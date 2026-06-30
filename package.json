@@ -1,0 +1,31 @@
+{
+  "name": "skoolos",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "boundary": "depcruise apps/api/src --config .dependency-cruiser.cjs",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "db:generate": "pnpm --filter @skoolos/db generate",
+    "db:migrate": "pnpm --filter @skoolos/db migrate:dev",
+    "db:seed": "pnpm --filter @skoolos/db seed"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "dependency-cruiser": "^16.3.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "turbo": "^2.0.6",
+    "typescript": "^5.4.5"
+  }
+}

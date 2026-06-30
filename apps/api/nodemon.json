@@ -1,0 +1,6 @@
+{
+  "watch": ["src", "../../packages"],
+  "ext": "ts",
+  "ignore": ["**/*.spec.ts", "dist", ".turbo"],
+  "exec": "node --require ts-node/register --require tsconfig-paths/register src/main.ts"
+}

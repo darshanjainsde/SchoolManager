@@ -1,0 +1,29 @@
+import { Module } from '@nestjs/common';
+import { AuthModule } from '../../auth';
+import { PlatformAuthService } from './platform-auth.service';
+import { PlatformAuthController } from './platform-auth.controller';
+import { PlatformSchoolsController } from './platform-schools.controller';
+import { PlatformHostGuard } from './platform-host.guard';
+import { PlatformStatsController } from './platform-stats.controller';
+import { OnboardingService } from './onboarding.service';
+import { OnboardingController } from './onboarding.controller';
+import { SchoolsMgmtController } from './schools-mgmt.controller';
+import { DomainsController } from './domains.controller';
+import { CsvImportController } from './csv-import.controller';
+import { PlatformUploadsController } from './platform-uploads.controller';
+
+@Module({
+  imports: [AuthModule], // PasswordService
+  providers: [PlatformAuthService, PlatformHostGuard, OnboardingService],
+  controllers: [
+    PlatformAuthController,
+    PlatformStatsController,
+    OnboardingController,
+    PlatformSchoolsController,
+    SchoolsMgmtController,
+    DomainsController,
+    CsvImportController,
+    PlatformUploadsController,
+  ],
+})
+export class PlatformModule {}

@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "baseUrl": ".",
+    "noEmit": true,
+    "paths": {
+      "@skoolos/db": ["../../packages/db/src"],
+      "@skoolos/types": ["../../packages/types/src"],
+      "@skoolos/config": ["../../packages/config/src"]
+    }
+  },
+  "include": ["src/**/*", "../../packages/*/src/**/*"],
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "commonjs",
+      "noEmit": false
+    },
+    "require": ["tsconfig-paths/register"]
+  }
+}

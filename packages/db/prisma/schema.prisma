@@ -1,0 +1,311 @@
+// Phase 1 — Auth, RBAC, multi-tenant core.
+// Every tenant-scoped table carries `schoolId` and is protected by RLS
+// (see migration 0002_rls_and_roles).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Enums
+// ────────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SCHOOL_ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+  STAFF
+}
+
+enum PlatformRole {
+  PLATFORM_OWNER
+  PLATFORM_ADMIN
+}
+
+enum SubscriptionPlan {
+  TRIAL
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  SUSPENDED
+}
+
+enum DomainType {
+  APEX
+  SUBDOMAIN
+}
+
+enum DomainStatus {
+  PENDING
+  VERIFYING
+  LIVE
+  ERROR
+}
+
+enum TlsStatus {
+  NONE
+  ISSUING
+  ACTIVE
+  FAILED
+}
+
+enum AuditScope {
+  PLATFORM
+  TENANT
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Tenant: School
+// ────────────────────────────────────────────────────────────────────────────
+
+model School {
+  id                 String             @id @default(uuid()) @db.Uuid
+  name               String
+  slug               String             @unique
+  logoUrl            String?
+  faviconUrl         String?
+  brandColors        Json?
+  aboutPage          String?
+  addressLine1       String?
+  addressLine2       String?
+  city               String?
+  region             String?
+  postalCode         String?
+  country            String?
+  geoLat             Float?
+  geoLng             Float?
+  phone              String?
+  email              String?
+  timezone           String             @default("UTC")
+  locale             String             @default("en-US")
+  currency           String             @default("USD")
+  subscriptionPlan   SubscriptionPlan   @default(TRIAL)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+  suspendedAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  users           User[]
+  customDomains   CustomDomain[]
+  studentProfiles StudentProfile[]
+  teacherProfiles TeacherProfile[]
+  parentProfiles  ParentProfile[]
+  refreshTokens   RefreshToken[]
+  auditLogs       AuditLog[]
+  academicYears   AcademicYear[]
+}
+
+/// One academic year per school. The "current" year is the default scope for
+/// attendance/assessment in later phases.
+model AcademicYear {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  name      String   // e.g. "2026-2027"
+  startDate DateTime
+  endDate   DateTime
+  isCurrent Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+model CustomDomain {
+  id                String       @id @default(uuid()) @db.Uuid
+  schoolId          String       @db.Uuid
+  school            School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  hostname          String       @unique
+  type              DomainType
+  status            DomainStatus @default(PENDING)
+  verificationToken String       @default(uuid())
+  lastCheckedAt     DateTime?
+  lastError         String?
+  dnsTarget         String?
+  tlsStatus         TlsStatus    @default(NONE)
+  isPrimary         Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([schoolId])
+  @@index([status])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Users (school-scoped)
+// ────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id                  String   @id @default(uuid()) @db.Uuid
+  schoolId            String   @db.Uuid
+  school              School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  email               String
+  passwordHash        String
+  role                UserRole
+  firstName           String
+  lastName            String
+  isActive            Boolean  @default(true)
+  failedLoginAttempts Int      @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+  parentProfile  ParentProfile?
+  refreshTokens  RefreshToken[]
+
+  @@unique([schoolId, email])
+  @@index([schoolId])
+  @@index([schoolId, role])
+}
+
+// Profile tables — light placeholders, fleshed out in later phases.
+
+model StudentProfile {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @db.Uuid
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId      String   @unique @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admissionNo String?
+  dob         DateTime?
+  createdAt   DateTime @default(now())
+
+  parents     ParentStudent[]
+
+  @@index([schoolId])
+}
+
+model TeacherProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId    String   @unique @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeNo String?
+  createdAt DateTime @default(now())
+
+  @@index([schoolId])
+}
+
+model ParentProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId    String   @unique @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  students  ParentStudent[]
+
+  @@index([schoolId])
+}
+
+model ParentStudent {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  parentId  String   @db.Uuid
+  studentId String   @db.Uuid
+
+  parent    ParentProfile  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, studentId])
+  @@index([schoolId])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Refresh tokens (school audience) — rotation with family-based reuse detection
+// ────────────────────────────────────────────────────────────────────────────
+
+model RefreshToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  schoolId    String    @db.Uuid
+  school      School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId      String    @db.Uuid
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyId    String    @db.Uuid
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  replacedById String?  @db.Uuid
+  createdAt   DateTime  @default(now())
+
+  @@index([schoolId])
+  @@index([userId])
+  @@index([familyId])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Platform users (NO school_id — they are above tenancy)
+// ────────────────────────────────────────────────────────────────────────────
+
+model PlatformUser {
+  id                  String       @id @default(uuid()) @db.Uuid
+  email               String       @unique
+  passwordHash        String
+  role                PlatformRole @default(PLATFORM_OWNER)
+  totpSecret          String       // mandatory TOTP
+  totpEnrolledAt      DateTime     @default(now())
+  failedLoginAttempts Int          @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  refreshTokens PlatformRefreshToken[]
+}
+
+model PlatformRefreshToken {
+  id            String       @id @default(uuid()) @db.Uuid
+  platformUserId String      @db.Uuid
+  platformUser  PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+  familyId      String       @db.Uuid
+  tokenHash     String       @unique
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  replacedById  String?      @db.Uuid
+  createdAt     DateTime     @default(now())
+
+  @@index([platformUserId])
+  @@index([familyId])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Audit log
+// ────────────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String     @id @default(uuid()) @db.Uuid
+  scope       AuditScope
+  schoolId    String?    @db.Uuid
+  school      School?    @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  actorId     String?    @db.Uuid
+  actorType   String     // "user" | "platform" | "system"
+  action      String     // e.g. "POST /auth/login"
+  targetType  String?
+  targetId    String?
+  ip          String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+
+  @@index([schoolId])
+  @@index([actorId])
+  @@index([createdAt])
+}
