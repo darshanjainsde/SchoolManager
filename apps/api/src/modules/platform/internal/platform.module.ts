@@ -11,10 +11,14 @@ import { SchoolsMgmtController } from './schools-mgmt.controller';
 import { DomainsController } from './domains.controller';
 import { CsvImportController } from './csv-import.controller';
 import { PlatformUploadsController } from './platform-uploads.controller';
+import { PlatformHelpersController } from './platform-helpers.controller';
+import { SettingsService } from './settings.service';
+import { PlatformSettingsController } from './settings.controller';
+import { PlatformUsageController } from './platform-usage.controller';
 
 @Module({
   imports: [AuthModule], // PasswordService
-  providers: [PlatformAuthService, PlatformHostGuard, OnboardingService],
+  providers: [PlatformAuthService, PlatformHostGuard, OnboardingService, SettingsService],
   controllers: [
     PlatformAuthController,
     PlatformStatsController,
@@ -24,6 +28,10 @@ import { PlatformUploadsController } from './platform-uploads.controller';
     DomainsController,
     CsvImportController,
     PlatformUploadsController,
+    PlatformHelpersController,
+    PlatformSettingsController,
+    PlatformUsageController,
   ],
+  exports: [SettingsService],
 })
 export class PlatformModule {}

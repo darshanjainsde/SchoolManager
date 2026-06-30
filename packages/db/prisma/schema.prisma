@@ -105,6 +105,33 @@ model School {
   refreshTokens   RefreshToken[]
   auditLogs       AuditLog[]
   academicYears   AcademicYear[]
+  grades          Grade[]
+  classes         Class[]
+  sections        Section[]
+  subjects        Subject[]
+  classSubjectTeachers ClassSubjectTeacher[]
+  enrollments     Enrollment[]
+  attendances     Attendance[]
+  assignments     Assignment[]
+  submissions     Submission[]
+  gradingSchemes  GradingScheme[]
+  exams           Exam[]
+  examSubjects    ExamSubject[]
+  examResults     ExamResult[]
+  marks           Mark[]
+  reportCards     ReportCard[]
+  leads           Lead[]
+  applications    AdmissionApplication[]
+  feeStructures   FeeStructure[]
+  feeStructureItems FeeStructureItem[]
+  feePlanAssignments FeePlanAssignment[]
+  invoices        Invoice[]
+  payments        Payment[]
+  discounts       Discount[]
+  subscription    Subscription?
+  announcements   Announcement[]
+  notifications   Notification[]
+  messages        Message[]
 }
 
 /// One academic year per school. The "current" year is the default scope for
@@ -119,6 +146,10 @@ model AcademicYear {
   isCurrent Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  classes     Class[]
+  enrollments Enrollment[]
+  feeStructures FeeStructure[]
 
   @@unique([schoolId, name])
   @@index([schoolId])
@@ -284,6 +315,607 @@ model PlatformRefreshToken {
 
   @@index([platformUserId])
   @@index([familyId])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Platform settings (admin-set secrets like Stripe / Resend / Ably keys)
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Key-value store for owner-portal configurable secrets and feature flags.
+/// Values are encrypted at rest with `PLATFORM_SETTINGS_KEY` (32-byte hex)
+/// → AES-256-GCM in `apps/api/src/modules/platform/internal/settings.service.ts`.
+/// Never read directly — go through SettingsService.
+model PlatformSetting {
+  key         String   @id
+  valueCipher String   // base64(iv || ciphertext || tag)
+  scope       String   @default("global") // "global" | "school:<uuid>" for tenant-scoped
+  updatedAt   DateTime @updatedAt
+  updatedById String?  @db.Uuid
+
+  @@index([scope])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 3 — Academic structure (tenant-scoped)
+// ────────────────────────────────────────────────────────────────────────────
+
+enum EnrollmentStatus {
+  ACTIVE
+  TRANSFERRED
+  GRADUATED
+  WITHDRAWN
+}
+
+model Grade {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  name      String   // e.g. "Grade 5"
+  sequence  Int      // sort order
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  classes   Class[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, sequence])
+  @@index([schoolId])
+}
+
+model Class {
+  id                  String   @id @default(uuid()) @db.Uuid
+  schoolId            String   @db.Uuid
+  school              School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gradeId             String   @db.Uuid
+  grade               Grade    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  academicYearId      String   @db.Uuid
+  academicYear        AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  name                String   // e.g. "5A"
+  classTeacherUserId  String?  @db.Uuid
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sections    Section[]
+  enrollments Enrollment[]
+  classSubjectTeachers ClassSubjectTeacher[]
+  assignments Assignment[]
+  exams       Exam[]
+
+  @@unique([schoolId, academicYearId, gradeId, name])
+  @@index([schoolId])
+}
+
+model Section {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classId   String   @db.Uuid
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  name      String   // e.g. "A"
+  capacity  Int      @default(40)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  enrollments Enrollment[]
+  assignments Assignment[]
+
+  @@unique([schoolId, classId, name])
+  @@index([schoolId])
+}
+
+model Subject {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  code      String   // e.g. "MATH"
+  name      String
+  isElective Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  classSubjectTeachers ClassSubjectTeacher[]
+  assignments  Assignment[]
+  examSubjects ExamSubject[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+model ClassSubjectTeacher {
+  id            String   @id @default(uuid()) @db.Uuid
+  schoolId      String   @db.Uuid
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classId       String   @db.Uuid
+  class         Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId     String   @db.Uuid
+  subject       Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherUserId String   @db.Uuid
+  sectionId     String?  @db.Uuid
+  createdAt     DateTime @default(now())
+
+  @@unique([schoolId, classId, subjectId, sectionId])
+  @@index([schoolId])
+}
+
+model Enrollment {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @db.Uuid
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  studentUserId   String   @db.Uuid
+  classId         String   @db.Uuid
+  class           Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  sectionId       String?  @db.Uuid
+  section         Section? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  academicYearId  String   @db.Uuid
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  status          EnrollmentStatus @default(ACTIVE)
+  enrolledAt      DateTime @default(now())
+  exitedAt        DateTime?
+
+  attendances Attendance[]
+
+  @@unique([schoolId, studentUserId, academicYearId])
+  @@index([schoolId])
+  @@index([schoolId, classId])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 4 — Teaching & Learning
+// ────────────────────────────────────────────────────────────────────────────
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model Attendance {
+  id             String           @id @default(uuid()) @db.Uuid
+  schoolId       String           @db.Uuid
+  school         School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  enrollmentId   String           @db.Uuid
+  enrollment     Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  date           DateTime         @db.Date
+  status         AttendanceStatus
+  markedByUserId String           @db.Uuid
+  note           String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([schoolId, enrollmentId, date])
+  @@index([schoolId])
+  @@index([schoolId, date])
+}
+
+model Assignment {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @db.Uuid
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classId         String   @db.Uuid
+  class           Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  sectionId       String?  @db.Uuid
+  section         Section? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  subjectId       String   @db.Uuid
+  subject         Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  dueAt           DateTime
+  attachmentUrl   String?
+  maxPoints       Int      @default(100)
+  createdByUserId String   @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  submissions Submission[]
+
+  @@index([schoolId])
+  @@index([schoolId, classId])
+}
+
+model Submission {
+  id            String    @id @default(uuid()) @db.Uuid
+  schoolId      String    @db.Uuid
+  school        School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assignmentId  String    @db.Uuid
+  assignment    Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentUserId String    @db.Uuid
+  submittedAt   DateTime  @default(now())
+  attachmentUrl String?
+  body          String?
+  grade         Decimal?  @db.Decimal(6, 2)
+  feedback      String?
+  isLate        Boolean   @default(false)
+  gradedAt      DateTime?
+  gradedByUserId String?  @db.Uuid
+
+  @@unique([assignmentId, studentUserId])
+  @@index([schoolId])
+}
+
+model GradingScheme {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  name      String
+  bands     Json     // [{min: 90, letter: "A"}, ...] sorted desc on min
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exams Exam[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+enum ExamResultStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Exam {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @db.Uuid
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  name            String
+  classId         String   @db.Uuid
+  class           Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  sectionId       String?  @db.Uuid
+  startsAt        DateTime
+  endsAt          DateTime
+  gradingSchemeId String?  @db.Uuid
+  gradingScheme   GradingScheme? @relation(fields: [gradingSchemeId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  examSubjects ExamSubject[]
+  examResults  ExamResult[]
+
+  @@index([schoolId])
+  @@index([schoolId, classId])
+}
+
+model ExamSubject {
+  id            String @id @default(uuid()) @db.Uuid
+  schoolId      String @db.Uuid
+  school        School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  examId        String @db.Uuid
+  exam          Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subjectId     String @db.Uuid
+  subject       Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  maxMarks      Int
+  passingMarks  Int
+
+  marks Mark[]
+
+  @@unique([examId, subjectId])
+  @@index([schoolId])
+}
+
+model ExamResult {
+  id            String           @id @default(uuid()) @db.Uuid
+  schoolId      String           @db.Uuid
+  school        School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  examId        String           @db.Uuid
+  exam          Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentUserId String           @db.Uuid
+  status        ExamResultStatus @default(DRAFT)
+  publishedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  marks       Mark[]
+  reportCards ReportCard[]
+
+  @@unique([examId, studentUserId])
+  @@index([schoolId])
+}
+
+model Mark {
+  id             String  @id @default(uuid()) @db.Uuid
+  schoolId       String  @db.Uuid
+  school         School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  examResultId   String  @db.Uuid
+  examResult     ExamResult @relation(fields: [examResultId], references: [id], onDelete: Cascade)
+  examSubjectId  String  @db.Uuid
+  examSubject    ExamSubject @relation(fields: [examSubjectId], references: [id], onDelete: Cascade)
+  marksObtained  Decimal @db.Decimal(6, 2)
+  isAbsent       Boolean @default(false)
+
+  @@unique([examResultId, examSubjectId])
+  @@index([schoolId])
+}
+
+model ReportCard {
+  id            String   @id @default(uuid()) @db.Uuid
+  schoolId      String   @db.Uuid
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  examResultId  String   @unique @db.Uuid
+  examResult    ExamResult @relation(fields: [examResultId], references: [id], onDelete: Cascade)
+  pdfUrl        String
+  generatedAt   DateTime @default(now())
+
+  @@index([schoolId])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 5 — Admissions CRM + Finance
+// ────────────────────────────────────────────────────────────────────────────
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  TOUR_BOOKED
+  APPLIED
+  ENROLLED
+  LOST
+}
+
+model Lead {
+  id                String    @id @default(uuid()) @db.Uuid
+  schoolId          String    @db.Uuid
+  school            School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fullName          String
+  contactEmail      String?
+  contactPhone      String?
+  gradeAppliedFor   String?
+  source            String?
+  stage             LeadStage @default(NEW)
+  assignedToUserId  String?   @db.Uuid
+  nextActionAt      DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  applications AdmissionApplication[]
+
+  @@index([schoolId])
+  @@index([schoolId, stage])
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  OFFERED
+  ACCEPTED
+  REJECTED
+  WAITLISTED
+}
+
+model AdmissionApplication {
+  id              String            @id @default(uuid()) @db.Uuid
+  schoolId        String            @db.Uuid
+  school          School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  leadId          String?           @db.Uuid
+  lead            Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  applicantData   Json              // first/last/dob/parentEmail/etc
+  status          ApplicationStatus @default(SUBMITTED)
+  reviewerUserId  String?           @db.Uuid
+  decidedAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([schoolId])
+  @@index([schoolId, status])
+}
+
+model FeeStructure {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  school         School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  name           String
+  academicYearId String   @db.Uuid
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  totalAmount    Decimal  @db.Decimal(12, 2)
+  currency       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items       FeeStructureItem[]
+  assignments FeePlanAssignment[]
+
+  @@unique([schoolId, academicYearId, name])
+  @@index([schoolId])
+}
+
+model FeeStructureItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @db.Uuid
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  feeStructureId  String   @db.Uuid
+  feeStructure    FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  label           String
+  amount          Decimal  @db.Decimal(12, 2)
+  dueDate         DateTime @db.Date
+
+  @@index([schoolId])
+  @@index([feeStructureId])
+}
+
+model FeePlanAssignment {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @db.Uuid
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  feeStructureId  String   @db.Uuid
+  feeStructure    FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  studentUserId   String   @db.Uuid
+  overrides       Json?
+  createdAt       DateTime @default(now())
+
+  invoices Invoice[]
+
+  @@unique([feeStructureId, studentUserId])
+  @@index([schoolId])
+}
+
+enum InvoiceStatus {
+  OPEN
+  PARTIAL
+  PAID
+  VOID
+  REFUNDED
+}
+
+model Invoice {
+  id                   String        @id @default(uuid()) @db.Uuid
+  schoolId             String        @db.Uuid
+  school               School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  number               Int
+  feePlanAssignmentId  String        @db.Uuid
+  feePlanAssignment    FeePlanAssignment @relation(fields: [feePlanAssignmentId], references: [id], onDelete: Cascade)
+  studentUserId        String        @db.Uuid
+  amountDue            Decimal       @db.Decimal(12, 2)
+  amountPaid           Decimal       @default(0) @db.Decimal(12, 2)
+  currency             String
+  status               InvoiceStatus @default(OPEN)
+  dueDate              DateTime      @db.Date
+  issuedAt             DateTime      @default(now())
+  metadata             Json?
+
+  payments  Payment[]
+  discounts Discount[]
+
+  @@unique([schoolId, number])
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@index([schoolId, studentUserId])
+}
+
+enum PaymentMethod {
+  CARD
+  BANK
+  CASH
+  OTHER
+}
+
+model Payment {
+  id                     String        @id @default(uuid()) @db.Uuid
+  schoolId               String        @db.Uuid
+  school                 School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  invoiceId              String        @db.Uuid
+  invoice                Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount                 Decimal       @db.Decimal(12, 2)
+  method                 PaymentMethod
+  stripePaymentIntentId  String?       @unique
+  stripeEventId          String?       @unique // for webhook idempotency
+  receivedAt             DateTime      @default(now())
+  recordedByUserId       String?       @db.Uuid
+
+  @@index([schoolId])
+  @@index([schoolId, invoiceId])
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+model Discount {
+  id                   String       @id @default(uuid()) @db.Uuid
+  schoolId             String       @db.Uuid
+  school               School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  invoiceId            String?      @db.Uuid
+  invoice              Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  feePlanAssignmentId  String?      @db.Uuid
+  type                 DiscountType
+  value                Decimal      @db.Decimal(12, 2)
+  reason               String
+
+  @@index([schoolId])
+}
+
+model Subscription {
+  id                   String   @id @default(uuid()) @db.Uuid
+  schoolId             String   @unique @db.Uuid
+  school               School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  plan                 String
+  status               String   // active|past_due|canceled|incomplete|trialing
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean  @default(false)
+  updatedAt            DateTime @updatedAt
+
+  @@index([schoolId])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 6 — Comms (announcements / notifications / messages)
+// ────────────────────────────────────────────────────────────────────────────
+
+enum AnnouncementAudience {
+  SCHOOL
+  ROLE
+  CLASS
+  USER
+}
+
+model Announcement {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @db.Uuid
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  authorUserId    String   @db.Uuid
+  audience        AnnouncementAudience
+  audienceRole    String?  // when audience=ROLE: SCHOOL_ADMIN/TEACHER/STUDENT/PARENT/STAFF
+  audienceClassId String?  @db.Uuid // when audience=CLASS
+  audienceUserId  String?  @db.Uuid // when audience=USER
+  title           String
+  body            String
+  createdAt       DateTime @default(now())
+
+  @@index([schoolId])
+  @@index([schoolId, createdAt])
+}
+
+model Notification {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @db.Uuid
+  school       School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId       String   @db.Uuid
+  title        String
+  body         String?
+  kind         String   // "announcement" | "assignment" | "exam" | "fee" | "generic"
+  payload      Json?
+  readAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([schoolId])
+  @@index([schoolId, userId])
+  @@index([schoolId, userId, readAt])
+}
+
+model Message {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @db.Uuid
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  threadId    String   @db.Uuid // groups messages
+  fromUserId  String   @db.Uuid
+  toUserId    String   @db.Uuid
+  body        String
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([schoolId])
+  @@index([schoolId, threadId])
+  @@index([schoolId, toUserId, readAt])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 7 — Idempotency key store
+// ────────────────────────────────────────────────────────────────────────────
+
+model IdempotencyKey {
+  key           String   @id // "<schoolId|platform>:<userId>:<rawKey>"
+  method        String
+  path          String
+  responseHash  String
+  responseBody  Json
+  statusCode    Int
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([expiresAt])
 }
 
 // ────────────────────────────────────────────────────────────────────────────

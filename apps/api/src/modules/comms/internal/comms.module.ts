@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
+import { CommsController } from './comms.controller';
+import { SseBusService } from './sse-bus.service';
 
-/** Phase 0 stub. Announcements/notifications/messaging land in Phase 6. */
-@Module({})
+@Module({
+  providers: [SseBusService],
+  controllers: [CommsController],
+  exports: [SseBusService],
+})
 export class CommsModule {}

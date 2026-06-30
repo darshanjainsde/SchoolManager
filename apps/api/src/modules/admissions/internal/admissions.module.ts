@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { AdmissionsController } from './admissions.controller';
 
-/** Phase 0 stub. Lead/Application/CRM land in Phase 5. */
-@Module({})
+@Module({
+  controllers: [AdmissionsController],
+})
 export class AdmissionsModule {}

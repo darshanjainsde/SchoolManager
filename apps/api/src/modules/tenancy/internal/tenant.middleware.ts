@@ -13,7 +13,13 @@ const lookup = new SchoolLookupService();
 const ctxService = new TenantContextService();
 
 export function tenantMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const host = (req.headers.host ?? '').toString();
+  // `req.hostname` honours `X-Forwarded-Host` when `trust proxy` is enabled
+  // (set in main.ts). Falling back to `req.headers.host` covers cases where
+  // trust proxy is off (e.g. integration tests via supertest, where the
+  // browser-equivalent Host header is set directly).
+  const fromExpress = typeof req.hostname === 'string' && req.hostname.length > 0 ? req.hostname : null;
+  const rawHostHeader = (req.headers.host ?? '').toString();
+  const host = fromExpress ?? rawHostHeader;
   void lookup
     .resolveByHostname(host)
     .then((resolved) => {

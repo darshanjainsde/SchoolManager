@@ -2,10 +2,30 @@ import { Worker } from 'bullmq';
 import { promises as dns } from 'node:dns';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import Redis from 'ioredis';
 import { getPlatformPrisma } from '@skoolos/db';
 import { loadEnv } from '@skoolos/config';
 import type { Logger } from 'pino';
 import { redisConnectionFromUrl } from '../redis-conn';
+
+/**
+ * Invalidate the host → schoolId cache as soon as a domain status changes.
+ * Mirrors the SchoolLookupService cache key shape. We do this from the worker
+ * (not the API) so the cache flip happens atomically with the DB write — no
+ * TTL race where a freshly-LIVE domain still returns kind:'unknown'.
+ */
+async function invalidateHostCache(hostname: string, logger: Logger): Promise<void> {
+  const env = loadEnv();
+  const r = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 2 });
+  try {
+    await r.connect();
+    await r.del('host:' + hostname.toLowerCase());
+  } catch (e) {
+    logger.warn({ err: (e as Error).message, hostname }, 'host-cache invalidate failed');
+  } finally {
+    await r.quit().catch(() => undefined);
+  }
+}
 
 interface DomainJobData {
   customDomainId: string;
@@ -70,6 +90,10 @@ export function startDomainVerificationWorker(logger: Logger) {
           tlsStatus: ok ? 'ACTIVE' : cd.tlsStatus,
         },
       });
+
+      // Cache invalidation runs on every transition (LIVE → next request hits
+      // the DB and warms the cache fresh; ERROR clears any stale LIVE entry).
+      await invalidateHostCache(cd.hostname, logger);
 
       logger.info({ id, hostname: cd.hostname, status: next, detail }, 'domain verified');
       return { ok, status: next, detail };

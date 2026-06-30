@@ -4,6 +4,8 @@
     "outDir": "dist",
     "baseUrl": ".",
     "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM"],
     "paths": {
       "@skoolos/db": ["../../packages/db/src"],
       "@skoolos/types": ["../../packages/types/src"],

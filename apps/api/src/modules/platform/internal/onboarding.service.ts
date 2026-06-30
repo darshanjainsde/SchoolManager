@@ -63,9 +63,13 @@ export class OnboardingService {
     }
 
     // One-time invite token — emailed to the new admin so they set their password.
-    // The placeholder hash makes the row valid but unusable until set.
+    // The placeholder password hash IS the Argon2 hash of the raw invite token,
+    // so `/auth/accept-invite` can verify the link by simply running the same
+    // password-verify call (no second column required). Once the user sets a
+    // real password the hash is replaced and the invite token can no longer
+    // verify → exactly the one-shot semantic we want.
     const inviteToken = randomBytes(24).toString('hex');
-    const placeholderHash = await this.passwords.hash(randomBytes(32).toString('hex'));
+    const placeholderHash = await this.passwords.hash(inviteToken);
 
     const out = await prisma.$transaction(async (tx) => {
       const school = await tx.school.create({

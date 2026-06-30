@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
+import { AssignmentsController } from './assignments.controller';
+import { ExamsController } from './exams.controller';
 
-/** Phase 0 stub. Assignments/exams/results/report-cards land in Phase 4. */
-@Module({})
+@Module({
+  controllers: [AssignmentsController, ExamsController],
+})
 export class AssessmentModule {}

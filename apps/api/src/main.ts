@@ -7,7 +7,9 @@ import { loadEnv } from '@skoolos/config';
 
 async function bootstrap() {
   const env = loadEnv();
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody:true lets the Stripe webhook controller verify signatures against
+  // the unparsed body. The body is still JSON-parsed for every other route.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   app.useLogger(app.get(Logger));
   app.enableShutdownHooks();
   // Honour X-Forwarded-Host behind an ingress (cert-manager, custom domains).
