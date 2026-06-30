@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { AttendanceController } from './attendance.controller';
 
-/** Phase 0 stub. Attendance lands in Phase 4. */
-@Module({})
+@Module({
+  controllers: [AttendanceController],
+})
 export class AttendanceModule {}

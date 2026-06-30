@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm --filter @skoolos/web build",
+  "installCommand": "pnpm install --frozen-lockfile && pnpm --filter @skoolos/db exec prisma generate",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": { "main": true }
+  },
+  "regions": ["iad1"]
+}
