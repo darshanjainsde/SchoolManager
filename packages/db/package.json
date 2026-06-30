@@ -1,0 +1,29 @@
+{
+  "name": "@skoolos/db",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:check": "prisma migrate status",
+    "studio": "prisma studio",
+    "seed": "tsx prisma/seed.ts",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json || true"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.13.0"
+  },
+  "devDependencies": {
+    "@skoolos/config": "workspace:*",
+    "argon2": "^0.40.1",
+    "otplib": "^12.0.1",
+    "prisma": "^5.13.0",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5"
+  }
+}

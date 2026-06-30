@@ -1,0 +1,19 @@
+// Runs in every test worker BEFORE any test module is loaded. Sets the env
+// vars Jest's globalSetup created — globalSetup runs in a separate process
+// and its env doesn't propagate to workers.
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL_TEST ??
+  'postgresql://skoolos:skoolos@localhost:5432/skoolos_test?schema=public';
+process.env.DATABASE_URL_APP =
+  process.env.DATABASE_URL.replace(
+    'postgresql://skoolos:skoolos',
+    'postgresql://skoolos_app:skoolos_app_pw',
+  );
+process.env.DATABASE_URL_PLATFORM =
+  process.env.DATABASE_URL.replace(
+    'postgresql://skoolos:skoolos',
+    'postgresql://skoolos_platform:skoolos_platform_pw',
+  );
+process.env.DISABLE_THROTTLER = 'true';
+process.env.DISABLE_AUDIT = 'true';
+process.env.NODE_ENV = 'test';

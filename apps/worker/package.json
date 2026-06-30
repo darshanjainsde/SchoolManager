@@ -1,0 +1,30 @@
+{
+  "name": "@skoolos/worker",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "tsx src/main.ts",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"(worker) no tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@skoolos/config": "workspace:*",
+    "@skoolos/db": "workspace:*",
+    "@skoolos/types": "workspace:*",
+    "argon2": "^0.40.1",
+    "bullmq": "^5.7.6",
+    "ioredis": "^5.4.1",
+    "nodemailer": "^6.9.13",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/nodemailer": "^6.4.15",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5"
+  }
+}
