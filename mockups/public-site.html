@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Greenwood International — Modern School Site (Mockup)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      fontFamily: { display: ['Space Grotesk','sans-serif'], sans: ['Inter','sans-serif'] },
+      colors: { ink:{950:'#080b16',900:'#0b1020',800:'#131a30'}, mint:'#3ee6b0', iris:'#7c6cff', sky:'#38bdf8' },
+    }},
+  };
+</script>
+<style>
+  *{scroll-behavior:smooth}
+  body{font-family:'Inter',sans-serif;background:#080b16;color:#e7ecf5;overflow-x:hidden}
+  h1,h2,h3,.font-display{font-family:'Space Grotesk',sans-serif}
+
+  /* animated aurora blobs */
+  .aurora{position:absolute;border-radius:9999px;filter:blur(90px);opacity:.55;pointer-events:none}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(60px,-40px) scale(1.15)}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-50px,50px) scale(1.1)}}
+  @keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,40px) scale(1.2)}}
+  .a1{animation:drift1 14s ease-in-out infinite}
+  .a2{animation:drift2 18s ease-in-out infinite}
+  .a3{animation:drift3 16s ease-in-out infinite}
+
+  /* gradient text */
+  .grad-text{background:linear-gradient(100deg,#3ee6b0,#38bdf8,#7c6cff);-webkit-background-clip:text;background-clip:text;color:transparent;background-size:200% auto;animation:shine 6s linear infinite}
+  @keyframes shine{to{background-position:200% center}}
+
+  /* grid overlay */
+  .grid-mask{background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(ellipse at 50% 40%,#000 40%,transparent 78%)}
+
+  /* float */
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+  .float{animation:floaty 6s ease-in-out infinite}
+  .float.d1{animation-delay:-2s}.float.d2{animation-delay:-4s}
+
+  /* reveal on scroll */
+  .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+
+  /* glass */
+  .glass{background:rgba(255,255,255,.05);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.09)}
+
+  /* marquee */
+  @keyframes scroll-x{to{transform:translateX(-50%)}}
+  .marquee{animation:scroll-x 22s linear infinite}
+
+  /* tilt card */
+  .tilt{transition:transform .2s ease-out}
+
+  /* gallery */
+  .gcard{transition:transform .5s cubic-bezier(.2,.7,.2,1),box-shadow .5s}
+  .gcard:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 24px 60px -20px rgba(124,108,255,.5)}
+  .gcard .cap{opacity:0;transform:translateY(10px);transition:.4s}
+  .gcard:hover .cap{opacity:1;transform:none}
+
+  .btn-glow{position:relative;overflow:hidden}
+  .btn-glow::after{content:"";position:absolute;inset:0;background:radial-gradient(120px circle at var(--x,50%) var(--y,50%),rgba(255,255,255,.35),transparent 60%);opacity:0;transition:opacity .3s}
+  .btn-glow:hover::after{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="bg-gradient-to-r from-mint via-sky to-iris text-ink-950 text-center text-xs font-semibold py-1.5">
+  MOCKUP — Modern public site · animated · all content editable from the admin/owner portal
+</div>
+
+<!-- NAV -->
+<header id="nav" class="fixed top-6 inset-x-0 z-50 transition-all duration-300">
+  <div class="max-w-6xl mx-auto px-4">
+    <div class="glass rounded-2xl px-4 flex items-center justify-between h-14">
+      <div class="flex items-center gap-2.5">
+        <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-mint to-iris grid place-items-center font-display font-bold text-ink-950">G</div>
+        <div class="font-display font-semibold tracking-tight">Greenwood</div>
+      </div>
+      <nav class="hidden md:flex items-center gap-1 text-sm text-slate-300">
+        <a class="px-3 py-2 rounded-lg hover:text-white hover:bg-white/5" href="#home">Home</a>
+        <a class="px-3 py-2 rounded-lg hover:text-white hover:bg-white/5" href="#about">About</a>
+        <div class="relative group">
+          <button class="px-3 py-2 rounded-lg hover:text-white hover:bg-white/5">Academics ▾</button>
+          <div class="absolute hidden group-hover:block top-full left-0 pt-2 w-56">
+            <div class="glass rounded-xl p-2">
+              <div class="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500">Classes (editable)</div>
+              <a class="block px-3 py-2 rounded-lg hover:bg-white/5" href="#academics">Nursery & KG</a>
+              <a class="block px-3 py-2 rounded-lg hover:bg-white/5" href="#academics">Primary (I–V)</a>
+              <a class="block px-3 py-2 rounded-lg hover:bg-white/5" href="#academics">Middle (VI–VIII)</a>
+              <a class="block px-3 py-2 rounded-lg hover:bg-white/5" href="#academics">Senior (IX–XII)</a>
+            </div>
+          </div>
+        </div>
+        <a class="px-3 py-2 rounded-lg hover:text-white hover:bg-white/5" href="#gallery">Gallery</a>
+        <a class="px-3 py-2 rounded-lg hover:text-white hover:bg-white/5" href="#events">Events</a>
+      </nav>
+      <a href="#enquire" class="btn-glow bg-white text-ink-950 text-sm font-semibold px-4 py-2 rounded-xl hover:scale-[1.03] transition">Enquire →</a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section id="home" class="relative min-h-screen flex items-center overflow-hidden">
+  <div class="aurora a1" style="width:520px;height:520px;background:#3ee6b0;top:-120px;left:-80px"></div>
+  <div class="aurora a2" style="width:560px;height:560px;background:#7c6cff;bottom:-160px;right:-100px"></div>
+  <div class="aurora a3" style="width:420px;height:420px;background:#38bdf8;top:30%;left:40%"></div>
+  <div class="absolute inset-0 grid-mask"></div>
+
+  <div class="relative max-w-6xl mx-auto px-6 pt-28 pb-16 grid lg:grid-cols-2 gap-12 items-center">
+    <div>
+      <div class="inline-flex items-center gap-2 glass rounded-full px-3 py-1.5 text-xs text-slate-300 mb-6">
+        <span class="h-2 w-2 rounded-full bg-mint animate-pulse"></span> Admissions open · 2026–27
+      </div>
+      <h1 class="text-5xl md:text-7xl font-semibold leading-[1.05] tracking-tight">
+        Learning,<br><span class="grad-text">reimagined</span> for<br>tomorrow's minds.
+      </h1>
+      <p class="mt-6 text-lg text-slate-400 max-w-md">A future-ready school where curiosity meets technology, and every child is known, challenged and championed.</p>
+      <div class="mt-8 flex items-center gap-3">
+        <a href="#enquire" class="btn-glow bg-gradient-to-r from-mint to-sky text-ink-950 font-semibold px-6 py-3.5 rounded-xl hover:scale-[1.03] transition">Book a campus visit</a>
+        <a href="#about" class="glass px-6 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition">Explore ↓</a>
+      </div>
+      <div class="mt-10 flex items-center gap-6 text-sm text-slate-500">
+        <div class="flex -space-x-2">
+          <img class="h-8 w-8 rounded-full ring-2 ring-ink-950 object-cover" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=60&q=60">
+          <img class="h-8 w-8 rounded-full ring-2 ring-ink-950 object-cover" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=60&q=60">
+          <img class="h-8 w-8 rounded-full ring-2 ring-ink-950 object-cover" src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=60&q=60">
+        </div>
+        Trusted by <b class="text-slate-300">1,800+</b> families
+      </div>
+    </div>
+
+    <!-- floating glass visual -->
+    <div class="relative h-[440px] hidden lg:block">
+      <div class="float absolute top-0 right-4 w-72 rounded-3xl overflow-hidden glass p-2">
+        <img class="rounded-2xl h-56 w-full object-cover" src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=600&q=70">
+      </div>
+      <div class="float d1 absolute bottom-6 left-0 glass rounded-2xl p-4 w-52">
+        <div class="text-xs text-slate-400">Board results</div>
+        <div class="text-3xl font-display font-semibold grad-text">98%</div>
+        <div class="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden"><div class="h-full w-[98%] bg-gradient-to-r from-mint to-sky"></div></div>
+      </div>
+      <div class="float d2 absolute bottom-40 right-0 glass rounded-2xl p-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-iris to-sky grid place-items-center">🤖</div>
+        <div><div class="text-sm font-semibold">AI-assisted</div><div class="text-xs text-slate-400">smart learning labs</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="absolute bottom-6 left-1/2 -translate-x-1/2 text-slate-500 text-xs animate-bounce">scroll ↓</div>
+</section>
+
+<!-- MARQUEE -->
+<div class="border-y border-white/10 py-5 overflow-hidden">
+  <div class="marquee flex gap-12 whitespace-nowrap text-2xl font-display text-slate-600 w-max">
+    <span>Curiosity ✦</span><span>Innovation ✦</span><span>Character ✦</span><span>Creativity ✦</span><span>Excellence ✦</span><span>Community ✦</span>
+    <span>Curiosity ✦</span><span>Innovation ✦</span><span>Character ✦</span><span>Creativity ✦</span><span>Excellence ✦</span><span>Community ✦</span>
+  </div>
+</div>
+
+<!-- STATS (count up) -->
+<section class="max-w-6xl mx-auto px-6 py-20 grid grid-cols-2 md:grid-cols-4 gap-6">
+  <div class="reveal glass rounded-2xl p-6 text-center"><div class="text-4xl font-display font-semibold grad-text count" data-to="25">0</div><div class="text-sm text-slate-400 mt-1">Years of legacy</div></div>
+  <div class="reveal glass rounded-2xl p-6 text-center" style="transition-delay:.1s"><div class="text-4xl font-display font-semibold grad-text count" data-to="1800">0</div><div class="text-sm text-slate-400 mt-1">Students</div></div>
+  <div class="reveal glass rounded-2xl p-6 text-center" style="transition-delay:.2s"><div class="text-4xl font-display font-semibold grad-text count" data-to="120">0</div><div class="text-sm text-slate-400 mt-1">Educators</div></div>
+  <div class="reveal glass rounded-2xl p-6 text-center" style="transition-delay:.3s"><div class="text-4xl font-display font-semibold grad-text count" data-to="40">0</div><div class="text-sm text-slate-400 mt-1">Clubs & sports</div></div>
+</section>
+
+<!-- ABOUT -->
+<section id="about" class="max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-2 gap-14 items-center">
+  <div class="reveal relative">
+    <div class="absolute -inset-4 bg-gradient-to-br from-mint/20 to-iris/20 blur-2xl rounded-3xl"></div>
+    <img class="relative rounded-3xl w-full object-cover h-80" src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=800&q=70">
+    <div class="glass absolute -bottom-6 -right-4 rounded-2xl p-4 w-56">
+      <div class="flex items-center gap-3">
+        <img class="h-11 w-11 rounded-full object-cover" src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=100&q=70">
+        <div><div class="text-sm font-semibold">Dr. Anita Rao</div><div class="text-xs text-slate-400">Principal</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="reveal">
+    <div class="text-mint font-semibold text-sm uppercase tracking-widest">About</div>
+    <h2 class="text-4xl font-semibold mt-3 tracking-tight">A community built on <span class="grad-text">care & curiosity</span></h2>
+    <p class="mt-5 text-slate-400 leading-relaxed">We blend a rigorous academic programme with rich co-curricular life. Our educators know every child by name and help them find their strengths — on the field, on stage, and in the lab.</p>
+    <p class="mt-3 text-slate-500 text-sm">Every word and image here is editable from the admin portal.</p>
+    <div class="mt-8 grid grid-cols-2 gap-4">
+      <div class="glass rounded-2xl p-4"><div class="font-display text-2xl grad-text">CBSE</div><div class="text-sm text-slate-400">Affiliated curriculum</div></div>
+      <div class="glass rounded-2xl p-4"><div class="font-display text-2xl grad-text">1:15</div><div class="text-sm text-slate-400">Teacher ratio</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ACADEMICS bento -->
+<section id="academics" class="max-w-6xl mx-auto px-6 py-20">
+  <div class="reveal text-center max-w-2xl mx-auto">
+    <div class="text-mint font-semibold text-sm uppercase tracking-widest">Academics</div>
+    <h2 class="text-4xl font-semibold mt-3 tracking-tight">Programmes for every stage</h2>
+    <p class="mt-3 text-slate-400">Menu is class-wise by default — admin can rename, reorder or add sub-pages.</p>
+  </div>
+  <div class="mt-12 grid md:grid-cols-3 gap-5 auto-rows-[180px]">
+    <div class="reveal group md:row-span-2 relative rounded-3xl overflow-hidden glass p-6 flex flex-col justify-end">
+      <img class="absolute inset-0 h-full w-full object-cover opacity-40 group-hover:opacity-60 group-hover:scale-105 transition duration-700" src="https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=700&q=70">
+      <div class="relative"><div class="text-3xl">🎓</div><h3 class="text-2xl font-display font-semibold mt-2">Senior · IX–XII</h3><p class="text-sm text-slate-300 mt-1">Streams, mentoring and career labs that launch bright futures.</p></div>
+    </div>
+    <div class="reveal group relative rounded-3xl overflow-hidden glass p-6 flex flex-col justify-end" style="transition-delay:.05s">
+      <div class="relative"><div class="text-3xl">🧸</div><h3 class="text-xl font-display font-semibold mt-2">Nursery & KG</h3><p class="text-sm text-slate-400 mt-1">Play-based early learning.</p></div>
+    </div>
+    <div class="reveal group relative rounded-3xl overflow-hidden glass p-6 flex flex-col justify-end" style="transition-delay:.1s">
+      <div class="relative"><div class="text-3xl">📚</div><h3 class="text-xl font-display font-semibold mt-2">Primary · I–V</h3><p class="text-sm text-slate-400 mt-1">Foundations in literacy & inquiry.</p></div>
+    </div>
+    <div class="reveal group md:col-span-2 relative rounded-3xl overflow-hidden glass p-6 flex items-center gap-6" style="transition-delay:.15s">
+      <div class="text-4xl">🔬</div><div><h3 class="text-xl font-display font-semibold">Middle · VI–VIII</h3><p class="text-sm text-slate-400 mt-1">Exploration across sciences, humanities, coding and the arts — with AI-assisted smart labs.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- EDUCATORS -->
+<section class="max-w-6xl mx-auto px-6 py-20">
+  <div class="reveal text-center max-w-2xl mx-auto">
+    <div class="text-mint font-semibold text-sm uppercase tracking-widest">Our people</div>
+    <h2 class="text-4xl font-semibold mt-3 tracking-tight">Meet the educators</h2>
+    <p class="mt-3 text-slate-400">Admin chooses who's featured, with photos and names.</p>
+  </div>
+  <div class="mt-12 grid grid-cols-2 md:grid-cols-4 gap-5">
+    <div class="reveal group relative rounded-3xl overflow-hidden"><img class="h-64 w-full object-cover group-hover:scale-105 transition duration-700" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=70"><div class="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-ink-950 to-transparent"><div class="font-semibold">Meera Nair</div><div class="text-xs text-slate-400">Head of Science</div></div></div>
+    <div class="reveal group relative rounded-3xl overflow-hidden" style="transition-delay:.05s"><img class="h-64 w-full object-cover group-hover:scale-105 transition duration-700" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=70"><div class="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-ink-950 to-transparent"><div class="font-semibold">Arjun Verma</div><div class="text-xs text-slate-400">Mathematics</div></div></div>
+    <div class="reveal group relative rounded-3xl overflow-hidden" style="transition-delay:.1s"><img class="h-64 w-full object-cover group-hover:scale-105 transition duration-700" src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400&q=70"><div class="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-ink-950 to-transparent"><div class="font-semibold">Priya Menon</div><div class="text-xs text-slate-400">English</div></div></div>
+    <div class="reveal group relative rounded-3xl overflow-hidden" style="transition-delay:.15s"><img class="h-64 w-full object-cover group-hover:scale-105 transition duration-700" src="https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=70"><div class="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-ink-950 to-transparent"><div class="font-semibold">Sameer Khan</div><div class="text-xs text-slate-400">Sports</div></div></div>
+  </div>
+</section>
+
+<!-- GALLERY -->
+<section id="gallery" class="max-w-6xl mx-auto px-6 py-20">
+  <div class="reveal flex items-end justify-between flex-wrap gap-4">
+    <div><div class="text-mint font-semibold text-sm uppercase tracking-widest">Gallery</div><h2 class="text-4xl font-semibold mt-3 tracking-tight">Life at Greenwood</h2></div>
+  </div>
+  <div class="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="reveal gcard relative rounded-2xl overflow-hidden"><img class="h-48 w-full object-cover" src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=500&q=70"><div class="cap absolute bottom-3 left-3 text-sm font-medium">Science lab</div></div>
+    <div class="reveal gcard relative rounded-2xl overflow-hidden row-span-2"><img class="h-full min-h-[12rem] w-full object-cover" src="https://images.unsplash.com/photo-1571260899304-425eee4c7efc?auto=format&fit=crop&w=500&q=70"><div class="cap absolute bottom-3 left-3 text-sm font-medium">Sports day</div></div>
+    <div class="reveal gcard relative rounded-2xl overflow-hidden"><img class="h-48 w-full object-cover" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=500&q=70"><div class="cap absolute bottom-3 left-3 text-sm font-medium">Group project</div></div>
+    <div class="reveal gcard relative rounded-2xl overflow-hidden"><img class="h-48 w-full object-cover" src="https://images.unsplash.com/photo-1594608661623-aa0bd3a69d98?auto=format&fit=crop&w=500&q=70"><div class="cap absolute bottom-3 left-3 text-sm font-medium">Library</div></div>
+    <div class="reveal gcard relative rounded-2xl overflow-hidden"><img class="h-48 w-full object-cover" src="https://images.unsplash.com/photo-1588072432836-e10032774350?auto=format&fit=crop&w=500&q=70"><div class="cap absolute bottom-3 left-3 text-sm font-medium">Auditorium</div></div>
+    <div class="reveal gcard relative rounded-2xl overflow-hidden"><img class="h-48 w-full object-cover" src="https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=500&q=70"><div class="cap absolute bottom-3 left-3 text-sm font-medium">Art studio</div></div>
+    <div class="reveal gcard relative rounded-2xl overflow-hidden"><img class="h-48 w-full object-cover" src="https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=500&q=70"><div class="cap absolute bottom-3 left-3 text-sm font-medium">Campus</div></div>
+  </div>
+</section>
+
+<!-- EVENTS / CONNECT with tilt -->
+<section id="events" class="max-w-6xl mx-auto px-6 py-20">
+  <div class="reveal flex items-end justify-between flex-wrap gap-4">
+    <div><div class="text-mint font-semibold text-sm uppercase tracking-widest">Connect · Events</div><h2 class="text-4xl font-semibold mt-3 tracking-tight">Across our network</h2><p class="mt-2 text-slate-400 max-w-xl">Events from every school in the network — one shared calendar for the whole community.</p></div>
+  </div>
+  <div class="mt-10 grid md:grid-cols-3 gap-5">
+    <div class="reveal tilt glass rounded-3xl overflow-hidden">
+      <div class="h-40 bg-cover" style="background-image:url('https://images.unsplash.com/photo-1522543558187-768b6df7c25c?auto=format&fit=crop&w=600&q=70')"></div>
+      <div class="p-5"><span class="text-[11px] font-semibold bg-mint/15 text-mint px-2 py-0.5 rounded">Our School</span><h3 class="font-display font-semibold text-lg mt-3">Annual Science Fair</h3><div class="text-sm text-slate-400 mt-1">Aug 14 · 9:00 AM · Main Campus</div></div>
+    </div>
+    <div class="reveal tilt glass rounded-3xl overflow-hidden" style="transition-delay:.08s">
+      <div class="h-40 bg-cover" style="background-image:url('https://images.unsplash.com/photo-1471967183320-ee018f6e114a?auto=format&fit=crop&w=600&q=70')"></div>
+      <div class="p-5"><span class="text-[11px] font-semibold bg-iris/20 text-iris px-2 py-0.5 rounded">Network · Sunrise Public</span><h3 class="font-display font-semibold text-lg mt-3">Inter-School Music Fest</h3><div class="text-sm text-slate-400 mt-1">Aug 22 · 5:00 PM · Sunrise Auditorium</div></div>
+    </div>
+    <div class="reveal tilt glass rounded-3xl overflow-hidden" style="transition-delay:.16s">
+      <div class="h-40 bg-cover" style="background-image:url('https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=600&q=70')"></div>
+      <div class="p-5"><span class="text-[11px] font-semibold bg-sky/20 text-sky px-2 py-0.5 rounded">Network · Riverside</span><h3 class="font-display font-semibold text-lg mt-3">Regional Sports Meet</h3><div class="text-sm text-slate-400 mt-1">Sep 03 · 8:00 AM · City Stadium</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ENQUIRE -->
+<section id="enquire" class="relative max-w-6xl mx-auto px-6 py-24">
+  <div class="relative glass rounded-[2rem] overflow-hidden p-8 md:p-12 grid md:grid-cols-2 gap-12 items-center">
+    <div class="aurora a2" style="width:340px;height:340px;background:#7c6cff;top:-80px;right:-40px;opacity:.4"></div>
+    <div class="relative">
+      <h2 class="text-4xl font-semibold tracking-tight">Ready to <span class="grad-text">join us?</span></h2>
+      <p class="mt-4 text-slate-400">Leave your details and our admissions team reaches out within a working day. This drops an enquiry straight into the school's admin inbox.</p>
+      <div class="mt-6 space-y-2 text-sm text-slate-300">
+        <div>📞 +91 98765 43210</div><div>✉️ admissions@greenwoodschool.com</div><div>📍 42 Garden Avenue, Bengaluru 560001</div>
+      </div>
+    </div>
+    <form onsubmit="event.preventDefault();document.getElementById('ok').classList.remove('hidden');this.reset();" class="relative space-y-3">
+      <div id="ok" class="hidden bg-mint/15 text-mint text-sm rounded-xl px-4 py-2.5">✓ Thank you! Your enquiry has been received.</div>
+      <input required class="w-full glass rounded-xl px-4 py-3 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-mint/40" placeholder="Parent name">
+      <div class="grid grid-cols-2 gap-3">
+        <input required class="w-full glass rounded-xl px-4 py-3 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-mint/40" placeholder="Phone">
+        <select class="w-full glass rounded-xl px-4 py-3 text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-mint/40"><option class="bg-ink-900">Nursery</option><option class="bg-ink-900">Primary</option><option class="bg-ink-900">Middle</option><option class="bg-ink-900">Senior</option></select>
+      </div>
+      <textarea rows="3" class="w-full glass rounded-xl px-4 py-3 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-mint/40" placeholder="Message"></textarea>
+      <button class="btn-glow w-full bg-gradient-to-r from-mint to-sky text-ink-950 font-semibold py-3.5 rounded-xl hover:scale-[1.01] transition">Submit enquiry →</button>
+    </form>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="border-t border-white/10">
+  <div class="max-w-6xl mx-auto px-6 py-14 grid md:grid-cols-4 gap-8">
+    <div>
+      <div class="flex items-center gap-2.5"><span class="h-9 w-9 rounded-xl bg-gradient-to-br from-mint to-iris grid place-items-center font-display font-bold text-ink-950">G</span><span class="font-display font-semibold">Greenwood</span></div>
+      <p class="text-sm text-slate-400 mt-3">Nurturing confident, compassionate lifelong learners since 2001.</p>
+      <div class="flex gap-2 mt-4">
+        <a href="#" class="glass h-9 w-9 rounded-lg grid place-items-center hover:bg-white/10">📘</a>
+        <a href="#" class="glass h-9 w-9 rounded-lg grid place-items-center hover:bg-white/10">📷</a>
+        <a href="#" class="glass h-9 w-9 rounded-lg grid place-items-center hover:bg-white/10">▶️</a>
+      </div>
+    </div>
+    <div><div class="font-semibold mb-3">Explore</div><ul class="space-y-2 text-sm text-slate-400"><li><a href="#about">About</a></li><li><a href="#academics">Academics</a></li><li><a href="#gallery">Gallery</a></li><li><a href="#events">Events</a></li></ul></div>
+    <div><div class="font-semibold mb-3">Contact</div><ul class="space-y-2 text-sm text-slate-400"><li>📞 +91 98765 43210</li><li>✉️ info@greenwoodschool.com</li><li>📍 Bengaluru 560001</li></ul></div>
+    <div><div class="font-semibold mb-3">Visit</div><div class="glass rounded-xl h-28 grid place-items-center text-sm text-slate-500">🗺️ Map embed</div></div>
+  </div>
+  <div class="border-t border-white/10 text-center text-xs text-slate-500 py-4">© 2026 Greenwood International · Powered by SkoolOS</div>
+</footer>
+
+<script>
+  // nav shrink on scroll
+  addEventListener('scroll',()=>{ document.getElementById('nav').classList.toggle('top-2', scrollY>40); document.getElementById('nav').classList.toggle('top-6', scrollY<=40); });
+
+  // reveal on scroll
+  const io=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} }),{threshold:.15});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+  // count up
+  const cio=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ const el=e.target,to=+el.dataset.to; let n=0; const step=Math.max(1,Math.round(to/60)); const t=setInterval(()=>{ n+=step; if(n>=to){n=to;clearInterval(t);} el.textContent=to>=1000?n.toLocaleString():n+(to===98?'':''); },18); cio.unobserve(el);} }),{threshold:.6});
+  document.querySelectorAll('.count').forEach(el=>cio.observe(el));
+
+  // magnetic glow buttons
+  document.querySelectorAll('.btn-glow').forEach(b=>b.addEventListener('mousemove',e=>{const r=b.getBoundingClientRect();b.style.setProperty('--x',(e.clientX-r.left)+'px');b.style.setProperty('--y',(e.clientY-r.top)+'px');}));
+
+  // tilt cards
+  document.querySelectorAll('.tilt').forEach(c=>{
+    c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect();const rx=((e.clientY-r.top)/r.height-.5)*-8;const ry=((e.clientX-r.left)/r.width-.5)*8;c.style.transform=`perspective(800px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-4px)`;});
+    c.addEventListener('mouseleave',()=>c.style.transform='');
+  });
+</script>
+</body>
+</html>

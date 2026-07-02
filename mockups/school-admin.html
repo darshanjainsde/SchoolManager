@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>School Admin — Greenwood (Mockup)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script>
+  tailwind.config = { theme: { extend: { fontFamily:{sans:['Plus Jakarta Sans','sans-serif']},
+    colors:{ ink:{900:'#0f172a'}, teal:{50:'#f0fdfa',100:'#ccfbf1',500:'#14b8a6',600:'#0d9488',700:'#0f766e'} } } } };
+</script>
+<style>body{font-family:'Plus Jakarta Sans',sans-serif}
+ .nav-item.active{background:#ccfbf1;color:#0f766e;font-weight:600}
+ .view{display:none}.view.active{display:block}
+ .slot{transition:.1s}.slot:hover{background:#f0fdfa}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="bg-amber-400 text-amber-950 text-center text-xs font-semibold py-1.5">MOCKUP — School Admin Portal (Pro tier) · Greenwood International · manages website + teachers/classes/students/timetable</div>
+
+<div class="flex min-h-screen">
+  <aside class="w-60 bg-ink-900 text-slate-300 flex flex-col shrink-0">
+    <div class="p-5 flex items-center gap-2 text-white font-extrabold">
+      <span class="h-8 w-8 rounded-lg bg-teal-600 grid place-items-center">G</span> Greenwood
+    </div>
+    <nav class="px-3 space-y-1 mt-2 text-sm">
+      <a onclick="show('dashboard',this)" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">📊 Dashboard</a>
+      <a onclick="show('website',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">🎨 Website</a>
+      <div class="pt-2 pb-1 px-3 text-[10px] uppercase tracking-wider text-slate-500">Management</div>
+      <a onclick="show('classes',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">📚 Classes</a>
+      <a onclick="show('teachers',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">👩‍🏫 Teachers</a>
+      <a onclick="show('students',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">🎒 Students</a>
+      <a onclick="show('timetable',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">🗓️ Timetable</a>
+      <a onclick="show('availability',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">🧭 Teacher availability</a>
+      <div class="pt-2 pb-1 px-3 text-[10px] uppercase tracking-wider text-slate-500">Community</div>
+      <a onclick="show('events',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">📅 Events</a>
+      <a onclick="show('enquiries',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">📨 Enquiries <span class="ml-auto bg-teal-500 text-white text-[10px] px-1.5 rounded-full">4</span></a>
+    </nav>
+    <div class="mt-auto p-4 text-xs text-slate-500 border-t border-white/10">admin@greenwoodschool.com</div>
+  </aside>
+
+  <main class="flex-1 overflow-auto">
+    <!-- DASHBOARD -->
+    <section class="view active" id="dashboard"><div class="p-8">
+      <h1 class="text-2xl font-bold text-ink-900">Good morning, Anita 👋</h1>
+      <p class="text-slate-500 text-sm mt-1">Here's what's happening at Greenwood today.</p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-6">
+        <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="text-sm text-slate-500">Students</div><div class="text-3xl font-bold mt-1">1,806</div></div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="text-sm text-slate-500">Teachers</div><div class="text-3xl font-bold mt-1">118</div></div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="text-sm text-slate-500">Classes</div><div class="text-3xl font-bold mt-1">42</div></div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="text-sm text-slate-500">New enquiries</div><div class="text-3xl font-bold mt-1 text-teal-600">4</div></div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-5 mt-6">
+        <div class="bg-white rounded-2xl p-6 shadow-sm"><div class="font-semibold mb-4">Quick actions</div>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <button onclick="show('teachers',document.querySelectorAll('.nav-item')[3])" class="border rounded-xl p-3 hover:bg-slate-50 text-left">👩‍🏫 Add teacher</button>
+            <button onclick="show('students',document.querySelectorAll('.nav-item')[4])" class="border rounded-xl p-3 hover:bg-slate-50 text-left">🎒 Add student</button>
+            <button onclick="show('timetable',document.querySelectorAll('.nav-item')[5])" class="border rounded-xl p-3 hover:bg-slate-50 text-left">🗓️ Edit timetable</button>
+            <button onclick="show('website',document.querySelectorAll('.nav-item')[1])" class="border rounded-xl p-3 hover:bg-slate-50 text-left">🎨 Edit website</button>
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm"><div class="font-semibold mb-4">Teacher availability now</div>
+          <div class="space-y-2 text-sm">
+            <div class="flex items-center justify-between"><span>Period 3 · 10:30 AM</span><span class="text-slate-500">12 free · 106 teaching</span></div>
+            <div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-teal-500" style="width:10%"></div></div>
+            <div class="text-xs text-slate-400">See the full grid in “Teacher availability”.</div>
+          </div>
+        </div>
+      </div>
+    </div></section>
+
+    <!-- WEBSITE (reuses content tabs, scoped to this school) -->
+    <section class="view" id="website"><div class="p-8">
+      <h1 class="text-2xl font-bold text-ink-900">Website content</h1>
+      <p class="text-slate-500 text-sm mt-1">Edit what visitors see on your public site. <a class="text-teal-600" href="public-site.html" target="_blank">Open live site ↗</a></p>
+      <div class="flex gap-2 mt-5 border-b overflow-x-auto text-sm">
+        <button onclick="wtab('w-home',this)" class="wtab-btn px-4 py-2 border-b-2 border-teal-600 text-teal-600 font-semibold whitespace-nowrap">Homepage</button>
+        <button onclick="wtab('w-gallery',this)" class="wtab-btn px-4 py-2 border-b-2 border-transparent text-slate-500 whitespace-nowrap">Gallery</button>
+        <button onclick="wtab('w-about',this)" class="wtab-btn px-4 py-2 border-b-2 border-transparent text-slate-500 whitespace-nowrap">About</button>
+        <button onclick="wtab('w-contact',this)" class="wtab-btn px-4 py-2 border-b-2 border-transparent text-slate-500 whitespace-nowrap">Contact & address</button>
+      </div>
+      <div id="w-home" class="wtab mt-6">
+        <div class="bg-white rounded-2xl p-6 shadow-sm max-w-2xl space-y-4">
+          <div><label class="text-sm font-medium">Hero image</label><div class="mt-2 h-32 rounded-xl bg-cover bg-center relative" style="background-image:url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=800&q=60')"><button class="absolute bottom-2 right-2 bg-white/90 text-xs px-3 py-1.5 rounded-lg font-medium">Replace</button></div></div>
+          <div><label class="text-sm font-medium">Headline</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" value="Where curious minds grow into confident leaders"></div>
+          <button class="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save</button>
+        </div>
+      </div>
+      <div id="w-gallery" class="wtab mt-6 hidden"><div class="bg-white rounded-2xl p-6 shadow-sm">
+        <div class="flex items-center justify-between mb-4"><div class="font-semibold">Gallery</div><button class="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">⬆ Upload</button></div>
+        <div class="grid grid-cols-3 md:grid-cols-5 gap-3">
+          <img class="h-24 w-full object-cover rounded-lg" src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=200&q=60">
+          <img class="h-24 w-full object-cover rounded-lg" src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=200&q=60">
+          <img class="h-24 w-full object-cover rounded-lg" src="https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=200&q=60">
+          <div class="h-24 w-full rounded-lg border-2 border-dashed border-slate-300 grid place-items-center text-slate-400 text-sm cursor-pointer">＋ Add</div>
+        </div></div>
+      </div>
+      <div id="w-about" class="wtab mt-6 hidden"><div class="bg-white rounded-2xl p-6 shadow-sm max-w-2xl space-y-4">
+        <div><label class="text-sm font-medium">About text</label><textarea rows="5" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">Greenwood International blends a rigorous academic programme with rich co-curricular life...</textarea></div>
+        <button class="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save</button></div>
+      </div>
+      <div id="w-contact" class="wtab mt-6 hidden"><div class="bg-white rounded-2xl p-6 shadow-sm max-w-2xl space-y-4">
+        <div class="grid grid-cols-2 gap-3"><div><label class="text-sm font-medium">Phone</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" value="+91 98765 43210"></div><div><label class="text-sm font-medium">Email</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" value="info@greenwoodschool.com"></div></div>
+        <div><label class="text-sm font-medium">Address</label><textarea rows="2" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">42 Garden Avenue, Bengaluru 560001</textarea></div>
+        <button class="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save</button></div>
+      </div>
+    </div></section>
+
+    <!-- CLASSES -->
+    <section class="view" id="classes"><div class="p-8">
+      <div class="flex items-center justify-between"><div><h1 class="text-2xl font-bold text-ink-900">Classes</h1><p class="text-slate-500 text-sm mt-1">Classes drive your public “Academics” menu.</p></div>
+        <button onclick="modal('m-class')" class="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">＋ Add class</button></div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6" id="class-grid">
+        <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="font-semibold text-lg">Grade 5 · A</div><div class="text-sm text-slate-500 mt-1">Class teacher: Priya Menon</div><div class="text-sm text-slate-500">32 students · 8 subjects</div></div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="font-semibold text-lg">Grade 5 · B</div><div class="text-sm text-slate-500 mt-1">Class teacher: Arjun Verma</div><div class="text-sm text-slate-500">30 students · 8 subjects</div></div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="font-semibold text-lg">Grade 6 · A</div><div class="text-sm text-slate-500 mt-1">Class teacher: Meera Nair</div><div class="text-sm text-slate-500">28 students · 9 subjects</div></div>
+      </div>
+    </div></section>
+
+    <!-- TEACHERS -->
+    <section class="view" id="teachers"><div class="p-8">
+      <div class="flex items-center justify-between"><div><h1 class="text-2xl font-bold text-ink-900">Teachers</h1><p class="text-slate-500 text-sm mt-1">Photos and names sync to your public “Our people” section.</p></div>
+        <button onclick="modal('m-teacher')" class="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">＋ Add teacher</button></div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6" id="teacher-grid">
+        <div class="bg-white rounded-2xl p-5 shadow-sm text-center"><img class="h-20 w-20 rounded-full object-cover mx-auto" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&q=60"><div class="font-semibold mt-3">Meera Nair</div><div class="text-sm text-slate-500">Science</div><div class="text-xs text-teal-600 mt-1">On homepage ✓</div></div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm text-center"><img class="h-20 w-20 rounded-full object-cover mx-auto" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=60"><div class="font-semibold mt-3">Arjun Verma</div><div class="text-sm text-slate-500">Mathematics</div><div class="text-xs text-teal-600 mt-1">On homepage ✓</div></div>
+        <div class="bg-white rounded-2xl p-5 shadow-sm text-center"><img class="h-20 w-20 rounded-full object-cover mx-auto" src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=120&q=60"><div class="font-semibold mt-3">Priya Menon</div><div class="text-sm text-slate-500">English</div><div class="text-xs text-slate-400 mt-1">Not featured</div></div>
+      </div>
+    </div></section>
+
+    <!-- STUDENTS -->
+    <section class="view" id="students"><div class="p-8">
+      <div class="flex items-center justify-between"><div><h1 class="text-2xl font-bold text-ink-900">Students</h1><p class="text-slate-500 text-sm mt-1">Each student is mapped to a class on creation.</p></div>
+        <button onclick="modal('m-student')" class="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">＋ Add student</button></div>
+      <div class="bg-white rounded-2xl shadow-sm mt-6 overflow-hidden">
+        <table class="w-full text-sm"><thead class="text-left text-slate-400 border-b bg-slate-50"><tr><th class="px-5 py-3 font-medium">Roll</th><th class="font-medium">Name</th><th class="font-medium">Class</th><th class="font-medium">Guardian</th><th class="font-medium">Contact</th></tr></thead>
+        <tbody class="divide-y" id="student-rows">
+          <tr><td class="px-5 py-3">05A-01</td><td class="font-medium">Aarav Sharma</td><td><span class="bg-teal-50 text-teal-700 text-xs px-2 py-0.5 rounded">Grade 5 · A</span></td><td class="text-slate-500">Rohan Sharma</td><td class="text-slate-500">+91 90000 11111</td></tr>
+          <tr><td class="px-5 py-3">05A-02</td><td class="font-medium">Isha Patel</td><td><span class="bg-teal-50 text-teal-700 text-xs px-2 py-0.5 rounded">Grade 5 · A</span></td><td class="text-slate-500">Nisha Patel</td><td class="text-slate-500">+91 90000 22222</td></tr>
+          <tr><td class="px-5 py-3">06A-01</td><td class="font-medium">Kabir Singh</td><td><span class="bg-teal-50 text-teal-700 text-xs px-2 py-0.5 rounded">Grade 6 · A</span></td><td class="text-slate-500">Vir Singh</td><td class="text-slate-500">+91 90000 33333</td></tr>
+        </tbody></table>
+      </div>
+    </div></section>
+
+    <!-- TIMETABLE -->
+    <section class="view" id="timetable"><div class="p-8">
+      <div class="flex items-center justify-between flex-wrap gap-3"><div><h1 class="text-2xl font-bold text-ink-900">Timetable builder</h1><p class="text-slate-500 text-sm mt-1">Assign teacher + subject to each period. Clashes are flagged automatically.</p></div>
+        <select class="border rounded-lg px-3 py-2 text-sm bg-white"><option>Grade 5 · A</option><option>Grade 5 · B</option><option>Grade 6 · A</option></select></div>
+      <div id="clash-warn" class="hidden mt-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-2">⚠ Clash: Arjun Verma is already teaching Grade 6·A at this period.</div>
+      <div class="bg-white rounded-2xl shadow-sm mt-4 overflow-auto">
+        <table class="w-full text-sm text-center border-collapse">
+          <thead><tr class="bg-slate-50 text-slate-500"><th class="p-3 border-b border-r text-left">Period</th><th class="p-3 border-b">Mon</th><th class="p-3 border-b">Tue</th><th class="p-3 border-b">Wed</th><th class="p-3 border-b">Thu</th><th class="p-3 border-b">Fri</th></tr></thead>
+          <tbody id="tt-body"></tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-400 mt-3">Click any empty slot to assign a subject + teacher (mockup shows the flow).</p>
+    </div></section>
+
+    <!-- AVAILABILITY -->
+    <section class="view" id="availability"><div class="p-8">
+      <h1 class="text-2xl font-bold text-ink-900">Teacher availability</h1>
+      <p class="text-slate-500 text-sm mt-1">Holistic view — who's free and who's teaching, per period. Green = free.</p>
+      <div class="bg-white rounded-2xl shadow-sm mt-6 overflow-auto">
+        <table class="w-full text-sm text-center"><thead><tr class="bg-slate-50 text-slate-500"><th class="p-3 text-left border-b">Teacher</th><th class="p-3 border-b">P1</th><th class="p-3 border-b">P2</th><th class="p-3 border-b">P3</th><th class="p-3 border-b">P4</th><th class="p-3 border-b">P5</th><th class="p-3 border-b">P6</th><th class="p-3 border-b">Load</th></tr></thead>
+        <tbody id="avail-body"></tbody></table>
+      </div>
+      <div class="flex gap-4 mt-3 text-xs text-slate-500"><span><span class="inline-block h-3 w-3 rounded bg-teal-400 align-middle"></span> Free</span><span><span class="inline-block h-3 w-3 rounded bg-slate-200 align-middle"></span> Teaching</span></div>
+    </div></section>
+
+    <!-- EVENTS -->
+    <section class="view" id="events"><div class="p-8">
+      <div class="flex items-center justify-between"><div><h1 class="text-2xl font-bold text-ink-900">Events</h1><p class="text-slate-500 text-sm mt-1">Submit an event → owner approves → it shows on every network site.</p></div>
+        <button onclick="modal('m-event')" class="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">＋ Submit event</button></div>
+      <div class="bg-white rounded-2xl shadow-sm mt-6 divide-y">
+        <div class="p-5 flex items-center gap-4"><div class="h-14 w-20 rounded-lg bg-cover" style="background-image:url('https://images.unsplash.com/photo-1522543558187-768b6df7c25c?auto=format&fit=crop&w=200&q=60')"></div><div class="flex-1"><div class="font-semibold">Annual Science Fair</div><div class="text-sm text-slate-500">Aug 14 · Main Campus</div></div><span class="bg-green-50 text-green-700 text-xs px-2 py-1 rounded">● Approved · live</span></div>
+        <div class="p-5 flex items-center gap-4"><div class="h-14 w-20 rounded-lg bg-cover" style="background-image:url('https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=200&q=60')"></div><div class="flex-1"><div class="font-semibold">Parent-Teacher Meet</div><div class="text-sm text-slate-500">Aug 30 · Auditorium</div></div><span class="bg-amber-50 text-amber-700 text-xs px-2 py-1 rounded">● Pending approval</span></div>
+      </div>
+    </div></section>
+
+    <!-- ENQUIRIES -->
+    <section class="view" id="enquiries"><div class="p-8">
+      <h1 class="text-2xl font-bold text-ink-900">Enquiries</h1><p class="text-slate-500 text-sm mt-1">Leads from your public enquiry form.</p>
+      <div class="bg-white rounded-2xl shadow-sm mt-6 overflow-hidden">
+        <table class="w-full text-sm"><thead class="text-left text-slate-400 border-b bg-slate-50"><tr><th class="px-5 py-3 font-medium">Parent</th><th class="font-medium">Phone</th><th class="font-medium">Grade</th><th class="font-medium">When</th><th class="font-medium">Status</th></tr></thead>
+        <tbody class="divide-y">
+          <tr><td class="px-5 py-3 font-medium">Rohan Sharma</td><td class="text-slate-500">+91 90000 11111</td><td>Grade 1</td><td class="text-slate-500">2h ago</td><td><span class="bg-amber-50 text-amber-700 text-xs px-2 py-0.5 rounded">New</span></td></tr>
+          <tr><td class="px-5 py-3 font-medium">Nisha Patel</td><td class="text-slate-500">+91 90000 22222</td><td>Nursery</td><td class="text-slate-500">5h ago</td><td><span class="bg-amber-50 text-amber-700 text-xs px-2 py-0.5 rounded">New</span></td></tr>
+          <tr><td class="px-5 py-3 font-medium">Vir Singh</td><td class="text-slate-500">+91 90000 33333</td><td>Grade 6</td><td class="text-slate-500">1d ago</td><td><span class="bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded">Contacted</span></td></tr>
+        </tbody></table>
+      </div>
+    </div></section>
+  </main>
+</div>
+
+<!-- MODALS -->
+<div id="m-class" class="modal fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4"><div class="bg-white rounded-2xl w-full max-w-md shadow-2xl"><div class="px-6 py-4 border-b flex items-center justify-between"><div class="font-bold text-lg">Add class</div><button onclick="closeModal()" class="text-slate-400">✕</button></div><div class="p-6 space-y-4"><div class="grid grid-cols-2 gap-3"><div><label class="text-sm font-medium">Grade</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Grade 7"></div><div><label class="text-sm font-medium">Section</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="A"></div></div><div><label class="text-sm font-medium">Class teacher</label><select class="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"><option>Meera Nair</option><option>Arjun Verma</option><option>Priya Menon</option></select></div></div><div class="px-6 py-4 border-t flex justify-end gap-2"><button onclick="closeModal()" class="text-slate-500 text-sm px-4 py-2">Cancel</button><button onclick="addClass()" class="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">Add class</button></div></div></div>
+
+<div id="m-teacher" class="modal fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4"><div class="bg-white rounded-2xl w-full max-w-md shadow-2xl"><div class="px-6 py-4 border-b flex items-center justify-between"><div class="font-bold text-lg">Add teacher</div><button onclick="closeModal()" class="text-slate-400">✕</button></div><div class="p-6 space-y-4"><div class="flex items-center gap-4"><div class="h-16 w-16 rounded-full bg-slate-100 grid place-items-center text-slate-400">📷</div><button class="border rounded-lg px-4 py-2 text-sm">Upload photo</button></div><div><label class="text-sm font-medium">Full name</label><input id="t-name" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Sameer Khan"></div><div class="grid grid-cols-2 gap-3"><div><label class="text-sm font-medium">Subject</label><input id="t-subj" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Physics"></div><div><label class="text-sm font-medium">Email</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="teacher@..."></div></div><label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded"> Feature on public homepage</label></div><div class="px-6 py-4 border-t flex justify-end gap-2"><button onclick="closeModal()" class="text-slate-500 text-sm px-4 py-2">Cancel</button><button onclick="addTeacher()" class="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">Add teacher</button></div></div></div>
+
+<div id="m-student" class="modal fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4"><div class="bg-white rounded-2xl w-full max-w-md shadow-2xl"><div class="px-6 py-4 border-b flex items-center justify-between"><div class="font-bold text-lg">Add student</div><button onclick="closeModal()" class="text-slate-400">✕</button></div><div class="p-6 space-y-4"><div><label class="text-sm font-medium">Full name</label><input id="s-name" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Rhea Kapoor"></div><div class="grid grid-cols-2 gap-3"><div><label class="text-sm font-medium">Map to class</label><select id="s-class" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"><option>Grade 5 · A</option><option>Grade 5 · B</option><option>Grade 6 · A</option></select></div><div><label class="text-sm font-medium">Roll no.</label><input id="s-roll" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="05A-33"></div></div><div><label class="text-sm font-medium">Guardian name & phone</label><input id="s-guard" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Parent · +91 ..."></div></div><div class="px-6 py-4 border-t flex justify-end gap-2"><button onclick="closeModal()" class="text-slate-500 text-sm px-4 py-2">Cancel</button><button onclick="addStudent()" class="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">Add student</button></div></div></div>
+
+<div id="m-event" class="modal fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4"><div class="bg-white rounded-2xl w-full max-w-md shadow-2xl"><div class="px-6 py-4 border-b flex items-center justify-between"><div class="font-bold text-lg">Submit event</div><button onclick="closeModal()" class="text-slate-400">✕</button></div><div class="p-6 space-y-4"><div><label class="text-sm font-medium">Event title</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Cultural Fest"></div><div class="grid grid-cols-2 gap-3"><div><label class="text-sm font-medium">Date</label><input type="date" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm"></div><div><label class="text-sm font-medium">Venue</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="Campus"></div></div><div class="bg-amber-50 text-amber-700 text-xs rounded-lg px-3 py-2">This event will be sent to the owner for approval before appearing on network sites.</div></div><div class="px-6 py-4 border-t flex justify-end gap-2"><button onclick="closeModal()" class="text-slate-500 text-sm px-4 py-2">Cancel</button><button onclick="closeModal();alert('✓ Mockup: event submitted for owner approval.')" class="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">Submit for approval</button></div></div></div>
+
+<!-- Slot assign modal -->
+<div id="m-slot" class="modal fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4"><div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl"><div class="px-6 py-4 border-b flex items-center justify-between"><div class="font-bold text-lg">Assign period</div><button onclick="closeModal()" class="text-slate-400">✕</button></div><div class="p-6 space-y-4"><div><label class="text-sm font-medium">Subject</label><select id="slot-subj" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"><option>Mathematics</option><option>Science</option><option>English</option><option>History</option></select></div><div><label class="text-sm font-medium">Teacher</label><select id="slot-teacher" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"><option>Arjun Verma</option><option>Meera Nair</option><option>Priya Menon</option></select></div></div><div class="px-6 py-4 border-t flex justify-end gap-2"><button onclick="closeModal()" class="text-slate-500 text-sm px-4 py-2">Cancel</button><button onclick="assignSlot()" class="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">Assign</button></div></div></div>
+
+<script>
+  function show(id, el){ document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active')); if(el) el.classList.add('active'); document.querySelector('main').scrollTo(0,0); }
+  function wtab(id,btn){ document.querySelectorAll('.wtab').forEach(t=>t.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); document.querySelectorAll('.wtab-btn').forEach(b=>{b.classList.remove('border-teal-600','text-teal-600','font-semibold');b.classList.add('border-transparent','text-slate-500');}); btn.classList.add('border-teal-600','text-teal-600','font-semibold'); btn.classList.remove('border-transparent','text-slate-500'); }
+  let curModal=null, curSlot=null;
+  function modal(id){ curModal=id; const m=document.getElementById(id); m.classList.remove('hidden'); m.classList.add('flex'); }
+  function closeModal(){ document.querySelectorAll('.modal').forEach(m=>{m.classList.add('hidden');m.classList.remove('flex');}); }
+  function addClass(){ const g=document.getElementById('class-grid'); const d=document.createElement('div'); d.className='bg-white rounded-2xl p-5 shadow-sm ring-2 ring-teal-400'; d.innerHTML='<div class="font-semibold text-lg">New class</div><div class="text-sm text-slate-500 mt-1">Just added</div>'; g.prepend(d); closeModal(); }
+  function addTeacher(){ const n=document.getElementById('t-name').value||'New Teacher'; const s=document.getElementById('t-subj').value||'Subject'; const g=document.getElementById('teacher-grid'); const d=document.createElement('div'); d.className='bg-white rounded-2xl p-5 shadow-sm text-center ring-2 ring-teal-400'; d.innerHTML='<div class="h-20 w-20 rounded-full bg-teal-100 grid place-items-center text-teal-600 text-2xl mx-auto">'+n[0]+'</div><div class="font-semibold mt-3">'+n+'</div><div class="text-sm text-slate-500">'+s+'</div>'; g.prepend(d); closeModal(); }
+  function addStudent(){ const n=document.getElementById('s-name').value||'New Student'; const c=document.getElementById('s-class').value; const r=document.getElementById('s-roll').value||'—'; const gd=document.getElementById('s-guard').value||'—'; const tb=document.getElementById('student-rows'); const tr=document.createElement('tr'); tr.className='bg-teal-50/50'; tr.innerHTML='<td class="px-5 py-3">'+r+'</td><td class="font-medium">'+n+'</td><td><span class="bg-teal-50 text-teal-700 text-xs px-2 py-0.5 rounded">'+c+'</span></td><td class="text-slate-500">'+gd+'</td><td class="text-slate-500">—</td>'; tb.prepend(tr); closeModal(); }
+  // timetable grid
+  const periods=['P1 · 8:00','P2 · 9:00','P3 · 10:30','P4 · 11:30','P5 · 1:30','P6 · 2:30'];
+  const seed={0:['Mathematics·Arjun Verma','Science·Meera Nair','','English·Priya Menon','',''],1:['Science·Meera Nair','','Mathematics·Arjun Verma','','History·Priya Menon','']};
+  function buildTT(){ const b=document.getElementById('tt-body'); b.innerHTML=''; periods.forEach((p,pi)=>{ let row='<tr><td class="p-3 border-r border-b text-left text-slate-500 whitespace-nowrap">'+p+'</td>'; for(let d=0;d<5;d++){ const val=(seed[pi]&&seed[pi][d])||''; if(val){ const [s,t]=val.split('·'); row+='<td class="p-2 border-b"><div class="rounded-lg bg-teal-50 text-teal-800 px-2 py-2 text-xs"><div class="font-semibold">'+s+'</div><div class="text-teal-600">'+t+'</div></div></td>'; } else { row+='<td class="p-2 border-b slot cursor-pointer" onclick="openSlot(this)"><div class="rounded-lg border-2 border-dashed border-slate-200 text-slate-300 py-3 text-xs">＋</div></td>'; } } row+='</tr>'; b.innerHTML+=row; }); }
+  function openSlot(td){ curSlot=td; modal('m-slot'); }
+  function assignSlot(){ const s=document.getElementById('slot-subj').value, t=document.getElementById('slot-teacher').value; const clash = (t==='Arjun Verma'); document.getElementById('clash-warn').classList.toggle('hidden', !clash); curSlot.innerHTML='<div class="rounded-lg '+(clash?'bg-rose-50 text-rose-800':'bg-teal-50 text-teal-800')+' px-2 py-2 text-xs"><div class="font-semibold">'+s+'</div><div>'+t+(clash?' ⚠':'')+'</div></div>'; closeModal(); }
+  // availability grid
+  const teachers=[['Meera Nair',[1,0,1,0,0,1]],['Arjun Verma',[0,0,1,1,0,0]],['Priya Menon',[0,1,0,0,1,1]],['Sameer Khan',[1,1,1,0,0,0]],['Ravi Iyer',[0,0,0,1,1,0]]];
+  function buildAvail(){ const b=document.getElementById('avail-body'); b.innerHTML=''; teachers.forEach(([name,slots])=>{ const free=slots.filter(x=>x).length; let row='<tr class="border-b"><td class="p-3 text-left font-medium">'+name+'</td>'; slots.forEach(s=>{ row+='<td class="p-2"><div class="h-8 rounded '+(s?'bg-teal-400':'bg-slate-200')+'"></div></td>'; }); row+='<td class="p-3 text-slate-500">'+(6-free)+'/6</td></tr>'; b.innerHTML+=row; }); }
+  buildTT(); buildAvail();
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SkoolOS — Mockups Launcher</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>body{font-family:'Plus Jakarta Sans',sans-serif}</style>
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen">
+<div class="max-w-5xl mx-auto px-6 py-14">
+  <div class="flex items-center gap-3">
+    <span class="h-11 w-11 rounded-xl bg-indigo-600 grid place-items-center font-extrabold text-white text-xl">S</span>
+    <div><h1 class="text-2xl font-extrabold text-white">SkoolOS — Design Mockups</h1><p class="text-slate-400 text-sm">Clickable prototypes for approval. No backend — this is about look & flow.</p></div>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-5 mt-10">
+    <a href="public-site.html" class="group bg-slate-800 hover:bg-slate-750 rounded-2xl p-6 border border-slate-700 hover:border-indigo-500 transition">
+      <div class="text-3xl">🌐</div>
+      <div class="font-bold text-white text-lg mt-3">Public School Website</div>
+      <p class="text-sm text-slate-400 mt-1">What a visitor sees at <span class="font-mono text-slate-300">greenwoodschool.com</span> — hero, about, class-wise menu, gallery, Connect events, enquiry form. <b>Standard tier</b>.</p>
+      <div class="text-indigo-400 text-sm mt-3 group-hover:underline">Open →</div>
+    </a>
+    <a href="owner-portal.html" class="group bg-slate-800 hover:bg-slate-750 rounded-2xl p-6 border border-slate-700 hover:border-indigo-500 transition">
+      <div class="text-3xl">👑</div>
+      <div class="font-bold text-white text-lg mt-3">Owner Portal</div>
+      <p class="text-sm text-slate-400 mt-1">Your control room. Add-school <b>wizard with the 3 tiers</b>, per-school content editor (with owner override), and the <b>events moderation</b> queue.</p>
+      <div class="text-indigo-400 text-sm mt-3 group-hover:underline">Open →</div>
+    </a>
+    <a href="school-admin.html" class="group bg-slate-800 hover:bg-slate-750 rounded-2xl p-6 border border-slate-700 hover:border-indigo-500 transition">
+      <div class="text-3xl">🏫</div>
+      <div class="font-bold text-white text-lg mt-3">School Admin Portal</div>
+      <p class="text-sm text-slate-400 mt-1">Website editor + <b>classes, teachers (with photos), students mapped to a class</b>, a <b>timetable builder</b> with clash detection, and a <b>teacher-availability</b> grid.</p>
+      <div class="text-indigo-400 text-sm mt-3 group-hover:underline">Open →</div>
+    </a>
+    <a href="student-portal.html" class="group bg-slate-800 hover:bg-slate-750 rounded-2xl p-6 border border-slate-700 hover:border-indigo-500 transition">
+      <div class="text-3xl">🎒</div>
+      <div class="font-bold text-white text-lg mt-3">Student Portal <span class="text-xs bg-slate-600 px-2 py-0.5 rounded ml-1">Later</span></div>
+      <p class="text-sm text-slate-400 mt-1">A deliberately minimal first cut — timetable + announcements. Built in a later phase.</p>
+      <div class="text-indigo-400 text-sm mt-3 group-hover:underline">Open →</div>
+    </a>
+  </div>
+
+  <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 mt-8">
+    <div class="font-bold text-white">What to check while clicking around</div>
+    <ul class="text-sm text-slate-400 mt-3 space-y-1.5 list-disc pl-5">
+      <li>Owner portal → <b>Add School</b> — the 3-step wizard and the Basic / Standard / Pro tier picker.</li>
+      <li>Owner portal → <b>Events</b> — approve a pending event (watch the badge tick down).</li>
+      <li>Owner portal → <b>Content Editor</b> — the "owner override" banner and the branding/gallery/staff tabs.</li>
+      <li>School admin → <b>Teachers/Students</b> — add one, see it appear; students map to a class.</li>
+      <li>School admin → <b>Timetable</b> — click an empty slot, assign a subject+teacher; assigning "Arjun Verma" triggers a clash warning.</li>
+      <li>School admin → <b>Teacher availability</b> — the green/grey free-vs-teaching grid.</li>
+      <li>Public site → scroll the whole page; try the <b>enquiry form</b>.</li>
+    </ul>
+    <p class="text-xs text-slate-500 mt-4">These are throwaway prototypes to lock the look & behaviour. Once you approve, I write the spec + scalable architecture (Postgres, Redis, multi-tenant) and build it for real.</p>
+  </div>
+</div>
+</body>
+</html>

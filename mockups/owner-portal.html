@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Owner Portal — SkoolOS (Mockup)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script>
+  tailwind.config = { theme: { extend: { fontFamily: { sans: ['Plus Jakarta Sans','sans-serif'] },
+    colors: { ink:{900:'#0f172a'}, iris:{50:'#eef2ff',100:'#e0e7ff',500:'#6366f1',600:'#4f46e5',700:'#4338ca'} } } } };
+</script>
+<style>body{font-family:'Plus Jakarta Sans',sans-serif}
+ .nav-item.active{background:#e0e7ff;color:#4338ca;font-weight:600}
+ .view{display:none} .view.active{display:block}
+ .wstep{display:none} .wstep.active{display:block}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="bg-amber-400 text-amber-950 text-center text-xs font-semibold py-1.5">MOCKUP — Owner Portal · you manage every school's website, features & events</div>
+
+<div class="flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="w-60 bg-ink-900 text-slate-300 flex flex-col shrink-0">
+    <div class="p-5 flex items-center gap-2 text-white font-extrabold text-lg">
+      <span class="h-8 w-8 rounded-lg bg-iris-600 grid place-items-center">S</span> SkoolOS
+      <span class="ml-auto text-[10px] bg-iris-600 text-white px-2 py-0.5 rounded-full">OWNER</span>
+    </div>
+    <nav class="px-3 space-y-1 mt-2 text-sm">
+      <a onclick="show('dashboard',this)" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">📊 Dashboard</a>
+      <a onclick="show('schools',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">🏫 Schools</a>
+      <a onclick="openWizard()" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">➕ Add School</a>
+      <a onclick="show('content',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">🎨 Content Editor</a>
+      <a onclick="show('events',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">📅 Events <span id="ev-badge" class="ml-auto bg-rose-500 text-white text-[10px] px-1.5 rounded-full">2</span></a>
+      <a onclick="show('settings',this)" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-white/5">⚙️ Settings</a>
+    </nav>
+    <div class="mt-auto p-4 text-xs text-slate-500 border-t border-white/10">owner@skoolos.local</div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 overflow-auto">
+    <!-- DASHBOARD -->
+    <section class="view active" id="dashboard">
+      <div class="p-8">
+        <h1 class="text-2xl font-bold text-ink-900">Dashboard</h1>
+        <p class="text-slate-500 text-sm mt-1">Overview of every school on your platform.</p>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-6">
+          <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="text-sm text-slate-500">Total schools</div><div class="text-3xl font-bold mt-1">6</div></div>
+          <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="text-sm text-slate-500">Basic / Standard / Pro</div><div class="text-3xl font-bold mt-1">2 · 3 · 1</div></div>
+          <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="text-sm text-slate-500">Live domains</div><div class="text-3xl font-bold mt-1">5</div></div>
+          <div class="bg-white rounded-2xl p-5 shadow-sm"><div class="text-sm text-slate-500">Events pending</div><div class="text-3xl font-bold mt-1 text-rose-600">2</div></div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm mt-6">
+          <div class="px-5 py-4 border-b font-semibold">Recently added</div>
+          <table class="w-full text-sm">
+            <thead class="text-left text-slate-400 border-b"><tr><th class="px-5 py-3 font-medium">School</th><th class="font-medium">Domain</th><th class="font-medium">Tier</th><th class="font-medium">Status</th></tr></thead>
+            <tbody class="divide-y">
+              <tr><td class="px-5 py-3 font-medium">Greenwood International</td><td class="text-slate-500">greenwoodschool.com</td><td><span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded">Standard</span></td><td><span class="text-green-600">● Live</span></td></tr>
+              <tr><td class="px-5 py-3 font-medium">Sunrise Public School</td><td class="text-slate-500">sunrisepublic.in</td><td><span class="bg-violet-100 text-violet-700 text-xs px-2 py-0.5 rounded">Pro</span></td><td><span class="text-green-600">● Live</span></td></tr>
+              <tr><td class="px-5 py-3 font-medium">Little Stars Preschool</td><td class="text-slate-500">littlestars.edu</td><td><span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded">Basic</span></td><td><span class="text-amber-600">● Setup</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCHOOLS -->
+    <section class="view" id="schools">
+      <div class="p-8">
+        <div class="flex items-center justify-between">
+          <div><h1 class="text-2xl font-bold text-ink-900">Schools</h1><p class="text-slate-500 text-sm mt-1">Manage content, features and domains per school.</p></div>
+          <button onclick="openWizard()" class="bg-iris-600 hover:bg-iris-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">➕ Add School</button>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm mt-6 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="text-left text-slate-400 border-b bg-slate-50"><tr><th class="px-5 py-3 font-medium">School</th><th class="font-medium">Domain</th><th class="font-medium">Tier</th><th class="font-medium">Features</th><th class="font-medium">Status</th><th class="font-medium text-right pr-5">Actions</th></tr></thead>
+            <tbody class="divide-y">
+              <tr>
+                <td class="px-5 py-3 font-medium">Greenwood International</td>
+                <td class="text-slate-500">greenwoodschool.com</td>
+                <td><span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded">Standard</span></td>
+                <td class="text-xs text-slate-500">Website · Events</td>
+                <td><span class="text-green-600">● Live</span></td>
+                <td class="text-right pr-5"><button onclick="show('content',document.querySelectorAll('.nav-item')[3])" class="text-iris-600 hover:underline font-medium">Manage content</button></td>
+              </tr>
+              <tr>
+                <td class="px-5 py-3 font-medium">Sunrise Public School</td>
+                <td class="text-slate-500">sunrisepublic.in</td>
+                <td><span class="bg-violet-100 text-violet-700 text-xs px-2 py-0.5 rounded">Pro</span></td>
+                <td class="text-xs text-slate-500">Website · Events · Management</td>
+                <td><span class="text-green-600">● Live</span></td>
+                <td class="text-right pr-5"><button onclick="show('content',document.querySelectorAll('.nav-item')[3])" class="text-iris-600 hover:underline font-medium">Manage content</button></td>
+              </tr>
+              <tr>
+                <td class="px-5 py-3 font-medium">Little Stars Preschool</td>
+                <td class="text-slate-500">littlestars.edu</td>
+                <td><span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded">Basic</span></td>
+                <td class="text-xs text-slate-500">Homepage · Gallery · Enquiry</td>
+                <td><span class="text-amber-600">● Setup</span></td>
+                <td class="text-right pr-5"><button onclick="show('content',document.querySelectorAll('.nav-item')[3])" class="text-iris-600 hover:underline font-medium">Manage content</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTENT EDITOR -->
+    <section class="view" id="content">
+      <div class="p-8">
+        <div class="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3 mb-5">👑 <b>Owner override:</b> you are editing <b>Greenwood International</b> on the school's behalf. Changes publish to their live site.</div>
+        <h1 class="text-2xl font-bold text-ink-900">Content Editor — Greenwood International</h1>
+        <div class="flex gap-2 mt-5 border-b overflow-x-auto text-sm">
+          <button onclick="ctab('c-brand',this)" class="ctab-btn px-4 py-2 border-b-2 border-iris-600 text-iris-600 font-semibold whitespace-nowrap">Branding</button>
+          <button onclick="ctab('c-home',this)" class="ctab-btn px-4 py-2 border-b-2 border-transparent text-slate-500 whitespace-nowrap">Homepage</button>
+          <button onclick="ctab('c-gallery',this)" class="ctab-btn px-4 py-2 border-b-2 border-transparent text-slate-500 whitespace-nowrap">Gallery</button>
+          <button onclick="ctab('c-about',this)" class="ctab-btn px-4 py-2 border-b-2 border-transparent text-slate-500 whitespace-nowrap">About</button>
+          <button onclick="ctab('c-staff',this)" class="ctab-btn px-4 py-2 border-b-2 border-transparent text-slate-500 whitespace-nowrap">Featured Staff</button>
+          <button onclick="ctab('c-contact',this)" class="ctab-btn px-4 py-2 border-b-2 border-transparent text-slate-500 whitespace-nowrap">Contact</button>
+        </div>
+
+        <div id="c-brand" class="ctab mt-6">
+          <div class="bg-white rounded-2xl p-6 shadow-sm max-w-2xl space-y-5">
+            <div><label class="text-sm font-medium">School logo</label>
+              <div class="mt-2 flex items-center gap-4"><div class="h-16 w-16 rounded-xl bg-brand-700 grid place-items-center text-white font-bold text-xl" style="background:#155c41">G</div><button class="border border-slate-300 rounded-lg px-4 py-2 text-sm hover:bg-slate-50">⬆ Upload new logo</button></div>
+            </div>
+            <div><label class="text-sm font-medium">Brand colour</label>
+              <div class="mt-2 flex gap-2">
+                <button class="h-9 w-9 rounded-lg ring-2 ring-offset-2 ring-slate-800" style="background:#155c41"></button>
+                <button class="h-9 w-9 rounded-lg" style="background:#1e3a8a"></button>
+                <button class="h-9 w-9 rounded-lg" style="background:#7c2d12"></button>
+                <button class="h-9 w-9 rounded-lg" style="background:#6b21a8"></button>
+                <button class="h-9 w-9 rounded-lg border grid place-items-center text-slate-400">＋</button>
+              </div>
+            </div>
+            <div><label class="text-sm font-medium">Hero image</label>
+              <div class="mt-2 h-32 rounded-xl bg-cover bg-center relative" style="background-image:url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=800&q=60')"><button class="absolute bottom-2 right-2 bg-white/90 text-xs px-3 py-1.5 rounded-lg font-medium">Replace</button></div>
+            </div>
+            <div class="pt-2"><button class="bg-iris-600 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save branding</button></div>
+          </div>
+        </div>
+        <div id="c-home" class="ctab mt-6 hidden">
+          <div class="bg-white rounded-2xl p-6 shadow-sm max-w-2xl space-y-4">
+            <div><label class="text-sm font-medium">Headline</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" value="Where curious minds grow into confident leaders"></div>
+            <div><label class="text-sm font-medium">Sub-headline</label><textarea class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" rows="2">A nurturing, future-ready school shaping the next generation.</textarea></div>
+            <div class="grid grid-cols-4 gap-3">
+              <div><label class="text-xs text-slate-500">Stat 1</label><input class="mt-1 w-full border rounded-lg px-2 py-1.5 text-sm" value="25+ Years"></div>
+              <div><label class="text-xs text-slate-500">Stat 2</label><input class="mt-1 w-full border rounded-lg px-2 py-1.5 text-sm" value="1,800 Students"></div>
+              <div><label class="text-xs text-slate-500">Stat 3</label><input class="mt-1 w-full border rounded-lg px-2 py-1.5 text-sm" value="120 Teachers"></div>
+              <div><label class="text-xs text-slate-500">Stat 4</label><input class="mt-1 w-full border rounded-lg px-2 py-1.5 text-sm" value="98% Results"></div>
+            </div>
+            <button class="bg-iris-600 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save homepage</button>
+          </div>
+        </div>
+        <div id="c-gallery" class="ctab mt-6 hidden">
+          <div class="bg-white rounded-2xl p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-4"><div class="font-semibold">Gallery images</div><button class="bg-iris-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">⬆ Upload images</button></div>
+            <div class="grid grid-cols-3 md:grid-cols-5 gap-3">
+              <div class="relative group"><img class="h-24 w-full object-cover rounded-lg" src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=200&q=60"><button class="absolute top-1 right-1 bg-white/90 rounded-full h-6 w-6 text-rose-600 opacity-0 group-hover:opacity-100">✕</button></div>
+              <div class="relative group"><img class="h-24 w-full object-cover rounded-lg" src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=200&q=60"><button class="absolute top-1 right-1 bg-white/90 rounded-full h-6 w-6 text-rose-600 opacity-0 group-hover:opacity-100">✕</button></div>
+              <div class="relative group"><img class="h-24 w-full object-cover rounded-lg" src="https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=200&q=60"><button class="absolute top-1 right-1 bg-white/90 rounded-full h-6 w-6 text-rose-600 opacity-0 group-hover:opacity-100">✕</button></div>
+              <div class="relative group"><img class="h-24 w-full object-cover rounded-lg" src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=200&q=60"><button class="absolute top-1 right-1 bg-white/90 rounded-full h-6 w-6 text-rose-600 opacity-0 group-hover:opacity-100">✕</button></div>
+              <div class="h-24 w-full rounded-lg border-2 border-dashed border-slate-300 grid place-items-center text-slate-400 text-sm cursor-pointer hover:bg-slate-50">＋ Add</div>
+            </div>
+          </div>
+        </div>
+        <div id="c-about" class="ctab mt-6 hidden">
+          <div class="bg-white rounded-2xl p-6 shadow-sm max-w-2xl space-y-4">
+            <div><label class="text-sm font-medium">About text</label><textarea class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" rows="5">Greenwood International blends a rigorous academic programme with rich co-curricular life...</textarea></div>
+            <div><label class="text-sm font-medium">Principal's message</label><textarea class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" rows="3">We don't just prepare students for exams — we prepare them for life.</textarea></div>
+            <button class="bg-iris-600 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save about</button>
+          </div>
+        </div>
+        <div id="c-staff" class="ctab mt-6 hidden">
+          <div class="bg-white rounded-2xl p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-4"><div class="font-semibold">Staff featured on homepage</div><button class="bg-iris-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">＋ Add staff</button></div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="text-center border rounded-xl p-4 relative"><img class="h-20 w-20 rounded-full object-cover mx-auto" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&q=60"><input class="mt-2 w-full text-center border rounded px-2 py-1 text-sm font-medium" value="Meera Nair"><input class="mt-1 w-full text-center border rounded px-2 py-1 text-xs text-slate-500" value="Head of Science"></div>
+              <div class="text-center border rounded-xl p-4"><img class="h-20 w-20 rounded-full object-cover mx-auto" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=60"><input class="mt-2 w-full text-center border rounded px-2 py-1 text-sm font-medium" value="Arjun Verma"><input class="mt-1 w-full text-center border rounded px-2 py-1 text-xs text-slate-500" value="Mathematics"></div>
+            </div>
+          </div>
+        </div>
+        <div id="c-contact" class="ctab mt-6 hidden">
+          <div class="bg-white rounded-2xl p-6 shadow-sm max-w-2xl space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-sm font-medium">Phone</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" value="+91 98765 43210"></div>
+              <div><label class="text-sm font-medium">Email</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" value="info@greenwoodschool.com"></div>
+            </div>
+            <div><label class="text-sm font-medium">Address</label><textarea class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" rows="2">42 Garden Avenue, Bengaluru 560001</textarea></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-sm font-medium">Facebook</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="facebook.com/..."></div>
+              <div><label class="text-sm font-medium">Instagram</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="instagram.com/..."></div>
+            </div>
+            <button class="bg-iris-600 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save contact</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EVENTS MODERATION -->
+    <section class="view" id="events">
+      <div class="p-8">
+        <div class="flex items-center justify-between">
+          <div><h1 class="text-2xl font-bold text-ink-900">Events — Connect network</h1><p class="text-slate-500 text-sm mt-1">Approve school-submitted events. Approved events appear on every school's public site.</p></div>
+          <button class="bg-iris-600 text-white text-sm font-semibold px-4 py-2 rounded-lg">＋ Post network event</button>
+        </div>
+        <div class="mt-6"><div class="text-sm font-semibold text-slate-500 mb-3">PENDING APPROVAL</div>
+          <div class="space-y-3" id="pending-list">
+            <div class="bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4">
+              <div class="h-16 w-24 rounded-lg bg-cover shrink-0" style="background-image:url('https://images.unsplash.com/photo-1471967183320-ee018f6e114a?auto=format&fit=crop&w=200&q=60')"></div>
+              <div class="flex-1"><div class="font-semibold">Inter-School Music Festival</div><div class="text-sm text-slate-500">Sunrise Public School · Aug 22, 5:00 PM · Sunrise Auditorium</div></div>
+              <button onclick="this.closest('.bg-white').remove();decEv()" class="bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-medium">✓ Approve</button>
+              <button onclick="this.closest('.bg-white').remove();decEv()" class="border text-slate-500 text-sm px-4 py-2 rounded-lg">Reject</button>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4">
+              <div class="h-16 w-24 rounded-lg bg-cover shrink-0" style="background-image:url('https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=200&q=60')"></div>
+              <div class="flex-1"><div class="font-semibold">Regional Sports Meet</div><div class="text-sm text-slate-500">Riverside Academy · Sep 3, 8:00 AM · City Stadium</div></div>
+              <button onclick="this.closest('.bg-white').remove();decEv()" class="bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-medium">✓ Approve</button>
+              <button onclick="this.closest('.bg-white').remove();decEv()" class="border text-slate-500 text-sm px-4 py-2 rounded-lg">Reject</button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-8"><div class="text-sm font-semibold text-slate-500 mb-3">PUBLISHED (visible on all sites)</div>
+          <div class="bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4">
+            <div class="h-16 w-24 rounded-lg bg-cover shrink-0" style="background-image:url('https://images.unsplash.com/photo-1522543558187-768b6df7c25c?auto=format&fit=crop&w=200&q=60')"></div>
+            <div class="flex-1"><div class="font-semibold">Annual Science Fair</div><div class="text-sm text-slate-500">Greenwood International · Aug 14 · <span class="text-green-600">● Live on 6 sites</span></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="settings">
+      <div class="p-8"><h1 class="text-2xl font-bold text-ink-900">Settings</h1><p class="text-slate-500 text-sm mt-1">Owner account, network branding, default templates.</p>
+        <div class="bg-white rounded-2xl p-6 shadow-sm mt-6 max-w-lg text-sm text-slate-500">Placeholder — network-level settings live here.</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ADD SCHOOL WIZARD -->
+<div id="wizard" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-xl shadow-2xl">
+    <div class="px-6 py-4 border-b flex items-center justify-between"><div class="font-bold text-lg">Add a new school</div><button onclick="closeWizard()" class="text-slate-400 hover:text-slate-700">✕</button></div>
+    <!-- steps indicator -->
+    <div class="px-6 pt-4 flex items-center gap-2 text-xs">
+      <span id="dot1" class="flex items-center gap-1.5 text-iris-600 font-semibold"><span class="h-5 w-5 rounded-full bg-iris-600 text-white grid place-items-center">1</span> Basics</span>
+      <span class="flex-1 h-px bg-slate-200"></span>
+      <span id="dot2" class="flex items-center gap-1.5 text-slate-400"><span class="h-5 w-5 rounded-full bg-slate-200 grid place-items-center">2</span> Choose tier</span>
+      <span class="flex-1 h-px bg-slate-200"></span>
+      <span id="dot3" class="flex items-center gap-1.5 text-slate-400"><span class="h-5 w-5 rounded-full bg-slate-200 grid place-items-center">3</span> Confirm</span>
+    </div>
+
+    <div class="p-6">
+      <div class="wstep active" id="wstep1">
+        <div class="space-y-4">
+          <div><label class="text-sm font-medium">School name</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Maple Leaf Academy"></div>
+          <div><label class="text-sm font-medium">Domain (bought & pointed manually)</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="mapleleaf.edu"></div>
+          <div><label class="text-sm font-medium">Admin email (school's login)</label><input class="mt-1 w-full border rounded-lg px-3 py-2 text-sm" placeholder="admin@mapleleaf.edu"></div>
+        </div>
+      </div>
+
+      <div class="wstep" id="wstep2">
+        <p class="text-sm text-slate-500 mb-4">Pick what this school gets. You can change this later.</p>
+        <div class="space-y-3">
+          <label class="tier-card flex gap-3 border-2 rounded-xl p-4 cursor-pointer" onclick="pickTier(this,'Basic')">
+            <input type="radio" name="tier" class="mt-1">
+            <div><div class="font-semibold">Basic <span class="text-xs text-slate-400 font-normal">— website only</span></div>
+              <div class="text-xs text-slate-500 mt-1">Homepage · Gallery · Enquiry form · Social links</div></div>
+          </label>
+          <label class="tier-card flex gap-3 border-2 border-iris-500 bg-iris-50 rounded-xl p-4 cursor-pointer" onclick="pickTier(this,'Standard')">
+            <input type="radio" name="tier" class="mt-1" checked>
+            <div><div class="font-semibold">Standard <span class="text-xs bg-iris-600 text-white px-2 py-0.5 rounded ml-1">Popular</span></div>
+              <div class="text-xs text-slate-500 mt-1">Everything in Basic · About & Contact pages · <b>Connect events</b></div></div>
+          </label>
+          <label class="tier-card flex gap-3 border-2 rounded-xl p-4 cursor-pointer" onclick="pickTier(this,'Pro')">
+            <input type="radio" name="tier" class="mt-1">
+            <div><div class="font-semibold">Pro <span class="text-xs text-slate-400 font-normal">— website + management</span></div>
+              <div class="text-xs text-slate-500 mt-1">Everything in Standard · <b>Admin management</b>: classes, teachers, students, timetable</div></div>
+          </label>
+        </div>
+      </div>
+
+      <div class="wstep" id="wstep3">
+        <div class="bg-slate-50 rounded-xl p-5 text-sm space-y-2">
+          <div class="flex justify-between"><span class="text-slate-500">School</span><span class="font-medium">Maple Leaf Academy</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Domain</span><span class="font-medium">mapleleaf.edu</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Tier</span><span id="confirm-tier" class="font-medium text-iris-600">Standard</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Admin invite</span><span class="font-medium">admin@mapleleaf.edu</span></div>
+        </div>
+        <div class="mt-4 text-xs text-slate-500">On create: the school record is provisioned, an admin invite email is sent, and their public site goes live at the domain once DNS is pointed.</div>
+      </div>
+    </div>
+
+    <div class="px-6 py-4 border-t flex justify-between">
+      <button id="wback" onclick="wprev()" class="text-slate-500 text-sm px-4 py-2 rounded-lg hover:bg-slate-100 invisible">← Back</button>
+      <button id="wnext" onclick="wnext()" class="bg-iris-600 text-white text-sm font-semibold px-5 py-2 rounded-lg">Next →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function show(id, el){
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    if(el) el.classList.add('active');
+    document.querySelector('main').scrollTo(0,0);
+  }
+  function ctab(id, btn){
+    document.querySelectorAll('.ctab').forEach(t=>t.classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    document.querySelectorAll('.ctab-btn').forEach(b=>{b.classList.remove('border-iris-600','text-iris-600','font-semibold');b.classList.add('border-transparent','text-slate-500');});
+    btn.classList.add('border-iris-600','text-iris-600','font-semibold');btn.classList.remove('border-transparent','text-slate-500');
+  }
+  // wizard
+  let wstep=1, chosenTier='Standard';
+  function openWizard(){ wstep=1; renderStep(); document.getElementById('wizard').classList.remove('hidden'); document.getElementById('wizard').classList.add('flex'); }
+  function closeWizard(){ document.getElementById('wizard').classList.add('hidden'); document.getElementById('wizard').classList.remove('flex'); }
+  function renderStep(){
+    document.querySelectorAll('.wstep').forEach(s=>s.classList.remove('active'));
+    document.getElementById('wstep'+wstep).classList.add('active');
+    document.getElementById('wback').classList.toggle('invisible', wstep===1);
+    document.getElementById('wnext').textContent = wstep===3 ? '✓ Create school' : 'Next →';
+    [1,2,3].forEach(i=>{
+      const dot=document.getElementById('dot'+i); const circle=dot.querySelector('span');
+      if(i<=wstep){ dot.classList.add('text-iris-600','font-semibold'); dot.classList.remove('text-slate-400'); circle.classList.add('bg-iris-600','text-white'); circle.classList.remove('bg-slate-200'); }
+      else { dot.classList.remove('text-iris-600','font-semibold'); dot.classList.add('text-slate-400'); circle.classList.remove('bg-iris-600','text-white'); circle.classList.add('bg-slate-200'); }
+    });
+    document.getElementById('confirm-tier').textContent = chosenTier;
+  }
+  function wnext(){ if(wstep===3){ closeWizard(); show('schools', document.querySelectorAll('.nav-item')[1]); alert('✓ Mockup: “Maple Leaf Academy” would be created as a '+chosenTier+' school and an admin invite sent.'); return;} wstep++; renderStep(); }
+  function wprev(){ if(wstep>1){wstep--; renderStep();} }
+  function pickTier(card, tier){ chosenTier=tier; document.querySelectorAll('.tier-card').forEach(c=>{c.classList.remove('border-iris-500','bg-iris-50');c.classList.add('border-slate-200');}); card.classList.add('border-iris-500','bg-iris-50'); card.querySelector('input').checked=true; }
+  function decEv(){ let b=document.getElementById('ev-badge'); let n=parseInt(b.textContent)-1; if(n<=0){b.remove();} else b.textContent=n; }
+</script>
+</body>
+</html>
