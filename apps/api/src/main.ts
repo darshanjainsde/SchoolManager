@@ -15,6 +15,22 @@ async function bootstrap() {
   // Honour X-Forwarded-Host behind an ingress (cert-manager, custom domains).
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
+  // Allow browser requests from any *.localhost subdomain (school portals) and
+  // the plain localhost origin (platform portal). In production this is locked
+  // down via the ingress/CDN layer, not here.
+  app.enableCors({
+    origin: (origin, cb) => {
+      if (!origin || /^https?:\/\/([a-z0-9-]+\.)*localhost(:\d+)?$/.test(origin)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Forwarded-Host'],
+  });
+
   // Swagger UI is opt-in via env so a misconfigured controller can't take down
   // the api at boot — security tests still cover all endpoints whether the
   // doc page is exposed or not.
