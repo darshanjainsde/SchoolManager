@@ -56,7 +56,7 @@ export class AuthService {
       data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
     });
 
-    return this.issueTokens(user, randomUUID());
+    return this.issueTokens(user, randomUUID(), schoolId);
   }
 
   async refresh(rawToken: string): Promise<IssuedTokens> {
@@ -110,7 +110,7 @@ export class AuthService {
         sub: user.id,
         jti: newJti,
         fam: existing.familyId,
-        schoolId: user.schoolId,
+        schoolId: payload.schoolId,
       });
 
       const newHash = sha256(newRefresh);
@@ -129,7 +129,7 @@ export class AuthService {
         data: { revokedAt: new Date(), replacedById: newRow.id },
       });
 
-      const accessToken = this.signAccess(user);
+      const accessToken = this.signAccess(user, payload.schoolId);
       return { accessToken, refreshToken: newRefresh, expiresIn: this.env.JWT_ACCESS_TTL };
     });
   }
@@ -144,20 +144,20 @@ export class AuthService {
     }).catch(() => undefined);
   }
 
-  private async issueTokens(user: User, familyId: string): Promise<IssuedTokens> {
-    const accessToken = this.signAccess(user);
+  private async issueTokens(user: User, familyId: string, schoolId: string): Promise<IssuedTokens> {
+    const accessToken = this.signAccess(user, schoolId);
     const refreshToken = this.signRefresh({
       sub: user.id,
       jti: randomUUID(),
       fam: familyId,
-      schoolId: user.schoolId,
+      schoolId,
     });
 
     // Persist refresh-token hash so we can detect reuse.
-    await withTenant(user.schoolId, (tx) =>
+    await withTenant(schoolId, (tx) =>
       tx.refreshToken.create({
         data: {
-          schoolId: user.schoolId,
+          schoolId,
           userId: user.id,
           familyId,
           tokenHash: sha256(refreshToken),
@@ -169,11 +169,11 @@ export class AuthService {
     return { accessToken, refreshToken, expiresIn: this.env.JWT_ACCESS_TTL };
   }
 
-  private signAccess(user: User): string {
+  private signAccess(user: User, schoolId: string): string {
     const payload: Omit<SchoolJwtPayload, 'iat' | 'exp'> = {
       sub: user.id,
       aud: 'school',
-      schoolId: user.schoolId,
+      schoolId,
       role: user.role,
       jti: randomUUID(),
     };

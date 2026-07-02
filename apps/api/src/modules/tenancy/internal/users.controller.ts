@@ -27,6 +27,9 @@ import { TenantContextService } from './tenant-context.service';
  *   4. Ownership check      — for "self-only" paths, compare resource owner
  *                             to JWT subject and 404 (not 403) when wrong, so
  *                             enumeration doesn't reveal which IDs exist.
+ *
+ * NOTE: User model has no firstName/lastName (those live on Teacher/Student).
+ * STAFF role was removed; replaced by SCHOOL_ADMIN + TEACHER distinction.
  */
 @ApiTags('directory')
 @ApiBearerAuth()
@@ -35,42 +38,42 @@ import { TenantContextService } from './tenant-context.service';
 export class UsersController {
   constructor(private readonly tenantCtx: TenantContextService) {}
 
-  // List users in this school — restricted to admins/teachers/staff.
-  @Roles(UserRole.SCHOOL_ADMIN, UserRole.TEACHER, UserRole.STAFF)
+  // List users in this school — restricted to admins and teachers.
+  @Roles(UserRole.SCHOOL_ADMIN, UserRole.TEACHER)
   @Get('users')
   async listUsers() {
     const ctx = this.tenantCtx.requireTenant();
     return withTenant(ctx.schoolId, (tx) =>
       tx.user.findMany({
-        select: { id: true, email: true, role: true, firstName: true, lastName: true },
-        orderBy: [{ role: 'asc' }, { lastName: 'asc' }],
+        select: { id: true, email: true, role: true, isActive: true, createdAt: true },
+        orderBy: [{ role: 'asc' }, { email: 'asc' }],
       }),
     );
   }
 
-  // List students — admins/teachers/staff only.
-  @Roles(UserRole.SCHOOL_ADMIN, UserRole.TEACHER, UserRole.STAFF)
+  // List students — admins/teachers only.
+  @Roles(UserRole.SCHOOL_ADMIN, UserRole.TEACHER)
   @Get('students')
   async listStudents() {
     const ctx = this.tenantCtx.requireTenant();
     return withTenant(ctx.schoolId, (tx) =>
       tx.user.findMany({
         where: { role: UserRole.STUDENT },
-        select: { id: true, email: true, firstName: true, lastName: true },
-        orderBy: { lastName: 'asc' },
+        select: { id: true, email: true, isActive: true, createdAt: true },
+        orderBy: { email: 'asc' },
       }),
     );
   }
 
-  // Read a single student — admins/teachers/staff for any in-tenant student,
-  // or the student themselves (parents not in Phase 1; added in Phase 6).
+  // Read a single student — admins/teachers for any in-tenant student,
+  // or the student themselves.
   @Get('students/:id')
   async getStudent(@Param('id') id: string, @CurrentUser() user: SchoolJwtPayload) {
     const ctx = this.tenantCtx.requireTenant();
     const row = await withTenant(ctx.schoolId, (tx) =>
       tx.user.findFirst({
         where: { id, role: UserRole.STUDENT },
-        select: { id: true, email: true, firstName: true, lastName: true },
+        select: { id: true, email: true, isActive: true, createdAt: true },
       }),
     );
     if (!row) throw new NotFoundException();
@@ -78,7 +81,6 @@ export class UsersController {
     const canRead =
       user.role === UserRole.SCHOOL_ADMIN ||
       user.role === UserRole.TEACHER ||
-      user.role === UserRole.STAFF ||
       (user.role === UserRole.STUDENT && user.sub === row.id);
 
     // Use 404 (not 403) for unauthorized reads so existence isn't leaked
@@ -87,38 +89,37 @@ export class UsersController {
     return row;
   }
 
-  // Read a teacher — admin/staff or self.
+  // Read a teacher — admin or self.
   @Get('teachers/:id')
   async getTeacher(@Param('id') id: string, @CurrentUser() user: SchoolJwtPayload) {
     const ctx = this.tenantCtx.requireTenant();
     const row = await withTenant(ctx.schoolId, (tx) =>
       tx.user.findFirst({
         where: { id, role: UserRole.TEACHER },
-        select: { id: true, email: true, firstName: true, lastName: true },
+        select: { id: true, email: true, isActive: true, createdAt: true },
       }),
     );
     if (!row) throw new NotFoundException();
 
     const canRead =
       user.role === UserRole.SCHOOL_ADMIN ||
-      user.role === UserRole.STAFF ||
       (user.role === UserRole.TEACHER && user.sub === row.id);
 
     if (!canRead) throw new NotFoundException();
     return row;
   }
 
-  // Read any in-tenant user — admin/staff for any, self for own row.
+  // Read any in-tenant user — admin for any, self for own row.
   @Get('users/:id')
   async getUser(@Param('id') id: string, @CurrentUser() user: SchoolJwtPayload) {
-    if (user.role !== UserRole.SCHOOL_ADMIN && user.role !== UserRole.STAFF && user.sub !== id) {
+    if (user.role !== UserRole.SCHOOL_ADMIN && user.sub !== id) {
       throw new ForbiddenException();
     }
     const ctx = this.tenantCtx.requireTenant();
     const row = await withTenant(ctx.schoolId, (tx) =>
       tx.user.findUnique({
         where: { id },
-        select: { id: true, email: true, role: true, firstName: true, lastName: true },
+        select: { id: true, email: true, role: true, isActive: true, createdAt: true },
       }),
     );
     if (!row) throw new NotFoundException();

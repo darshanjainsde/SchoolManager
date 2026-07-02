@@ -1,18 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
-import type { AuditScope } from '@skoolos/db';
 
-interface AuditEntry {
-  scope: AuditScope;
+export interface AuditEntry {
   schoolId: string | null;
-  actorId: string | null;
-  actorType: 'user' | 'platform' | 'system';
+  actorUserId: string | null;
   action: string;
-  targetType?: string | null;
-  targetId?: string | null;
-  ip?: string | null;
-  userAgent?: string | null;
-  metadata?: Record<string, unknown> | null;
+  entity: string;
+  entityId?: string | null;
+  meta?: Record<string, unknown> | null;
 }
 
 /**
@@ -27,16 +22,12 @@ export class AuditService {
     try {
       await getPlatformPrisma().auditLog.create({
         data: {
-          scope: entry.scope,
           schoolId: entry.schoolId,
-          actorId: entry.actorId,
-          actorType: entry.actorType,
+          actorUserId: entry.actorUserId,
           action: entry.action,
-          targetType: entry.targetType ?? null,
-          targetId: entry.targetId ?? null,
-          ip: entry.ip ?? null,
-          userAgent: entry.userAgent ?? null,
-          metadata: (entry.metadata as never) ?? null,
+          entity: entry.entity,
+          entityId: entry.entityId ?? null,
+          meta: (entry.meta as never) ?? null,
         },
       });
     } catch (e) {

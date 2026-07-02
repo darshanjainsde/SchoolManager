@@ -13,7 +13,7 @@ const CACHE_PREFIX = 'host:';
 
 /**
  * Resolves a request hostname to a tenant. Reads first from Redis cache,
- * falls back to Postgres (slug match or verified CustomDomain), and back-fills
+ * falls back to Postgres (slug match or verified Domain), and back-fills
  * the cache. Cache entries are short-TTL'd so domain changes propagate quickly.
  */
 @Injectable()
@@ -55,12 +55,12 @@ export class SchoolLookupService {
   private async lookupInDb(hostname: string): Promise<LookupResult> {
     const platform = getPlatformPrisma();
     // Custom domain — must be LIVE.
-    const cd = await platform.customDomain.findFirst({
+    const domain = await platform.domain.findFirst({
       where: { hostname, status: 'LIVE' },
-      include: { school: { select: { id: true, slug: true, suspendedAt: true } } },
+      include: { school: { select: { id: true, slug: true, status: true } } },
     });
-    if (cd && !cd.school.suspendedAt) {
-      return { kind: 'tenant', schoolId: cd.school.id, schoolSlug: cd.school.slug };
+    if (domain && domain.school.status !== 'SUSPENDED') {
+      return { kind: 'tenant', schoolId: domain.school.id, schoolSlug: domain.school.slug };
     }
 
     // Subdomain of platform host: <slug>.localhost / <slug>.skoolos.app
@@ -70,9 +70,9 @@ export class SchoolLookupService {
       if (/^[a-z0-9-]{2,32}$/.test(slug)) {
         const school = await platform.school.findUnique({
           where: { slug },
-          select: { id: true, slug: true, suspendedAt: true },
+          select: { id: true, slug: true, status: true },
         });
-        if (school && !school.suspendedAt) {
+        if (school && school.status !== 'SUSPENDED') {
           return { kind: 'tenant', schoolId: school.id, schoolSlug: school.slug };
         }
       }
