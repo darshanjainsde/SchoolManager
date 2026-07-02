@@ -14,6 +14,7 @@ import { AuditInterceptor } from './common/audit/audit.interceptor';
 import { AuthModule } from './modules/auth';
 import { TenancyModule } from './modules/tenancy';
 import { PlatformModule } from './modules/platform';
+import { FeaturesModule } from './modules/features';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { PlatformModule } from './modules/platform';
     TenancyModule,
     AuthModule,
     PlatformModule,
+    FeaturesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
