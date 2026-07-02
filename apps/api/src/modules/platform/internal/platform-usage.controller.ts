@@ -9,21 +9,13 @@ interface UsageRow {
   slug: string;
   name: string;
   userCount: bigint;
-  studentCount: bigint;
-  teacherCount: bigint;
-  classCount: bigint;
-  enrollmentCount: bigint;
-  attendanceCount: bigint;
-  assignmentCount: bigint;
-  invoiceCount: bigint;
-  paymentTotal: string;
   auditCount: bigint;
 }
 
 /**
- * Phase 7 — per-tenant usage view. Reads from the `tenant_usage` SQL view
- * created in migration 20260619120000_phase7_usage_view. The platform role
- * has BYPASSRLS so the SELECT works across tenants without setting context.
+ * Phase 1 — per-tenant usage view (stripped to school/user/audit counts).
+ * ERP fields (enrollments, attendance, assignments, invoices, payments) removed
+ * when those modules were deleted in Phase 1.
  */
 @ApiTags('platform-usage')
 @ApiBearerAuth()
@@ -32,24 +24,22 @@ interface UsageRow {
 export class PlatformUsageController {
   @Get()
   async list(): Promise<unknown> {
-    const rows = await getPlatformPrisma().$queryRawUnsafe<UsageRow[]>(
-      'SELECT * FROM tenant_usage ORDER BY "name"',
-    );
-    // BigInts can't go straight to JSON.
-    return rows.map((r) => ({
-      schoolId: r.schoolId,
-      slug: r.slug,
-      name: r.name,
-      userCount: Number(r.userCount),
-      studentCount: Number(r.studentCount),
-      teacherCount: Number(r.teacherCount),
-      classCount: Number(r.classCount),
-      enrollmentCount: Number(r.enrollmentCount),
-      attendanceCount: Number(r.attendanceCount),
-      assignmentCount: Number(r.assignmentCount),
-      invoiceCount: Number(r.invoiceCount),
-      paymentTotal: Number(r.paymentTotal),
-      auditCount: Number(r.auditCount),
+    const prisma = getPlatformPrisma();
+    const [schools, users, domains] = await Promise.all([
+      prisma.school.findMany({ select: { id: true, slug: true, name: true } }),
+      prisma.user.groupBy({ by: ['schoolId'], _count: { _all: true } }),
+      prisma.customDomain.groupBy({ by: ['schoolId'], _count: { _all: true } }),
+    ]);
+
+    const userCountMap = new Map(users.map((u) => [u.schoolId, u._count._all]));
+    const domainCountMap = new Map(domains.map((d) => [d.schoolId, d._count._all]));
+
+    return schools.map((s) => ({
+      schoolId: s.id,
+      slug: s.slug,
+      name: s.name,
+      userCount: userCountMap.get(s.id) ?? 0,
+      domainCount: domainCountMap.get(s.id) ?? 0,
     }));
   }
 }

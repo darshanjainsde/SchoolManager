@@ -13,12 +13,6 @@ import { StorageModule } from './common/storage/storage.module';
 import { AuditInterceptor } from './common/audit/audit.interceptor';
 import { AuthModule } from './modules/auth';
 import { TenancyModule } from './modules/tenancy';
-import { AcademicsModule } from './modules/academics';
-import { AttendanceModule } from './modules/attendance';
-import { AssessmentModule } from './modules/assessment';
-import { AdmissionsModule } from './modules/admissions';
-import { FinanceModule } from './modules/finance';
-import { CommsModule } from './modules/comms';
 import { PlatformModule } from './modules/platform';
 
 @Module({
@@ -51,12 +45,6 @@ import { PlatformModule } from './modules/platform';
 
     TenancyModule,
     AuthModule,
-    AcademicsModule,
-    AttendanceModule,
-    AssessmentModule,
-    AdmissionsModule,
-    FinanceModule,
-    CommsModule,
     PlatformModule,
   ],
   providers: [
