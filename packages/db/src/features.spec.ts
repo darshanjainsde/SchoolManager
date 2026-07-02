@@ -16,10 +16,13 @@ describe('resolveFeatures', () => {
     expect(f.has('ABOUT_CONTACT')).toBe(true);
     expect(f.has('EVENTS')).toBe(true);
     expect(f.has('MANAGEMENT')).toBe(false);
+    for (const k of TIER_FEATURES.BASIC) expect(f.has(k)).toBe(true);
   });
 
   it('PRO adds management', () => {
-    expect(resolveFeatures('PRO', []).has('MANAGEMENT')).toBe(true);
+    const f = resolveFeatures('PRO', []);
+    expect(f.has('MANAGEMENT')).toBe(true);
+    for (const k of TIER_FEATURES.STANDARD) expect(f.has(k)).toBe(true);
   });
 
   it('an enabled override adds a feature above the tier', () => {
