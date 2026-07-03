@@ -9,6 +9,7 @@
  * never point DATABASE_URL_TEST at a real/shared database.
  */
 import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
+import Redis from 'ioredis';
 
 const BASE = 'http://localhost:3001';
 async function ownerToken(): Promise<string> {
@@ -152,5 +153,44 @@ describe('POST /owner/schools', () => {
     const d3 = await tierRes.json();
     expect(d3.features).toContain('MANAGEMENT');
     expect(d3.tier).toBe('PRO');
+  });
+
+  it('PATCH features deletes the Redis feature cache key (invalidation)', async () => {
+    const token = await ownerToken();
+    const db = getPlatformPrisma();
+    const s = await db.school.findUniqueOrThrow({ where: { slug } });
+    const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+    try {
+      // Simulate a warmed tenant-side cache.
+      await redis.set(`feat:${s.id}`, JSON.stringify(['PUBLIC_SITE']), 'EX', 300);
+      const h = {
+        'Content-Type': 'application/json',
+        'X-Forwarded-Host': 'owner.localhost',
+        Authorization: `Bearer ${token}`,
+      };
+      const res = await fetch(`${BASE}/owner/schools/${s.id}/features`, {
+        method: 'PATCH',
+        headers: h,
+        body: JSON.stringify({ featureKey: 'GALLERY', enabled: false }),
+      });
+      expect(res.status).toBeLessThan(300);
+      expect(await redis.get(`feat:${s.id}`)).toBeNull(); // invalidate() must have deleted it
+    } finally {
+      await redis.quit();
+    }
+  });
+
+  it('PATCH features returns 404 for unknown school id', async () => {
+    const token = await ownerToken();
+    const res = await fetch(`${BASE}/owner/schools/00000000-0000-0000-0000-000000000000/features`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Forwarded-Host': 'owner.localhost',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ featureKey: 'GALLERY', enabled: true }),
+    });
+    expect(res.status).toBe(404);
   });
 });

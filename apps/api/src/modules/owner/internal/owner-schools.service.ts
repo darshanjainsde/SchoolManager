@@ -135,18 +135,13 @@ export class OwnerSchoolsService {
 
   async setFeature(id: string, featureKey: string, enabled: boolean): Promise<SchoolDetail> {
     const db = getPlatformPrisma();
-    try {
-      await db.featureOverride.upsert({
-        where: { schoolId_featureKey: { schoolId: id, featureKey } },
-        update: { enabled },
-        create: { schoolId: id, featureKey, enabled },
-      });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
-        throw new NotFoundException(`School ${id} not found`);
-      }
-      throw e;
-    }
+    const exists = await db.school.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) throw new NotFoundException(`School ${id} not found`);
+    await db.featureOverride.upsert({
+      where: { schoolId_featureKey: { schoolId: id, featureKey } },
+      update: { enabled },
+      create: { schoolId: id, featureKey, enabled },
+    });
     await this.featureResolver.invalidate(id);
     return this.detail(id);
   }
