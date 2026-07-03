@@ -1,8 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Upload, X } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,18 +60,95 @@ interface SiteContent {
   socialLinks: SocialLink[];
 }
 
+interface MediaAsset {
+  id: string;
+  kind: string;
+  url: string;
+  storageKey: string;
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const SOCIAL_PLATFORMS = ['FACEBOOK', 'INSTAGRAM', 'YOUTUBE', 'X', 'LINKEDIN'] as const;
 
-type Tab = 'branding' | 'homepage' | 'about' | 'contact';
+type Tab = 'branding' | 'homepage' | 'about' | 'contact' | 'gallery';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'branding', label: 'Branding' },
   { id: 'homepage', label: 'Homepage' },
   { id: 'about', label: 'About' },
   { id: 'contact', label: 'Contact & address' },
+  { id: 'gallery', label: 'Gallery' },
 ];
+
+// ── ImageUploader — reusable upload control ──────────────────────────────────
+
+interface ImageUploaderProps {
+  label: string;
+  hint?: string;
+  previewUrl?: string | null;
+  hasExistingAsset?: boolean;
+  isUploading: boolean;
+  accept?: string;
+  onFile: (file: File) => void;
+}
+
+function ImageUploader({
+  label,
+  hint,
+  previewUrl,
+  hasExistingAsset,
+  isUploading,
+  accept = 'image/*',
+  onFile,
+}: ImageUploaderProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) onFile(file);
+    // reset so the same file can be re-selected after an error
+    e.target.value = '';
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      {hint && <p className="text-xs text-slate-400">{hint}</p>}
+
+      {/* Preview or placeholder */}
+      {previewUrl ? (
+        <img
+          src={previewUrl}
+          alt={label}
+          className="h-24 w-auto rounded border border-slate-200 object-contain"
+        />
+      ) : hasExistingAsset ? (
+        <p className="text-sm text-slate-500 italic">Current asset set — upload a new file to replace.</p>
+      ) : (
+        <p className="text-sm text-slate-400">No image set.</p>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={handleChange}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={isUploading}
+        onClick={() => inputRef.current?.click()}
+      >
+        <Upload className="h-4 w-4 mr-1" />
+        {isUploading ? 'Uploading…' : previewUrl || hasExistingAsset ? 'Replace image' : 'Upload image'}
+      </Button>
+    </div>
+  );
+}
 
 // ── Page component ───────────────────────────────────────────────────────────
 
@@ -87,14 +164,27 @@ export default function WebsitePage() {
     refetchOnWindowFocus: false,
   });
 
+  // Gallery query
+  const galleryQuery = useQuery({
+    queryKey: ['site-media-gallery'],
+    queryFn: () => api.get<MediaAsset[]>('/site/media?kind=GALLERY'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: activeTab === 'gallery',
+  });
+
   // ── Branding form state ────────────────────────────────────────────────────
   const [brandColorPrimary, setBrandColorPrimary] = useState('#000000');
   const [brandColorSecondary, setBrandColorSecondary] = useState('#ffffff');
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   // ── Homepage form state ────────────────────────────────────────────────────
   const [headline, setHeadline] = useState('');
   const [subheadline, setSubheadline] = useState('');
   const [stats, setStats] = useState<Array<{ label: string; value: string }>>([]);
+  const [heroPreviewUrl, setHeroPreviewUrl] = useState<string | null>(null);
+  const [isUploadingHero, setIsUploadingHero] = useState(false);
 
   // ── About form state ───────────────────────────────────────────────────────
   const [aboutText, setAboutText] = useState('');
@@ -112,6 +202,10 @@ export default function WebsitePage() {
   const [country, setCountry] = useState('');
   const [mapEmbedUrl, setMapEmbedUrl] = useState('');
   const [socialLinks, setSocialLinks] = useState<Array<{ platform: string; url: string }>>([]);
+
+  // ── Gallery upload state ───────────────────────────────────────────────────
+  const galleryFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
 
   // Seed all form state from fetched data; re-seeds if data is refetched
   useEffect(() => {
@@ -202,6 +296,75 @@ export default function WebsitePage() {
     onError: (err: Error) => toast.error(`Failed to save contact: ${err.message}`),
   });
 
+  const galleryDeleteMutation = useMutation({
+    mutationFn: (id: string) => api.del<{ ok: boolean }>(`/site/media/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['site-media-gallery'] });
+      toast.success('Image deleted');
+    },
+    onError: (err: Error) => toast.error(`Failed to delete image: ${err.message}`),
+  });
+
+  // ── Upload handlers ────────────────────────────────────────────────────────
+
+  async function uploadLogo(file: File) {
+    setIsUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const asset = await api.request<MediaAsset>('/site/media?kind=LOGO', {
+        method: 'POST',
+        body: fd,
+      });
+      await api.put('/site/profile', { logoAssetId: asset.id });
+      setLogoPreviewUrl(asset.url);
+      void queryClient.invalidateQueries({ queryKey: ['site-content'] });
+      toast.success('Logo uploaded');
+    } catch (err) {
+      toast.error(`Logo upload failed: ${(err as Error).message}`);
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  }
+
+  async function uploadHero(file: File) {
+    setIsUploadingHero(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const asset = await api.request<MediaAsset>('/site/media?kind=HERO', {
+        method: 'POST',
+        body: fd,
+      });
+      await api.put('/site/homepage', { heroAssetId: asset.id });
+      setHeroPreviewUrl(asset.url);
+      void queryClient.invalidateQueries({ queryKey: ['site-content'] });
+      toast.success('Hero image uploaded');
+    } catch (err) {
+      toast.error(`Hero upload failed: ${(err as Error).message}`);
+    } finally {
+      setIsUploadingHero(false);
+    }
+  }
+
+  async function uploadGalleryImage(file: File) {
+    setIsUploadingGallery(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await api.request<MediaAsset>('/site/media?kind=GALLERY', {
+        method: 'POST',
+        body: fd,
+      });
+      void queryClient.invalidateQueries({ queryKey: ['site-media-gallery'] });
+      toast.success('Image added to gallery');
+    } catch (err) {
+      toast.error(`Gallery upload failed: ${(err as Error).message}`);
+    } finally {
+      setIsUploadingGallery(false);
+    }
+  }
+
   // ── Stat row helpers ──────────────────────────────────────────────────────
 
   function addStat() {
@@ -277,7 +440,7 @@ export default function WebsitePage() {
       {activeTab === 'branding' && (
         <Card className="max-w-2xl">
           <CardHeader>
-            <CardTitle>Brand colours</CardTitle>
+            <CardTitle>Brand colours &amp; logo</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -322,9 +485,16 @@ export default function WebsitePage() {
                 </div>
               </div>
             </div>
-            <p className="text-xs text-slate-400">
-              Logo and favicon uploads will be available in the Assets section (Task 7).
-            </p>
+
+            {/* Logo upload */}
+            <ImageUploader
+              label="School logo"
+              hint="PNG or SVG recommended. Max 8 MB."
+              previewUrl={logoPreviewUrl}
+              hasExistingAsset={!!data?.profile.logoAssetId}
+              isUploading={isUploadingLogo}
+              onFile={uploadLogo}
+            />
           </CardContent>
           <CardFooter>
             <Button
@@ -362,6 +532,16 @@ export default function WebsitePage() {
                 placeholder="A brief supporting sentence…"
               />
             </div>
+
+            {/* Hero image upload */}
+            <ImageUploader
+              label="Hero image"
+              hint="Wide landscape image for the homepage banner. Max 8 MB."
+              previewUrl={heroPreviewUrl}
+              hasExistingAsset={!!data?.homepage.heroAssetId}
+              isUploading={isUploadingHero}
+              onFile={uploadHero}
+            />
 
             {/* Stats editor */}
             <div className="space-y-3">
@@ -612,6 +792,83 @@ export default function WebsitePage() {
             </Button>
           </CardFooter>
         </Card>
+      )}
+
+      {/* ── GALLERY TAB ───────────────────────────────────────────────────── */}
+      {activeTab === 'gallery' && (
+        <div className="space-y-6 max-w-4xl">
+          <Card>
+            <CardHeader>
+              <CardTitle>Photo gallery</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-slate-500">
+                Upload images to your public gallery. Images are displayed on your school website.
+                Max 8 MB per image.
+              </p>
+
+              {/* Upload button */}
+              <div>
+                <input
+                  ref={galleryFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void uploadGalleryImage(file);
+                    e.target.value = '';
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isUploadingGallery}
+                  onClick={() => galleryFileInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {isUploadingGallery ? 'Uploading…' : 'Upload image'}
+                </Button>
+              </div>
+
+              {/* Gallery grid */}
+              {galleryQuery.isLoading && (
+                <p className="text-sm text-slate-500">Loading gallery…</p>
+              )}
+              {galleryQuery.error && (
+                <p className="text-sm text-rose-600">
+                  {(galleryQuery.error as Error).message}
+                </p>
+              )}
+              {galleryQuery.data && galleryQuery.data.length === 0 && (
+                <p className="text-sm text-slate-400">
+                  No images in the gallery yet. Upload one above.
+                </p>
+              )}
+              {galleryQuery.data && galleryQuery.data.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {galleryQuery.data.map((asset) => (
+                    <div key={asset.id} className="relative group rounded overflow-hidden border border-slate-200">
+                      <img
+                        src={asset.url}
+                        alt="Gallery image"
+                        className="w-full aspect-square object-cover"
+                      />
+                      <button
+                        onClick={() => galleryDeleteMutation.mutate(asset.id)}
+                        disabled={galleryDeleteMutation.isPending}
+                        aria-label="Delete image"
+                        className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-600 disabled:cursor-not-allowed"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
