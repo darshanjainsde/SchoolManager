@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { getPlatformPrisma } from '@skoolos/db';
+import { getPlatformPrisma, type Prisma } from '@skoolos/db';
 
 export interface AuditEntry {
   schoolId: string | null;
@@ -27,7 +27,7 @@ export class AuditService {
           action: entry.action,
           entity: entry.entity,
           entityId: entry.entityId ?? null,
-          meta: (entry.meta as never) ?? null,
+          meta: (entry.meta as Prisma.InputJsonValue) ?? null,
         },
       });
     } catch (e) {

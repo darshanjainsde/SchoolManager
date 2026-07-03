@@ -116,7 +116,7 @@ export class AuthService {
       const newHash = sha256(newRefresh);
       const newRow = await tx.refreshToken.create({
         data: {
-          schoolId: user.schoolId,
+          schoolId: payload.schoolId,
           userId: user.id,
           familyId: existing.familyId,
           tokenHash: newHash,
