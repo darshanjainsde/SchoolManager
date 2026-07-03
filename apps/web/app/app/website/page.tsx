@@ -83,6 +83,8 @@ export default function WebsitePage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['site-content'],
     queryFn: () => api.get<SiteContent>('/site/content'),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 
   // ── Branding form state ────────────────────────────────────────────────────
