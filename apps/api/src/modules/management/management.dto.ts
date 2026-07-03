@@ -7,6 +7,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  Max,
   Min,
 } from 'class-validator';
 
@@ -318,4 +319,28 @@ export class UpdateStudentDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+}
+
+// ── TimetableSlot ─────────────────────────────────────────────────────────────
+
+export class AssignSlotDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  dayOfWeek!: number;
+
+  @IsUUID()
+  periodId!: string;
+
+  @IsUUID()
+  subjectId!: string;
+
+  @IsUUID()
+  teacherId!: string;
+
+  @IsUUID()
+  academicYearId!: string;
 }
