@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
 import { OwnerHostGuard } from './owner-host.guard';
 import { OwnerSchoolsService } from './owner-schools.service';
@@ -11,5 +11,15 @@ export class OwnerController {
   @Get('stats')
   stats() {
     return this.schools.stats();
+  }
+
+  @Get('schools')
+  listSchools() {
+    return this.schools.list();
+  }
+
+  @Get('schools/:id')
+  schoolDetail(@Param('id') id: string) {
+    return this.schools.detail(id);
   }
 }
