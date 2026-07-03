@@ -96,7 +96,7 @@ export class ApiClient {
       throw new ApiError(401, 'Unauthenticated', null);
     }
     const audience = this.opts.audience ?? 'school';
-    const path = audience === 'platform' ? '/platform/auth/refresh' : '/auth/refresh';
+    const path = audience === 'platform' ? '/owner/auth/refresh' : '/auth/refresh';
 
     this.refreshing = (async () => {
       try {

@@ -30,7 +30,7 @@ export default function PlatformLoginPage() {
   async function onSubmit(values: FormValues) {
     setPending(true);
     try {
-      const res = await api.post<{ accessToken: string; refreshToken: string }>('/platform/auth/login', values);
+      const res = await api.post<{ accessToken: string; refreshToken: string }>('/owner/auth/login', values);
       setTokens({ ...res, audience: 'platform' });
       toast.success('Welcome back');
       router.replace('/platform');
