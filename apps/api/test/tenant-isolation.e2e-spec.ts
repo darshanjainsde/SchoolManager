@@ -46,7 +46,7 @@ describe('RLS tenant isolation', () => {
       withTenant(acmeId, (tx) =>
         tx.enquiry.create({ data: { schoolId: beaconId, parentName: 'X', phone: '3' } }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/row-level security|42501/);
   });
 
   it('approved NETWORK events are visible cross-tenant; SCHOOL events are not', async () => {
