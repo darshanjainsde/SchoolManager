@@ -1,4 +1,10 @@
 import { IsArray, IsHexColor, IsIn, IsOptional, IsString, IsUrl, Length, ValidateNested, IsInt, Min } from 'class-validator';
+
+export class ListMediaDto {
+  @IsOptional()
+  @IsIn(['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL'])
+  kind?: string;
+}
 import { Type } from 'class-transformer';
 
 export class UpdateProfileDto {
