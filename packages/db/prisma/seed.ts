@@ -1,157 +1,96 @@
-/**
- * Seed: 2 schools (Acme Academy, Beacon Hill) + a full set of users per
- * school + 1 platform owner. Deterministic — re-running upserts in place
- * rather than duplicating rows. Demo credentials are printed at the end.
- */
-import { loadEnv } from '@skoolos/config'; // ensures .env is loaded before Prisma reads DATABASE_URL
+import { loadEnv } from '@skoolos/config';
 loadEnv();
-
-import argon2 from 'argon2';
-import { authenticator } from 'otplib';
-import { Prisma, PrismaClient, UserRole, PlatformRole } from '@prisma/client';
-
-// Migrations + seeding run as the superuser so we don't fight RLS here.
-const prisma = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
-
-const DEMO_PASSWORD = 'Passw0rd!';
-const PLATFORM_PASSWORD = 'OwnerPassw0rd!';
-
-async function hash(plain: string): Promise<string> {
-  return argon2.hash(plain, { type: argon2.argon2id });
-}
-
-async function upsertSchool(slug: string, name: string) {
-  return prisma.school.upsert({
-    where: { slug },
-    update: { name },
-    create: {
-      slug,
-      name,
-      timezone: 'America/Los_Angeles',
-      currency: 'USD',
-      locale: 'en-US',
-      subscriptionPlan: 'PRO',
-      subscriptionStatus: 'ACTIVE',
-      brandColors: { primary: '#0f766e' } as Prisma.InputJsonValue,
-    },
-  });
-}
-
-async function upsertUser(
-  schoolId: string,
-  email: string,
-  role: UserRole,
-  first: string,
-  last: string,
-  passwordHash: string,
-) {
-  const user = await prisma.user.upsert({
-    where: { schoolId_email: { schoolId, email } },
-    update: {
-      role,
-      firstName: first,
-      lastName: last,
-      passwordHash,
-      isActive: true,
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-    },
-    create: {
-      schoolId,
-      email,
-      role,
-      firstName: first,
-      lastName: last,
-      passwordHash,
-      isActive: true,
-    },
-  });
-  if (role === 'STUDENT') {
-    await prisma.studentProfile.upsert({
-      where: { userId: user.id },
-      update: {},
-      create: { schoolId, userId: user.id },
-    });
-  } else if (role === 'TEACHER') {
-    await prisma.teacherProfile.upsert({
-      where: { userId: user.id },
-      update: {},
-      create: { schoolId, userId: user.id },
-    });
-  } else if (role === 'PARENT') {
-    await prisma.parentProfile.upsert({
-      where: { userId: user.id },
-      update: {},
-      create: { schoolId, userId: user.id },
-    });
-  }
-  return user;
-}
+import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
+import { hash } from 'argon2';
 
 async function main() {
-  const passwordHash = await hash(DEMO_PASSWORD);
+  const db = getPlatformPrisma();
+  const PW = 'Passw0rd!';
+  const OWNER_PW = 'OwnerPassw0rd!';
 
-  const acme = await upsertSchool('acme', 'Acme Academy');
-  const beacon = await upsertSchool('beacon', 'Beacon Hill School');
-
-  for (const school of [acme, beacon]) {
-    const tag = school.slug;
-    await upsertUser(school.id, `admin@${tag}.test`, 'SCHOOL_ADMIN', 'Ada', 'Admin', passwordHash);
-    await upsertUser(school.id, `teacher@${tag}.test`, 'TEACHER', 'Tara', 'Teacher', passwordHash);
-    await upsertUser(school.id, `student@${tag}.test`, 'STUDENT', 'Sam', 'Student', passwordHash);
-    await upsertUser(school.id, `parent@${tag}.test`, 'PARENT', 'Pat', 'Parent', passwordHash);
-    await upsertUser(school.id, `staff@${tag}.test`, 'STAFF', 'Sage', 'Staff', passwordHash);
-  }
-
-  // Platform owner — TOTP secret is regenerated only if the row is new, so
-  // re-running the seed keeps an existing owner's authenticator working.
-  const existingOwner = await prisma.platformUser.findUnique({
-    where: { email: 'owner@skoolos.local' },
-  });
-  const totpSecret = existingOwner?.totpSecret ?? authenticator.generateSecret();
-  await prisma.platformUser.upsert({
-    where: { email: 'owner@skoolos.local' },
-    update: {
-      passwordHash: await hash(PLATFORM_PASSWORD),
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-    },
-    create: {
-      email: 'owner@skoolos.local',
-      passwordHash: await hash(PLATFORM_PASSWORD),
-      role: PlatformRole.PLATFORM_OWNER,
-      totpSecret,
-    },
+  // Platform owner (no school).
+  await db.user.upsert({
+    where: { schoolId_email: { schoolId: null as unknown as string, email: 'owner@skoolos.local' } },
+    update: {},
+    create: { email: 'owner@skoolos.local', passwordHash: await hash(OWNER_PW), role: 'OWNER' },
+  }).catch(async () => {
+    // schoolId null can't use the compound unique in some Prisma versions; fall back to findFirst.
+    const existing = await db.user.findFirst({ where: { email: 'owner@skoolos.local', schoolId: null } });
+    if (!existing) await db.user.create({ data: { email: 'owner@skoolos.local', passwordHash: await hash(OWNER_PW), role: 'OWNER' } });
   });
 
-  const otpauth = authenticator.keyuri('owner@skoolos.local', 'SkoolOS Platform', totpSecret);
+  for (const [slug, name, tier] of [
+    ['acme', 'Acme International', 'STANDARD'],
+    ['beacon', 'Beacon Public School', 'PRO'],
+  ] as const) {
+    const school = await db.school.upsert({
+      where: { slug },
+      update: { tier, status: 'LIVE' },
+      create: { slug, name, tier, status: 'LIVE' },
+    });
+    await db.domain.upsert({
+      where: { hostname: `${slug}.localhost` },
+      update: {},
+      create: { schoolId: school.id, hostname: `${slug}.localhost`, type: 'SUBDOMAIN', status: 'LIVE', isPrimary: true },
+    });
+    await db.user.upsert({
+      where: { schoolId_email: { schoolId: school.id, email: `admin@${slug}.test` } },
+      update: {},
+      create: { schoolId: school.id, email: `admin@${slug}.test`, passwordHash: await hash(PW), role: 'SCHOOL_ADMIN' },
+    });
+    await db.schoolProfile.upsert({
+      where: { schoolId: school.id },
+      update: {},
+      create: { schoolId: school.id, phone: '+91 98765 43210', email: `info@${slug}.test`, city: 'Bengaluru', country: 'India' },
+    });
+    await db.homepageContent.upsert({
+      where: { schoolId: school.id },
+      update: {},
+      create: { schoolId: school.id, headline: `Welcome to ${name}`, subheadline: 'A future-ready school.' },
+    });
+    for (const [i, g] of ['Nursery', 'Grade 1', 'Grade 5', 'Grade 6'].entries()) {
+      await db.grade.upsert({
+        where: { schoolId_name: { schoolId: school.id, name: g } },
+        update: {}, create: { schoolId: school.id, name: g, order: i },
+      });
+    }
 
-  console.log('\n──────────────── SEED COMPLETE ────────────────');
-  console.log('School subdomains (use locally with Host header):');
-  console.log(`  Acme:   http://acme.localhost:3001`);
-  console.log(`  Beacon: http://beacon.localhost:3001`);
-  console.log('\nSchool demo users (password: Passw0rd! for ALL):');
-  for (const slug of ['acme', 'beacon']) {
-    for (const role of ['admin', 'teacher', 'student', 'parent', 'staff']) {
-      console.log(`  ${role}@${slug}.test`);
+    if (tier === 'PRO') {
+      const year = await db.academicYear.upsert({
+        where: { schoolId_name: { schoolId: school.id, name: '2026-27' } },
+        update: {}, create: { schoolId: school.id, name: '2026-27', startDate: new Date('2026-06-01'), endDate: new Date('2027-04-30'), isCurrent: true },
+      });
+      const grade5 = await db.grade.findFirstOrThrow({ where: { schoolId: school.id, name: 'Grade 5' } });
+
+      // Teacher has no unique key — use findFirst+create to stay idempotent.
+      let teacher = await db.teacher.findFirst({ where: { schoolId: school.id, email: 'meera@beacon.test' } });
+      if (!teacher) {
+        teacher = await db.teacher.create({
+          data: { schoolId: school.id, firstName: 'Meera', lastName: 'Nair', email: 'meera@beacon.test' },
+        });
+      }
+
+      // ClassSection unique: schoolId + gradeId + name + academicYearId.
+      const section = await db.classSection.upsert({
+        where: { schoolId_gradeId_name_academicYearId: { schoolId: school.id, gradeId: grade5.id, name: 'A', academicYearId: year.id } },
+        update: { classTeacherId: teacher.id },
+        create: { schoolId: school.id, gradeId: grade5.id, name: 'A', academicYearId: year.id, classTeacherId: teacher.id },
+      });
+
+      // Student unique: schoolId + admissionNo.
+      await db.student.upsert({
+        where: { schoolId_admissionNo: { schoolId: school.id, admissionNo: '05A-01' } },
+        update: {},
+        create: { schoolId: school.id, admissionNo: '05A-01', firstName: 'Aarav', lastName: 'Sharma', classSectionId: section.id, rollNo: '1', guardianName: 'Rohan Sharma', guardianPhone: '+91 90000 11111' },
+      });
     }
   }
-  console.log('\nPlatform owner (host: owner.localhost):');
-  console.log(`  email:    owner@skoolos.local`);
-  console.log(`  password: ${PLATFORM_PASSWORD}`);
-  console.log(`  TOTP secret (base32): ${totpSecret}`);
-  console.log(`  otpauth URL:          ${otpauth}`);
-  console.log(`  Current TOTP code:    ${authenticator.generate(totpSecret)}`);
-  console.log('───────────────────────────────────────────────\n');
+
+  console.log('\n──── SEED COMPLETE ────');
+  console.log('Owner:  owner@skoolos.local /', OWNER_PW);
+  console.log('Acme (STANDARD):   admin@acme.test /', PW, '→ http://acme.localhost');
+  console.log('Beacon (PRO):      admin@beacon.test /', PW, '→ http://beacon.localhost');
+  await disconnectAll();
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main().catch((e) => { console.error(e); process.exit(1); });
