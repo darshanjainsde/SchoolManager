@@ -8,13 +8,16 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { CatalogService } from './catalog.service';
+import { TimetableService } from './timetable.service';
 import {
+  AvailabilityQueryDto,
   CreateGradeDto,
   CreatePeriodDto,
   CreateSubjectDto,
@@ -30,6 +33,7 @@ import {
 export class CatalogController {
   constructor(
     private readonly catalog: CatalogService,
+    private readonly timetable: TimetableService,
     private readonly tenant: TenantContextService,
   ) {}
 
@@ -125,5 +129,12 @@ export class CatalogController {
   @HttpCode(204)
   deletePeriod(@Param('id', ParseUUIDPipe) id: string) {
     return this.catalog.deletePeriod(this.sid(), id);
+  }
+
+  // ── Availability ───────────────────────────────────────────────────────────
+
+  @Get('availability')
+  availability(@Query() query: AvailabilityQueryDto) {
+    return this.timetable.availability(this.sid(), query);
   }
 }

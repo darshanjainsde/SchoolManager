@@ -14,7 +14,7 @@ import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from './timetable.service';
-import { AssignSlotDto } from './management.dto';
+import { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
 
 @Controller('manage/timetable')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard)

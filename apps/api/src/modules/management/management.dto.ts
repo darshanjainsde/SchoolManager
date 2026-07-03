@@ -344,3 +344,11 @@ export class AssignSlotDto {
   @IsUUID()
   academicYearId!: string;
 }
+
+// ── Availability ──────────────────────────────────────────────────────────────
+
+export class AvailabilityQueryDto {
+  @IsOptional()
+  @IsUUID()
+  academicYearId?: string;
+}

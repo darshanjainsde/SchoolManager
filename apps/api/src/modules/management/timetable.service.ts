@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { isP2002, isP2025, p2002Target } from './internal/prisma-errors';
-import type { AssignSlotDto } from './management.dto';
+import type { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
 
 @Injectable()
 export class TimetableService {
@@ -124,6 +124,54 @@ export class TimetableService {
       }
       throw e;
     }
+  }
+
+  async availability(schoolId: string, query: AvailabilityQueryDto) {
+    return withTenant(schoolId, async (tx) => {
+      // Resolve the academic year: use query param if provided, else fall back to isCurrent.
+      let academicYearId = query.academicYearId;
+      if (!academicYearId) {
+        const current = await tx.academicYear.findFirst({
+          where: { schoolId, isCurrent: true },
+        });
+        if (!current) {
+          // No current year — return teachers + periods with an empty busy list.
+          const [teachers, periods] = await Promise.all([
+            tx.teacher.findMany({
+              where: { schoolId, isActive: true },
+              select: { id: true, firstName: true, lastName: true },
+              orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+            }),
+            tx.period.findMany({
+              where: { schoolId },
+              select: { id: true, order: true, label: true },
+              orderBy: { order: 'asc' },
+            }),
+          ]);
+          return { teachers, periods, busy: [] };
+        }
+        academicYearId = current.id;
+      }
+
+      const [teachers, periods, slots] = await Promise.all([
+        tx.teacher.findMany({
+          where: { schoolId, isActive: true },
+          select: { id: true, firstName: true, lastName: true },
+          orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        }),
+        tx.period.findMany({
+          where: { schoolId },
+          select: { id: true, order: true, label: true },
+          orderBy: { order: 'asc' },
+        }),
+        tx.timetableSlot.findMany({
+          where: { schoolId, academicYearId },
+          select: { teacherId: true, dayOfWeek: true, periodId: true },
+        }),
+      ]);
+
+      return { teachers, periods, busy: slots };
+    });
   }
 
   async unassign(schoolId: string, id: string) {
