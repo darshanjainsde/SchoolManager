@@ -18,14 +18,14 @@ export class SiteContentService {
 
   async updateProfile(schoolId: string, dto: UpdateProfileDto) {
     await withTenant(schoolId, (tx) =>
-      tx.schoolProfile.update({ where: { schoolId }, data: dto }),
+      tx.schoolProfile.upsert({ where: { schoolId }, update: dto, create: { schoolId, ...dto } }),
     );
     return this.getContent(schoolId);
   }
 
   async updateHomepage(schoolId: string, dto: UpdateHomepageDto) {
     await withTenant(schoolId, (tx) =>
-      tx.homepageContent.update({ where: { schoolId }, data: dto }),
+      tx.homepageContent.upsert({ where: { schoolId }, update: dto, create: { schoolId, ...dto } }),
     );
     return this.getContent(schoolId);
   }

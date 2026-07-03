@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Trash2, Upload, X } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -162,7 +163,8 @@ function ImageUploader({
 // ── Page component ───────────────────────────────────────────────────────────
 
 export default function WebsitePage() {
-  const api = useApi({ audience: 'school' });
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('branding');
 
