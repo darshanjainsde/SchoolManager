@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
 import { OwnerHostGuard } from './owner-host.guard';
 import { OwnerSchoolsService } from './owner-schools.service';
@@ -19,7 +19,7 @@ export class OwnerController {
   }
 
   @Get('schools/:id')
-  schoolDetail(@Param('id') id: string) {
+  schoolDetail(@Param('id', ParseUUIDPipe) id: string) {
     return this.schools.detail(id);
   }
 }
