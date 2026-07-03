@@ -1,57 +1,29 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useApi } from '@/lib/use-api';
+import Link from 'next/link';
+import { Globe } from 'lucide-react';
 
-export default function AppDashboardPage() {
-  const [host, setHost] = useState<string | undefined>();
-  useEffect(() => setHost(window.location.host), []);
-  const api = useApi({ audience: 'school', hostHeader: host });
-
-  const users = useQuery({
-    queryKey: ['users'],
-    enabled: !!host,
-    queryFn: () => api.get<Array<{ role: string }>>('/users'),
-  });
-  const grades = useQuery({
-    queryKey: ['grades'],
-    enabled: !!host,
-    queryFn: () => api.get<Array<{ id: string }>>('/grades'),
-  });
-  const classes = useQuery({
-    queryKey: ['classes'],
-    enabled: !!host,
-    queryFn: () => api.get<Array<{ id: string }>>('/classes'),
-  });
-
-  const countByRole = (role: string) => (users.data ?? []).filter((u) => u.role === role).length;
-
-  const cards = [
-    { label: 'Students', value: countByRole('STUDENT') },
-    { label: 'Teachers', value: countByRole('TEACHER') },
-    { label: 'Parents', value: countByRole('PARENT') },
-    { label: 'Staff', value: countByRole('STAFF') },
-    { label: 'Grades', value: grades.data?.length ?? 0 },
-    { label: 'Classes', value: classes.data?.length ?? 0 },
-  ];
-
+export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-semibold text-slate-900">Welcome back</h1>
-        <p className="text-sm text-slate-500">School snapshot. Refreshes on every visit.</p>
+        <h1 className="text-2xl font-bold text-slate-900">Welcome to your school portal</h1>
+        <p className="mt-1 text-sm text-slate-500">Manage your school's online presence from here.</p>
       </header>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((c) => (
-          <Card key={c.label}>
-            <CardHeader>
-              <CardDescription>{c.label}</CardDescription>
-              <CardTitle className="text-3xl">{c.value}</CardTitle>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
+
+      {/* CTA card */}
+      <Link
+        href="/app/website"
+        className="group flex max-w-sm items-start gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-teal-300 hover:shadow-md"
+      >
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-600 group-hover:bg-teal-100">
+          <Globe className="h-5 w-5" />
+        </span>
+        <div>
+          <div className="font-semibold text-slate-900">Edit your website</div>
+          <div className="mt-0.5 text-sm text-slate-500">
+            Update your homepage, gallery, and contact info.
+          </div>
+        </div>
+      </Link>
     </div>
   );
 }

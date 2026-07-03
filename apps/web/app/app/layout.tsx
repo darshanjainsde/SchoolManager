@@ -1,40 +1,22 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Users, GraduationCap, BookOpen, Layers, Settings, LogOut } from 'lucide-react';
+import { useEffect, type ReactNode } from 'react';
+import { LayoutDashboard, Globe, LogOut } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
-import { useApi } from '@/lib/use-api';
 
-interface MeResponse {
-  userId: string;
-  schoolId: string;
-  role: 'SCHOOL_ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'STAFF';
-}
+const NAV_ITEMS = [
+  { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/app/website', label: 'Website', icon: Globe },
+];
 
-/**
- * Tenant-themed shell. Reads /auth/me on mount so we know the user's role
- * (which drives which sidebar items render). Theming is intentionally light
- * — Phase 3 surfaces existing brandColors via inline CSS variables; the full
- * theming pass lands when we add `/api/school` settings.
- */
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
-  const [host, setHost] = useState<string | undefined>();
-  useEffect(() => setHost(window.location.host), []);
-  const api = useApi({ audience: 'school', hostHeader: host });
-
-  const me = useQuery({
-    queryKey: ['me'],
-    enabled: !!refreshToken && audience === 'school' && !!host,
-    queryFn: () => api.get<MeResponse>('/auth/me'),
-  });
 
   useEffect(() => {
     if (!refreshToken || audience !== 'school') {
@@ -44,56 +26,58 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   if (!refreshToken || audience !== 'school') return null;
 
-  const role = me.data?.role;
-  const items = [
-    { href: '/app', label: 'Dashboard', icon: LayoutDashboard, roles: ['SCHOOL_ADMIN', 'TEACHER', 'STUDENT', 'PARENT', 'STAFF'] },
-    { href: '/app/people', label: 'People', icon: Users, roles: ['SCHOOL_ADMIN', 'STAFF'] },
-    { href: '/app/grades', label: 'Grades', icon: Layers, roles: ['SCHOOL_ADMIN', 'STAFF'] },
-    { href: '/app/classes', label: 'Classes', icon: GraduationCap, roles: ['SCHOOL_ADMIN', 'TEACHER', 'STAFF'] },
-    { href: '/app/subjects', label: 'Subjects', icon: BookOpen, roles: ['SCHOOL_ADMIN', 'TEACHER', 'STAFF'] },
-    { href: '/app/enrollments', label: 'Enrollment', icon: Users, roles: ['SCHOOL_ADMIN', 'STAFF'] },
-    { href: '/app/settings', label: 'Settings', icon: Settings, roles: ['SCHOOL_ADMIN'] },
-  ].filter((i) => !role || i.roles.includes(role));
-
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 flex-col border-r border-slate-200 bg-white p-4 sm:flex">
-        <div className="mb-6 px-2">
-          <div className="text-sm font-semibold text-slate-900">{host?.split(':')[0]}</div>
-          <div className="text-xs text-slate-500 capitalize">{role?.toLowerCase().replace('_', ' ')}</div>
+      {/* Sidebar */}
+      <aside className="hidden w-60 flex-col bg-slate-900 text-slate-300 sm:flex">
+        {/* Logo */}
+        <div className="flex items-center gap-2 p-5 font-extrabold text-white">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal-600 text-sm">S</span>
+          <span>School Admin</span>
         </div>
-        <nav className="flex flex-1 flex-col gap-1">
-          {items.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href !== '/app' && pathname.startsWith(href));
+
+        {/* Nav */}
+        <nav className="mt-2 flex flex-1 flex-col gap-1 px-3 text-sm">
+          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            const active =
+              href === '/app'
+                ? pathname === '/app'
+                : pathname === href || pathname.startsWith(href + '/');
             return (
               <Link
                 key={href}
                 href={href}
                 className={cn(
-                  'flex items-center gap-3 rounded px-3 py-2 text-sm',
-                  active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100',
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5',
+                  active
+                    ? 'bg-teal-100 font-semibold text-teal-700'
+                    : 'hover:bg-white/5',
                 )}
               >
-                <Icon className="h-4 w-4" /> {label}
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
               </Link>
             );
           })}
         </nav>
-        <button
-          onClick={async () => {
-            const rt = useAuthStore.getState().refreshToken;
-            if (rt) {
-              await api.post('/auth/logout', { refreshToken: rt }).catch(() => undefined);
-            }
-            clear();
-            router.replace('/login');
-          }}
-          className="mt-2 flex items-center gap-3 rounded px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-        >
-          <LogOut className="h-4 w-4" /> Log out
-        </button>
+
+        {/* Logout */}
+        <div className="border-t border-white/10 p-4">
+          <button
+            onClick={() => {
+              clear();
+              router.replace('/login');
+            }}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-white/5"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            Log out
+          </button>
+        </div>
       </aside>
-      <main className="flex-1 p-6 sm:p-10">{children}</main>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-auto p-6 sm:p-10">{children}</main>
     </div>
   );
 }
