@@ -1,10 +1,9 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ValidationPipe } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
-import { IdempotencyMiddleware } from './common/idempotency/idempotency.middleware';
 import { HealthModule } from './health/health.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
 import { CommonAuthModule } from './common/auth/auth.module';
@@ -13,13 +12,7 @@ import { StorageModule } from './common/storage/storage.module';
 import { AuditInterceptor } from './common/audit/audit.interceptor';
 import { AuthModule } from './modules/auth';
 import { TenancyModule } from './modules/tenancy';
-import { AcademicsModule } from './modules/academics';
-import { AttendanceModule } from './modules/attendance';
-import { AssessmentModule } from './modules/assessment';
-import { AdmissionsModule } from './modules/admissions';
-import { FinanceModule } from './modules/finance';
-import { CommsModule } from './modules/comms';
-import { PlatformModule } from './modules/platform';
+import { FeaturesModule } from './modules/features';
 
 @Module({
   imports: [
@@ -51,13 +44,7 @@ import { PlatformModule } from './modules/platform';
 
     TenancyModule,
     AuthModule,
-    AcademicsModule,
-    AttendanceModule,
-    AssessmentModule,
-    AdmissionsModule,
-    FinanceModule,
-    CommsModule,
-    PlatformModule,
+    FeaturesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
@@ -72,11 +59,4 @@ import { PlatformModule } from './modules/platform';
     },
   ],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
-    // Idempotency-Key handling runs AFTER the tenant middleware (registered in
-    // TenancyModule) but BEFORE any controller. Mounted globally because the
-    // middleware itself checks the HTTP method and bails for safe methods.
-    consumer.apply(IdempotencyMiddleware).forRoutes('*');
-  }
-}
+export class AppModule {}

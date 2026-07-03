@@ -1,9 +1,6 @@
 import http from 'node:http';
 import pino from 'pino';
 import { loadEnv } from '@skoolos/config';
-import { startProvisioningWorker } from './jobs/provisioning';
-import { startDomainVerificationWorker } from './jobs/domain-verification';
-import { startReportCardWorker } from './jobs/report-card';
 
 const env = loadEnv();
 const logger = pino({
@@ -12,10 +9,6 @@ const logger = pino({
       ? { target: 'pino-pretty', options: { singleLine: true } }
       : undefined,
 });
-
-const provisioningWorker = startProvisioningWorker(logger);
-const domainWorker = startDomainVerificationWorker(logger);
-const reportCardWorker = startReportCardWorker(logger);
 
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
@@ -32,9 +25,6 @@ server.listen(env.WORKER_PORT, () =>
 
 async function shutdown(signal: string) {
   logger.info({ signal }, 'shutting down');
-  await provisioningWorker.close();
-  await domainWorker.close();
-  await reportCardWorker.close();
   server.close();
   process.exit(0);
 }

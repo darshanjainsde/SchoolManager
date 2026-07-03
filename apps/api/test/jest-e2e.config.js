@@ -3,7 +3,8 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   rootDir: '..',
-  testRegex: 'test/integration/.*\\.e2e-spec\\.ts$',
+  // testRegex matches *.e2e-spec.ts under test/ (integration/ subdir OR test root) so root-level suites like tenant-isolation are discovered.
+  testRegex: 'test/(integration/)?.*\\.e2e-spec\\.ts$',
   globalSetup: '<rootDir>/test/integration/global-setup.ts',
   testTimeout: 60000,
   moduleNameMapper: {

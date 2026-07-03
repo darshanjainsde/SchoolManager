@@ -28,16 +28,17 @@ export class AuditInterceptor implements NestInterceptor {
           if (process.env.DISABLE_AUDIT === 'true') return;
           const tenant = req.tenant;
           const user = req.user;
-          const scope = tenant?.kind === 'platform' ? 'PLATFORM' : 'TENANT';
+          const urlPath = (req.originalUrl ?? req.url).replace(/\?.*/, '');
+          const parts = urlPath.split('/').filter(Boolean);
+          const entity = parts[0] ?? 'unknown';
+          const entityId = parts[1] && /^[\w-]+$/.test(parts[1]) ? parts[1] : undefined;
           // Fire-and-forget — never `await` inside an interceptor.
           this.audit.record({
-            scope,
             schoolId: tenant?.kind === 'tenant' ? tenant.schoolId : null,
-            actorId: user?.sub ?? null,
-            actorType: user ? (user.aud === 'platform' ? 'platform' : 'user') : 'system',
-            action: `${method} ${req.originalUrl ?? req.url}`,
-            ip: (req.ip ?? req.socket?.remoteAddress) ?? null,
-            userAgent: req.headers['user-agent']?.toString() ?? null,
+            actorUserId: user?.sub ?? null,
+            action: `${method} ${urlPath}`,
+            entity,
+            entityId,
           });
         },
       }),

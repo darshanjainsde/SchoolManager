@@ -3,6 +3,7 @@
  * distinct secret per audience — a school token literally cannot validate
  * against the platform secret.
  */
+import type { UserRole } from '@skoolos/db';
 
 export type Audience = 'school' | 'platform';
 
@@ -10,7 +11,7 @@ export interface SchoolJwtPayload {
   sub: string;          // userId
   aud: 'school';
   schoolId: string;
-  role: 'SCHOOL_ADMIN' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'STAFF';
+  role: UserRole;
   jti: string;
   iat?: number;
   exp?: number;
