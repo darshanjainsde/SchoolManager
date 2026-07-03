@@ -5,11 +5,13 @@ import { SiteContentService } from './site-content.service';
 import { SiteContentController } from './site-content.controller';
 import { MediaService } from './media.service';
 import { MediaController } from './media.controller';
+import { StaffService } from './staff.service';
+import { StaffController } from './staff.controller';
 
 @Module({
   imports: [TenancyModule, StorageModule],
-  providers: [SiteContentService, MediaService],
-  controllers: [SiteContentController, MediaController],
-  exports: [SiteContentService, MediaService],
+  providers: [SiteContentService, MediaService, StaffService],
+  controllers: [SiteContentController, MediaController, StaffController],
+  exports: [SiteContentService, MediaService, StaffService],
 })
 export class CmsModule {}

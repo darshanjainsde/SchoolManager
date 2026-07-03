@@ -1,11 +1,11 @@
-import { IsArray, IsHexColor, IsIn, IsOptional, IsString, IsUrl, Length, ValidateNested, IsInt, Min } from 'class-validator';
+import { IsArray, IsHexColor, IsIn, IsInt, IsOptional, IsString, IsUrl, Length, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class ListMediaDto {
   @IsOptional()
   @IsIn(['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL'])
   kind?: string;
 }
-import { Type } from 'class-transformer';
 
 export class UpdateProfileDto {
   @IsOptional() @IsHexColor() brandColorPrimary?: string;
@@ -49,4 +49,11 @@ export class SocialLinkDto {
 }
 export class SetSocialDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => SocialLinkDto) links!: SocialLinkDto[];
+}
+
+export class UpsertStaffDto {
+  @IsString() @Length(1, 120) name!: string;
+  @IsString() @Length(1, 120) role!: string;
+  @IsOptional() @IsString() photoAssetId?: string;
+  @IsInt() @Min(0) order!: number;
 }
