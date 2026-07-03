@@ -189,3 +189,40 @@ export class UpdateTeacherDto {
   @IsBoolean()
   isActive?: boolean;
 }
+
+// ── ClassSection ─────────────────────────────────────────────────────────────
+
+export class CreateClassDto {
+  @IsUUID()
+  gradeId!: string;
+
+  @IsString()
+  @Length(1, 120)
+  name!: string;
+
+  @IsUUID()
+  academicYearId!: string;
+
+  @IsOptional()
+  @IsUUID()
+  classTeacherId?: string;
+}
+
+export class UpdateClassDto {
+  @IsOptional()
+  @IsUUID()
+  gradeId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 120)
+  name?: string;
+
+  @IsOptional()
+  @IsUUID()
+  academicYearId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  classTeacherId?: string;
+}

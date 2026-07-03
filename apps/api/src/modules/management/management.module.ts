@@ -5,11 +5,13 @@ import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
 import { TeachersService } from './teachers.service';
 import { TeachersController } from './teachers.controller';
+import { ClassesService } from './classes.service';
+import { ClassesController } from './classes.controller';
 
 @Module({
   imports: [FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService],
-  controllers: [CatalogController, TeachersController],
-  exports: [CatalogService, TeachersService],
+  providers: [CatalogService, TeachersService, ClassesService],
+  controllers: [CatalogController, TeachersController, ClassesController],
+  exports: [CatalogService, TeachersService, ClassesService],
 })
 export class ManagementModule {}
