@@ -113,4 +113,44 @@ describe('POST /owner/schools', () => {
     });
     expect(res.status).toBe(409);
   });
+
+  it('feature override and tier change reflect in resolved features', async () => {
+    const token = await ownerToken();
+    const db = getPlatformPrisma();
+    const s = await db.school.findUniqueOrThrow({ where: { slug } });
+    const h = {
+      'Content-Type': 'application/json',
+      'X-Forwarded-Host': 'owner.localhost',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Warm the cache so invalidation is actually exercised
+    await fetch(`${BASE}/owner/schools/${s.id}`, { headers: h });
+
+    // Feature override: enable MANAGEMENT on a STANDARD school (not in tier defaults)
+    const patchRes = await fetch(`${BASE}/owner/schools/${s.id}/features`, {
+      method: 'PATCH',
+      headers: h,
+      body: JSON.stringify({ featureKey: 'MANAGEMENT', enabled: true }),
+    });
+    expect(patchRes.status).toBeLessThan(300);
+    const d1 = await patchRes.json();
+    expect(d1.features).toContain('MANAGEMENT');
+
+    // Confirm via separate GET detail that cache was invalidated correctly
+    const getRes = await fetch(`${BASE}/owner/schools/${s.id}`, { headers: h });
+    const d2 = await getRes.json();
+    expect(d2.features).toContain('MANAGEMENT');
+
+    // Tier change to PRO: MANAGEMENT should now be in tier defaults as well
+    const tierRes = await fetch(`${BASE}/owner/schools/${s.id}/tier`, {
+      method: 'PATCH',
+      headers: h,
+      body: JSON.stringify({ tier: 'PRO' }),
+    });
+    expect(tierRes.status).toBeLessThan(300);
+    const d3 = await tierRes.json();
+    expect(d3.features).toContain('MANAGEMENT');
+    expect(d3.tier).toBe('PRO');
+  });
 });

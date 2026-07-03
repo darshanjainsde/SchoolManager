@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsString, Length, Matches } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsString, Length, Matches } from 'class-validator';
 
 export class OwnerLoginDto {
   @IsEmail() email!: string;
@@ -16,4 +16,13 @@ export class CreateSchoolDto {
   @IsIn(['BASIC', 'STANDARD', 'PRO']) tier!: 'BASIC' | 'STANDARD' | 'PRO';
   @IsString() @Matches(/^[a-z0-9.-]+$/) domainHostname!: string;
   @IsEmail() adminEmail!: string;
+}
+
+export class SetTierDto {
+  @IsIn(['BASIC', 'STANDARD', 'PRO']) tier!: 'BASIC' | 'STANDARD' | 'PRO';
+}
+
+export class SetFeatureDto {
+  @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT']) featureKey!: string;
+  @IsBoolean() enabled!: boolean;
 }

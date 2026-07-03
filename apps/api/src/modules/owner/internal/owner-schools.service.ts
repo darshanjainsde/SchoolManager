@@ -118,4 +118,36 @@ export class OwnerSchoolsService {
 
     return { id: school.id, slug: school.slug, tempPassword };
   }
+
+  async setTier(id: string, tier: 'BASIC' | 'STANDARD' | 'PRO'): Promise<SchoolDetail> {
+    const db = getPlatformPrisma();
+    try {
+      await db.school.update({ where: { id }, data: { tier } });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        throw new NotFoundException(`School ${id} not found`);
+      }
+      throw e;
+    }
+    await this.featureResolver.invalidate(id);
+    return this.detail(id);
+  }
+
+  async setFeature(id: string, featureKey: string, enabled: boolean): Promise<SchoolDetail> {
+    const db = getPlatformPrisma();
+    try {
+      await db.featureOverride.upsert({
+        where: { schoolId_featureKey: { schoolId: id, featureKey } },
+        update: { enabled },
+        create: { schoolId: id, featureKey, enabled },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        throw new NotFoundException(`School ${id} not found`);
+      }
+      throw e;
+    }
+    await this.featureResolver.invalidate(id);
+    return this.detail(id);
+  }
 }
