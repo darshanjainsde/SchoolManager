@@ -3,7 +3,7 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   rootDir: '..',
-  testRegex: 'test/integration/.*\\.e2e-spec\\.ts$',
+  testRegex: 'test/(integration/)?.*\\.e2e-spec\\.ts$',
   globalSetup: '<rootDir>/test/integration/global-setup.ts',
   testTimeout: 60000,
   moduleNameMapper: {
