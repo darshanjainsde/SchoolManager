@@ -6,92 +6,117 @@ import { Button } from '@/components/ui/button';
 import { useApi } from '@/lib/use-api';
 import { useAuthStore } from '@/lib/auth-store';
 
+/**
+ * Shape returned by GET /owner/stats (Task 2 contract).
+ * Declared locally — the web app cannot import API service code.
+ */
 interface StatsResponse {
-  totals: {
-    schools: number;
-    activeSchools: number;
-    suspendedSchools: number;
-    students: number;
-    teachers: number;
-    admins: number;
-    parents: number;
-    staff: number;
+  schools: {
+    total: number;
+    byTier: {
+      BASIC: number;
+      STANDARD: number;
+      PRO: number;
+    };
+    live: number;
+    suspended: number;
   };
-  domains: { pendingOrError: number };
-  revenue: { mrr: number | null; currency: string };
-  health: { api: string; db: string };
+  domains: {
+    live: number;
+  };
 }
-
-const CARDS: Array<{ key: keyof StatsResponse['totals'] | 'mrr' | 'pendingDomains'; label: string }> = [
-  { key: 'schools', label: 'Total schools' },
-  { key: 'activeSchools', label: 'Active' },
-  { key: 'suspendedSchools', label: 'Suspended' },
-  { key: 'students', label: 'Students' },
-  { key: 'teachers', label: 'Teachers' },
-  { key: 'admins', label: 'Admins' },
-  { key: 'pendingDomains', label: 'Pending domains' },
-  { key: 'mrr', label: 'MRR (placeholder)' },
-];
 
 export default function PlatformDashboardPage() {
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const api = useApi({ audience: 'platform', hostHeader: 'owner.localhost' });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['platform-stats'],
-    queryFn: () => api.get<StatsResponse>('/platform/stats'),
+    queryKey: ['owner-stats'],
+    queryFn: () => api.get<StatsResponse>('/owner/stats'),
     enabled: !!refreshToken,
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex items-center justify-between">
+    <div className="p-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
-          <p className="text-sm text-slate-500">Live platform stats. Updated on each visit.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Overview of every school on your platform.
+          </p>
         </div>
         <Link href="/platform/onboard">
-          <Button>Onboard a school</Button>
+          <Button>➕ Add School</Button>
         </Link>
-      </header>
+      </div>
 
-      {isLoading && <div className="text-sm text-slate-500">Loading stats…</div>}
-      {error && <div className="text-sm text-rose-600">{(error as Error).message}</div>}
+      {/* Loading / error states */}
+      {isLoading && (
+        <div className="text-sm text-slate-500">Loading stats…</div>
+      )}
+      {error && (
+        <div className="text-sm text-rose-600">{(error as Error).message}</div>
+      )}
 
+      {/* Stat cards */}
       {data && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {CARDS.map(({ key, label }) => {
-            const value =
-              key === 'mrr'
-                ? data.revenue.mrr === null
-                  ? '—'
-                  : `${data.revenue.currency} ${data.revenue.mrr}`
-                : key === 'pendingDomains'
-                ? data.domains.pendingOrError
-                : (data.totals[key as keyof StatsResponse['totals']] ?? 0);
-            return (
-              <Card key={key}>
-                <CardHeader>
-                  <CardDescription>{label}</CardDescription>
-                  <CardTitle className="text-3xl">{value}</CardTitle>
-                </CardHeader>
-              </Card>
-            );
-          })}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Total schools */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className="text-sm text-slate-500">Total schools</div>
+            <div className="text-3xl font-bold mt-1">{data.schools.total}</div>
+          </div>
+
+          {/* By tier */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className="text-sm text-slate-500">Basic · Standard · Pro</div>
+            <div className="text-3xl font-bold mt-1">
+              {data.schools.byTier.BASIC} · {data.schools.byTier.STANDARD} · {data.schools.byTier.PRO}
+            </div>
+          </div>
+
+          {/* Live domains */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className="text-sm text-slate-500">Live domains</div>
+            <div className="text-3xl font-bold mt-1">{data.domains.live}</div>
+          </div>
+
+          {/* Suspended */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className="text-sm text-slate-500">Suspended</div>
+            <div
+              className={`text-3xl font-bold mt-1 ${
+                data.schools.suspended > 0 ? 'text-rose-600' : ''
+              }`}
+            >
+              {data.schools.suspended}
+            </div>
+          </div>
         </div>
       )}
 
+      {/* Placeholder table for recently added schools */}
       {data && (
-        <Card>
-          <CardHeader>
-            <CardTitle>System health</CardTitle>
-            <CardDescription>End-to-end probes from the API process.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-6 text-sm">
-            <div>API: <span className="font-mono">{data.health.api}</span></div>
-            <div>DB: <span className="font-mono">{data.health.db}</span></div>
-          </CardContent>
-        </Card>
+        <div className="bg-white rounded-2xl shadow-sm mt-6">
+          <div className="px-5 py-4 border-b font-semibold text-slate-900">
+            Platform summary
+          </div>
+          <div className="px-5 py-4 text-sm text-slate-500 space-y-1">
+            <div>
+              <span className="font-medium text-slate-700">Live schools:</span>{' '}
+              {data.schools.live}
+            </div>
+            <div>
+              <span className="font-medium text-slate-700">Suspended:</span>{' '}
+              {data.schools.suspended}
+            </div>
+            <div>
+              <span className="font-medium text-slate-700">Live domains:</span>{' '}
+              {data.domains.live}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
