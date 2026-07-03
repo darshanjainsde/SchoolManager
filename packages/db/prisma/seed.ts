@@ -2,6 +2,7 @@ import { loadEnv } from '@skoolos/config';
 loadEnv();
 import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
 import { hash } from 'argon2';
+import { authenticator } from 'otplib';
 
 async function main() {
   const db = getPlatformPrisma();
@@ -9,15 +10,21 @@ async function main() {
   const OWNER_PW = 'OwnerPassw0rd!';
 
   // Platform owner (no school).
+  const MFA_SECRET = 'AIRFGVZFLVAH6J2C';
   await db.user.upsert({
     where: { schoolId_email: { schoolId: null as unknown as string, email: 'owner@skoolos.local' } },
-    update: {},
-    create: { email: 'owner@skoolos.local', passwordHash: await hash(OWNER_PW), role: 'OWNER' },
+    update: { mfaSecret: MFA_SECRET },
+    create: { email: 'owner@skoolos.local', passwordHash: await hash(OWNER_PW), role: 'OWNER', mfaSecret: MFA_SECRET },
   }).catch(async () => {
     // schoolId null can't use the compound unique in some Prisma versions; fall back to findFirst.
     const existing = await db.user.findFirst({ where: { email: 'owner@skoolos.local', schoolId: null } });
-    if (!existing) await db.user.create({ data: { email: 'owner@skoolos.local', passwordHash: await hash(OWNER_PW), role: 'OWNER' } });
+    if (!existing) {
+      await db.user.create({ data: { email: 'owner@skoolos.local', passwordHash: await hash(OWNER_PW), role: 'OWNER', mfaSecret: MFA_SECRET } });
+    } else {
+      await db.user.update({ where: { id: existing.id }, data: { mfaSecret: MFA_SECRET } });
+    }
   });
+  console.log('Owner TOTP secret: AIRFGVZFLVAH6J2C  current code:', authenticator.generate(MFA_SECRET));
 
   for (const [slug, name, tier] of [
     ['acme', 'Acme International', 'STANDARD'],

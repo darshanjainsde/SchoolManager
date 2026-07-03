@@ -13,6 +13,7 @@ import { AuditInterceptor } from './common/audit/audit.interceptor';
 import { AuthModule } from './modules/auth';
 import { TenancyModule } from './modules/tenancy';
 import { FeaturesModule } from './modules/features';
+import { OwnerModule } from './modules/owner';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { FeaturesModule } from './modules/features';
     TenancyModule,
     AuthModule,
     FeaturesModule,
+    OwnerModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -20,7 +20,7 @@ export interface SchoolJwtPayload {
 export interface PlatformJwtPayload {
   sub: string;          // platformUserId
   aud: 'platform';
-  role: 'PLATFORM_OWNER' | 'PLATFORM_ADMIN';
+  role: 'PLATFORM_OWNER' | 'PLATFORM_ADMIN' | 'OWNER';
   jti: string;
   iat?: number;
   exp?: number;
