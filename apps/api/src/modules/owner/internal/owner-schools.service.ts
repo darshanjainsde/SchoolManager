@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { getPlatformPrisma, resolveFeatures } from '@skoolos/db';
+import { getPlatformPrisma, resolveFeatures, Prisma } from '@skoolos/db';
 import { randomBytes } from 'node:crypto';
 import { PasswordService } from '../../auth';
 import { FeatureResolverService } from '../../features/internal/feature-resolver.service';
@@ -88,25 +88,33 @@ export class OwnerSchoolsService {
     });
     if (clash) throw new ConflictException('Slug or domain already in use');
 
-    const tempPassword = randomBytes(6).toString('base64url');
+    const tempPassword = randomBytes(8).toString('base64url');
     const passwordHash = await this.passwords.hash(tempPassword);
     const defaultGrades = ['Nursery', 'Grade 1', 'Grade 2', 'Grade 3'];
 
-    const school = await db.$transaction(async (tx) => {
-      const s = await tx.school.create({ data: { name: dto.name, slug: dto.slug, tier: dto.tier, status: 'SETUP' } });
-      await tx.domain.create({
-        data: { schoolId: s.id, hostname: dto.domainHostname, type: 'CUSTOM', status: 'PENDING', isPrimary: true },
+    let school;
+    try {
+      school = await db.$transaction(async (tx) => {
+        const s = await tx.school.create({ data: { name: dto.name, slug: dto.slug, tier: dto.tier, status: 'SETUP' } });
+        await tx.domain.create({
+          data: { schoolId: s.id, hostname: dto.domainHostname, type: 'CUSTOM', status: 'PENDING', isPrimary: true },
+        });
+        await tx.user.create({
+          data: { schoolId: s.id, email: dto.adminEmail.toLowerCase(), passwordHash, role: 'SCHOOL_ADMIN' },
+        });
+        await tx.schoolProfile.create({ data: { schoolId: s.id } });
+        await tx.homepageContent.create({ data: { schoolId: s.id, headline: `Welcome to ${dto.name}` } });
+        await tx.grade.createMany({
+          data: defaultGrades.map((name, order) => ({ schoolId: s.id, name, order })),
+        });
+        return s;
       });
-      await tx.user.create({
-        data: { schoolId: s.id, email: dto.adminEmail.toLowerCase(), passwordHash, role: 'SCHOOL_ADMIN' },
-      });
-      await tx.schoolProfile.create({ data: { schoolId: s.id } });
-      await tx.homepageContent.create({ data: { schoolId: s.id, headline: `Welcome to ${dto.name}` } });
-      await tx.grade.createMany({
-        data: defaultGrades.map((name, order) => ({ schoolId: s.id, name, order })),
-      });
-      return s;
-    });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException('Slug or domain already in use');
+      }
+      throw e;
+    }
 
     return { id: school.id, slug: school.slug, tempPassword };
   }
