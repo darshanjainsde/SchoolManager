@@ -1,9 +1,11 @@
 import {
   IsBoolean,
   IsDateString,
+  IsEmail,
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Min,
 } from 'class-validator';
@@ -114,4 +116,76 @@ export class UpdatePeriodDto {
   @IsString()
   @Length(1, 10)
   endTime?: string;
+}
+
+// ── Teacher ──────────────────────────────────────────────────────────────────
+
+export class CreateTeacherDto {
+  @IsString()
+  @Length(1, 120)
+  firstName!: string;
+
+  @IsString()
+  @Length(1, 120)
+  lastName!: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsUUID()
+  photoAssetId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  primarySubjectId?: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class UpdateTeacherDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 120)
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 120)
+  lastName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsUUID()
+  photoAssetId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  primarySubjectId?: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
