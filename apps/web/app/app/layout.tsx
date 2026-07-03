@@ -2,13 +2,18 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
-import { LayoutDashboard, Globe, LogOut } from 'lucide-react';
+import { LayoutDashboard, Globe, LogOut, School, Users, GraduationCap, CalendarDays, Clock } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 
 const NAV_ITEMS = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/app/website', label: 'Website', icon: Globe },
+  { href: '/app/classes', label: 'Classes', icon: School },
+  { href: '/app/teachers', label: 'Teachers', icon: GraduationCap },
+  { href: '/app/students', label: 'Students', icon: Users },
+  { href: '/app/timetable', label: 'Timetable', icon: CalendarDays },
+  { href: '/app/availability', label: 'Availability', icon: Clock },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
