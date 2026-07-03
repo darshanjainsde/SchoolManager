@@ -1,5 +1,6 @@
-import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
+import { CreateSchoolDto } from './owner.dto';
 import { OwnerHostGuard } from './owner-host.guard';
 import { OwnerSchoolsService } from './owner-schools.service';
 
@@ -21,5 +22,10 @@ export class OwnerController {
   @Get('schools/:id')
   schoolDetail(@Param('id', ParseUUIDPipe) id: string) {
     return this.schools.detail(id);
+  }
+
+  @Post('schools')
+  createSchool(@Body() dto: CreateSchoolDto) {
+    return this.schools.create(dto);
   }
 }

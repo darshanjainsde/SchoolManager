@@ -1,4 +1,4 @@
-import { IsEmail, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsIn, IsString, Length, Matches } from 'class-validator';
 
 export class OwnerLoginDto {
   @IsEmail() email!: string;
@@ -8,4 +8,12 @@ export class OwnerLoginDto {
 
 export class RefreshDto {
   @IsString() refreshToken!: string;
+}
+
+export class CreateSchoolDto {
+  @IsString() @Length(2, 120) name!: string;
+  @Matches(/^[a-z0-9-]{2,40}$/) slug!: string;
+  @IsIn(['BASIC', 'STANDARD', 'PRO']) tier!: 'BASIC' | 'STANDARD' | 'PRO';
+  @Matches(/^[a-z0-9.-]+$/) domainHostname!: string;
+  @IsEmail() adminEmail!: string;
 }
