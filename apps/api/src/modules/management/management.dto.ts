@@ -226,3 +226,96 @@ export class UpdateClassDto {
   @IsUUID()
   classTeacherId?: string;
 }
+
+// ── Student ──────────────────────────────────────────────────────────────────
+
+export class CreateStudentDto {
+  @IsString()
+  @Length(1, 60)
+  admissionNo!: string;
+
+  @IsString()
+  @Length(1, 120)
+  firstName!: string;
+
+  @IsString()
+  @Length(1, 120)
+  lastName!: string;
+
+  @IsOptional()
+  @IsUUID()
+  classSectionId?: string;
+
+  @IsOptional()
+  @IsString()
+  rollNo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dob?: string;
+
+  @IsOptional()
+  @IsString()
+  gender?: string;
+
+  @IsOptional()
+  @IsString()
+  guardianName?: string;
+
+  @IsOptional()
+  @IsString()
+  guardianPhone?: string;
+
+  @IsOptional()
+  @IsUUID()
+  photoAssetId?: string;
+}
+
+export class UpdateStudentDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 60)
+  admissionNo?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 120)
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 120)
+  lastName?: string;
+
+  @IsOptional()
+  @IsUUID()
+  classSectionId?: string;
+
+  @IsOptional()
+  @IsString()
+  rollNo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dob?: string;
+
+  @IsOptional()
+  @IsString()
+  gender?: string;
+
+  @IsOptional()
+  @IsString()
+  guardianName?: string;
+
+  @IsOptional()
+  @IsString()
+  guardianPhone?: string;
+
+  @IsOptional()
+  @IsUUID()
+  photoAssetId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
