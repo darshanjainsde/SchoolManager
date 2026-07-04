@@ -18,6 +18,7 @@ import { CmsModule } from './modules/cms';
 import { ManagementModule } from './modules/management';
 import { CommunityModule } from './modules/community';
 import { PublicModule } from './modules/public';
+import { PortalModule } from './modules/portal';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { PublicModule } from './modules/public';
     ManagementModule,
     CommunityModule,
     PublicModule,
+    PortalModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
