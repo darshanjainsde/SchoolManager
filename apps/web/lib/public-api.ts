@@ -1,0 +1,52 @@
+export interface PublicSiteData {
+  school: {
+    name: string;
+    slug: string;
+    tier: 'BASIC' | 'STANDARD' | 'PRO';
+    features: string[];
+  };
+  profile: {
+    logoUrl: string | null;
+    faviconUrl: string | null;
+    brandColorPrimary: string;
+    brandColorSecondary: string;
+    phone: string | null;
+    email: string | null;
+    addressLine1: string | null;
+    addressLine2: string | null;
+    city: string | null;
+    region: string | null;
+    postalCode: string | null;
+    country: string | null;
+    mapEmbedUrl: string | null;
+  } | null;
+  homepage: {
+    headline: string;
+    subheadline: string | null;
+    heroUrl: string | null;
+    aboutText: string | null;
+    principalName: string | null;
+    principalMessage: string | null;
+    principalPhotoUrl: string | null;
+  } | null;
+  stats: { label: string; value: string }[];
+  socialLinks: { platform: string; url: string }[];
+  gallery: { url: string; caption: string | null }[];
+  staff: { name: string; role: string; photoUrl: string | null }[];
+  menu: { label: string; gradeId: string }[];
+}
+
+export async function fetchPublicSite(host: string): Promise<PublicSiteData | null> {
+  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+  try {
+    const res = await fetch(`${base}/public/site`, {
+      headers: { 'X-Forwarded-Host': host },
+      cache: 'no-store',
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    return res.json() as Promise<PublicSiteData>;
+  } catch {
+    return null;
+  }
+}

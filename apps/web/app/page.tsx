@@ -1,3 +1,7 @@
+import { headers } from 'next/headers';
+import { fetchPublicSite } from '@/lib/public-api';
+import PublicSite from '@/components/public/PublicSite';
+
 async function getApiHealth(): Promise<string> {
   const url = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001') + '/health';
   try {
@@ -66,7 +70,21 @@ const DEV_TOOLS = [
   { label: 'MinIO console (S3)', href: 'http://localhost:9001' },
 ];
 
+function isPlatformHost(host: string): boolean {
+  const hostname = host.split(':')[0];
+  return hostname === 'localhost' || hostname === 'owner.localhost';
+}
+
 export default async function HomePage() {
+  const host = headers().get('host') ?? '';
+
+  if (!isPlatformHost(host)) {
+    const data = await fetchPublicSite(host);
+    if (data) {
+      return <PublicSite data={data} />;
+    }
+  }
+
   const apiStatus = await getApiHealth();
 
   return (
