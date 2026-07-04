@@ -16,6 +16,7 @@ import { FeaturesModule } from './modules/features';
 import { OwnerModule } from './modules/owner';
 import { CmsModule } from './modules/cms';
 import { ManagementModule } from './modules/management';
+import { CommunityModule } from './modules/community';
 import { PublicModule } from './modules/public';
 
 @Module({
@@ -52,6 +53,7 @@ import { PublicModule } from './modules/public';
     OwnerModule,
     CmsModule,
     ManagementModule,
+    CommunityModule,
     PublicModule,
   ],
   providers: [

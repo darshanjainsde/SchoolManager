@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant, type FeatureKey } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
+import { PublicEventsService } from '../community/public-events.service';
 import type { PublicSiteData } from './public.dto';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class PublicSiteService {
   constructor(
     private readonly tenant: TenantContextService,
     private readonly features: FeatureResolverService,
+    private readonly publicEvents: PublicEventsService,
   ) {}
 
   async getSite(): Promise<PublicSiteData> {
@@ -54,6 +56,8 @@ export class PublicSiteService {
 
       const has = (k: FeatureKey) => feat.has(k);
 
+      const events = has('EVENTS') ? await this.publicEvents.forHost(tx, schoolId) : [];
+
       return {
         school: { name: school.name, slug: school.slug, tier: school.tier, features: [...feat] },
         profile: profile
@@ -89,6 +93,7 @@ export class PublicSiteService {
         gallery: has('GALLERY') ? galleryAssets.map((g) => ({ url: g.url, caption: g.caption })) : [],
         staff: staff.map((s) => ({ name: s.name, role: s.role, photoUrl: urlOf(s.photoAssetId) })),
         menu: grades.map((g) => ({ label: g.name, gradeId: g.id })),
+        events,
       };
     });
   }

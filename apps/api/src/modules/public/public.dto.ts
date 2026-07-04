@@ -1,4 +1,5 @@
 import { IsEmail, IsIn, IsOptional, IsString, Length } from 'class-validator';
+import type { PublicEvent } from '../community/community.dto';
 
 export class SubmitEnquiryDto {
   @IsString()
@@ -64,4 +65,5 @@ export interface PublicSiteData {
   gallery: { url: string; caption: string | null }[];
   staff: { name: string; role: string; photoUrl: string | null }[];
   menu: { label: string; gradeId: string }[];
+  events: PublicEvent[];
 }

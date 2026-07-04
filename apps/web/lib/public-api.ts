@@ -34,6 +34,18 @@ export interface PublicSiteData {
   gallery: { url: string; caption: string | null }[];
   staff: { name: string; role: string; photoUrl: string | null }[];
   menu: { label: string; gradeId: string }[];
+  events: {
+    id: string;
+    title: string;
+    description: string | null;
+    coverUrl: string | null;
+    startAt: string;
+    endAt: string | null;
+    venue: string | null;
+    scope: 'SCHOOL' | 'NETWORK';
+    originSchoolName: string | null;
+    isHost: boolean;
+  }[];
 }
 
 export async function fetchPublicSite(host: string): Promise<PublicSiteData | null> {
