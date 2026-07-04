@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 
 interface Props {
@@ -88,6 +88,7 @@ export default function PublicSite({ data }: Props) {
   const hasGallery =
     data.gallery.length > 0 || data.school.features.includes('GALLERY');
   const hasContact = !!(data.profile?.phone || data.profile?.email);
+  const hasEnquiry = data.school.features.includes('ENQUIRY');
   const logoUrl = data.profile?.logoUrl;
   const principalName = data.homepage?.principalName;
   const principalMessage = data.homepage?.principalMessage;
@@ -492,9 +493,165 @@ export default function PublicSite({ data }: Props) {
         </section>
       )}
 
-      {/* TODO: Gallery section — Task 6 */}
-      {/* TODO: Staff section — Task 6 */}
-      {/* TODO: Enquiry / Contact form — Task 7 */}
+      {/* ── GALLERY ── */}
+      {data.gallery.length > 0 && (
+        <section id="gallery" className="max-w-6xl mx-auto px-6 py-20">
+          <div className="reveal flex items-end justify-between flex-wrap gap-4">
+            <div>
+              <div
+                className="text-sm font-semibold uppercase tracking-widest"
+                style={{ color: brandColor }}
+              >
+                Gallery
+              </div>
+              <h2 className="text-4xl font-semibold mt-3 tracking-tight">
+                Life at {schoolName}
+              </h2>
+            </div>
+          </div>
+          <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
+            {data.gallery.map((img, i) => (
+              <div
+                key={i}
+                className="reveal group relative rounded-2xl overflow-hidden ps-glass"
+                style={{ transitionDelay: `${i * 0.05}s` }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.url}
+                  alt={img.caption ?? `${schoolName} gallery ${i + 1}`}
+                  className="h-48 w-full object-cover transition duration-500 group-hover:scale-105"
+                />
+                {img.caption && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#080b16]/80 to-transparent opacity-0 group-hover:opacity-100 transition" />
+                )}
+                {img.caption && (
+                  <div className="absolute bottom-3 left-3 text-sm font-medium opacity-0 group-hover:opacity-100 transition">
+                    {img.caption}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── EDUCATORS / STAFF ── */}
+      {data.staff.length > 0 && (
+        <section id="staff" className="max-w-6xl mx-auto px-6 py-20">
+          <div className="reveal text-center max-w-2xl mx-auto">
+            <div
+              className="text-sm font-semibold uppercase tracking-widest"
+              style={{ color: brandColor }}
+            >
+              Our people
+            </div>
+            <h2 className="text-4xl font-semibold mt-3 tracking-tight">
+              Meet our educators
+            </h2>
+          </div>
+          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
+            {data.staff.map((person, i) => (
+              <div
+                key={i}
+                className="reveal ps-glass rounded-3xl p-6 text-center hover:bg-white/10 transition"
+                style={{ transitionDelay: `${i * 0.05}s` }}
+              >
+                <div className="mx-auto h-20 w-20 rounded-full overflow-hidden ps-logo-bg flex items-center justify-center text-2xl font-semibold text-[#080b16]">
+                  {person.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={person.photoUrl}
+                      alt={person.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    person.name.charAt(0)
+                  )}
+                </div>
+                <div className="mt-4 font-semibold">{person.name}</div>
+                <div className="text-sm text-slate-400 mt-0.5">{person.role}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── CONTACT + ENQUIRY ── */}
+      {(hasContact || hasEnquiry) && (
+        <section id="enquire" className="relative max-w-6xl mx-auto px-6 py-24">
+          <div className="relative ps-glass rounded-[2rem] overflow-hidden p-8 md:p-12 grid md:grid-cols-2 gap-12 items-center">
+            <div
+              className="ps-aurora"
+              style={{
+                width: '340px',
+                height: '340px',
+                background: '#7c6cff',
+                top: '-80px',
+                right: '-40px',
+                opacity: 0.4,
+              }}
+            />
+            <div className="relative">
+              <h2 className="text-4xl font-semibold tracking-tight">
+                Ready to <span className="ps-grad-text">join us?</span>
+              </h2>
+              <p className="mt-4 text-slate-400">
+                Leave your details and our admissions team reaches out within a working
+                day.
+              </p>
+              {(data.profile?.phone ||
+                data.profile?.email ||
+                data.profile?.addressLine1) && (
+                <div className="mt-6 space-y-2 text-sm text-slate-300">
+                  {data.profile?.phone && <div>📞 {data.profile.phone}</div>}
+                  {data.profile?.email && <div>✉️ {data.profile.email}</div>}
+                  {data.profile?.addressLine1 && (
+                    <div>
+                      📍 {data.profile.addressLine1}
+                      {data.profile.city ? `, ${data.profile.city}` : ''}
+                      {data.profile.postalCode ? ` ${data.profile.postalCode}` : ''}
+                    </div>
+                  )}
+                </div>
+              )}
+              {data.socialLinks.length > 0 && (
+                <div className="mt-6 flex flex-wrap gap-3">
+                  {data.socialLinks.map((s, i) => (
+                    <a
+                      key={i}
+                      href={s.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ps-glass rounded-lg px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 transition capitalize"
+                    >
+                      {s.platform}
+                    </a>
+                  ))}
+                </div>
+              )}
+              {data.profile?.mapEmbedUrl && (
+                <div className="mt-6 rounded-2xl overflow-hidden ps-glass">
+                  <iframe
+                    src={data.profile.mapEmbedUrl}
+                    className="w-full h-40 border-0"
+                    loading="lazy"
+                    title={`${schoolName} location`}
+                  />
+                </div>
+              )}
+            </div>
+
+            {hasEnquiry ? (
+              <EnquiryForm brandColor={brandColor} menu={data.menu} />
+            ) : (
+              <div className="relative ps-glass rounded-2xl p-6 text-sm text-slate-400">
+                Reach out to us using the contact details on the left.
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ── FOOTER ── */}
       <footer className="border-t border-white/10 mt-16">
@@ -561,5 +718,126 @@ export default function PublicSite({ data }: Props) {
         </div>
       </footer>
     </div>
+  );
+}
+
+// ── Enquiry form (client, posts to public API with school Host header) ──────────
+
+function EnquiryForm({
+  brandColor,
+  menu,
+}: {
+  brandColor: string;
+  menu: { label: string; gradeId: string }[];
+}) {
+  const [status, setStatus] = useState<'idle' | 'sending' | 'ok' | 'rate' | 'error'>(
+    'idle'
+  );
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const parentName = String(fd.get('parentName') ?? '').trim();
+    const phone = String(fd.get('phone') ?? '').trim();
+    const email = String(fd.get('email') ?? '').trim();
+    const gradeInterest = String(fd.get('gradeInterest') ?? '').trim();
+    const message = String(fd.get('message') ?? '').trim();
+    if (!parentName || !phone) return;
+
+    setStatus('sending');
+    const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+    try {
+      const res = await fetch(`${base}/public/enquiry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Browser is already on <slug>.localhost; forward it so the API
+          // resolves the correct tenant (it strips the port).
+          'X-Forwarded-Host': window.location.host,
+        },
+        body: JSON.stringify({
+          parentName,
+          phone,
+          ...(email ? { email } : {}),
+          ...(gradeInterest ? { gradeInterest } : {}),
+          ...(message ? { message } : {}),
+        }),
+      });
+      if (res.status === 429) {
+        setStatus('rate');
+        return;
+      }
+      if (!res.ok) {
+        setStatus('error');
+        return;
+      }
+      form.reset();
+      setStatus('ok');
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  const inputCls =
+    'w-full ps-glass rounded-xl px-4 py-3 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-white/20';
+
+  return (
+    <form onSubmit={onSubmit} className="relative space-y-3">
+      {status === 'ok' && (
+        <div className="bg-emerald-400/15 text-emerald-300 text-sm rounded-xl px-4 py-2.5">
+          ✓ Thank you! Your enquiry has been received.
+        </div>
+      )}
+      {status === 'rate' && (
+        <div className="bg-amber-400/15 text-amber-300 text-sm rounded-xl px-4 py-2.5">
+          You&apos;ve submitted a few times — please try again shortly.
+        </div>
+      )}
+      {status === 'error' && (
+        <div className="bg-rose-500/15 text-rose-300 text-sm rounded-xl px-4 py-2.5">
+          Something went wrong. Please try again.
+        </div>
+      )}
+      <input required name="parentName" className={inputCls} placeholder="Parent name" />
+      <div className="grid grid-cols-2 gap-3">
+        <input required name="phone" className={inputCls} placeholder="Phone" />
+        {menu.length > 0 ? (
+          <select
+            name="gradeInterest"
+            className={`${inputCls} bg-transparent`}
+            defaultValue=""
+          >
+            <option value="" className="bg-[#0f1424]">
+              Interested in…
+            </option>
+            {menu.map((m) => (
+              <option key={m.gradeId} value={m.label} className="bg-[#0f1424]">
+                {m.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input name="email" type="email" className={inputCls} placeholder="Email" />
+        )}
+      </div>
+      {menu.length > 0 && (
+        <input name="email" type="email" className={inputCls} placeholder="Email (optional)" />
+      )}
+      <textarea
+        name="message"
+        rows={3}
+        className={inputCls}
+        placeholder="Message (optional)"
+      />
+      <button
+        type="submit"
+        disabled={status === 'sending'}
+        className="btn-glow w-full font-semibold py-3.5 rounded-xl hover:scale-[1.01] transition disabled:opacity-60"
+        style={{ background: `linear-gradient(90deg, ${brandColor}, #38bdf8)`, color: '#080b16' }}
+      >
+        {status === 'sending' ? 'Sending…' : 'Submit enquiry →'}
+      </button>
+    </form>
   );
 }
