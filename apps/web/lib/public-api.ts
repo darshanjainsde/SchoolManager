@@ -37,7 +37,12 @@ export interface PublicSiteData {
 }
 
 export async function fetchPublicSite(host: string): Promise<PublicSiteData | null> {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+  // Server-to-server call (Next server → API). Prefer an explicit server-side
+  // base, then fall back to the public URL. Normalise `localhost` → `127.0.0.1`
+  // because Node's fetch (undici) resolves `localhost` to IPv6 `::1`, which the
+  // API (bound to IPv4 0.0.0.0) refuses — silently turning every fetch into null.
+  const raw = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001';
+  const base = raw.replace('localhost', '127.0.0.1');
   try {
     const res = await fetch(`${base}/public/site`, {
       headers: { 'X-Forwarded-Host': host },
