@@ -221,6 +221,20 @@ describe('Public API e2e', () => {
       // menu has the Grade 1 we created.
       expect(body.menu.length).toBeGreaterThan(0);
     });
+
+    it('theme fields present with defaults on a school that never set them', async () => {
+      const res = await fetch(`${BASE}/public/site`, {
+        headers: { 'X-Forwarded-Host': `${throwawaySlug}.localhost` },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json() as {
+        profile: { headingFont: string; heroStyle: string; animationLevel: string } | null;
+      };
+      expect(body.profile).not.toBeNull();
+      expect(body.profile!.headingFont).toBe('INTER');
+      expect(body.profile!.heroStyle).toBe('ILLUSTRATION');
+      expect(body.profile!.animationLevel).toBe('FULL');
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────

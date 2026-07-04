@@ -107,6 +107,72 @@ describe('CMS e2e', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // 1b. Theme round-trip (Phase 8)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('theme round-trip', () => {
+    afterAll(async () => {
+      // Restore acme to defaults so other suites / demos start clean.
+      await fetch(`${BASE}/site/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-Host': 'acme.localhost',
+          Authorization: `Bearer ${acmeToken}`,
+        },
+        body: JSON.stringify({
+          headingFont: 'INTER',
+          heroStyle: 'ILLUSTRATION',
+          animationLevel: 'FULL',
+          themePreset: null,
+        }),
+      });
+    });
+
+    it('PUT /site/profile accepts theme fields', async () => {
+      const res = await fetch(`${BASE}/site/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-Host': 'acme.localhost',
+          Authorization: `Bearer ${acmeToken}`,
+        },
+        body: JSON.stringify({
+          headingFont: 'FRAUNCES',
+          heroStyle: 'PHOTO',
+          animationLevel: 'SUBTLE',
+          themePreset: 'ACADEMIC',
+        }),
+      });
+      expect(res.status).toBeLessThan(300);
+    });
+
+    it('GET /site/content reflects the saved theme fields', async () => {
+      const res = await fetch(`${BASE}/site/content`, {
+        headers: { 'X-Forwarded-Host': 'acme.localhost', Authorization: `Bearer ${acmeToken}` },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.profile.headingFont).toBe('FRAUNCES');
+      expect(body.profile.heroStyle).toBe('PHOTO');
+      expect(body.profile.animationLevel).toBe('SUBTLE');
+      expect(body.profile.themePreset).toBe('ACADEMIC');
+    });
+
+    it('rejects an invalid theme value (400)', async () => {
+      const res = await fetch(`${BASE}/site/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-Host': 'acme.localhost',
+          Authorization: `Bearer ${acmeToken}`,
+        },
+        body: JSON.stringify({ headingFont: 'COMIC' }),
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   // 2. Staff round-trip
   // ──────────────────────────────────────────────────────────────────────────
   describe('staff round-trip', () => {
