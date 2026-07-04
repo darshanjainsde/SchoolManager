@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -5,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import { PasswordService } from '../auth';
 import { isP2002, isP2003, isP2025 } from './internal/prisma-errors';
 import type { CreateStudentDto, UpdateStudentDto } from './management.dto';
 
@@ -14,6 +16,8 @@ interface ListFilters {
 
 @Injectable()
 export class StudentsService {
+  constructor(private readonly passwords: PasswordService) {}
+
   async list(schoolId: string, filters: ListFilters = {}) {
     return withTenant(schoolId, (tx) =>
       tx.student.findMany({
@@ -88,6 +92,37 @@ export class StudentsService {
         throw new ConflictException('Cannot delete: other records still reference this student');
       throw e;
     }
+  }
+
+  async createLogin(schoolId: string, studentId: string): Promise<{ email: string; tempPassword: string }> {
+    return withTenant(schoolId, async (tx) => {
+      const student = await tx.student.findFirst({ where: { id: studentId } });
+      if (!student) throw new NotFoundException('Student not found');
+      if (student.userId) throw new ConflictException('Student already has a login');
+
+      // The synthetic email must pass @IsEmail() at /auth/login, but admissionNo
+      // allows any characters (spaces, slashes, etc.). Slugify it to a safe local
+      // part and append a student-id fragment so distinct students never collide
+      // even if their admission numbers slugify to the same value.
+      const slug = student.admissionNo.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const localPart = `${slug || 'student'}-${studentId.slice(0, 8)}`;
+      const email = `student.${localPart}@${schoolId}.students.local`;
+      const tempPassword = randomBytes(8).toString('base64url');
+      const passwordHash = await this.passwords.hash(tempPassword);
+
+      let user: { id: string };
+      try {
+        user = await tx.user.create({
+          data: { schoolId, email, passwordHash, role: 'STUDENT' },
+        });
+      } catch (e) {
+        if (isP2002(e)) throw new ConflictException('Login already exists');
+        throw e;
+      }
+
+      await tx.student.update({ where: { id: studentId }, data: { userId: user.id } });
+      return { email, tempPassword };
+    });
   }
 
   private async validateClassSection(schoolId: string, classSectionId: string) {

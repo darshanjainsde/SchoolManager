@@ -27,12 +27,16 @@ export default function TenantLoginPage() {
 
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: '', password: '' } });
 
+  const setMe = useAuthStore((s) => s.setMe);
+
   async function onSubmit(values: FormValues) {
     try {
       const res = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', values);
       setTokens({ ...res, audience: 'school' });
+      const me = await api.get<{ userId: string; schoolId?: string; role?: string }>('/auth/me');
+      setMe(me);
       toast.success('Welcome back');
-      router.replace('/app');
+      router.replace(me.role === 'STUDENT' ? '/portal' : '/app');
     } catch (e) {
       toast.error((e as Error).message);
     }

@@ -352,3 +352,35 @@ export class AvailabilityQueryDto {
   @IsUUID()
   academicYearId?: string;
 }
+
+// ── Announcement ─────────────────────────────────────────────────────────────
+
+export class CreateAnnouncementDto {
+  @IsString()
+  @Length(1, 160)
+  title!: string;
+
+  @IsString()
+  @Length(1, 4000)
+  body!: string;
+
+  @IsOptional()
+  @IsUUID()
+  classSectionId?: string; // omitted = school-wide
+}
+
+export class UpdateAnnouncementDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 160)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 4000)
+  body?: string;
+
+  @IsOptional()
+  @IsUUID()
+  classSectionId?: string;
+}
