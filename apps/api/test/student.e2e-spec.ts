@@ -97,7 +97,10 @@ describe('Student portal e2e', () => {
     const student = await db.student.create({
       data: {
         schoolId: beaconId,
-        admissionNo: `E2E-${ts.toString().slice(-6)}`,
+        // Deliberately contains a space + slash — chars invalid in an email local
+        // part — to prove createLogin slugifies admissionNo into a login the
+        // student can actually authenticate with (regression: final-review #1).
+        admissionNo: `E2E ${ts.toString().slice(-6)}/A`,
         firstName: 'Test',
         lastName: 'Student',
         classSectionId: myClassId,

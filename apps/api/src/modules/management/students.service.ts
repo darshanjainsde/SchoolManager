@@ -100,7 +100,13 @@ export class StudentsService {
       if (!student) throw new NotFoundException('Student not found');
       if (student.userId) throw new ConflictException('Student already has a login');
 
-      const email = `student.${student.admissionNo.toLowerCase()}@${schoolId}.students.local`;
+      // The synthetic email must pass @IsEmail() at /auth/login, but admissionNo
+      // allows any characters (spaces, slashes, etc.). Slugify it to a safe local
+      // part and append a student-id fragment so distinct students never collide
+      // even if their admission numbers slugify to the same value.
+      const slug = student.admissionNo.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const localPart = `${slug || 'student'}-${studentId.slice(0, 8)}`;
+      const email = `student.${localPart}@${schoolId}.students.local`;
       const tempPassword = randomBytes(8).toString('base64url');
       const passwordHash = await this.passwords.hash(tempPassword);
 
