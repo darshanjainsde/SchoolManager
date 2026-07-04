@@ -37,6 +37,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
     { href: '/platform', label: 'Dashboard', emoji: '📊' },
     { href: '/platform/schools', label: 'Schools', emoji: '🏫' },
     { href: '/platform/onboard', label: 'Add School', emoji: '➕' },
+    { href: '/platform/connect', label: 'Connect', emoji: '🔗' },
   ];
 
   function handleLogout() {
