@@ -75,6 +75,9 @@ export class PublicSiteService {
               postalCode: has('ABOUT_CONTACT') ? profile.postalCode : null,
               country: has('ABOUT_CONTACT') ? profile.country : null,
               mapEmbedUrl: has('ABOUT_CONTACT') ? profile.mapEmbedUrl : null,
+              headingFont: profile.headingFont,
+              heroStyle: profile.heroStyle,
+              animationLevel: profile.animationLevel,
             }
           : null,
         homepage: homepage

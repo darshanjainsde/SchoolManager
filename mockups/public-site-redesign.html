@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SkoolOS — Public Site Redesign Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --brand: #2f6b4f;      /* primary */
+    --brand2: #e8b04b;     /* secondary/accent */
+    --ink: #14261d;        /* deep heading colour */
+    --paper: #f7f5ef;      /* warm paper background */
+    --font-head: 'Fraunces', serif;
+    --font-body: 'Inter', sans-serif;
+    --radius: 20px;
+    --motion: 1;           /* animation intensity multiplier (0..1) */
+  }
+  body { font-family: var(--font-body); background: var(--paper); color: var(--ink); }
+  .head { font-family: var(--font-head); }
+
+  /* ── School-themed motion: gentle, warm, not "AI aurora" ── */
+  @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(calc(-12px * var(--motion)))} }
+  .float { animation: floaty calc(7s / (var(--motion) + .01)) ease-in-out infinite; }
+  @keyframes sway { 0%,100%{transform:rotate(-2deg)} 50%{transform:rotate(2deg)} }
+  .sway { animation: sway calc(5s / (var(--motion) + .01)) ease-in-out infinite; transform-origin: top center; }
+  @keyframes rise { from{opacity:0; transform:translateY(calc(26px * var(--motion)))} to{opacity:1; transform:none} }
+  .rise { animation: rise .8s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes drawline { to { stroke-dashoffset: 0; } }
+  .underline-draw { stroke-dasharray: 260; stroke-dashoffset: 260; animation: drawline 1.4s ease .3s forwards; }
+  @keyframes twinkle { 0%,100%{opacity:.25} 50%{opacity:1} }
+  .twinkle { animation: twinkle calc(3s / (var(--motion)+.01)) ease-in-out infinite; }
+  .soft-shadow { box-shadow: 0 20px 45px -20px rgba(20,38,29,.35); }
+  .brandbg { background: var(--brand); }
+  .accentbg { background: var(--brand2); }
+  .brandgrad { background: linear-gradient(120deg, var(--brand), color-mix(in srgb, var(--brand) 55%, var(--brand2))); }
+  .chip { background: color-mix(in srgb, var(--brand) 12%, white); color: var(--brand); }
+
+  /* Hero style variants */
+  .hero-photo .hero-bg { background-image: linear-gradient(rgba(20,38,29,.55),rgba(20,38,29,.35)), url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=1400&q=70'); background-size: cover; background-position: center; }
+  .hero-photo .hero-ink, .hero-photo .hero-sub { color: #fff; }
+  .hero-minimal .hero-decor { display:none; }
+  .hero-minimal { --motion: .3; }
+</style>
+</head>
+<body>
+
+<!-- ══ Control bar (this represents the admin "Theme" editor) ══ -->
+<div class="sticky top-0 z-50 bg-white border-b border-black/10 shadow-sm">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+    <span class="font-bold head text-base">🎨 Theme editor <span class="text-xs font-normal text-slate-400">(mockup — lives in Website content)</span></span>
+
+    <label class="flex items-center gap-2">Preset
+      <select id="preset" class="border rounded-lg px-2 py-1">
+        <option value="academic">Academic (green/gold)</option>
+        <option value="modern">Modern (indigo/sky)</option>
+        <option value="playful">Playful (coral/teal)</option>
+        <option value="elegant">Elegant (maroon/cream)</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+    <label class="flex items-center gap-1">Primary <input id="c1" type="color" value="#2f6b4f" class="h-7 w-9 rounded" /></label>
+    <label class="flex items-center gap-1">Accent <input id="c2" type="color" value="#e8b04b" class="h-7 w-9 rounded" /></label>
+
+    <label class="flex items-center gap-2">Heading font
+      <select id="font" class="border rounded-lg px-2 py-1">
+        <option value="'Fraunces', serif">Fraunces (academic serif)</option>
+        <option value="'Poppins', sans-serif">Poppins (rounded)</option>
+        <option value="'Nunito', sans-serif">Nunito (friendly)</option>
+        <option value="'Inter', sans-serif">Inter (neutral)</option>
+      </select>
+    </label>
+
+    <label class="flex items-center gap-2">Hero
+      <select id="hero" class="border rounded-lg px-2 py-1">
+        <option value="hero-illustration">Illustrated (animated)</option>
+        <option value="hero-photo">Photo background</option>
+        <option value="hero-minimal">Minimal / calm</option>
+      </select>
+    </label>
+
+    <label class="flex items-center gap-2">Motion
+      <input id="motion" type="range" min="0" max="1" step="0.5" value="1" />
+      <span id="motionLabel" class="text-xs text-slate-500 w-10">Full</span>
+    </label>
+  </div>
+</div>
+
+<!-- ══ Public site preview ══ -->
+<main id="site" class="hero-illustration">
+
+  <!-- Nav -->
+  <header class="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <span class="h-10 w-10 rounded-2xl brandgrad grid place-items-center text-white font-bold head">G</span>
+      <span class="font-bold head text-lg">Greenwood School</span>
+    </div>
+    <nav class="hidden md:flex items-center gap-1 text-sm">
+      <a class="px-3 py-2 rounded-lg hover:bg-black/5">Home</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-black/5">About</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-black/5">Academics</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-black/5">Events</a>
+      <a class="px-3 py-2 rounded-lg hover:bg-black/5">Gallery</a>
+    </nav>
+    <a class="accentbg text-ink px-4 py-2 rounded-xl font-semibold text-sm soft-shadow" style="color:var(--ink)">Enquire →</a>
+  </header>
+
+  <!-- Hero -->
+  <section class="relative overflow-hidden">
+    <div class="hero-bg absolute inset-0"></div>
+    <div class="relative max-w-6xl mx-auto px-6 pt-10 pb-20 grid lg:grid-cols-2 gap-10 items-center">
+      <div class="rise">
+        <div class="chip inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold mb-5">
+          <span class="h-2 w-2 rounded-full accentbg twinkle"></span> Admissions open · 2026–27
+        </div>
+        <h1 class="hero-ink head text-5xl md:text-6xl font-bold leading-[1.05]">
+          Where curiosity
+          <span class="relative inline-block">
+            grows
+            <svg class="absolute -bottom-2 left-0 w-full" height="14" viewBox="0 0 260 14" fill="none">
+              <path class="underline-draw" d="M2 10 C 70 2, 190 2, 258 9" stroke="var(--brand2)" stroke-width="5" stroke-linecap="round"/>
+            </svg>
+          </span>
+          every day
+        </h1>
+        <p class="hero-sub mt-6 text-lg text-slate-600 max-w-md">A nurturing school where every child is known by name, and learning feels like an adventure.</p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a class="brandbg text-white font-semibold px-6 py-3.5 rounded-xl soft-shadow">Book a campus visit</a>
+          <a class="bg-white border border-black/10 px-6 py-3.5 rounded-xl font-semibold">Explore ↓</a>
+        </div>
+        <div class="mt-8 flex items-center gap-6 text-sm text-slate-500">
+          <div><span class="head text-2xl font-bold text-ink">1,200+</span><br>Happy students</div>
+          <div><span class="head text-2xl font-bold text-ink">40+</span><br>Caring teachers</div>
+          <div><span class="head text-2xl font-bold text-ink">98%</span><br>Parent rating</div>
+        </div>
+      </div>
+
+      <!-- Illustrated animated cluster -->
+      <div class="hero-decor relative h-[380px] hidden lg:block">
+        <div class="float absolute top-4 right-6 w-64 rounded-3xl bg-white p-2 soft-shadow">
+          <div class="rounded-2xl h-44 brandgrad grid place-items-center text-white text-6xl">🏫</div>
+          <div class="p-3 text-sm"><b class="head">Open Day</b><br><span class="text-slate-500">Sat, 9:00 AM</span></div>
+        </div>
+        <div class="sway absolute bottom-6 left-2 text-6xl">🎓</div>
+        <div class="float absolute bottom-24 right-0 bg-white rounded-2xl p-4 soft-shadow flex items-center gap-3" style="animation-delay:-3s">
+          <span class="h-11 w-11 rounded-xl accentbg grid place-items-center text-2xl">📚</span>
+          <div><b class="head text-sm">Reading club</b><br><span class="text-xs text-slate-500">every Friday</span></div>
+        </div>
+        <div class="twinkle absolute top-10 left-10 text-3xl">✏️</div>
+        <div class="twinkle absolute top-40 left-24 text-2xl" style="animation-delay:-1s">⭐</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Academics ribbon -->
+  <section class="max-w-6xl mx-auto px-6 py-16">
+    <h2 class="head text-3xl font-bold text-center">Programmes for every stage</h2>
+    <div class="mt-10 grid md:grid-cols-4 gap-5">
+      <div class="rise bg-white rounded-3xl p-6 soft-shadow"><div class="text-4xl">🧸</div><h3 class="head font-bold text-lg mt-3">Nursery</h3><p class="text-sm text-slate-500 mt-1">Play-led early years.</p></div>
+      <div class="rise bg-white rounded-3xl p-6 soft-shadow"><div class="text-4xl">🔤</div><h3 class="head font-bold text-lg mt-3">Primary</h3><p class="text-sm text-slate-500 mt-1">Strong foundations.</p></div>
+      <div class="rise bg-white rounded-3xl p-6 soft-shadow"><div class="text-4xl">🔬</div><h3 class="head font-bold text-lg mt-3">Middle</h3><p class="text-sm text-slate-500 mt-1">Curiosity in action.</p></div>
+      <div class="rise bg-white rounded-3xl p-6 soft-shadow"><div class="text-4xl">🎯</div><h3 class="head font-bold text-lg mt-3">Senior</h3><p class="text-sm text-slate-500 mt-1">Ready for the world.</p></div>
+    </div>
+  </section>
+
+  <!-- Events -->
+  <section class="brandgrad text-white">
+    <div class="max-w-6xl mx-auto px-6 py-16">
+      <h2 class="head text-3xl font-bold">Connect · What's on</h2>
+      <div class="mt-8 grid md:grid-cols-3 gap-5">
+        <div class="bg-white/10 backdrop-blur rounded-3xl p-5"><span class="text-xs accentbg text-ink px-2 py-0.5 rounded font-semibold">Our School</span><h3 class="head font-bold text-lg mt-3">Annual Science Fair</h3><div class="text-sm text-white/80 mt-1">Aug 14 · 9:00 AM</div></div>
+        <div class="bg-white/10 backdrop-blur rounded-3xl p-5"><span class="text-xs bg-white/25 px-2 py-0.5 rounded font-semibold">Network · Sunrise</span><h3 class="head font-bold text-lg mt-3">Inter-School Music Fest</h3><div class="text-sm text-white/80 mt-1">Aug 22 · 5:00 PM</div></div>
+        <div class="bg-white/10 backdrop-blur rounded-3xl p-5"><span class="text-xs bg-white/25 px-2 py-0.5 rounded font-semibold">Network · Riverside</span><h3 class="head font-bold text-lg mt-3">Regional Sports Meet</h3><div class="text-sm text-white/80 mt-1">Sep 03 · 8:00 AM</div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="max-w-6xl mx-auto px-6 py-12 text-center text-sm text-slate-500">
+    © 2026 Greenwood School · Powered by SkoolOS
+  </footer>
+</main>
+
+<script>
+  const root = document.documentElement;
+  const site = document.getElementById('site');
+  const PRESETS = {
+    academic: { c1:'#2f6b4f', c2:'#e8b04b', font:"'Fraunces', serif" },
+    modern:   { c1:'#3b4ee0', c2:'#38bdf8', font:"'Poppins', sans-serif" },
+    playful:  { c1:'#f2653f', c2:'#12b3a6', font:"'Nunito', sans-serif" },
+    elegant:  { c1:'#7a2233', c2:'#d9c7a3', font:"'Fraunces', serif" },
+  };
+  const $ = (id) => document.getElementById(id);
+  function apply(c1, c2, font) {
+    root.style.setProperty('--brand', c1);
+    root.style.setProperty('--brand2', c2);
+    if (font) root.style.setProperty('--font-head', font);
+    $('c1').value = c1; $('c2').value = c2;
+    // Derive a deep ink from primary for headings
+    root.style.setProperty('--ink', mix(c1, '#12211a', .35));
+  }
+  function mix(hex, dark, amt){ const a=rgb(hex),b=rgb(dark); if(!a||!b)return hex; return '#'+a.map((v,i)=>Math.round(v+(b[i]-v)*amt).toString(16).padStart(2,'0')).join(''); }
+  function rgb(h){ const m=/^#?([0-9a-f]{6})$/i.exec(h.trim()); if(!m)return null; const n=parseInt(m[1],16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+
+  $('preset').addEventListener('change', e => {
+    const p = PRESETS[e.target.value];
+    if (p) { apply(p.c1, p.c2, p.font); $('font').value = p.font; }
+  });
+  $('c1').addEventListener('input', e => { apply(e.target.value, $('c2').value); $('preset').value='custom'; });
+  $('c2').addEventListener('input', e => { apply($('c1').value, e.target.value); $('preset').value='custom'; });
+  $('font').addEventListener('change', e => root.style.setProperty('--font-head', e.target.value));
+  $('hero').addEventListener('change', e => { site.className = e.target.value; });
+  $('motion').addEventListener('input', e => {
+    root.style.setProperty('--motion', e.target.value);
+    $('motionLabel').textContent = e.target.value === '1' ? 'Full' : e.target.value === '0.5' ? 'Subtle' : 'Off';
+  });
+</script>
+</body>
+</html>

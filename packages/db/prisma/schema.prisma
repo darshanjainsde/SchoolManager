@@ -197,6 +197,10 @@ model SchoolProfile {
   faviconAssetId    String? @db.Uuid
   brandColorPrimary String  @default("#3ee6b0")
   brandColorSecondary String @default("#7c6cff")
+  headingFont       String  @default("INTER")
+  heroStyle         String  @default("ILLUSTRATION")
+  animationLevel    String  @default("FULL")
+  themePreset       String?
   phone             String?
   email             String?
   addressLine1      String?

@@ -50,6 +50,9 @@ export interface PublicSiteData {
     postalCode: string | null;
     country: string | null;
     mapEmbedUrl: string | null;
+    headingFont: string;
+    heroStyle: string;
+    animationLevel: string;
   } | null;
   homepage: {
     headline: string;

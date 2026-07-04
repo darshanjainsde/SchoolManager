@@ -21,6 +21,10 @@ export class UpdateProfileDto {
   @IsOptional() @IsString() @Length(0, 500) mapEmbedUrl?: string;
   @IsOptional() @IsString() logoAssetId?: string;
   @IsOptional() @IsString() faviconAssetId?: string;
+  @IsOptional() @IsIn(['INTER', 'FRAUNCES', 'POPPINS', 'NUNITO']) headingFont?: string;
+  @IsOptional() @IsIn(['ILLUSTRATION', 'PHOTO', 'MINIMAL']) heroStyle?: string;
+  @IsOptional() @IsIn(['FULL', 'SUBTLE', 'NONE']) animationLevel?: string;
+  @IsOptional() @IsIn(['ACADEMIC', 'MODERN', 'PLAYFUL', 'ELEGANT', 'CUSTOM']) themePreset?: string;
 }
 
 export class UpdateHomepageDto {
