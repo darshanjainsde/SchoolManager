@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth';
 import { FeaturesModule } from '../features';
 import { TenancyModule } from '../tenancy';
 import { CatalogService } from './catalog.service';
@@ -13,7 +14,7 @@ import { TimetableService } from './timetable.service';
 import { TimetableController } from './timetable.controller';
 
 @Module({
-  imports: [FeaturesModule, TenancyModule],
+  imports: [AuthModule, FeaturesModule, TenancyModule],
   providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService],
   controllers: [
     CatalogController,

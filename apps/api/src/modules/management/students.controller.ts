@@ -12,14 +12,17 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
+import { RolesGuard } from '../../common/auth/roles.guard';
+import { Roles } from '../../common/auth/roles.decorator';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { StudentsService } from './students.service';
 import { CreateStudentDto, UpdateStudentDto } from './management.dto';
 
 @Controller('manage/students')
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard)
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
 @RequireFeature('MANAGEMENT')
+@Roles('SCHOOL_ADMIN')
 export class StudentsController {
   constructor(
     private readonly students: StudentsService,
@@ -41,6 +44,11 @@ export class StudentsController {
   @Post()
   create(@Body() dto: CreateStudentDto) {
     return this.students.create(this.sid(), dto);
+  }
+
+  @Post(':id/login')
+  createLogin(@Param('id', ParseUUIDPipe) id: string) {
+    return this.students.createLogin(this.sid(), id);
   }
 
   @Put(':id')
