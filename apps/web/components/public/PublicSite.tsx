@@ -84,6 +84,10 @@ const PS_CSS = `
   .ps-progress-bar { background: linear-gradient(90deg, #3ee6b0, #38bdf8); height: 100%; }
   .ps-icon-bg { background: linear-gradient(135deg, #7c6cff, #38bdf8); }
   .ps-about-glow { background: linear-gradient(135deg, rgba(62,230,176,.2), rgba(124,108,255,.2)); filter: blur(2rem); }
+
+  /* tilt card hover */
+  .tilt { transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s cubic-bezier(.2,.7,.2,1); }
+  .tilt:hover { transform: perspective(800px) rotateX(2deg) rotateY(-3deg) scale(1.02); box-shadow: 0 20px 60px rgba(0,0,0,.4); }
 `;
 
 export default function PublicSite({ data }: Props) {
@@ -104,6 +108,7 @@ export default function PublicSite({ data }: Props) {
     data.profile?.addressLine1
   );
   const hasEnquiry = data.school.features.includes('ENQUIRY');
+  const hasEvents = data.events.length > 0;
   const logoUrl = data.profile?.logoUrl;
   const principalName = data.homepage?.principalName;
   const principalMessage = data.homepage?.principalMessage;
@@ -261,6 +266,11 @@ export default function PublicSite({ data }: Props) {
               {hasGallery && (
                 <a className="px-3 py-2 rounded-lg hover:text-white hover:bg-white/5 transition" href="#gallery">
                   Gallery
+                </a>
+              )}
+              {hasEvents && (
+                <a className="px-3 py-2 rounded-lg hover:text-white hover:bg-white/5 transition" href="#events">
+                  Connect
                 </a>
               )}
               {hasContact && (
@@ -551,6 +561,76 @@ export default function PublicSite({ data }: Props) {
         </section>
       )}
 
+      {/* ── CONNECT / EVENTS ── */}
+      {hasEvents && (
+        <section id="events" className="max-w-6xl mx-auto px-6 py-20">
+          <div className="reveal flex items-end justify-between flex-wrap gap-4">
+            <div>
+              <div
+                className="text-sm font-semibold uppercase tracking-widest"
+                style={{ color: brandColor }}
+              >
+                Connect · Events
+              </div>
+              <h2 className="text-4xl font-semibold mt-3 tracking-tight">Across our network</h2>
+              <p className="mt-2 text-slate-400 max-w-xl">
+                Events from every school in the network — one shared calendar for the whole community.
+              </p>
+            </div>
+          </div>
+          <div className="mt-10 grid md:grid-cols-3 gap-5">
+            {data.events.map((e, i) => {
+              const coverSrc = safeHttpUrl(e.coverUrl);
+              const dateStr = new Date(e.startAt).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              });
+              const timeStr = new Date(e.startAt).toLocaleTimeString(undefined, {
+                hour: 'numeric',
+                minute: '2-digit',
+              });
+              const metaLine = [dateStr, timeStr, e.venue ? `· ${e.venue}` : null]
+                .filter(Boolean)
+                .join(' ');
+              return (
+                <div
+                  key={e.id}
+                  className="reveal tilt ps-glass rounded-3xl overflow-hidden"
+                  style={{ transitionDelay: `${i * 0.07}s` }}
+                >
+                  {/* Cover area */}
+                  {coverSrc ? (
+                    <div
+                      className="h-40 bg-cover bg-center"
+                      style={{ backgroundImage: `url('${coverSrc}')` }}
+                    />
+                  ) : (
+                    <div className="h-40 ps-logo-bg opacity-70" />
+                  )}
+                  {/* Card body */}
+                  <div className="p-5">
+                    {e.isHost ? (
+                      <span
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded"
+                        style={{ background: `${brandColor}26`, color: brandColor }}
+                      >
+                        Our School
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-[#7c6cff]/20 text-[#a89dff]">
+                        Network · {e.originSchoolName ?? 'Network'}
+                      </span>
+                    )}
+                    <h3 className="font-semibold text-lg mt-3 leading-snug">{e.title}</h3>
+                    <div className="text-sm text-slate-400 mt-1">{metaLine}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* ── EDUCATORS / STAFF ── */}
       {data.staff.length > 0 && (
         <section id="staff" className="max-w-6xl mx-auto px-6 py-20">
@@ -707,6 +787,11 @@ export default function PublicSite({ data }: Props) {
               {hasGallery && (
                 <li>
                   <a href="#gallery" className="hover:text-white transition">Gallery</a>
+                </li>
+              )}
+              {hasEvents && (
+                <li>
+                  <a href="#events" className="hover:text-white transition">Connect</a>
                 </li>
               )}
               <li>
