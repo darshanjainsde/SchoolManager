@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Pencil, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,42 @@ interface Student {
   guardianName: string | null;
   guardianPhone: string | null;
   classSection: { name: string; grade: { name: string } } | null;
+  userId: string | null;
+}
+
+// ── Create Login Modal ────────────────────────────────────────────────────────
+
+interface LoginCredentials {
+  email: string;
+  tempPassword: string;
+}
+
+function CreateLoginModal({ credentials, onClose }: { credentials: LoginCredentials; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <Card className="w-full max-w-sm mx-4">
+        <CardHeader>
+          <CardTitle>Login created — save these now</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+            The temporary password is shown only once. Save it before closing this dialog.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="cl-email">Email</Label>
+            <Input id="cl-email" readOnly value={credentials.email} className="font-mono text-sm" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cl-pw">Temporary password</Label>
+            <Input id="cl-pw" readOnly value={credentials.tempPassword} className="font-mono text-sm" />
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button onClick={onClose}>I've saved these — close</Button>
+        </CardFooter>
+      </Card>
+    </div>
+  );
 }
 
 // ── Student Form (Add / Edit) ────────────────────────────────────────────────
@@ -197,6 +233,7 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState('');
+  const [loginCredentials, setLoginCredentials] = useState<LoginCredentials | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const classesQuery = useQuery({
@@ -286,12 +323,36 @@ export default function StudentsPage() {
     onError: (err: Error) => toast.error(`Failed to delete student: ${err.message}`),
   });
 
+  const createLoginMutation = useMutation({
+    mutationFn: (studentId: string) =>
+      api.post<LoginCredentials>(`/manage/students/${studentId}/login`, {}),
+    onSuccess: (credentials) => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
+      setLoginCredentials(credentials);
+    },
+    onError: (err: Error) => {
+      const msg = err.message;
+      if (msg.includes('409') || msg.toLowerCase().includes('already')) {
+        toast.error('This student already has a login.');
+      } else {
+        toast.error(`Failed to create login: ${msg}`);
+      }
+    },
+  });
+
   // Derive the initial values for the edit form from current student data
   const editingStudent = editId ? (studentsQuery.data ?? []).find((s) => s.id === editId) : null;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6">
+      {/* Create Login credentials modal */}
+      {loginCredentials && (
+        <CreateLoginModal
+          credentials={loginCredentials}
+          onClose={() => setLoginCredentials(null)}
+        />
+      )}
       {/* Page header */}
       <header className="flex items-center justify-between">
         <div>
@@ -390,6 +451,7 @@ export default function StudentsPage() {
               <Th>Class</Th>
               <Th>Guardian</Th>
               <Th>Contact</Th>
+              <Th>Portal login</Th>
               <Th />
             </Tr>
           </THead>
@@ -410,6 +472,24 @@ export default function StudentsPage() {
                 </Td>
                 <Td>{student.guardianName ?? <span className="text-slate-400">—</span>}</Td>
                 <Td>{student.guardianPhone ?? <span className="text-slate-400">—</span>}</Td>
+                <Td>
+                  {student.userId ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-teal-700 font-medium">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Has login
+                    </span>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={createLoginMutation.isPending}
+                      onClick={() => createLoginMutation.mutate(student.id)}
+                    >
+                      <KeyRound className="h-3.5 w-3.5 mr-1" />
+                      Create login
+                    </Button>
+                  )}
+                </Td>
                 <Td>
                   <div className="flex items-center gap-2">
                     <Button
