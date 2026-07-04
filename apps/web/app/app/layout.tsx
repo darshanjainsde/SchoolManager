@@ -5,6 +5,7 @@ import { useEffect, type ReactNode } from 'react';
 import { LayoutDashboard, Globe, LogOut, School, Users, GraduationCap, CalendarDays, Clock, CalendarHeart, Megaphone } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
+import { useHydrated } from '@/lib/use-hydrated';
 
 const NAV_ITEMS = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
@@ -21,16 +22,19 @@ const NAV_ITEMS = [
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const hydrated = useHydrated();
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
 
   useEffect(() => {
-    if (!refreshToken || audience !== 'school') {
+    if (hydrated && (!refreshToken || audience !== 'school')) {
       router.replace('/login');
     }
-  }, [refreshToken, audience, router]);
+  }, [hydrated, refreshToken, audience, router]);
 
+  // Until hydrated, render nothing so the first client paint matches the server.
+  if (!hydrated) return null;
   if (!refreshToken || audience !== 'school') return null;
 
   return (

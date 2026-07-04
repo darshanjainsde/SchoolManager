@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
+import { useHydrated } from '@/lib/use-hydrated';
 import { LogOut } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -17,6 +18,7 @@ import { cn } from '@/lib/cn';
 export default function PlatformLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const hydrated = useHydrated();
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
@@ -24,13 +26,15 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   const isLogin = pathname === '/platform/login';
 
   useEffect(() => {
-    if (!isLogin && (!refreshToken || audience !== 'platform')) {
+    if (hydrated && !isLogin && (!refreshToken || audience !== 'platform')) {
       router.replace('/platform/login');
     }
-  }, [isLogin, refreshToken, audience, router]);
+  }, [hydrated, isLogin, refreshToken, audience, router]);
 
   // Render login page without sidebar/guard wrapper
   if (isLogin) return <>{children}</>;
+  // Until hydrated, render nothing so the first client paint matches the server.
+  if (!hydrated) return null;
   if (!refreshToken) return null;
 
   const items = [
