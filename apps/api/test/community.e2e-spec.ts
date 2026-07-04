@@ -276,6 +276,42 @@ describe('Community / Connect-Events e2e', () => {
       expect(ev!.isHost).toBe(true);
       expect(ev!.scope).toBe('NETWORK');
     });
+
+    // Editing an already-APPROVED NETWORK event must re-enter moderation — the
+    // school admin cannot silently push new content live network-wide.
+    it('PATCH /manage/events/:id on the APPROVED network event → re-enters PENDING, drops off other schools', async () => {
+      const token = await schoolToken('beacon');
+      const res = await fetch(`${BASE}/manage/events/${beaconNetworkEventId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-Host': 'beacon.localhost',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title: 'Edited After Approval' }),
+      });
+      expect(res.status).toBe(200);
+      const ev = await res.json() as { status: string; title: string };
+      expect(ev.title).toBe('Edited After Approval');
+      expect(ev.status).toBe('PENDING');
+
+      // No longer visible on another school until re-approved.
+      const acme = await getPublicSite('acme');
+      expect(acme.events.find((e) => e.id === beaconNetworkEventId)).toBeUndefined();
+
+      // Re-approve so later tests (owner re-list, cleanup) see a consistent state.
+      const otoken = await ownerToken();
+      const reapprove = await fetch(`${BASE}/owner/events/${beaconNetworkEventId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-Host': 'owner.localhost',
+          Authorization: `Bearer ${otoken}`,
+        },
+        body: JSON.stringify({ action: 'APPROVE' }),
+      });
+      expect(reapprove.status).toBe(200);
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────

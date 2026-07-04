@@ -61,6 +61,16 @@ export class EventsService {
   async update(id: string, dto: UpdateEventDto) {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
+      // Load the event first (RLS scopes this to the tenant's own rows) so we
+      // know its scope. Editing a NETWORK event's content must re-enter owner
+      // moderation — otherwise an admin could edit an already-APPROVED network
+      // event and push arbitrary content live network-wide with no re-approval.
+      const existing = await tx.event.findUnique({
+        where: { id },
+        select: { scope: true },
+      });
+      if (!existing) throw new NotFoundException('Event not found');
+
       let coverUrl: string | undefined;
       if (dto.coverAssetId) {
         const asset = await tx.mediaAsset.findFirst({
@@ -70,6 +80,13 @@ export class EventsService {
         if (!asset) throw new BadRequestException('coverAssetId not found');
         coverUrl = asset.url;
       }
+
+      // NETWORK edits drop back to PENDING and shed the prior approval stamp.
+      const remoderation =
+        existing.scope === 'NETWORK'
+          ? { status: 'PENDING' as const, approvedByUserId: null, approvedAt: null }
+          : {};
+
       try {
         return await tx.event.update({
           where: { id },
@@ -80,6 +97,7 @@ export class EventsService {
             ...(dto.startAt !== undefined ? { startAt: new Date(dto.startAt) } : {}),
             ...(dto.endAt !== undefined ? { endAt: dto.endAt ? new Date(dto.endAt) : null } : {}),
             ...(dto.venue !== undefined ? { venue: dto.venue } : {}),
+            ...remoderation,
           },
         });
       } catch (e) {
