@@ -16,6 +16,7 @@ import { FeaturesModule } from './modules/features';
 import { OwnerModule } from './modules/owner';
 import { CmsModule } from './modules/cms';
 import { ManagementModule } from './modules/management';
+import { PublicModule } from './modules/public';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { ManagementModule } from './modules/management';
     OwnerModule,
     CmsModule,
     ManagementModule,
+    PublicModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
