@@ -451,7 +451,9 @@ model Event {
   coverAssetId    String?     @db.Uuid
   startAt         DateTime
   endAt           DateTime?
-  venue           String?
+  venue            String?
+  coverUrl         String?
+  originSchoolName String?
   scope           EventScope  @default(SCHOOL)
   status          EventStatus @default(DRAFT)
   createdByUserId String?     @db.Uuid
