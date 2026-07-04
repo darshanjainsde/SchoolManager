@@ -1,3 +1,33 @@
+import { IsEmail, IsIn, IsOptional, IsString, Length } from 'class-validator';
+
+export class SubmitEnquiryDto {
+  @IsString()
+  @Length(1, 120)
+  parentName!: string;
+
+  @IsString()
+  @Length(1, 40)
+  phone!: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  gradeInterest?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 2000)
+  message?: string;
+}
+
+export class SetEnquiryStatusDto {
+  @IsIn(['NEW', 'CONTACTED', 'CLOSED'])
+  status!: 'NEW' | 'CONTACTED' | 'CLOSED';
+}
+
 export interface PublicSiteData {
   school: {
     name: string;
