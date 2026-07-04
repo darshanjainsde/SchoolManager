@@ -199,6 +199,7 @@ export default function TeachersPage() {
     queryFn: () => api.get<Teacher[]>('/manage/teachers'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   // Media for resolving photo URLs
@@ -207,6 +208,7 @@ export default function TeachersPage() {
     queryFn: () => api.get<MediaAsset[]>('/site/media?kind=STAFF'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const photoUrlMap: Record<string, string> = {};

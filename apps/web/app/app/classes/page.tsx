@@ -233,6 +233,7 @@ export default function ClassesPage() {
     queryFn: () => api.get<SchoolClass[]>('/manage/classes'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const gradesQuery = useQuery({
@@ -240,6 +241,7 @@ export default function ClassesPage() {
     queryFn: () => api.get<Grade[]>('/manage/grades'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const yearsQuery = useQuery({
@@ -247,6 +249,7 @@ export default function ClassesPage() {
     queryFn: () => api.get<AcademicYear[]>('/manage/years'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const teachersQuery = useQuery({
@@ -254,6 +257,7 @@ export default function ClassesPage() {
     queryFn: () => api.get<Teacher[]>('/manage/teachers'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const subjectsQuery = useQuery({
@@ -261,6 +265,7 @@ export default function ClassesPage() {
     queryFn: () => api.get<Subject[]>('/manage/subjects'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   // ── Mutations ─────────────────────────────────────────────────────────────

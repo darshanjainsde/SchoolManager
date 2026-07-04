@@ -241,6 +241,7 @@ export default function StudentsPage() {
     queryFn: () => api.get<SchoolClass[]>('/manage/classes'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const studentsQuery = useQuery({
@@ -251,6 +252,7 @@ export default function StudentsPage() {
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   // ── Mutations ─────────────────────────────────────────────────────────────
