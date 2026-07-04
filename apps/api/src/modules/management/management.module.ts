@@ -12,17 +12,20 @@ import { StudentsService } from './students.service';
 import { StudentsController } from './students.controller';
 import { TimetableService } from './timetable.service';
 import { TimetableController } from './timetable.controller';
+import { AnnouncementsService } from './announcements.service';
+import { AnnouncementsController } from './announcements.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService],
+  providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService],
   controllers: [
     CatalogController,
     TeachersController,
     ClassesController,
     StudentsController,
     TimetableController,
+    AnnouncementsController,
   ],
-  exports: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService],
+  exports: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService],
 })
 export class ManagementModule {}
