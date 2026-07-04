@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { withTenant, type FeatureKey } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import type { PublicSiteData } from './public.dto';
@@ -18,7 +18,8 @@ export class PublicSiteService {
     const feat = await this.features.getFeatures(schoolId);
 
     return withTenant(schoolId, async (tx) => {
-      const school = await tx.school.findUniqueOrThrow({ where: { id: schoolId } });
+      const school = await tx.school.findUnique({ where: { id: schoolId } });
+      if (!school) throw new NotFoundException('Site not found');
       if (school.status === 'SUSPENDED') throw new NotFoundException('Site not found');
 
       const [profile, homepage, stats, socials, galleryAssets, staff, grades] = await Promise.all([
@@ -51,7 +52,7 @@ export class PublicSiteService {
       const urlOf = (id?: string | null) =>
         id ? (assets.find((a) => a.id === id)?.url ?? null) : null;
 
-      const has = (k: string) => feat.has(k as never);
+      const has = (k: FeatureKey) => feat.has(k);
 
       return {
         school: { name: school.name, slug: school.slug, tier: school.tier, features: [...feat] },
