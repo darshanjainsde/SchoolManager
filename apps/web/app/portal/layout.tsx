@@ -6,6 +6,14 @@ import { LayoutDashboard, CalendarDays, Megaphone, User, LogOut } from 'lucide-r
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
+import { useHost } from '@/components/use-host';
+
+/** The student portal is tenant-scoped by host: it only works on a school subdomain. */
+function isSchoolHost(host: string | undefined): boolean {
+  if (!host) return false;
+  const hostname = host.split(':')[0].toLowerCase();
+  return hostname !== 'localhost' && hostname !== 'owner.localhost';
+}
 
 const NAV_ITEMS = [
   { href: '/portal', label: 'Home', icon: LayoutDashboard },
@@ -18,6 +26,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const hydrated = useHydrated();
+  const host = useHost();
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
@@ -30,6 +39,24 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
 
   // Until hydrated, render nothing so the first client paint matches the server.
   if (!hydrated) return null;
+
+  // The portal resolves its school from the host — only works on a school subdomain.
+  if (!isSchoolHost(host)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-md rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm">
+          <div className="mb-3 text-3xl">🎓</div>
+          <h1 className="text-lg font-bold text-slate-900">Open the portal at your school&rsquo;s address</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            The student portal lives on your school&rsquo;s own web address (for example{' '}
+            <span className="font-mono text-slate-800">beacon.localhost:3000</span>) — not on{' '}
+            <span className="font-mono">{host}</span>.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!refreshToken || audience !== 'school') return null;
 
   return (

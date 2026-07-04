@@ -4,6 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto, RefreshDto } from './dto';
 import { TenantContextService } from '../../tenancy';
+import { FeatureResolverService } from '../../features';
 import { Public } from '../../../common/auth/public.decorator';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
@@ -15,6 +16,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly tenantCtx: TenantContextService,
+    private readonly features: FeatureResolverService,
   ) {}
 
   @Public()
@@ -45,11 +47,13 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(SchoolJwtGuard)
   @Get('me')
-  me(@CurrentUser() user: SchoolJwtPayload) {
+  async me(@CurrentUser() user: SchoolJwtPayload) {
+    const features = await this.features.getFeatures(user.schoolId);
     return {
       userId: user.sub,
       schoolId: user.schoolId,
       role: user.role,
+      features: [...features],
     };
   }
 }
