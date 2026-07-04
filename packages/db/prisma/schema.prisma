@@ -113,6 +113,7 @@ model School {
   timetableSlots   TimetableSlot[]
   events           Event[]
   enquiries        Enquiry[]
+  announcements    Announcement[]
 }
 
 model Domain {
@@ -334,6 +335,7 @@ model ClassSection {
   classTeacher   Teacher?     @relation("ClassTeacher", fields: [classTeacherId], references: [id], onDelete: SetNull)
   students       Student[]
   timetableSlots TimetableSlot[]
+  announcements  Announcement[]
 
   @@unique([schoolId, gradeId, name, academicYearId])
   @@index([schoolId])
@@ -398,6 +400,7 @@ model Student {
   guardianName   String?
   guardianPhone  String?
   photoAssetId   String?  @db.Uuid
+  userId         String?  @unique @db.Uuid
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   school         School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -479,4 +482,19 @@ model Enquiry {
   school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
+}
+
+model Announcement {
+  id              String        @id @default(uuid()) @db.Uuid
+  schoolId        String        @db.Uuid
+  classSectionId  String?       @db.Uuid
+  title           String
+  body            String
+  createdByUserId String?       @db.Uuid
+  createdAt       DateTime      @default(now())
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection    ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([schoolId, classSectionId])
 }
