@@ -18,6 +18,15 @@ const MARQUEE_ITEMS = [
 
 const CLASS_EMOJIS = ['🎓', '🧸', '📚', '🔬', '🎨', '🏆', '🌟', '💡', '🎯', '🚀'];
 
+// Admin-controlled URLs are rendered into href/src. React only warns on
+// `javascript:` — it does not block it — so validate the scheme ourselves.
+function safeHttpUrl(u: string | null | undefined): string | null {
+  return u && /^https?:\/\//i.test(u) ? u : null;
+}
+function safeHttpsUrl(u: string | null | undefined): string | null {
+  return u && /^https:\/\//i.test(u) ? u : null;
+}
+
 function parseStatValue(val: string): { numeric: boolean; num: number; suffix: string } {
   const clean = val.trim();
   const match = clean.match(/^(\d+(?:\.\d+)?)\s*([%+]?)$/);
@@ -85,9 +94,15 @@ export default function PublicSite({ data }: Props) {
   const heroUrl = data.homepage?.heroUrl;
   const aboutText = data.homepage?.aboutText;
   const hasAbout = !!aboutText;
-  const hasGallery =
-    data.gallery.length > 0 || data.school.features.includes('GALLERY');
-  const hasContact = !!(data.profile?.phone || data.profile?.email);
+  // Nav/footer gallery links must track the actual section, which only renders
+  // when there are images — a GALLERY-enabled school with no uploads yet should
+  // not show a link to an empty (missing) #gallery anchor.
+  const hasGallery = data.gallery.length > 0;
+  const hasContact = !!(
+    data.profile?.phone ||
+    data.profile?.email ||
+    data.profile?.addressLine1
+  );
   const hasEnquiry = data.school.features.includes('ENQUIRY');
   const logoUrl = data.profile?.logoUrl;
   const principalName = data.homepage?.principalName;
@@ -617,23 +632,26 @@ export default function PublicSite({ data }: Props) {
               )}
               {data.socialLinks.length > 0 && (
                 <div className="mt-6 flex flex-wrap gap-3">
-                  {data.socialLinks.map((s, i) => (
-                    <a
-                      key={i}
-                      href={s.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="ps-glass rounded-lg px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 transition capitalize"
-                    >
-                      {s.platform}
-                    </a>
-                  ))}
+                  {data.socialLinks
+                    .map((s) => ({ ...s, href: safeHttpUrl(s.url) }))
+                    .filter((s) => s.href)
+                    .map((s, i) => (
+                      <a
+                        key={i}
+                        href={s.href!}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ps-glass rounded-lg px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 transition capitalize"
+                      >
+                        {s.platform}
+                      </a>
+                    ))}
                 </div>
               )}
-              {data.profile?.mapEmbedUrl && (
+              {safeHttpsUrl(data.profile?.mapEmbedUrl) && (
                 <div className="mt-6 rounded-2xl overflow-hidden ps-glass">
                   <iframe
-                    src={data.profile.mapEmbedUrl}
+                    src={safeHttpsUrl(data.profile?.mapEmbedUrl)!}
                     className="w-full h-40 border-0"
                     loading="lazy"
                     title={`${schoolName} location`}

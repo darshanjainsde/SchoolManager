@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { notFound } from 'next/navigation';
 import { fetchPublicSite } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';
 
@@ -83,6 +84,10 @@ export default async function HomePage() {
     if (data) {
       return <PublicSite data={data} />;
     }
+    // A school-style host that resolves to no live site (unknown/suspended/not
+    // yet live) must 404 — never fall through to the internal dev launcher,
+    // which would leak platform tooling links on a public domain.
+    notFound();
   }
 
   const apiStatus = await getApiHealth();
