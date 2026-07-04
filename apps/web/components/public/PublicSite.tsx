@@ -18,6 +18,26 @@ const MARQUEE_ITEMS = [
 
 const CLASS_EMOJIS = ['🎓', '🧸', '📚', '🔬', '🎨', '🏆', '🌟', '💡', '🎯', '🚀'];
 
+// ── Brand-colour helpers ────────────────────────────────────────────────────
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function isNearWhite(hex: string): boolean {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return false;
+  return rgb.every((c) => c >= 235);
+}
+/** Blend a hex colour toward white by `amt` (0..1). */
+function lighten(hex: string, amt: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const [r, g, b] = rgb.map((c) => Math.round(c + (255 - c) * amt));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
 // Admin-controlled URLs are rendered into href/src. React only warns on
 // `javascript:` — it does not block it — so validate the scheme ourselves.
 function safeHttpUrl(u: string | null | undefined): string | null {
@@ -50,7 +70,7 @@ const PS_CSS = `
   .ps-a3 { animation: ps-drift3 16s ease-in-out infinite; }
 
   /* gradient text */
-  .ps-grad-text { background: linear-gradient(100deg,#3ee6b0,#38bdf8,#7c6cff); -webkit-background-clip: text; background-clip: text; color: transparent; background-size: 200% auto; animation: ps-shine 6s linear infinite; }
+  .ps-grad-text { background: linear-gradient(100deg,var(--ps1),var(--ps2),var(--ps1)); -webkit-background-clip: text; background-clip: text; color: transparent; background-size: 200% auto; animation: ps-shine 6s linear infinite; }
   @keyframes ps-shine { to { background-position: 200% center; } }
 
   /* grid overlay */
@@ -79,11 +99,11 @@ const PS_CSS = `
   .btn-glow:hover::after { opacity: 1; }
 
   /* logo bg */
-  .ps-logo-bg { background: linear-gradient(135deg, #3ee6b0, #7c6cff); }
-  .ps-cta-btn { background: linear-gradient(90deg, #3ee6b0, #38bdf8); color: #080b16; }
-  .ps-progress-bar { background: linear-gradient(90deg, #3ee6b0, #38bdf8); height: 100%; }
-  .ps-icon-bg { background: linear-gradient(135deg, #7c6cff, #38bdf8); }
-  .ps-about-glow { background: linear-gradient(135deg, rgba(62,230,176,.2), rgba(124,108,255,.2)); filter: blur(2rem); }
+  .ps-logo-bg { background: linear-gradient(135deg, var(--ps1), var(--ps2)); }
+  .ps-cta-btn { background: linear-gradient(90deg, var(--ps1), var(--ps2)); color: #080b16; }
+  .ps-progress-bar { background: linear-gradient(90deg, var(--ps1), var(--ps2)); height: 100%; }
+  .ps-icon-bg { background: linear-gradient(135deg, var(--ps2), var(--ps1)); }
+  .ps-about-glow { background: linear-gradient(135deg, color-mix(in srgb, var(--ps1) 22%, transparent), color-mix(in srgb, var(--ps2) 22%, transparent)); filter: blur(2rem); }
 
   /* tilt card hover */
   .tilt { transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s cubic-bezier(.2,.7,.2,1); }
@@ -92,6 +112,10 @@ const PS_CSS = `
 
 export default function PublicSite({ data }: Props) {
   const brandColor = data.profile?.brandColorPrimary ?? '#3ee6b0';
+  // Secondary drives the second gradient stop. If a school leaves it near-white
+  // (the default), a lightened tint of the primary reads better than pure white.
+  const rawSecondary = data.profile?.brandColorSecondary ?? '#38bdf8';
+  const brandColor2 = isNearWhite(rawSecondary) ? lighten(brandColor, 0.45) : rawSecondary;
   const schoolName = data.school.name;
   const headline = data.homepage?.headline ?? schoolName;
   const subheadline = data.homepage?.subheadline;
@@ -191,8 +215,13 @@ export default function PublicSite({ data }: Props) {
   return (
     <div
       className="ps-root"
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      style={{ ['--brand' as any]: brandColor } as React.CSSProperties}
+      style={
+        {
+          '--brand': brandColor,
+          '--ps1': brandColor,
+          '--ps2': brandColor2,
+        } as React.CSSProperties
+      }
     >
       {/* Injected animation CSS */}
       <style dangerouslySetInnerHTML={{ __html: PS_CSS }} />
@@ -305,18 +334,18 @@ export default function PublicSite({ data }: Props) {
             : {}
         }
       >
-        {/* Aurora blobs */}
+        {/* Aurora blobs — tinted by the school's brand colours */}
         <div
           className="ps-aurora ps-a1"
-          style={{ width: '520px', height: '520px', background: '#3ee6b0', top: '-120px', left: '-80px' }}
+          style={{ width: '520px', height: '520px', background: brandColor, top: '-120px', left: '-80px' }}
         />
         <div
           className="ps-aurora ps-a2"
-          style={{ width: '560px', height: '560px', background: '#7c6cff', bottom: '-160px', right: '-100px' }}
+          style={{ width: '560px', height: '560px', background: brandColor2, bottom: '-160px', right: '-100px' }}
         />
         <div
           className="ps-aurora ps-a3"
-          style={{ width: '420px', height: '420px', background: '#38bdf8', top: '30%', left: '40%' }}
+          style={{ width: '420px', height: '420px', background: brandColor, top: '30%', left: '40%' }}
         />
         {heroUrl && <div className="absolute inset-0 bg-[#080b16]/70" />}
         <div className="absolute inset-0 ps-grid-mask" />
@@ -372,10 +401,10 @@ export default function PublicSite({ data }: Props) {
               </div>
             </div>
             <div className="ps-float ps-d2 absolute bottom-40 right-0 ps-glass rounded-2xl p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl ps-icon-bg flex items-center justify-center">🤖</div>
+              <div className="h-10 w-10 rounded-xl ps-icon-bg flex items-center justify-center">🎓</div>
               <div>
-                <div className="text-sm font-semibold">AI-assisted</div>
-                <div className="text-xs text-slate-400">smart learning labs</div>
+                <div className="text-sm font-semibold">Caring teachers</div>
+                <div className="text-xs text-slate-400">every child known by name</div>
               </div>
             </div>
           </div>
@@ -681,7 +710,7 @@ export default function PublicSite({ data }: Props) {
               style={{
                 width: '340px',
                 height: '340px',
-                background: '#7c6cff',
+                background: brandColor2,
                 top: '-80px',
                 right: '-40px',
                 opacity: 0.4,
@@ -937,7 +966,7 @@ function EnquiryForm({
         type="submit"
         disabled={status === 'sending'}
         className="btn-glow w-full font-semibold py-3.5 rounded-xl hover:scale-[1.01] transition disabled:opacity-60"
-        style={{ background: `linear-gradient(90deg, ${brandColor}, #38bdf8)`, color: '#080b16' }}
+        style={{ background: 'linear-gradient(90deg, var(--ps1), var(--ps2))', color: '#080b16' }}
       >
         {status === 'sending' ? 'Sending…' : 'Submit enquiry →'}
       </button>

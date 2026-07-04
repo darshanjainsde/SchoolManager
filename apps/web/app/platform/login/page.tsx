@@ -16,7 +16,11 @@ import { ApiError } from '@/lib/api';
 const schema = z.object({
   email: z.string().email(),
   password: z.string().min(1, 'Password required'),
-  totp: z.string().regex(/^\d{6}$/, '6-digit code'),
+  // Optional: only validated as a 6-digit code when the field is filled in.
+  totp: z
+    .string()
+    .optional()
+    .refine((v) => !v || /^\d{6}$/.test(v), '6-digit code'),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -30,7 +34,9 @@ export default function PlatformLoginPage() {
   async function onSubmit(values: FormValues) {
     setPending(true);
     try {
-      const res = await api.post<{ accessToken: string; refreshToken: string }>('/owner/auth/login', values);
+      // Omit the TOTP field entirely when the owner didn't enter one.
+      const payload = values.totp ? values : { email: values.email, password: values.password };
+      const res = await api.post<{ accessToken: string; refreshToken: string }>('/owner/auth/login', payload);
       setTokens({ ...res, audience: 'platform' });
       toast.success('Welcome back');
       router.replace('/platform');
@@ -47,7 +53,7 @@ export default function PlatformLoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Platform owner login</CardTitle>
-          <CardDescription>Restricted to the owner host. Password + TOTP required.</CardDescription>
+          <CardDescription>Restricted to the owner host. TOTP is optional.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={form.handleSubmit(onSubmit)}>
@@ -66,7 +72,7 @@ export default function PlatformLoginPage() {
               )}
             </div>
             <div>
-              <Label htmlFor="totp" required hint="6-digit code from your authenticator app">TOTP</Label>
+              <Label htmlFor="totp" hint="Optional — leave blank unless MFA is enabled">TOTP</Label>
               <Input id="totp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} {...form.register('totp')} />
               {form.formState.errors.totp && (
                 <p className="mt-1 text-xs text-rose-600">{form.formState.errors.totp.message}</p>

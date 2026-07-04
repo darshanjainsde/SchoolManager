@@ -23,13 +23,14 @@ export class OwnerAuthService {
   private readonly logger = new Logger(OwnerAuthService.name);
   constructor(private readonly jwt: JwtService, private readonly passwords: PasswordService) {}
 
-  async login(email: string, password: string, totp: string): Promise<IssuedTokens> {
+  async login(email: string, password: string, totp?: string): Promise<IssuedTokens> {
     const db = getPlatformPrisma();
     const user = await db.user.findFirst({ where: { email: email.toLowerCase(), schoolId: null, role: 'OWNER' } });
     if (!user || !user.isActive) throw new UnauthorizedException('Invalid credentials');
     if (user.lockedUntil && user.lockedUntil > new Date()) throw new ForbiddenException('Account temporarily locked');
     const passOk = await this.passwords.verify(user.passwordHash, password);
-    const totpOk = passOk && verifyTotp(totp, user.mfaSecret);
+    // MFA is optional: a supplied code must be valid, but it isn't required.
+    const totpOk = totp ? verifyTotp(totp, user.mfaSecret) : true;
     if (!passOk || !totpOk) {
       await this.recordFailedAttempt(user);
       throw new UnauthorizedException('Invalid credentials');

@@ -173,6 +173,9 @@ export default function WebsitePage() {
     queryFn: () => api.get<SiteContent>('/site/content'),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
+    // Wait for the tenant host — firing before it's set sends no X-Forwarded-Host
+    // and the API rejects with "Tenant context required".
+    enabled: !!host,
   });
 
   // Gallery query
@@ -181,7 +184,7 @@ export default function WebsitePage() {
     queryFn: () => api.get<MediaAsset[]>('/site/media?kind=GALLERY'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    enabled: activeTab === 'gallery',
+    enabled: !!host && activeTab === 'gallery',
   });
 
   // Staff queries
@@ -190,7 +193,7 @@ export default function WebsitePage() {
     queryFn: () => api.get<StaffMember[]>('/site/staff'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    enabled: activeTab === 'staff',
+    enabled: !!host && activeTab === 'staff',
   });
 
   // Staff media query — used to resolve photo URLs from photoAssetId
@@ -199,7 +202,7 @@ export default function WebsitePage() {
     queryFn: () => api.get<MediaAsset[]>('/site/media?kind=STAFF'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
-    enabled: activeTab === 'staff',
+    enabled: !!host && activeTab === 'staff',
   });
 
   // ── Branding form state ────────────────────────────────────────────────────

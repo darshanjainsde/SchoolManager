@@ -48,6 +48,26 @@ export interface PublicSiteData {
   }[];
 }
 
+export interface DirectorySchool {
+  name: string;
+  slug: string;
+  tier: 'BASIC' | 'STANDARD' | 'PRO';
+  host: string;
+}
+
+/** Server-side fetch of the LIVE-school directory for the platform landing page. */
+export async function fetchDirectory(): Promise<DirectorySchool[]> {
+  const raw = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001';
+  const base = raw.replace('localhost', '127.0.0.1');
+  try {
+    const res = await fetch(`${base}/directory`, { cache: 'no-store' });
+    if (!res.ok) return [];
+    return (await res.json()) as DirectorySchool[];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchPublicSite(host: string): Promise<PublicSiteData | null> {
   // Server-to-server call (Next server → API). Prefer an explicit server-side
   // base, then fall back to the public URL. Normalise `localhost` → `127.0.0.1`

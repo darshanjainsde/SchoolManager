@@ -178,6 +178,7 @@ export default function TimetablePage() {
     queryFn: () => api.get<SchoolClass[]>('/manage/classes'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const periodsQuery = useQuery({
@@ -185,6 +186,7 @@ export default function TimetablePage() {
     queryFn: () => api.get<Period[]>('/manage/periods'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const subjectsQuery = useQuery({
@@ -192,6 +194,7 @@ export default function TimetablePage() {
     queryFn: () => api.get<Subject[]>('/manage/subjects'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const teachersQuery = useQuery({
@@ -199,13 +202,14 @@ export default function TimetablePage() {
     queryFn: () => api.get<Teacher[]>('/manage/teachers'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const timetableQuery = useQuery({
     queryKey: ['timetable', classSectionId],
     queryFn: () =>
       api.get<TimetableSlot[]>(`/manage/timetable?classSectionId=${encodeURIComponent(classSectionId)}`),
-    enabled: !!classSectionId,
+    enabled: !!host && !!classSectionId,
     staleTime: 15_000,
     refetchOnWindowFocus: false,
   });

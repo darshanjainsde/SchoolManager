@@ -19,6 +19,7 @@ import { ManagementModule } from './modules/management';
 import { CommunityModule } from './modules/community';
 import { PublicModule } from './modules/public';
 import { PortalModule } from './modules/portal';
+import { DirectoryModule } from './modules/directory/directory.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { PortalModule } from './modules/portal';
     CommunityModule,
     PublicModule,
     PortalModule,
+    DirectoryModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

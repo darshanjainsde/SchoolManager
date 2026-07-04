@@ -3,7 +3,8 @@ import { IsBoolean, IsDateString, IsEmail, IsIn, IsOptional, IsString, IsUUID, L
 export class OwnerLoginDto {
   @IsEmail() email!: string;
   @IsString() @Length(1, 200) password!: string;
-  @Matches(/^\d{6}$/) totp!: string;
+  // MFA is optional: verified only when a code is supplied.
+  @IsOptional() @Matches(/^\d{6}$/) totp?: string;
 }
 
 export class RefreshDto {
