@@ -3,11 +3,12 @@ import { FeaturesModule } from '../features';
 import { TenancyModule } from '../tenancy';
 import { EventsService } from './events.service';
 import { EventsController } from './events.controller';
+import { PublicEventsService } from './public-events.service';
 
 @Module({
   imports: [FeaturesModule, TenancyModule],
-  providers: [EventsService],
+  providers: [EventsService, PublicEventsService],
   controllers: [EventsController],
-  exports: [EventsService],
+  exports: [EventsService, PublicEventsService],
 })
 export class CommunityModule {}
