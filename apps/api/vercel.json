@@ -1,16 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd ../.. && pnpm install --frozen-lockfile=false && pnpm --filter @skoolos/db generate && node apps/api/scripts/deref-pnpm-symlinks.mjs",
-  "buildCommand": "true",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile=false && pnpm --filter @skoolos/db generate",
+  "buildCommand": "npx --yes @vercel/ncc build server.ts -o .ncc --quiet",
+  "outputDirectory": ".ncc",
   "functions": {
-    "api/index.ts": {
+    ".ncc/index.js": {
       "maxDuration": 60
     }
   },
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/api/index.ts"
+      "dest": "/.ncc/index.js"
     }
   ]
 }
