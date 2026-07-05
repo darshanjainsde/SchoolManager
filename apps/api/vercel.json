@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd ../.. && pnpm install --frozen-lockfile=false && pnpm --filter @skoolos/db generate && node -e \"const fs=require('fs'); const real=fs.realpathSync('apps/api/node_modules/reflect-metadata'); fs.rmSync('apps/api/node_modules/reflect-metadata',{recursive:true,force:true}); fs.cpSync(real,'apps/api/node_modules/reflect-metadata',{recursive:true})\"",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile=false && pnpm --filter @skoolos/db generate && node apps/api/scripts/deref-pnpm-symlinks.mjs",
   "buildCommand": "",
   "functions": {
     "api/index.ts": {
