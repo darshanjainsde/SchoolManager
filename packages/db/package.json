@@ -14,7 +14,8 @@
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json || true",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^5.13.0"

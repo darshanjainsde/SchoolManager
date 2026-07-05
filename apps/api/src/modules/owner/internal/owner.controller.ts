@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGua
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
 import type { PlatformJwtPayload } from '../../../common/auth/jwt-payload';
-import { CreateSchoolDto, ModerateEventDto, OwnerCreateEventDto, SetFeatureDto, SetTierDto } from './owner.dto';
+import { CreateSchoolDto, ModerateEventDto, OwnerCreateEventDto, SetFeatureDto, SetStatusDto, SetTierDto } from './owner.dto';
 import { OwnerHostGuard } from './owner-host.guard';
 import { OwnerEventsService } from './owner-events.service';
 import { OwnerSchoolsService } from './owner-schools.service';
@@ -43,6 +43,11 @@ export class OwnerController {
   @Patch('schools/:id/features')
   setFeature(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetFeatureDto) {
     return this.schools.setFeature(id, dto.featureKey, dto.enabled);
+  }
+
+  @Patch('schools/:id/status')
+  setStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetStatusDto) {
+    return this.schools.setStatus(id, dto.status);
   }
 
   @Get('events')

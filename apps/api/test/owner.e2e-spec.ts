@@ -75,6 +75,45 @@ describe('POST /owner/schools', () => {
     expect(s.grades.length).toBeGreaterThan(0);
   });
 
+  it('go-live: SETUP school 404s publicly until owner sets status LIVE', async () => {
+    const token = await ownerToken();
+    const db = getPlatformPrisma();
+    const s = await db.school.findUniqueOrThrow({ where: { slug }, select: { id: true } });
+    const publicHeaders = { 'X-Forwarded-Host': `${slug}.localhost` };
+
+    // While SETUP the public site 404s (admin can still log in, but it's not published).
+    const before = await fetch(`${BASE}/public/site`, { headers: publicHeaders });
+    expect(before.status).toBe(404);
+
+    // Owner publishes it.
+    const patch = await fetch(`${BASE}/owner/schools/${s.id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Forwarded-Host': 'owner.localhost',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status: 'LIVE' }),
+    });
+    expect(patch.status).toBeLessThan(300);
+
+    // Now the public site resolves.
+    const after = await fetch(`${BASE}/public/site`, { headers: publicHeaders });
+    expect(after.status).toBe(200);
+
+    // Invalid status value → 400.
+    const bad = await fetch(`${BASE}/owner/schools/${s.id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Forwarded-Host': 'owner.localhost',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status: 'PUBLISHED' }),
+    });
+    expect(bad.status).toBe(400);
+  });
+
   it('returns 409 on duplicate slug', async () => {
     const token = await ownerToken();
     const res = await fetch(`${BASE}/owner/schools`, {

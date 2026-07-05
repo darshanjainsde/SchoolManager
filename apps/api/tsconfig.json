@@ -10,7 +10,7 @@
       "@skoolos/config": ["../../packages/config/src"]
     }
   },
-  "include": ["src/**/*", "../../packages/*/src/**/*"],
+  "include": ["src/**/*", "server.ts", "../../packages/*/src/**/*"],
   "ts-node": {
     "transpileOnly": true,
     "compilerOptions": {
