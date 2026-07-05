@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { useApi } from '@/lib/use-api';
 import { OWNER_HOST } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
+import { AdminAccessCard } from '@/components/admin-access-card';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -281,6 +282,9 @@ export default function SchoolDetailPage() {
           </ul>
         </CardContent>
       </Card>
+
+      {/* Admin access ────────────────────────────────────────────────────── */}
+      <AdminAccessCard schoolId={school.id} />
 
       {/* Domains list ────────────────────────────────────────────────────── */}
       {school.domains.length > 0 && (
