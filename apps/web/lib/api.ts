@@ -47,7 +47,14 @@ export class ApiClient {
   async request<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
     const baseUrl = this.opts.baseUrl ?? DEFAULT_BASE;
     const headers = new Headers(init.headers);
-    if (this.opts.hostHeader) headers.set('X-Forwarded-Host', this.opts.hostHeader);
+    if (this.opts.hostHeader) {
+      // Vercel (and some CDNs) overwrite X-Forwarded-Host with the real
+      // deployment host, so we also send an app-controlled header that the
+      // ingress leaves untouched. The API prefers X-Skoolos-Host for tenant
+      // resolution. Both are sent so local dev / real subdomains keep working.
+      headers.set('X-Forwarded-Host', this.opts.hostHeader);
+      headers.set('X-Skoolos-Host', this.opts.hostHeader);
+    }
     const token = this.opts.getAccessToken?.();
     if (token && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${token}`);
@@ -62,7 +69,10 @@ export class ApiClient {
     if (res.status === 401 && this.opts.getRefreshToken && this.opts.setTokens && !path.includes('/refresh')) {
       await this.refresh();
       const retryHeaders = new Headers(init.headers);
-      if (this.opts.hostHeader) retryHeaders.set('X-Forwarded-Host', this.opts.hostHeader);
+      if (this.opts.hostHeader) {
+        retryHeaders.set('X-Forwarded-Host', this.opts.hostHeader);
+        retryHeaders.set('X-Skoolos-Host', this.opts.hostHeader);
+      }
       const newToken = this.opts.getAccessToken?.();
       if (newToken) retryHeaders.set('Authorization', `Bearer ${newToken}`);
       if (init.body && !(init.body instanceof FormData) && !retryHeaders.has('Content-Type')) {
@@ -105,7 +115,14 @@ export class ApiClient {
       try {
         const baseUrl = this.opts.baseUrl ?? DEFAULT_BASE;
         const headers = new Headers({ 'Content-Type': 'application/json' });
-        if (this.opts.hostHeader) headers.set('X-Forwarded-Host', this.opts.hostHeader);
+        if (this.opts.hostHeader) {
+      // Vercel (and some CDNs) overwrite X-Forwarded-Host with the real
+      // deployment host, so we also send an app-controlled header that the
+      // ingress leaves untouched. The API prefers X-Skoolos-Host for tenant
+      // resolution. Both are sent so local dev / real subdomains keep working.
+      headers.set('X-Forwarded-Host', this.opts.hostHeader);
+      headers.set('X-Skoolos-Host', this.opts.hostHeader);
+    }
         const res = await fetch(baseUrl + path, {
           method: 'POST',
           headers,

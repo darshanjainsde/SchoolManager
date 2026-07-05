@@ -20,7 +20,7 @@ export function configureApp(app: INestApplication, env: AppEnv): void {
     origin: buildCorsOrigin(env),
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Forwarded-Host'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Forwarded-Host', 'X-Skoolos-Host'],
   });
 
   // Swagger UI is opt-in via env so a misconfigured controller can't take down

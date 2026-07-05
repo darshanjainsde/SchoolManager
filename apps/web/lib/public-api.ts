@@ -81,7 +81,9 @@ export async function fetchPublicSite(host: string): Promise<PublicSiteData | nu
   const base = raw.replace('localhost', '127.0.0.1');
   try {
     const res = await fetch(`${base}/public/site`, {
-      headers: { 'X-Forwarded-Host': host },
+      // Send both: X-Skoolos-Host survives ingress that rewrites
+      // X-Forwarded-Host (e.g. Vercel); the API prefers X-Skoolos-Host.
+      headers: { 'X-Forwarded-Host': host, 'X-Skoolos-Host': host },
       cache: 'no-store',
     });
     if (res.status === 404) return null;

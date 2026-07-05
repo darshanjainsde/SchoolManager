@@ -13,13 +13,21 @@ const lookup = new SchoolLookupService();
 const ctxService = new TenantContextService();
 
 export function tenantMiddleware(req: Request, res: Response, next: NextFunction): void {
-  // `req.hostname` honours `X-Forwarded-Host` when `trust proxy` is enabled
-  // (set in main.ts). Falling back to `req.headers.host` covers cases where
-  // trust proxy is off (e.g. integration tests via supertest, where the
-  // browser-equivalent Host header is set directly).
+  // Tenant identity is carried by the request host. Resolution order:
+  //   1. `X-Skoolos-Host` — an explicit, app-controlled header. Required on
+  //      platforms whose ingress rewrites `X-Forwarded-Host` (e.g. Vercel
+  //      overwrites it with the real deployment host), which would otherwise
+  //      make every request resolve to the same host. This is also
+  //      forward-compatible with per-tenant custom domains: when a real
+  //      subdomain Host arrives, the client simply doesn't send this header.
+  //   2. `req.hostname` — honours `X-Forwarded-Host` when `trust proxy` is
+  //      enabled (set in main.ts); correct for real subdomain hosting.
+  //   3. `req.headers.host` — covers trust-proxy-off cases (e.g. supertest
+  //      integration tests set the Host header directly).
+  const customHost = (req.headers['x-skoolos-host'] ?? '').toString().trim();
   const fromExpress = typeof req.hostname === 'string' && req.hostname.length > 0 ? req.hostname : null;
   const rawHostHeader = (req.headers.host ?? '').toString();
-  const host = fromExpress ?? rawHostHeader;
+  const host = customHost || fromExpress || rawHostHeader;
   void lookup
     .resolveByHostname(host)
     .then((resolved) => {
