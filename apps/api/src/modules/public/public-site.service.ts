@@ -59,7 +59,7 @@ export class PublicSiteService {
       const events = has('EVENTS') ? await this.publicEvents.forHost(tx, schoolId) : [];
 
       return {
-        school: { name: school.name, slug: school.slug, tier: school.tier, features: [...feat] },
+        school: { name: school.name, slug: school.slug, tier: school.tier, features: [...feat], timezone: school.timezone },
         profile: profile
           ? {
               logoUrl: urlOf(profile.logoAssetId),

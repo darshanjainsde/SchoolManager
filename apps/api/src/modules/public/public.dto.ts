@@ -35,6 +35,7 @@ export interface PublicSiteData {
     slug: string;
     tier: 'BASIC' | 'STANDARD' | 'PRO';
     features: string[];
+    timezone: string;
   };
   profile: {
     logoUrl: string | null;

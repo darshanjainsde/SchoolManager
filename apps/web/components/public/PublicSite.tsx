@@ -54,6 +54,32 @@ function safeHttpsUrl(u: string | null | undefined): string | null {
   return u && /^https:\/\//i.test(u) ? u : null;
 }
 
+// Format an event's start in the SCHOOL's timezone with a fixed locale, so the
+// server (often UTC) and the client produce identical strings — otherwise
+// `toLocale*` with the runtime locale/zone causes a hydration mismatch.
+function formatEventDate(iso: string, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone,
+    }).format(new Date(iso));
+  } catch {
+    // Bad/unknown timezone → fall back to UTC (still deterministic).
+    return new Intl.DateTimeFormat('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC',
+    }).format(new Date(iso));
+  }
+}
+
 function parseStatValue(val: string): { numeric: boolean; num: number; suffix: string } {
   const clean = val.trim();
   const match = clean.match(/^(\d+(?:\.\d+)?)\s*([%+]?)$/);
@@ -545,9 +571,9 @@ export default function PublicSite({ data }: Props) {
             <div className="mt-10 grid md:grid-cols-3 gap-5">
               {data.events.map((e, i) => {
                 const coverSrc = safeHttpUrl(e.coverUrl);
-                const dateStr = new Date(e.startAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-                const timeStr = new Date(e.startAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-                const metaLine = [dateStr, timeStr, e.venue ? `· ${e.venue}` : null].filter(Boolean).join(' ');
+                const metaLine = [formatEventDate(e.startAt, data.school.timezone), e.venue ? `· ${e.venue}` : null]
+                  .filter(Boolean)
+                  .join(' ');
                 return (
                   <div
                     key={e.id}
