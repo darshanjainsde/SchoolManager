@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd ../.. && pnpm install --frozen-lockfile=false && pnpm --filter @skoolos/db generate",
+  "installCommand": "cd ../.. && NODE_ENV=development pnpm install --frozen-lockfile=false && pnpm --filter @skoolos/db generate",
   "buildCommand": "pnpm run bundle",
   "functions": {
     "api/index.js": {
