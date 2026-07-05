@@ -18,6 +18,9 @@
     "db:migrate": "pnpm --filter @skoolos/db migrate:dev",
     "db:seed": "pnpm --filter @skoolos/db seed"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["argon2", "prisma", "@prisma/client"]
+  },
   "devDependencies": {
     "@types/node": "^20.11.30",
     "@typescript-eslint/eslint-plugin": "^7.13.0",
