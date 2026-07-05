@@ -16,6 +16,7 @@ describe('AccountService.changePassword', () => {
     mockDb.user.findFirst.mockResolvedValue({ id: 'u1', passwordHash: 'OLD' });
     passwords.verify.mockResolvedValue(false);
     await expect(svc.changePassword('s1', 'u1', 'wrong', 'brandnew1')).rejects.toThrow(/incorrect/i);
+    expect(passwords.hash).not.toHaveBeenCalled();
     expect(mockDb.user.update).not.toHaveBeenCalled();
     expect(mockDb.refreshToken.updateMany).not.toHaveBeenCalled();
   });
@@ -27,6 +28,8 @@ describe('AccountService.changePassword', () => {
       where: { id: 'u1', schoolId: 's1' },
       select: { id: true, passwordHash: true },
     });
+    expect(mockDb.user.update).not.toHaveBeenCalled();
+    expect(mockDb.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 
   it('updates the hash and revokes sessions on success', async () => {
@@ -45,5 +48,15 @@ describe('AccountService.changePassword', () => {
       where: { userId: 'u1', schoolId: 's1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
+    expect(mockDb.$transaction).toHaveBeenCalled();
+  });
+
+  it('400s and mutates nothing when the new password equals the current one', async () => {
+    mockDb.user.findFirst.mockResolvedValue({ id: 'u1', passwordHash: 'OLD' });
+    passwords.verify.mockResolvedValue(true);
+    await expect(svc.changePassword('s1', 'u1', 'samepass1', 'samepass1')).rejects.toThrow(/different/i);
+    expect(passwords.hash).not.toHaveBeenCalled();
+    expect(mockDb.user.update).not.toHaveBeenCalled();
+    expect(mockDb.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 });
