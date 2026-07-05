@@ -133,6 +133,24 @@ export class OwnerSchoolsService {
     return this.detail(id);
   }
 
+  /**
+   * Publish / unpublish a school. The public site (`getSite`) reads `status`
+   * fresh per request, so the change takes effect immediately — no cache flush
+   * needed for the SETUP→LIVE (go-live) path.
+   */
+  async setStatus(id: string, status: 'SETUP' | 'LIVE' | 'SUSPENDED'): Promise<SchoolDetail> {
+    const db = getPlatformPrisma();
+    try {
+      await db.school.update({ where: { id }, data: { status } });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+        throw new NotFoundException(`School ${id} not found`);
+      }
+      throw e;
+    }
+    return this.detail(id);
+  }
+
   async setFeature(id: string, featureKey: string, enabled: boolean): Promise<SchoolDetail> {
     const db = getPlatformPrisma();
     const exists = await db.school.findUnique({ where: { id }, select: { id: true } });

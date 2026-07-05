@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useApi } from '@/lib/use-api';
@@ -86,6 +87,20 @@ export default function SchoolDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // ── Publish / status mutation (go-live) ──────────────────────────────────
+  const statusMutation = useMutation({
+    mutationFn: (status: 'SETUP' | 'LIVE' | 'SUSPENDED') =>
+      api.patch<SchoolDetail>(`/owner/schools/${id}/status`, { status }),
+    onSuccess: (_d, status) => {
+      toast.success(
+        status === 'LIVE' ? 'School published — public site is live' : `Status set to ${status}`,
+      );
+      qc.invalidateQueries({ queryKey: ['owner-schools'] });
+      qc.invalidateQueries({ queryKey: ['owner-school', id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   // ── Loading / error states ───────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -113,9 +128,55 @@ export default function SchoolDetailPage() {
         <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
           <code className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">{school.slug}</code>
           <Badge tone={TIER_TONE[school.tier]}>{school.tier}</Badge>
-          <span>{school.status}</span>
+          <Badge
+            tone={
+              school.status === 'LIVE' ? 'success' : school.status === 'SUSPENDED' ? 'danger' : 'neutral'
+            }
+          >
+            {school.status}
+          </Badge>
           {school.primaryDomain && (
             <span className="font-mono text-xs">{school.primaryDomain}</span>
+          )}
+        </div>
+        {/* Go-live controls */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {school.status !== 'LIVE' ? (
+            <Button
+              size="sm"
+              disabled={statusMutation.isPending}
+              onClick={() => statusMutation.mutate('LIVE')}
+            >
+              {statusMutation.isPending ? 'Publishing…' : 'Publish (go live)'}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={statusMutation.isPending}
+              onClick={() => statusMutation.mutate('SETUP')}
+            >
+              Unpublish
+            </Button>
+          )}
+          {school.status !== 'SUSPENDED' ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={statusMutation.isPending}
+              onClick={() => statusMutation.mutate('SUSPENDED')}
+            >
+              Suspend
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={statusMutation.isPending}
+              onClick={() => statusMutation.mutate('LIVE')}
+            >
+              Reinstate
+            </Button>
           )}
         </div>
       </header>

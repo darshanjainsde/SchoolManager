@@ -23,6 +23,10 @@ export class SetTierDto {
   @IsIn(['BASIC', 'STANDARD', 'PRO']) tier!: 'BASIC' | 'STANDARD' | 'PRO';
 }
 
+export class SetStatusDto {
+  @IsIn(['SETUP', 'LIVE', 'SUSPENDED']) status!: 'SETUP' | 'LIVE' | 'SUSPENDED';
+}
+
 export class SetFeatureDto {
   @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT']) featureKey!: string;
   @IsBoolean() enabled!: boolean;

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile=false && pnpm --filter @skoolos/db generate",
+  "functions": {
+    "server.ts": {
+      "maxDuration": 60
+    }
+  }
+}

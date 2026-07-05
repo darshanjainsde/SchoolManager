@@ -22,7 +22,10 @@ export class PublicSiteService {
     return withTenant(schoolId, async (tx) => {
       const school = await tx.school.findUnique({ where: { id: schoolId } });
       if (!school) throw new NotFoundException('Site not found');
-      if (school.status === 'SUSPENDED') throw new NotFoundException('Site not found');
+      // Only a published (LIVE) school serves a public site. SETUP schools are
+      // still resolvable so their admin can log in and build the site, but the
+      // public site 404s until the owner publishes it (PATCH /owner/schools/:id/status).
+      if (school.status !== 'LIVE') throw new NotFoundException('Site not found');
 
       const [profile, homepage, stats, socials, galleryAssets, staff, grades] = await Promise.all([
         tx.schoolProfile.findUnique({ where: { schoolId } }),
