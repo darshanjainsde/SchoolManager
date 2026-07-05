@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { fetchPublicSite, fetchDirectory } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';
 import PlatformLanding from '@/components/PlatformLanding';
+import { isPlatformHost } from '@/lib/hosts';
 
 async function getApiHealth(): Promise<string> {
   const url = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001') + '/health';
@@ -14,11 +15,6 @@ async function getApiHealth(): Promise<string> {
   } catch (e) {
     return `unreachable:${(e as Error).message}`;
   }
-}
-
-function isPlatformHost(host: string): boolean {
-  const hostname = host.split(':')[0];
-  return hostname === 'localhost' || hostname === 'owner.localhost';
 }
 
 export default async function HomePage() {

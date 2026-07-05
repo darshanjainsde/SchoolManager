@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useApi } from '@/lib/use-api';
+import { OWNER_HOST } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
 import { ApiError } from '@/lib/api';
 
@@ -26,7 +27,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function PlatformLoginPage() {
   const router = useRouter();
-  const api = useApi({ audience: 'platform', hostHeader: 'owner.localhost' });
+  const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const setTokens = useAuthStore((s) => s.setTokens);
   const [pending, setPending] = useState(false);
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: '', password: '', totp: '' } });

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { useApi } from '@/lib/use-api';
+import { OWNER_HOST } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -50,7 +51,7 @@ function formatDate(iso: string): string {
 
 export default function ConnectPage() {
   const refreshToken = useAuthStore((s) => s.refreshToken);
-  const api = useApi({ audience: 'platform', hostHeader: 'owner.localhost' });
+  const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const qc = useQueryClient();
 
   // ── Pending events query ───────────────────────────────────────────────────

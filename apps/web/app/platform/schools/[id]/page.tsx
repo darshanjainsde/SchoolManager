@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useApi } from '@/lib/use-api';
+import { OWNER_HOST } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ const TIER_TONE: Record<SchoolDetail['tier'], 'neutral' | 'info' | 'success'> = 
 
 export default function SchoolDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const api = useApi({ audience: 'platform', hostHeader: 'owner.localhost' });
+  const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const qc = useQueryClient();
   const refreshToken = useAuthStore((s) => s.refreshToken);
 

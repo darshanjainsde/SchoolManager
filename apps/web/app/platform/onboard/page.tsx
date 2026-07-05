@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/lib/use-api';
+import { OWNER_HOST } from '@/lib/hosts';
 import { useWizardStore, type Tier } from '@/lib/wizard-store';
 import { cn } from '@/lib/cn';
 
@@ -44,7 +45,7 @@ function isStep1Valid(data: { name: string; slug: string; domainHostname: string
 export default function OnboardPage() {
   const w = useWizardStore();
   const router = useRouter();
-  const api = useApi({ audience: 'platform', hostHeader: 'owner.localhost' });
+  const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const [successInfo, setSuccessInfo] = useState<{ id: string; slug: string; tempPassword: string } | null>(null);
 
   const createSchool = useMutation({

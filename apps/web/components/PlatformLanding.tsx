@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { DirectorySchool } from '@/lib/public-api';
+import { OWNER_HOST, ownerHref, schoolHref } from '@/lib/hosts';
 
 interface Props {
   schools: DirectorySchool[];
@@ -19,12 +20,6 @@ const TIER_TONE: Record<DirectorySchool['tier'], string> = {
   STANDARD: 'bg-sky-100 text-sky-700',
   PRO: 'bg-emerald-100 text-emerald-700',
 };
-
-// Dev port is baked into the seeded hostnames' companion (schools run on :3000).
-function urlFor(host: string, path = ''): string {
-  const h = host.includes(':') ? host : `${host}:3000`;
-  return `http://${h}${path}`;
-}
 
 export default function PlatformLanding({ schools, apiHealthy }: Props) {
   const [selected, setSelected] = useState<string>(schools[0]?.slug ?? '');
@@ -66,7 +61,7 @@ export default function PlatformLanding({ schools, apiHealthy }: Props) {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <span className="inline-block rounded bg-violet-200 px-2 py-0.5 font-mono text-xs text-violet-700">
-                owner.localhost
+                {OWNER_HOST}
               </span>
               <h2 className="mt-2 text-lg font-bold text-slate-900">Platform Owner Portal</h2>
               <p className="mt-1 max-w-lg text-sm text-slate-600">
@@ -79,7 +74,7 @@ export default function PlatformLanding({ schools, apiHealthy }: Props) {
               </p>
             </div>
             <a
-              href="http://owner.localhost:3000/platform/login"
+              href={ownerHref('/platform/login')}
               className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700"
             >
               Sign in as Owner →
@@ -130,7 +125,7 @@ export default function PlatformLanding({ schools, apiHealthy }: Props) {
                     {TIER_LABEL[current.tier]} plan
                   </span>
                   <a
-                    href={urlFor(current.host, '/login')}
+                    href={schoolHref(current.host, '/login')}
                     className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700"
                   >
                     Sign in →
@@ -162,7 +157,7 @@ export default function PlatformLanding({ schools, apiHealthy }: Props) {
               {schools.map((s) => (
                 <a
                   key={s.slug}
-                  href={urlFor(s.host)}
+                  href={schoolHref(s.host)}
                   className="group flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-teal-300 hover:bg-teal-50"
                 >
                   <div>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useApi } from '@/lib/use-api';
+import { OWNER_HOST } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
 
 /**
@@ -28,7 +29,7 @@ interface StatsResponse {
 
 export default function PlatformDashboardPage() {
   const refreshToken = useAuthStore((s) => s.refreshToken);
-  const api = useApi({ audience: 'platform', hostHeader: 'owner.localhost' });
+  const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['owner-stats'],

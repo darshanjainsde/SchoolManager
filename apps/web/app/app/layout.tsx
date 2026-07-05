@@ -9,13 +9,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useHost } from '@/components/use-host';
 import { useApi } from '@/lib/use-api';
-
-/** The admin portal is tenant-scoped by host: it only works on a school subdomain. */
-function isSchoolHost(host: string | undefined): boolean {
-  if (!host) return false;
-  const hostname = host.split(':')[0].toLowerCase();
-  return hostname !== 'localhost' && hostname !== 'owner.localhost';
-}
+import { isSchoolHost, exampleSchoolHost, platformHref } from '@/lib/hosts';
 
 // `requiredFeature` hides the item for schools whose tier lacks it. Items with
 // no requiredFeature are always shown.
@@ -74,11 +68,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <h1 className="text-lg font-bold text-slate-900">Open the admin at a school&rsquo;s address</h1>
           <p className="mt-2 text-sm text-slate-600">
             The school admin portal lives on each school&rsquo;s own web address (for example{' '}
-            <span className="font-mono text-slate-800">beacon.localhost:3000</span>) — not on{' '}
+            <span className="font-mono text-slate-800">{exampleSchoolHost()}</span>) — not on{' '}
             <span className="font-mono">{host}</span>.
           </p>
           <a
-            href="http://localhost:3000"
+            href={platformHref()}
             className="mt-5 inline-block rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700"
           >
             Go to the launcher &amp; pick a school →
