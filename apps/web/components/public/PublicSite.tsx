@@ -446,13 +446,13 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               className="absolute inset-0 bg-cover bg-center"
               style={{ backgroundImage: `url('${heroUrl}')` }}
             />
-            {/* Paper wash: strong over the text column, lighter on the right so
-                the photo stays visible behind the floating cards. */}
+            {/* Paper wash: strong over the text column, light on the right so
+                the photo reads clearly behind the floating cards. */}
             <div
               className="absolute inset-0"
               style={{
                 background:
-                  'linear-gradient(90deg, rgba(247,245,239,.95) 0%, rgba(247,245,239,.86) 45%, rgba(247,245,239,.55) 100%)',
+                  'linear-gradient(90deg, rgba(247,245,239,.9) 0%, rgba(247,245,239,.72) 42%, rgba(247,245,239,.3) 100%)',
               }}
             />
             {/* Fade into the page background so the next section blends in. */}

@@ -355,6 +355,22 @@ export default function WebsitePage() {
     onError: (err: Error) => toast.error(`Failed to save theme: ${err.message}`),
   });
 
+  // Backdrop toggle in the Homepage tab — saves heroStyle immediately (only
+  // that field) so admins don't have to discover the Theme tab for it.
+  const backdropMutation = useMutation({
+    mutationFn: (style: string) => api.put('/site/profile', { heroStyle: style }),
+    onSuccess: (_data, style) => {
+      setHeroStyle(style);
+      void queryClient.invalidateQueries({ queryKey: ['site-content'] });
+      toast.success(
+        style === 'PHOTO'
+          ? 'Landing backdrop on — your photo now fills the landing screen'
+          : 'Landing backdrop off — back to the illustrated hero',
+      );
+    },
+    onError: (err: Error) => toast.error(`Failed to update backdrop: ${err.message}`),
+  });
+
   // Apply a preset locally (does not save until "Save theme").
   const applyPreset = (key: string) => {
     const p = THEME_PRESETS[key];
@@ -870,12 +886,30 @@ export default function WebsitePage() {
             {/* Hero image upload */}
             <ImageUploader
               label="Hero / landing background image"
-              hint="Wide landscape photo (e.g. your school building). With the 'Photo backdrop' theme it fills the whole landing screen behind the homepage hero. Max 4 MB."
+              hint="Wide landscape photo (e.g. your school building). Max 4 MB."
               previewUrl={heroPreviewUrl}
               hasExistingAsset={!!data?.homepage.heroAssetId}
               isUploading={isUploadingHero}
               onFile={uploadHero}
             />
+            <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={heroStyle === 'PHOTO'}
+                disabled={backdropMutation.isPending || (!data?.homepage.heroAssetId && !heroPreviewUrl)}
+                onChange={(e) => backdropMutation.mutate(e.target.checked ? 'PHOTO' : 'ILLUSTRATION')}
+                className="mt-0.5 h-4 w-4 accent-emerald-700"
+              />
+              <span>
+                <span className="block text-sm font-medium text-slate-800">
+                  Use as full-screen landing backdrop
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Fills the whole first screen behind the homepage hero (saves immediately; same as the
+                  &ldquo;Photo backdrop&rdquo; option in the Theme tab). Needs an image uploaded above.
+                </span>
+              </span>
+            </label>
 
             {/* Stats editor */}
             <div className="space-y-3">
