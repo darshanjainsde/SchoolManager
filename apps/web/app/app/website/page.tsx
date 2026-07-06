@@ -869,8 +869,8 @@ export default function WebsitePage() {
 
             {/* Hero image upload */}
             <ImageUploader
-              label="Hero image"
-              hint="Wide landscape image for the homepage banner. Max 8 MB."
+              label="Hero / landing background image"
+              hint="Wide landscape photo (e.g. your school building). With the 'Photo backdrop' theme it fills the whole landing screen behind the homepage hero. Max 4 MB."
               previewUrl={heroPreviewUrl}
               hasExistingAsset={!!data?.homepage.heroAssetId}
               isUploading={isUploadingHero}

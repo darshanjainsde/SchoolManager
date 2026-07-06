@@ -16,7 +16,7 @@ export const FONT_OPTIONS = [
 
 export const HERO_OPTIONS = [
   { value: 'ILLUSTRATION', label: 'Illustrated (animated)' },
-  { value: 'PHOTO',        label: 'Photo background' },
+  { value: 'PHOTO',        label: 'Photo backdrop (building photo behind the landing)' },
   { value: 'MINIMAL',      label: 'Minimal / calm' },
 ];
 

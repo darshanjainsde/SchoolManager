@@ -10,6 +10,8 @@ import { submitEnquiry } from './enquiry-client';
 
 interface Props {
   data: PublicSiteData;
+  /** 'home' = full landing page; 'academics' = dedicated programmes page with the same chrome. */
+  view?: 'home' | 'academics';
 }
 
 const CLASS_EMOJIS = ['🎓', '🧸', '📚', '🔬', '🎨', '🏆', '🌟', '💡', '🎯', '🚀'];
@@ -178,7 +180,10 @@ const PS_CSS = `
   }
 `;
 
-export default function PublicSite({ data }: Props) {
+export default function PublicSite({ data, view = 'home' }: Props) {
+  const onAcademicsPage = view === 'academics';
+  // Section anchors live on the homepage; from other pages they need the "/" prefix.
+  const base = onAcademicsPage ? '/' : '';
   const brandColor = data.profile?.brandColorPrimary ?? '#2f6b4f';
   // Secondary drives the second gradient stop. If a school leaves it near-white
   // (the default), a lightened tint of the primary reads better than pure white.
@@ -216,8 +221,12 @@ export default function PublicSite({ data }: Props) {
   const principalMessage = data.homepage?.principalMessage;
   const principalPhotoUrl = data.homepage?.principalPhotoUrl;
 
-  // PHOTO hero needs an image; fall back to the illustrated hero if none.
-  const heroStyle = heroStyleRaw === 'PHOTO' && !heroUrl ? 'ILLUSTRATION' : heroStyleRaw;
+  // PHOTO = the school's photo (building etc.) as a full-viewport backdrop
+  // BEHIND the regular animated hero — layout, animations and dark text stay
+  // exactly as the illustrated hero; a paper-tinted wash keeps it readable.
+  // Needs an image; without one it's just the illustrated hero.
+  const photoBackdrop = heroStyleRaw === 'PHOTO' && !!heroUrl;
+  const heroStyle = heroStyleRaw === 'PHOTO' ? 'ILLUSTRATION' : heroStyleRaw;
   const minimal = heroStyle === 'MINIMAL';
 
   useEffect(() => {
@@ -288,7 +297,9 @@ export default function PublicSite({ data }: Props) {
     };
   }, []);
 
-  const heroTextLight = heroStyle === 'PHOTO';
+  // Hero text stays dark even on the photo backdrop — the paper wash keeps it
+  // readable, so the ink/underline/chip styling is identical across themes.
+  const heroTextLight = false;
 
   return (
     <div
@@ -332,20 +343,20 @@ export default function PublicSite({ data }: Props) {
           </div>
 
           <nav className="hidden md:flex items-center gap-1 text-sm text-slate-600">
-            <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#home">Home</a>
+            <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#home`}>Home</a>
             {hasAbout && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#about">About</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#about`}>About</a>
             )}
             {hasAcademics && (
               <div className="ps-acad">
-                <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition inline-block" href="#academics">
+                <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition inline-block" href="/academics">
                   Academics <span className="text-[10px] opacity-60">▾</span>
                 </a>
                 <div className="ps-dropdown">
                   {data.courses.map((c, i) => (
                     <a
                       key={c.id}
-                      href={`#course-${c.id}`}
+                      href={onAcademicsPage ? `#course-${c.id}` : `/academics#course-${c.id}`}
                       className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 hover:bg-black/[.04] transition"
                     >
                       <span className="h-9 w-9 rounded-lg ps-chip grid place-items-center text-base flex-none">
@@ -358,34 +369,34 @@ export default function PublicSite({ data }: Props) {
                     </a>
                   ))}
                   <a
-                    href="#academics"
+                    href="/academics"
                     className="col-span-2 border-t border-black/5 mt-1 pt-2 px-2.5 pb-0.5 text-xs font-semibold"
                     style={{ color: 'var(--ps1)' }}
                   >
-                    View all programmes ↓
+                    View all programmes →
                   </a>
                 </div>
               </div>
             )}
             {hasAdmissions && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#admissions">Admissions</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#admissions`}>Admissions</a>
             )}
             {hasHof && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#hall-of-fame">Hall of Fame</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#hall-of-fame`}>Hall of Fame</a>
             )}
             {hasGallery && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#gallery">Gallery</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#gallery`}>Gallery</a>
             )}
             {hasEvents && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#events">Connect</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#events`}>Connect</a>
             )}
             {(hasContact || hasEnquiry) && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#enquire">Contact</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#enquire`}>Contact</a>
             )}
           </nav>
 
           <a
-            href="#enquire"
+            href={`${base}#enquire`}
             className="btn-glow ps-accentbg text-sm font-semibold px-4 py-2 rounded-xl ps-soft hover:scale-[1.03] transition"
             style={{ color: ink }}
           >
@@ -394,26 +405,68 @@ export default function PublicSite({ data }: Props) {
         </div>
       </header>
 
+      {onAcademicsPage ? (
+        <>
+          {/* ── ACADEMICS PAGE BODY ── */}
+          <section className="max-w-6xl mx-auto px-6 pt-12">
+            <a href="/" className="text-sm text-slate-500 hover:text-slate-800 transition">← Back to home</a>
+            <div className="reveal mt-6 max-w-2xl">
+              <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
+                Academics
+              </div>
+              <h1 className="ps-head text-5xl font-bold mt-3">Programmes at {schoolName}</h1>
+              <p className="mt-4 text-slate-600">
+                Everything we offer, from the earliest years up — tap a programme in the menu above to jump straight to it.
+              </p>
+            </div>
+          </section>
+          <AcademicsSection courses={data.courses} />
+          <section className="max-w-6xl mx-auto px-6 py-16 text-center">
+            <h2 className="ps-head text-3xl font-bold">Want to know more?</h2>
+            <p className="mt-2 text-slate-600">Our admissions team is happy to walk you through any programme.</p>
+            <a
+              href="/#enquire"
+              className="btn-glow ps-cta-btn inline-block mt-6 font-semibold px-6 py-3.5 rounded-xl ps-soft hover:scale-[1.03] transition"
+            >
+              Enquire now →
+            </a>
+          </section>
+        </>
+      ) : (
+        <>
       {/* ── HERO ── */}
       <section
         id="home"
-        className={`relative overflow-hidden ${heroStyle === 'PHOTO' ? 'text-white' : ''}`}
+        className={`relative overflow-hidden ${photoBackdrop ? 'min-h-[calc(100vh-4rem)] flex items-center' : ''}`}
       >
-        {/* Photo background variant */}
-        {heroStyle === 'PHOTO' && heroUrl && (
-          <div className="absolute inset-0">
+        {/* School photo backdrop behind the regular hero (PHOTO theme) */}
+        {photoBackdrop && (
+          <div className="absolute inset-0" aria-hidden="true">
             <div
               className="absolute inset-0 bg-cover bg-center"
               style={{ backgroundImage: `url('${heroUrl}')` }}
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#14261d]/70 to-[#14261d]/45" />
+            {/* Paper wash: strong over the text column, lighter on the right so
+                the photo stays visible behind the floating cards. */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  'linear-gradient(90deg, rgba(247,245,239,.95) 0%, rgba(247,245,239,.86) 45%, rgba(247,245,239,.55) 100%)',
+              }}
+            />
+            {/* Fade into the page background so the next section blends in. */}
+            <div
+              className="absolute inset-x-0 bottom-0 h-24"
+              style={{ background: 'linear-gradient(180deg, transparent, var(--paper))' }}
+            />
           </div>
         )}
 
         <div
           className={`relative max-w-6xl mx-auto px-6 ${
             minimal ? 'py-24 text-center max-w-3xl' : 'pt-14 pb-20'
-          } grid ${minimal || heroStyle === 'PHOTO' ? 'grid-cols-1' : 'lg:grid-cols-2'} gap-12 items-center w-full`}
+          } grid ${minimal ? 'grid-cols-1' : 'lg:grid-cols-2'} gap-12 items-center w-full`}
         >
           <div className={minimal ? 'mx-auto' : ''}>
             <div
@@ -568,9 +621,14 @@ export default function PublicSite({ data }: Props) {
 
       {/* ── FEATURED COURSES (homepage flip cards) ── */}
       <CoursesFeatured courses={data.courses} />
-
-      {/* ── ACADEMICS (full course catalogue) ── */}
-      {hasAcademics && <AcademicsSection courses={data.courses} />}
+      {/* Full catalogue lives on its own page now */}
+      {hasAcademics && (
+        <div className="max-w-6xl mx-auto px-6 -mt-8 pb-14">
+          <a href="/academics" className="text-sm font-semibold hover:opacity-80 transition" style={{ color: 'var(--ps1)' }}>
+            View all programmes →
+          </a>
+        </div>
+      )}
 
       {/* ── ADMISSIONS (process + fee structure) ── */}
       {hasAdmissions && <AdmissionsSection admissions={data.admissions} courses={data.courses} />}
@@ -776,6 +834,8 @@ export default function PublicSite({ data }: Props) {
           </div>
         </section>
       )}
+        </>
+      )}
 
       {/* ── FOOTER ── */}
       <footer className="border-t border-black/10 mt-8">
@@ -798,13 +858,13 @@ export default function PublicSite({ data }: Props) {
           <div>
             <div className="ps-head font-bold mb-3">Explore</div>
             <ul className="space-y-2 text-sm text-slate-500">
-              {hasAbout && <li><a href="#about" className="hover:text-slate-900 transition">About</a></li>}
-              {hasAcademics && <li><a href="#academics" className="hover:text-slate-900 transition">Academics</a></li>}
-              {hasAdmissions && <li><a href="#admissions" className="hover:text-slate-900 transition">Admissions</a></li>}
-              {hasHof && <li><a href="#hall-of-fame" className="hover:text-slate-900 transition">Hall of Fame</a></li>}
-              {hasGallery && <li><a href="#gallery" className="hover:text-slate-900 transition">Gallery</a></li>}
-              {hasEvents && <li><a href="#events" className="hover:text-slate-900 transition">Connect</a></li>}
-              <li><a href="#enquire" className="hover:text-slate-900 transition">Enquire</a></li>
+              {hasAbout && <li><a href={`${base}#about`} className="hover:text-slate-900 transition">About</a></li>}
+              {hasAcademics && <li><a href="/academics" className="hover:text-slate-900 transition">Academics</a></li>}
+              {hasAdmissions && <li><a href={`${base}#admissions`} className="hover:text-slate-900 transition">Admissions</a></li>}
+              {hasHof && <li><a href={`${base}#hall-of-fame`} className="hover:text-slate-900 transition">Hall of Fame</a></li>}
+              {hasGallery && <li><a href={`${base}#gallery`} className="hover:text-slate-900 transition">Gallery</a></li>}
+              {hasEvents && <li><a href={`${base}#events`} className="hover:text-slate-900 transition">Connect</a></li>}
+              <li><a href={`${base}#enquire`} className="hover:text-slate-900 transition">Enquire</a></li>
             </ul>
           </div>
           <div>
