@@ -76,10 +76,13 @@ export class StorageService {
   }
 
   /**
-   * MinIO bucket is anonymous-download in local dev, so we can give browsers a
-   * direct URL. For prod we'd serve through a CDN or presigned URL instead.
+   * Browser-facing URL for an uploaded object. When S3_PUBLIC_URL_BASE is set
+   * (e.g. Supabase Storage's CDN-backed public path) it wins; otherwise fall
+   * back to the MinIO-style <endpoint>/<bucket>/<key> path URL used in dev.
    */
   publicUrl(key: string): string {
+    const base = this.env.S3_PUBLIC_URL_BASE?.replace(/\/+$/, '');
+    if (base) return `${base}/${key}`;
     return `${this.env.S3_ENDPOINT.replace(/\/+$/, '')}/${this.env.S3_BUCKET}/${key}`;
   }
 }

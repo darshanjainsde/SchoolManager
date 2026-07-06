@@ -44,6 +44,11 @@ const envSchema = z.object({
     .string()
     .default('true')
     .transform((v) => v === 'true'),
+  // Public base for browser-facing asset URLs when it differs from the S3
+  // upload endpoint (e.g. Supabase Storage serves public objects via its CDN
+  // at /storage/v1/object/public/<bucket>, not the S3 protocol endpoint).
+  // Empty → fall back to <S3_ENDPOINT>/<S3_BUCKET> (MinIO-style path URL).
+  S3_PUBLIC_URL_BASE: z.string().url().optional(),
 
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),
