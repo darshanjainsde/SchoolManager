@@ -52,9 +52,13 @@ function FlipCard({ course, emoji, delay }: { course: PublicCourse; emoji: strin
   }
 
   return (
+    // The scroll-reveal observer adds 'in' to `.reveal` elements imperatively;
+    // React wipes foreign classes whenever it rewrites a CHANGED className.
+    // So `reveal` must sit on this wrapper (className never changes) and the
+    // state-driven flip classes on the child — never both on one element.
+    <div className="reveal" style={{ transitionDelay: `${delay}s` }}>
     <div
-      className={`reveal ps-flip ${flipped ? 'ps-flipped' : ''}`}
-      style={{ transitionDelay: `${delay}s` }}
+      className={`ps-flip ${flipped ? 'ps-flipped' : ''}`}
       onClick={() => setFlipped((f) => !f)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -140,6 +144,7 @@ function FlipCard({ course, emoji, delay }: { course: PublicCourse; emoji: strin
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }
