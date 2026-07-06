@@ -20,6 +20,7 @@ import { CommunityModule } from './modules/community';
 import { PublicModule } from './modules/public';
 import { PortalModule } from './modules/portal';
 import { DirectoryModule } from './modules/directory/directory.module';
+import { AdminCredentialsModule } from './modules/admin-credentials';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { DirectoryModule } from './modules/directory/directory.module';
     AuthModule,
     FeaturesModule,
     OwnerModule,
+    AdminCredentialsModule,
     CmsModule,
     ManagementModule,
     CommunityModule,

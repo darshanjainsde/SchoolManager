@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -24,6 +25,9 @@ export default function MyProfilePage() {
           <div><span className="text-slate-500">Host:</span> {host}</div>
         </CardContent>
       </Card>
+      <Link href="/account/password" className="text-sm text-indigo-600 hover:underline">
+        Change password →
+      </Link>
     </div>
   );
 }
