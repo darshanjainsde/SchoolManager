@@ -164,16 +164,17 @@ export default function PublicSite({ data }: Props) {
   const heroUrl = data.homepage?.heroUrl;
   const aboutText = data.homepage?.aboutText;
   const hasAbout = !!aboutText;
-  // Nav/footer gallery links must track the actual section, which only renders
-  // when there are images.
-  const hasGallery = data.gallery.length > 0;
+  // Feature-backed sections are gated on the school's plan entitlements (not on
+  // whether content exists yet), so the navbar stays consistent from day one —
+  // an enabled-but-empty section renders with an empty state instead of vanishing.
+  const hasGallery = data.school.features.includes('GALLERY');
   const hasContact = !!(
     data.profile?.phone ||
     data.profile?.email ||
     data.profile?.addressLine1
   );
   const hasEnquiry = data.school.features.includes('ENQUIRY');
-  const hasEvents = data.events.length > 0;
+  const hasEvents = data.school.features.includes('EVENTS');
   const logoUrl = data.profile?.logoUrl;
   const principalName = data.homepage?.principalName;
   const principalMessage = data.homepage?.principalMessage;
@@ -308,7 +309,7 @@ export default function PublicSite({ data }: Props) {
             {hasEvents && (
               <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#events">Connect</a>
             )}
-            {hasContact && (
+            {(hasContact || hasEnquiry) && (
               <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#enquire">Contact</a>
             )}
           </nav>
@@ -522,7 +523,7 @@ export default function PublicSite({ data }: Props) {
       )}
 
       {/* ── GALLERY ── */}
-      {data.gallery.length > 0 && (
+      {hasGallery && (
         <section id="gallery" className="max-w-6xl mx-auto px-6 py-20">
           <div className="reveal">
             <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: brandColor }}>
@@ -530,6 +531,13 @@ export default function PublicSite({ data }: Props) {
             </div>
             <h2 className="ps-head text-4xl font-bold mt-3">Life at {schoolName}</h2>
           </div>
+          {data.gallery.length === 0 ? (
+            <div className="reveal mt-10 ps-card ps-soft rounded-3xl p-10 text-center">
+              <div className="text-5xl">📷</div>
+              <h3 className="ps-head font-bold text-lg mt-4">Photos coming soon</h3>
+              <p className="text-sm text-slate-500 mt-1">Moments from campus life will appear here.</p>
+            </div>
+          ) : (
           <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
             {data.gallery.map((img, i) => (
               <div
@@ -554,6 +562,7 @@ export default function PublicSite({ data }: Props) {
               </div>
             ))}
           </div>
+          )}
         </section>
       )}
 
@@ -568,6 +577,13 @@ export default function PublicSite({ data }: Props) {
                 Events from every school in the network — one shared calendar for the whole community.
               </p>
             </div>
+            {data.events.length === 0 ? (
+              <div className="reveal mt-10 bg-white/10 backdrop-blur rounded-3xl border border-white/15 p-10 text-center">
+                <div className="text-5xl">📅</div>
+                <h3 className="ps-head font-bold text-lg mt-4 text-white">No upcoming events right now</h3>
+                <p className="text-sm text-white/80 mt-1">Check back soon — new events land here as they&rsquo;re announced.</p>
+              </div>
+            ) : (
             <div className="mt-10 grid md:grid-cols-3 gap-5">
               {data.events.map((e, i) => {
                 const coverSrc = safeHttpUrl(e.coverUrl);
@@ -602,6 +618,7 @@ export default function PublicSite({ data }: Props) {
                 );
               })}
             </div>
+            )}
           </div>
         </section>
       )}
