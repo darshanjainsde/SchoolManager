@@ -27,23 +27,32 @@ export class PublicSiteService {
       // public site 404s until the owner publishes it (PATCH /owner/schools/:id/status).
       if (school.status !== 'LIVE') throw new NotFoundException('Site not found');
 
-      const [profile, homepage, stats, socials, galleryAssets, staff, grades] = await Promise.all([
-        tx.schoolProfile.findUnique({ where: { schoolId } }),
-        tx.homepageContent.findUnique({ where: { schoolId } }),
-        tx.statItem.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
-        tx.socialLink.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
-        tx.mediaAsset.findMany({ where: { schoolId, kind: 'GALLERY' }, orderBy: { order: 'asc' } }),
-        tx.featuredStaff.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
-        tx.grade.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
-      ]);
+      const [profile, homepage, stats, socials, galleryAssets, staff, courses, admissionSteps, admissionsSettings] =
+        await Promise.all([
+          tx.schoolProfile.findUnique({ where: { schoolId } }),
+          tx.homepageContent.findUnique({ where: { schoolId } }),
+          tx.statItem.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+          tx.socialLink.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+          tx.mediaAsset.findMany({ where: { schoolId, kind: 'GALLERY' }, orderBy: { order: 'asc' } }),
+          tx.featuredStaff.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+          tx.course.findMany({
+            where: { schoolId },
+            orderBy: { order: 'asc' },
+            include: { fee: true, hallOfFame: { orderBy: { rank: 'asc' } } },
+          }),
+          tx.admissionStep.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+          tx.admissionsSettings.findUnique({ where: { schoolId } }),
+        ]);
 
-      // Resolve all asset ids referenced by profile/homepage/staff in one query.
+      // Resolve all asset ids referenced by profile/homepage/staff/courses in one query.
       const ids = [
         profile?.logoAssetId,
         profile?.faviconAssetId,
         homepage?.heroAssetId,
         homepage?.principalPhotoAssetId,
         ...staff.map((s) => s.photoAssetId),
+        ...courses.map((c) => c.imageAssetId),
+        ...courses.flatMap((c) => c.hallOfFame.map((h) => h.photoAssetId)),
       ].filter(Boolean) as string[];
 
       const assets =
@@ -58,6 +67,7 @@ export class PublicSiteService {
         id ? (assets.find((a) => a.id === id)?.url ?? null) : null;
 
       const has = (k: FeatureKey) => feat.has(k);
+      const showFees = admissionsSettings?.showFeesPublicly ?? true;
 
       const events = has('EVENTS') ? await this.publicEvents.forHost(tx, schoolId) : [];
 
@@ -98,7 +108,32 @@ export class PublicSiteService {
         socialLinks: has('SOCIAL') ? socials.map((s) => ({ platform: s.platform, url: s.url })) : [],
         gallery: has('GALLERY') ? galleryAssets.map((g) => ({ url: g.url, caption: g.caption })) : [],
         staff: staff.map((s) => ({ name: s.name, role: s.role, photoUrl: urlOf(s.photoAssetId) })),
-        menu: grades.map((g) => ({ label: g.name, gradeId: g.id })),
+        courses: courses.map((c) => ({
+          id: c.id,
+          name: c.name,
+          tagline: c.tagline,
+          description: c.description,
+          highlights: c.highlights,
+          ageRange: c.ageRange,
+          imageUrl: urlOf(c.imageAssetId),
+          featured: c.featured,
+          fee:
+            showFees && c.fee
+              ? { admissionFee: c.fee.admissionFee, annualFee: c.fee.annualFee, includes: c.fee.includes }
+              : null,
+          hallOfFame: c.hallOfFame.map((h) => ({
+            rank: h.rank,
+            name: h.name,
+            achievement: h.achievement,
+            year: h.year,
+            photoUrl: urlOf(h.photoAssetId),
+          })),
+        })),
+        admissions: {
+          steps: admissionSteps.map((s) => ({ title: s.title, description: s.description })),
+          showFees,
+          feeNote: showFees ? (admissionsSettings?.feeNote ?? null) : null,
+        },
         events,
       };
     });

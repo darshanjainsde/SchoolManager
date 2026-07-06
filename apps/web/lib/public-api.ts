@@ -37,7 +37,12 @@ export interface PublicSiteData {
   socialLinks: { platform: string; url: string }[];
   gallery: { url: string; caption: string | null }[];
   staff: { name: string; role: string; photoUrl: string | null }[];
-  menu: { label: string; gradeId: string }[];
+  courses: PublicCourse[];
+  admissions: {
+    steps: { title: string; description: string | null }[];
+    showFees: boolean;
+    feeNote: string | null;
+  };
   events: {
     id: string;
     title: string;
@@ -50,6 +55,19 @@ export interface PublicSiteData {
     originSchoolName: string | null;
     isHost: boolean;
   }[];
+}
+
+export interface PublicCourse {
+  id: string;
+  name: string;
+  tagline: string | null;
+  description: string | null;
+  highlights: string[];
+  ageRange: string | null;
+  imageUrl: string | null;
+  featured: boolean;
+  fee: { admissionFee: string | null; annualFee: string | null; includes: string | null } | null;
+  hallOfFame: { rank: number; name: string; achievement: string | null; year: string | null; photoUrl: string | null }[];
 }
 
 export interface DirectorySchool {

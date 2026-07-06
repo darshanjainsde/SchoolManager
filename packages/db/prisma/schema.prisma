@@ -48,6 +48,8 @@ enum MediaKind {
   STAFF
   EVENT
   PRINCIPAL
+  COURSE
+  HOF
 }
 
 enum SocialPlatform {
@@ -116,6 +118,11 @@ model School {
   events           Event[]
   enquiries        Enquiry[]
   announcements    Announcement[]
+  courses            Course[]
+  courseFees         CourseFee[]
+  admissionSteps     AdmissionStep[]
+  admissionsSettings AdmissionsSettings?
+  hallOfFameEntries  HallOfFameEntry[]
 }
 
 model Domain {
@@ -297,6 +304,75 @@ model FeaturedStaff {
   school       School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   teacher      Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
 
+  @@index([schoolId])
+}
+
+// Public "courses/classes offered" — CMS content for ALL tiers, fully
+// separate from the Management (Pro) Grade/ClassSection operational models.
+model Course {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @db.Uuid
+  name         String
+  tagline      String?
+  description  String?
+  highlights   String[] @default([])
+  ageRange     String?
+  imageAssetId String?  @db.Uuid
+  featured     Boolean  @default(false)
+  order        Int      @default(0)
+  school       School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fee          CourseFee?
+  hallOfFame   HallOfFameEntry[]
+
+  @@index([schoolId])
+}
+
+// Fee amounts are free text ("₹ 68,000" / "On request") — display content, not billing.
+model CourseFee {
+  id           String  @id @default(uuid()) @db.Uuid
+  schoolId     String  @db.Uuid
+  courseId     String  @unique @db.Uuid
+  admissionFee String?
+  annualFee    String?
+  includes     String?
+  school       School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  course       Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+model AdmissionStep {
+  id          String  @id @default(uuid()) @db.Uuid
+  schoolId    String  @db.Uuid
+  title       String
+  description String?
+  order       Int     @default(0)
+  school      School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+model AdmissionsSettings {
+  id               String  @id @default(uuid()) @db.Uuid
+  schoolId         String  @unique @db.Uuid
+  showFeesPublicly Boolean @default(true)
+  feeNote          String?
+  school           School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+model HallOfFameEntry {
+  id           String  @id @default(uuid()) @db.Uuid
+  schoolId     String  @db.Uuid
+  courseId     String  @db.Uuid
+  rank         Int // 1..3
+  name         String
+  achievement  String?
+  year         String?
+  photoAssetId String? @db.Uuid
+  school       School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  course       Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, rank])
   @@index([schoolId])
 }
 

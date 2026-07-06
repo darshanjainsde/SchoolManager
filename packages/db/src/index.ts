@@ -82,3 +82,4 @@ export async function disconnectAll(): Promise<void> {
 export { PrismaClient } from '@prisma/client';
 export * from '@prisma/client';
 export * from './features';
+export * from './default-content';

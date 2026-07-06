@@ -7,11 +7,31 @@ import { MediaService } from './media.service';
 import { MediaController } from './media.controller';
 import { StaffService } from './staff.service';
 import { StaffController } from './staff.controller';
+import { CoursesService } from './courses.service';
+import { CoursesController } from './courses.controller';
+import { AdmissionsService } from './admissions.service';
+import { AdmissionsController } from './admissions.controller';
+import { HallOfFameService } from './hall-of-fame.service';
+import { HallOfFameController } from './hall-of-fame.controller';
 
 @Module({
   imports: [TenancyModule, StorageModule],
-  providers: [SiteContentService, MediaService, StaffService],
-  controllers: [SiteContentController, MediaController, StaffController],
-  exports: [SiteContentService, MediaService, StaffService],
+  providers: [
+    SiteContentService,
+    MediaService,
+    StaffService,
+    CoursesService,
+    AdmissionsService,
+    HallOfFameService,
+  ],
+  controllers: [
+    SiteContentController,
+    MediaController,
+    StaffController,
+    CoursesController,
+    AdmissionsController,
+    HallOfFameController,
+  ],
+  exports: [SiteContentService, MediaService, StaffService, CoursesService, AdmissionsService, HallOfFameService],
 })
 export class CmsModule {}

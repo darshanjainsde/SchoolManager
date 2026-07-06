@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { getPlatformPrisma, resolveFeatures, Prisma } from '@skoolos/db';
+import { getPlatformPrisma, resolveFeatures, Prisma, DEFAULT_COURSES } from '@skoolos/db';
 import { randomBytes } from 'node:crypto';
 import { PasswordService } from '../../auth';
 import { FeatureResolverService } from '../../features/internal/feature-resolver.service';
@@ -106,6 +106,9 @@ export class OwnerSchoolsService {
         await tx.homepageContent.create({ data: { schoolId: s.id, headline: `Welcome to ${dto.name}` } });
         await tx.grade.createMany({
           data: defaultGrades.map((name, order) => ({ schoolId: s.id, name, order })),
+        });
+        await tx.course.createMany({
+          data: DEFAULT_COURSES.map((c, order) => ({ ...c, highlights: [...c.highlights], schoolId: s.id, order })),
         });
         return s;
       });

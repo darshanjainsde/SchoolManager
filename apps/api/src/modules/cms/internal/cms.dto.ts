@@ -1,9 +1,23 @@
-import { IsArray, IsHexColor, IsIn, IsInt, IsOptional, IsString, IsUrl, Length, Min, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsHexColor,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Length,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ListMediaDto {
   @IsOptional()
-  @IsIn(['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL'])
+  @IsIn(['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF'])
   kind?: string;
 }
 
@@ -60,4 +74,46 @@ export class UpsertStaffDto {
   @IsString() @Length(1, 120) role!: string;
   @IsOptional() @IsString() photoAssetId?: string;
   @IsInt() @Min(0) order!: number;
+}
+
+export class UpsertCourseDto {
+  @IsString() @Length(1, 120) name!: string;
+  @IsOptional() @IsString() @Length(0, 200) tagline?: string;
+  @IsOptional() @IsString() @Length(0, 4000) description?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(12) @IsString({ each: true }) @Length(1, 120, { each: true }) highlights?: string[];
+  @IsOptional() @IsString() @Length(0, 60) ageRange?: string;
+  @IsOptional() @IsString() imageAssetId?: string;
+  @IsOptional() @IsBoolean() featured?: boolean;
+  @IsInt() @Min(0) order!: number;
+}
+
+export class UpsertCourseFeeDto {
+  @IsOptional() @IsString() @Length(0, 60) admissionFee?: string;
+  @IsOptional() @IsString() @Length(0, 60) annualFee?: string;
+  @IsOptional() @IsString() @Length(0, 200) includes?: string;
+}
+
+export class AdmissionStepDto {
+  @IsString() @Length(1, 120) title!: string;
+  @IsOptional() @IsString() @Length(0, 400) description?: string;
+  @IsInt() @Min(0) order!: number;
+}
+export class SetAdmissionStepsDto {
+  @IsArray() @ArrayMaxSize(10) @ValidateNested({ each: true }) @Type(() => AdmissionStepDto) steps!: AdmissionStepDto[];
+}
+
+export class UpdateAdmissionsSettingsDto {
+  @IsOptional() @IsBoolean() showFeesPublicly?: boolean;
+  @IsOptional() @IsString() @Length(0, 400) feeNote?: string;
+}
+
+export class HallOfFameEntryDto {
+  @IsInt() @Min(1) @Max(3) rank!: number;
+  @IsString() @Length(1, 120) name!: string;
+  @IsOptional() @IsString() @Length(0, 120) achievement?: string;
+  @IsOptional() @IsString() @Length(0, 20) year?: string;
+  @IsOptional() @IsString() photoAssetId?: string;
+}
+export class SetHallOfFameDto {
+  @IsArray() @ArrayMaxSize(3) @ValidateNested({ each: true }) @Type(() => HallOfFameEntryDto) entries!: HallOfFameEntryDto[];
 }

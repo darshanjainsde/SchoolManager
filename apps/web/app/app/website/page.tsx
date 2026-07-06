@@ -17,6 +17,9 @@ import {
   HERO_OPTIONS,
   MOTION_OPTIONS,
 } from '@/lib/theme-presets';
+import CoursesTab from './courses-tab';
+import AdmissionsTab from './admissions-tab';
+import HallOfFameTab from './hof-tab';
 
 const FONT_FAMILY: Record<string, string> = {
   INTER: "'Inter', sans-serif",
@@ -97,7 +100,17 @@ interface StaffMember {
 
 const SOCIAL_PLATFORMS = ['FACEBOOK', 'INSTAGRAM', 'YOUTUBE', 'X', 'LINKEDIN'] as const;
 
-type Tab = 'branding' | 'theme' | 'homepage' | 'about' | 'contact' | 'gallery' | 'staff';
+type Tab =
+  | 'branding'
+  | 'theme'
+  | 'homepage'
+  | 'about'
+  | 'contact'
+  | 'courses'
+  | 'admissions'
+  | 'hof'
+  | 'gallery'
+  | 'staff';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'branding', label: 'Branding' },
@@ -105,6 +118,9 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'homepage', label: 'Homepage' },
   { id: 'about', label: 'About' },
   { id: 'contact', label: 'Contact & address' },
+  { id: 'courses', label: 'Courses' },
+  { id: 'admissions', label: 'Admissions' },
+  { id: 'hof', label: 'Hall of Fame' },
   { id: 'gallery', label: 'Gallery' },
   { id: 'staff', label: 'Staff' },
 ];
@@ -1113,6 +1129,15 @@ export default function WebsitePage() {
       )}
 
       {/* ── STAFF TAB ─────────────────────────────────────────────────────── */}
+      {/* ── COURSES TAB ───────────────────────────────────────────────────── */}
+      {activeTab === 'courses' && <CoursesTab />}
+
+      {/* ── ADMISSIONS TAB ────────────────────────────────────────────────── */}
+      {activeTab === 'admissions' && <AdmissionsTab />}
+
+      {/* ── HALL OF FAME TAB ──────────────────────────────────────────────── */}
+      {activeTab === 'hof' && <HallOfFameTab />}
+
       {activeTab === 'staff' && (() => {
         // Build a lookup map: photoAssetId → url from the staff media list
         const staffPhotoUrlMap: Record<string, string> = {};

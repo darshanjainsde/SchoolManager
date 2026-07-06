@@ -1,0 +1,59 @@
+'use client';
+
+import type { PublicCourse } from '@/lib/public-api';
+
+const COURSE_EMOJIS = ['🧸', '📚', '🔬', '🎓', '🎨', '🏆', '🌟', '💡'];
+
+/** Full catalogue — every course, featured or not. Nav dropdown items land here. */
+export default function AcademicsSection({ courses }: { courses: PublicCourse[] }) {
+  if (courses.length === 0) return null;
+
+  return (
+    <section id="academics" className="bg-white border-t border-black/5">
+      <div className="max-w-6xl mx-auto px-6 py-20">
+        <div className="reveal text-center max-w-2xl mx-auto">
+          <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
+            Academics
+          </div>
+          <h2 className="ps-head text-4xl font-bold mt-3">Programmes for every stage</h2>
+        </div>
+        <div className="mt-12 grid gap-5">
+          {courses.map((c, i) => (
+            <div
+              key={c.id}
+              id={`course-${c.id}`}
+              className="reveal ps-lift grid md:grid-cols-[220px,1fr] rounded-3xl overflow-hidden ps-card scroll-mt-24"
+              style={{ transitionDelay: `${i * 0.05}s`, background: 'var(--paper)' }}
+            >
+              {c.imageUrl ? (
+                <div className="min-h-[150px] bg-cover bg-center" style={{ backgroundImage: `url('${c.imageUrl}')` }} />
+              ) : (
+                <div className="min-h-[150px] ps-brandgrad grid place-items-center text-5xl text-white">
+                  {COURSE_EMOJIS[i % COURSE_EMOJIS.length]}
+                </div>
+              )}
+              <div className="p-6 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
+                  {c.ageRange && <span className="ps-chip rounded-full px-2.5 py-1">{c.ageRange}</span>}
+                </div>
+                <h3 className="ps-head text-xl font-bold">{c.name}</h3>
+                {(c.description || c.tagline) && (
+                  <p className="text-sm text-slate-600 whitespace-pre-line">{c.description ?? c.tagline}</p>
+                )}
+                {c.highlights.length > 0 && (
+                  <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-slate-500 mt-1">
+                    {c.highlights.map((h, j) => (
+                      <li key={j}>
+                        <span className="font-bold" style={{ color: 'var(--ps1)' }}>✓</span> {h}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

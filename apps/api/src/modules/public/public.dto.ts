@@ -68,6 +68,25 @@ export interface PublicSiteData {
   socialLinks: { platform: string; url: string }[];
   gallery: { url: string; caption: string | null }[];
   staff: { name: string; role: string; photoUrl: string | null }[];
-  menu: { label: string; gradeId: string }[];
+  courses: PublicCourse[];
+  admissions: {
+    steps: { title: string; description: string | null }[];
+    showFees: boolean;
+    feeNote: string | null;
+  };
   events: PublicEvent[];
+}
+
+export interface PublicCourse {
+  id: string;
+  name: string;
+  tagline: string | null;
+  description: string | null;
+  highlights: string[];
+  ageRange: string | null;
+  imageUrl: string | null;
+  featured: boolean;
+  // null when the school hides fees or hasn't set them
+  fee: { admissionFee: string | null; annualFee: string | null; includes: string | null } | null;
+  hallOfFame: { rank: number; name: string; achievement: string | null; year: string | null; photoUrl: string | null }[];
 }

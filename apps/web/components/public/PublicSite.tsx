@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
+import CoursesFeatured from './sections/CoursesFeatured';
+import AcademicsSection from './sections/AcademicsSection';
+import AdmissionsSection, { admissionsHasContent } from './sections/AdmissionsSection';
+import HallOfFame, { hofCourses } from './sections/HallOfFame';
+import { submitEnquiry } from './enquiry-client';
 
 interface Props {
   data: PublicSiteData;
@@ -138,10 +143,38 @@ const PS_CSS = `
   .btn-glow::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120px circle at var(--x,50%) var(--y,50%),rgba(255,255,255,.28),transparent 60%); opacity: 0; transition: opacity .3s; }
   .btn-glow:hover::after { opacity: 1; }
 
+  /* ── Academics nav dropdown ── */
+  .ps-acad { position: relative; }
+  .ps-dropdown { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(6px);
+    width: 420px; max-width: 90vw; background: #fff; border: 1px solid rgba(28,45,36,.08); border-radius: 20px;
+    box-shadow: 0 26px 56px -22px rgba(28,45,36,.4); padding: 12px; opacity: 0; visibility: hidden;
+    transition: opacity .22s, transform .22s, visibility .22s; z-index: 60;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .ps-acad:hover .ps-dropdown, .ps-acad:focus-within .ps-dropdown { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+
+  /* ── Course flip cards ── */
+  .ps-flip { perspective: 1200px; height: 340px; cursor: pointer; outline-offset: 4px; }
+  .ps-flip-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d;
+    transition: transform .65s cubic-bezier(.2,.7,.2,1); }
+  .ps-flipped .ps-flip-inner { transform: rotateY(180deg); }
+  .ps-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    border-radius: 1.5rem; overflow: hidden; display: flex; flex-direction: column; }
+  .ps-face-back { transform: rotateY(180deg);
+    background: linear-gradient(150deg, var(--ps1), color-mix(in srgb, var(--ps1) 45%, #14261d)); }
+
+  /* ── Hall of fame podium rise ── */
+  @keyframes ps-rise { to { opacity: 1; transform: none; } }
+  .ps-champ { opacity: 0; transform: translateY(26px); animation: ps-rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
+  .ps-champ-2 { animation-delay: .18s; }
+  .ps-champ-3 { animation-delay: .34s; }
+
   @media (prefers-reduced-motion: reduce) {
     .ps-root { --motion: 0 !important; }
     .reveal { opacity: 1; transform: none; }
     .ps-underline path { stroke-dashoffset: 0; }
+    .ps-flip-inner { transition: none; }
+    .ps-dropdown { transition: none; }
+    .ps-champ { animation: none; opacity: 1; transform: none; }
   }
 `;
 
@@ -175,6 +208,9 @@ export default function PublicSite({ data }: Props) {
   );
   const hasEnquiry = data.school.features.includes('ENQUIRY');
   const hasEvents = data.school.features.includes('EVENTS');
+  const hasAcademics = data.courses.length > 0;
+  const hasAdmissions = admissionsHasContent(data.admissions, data.courses);
+  const hasHof = hofCourses(data.courses).length > 0;
   const logoUrl = data.profile?.logoUrl;
   const principalName = data.homepage?.principalName;
   const principalMessage = data.homepage?.principalMessage;
@@ -300,8 +336,42 @@ export default function PublicSite({ data }: Props) {
             {hasAbout && (
               <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#about">About</a>
             )}
-            {data.menu.length > 0 && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#academics">Academics</a>
+            {hasAcademics && (
+              <div className="ps-acad">
+                <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition inline-block" href="#academics">
+                  Academics <span className="text-[10px] opacity-60">▾</span>
+                </a>
+                <div className="ps-dropdown">
+                  {data.courses.map((c, i) => (
+                    <a
+                      key={c.id}
+                      href={`#course-${c.id}`}
+                      className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 hover:bg-black/[.04] transition"
+                    >
+                      <span className="h-9 w-9 rounded-lg ps-chip grid place-items-center text-base flex-none">
+                        {['🧸', '📚', '🔬', '🎓', '🎨', '🏆', '🌟', '💡'][i % 8]}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-bold truncate" style={{ color: 'var(--ink)' }}>{c.name}</span>
+                        {c.ageRange && <span className="block text-[11px] text-slate-400 truncate">{c.ageRange}</span>}
+                      </span>
+                    </a>
+                  ))}
+                  <a
+                    href="#academics"
+                    className="col-span-2 border-t border-black/5 mt-1 pt-2 px-2.5 pb-0.5 text-xs font-semibold"
+                    style={{ color: 'var(--ps1)' }}
+                  >
+                    View all programmes ↓
+                  </a>
+                </div>
+              </div>
+            )}
+            {hasAdmissions && (
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#admissions">Admissions</a>
+            )}
+            {hasHof && (
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#hall-of-fame">Hall of Fame</a>
             )}
             {hasGallery && (
               <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="#gallery">Gallery</a>
@@ -496,31 +566,14 @@ export default function PublicSite({ data }: Props) {
         </section>
       )}
 
-      {/* ── ACADEMICS ── */}
-      {data.menu.length > 0 && (
-        <section id="academics" className="max-w-6xl mx-auto px-6 py-20">
-          <div className="reveal text-center max-w-2xl mx-auto">
-            <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: brandColor }}>
-              Academics
-            </div>
-            <h2 className="ps-head text-4xl font-bold mt-3">Programmes for every stage</h2>
-            <p className="mt-3 text-slate-600">Explore our class-wise academic programmes.</p>
-          </div>
+      {/* ── FEATURED COURSES (homepage flip cards) ── */}
+      <CoursesFeatured courses={data.courses} />
 
-          <div className="mt-12 grid md:grid-cols-3 gap-5">
-            {data.menu.map((item, i) => (
-              <div
-                key={item.gradeId}
-                className="reveal ps-lift ps-card ps-soft rounded-3xl p-6 flex flex-col justify-end cursor-pointer"
-                style={{ transitionDelay: `${i * 0.05}s`, minHeight: '150px' }}
-              >
-                <div className="text-4xl mb-2">{CLASS_EMOJIS[i % CLASS_EMOJIS.length]}</div>
-                <h3 className="ps-head text-xl font-bold">{item.label}</h3>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* ── ACADEMICS (full course catalogue) ── */}
+      {hasAcademics && <AcademicsSection courses={data.courses} />}
+
+      {/* ── ADMISSIONS (process + fee structure) ── */}
+      {hasAdmissions && <AdmissionsSection admissions={data.admissions} courses={data.courses} />}
 
       {/* ── GALLERY ── */}
       {hasGallery && (
@@ -565,6 +618,9 @@ export default function PublicSite({ data }: Props) {
           )}
         </section>
       )}
+
+      {/* ── HALL OF FAME (class-wise toppers) ── */}
+      {hasHof && <HallOfFame courses={data.courses} />}
 
       {/* ── CONNECT / EVENTS ── */}
       {hasEvents && (
@@ -711,7 +767,7 @@ export default function PublicSite({ data }: Props) {
             </div>
 
             {hasEnquiry ? (
-              <EnquiryForm ink={ink} menu={data.menu} />
+              <EnquiryForm ink={ink} courses={data.courses.map((c) => c.name)} />
             ) : (
               <div className="relative ps-chip rounded-2xl p-6 text-sm">
                 Reach out to us using the contact details on the left.
@@ -743,7 +799,9 @@ export default function PublicSite({ data }: Props) {
             <div className="ps-head font-bold mb-3">Explore</div>
             <ul className="space-y-2 text-sm text-slate-500">
               {hasAbout && <li><a href="#about" className="hover:text-slate-900 transition">About</a></li>}
-              {data.menu.length > 0 && <li><a href="#academics" className="hover:text-slate-900 transition">Academics</a></li>}
+              {hasAcademics && <li><a href="#academics" className="hover:text-slate-900 transition">Academics</a></li>}
+              {hasAdmissions && <li><a href="#admissions" className="hover:text-slate-900 transition">Admissions</a></li>}
+              {hasHof && <li><a href="#hall-of-fame" className="hover:text-slate-900 transition">Hall of Fame</a></li>}
               {hasGallery && <li><a href="#gallery" className="hover:text-slate-900 transition">Gallery</a></li>}
               {hasEvents && <li><a href="#events" className="hover:text-slate-900 transition">Connect</a></li>}
               <li><a href="#enquire" className="hover:text-slate-900 transition">Enquire</a></li>
@@ -773,13 +831,7 @@ export default function PublicSite({ data }: Props) {
 
 // ── Enquiry form (client, posts to public API with school Host header) ──────────
 
-function EnquiryForm({
-  ink,
-  menu,
-}: {
-  ink: string;
-  menu: { label: string; gradeId: string }[];
-}) {
+function EnquiryForm({ ink, courses }: { ink: string; courses: string[] }) {
   const [status, setStatus] = useState<'idle' | 'sending' | 'ok' | 'rate' | 'error'>('idle');
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -794,37 +846,9 @@ function EnquiryForm({
     if (!parentName || !phone) return;
 
     setStatus('sending');
-    const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-    try {
-      const res = await fetch(`${base}/public/enquiry`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Browser is already on <slug>.localhost; forward it so the API
-          // resolves the correct tenant (it strips the port).
-          'X-Forwarded-Host': window.location.host,
-        },
-        body: JSON.stringify({
-          parentName,
-          phone,
-          ...(email ? { email } : {}),
-          ...(gradeInterest ? { gradeInterest } : {}),
-          ...(message ? { message } : {}),
-        }),
-      });
-      if (res.status === 429) {
-        setStatus('rate');
-        return;
-      }
-      if (!res.ok) {
-        setStatus('error');
-        return;
-      }
-      form.reset();
-      setStatus('ok');
-    } catch {
-      setStatus('error');
-    }
+    const result = await submitEnquiry({ parentName, phone, email, gradeInterest, message });
+    if (result === 'ok') form.reset();
+    setStatus(result);
   }
 
   const inputCls =
@@ -850,12 +874,12 @@ function EnquiryForm({
       <input required name="parentName" className={inputCls} placeholder="Parent name" />
       <div className="grid grid-cols-2 gap-3">
         <input required name="phone" className={inputCls} placeholder="Phone" />
-        {menu.length > 0 ? (
+        {courses.length > 0 ? (
           <select name="gradeInterest" className={inputCls} defaultValue="">
             <option value="">Interested in…</option>
-            {menu.map((m) => (
-              <option key={m.gradeId} value={m.label}>
-                {m.label}
+            {courses.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </select>
@@ -863,7 +887,7 @@ function EnquiryForm({
           <input name="email" type="email" className={inputCls} placeholder="Email" />
         )}
       </div>
-      {menu.length > 0 && (
+      {courses.length > 0 && (
         <input name="email" type="email" className={inputCls} placeholder="Email (optional)" />
       )}
       <textarea name="message" rows={3} className={inputCls} placeholder="Message (optional)" />

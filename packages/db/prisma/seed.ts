@@ -1,6 +1,6 @@
 import { loadEnv } from '@skoolos/config';
 loadEnv();
-import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
+import { getPlatformPrisma, disconnectAll, DEFAULT_COURSES } from '@skoolos/db';
 import { hash } from 'argon2';
 import { authenticator } from 'otplib';
 
@@ -60,6 +60,16 @@ async function main() {
         where: { schoolId_name: { schoolId: school.id, name: g } },
         update: {}, create: { schoolId: school.id, name: g, order: i },
       });
+    }
+
+    // Public-site courses (CMS content, all tiers). Idempotent by (schoolId, name).
+    for (const [i, c] of DEFAULT_COURSES.entries()) {
+      const existing = await db.course.findFirst({ where: { schoolId: school.id, name: c.name } });
+      if (!existing) {
+        await db.course.create({
+          data: { ...c, highlights: [...c.highlights], schoolId: school.id, order: i },
+        });
+      }
     }
 
     if (tier === 'PRO') {
