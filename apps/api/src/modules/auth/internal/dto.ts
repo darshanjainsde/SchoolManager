@@ -35,3 +35,10 @@ export class ResetPasswordDto {
   @MinLength(8)
   newPassword!: string;
 }
+
+export class ImpersonateDto {
+  @ApiProperty()
+  @IsString()
+  @Length(24, 64)
+  token!: string;
+}

@@ -13,6 +13,8 @@ export interface SchoolJwtPayload {
   schoolId: string;
   role: UserRole;
   jti: string;
+  /** Present (true) only on owner-impersonation sessions. */
+  imp?: boolean;
   iat?: number;
   exp?: number;
 }

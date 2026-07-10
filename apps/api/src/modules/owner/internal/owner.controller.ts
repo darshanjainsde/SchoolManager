@@ -3,6 +3,7 @@ import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
 import type { PlatformJwtPayload } from '../../../common/auth/jwt-payload';
 import { CreateSchoolDto, ModerateEventDto, OwnerCreateEventDto, SetFeatureDto, SetStatusDto, SetTierDto } from './owner.dto';
+import { ImpersonationService } from './impersonation.service';
 import { OwnerHostGuard } from './owner-host.guard';
 import { OwnerEventsService } from './owner-events.service';
 import { OwnerSchoolsService } from './owner-schools.service';
@@ -13,6 +14,7 @@ export class OwnerController {
   constructor(
     private readonly schools: OwnerSchoolsService,
     private readonly ownerEvents: OwnerEventsService,
+    private readonly impersonation: ImpersonationService,
   ) {}
 
   @Get('stats')
@@ -53,6 +55,11 @@ export class OwnerController {
   @Delete('schools/:id')
   deleteSchool(@Param('id', ParseUUIDPipe) id: string) {
     return this.schools.deleteSchool(id);
+  }
+
+  @Post('schools/:id/impersonate')
+  impersonate(@Param('id', ParseUUIDPipe) id: string) {
+    return this.impersonation.mint(id);
   }
 
   @Get('events')

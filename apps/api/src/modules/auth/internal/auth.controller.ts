@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
-import { ForgotPasswordDto, LoginDto, RefreshDto, ResetPasswordDto } from './dto';
+import { ForgotPasswordDto, ImpersonateDto, LoginDto, RefreshDto, ResetPasswordDto } from './dto';
 import { TenantContextService } from '../../tenancy';
 import { FeatureResolverService } from '../../features';
 import { Public } from '../../../common/auth/public.decorator';
@@ -53,6 +53,14 @@ export class AuthController {
     const ctx = this.tenantCtx.requireTenant();
     await this.passwordReset.resetPassword(ctx.schoolId, dto.token, dto.newPassword);
     return { ok: true };
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('impersonate')
+  async impersonate(@Body() dto: ImpersonateDto) {
+    const ctx = this.tenantCtx.requireTenant();
+    return this.auth.impersonate(ctx.schoolId, dto.token);
   }
 
   @ApiBearerAuth()

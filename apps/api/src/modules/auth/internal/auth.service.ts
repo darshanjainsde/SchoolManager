@@ -134,6 +134,49 @@ export class AuthService {
     });
   }
 
+  /**
+   * Exchanges a single-use owner-minted impersonation token for a short-lived
+   * school-admin session. No refresh token is issued — the session hard-ends
+   * when the access token expires, and the `imp` claim lets the UI show an
+   * "Owner view" banner.
+   */
+  async impersonate(schoolId: string, rawToken: string): Promise<{ accessToken: string; expiresIn: number; impersonated: true }> {
+    const db = getPlatformPrisma();
+    const row = await db.impersonationToken.findUnique({
+      where: { tokenHash: sha256(rawToken) },
+      include: { user: true },
+    });
+    const invalid =
+      !row ||
+      row.usedAt !== null ||
+      row.expiresAt < new Date() ||
+      row.schoolId !== schoolId ||
+      !row.user.isActive;
+    if (invalid) throw new UnauthorizedException('This impersonation link is invalid or has expired');
+
+    // Burn before issuing: a raced second exchange must lose.
+    const burned = await db.impersonationToken.updateMany({
+      where: { id: row.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (burned.count === 0) throw new UnauthorizedException('This impersonation link is invalid or has expired');
+
+    const payload: Omit<SchoolJwtPayload, 'iat' | 'exp'> = {
+      sub: row.user.id,
+      aud: 'school',
+      schoolId,
+      role: row.user.role,
+      jti: randomUUID(),
+      imp: true,
+    };
+    const accessToken = this.jwt.sign(payload, {
+      secret: this.env.JWT_SCHOOL_ACCESS_SECRET,
+      expiresIn: this.env.JWT_ACCESS_TTL,
+    });
+    this.logger.warn(`Impersonation session started for user ${row.user.id} (school ${schoolId})`);
+    return { accessToken, expiresIn: this.env.JWT_ACCESS_TTL, impersonated: true };
+  }
+
   async logout(schoolId: string, rawToken: string): Promise<void> {
     const hash = sha256(rawToken);
     await withTenant(schoolId, async (tx) => {
