@@ -53,6 +53,9 @@ const envSchema = z.object({
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().int().positive(),
   SMTP_FROM: z.string().min(1),
+  // Optional: Mailhog (local dev) accepts unauthenticated mail.
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
 
   JWT_SCHOOL_ACCESS_SECRET: z.string().min(16),
   JWT_SCHOOL_REFRESH_SECRET: z.string().min(16),

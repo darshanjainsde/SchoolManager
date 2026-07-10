@@ -64,6 +64,9 @@ export default function TenantLoginPage() {
             <Button type="submit" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
             </Button>
+            <a href="/forgot-password" className="text-center text-sm text-slate-500 hover:text-teal-700 transition">
+              Forgot password?
+            </a>
           </form>
         </CardContent>
       </Card>

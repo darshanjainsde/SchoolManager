@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
 import type { PlatformJwtPayload } from '../../../common/auth/jwt-payload';
@@ -48,6 +48,11 @@ export class OwnerController {
   @Patch('schools/:id/status')
   setStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetStatusDto) {
     return this.schools.setStatus(id, dto.status);
+  }
+
+  @Delete('schools/:id')
+  deleteSchool(@Param('id', ParseUUIDPipe) id: string) {
+    return this.schools.deleteSchool(id);
   }
 
   @Get('events')

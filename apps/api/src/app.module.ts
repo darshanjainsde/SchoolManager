@@ -9,6 +9,7 @@ import { EventBusModule } from './common/event-bus/event-bus.module';
 import { CommonAuthModule } from './common/auth/auth.module';
 import { AuditModule } from './common/audit/audit.module';
 import { StorageModule } from './common/storage/storage.module';
+import { MailModule } from './common/mail/mail.module';
 import { AuditInterceptor } from './common/audit/audit.interceptor';
 import { AuthModule } from './modules/auth';
 import { TenancyModule } from './modules/tenancy';
@@ -47,6 +48,7 @@ import { AdminCredentialsModule } from './modules/admin-credentials';
     CommonAuthModule,
     AuditModule,
     StorageModule,
+    MailModule,
     EventBusModule,
     HealthModule,
 

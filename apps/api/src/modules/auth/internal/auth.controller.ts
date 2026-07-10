@@ -2,7 +2,8 @@ import { Body, Controller, ForbiddenException, Get, Post, UseGuards } from '@nes
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { LoginDto, RefreshDto } from './dto';
+import { PasswordResetService } from './password-reset.service';
+import { ForgotPasswordDto, LoginDto, RefreshDto, ResetPasswordDto } from './dto';
 import { TenantContextService } from '../../tenancy';
 import { FeatureResolverService } from '../../features';
 import { Public } from '../../../common/auth/public.decorator';
@@ -15,6 +16,7 @@ import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly passwordReset: PasswordResetService,
     private readonly tenantCtx: TenantContextService,
     private readonly features: FeatureResolverService,
   ) {}
@@ -32,6 +34,25 @@ export class AuthController {
   @Post('refresh')
   async refresh(@Body() dto: RefreshDto) {
     return this.auth.refresh(dto.refreshToken);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    const ctx = this.tenantCtx.requireTenant();
+    await this.passwordReset.requestReset(ctx.schoolId, dto.email);
+    // Identical response whether or not the account exists.
+    return { ok: true };
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('reset-password')
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    const ctx = this.tenantCtx.requireTenant();
+    await this.passwordReset.resetPassword(ctx.schoolId, dto.token, dto.newPassword);
+    return { ok: true };
   }
 
   @ApiBearerAuth()

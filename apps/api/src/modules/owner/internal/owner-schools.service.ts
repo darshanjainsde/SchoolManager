@@ -1,8 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, resolveFeatures, Prisma, DEFAULT_COURSES } from '@skoolos/db';
 import { randomBytes } from 'node:crypto';
 import { PasswordService } from '../../auth';
 import { FeatureResolverService } from '../../features/internal/feature-resolver.service';
+import { StorageService } from '../../../common/storage/storage.service';
 import { CreateSchoolDto } from './owner.dto';
 
 export interface StatsResponse {
@@ -26,10 +27,39 @@ export interface SchoolDetail extends SchoolRow {
 
 @Injectable()
 export class OwnerSchoolsService {
+  private readonly logger = new Logger(OwnerSchoolsService.name);
+
   constructor(
     private readonly featureResolver: FeatureResolverService,
     private readonly passwords: PasswordService,
+    private readonly storage: StorageService,
   ) {}
+
+  /**
+   * Permanently removes a school and everything under it. Guarded to
+   * SUSPENDED schools so deletion is always a deliberate two-step
+   * (suspend → delete). DB rows cascade from School; uploaded files are
+   * removed best-effort; the tenant-lookup cache expires on its own TTL.
+   */
+  async deleteSchool(id: string): Promise<{ ok: true }> {
+    const db = getPlatformPrisma();
+    const school = await db.school.findUnique({
+      where: { id },
+      select: { id: true, slug: true, status: true, media: { select: { storageKey: true } } },
+    });
+    if (!school) throw new NotFoundException(`School ${id} not found`);
+    if (school.status !== 'SUSPENDED') {
+      throw new ConflictException('Suspend the school first — only suspended schools can be deleted.');
+    }
+
+    for (const m of school.media) {
+      await this.storage.delete(m.storageKey); // best-effort, never throws
+    }
+    await db.school.delete({ where: { id } });
+    await this.featureResolver.invalidate(id);
+    this.logger.warn(`School ${school.slug} (${id}) permanently deleted with ${school.media.length} stored files`);
+    return { ok: true };
+  }
 
   async stats(): Promise<StatsResponse> {
     const db = getPlatformPrisma();

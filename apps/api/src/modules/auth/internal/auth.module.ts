@@ -4,10 +4,11 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { AcceptInviteController } from './accept-invite.controller';
 import { PasswordService } from './password.service';
+import { PasswordResetService } from './password-reset.service';
 
 @Module({
   imports: [FeaturesModule],
-  providers: [AuthService, PasswordService],
+  providers: [AuthService, PasswordService, PasswordResetService],
   controllers: [AuthController, AcceptInviteController],
   exports: [PasswordService],
 })
