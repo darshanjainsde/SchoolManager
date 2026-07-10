@@ -116,3 +116,38 @@ export async function fetchPublicSite(host: string): Promise<PublicSiteData | nu
     return null;
   }
 }
+
+// ── Marketing site (sckools.com) ────────────────────────────────────────────
+
+export interface MarketingConfigData {
+  prices: {
+    basic: { usd: number; inr: number };
+    standard: { usd: number; inr: number };
+    pro: { usd: number; inr: number };
+  };
+  contactEmail: string;
+  contactPhone: string;
+}
+
+const MARKETING_DEFAULTS: MarketingConfigData = {
+  prices: {
+    basic: { usd: 19, inr: 999 },
+    standard: { usd: 49, inr: 2499 },
+    pro: { usd: 99, inr: 4999 },
+  },
+  contactEmail: 'admin@sckools.com',
+  contactPhone: '',
+};
+
+/** Owner-editable pricing/contact for the marketing pages (60 s revalidate). */
+export async function fetchMarketingConfig(): Promise<MarketingConfigData> {
+  const raw = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001';
+  const base = raw.replace('localhost', '127.0.0.1');
+  try {
+    const res = await fetch(`${base}/marketing/config`, { next: { revalidate: 60 } });
+    if (!res.ok) return MARKETING_DEFAULTS;
+    return (await res.json()) as MarketingConfigData;
+  } catch {
+    return MARKETING_DEFAULTS;
+  }
+}

@@ -1,20 +1,36 @@
+import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { fetchPublicSite, fetchDirectory } from '@/lib/public-api';
+import { fetchPublicSite, fetchMarketingConfig } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';
-import PlatformLanding from '@/components/PlatformLanding';
+import MarketingSite from '@/components/marketing/MarketingSite';
 import { isPlatformHost } from '@/lib/hosts';
 
-async function getApiHealth(): Promise<string> {
-  const url = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001') + '/health';
-  try {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return `error:${res.status}`;
-    const data = (await res.json()) as { status?: string };
-    return data.status ?? 'unknown';
-  } catch (e) {
-    return `unreachable:${(e as Error).message}`;
-  }
+export async function generateMetadata(): Promise<Metadata> {
+  const host = headers().get('host') ?? '';
+  if (!isPlatformHost(host)) return {}; // school sites keep the layout default
+  return {
+    title: 'Sckools — School Websites, Admissions & Inter-School Events Network',
+    description:
+      'Sckools gives your school a stunning website, an admissions enquiry engine, effortless management — and a live network where students from different schools compete, connect and win bigger.',
+    keywords: ['sckools', 'school website builder', 'school management software', 'inter-school events', 'school admissions software', 'school website India'],
+    alternates: { canonical: 'https://sckools.com/' },
+    metadataBase: new URL('https://sckools.com'),
+    openGraph: {
+      title: 'Sckools — Your school, on a bigger stage',
+      description: 'School websites, admissions, management and an inter-school events network — one platform, zero developers needed.',
+      url: 'https://sckools.com/',
+      siteName: 'Sckools',
+      type: 'website',
+      locale: 'en_IN',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: 'Sckools — Your school, on a bigger stage',
+      description: 'School websites, admissions, management and an inter-school events network.',
+    },
+    robots: { index: true, follow: true },
+  };
 }
 
 export default async function HomePage() {
@@ -26,12 +42,27 @@ export default async function HomePage() {
       return <PublicSite data={data} />;
     }
     // A school-style host that resolves to no live site (unknown/suspended/not
-    // yet live) must 404 — never fall through to the internal dev launcher,
-    // which would leak platform tooling links on a public domain.
+    // yet live) must 404 — never fall through to platform pages.
     notFound();
   }
 
-  const [apiStatus, schools] = await Promise.all([getApiHealth(), fetchDirectory()]);
+  const config = await fetchMarketingConfig();
 
-  return <PlatformLanding schools={schools} apiHealthy={apiStatus === 'ok'} />;
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Sckools',
+    url: 'https://sckools.com',
+    email: config.contactEmail,
+    ...(config.contactPhone ? { telephone: config.contactPhone } : {}),
+    description: 'School websites, admissions engine, management suite and an inter-school events network.',
+    sameAs: [],
+  };
+
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <MarketingSite config={config} />
+    </>
+  );
 }
