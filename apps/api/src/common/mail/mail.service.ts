@@ -34,6 +34,36 @@ export class MailService {
     }
   }
 
+  async sendLeadNotification(
+    to: string,
+    lead: { name: string | null; phone: string; school: string | null; interest: string | null; source: string },
+  ): Promise<boolean> {
+    const who = lead.name ?? 'Someone';
+    const subject = `New Sckools lead: ${who}${lead.school ? ` — ${lead.school}` : ''}`;
+    const lines = [
+      `Name: ${lead.name ?? '—'}`,
+      `Phone: ${lead.phone}`,
+      `School: ${lead.school ?? '—'}`,
+      `Interested in: ${lead.interest ?? '—'}`,
+      `Source: ${lead.source}`,
+    ];
+    const text = `New callback request from sckools.com\n\n${lines.join('\n')}\n\nOpen the owner console to follow up.`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#134e4a;margin:0 0 12px">📞 New callback request</h2>
+        <table style="border-collapse:collapse;width:100%;font-size:14px;color:#334155">
+          ${lines
+            .map((l) => {
+              const [k, v] = l.split(/: (.*)/s);
+              return `<tr><td style="padding:6px 10px 6px 0;color:#64748b;white-space:nowrap">${k}</td><td style="padding:6px 0;font-weight:bold">${v}</td></tr>`;
+            })
+            .join('')}
+        </table>
+        <p style="color:#64748b;font-size:13px;margin-top:20px">Open the owner console → Marketing leads to follow up.</p>
+      </div>`;
+    return this.send(to, subject, html, text);
+  }
+
   async sendPasswordReset(to: string, schoolName: string, resetUrl: string): Promise<boolean> {
     const subject = `Reset your ${schoolName} admin password`;
     const text = `Someone requested a password reset for your ${schoolName} account.\n\nReset it here (valid 30 minutes): ${resetUrl}\n\nIf this wasn't you, ignore this email — your password is unchanged.`;

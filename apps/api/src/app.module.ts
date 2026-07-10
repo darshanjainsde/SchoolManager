@@ -21,6 +21,7 @@ import { CommunityModule } from './modules/community';
 import { PublicModule } from './modules/public';
 import { PortalModule } from './modules/portal';
 import { DirectoryModule } from './modules/directory/directory.module';
+import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
 
 @Module({
@@ -63,6 +64,7 @@ import { AdminCredentialsModule } from './modules/admin-credentials';
     PublicModule,
     PortalModule,
     DirectoryModule,
+    MarketingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
