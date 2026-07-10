@@ -3,7 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../../common/auth/public.decorator';
 import { OwnerHostGuard } from './owner-host.guard';
 import { OwnerAuthService } from './owner-auth.service';
-import { OwnerLoginDto, RefreshDto } from './owner.dto';
+import { GateLoginDto, OwnerLoginDto, RefreshDto } from './owner.dto';
 
 @Controller('owner/auth')
 @UseGuards(OwnerHostGuard)
@@ -15,6 +15,13 @@ export class OwnerAuthController {
   @Post('login')
   login(@Body() dto: OwnerLoginDto) {
     return this.auth.login(dto.email, dto.password, dto.totp);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('gate')
+  gate(@Body() dto: GateLoginDto) {
+    return this.auth.gateLogin(dto.password);
   }
 
   @Public()

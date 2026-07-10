@@ -1,7 +1,7 @@
-import { ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { authenticator } from 'otplib';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { getPlatformPrisma } from '@skoolos/db';
 import type { User } from '@skoolos/db';
 import { loadEnv } from '@skoolos/config';
@@ -9,6 +9,14 @@ import { PasswordService } from '../../auth';
 import type { PlatformJwtPayload } from '../../../common/auth/jwt-payload';
 
 export interface IssuedTokens { accessToken: string; refreshToken: string; expiresIn: number; }
+
+/** Constant-time password check (compares sha256 digests, so length never leaks). */
+export function gatePasswordMatches(candidate: string, expected: string | undefined): boolean {
+  if (!expected) return false;
+  const a = createHash('sha256').update(candidate).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
+}
 
 /** Pure, unit-testable TOTP check (window ±1 step for clock skew). */
 export function verifyTotp(code: string, secret: string | null): boolean {
@@ -37,6 +45,26 @@ export class OwnerAuthService {
     }
     await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null } });
     return this.issue(user.id);
+  }
+
+  /**
+   * Single-password console unlock for sckools.com/owner. Issues the same
+   * platform tokens as email login, for the (single) OWNER user. Disabled
+   * (503) unless OWNER_GATE_PASSWORD is configured.
+   */
+  async gateLogin(password: string): Promise<IssuedTokens> {
+    if (!this.env.OWNER_GATE_PASSWORD) {
+      throw new ServiceUnavailableException('Owner gate is not enabled');
+    }
+    if (!gatePasswordMatches(password, this.env.OWNER_GATE_PASSWORD)) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    const db = getPlatformPrisma();
+    const owner = await db.user.findFirst({ where: { schoolId: null, role: 'OWNER', isActive: true } });
+    if (!owner) throw new UnauthorizedException('Invalid credentials');
+    await db.user.update({ where: { id: owner.id }, data: { lastLoginAt: new Date() } });
+    this.logger.log(`Owner console unlocked via gate password (user ${owner.id})`);
+    return this.issue(owner.id);
   }
 
   async refresh(rawToken: string): Promise<IssuedTokens> {

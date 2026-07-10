@@ -11,6 +11,10 @@ export class RefreshDto {
   @IsString() refreshToken!: string;
 }
 
+export class GateLoginDto {
+  @IsString() @Length(1, 200) password!: string;
+}
+
 export class CreateSchoolDto {
   @IsString() @Length(2, 120) name!: string;
   @IsString() @Matches(/^[a-z0-9-]{2,40}$/) slug!: string;
