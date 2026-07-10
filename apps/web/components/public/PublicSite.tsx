@@ -766,7 +766,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
           </div>
         </div>
         <div className="border-t border-black/10 text-center text-xs text-slate-400 py-4">
-          © {new Date().getFullYear()} {schoolName} · Powered by SkoolOS
+          © {new Date().getFullYear()} {schoolName} · Powered by Sckools
         </div>
       </footer>
     </div>

@@ -28,7 +28,7 @@ export function configureApp(app: INestApplication, env: AppEnv): void {
   if (env.NODE_ENV !== 'production' || process.env.ENABLE_SWAGGER === 'true') {
     try {
       const swagger = new DocumentBuilder()
-        .setTitle('SkoolOS API')
+        .setTitle('Sckools API')
         .setDescription('Multi-tenant school management platform — REST API')
         .setVersion('0.1.0')
         .addBearerAuth()

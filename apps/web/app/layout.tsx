@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'SkoolOS',
+  title: 'Sckools',
   description: 'Multi-tenant school management platform',
 };
 

@@ -59,7 +59,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
           <span className="h-8 w-8 rounded-lg bg-indigo-600 grid place-items-center text-sm font-bold">
             S
           </span>
-          <span>SkoolOS</span>
+          <span>Sckools</span>
           <span className="ml-auto text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-semibold">
             OWNER
           </span>

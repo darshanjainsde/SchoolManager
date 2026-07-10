@@ -38,7 +38,7 @@ export default function PlatformLanding({ schools, apiHealthy }: Props) {
               S
             </span>
             <div>
-              <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">SkoolOS</h1>
+              <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Sckools</h1>
               <p className="text-sm text-slate-500">Multi-school website & management platform</p>
             </div>
           </div>
