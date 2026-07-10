@@ -17,7 +17,7 @@ import { Type } from 'class-transformer';
 
 export class ListMediaDto {
   @IsOptional()
-  @IsIn(['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF'])
+  @IsIn(['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT'])
   kind?: string;
 }
 
@@ -49,6 +49,7 @@ export class UpdateHomepageDto {
   @IsOptional() @IsString() @Length(0, 2000) principalMessage?: string;
   @IsOptional() @IsString() heroAssetId?: string;
   @IsOptional() @IsString() principalPhotoAssetId?: string;
+  @IsOptional() @IsString() aboutImageAssetId?: string;
   @IsOptional() @IsBoolean() showAdmissions?: boolean;
   @IsOptional() @IsBoolean() showGallery?: boolean;
   @IsOptional() @IsBoolean() showEvents?: boolean;

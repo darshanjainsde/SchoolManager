@@ -50,6 +50,7 @@ enum MediaKind {
   PRINCIPAL
   COURSE
   HOF
+  ABOUT
 }
 
 enum SocialPlatform {
@@ -234,6 +235,9 @@ model HomepageContent {
   principalName      String?
   principalMessage   String?
   principalPhotoAssetId String? @db.Uuid
+  // Wide image for the About section's picture card (campus/community photo);
+  // falls back to the principal photo, then a placeholder.
+  aboutImageAssetId  String? @db.Uuid
   // Which content sections render on the homepage. Full details always live on
   // the dedicated pages (/admissions, /gallery, /connect, /contact).
   showAdmissions     Boolean @default(true)

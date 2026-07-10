@@ -63,6 +63,7 @@ export interface PublicSiteData {
     principalName: string | null;
     principalMessage: string | null;
     principalPhotoUrl: string | null;
+    aboutImageUrl: string | null;
     showAdmissions: boolean;
     showGallery: boolean;
     showEvents: boolean;

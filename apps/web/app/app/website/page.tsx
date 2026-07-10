@@ -58,6 +58,7 @@ interface SiteHomepage {
   principalMessage?: string | null;
   heroAssetId?: string | null;
   principalPhotoAssetId?: string | null;
+  aboutImageAssetId?: string | null;
   showAdmissions?: boolean;
   showGallery?: boolean;
   showEvents?: boolean;
@@ -268,6 +269,10 @@ export default function WebsitePage() {
   const [stats, setStats] = useState<Array<{ label: string; value: string }>>([]);
   const [heroPreviewUrl, setHeroPreviewUrl] = useState<string | null>(null);
   const [isUploadingHero, setIsUploadingHero] = useState(false);
+  const [aboutImagePreviewUrl, setAboutImagePreviewUrl] = useState<string | null>(null);
+  const [isUploadingAboutImage, setIsUploadingAboutImage] = useState(false);
+  const [principalPhotoPreviewUrl, setPrincipalPhotoPreviewUrl] = useState<string | null>(null);
+  const [isUploadingPrincipalPhoto, setIsUploadingPrincipalPhoto] = useState(false);
 
   // ── About form state ───────────────────────────────────────────────────────
   const [aboutText, setAboutText] = useState('');
@@ -536,6 +541,40 @@ export default function WebsitePage() {
       toast.error(`Hero upload failed: ${(err as Error).message}`);
     } finally {
       setIsUploadingHero(false);
+    }
+  }
+
+  async function uploadAboutImage(file: File) {
+    setIsUploadingAboutImage(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const asset = await api.request<MediaAsset>('/site/media?kind=ABOUT', { method: 'POST', body: fd });
+      await api.put('/site/homepage', { aboutImageAssetId: asset.id });
+      setAboutImagePreviewUrl(asset.url);
+      void queryClient.invalidateQueries({ queryKey: ['site-content'] });
+      toast.success('About image uploaded');
+    } catch (err) {
+      toast.error(`About image upload failed: ${(err as Error).message}`);
+    } finally {
+      setIsUploadingAboutImage(false);
+    }
+  }
+
+  async function uploadPrincipalPhoto(file: File) {
+    setIsUploadingPrincipalPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const asset = await api.request<MediaAsset>('/site/media?kind=PRINCIPAL', { method: 'POST', body: fd });
+      await api.put('/site/homepage', { principalPhotoAssetId: asset.id });
+      setPrincipalPhotoPreviewUrl(asset.url);
+      void queryClient.invalidateQueries({ queryKey: ['site-content'] });
+      toast.success('Principal photo uploaded');
+    } catch (err) {
+      toast.error(`Principal photo upload failed: ${(err as Error).message}`);
+    } finally {
+      setIsUploadingPrincipalPhoto(false);
     }
   }
 
@@ -1040,6 +1079,22 @@ export default function WebsitePage() {
                 placeholder="A welcome message from the principal…"
               />
             </div>
+            <ImageUploader
+              label="About image"
+              hint="Wide photo shown beside the About text (campus, classrooms, community). Saves immediately. Max 4 MB."
+              previewUrl={aboutImagePreviewUrl}
+              hasExistingAsset={!!data?.homepage.aboutImageAssetId}
+              isUploading={isUploadingAboutImage}
+              onFile={uploadAboutImage}
+            />
+            <ImageUploader
+              label="Principal photo"
+              hint="Portrait shown in the small name card over the About image. Saves immediately. Max 4 MB."
+              previewUrl={principalPhotoPreviewUrl}
+              hasExistingAsset={!!data?.homepage.principalPhotoAssetId}
+              isUploading={isUploadingPrincipalPhoto}
+              onFile={uploadPrincipalPhoto}
+            />
           </CardContent>
           <CardFooter>
             <Button

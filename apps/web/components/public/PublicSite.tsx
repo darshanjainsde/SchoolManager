@@ -232,6 +232,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   const principalName = data.homepage?.principalName;
   const principalMessage = data.homepage?.principalMessage;
   const principalPhotoUrl = data.homepage?.principalPhotoUrl;
+  const aboutImageUrl = data.homepage?.aboutImageUrl;
 
   // PHOTO = the school's photo (building etc.) as a full-viewport backdrop
   // BEHIND the regular animated hero — layout, animations and dark text stay
@@ -609,8 +610,13 @@ export default function PublicSite({ data, view = 'home' }: Props) {
           <div className="reveal relative">
             <div className="absolute -inset-4 ps-about-glow rounded-3xl" />
             <div className="relative rounded-3xl overflow-hidden h-80 ps-card ps-soft">
-              {principalPhotoUrl ? (
-                <img src={principalPhotoUrl} alt={principalName ?? 'Principal'} className="w-full h-full object-cover" />
+              {aboutImageUrl || principalPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={(aboutImageUrl ?? principalPhotoUrl)!}
+                  alt={aboutImageUrl ? `About ${schoolName}` : principalName ?? 'Principal'}
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <div className="w-full h-full ps-brandgrad grid place-items-center text-6xl text-white">🏫</div>
               )}
