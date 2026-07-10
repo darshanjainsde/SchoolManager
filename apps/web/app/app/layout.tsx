@@ -32,15 +32,28 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const hydrated = useHydrated();
   const host = useHost();
   const refreshToken = useAuthStore((s) => s.refreshToken);
+  const accessToken = useAuthStore((s) => s.accessToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
   const api = useApi({ audience: 'school', hostHeader: host });
+
+  // Impersonation sessions carry an access token only (no refresh token) and
+  // an `imp: true` claim — used for the banner and to keep the session alive.
+  const hasSession = !!refreshToken || !!accessToken;
+  const impersonated = (() => {
+    if (!accessToken) return false;
+    try {
+      return Boolean((JSON.parse(atob(accessToken.split('.')[1])) as { imp?: boolean }).imp);
+    } catch {
+      return false;
+    }
+  })();
 
   // The school's resolved feature set drives which nav items are shown.
   const { data: me } = useQuery({
     queryKey: ['me', host],
     queryFn: () => api.get<{ features?: string[] }>('/auth/me'),
-    enabled: hydrated && isSchoolHost(host) && !!refreshToken && audience === 'school',
+    enabled: hydrated && isSchoolHost(host) && hasSession && audience === 'school',
     staleTime: 5 * 60_000,
   });
   const features = me?.features;
@@ -50,10 +63,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     : NAV_ITEMS;
 
   useEffect(() => {
-    if (hydrated && (!refreshToken || audience !== 'school')) {
+    if (hydrated && (!hasSession || audience !== 'school')) {
       router.replace('/login');
     }
-  }, [hydrated, refreshToken, audience, router]);
+  }, [hydrated, hasSession, audience, router]);
 
   // Until hydrated, render nothing so the first client paint matches the server.
   if (!hydrated) return null;
@@ -83,10 +96,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!refreshToken || audience !== 'school') return null;
+  if (!hasSession || audience !== 'school') return null;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col">
+      {impersonated && (
+        <div className="flex items-center justify-center gap-2 bg-violet-600 px-4 py-1.5 text-center text-xs font-bold text-white">
+          ⚡ Owner view — you are signed in as this school&rsquo;s admin via the owner console. The session ends automatically.
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1">
       {/* Sidebar */}
       <aside className="hidden w-60 flex-col bg-slate-900 text-slate-300 sm:flex">
         {/* Logo */}
@@ -137,6 +156,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto p-6 sm:p-10">{children}</main>
+      </div>
     </div>
   );
 }

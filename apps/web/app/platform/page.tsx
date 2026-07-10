@@ -1,124 +1,329 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useApi } from '@/lib/use-api';
-import { OWNER_HOST } from '@/lib/hosts';
+import { OWNER_HOST, schoolHref } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
 
-/**
- * Shape returned by GET /owner/stats (Task 2 contract).
- * Declared locally — the web app cannot import API service code.
- */
-interface StatsResponse {
-  schools: {
-    total: number;
-    byTier: {
-      BASIC: number;
-      STANDARD: number;
-      PRO: number;
-    };
-    live: number;
-    suspended: number;
-  };
-  domains: {
-    live: number;
-  };
+interface SchoolMetrics {
+  id: string;
+  name: string;
+  slug: string;
+  tier: 'BASIC' | 'STANDARD' | 'PRO';
+  status: string;
+  primaryDomain: string | null;
+  storageBytes: number;
+  enquiries: number;
+  newEnquiries: number;
+  events: number;
+}
+
+interface OverviewResponse {
+  totals: { schools: number; live: number; storageBytes: number; enquiriesThisMonth: number; newLeads: number };
+  schools: SchoolMetrics[];
+}
+
+interface Lead {
+  id: string;
+  name: string | null;
+  phone: string;
+  school: string | null;
+  interest: string | null;
+  source: string;
+  status: 'NEW' | 'CONTACTED' | 'CLOSED';
+  createdAt: string;
+}
+
+interface MarketingConfigRow {
+  priceBasicUsd: number; priceBasicInr: number;
+  priceStdUsd: number; priceStdInr: number;
+  priceProUsd: number; priceProInr: number;
+  contactEmail: string; contactPhone: string;
+}
+
+const TIER_TONE: Record<SchoolMetrics['tier'], string> = {
+  BASIC: 'bg-sky-100 text-sky-700',
+  STANDARD: 'bg-teal-100 text-teal-700',
+  PRO: 'bg-violet-100 text-violet-700',
+};
+
+const LEAD_TONE: Record<Lead['status'], string> = {
+  NEW: 'bg-amber-100 text-amber-700',
+  CONTACTED: 'bg-teal-100 text-teal-700',
+  CLOSED: 'bg-slate-100 text-slate-500',
+};
+
+function formatBytes(n: number): string {
+  if (n >= 1_073_741_824) return (n / 1_073_741_824).toFixed(1) + ' GB';
+  if (n >= 1_048_576) return (n / 1_048_576).toFixed(0) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(0) + ' KB';
+  return n + ' B';
 }
 
 export default function PlatformDashboardPage() {
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
+  const qc = useQueryClient();
+  const [impersonating, setImpersonating] = useState<string | null>(null);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['owner-stats'],
-    queryFn: () => api.get<StatsResponse>('/owner/stats'),
+  const overview = useQuery({
+    queryKey: ['owner-overview'],
+    queryFn: () => api.get<OverviewResponse>('/owner/overview'),
     enabled: !!refreshToken,
   });
 
+  const leads = useQuery({
+    queryKey: ['owner-leads'],
+    queryFn: () => api.get<Lead[]>('/owner/leads'),
+    enabled: !!refreshToken,
+  });
+
+  const config = useQuery({
+    queryKey: ['owner-marketing-config'],
+    queryFn: () => api.get<MarketingConfigRow>('/owner/marketing-config'),
+    enabled: !!refreshToken,
+  });
+
+  const leadStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: Lead['status'] }) =>
+      api.patch(`/owner/leads/${id}`, { status }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['owner-leads'] });
+      void qc.invalidateQueries({ queryKey: ['owner-overview'] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  async function impersonate(school: SchoolMetrics) {
+    setImpersonating(school.id);
+    try {
+      const { url } = await api.post<{ url: string }>(`/owner/schools/${school.id}/impersonate`);
+      window.open(url, '_blank', 'noopener');
+      toast.success(`Opening ${school.name} admin — link is single-use, valid 15 minutes`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setImpersonating(null);
+    }
+  }
+
+  async function downloadCsv(school: SchoolMetrics) {
+    try {
+      const csv = await api.get<string>(`/owner/schools/${school.id}/enquiries.csv`);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${school.slug}-enquiries.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   return (
     <div className="p-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Overview of every school on your platform.
-          </p>
+          <p className="mt-1 text-sm text-slate-500">Every school, every lead — live.</p>
         </div>
         <Link href="/platform/onboard">
           <Button>➕ Add School</Button>
         </Link>
       </div>
 
-      {/* Loading / error states */}
-      {isLoading && (
-        <div className="text-sm text-slate-500">Loading stats…</div>
-      )}
-      {error && (
-        <div className="text-sm text-rose-600">{(error as Error).message}</div>
-      )}
+      {overview.isLoading && <div className="text-sm text-slate-500">Loading…</div>}
+      {overview.error && <div className="text-sm text-rose-600">{(overview.error as Error).message}</div>}
 
-      {/* Stat cards */}
-      {data && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {/* Total schools */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Total schools</div>
-            <div className="text-3xl font-bold mt-1">{data.schools.total}</div>
-          </div>
-
-          {/* By tier */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Basic · Standard · Pro</div>
-            <div className="text-3xl font-bold mt-1">
-              {data.schools.byTier.BASIC} · {data.schools.byTier.STANDARD} · {data.schools.byTier.PRO}
+      {overview.data && (
+        <>
+          {/* KPI row */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl bg-white p-5 shadow-sm">
+              <div className="text-3xl font-bold">{overview.data.totals.live}</div>
+              <div className="text-sm text-slate-500">live schools <span className="text-teal-600 font-semibold">of {overview.data.totals.schools} total</span></div>
+            </div>
+            <div className="rounded-2xl bg-white p-5 shadow-sm">
+              <div className="text-3xl font-bold tabular-nums">{formatBytes(overview.data.totals.storageBytes)}</div>
+              <div className="text-sm text-slate-500">storage used across all schools</div>
+            </div>
+            <div className="rounded-2xl bg-white p-5 shadow-sm">
+              <div className="text-3xl font-bold tabular-nums">{overview.data.totals.enquiriesThisMonth}</div>
+              <div className="text-sm text-slate-500">enquiries this month</div>
+            </div>
+            <div className="rounded-2xl bg-white p-5 shadow-sm">
+              <div className={`text-3xl font-bold tabular-nums ${overview.data.totals.newLeads > 0 ? 'text-amber-600' : ''}`}>{overview.data.totals.newLeads}</div>
+              <div className="text-sm text-slate-500">new marketing leads{overview.data.totals.newLeads > 0 && <span className="font-semibold text-amber-600"> · needs action</span>}</div>
             </div>
           </div>
 
-          {/* Live domains */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Live domains</div>
-            <div className="text-3xl font-bold mt-1">{data.domains.live}</div>
+          {/* School cards */}
+          <h2 className="mb-3 mt-8 text-lg font-bold text-slate-900">Schools</h2>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {overview.data.schools.map((s) => (
+              <div key={s.id} className="rounded-2xl bg-white p-5 shadow-sm transition hover:shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-violet-500 font-bold text-white">
+                    {s.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-slate-900">{s.name}</div>
+                    <div className="truncate font-mono text-xs text-slate-400">{s.primaryDomain ?? s.slug}</div>
+                  </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${TIER_TONE[s.tier]}`}>{s.tier}</span>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${s.status === 'LIVE' ? 'bg-teal-100 text-teal-700' : s.status === 'SUSPENDED' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>
+                      {s.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="my-4 grid grid-cols-4 gap-2 border-y border-slate-100 py-3 text-center">
+                  <div><div className="font-bold tabular-nums">{formatBytes(s.storageBytes)}</div><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">storage</div></div>
+                  <div><div className="font-bold tabular-nums">{s.enquiries}</div><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">enquiries</div></div>
+                  <div><div className={`font-bold tabular-nums ${s.newEnquiries > 0 ? 'text-amber-600' : ''}`}>{s.newEnquiries}</div><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">new</div></div>
+                  <div><div className="font-bold tabular-nums">{s.events}</div><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">events</div></div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {s.primaryDomain && (
+                    <a href={schoolHref(s.primaryDomain)} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-600">
+                      Visit site ↗
+                    </a>
+                  )}
+                  <button
+                    onClick={() => impersonate(s)}
+                    disabled={impersonating === s.id}
+                    className="rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-px disabled:opacity-60"
+                  >
+                    {impersonating === s.id ? 'Minting…' : '⚡ Login as admin'}
+                  </button>
+                  <button onClick={() => downloadCsv(s)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-600">
+                    ⬇ Enquiries CSV
+                  </button>
+                  <Link href={`/platform/schools/${s.id}`} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-600">
+                    Manage
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs text-violet-900">
+            ⚡ <b>Login as admin</b> opens the school&rsquo;s admin portal in a new tab via a single-use link (valid 15 minutes, audit-logged, no password shown). The session can&rsquo;t be refreshed past expiry.
+          </p>
+
+          {/* Marketing leads */}
+          <h2 className="mb-3 mt-8 text-lg font-bold text-slate-900">
+            Marketing leads <span className="text-xs font-semibold text-amber-600">· from sckools.com callback forms</span>
+          </h2>
+          <div className="overflow-x-auto rounded-2xl bg-white shadow-sm">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">School</th>
+                  <th className="px-4 py-3">Interest</th>
+                  <th className="px-4 py-3">When</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(leads.data ?? []).map((l) => (
+                  <tr key={l.id} className="border-b border-slate-100 last:border-0">
+                    <td className="px-4 py-3 font-medium text-slate-900">{l.name ?? '—'}</td>
+                    <td className="px-4 py-3"><a className="text-teal-700 hover:underline" href={`tel:${l.phone.replace(/\s/g, '')}`}>{l.phone}</a></td>
+                    <td className="px-4 py-3 text-slate-600">{l.school ?? '—'}</td>
+                    <td className="px-4 py-3 text-slate-600">{l.interest ?? '—'}</td>
+                    <td className="px-4 py-3 text-slate-500">{new Date(l.createdAt).toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={l.status}
+                        onChange={(e) => leadStatus.mutate({ id: l.id, status: e.target.value as Lead['status'] })}
+                        className={`rounded-full border-0 px-2.5 py-1 text-[11px] font-bold ${LEAD_TONE[l.status]}`}
+                      >
+                        <option value="NEW">NEW</option>
+                        <option value="CONTACTED">CONTACTED</option>
+                        <option value="CLOSED">CLOSED</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+                {leads.data?.length === 0 && (
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-400">No leads yet — they&rsquo;ll appear the moment someone requests a callback on sckools.com.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
-          {/* Suspended */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Suspended</div>
-            <div
-              className={`text-3xl font-bold mt-1 ${
-                data.schools.suspended > 0 ? 'text-rose-600' : ''
-              }`}
-            >
-              {data.schools.suspended}
-            </div>
+          {/* Marketing site settings */}
+          {config.data && <MarketingSettings initial={config.data} onSaved={() => void qc.invalidateQueries({ queryKey: ['owner-marketing-config'] })} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+function MarketingSettings({ initial, onSaved }: { initial: MarketingConfigRow; onSaved: () => void }) {
+  const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
+  const [form, setForm] = useState({ ...initial });
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.put('/owner/marketing-config', {
+        priceBasicUsd: Number(form.priceBasicUsd), priceBasicInr: Number(form.priceBasicInr),
+        priceStdUsd: Number(form.priceStdUsd), priceStdInr: Number(form.priceStdInr),
+        priceProUsd: Number(form.priceProUsd), priceProInr: Number(form.priceProInr),
+        contactEmail: form.contactEmail, contactPhone: form.contactPhone,
+      }),
+    onSuccess: () => {
+      toast.success('Saved — live on sckools.com within a minute');
+      onSaved();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const num = (key: keyof MarketingConfigRow) => ({
+    value: String(form[key]),
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [key]: e.target.value }),
+  });
+
+  return (
+    <div className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
+      <h2 className="text-lg font-bold text-slate-900">
+        Marketing site settings <span className="text-xs font-semibold text-slate-400">· pricing &amp; contact shown on sckools.com, live within a minute</span>
+      </h2>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {([
+          ['BASIC — $ USD / month', 'priceBasicUsd', '₹ INR / month', 'priceBasicInr'],
+          ['STANDARD — $ USD / month', 'priceStdUsd', '₹ INR / month', 'priceStdInr'],
+          ['PRO — $ USD / month', 'priceProUsd', '₹ INR / month', 'priceProInr'],
+        ] as const).map(([usdLabel, usdKey, inrLabel, inrKey]) => (
+          <div key={usdKey} className="rounded-xl border border-slate-200 p-3">
+            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">{usdLabel}</label>
+            <input type="number" min={0} {...num(usdKey)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+            <label className="mt-2 block text-[11px] font-bold uppercase tracking-wide text-slate-400">{inrLabel}</label>
+            <input type="number" min={0} {...num(inrKey)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
           </div>
+        ))}
+        <div className="rounded-xl border border-slate-200 p-3">
+          <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">Public contact email</label>
+          <input type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
         </div>
-      )}
-
-      {/* Placeholder table for recently added schools */}
-      {data && (
-        <div className="bg-white rounded-2xl shadow-sm mt-6">
-          <div className="px-5 py-4 border-b font-semibold text-slate-900">
-            Platform summary
-          </div>
-          <div className="px-5 py-4 text-sm text-slate-500 space-y-1">
-            <div>
-              <span className="font-medium text-slate-700">Live schools:</span>{' '}
-              {data.schools.live}
-            </div>
-            <div>
-              <span className="font-medium text-slate-700">Suspended:</span>{' '}
-              {data.schools.suspended}
-            </div>
-            <div>
-              <span className="font-medium text-slate-700">Live domains:</span>{' '}
-              {data.domains.live}
-            </div>
-          </div>
+        <div className="rounded-xl border border-slate-200 p-3">
+          <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">Public contact phone</label>
+          <input value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="+91 ..." className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
         </div>
-      )}
+        <div className="flex items-end">
+          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending ? 'Saving…' : 'Save settings'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

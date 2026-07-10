@@ -28,6 +28,28 @@ export default function TenantLoginPage() {
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: '', password: '' } });
 
   const setMe = useAuthStore((s) => s.setMe);
+  const [exchangingImp, setExchangingImp] = useState(false);
+
+  // Owner impersonation handoff: /login?imp=<token> exchanges the single-use
+  // token for a short-lived admin session (no refresh token — it hard-expires).
+  useEffect(() => {
+    if (!host) return;
+    const imp = new URLSearchParams(window.location.search).get('imp');
+    if (!imp) return;
+    setExchangingImp(true);
+    api
+      .post<{ accessToken: string; expiresIn: number }>('/auth/impersonate', { token: imp })
+      .then((res) => {
+        setTokens({ accessToken: res.accessToken, audience: 'school' });
+        toast.success('Owner view active — session ends automatically in 15 minutes');
+        router.replace('/app');
+      })
+      .catch(() => {
+        setExchangingImp(false);
+        toast.error('This impersonation link is invalid or has expired — mint a new one from the owner console.');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [host]);
 
   async function onSubmit(values: FormValues) {
     try {
@@ -47,7 +69,7 @@ export default function TenantLoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
-          <CardDescription>{host?.split(':')[0]}</CardDescription>
+          <CardDescription>{exchangingImp ? 'Opening owner view…' : host?.split(':')[0]}</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={form.handleSubmit(onSubmit)}>
