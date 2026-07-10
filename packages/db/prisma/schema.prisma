@@ -234,6 +234,12 @@ model HomepageContent {
   principalName      String?
   principalMessage   String?
   principalPhotoAssetId String? @db.Uuid
+  // Which content sections render on the homepage. Full details always live on
+  // the dedicated pages (/admissions, /gallery, /connect, /contact).
+  showAdmissions     Boolean @default(true)
+  showGallery        Boolean @default(true)
+  showEvents         Boolean @default(true)
+  showContact        Boolean @default(true)
   school             School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 

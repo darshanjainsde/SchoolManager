@@ -6,13 +6,46 @@ import CoursesFeatured from './sections/CoursesFeatured';
 import AcademicsSection from './sections/AcademicsSection';
 import AdmissionsSection, { admissionsHasContent } from './sections/AdmissionsSection';
 import HallOfFame, { hofCourses } from './sections/HallOfFame';
-import { submitEnquiry } from './enquiry-client';
+import GallerySection from './sections/GallerySection';
+import EventsSection from './sections/EventsSection';
+import ContactSection from './sections/ContactSection';
+
+export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'contact';
 
 interface Props {
   data: PublicSiteData;
-  /** 'home' = full landing page; 'academics' = dedicated programmes page with the same chrome. */
-  view?: 'home' | 'academics';
+  /** 'home' = full landing page; anything else = a dedicated section page with the same chrome. */
+  view?: SiteView;
 }
+
+// Header copy for each dedicated section page.
+const SUBPAGES: Record<string, { eyebrow: string; title: string; blurb: string }> = {
+  academics: {
+    eyebrow: 'Academics',
+    title: 'Programmes at {school}',
+    blurb: 'Everything we offer, from the earliest years up — tap a programme in the menu above to jump straight to it.',
+  },
+  admissions: {
+    eyebrow: 'Admissions',
+    title: 'Joining {school}',
+    blurb: 'How admissions work, step by step — and the full fee structure.',
+  },
+  gallery: {
+    eyebrow: 'Gallery',
+    title: 'Life at {school}',
+    blurb: 'Moments from classrooms, playgrounds and celebrations across the campus.',
+  },
+  events: {
+    eyebrow: 'Connect · Events',
+    title: 'Events & community',
+    blurb: 'Everything happening at our school and across the network — one shared calendar.',
+  },
+  contact: {
+    eyebrow: 'Contact',
+    title: 'Get in touch',
+    blurb: 'Reach the front office directly or leave your details — admissions responds within a working day.',
+  },
+};
 
 const CLASS_EMOJIS = ['🎓', '🧸', '📚', '🔬', '🎨', '🏆', '🌟', '💡', '🎯', '🚀'];
 
@@ -52,41 +85,6 @@ function mix(hex: string, target: string, amt: number): string {
   return `#${((1 << 24) + (r << 16) + (g << 8) + bl).toString(16).slice(1)}`;
 }
 
-// Admin-controlled URLs are rendered into href/src. React only warns on
-// `javascript:` — it does not block it — so validate the scheme ourselves.
-function safeHttpUrl(u: string | null | undefined): string | null {
-  return u && /^https?:\/\//i.test(u) ? u : null;
-}
-function safeHttpsUrl(u: string | null | undefined): string | null {
-  return u && /^https:\/\//i.test(u) ? u : null;
-}
-
-// Format an event's start in the SCHOOL's timezone with a fixed locale, so the
-// server (often UTC) and the client produce identical strings — otherwise
-// `toLocale*` with the runtime locale/zone causes a hydration mismatch.
-function formatEventDate(iso: string, timeZone: string): string {
-  try {
-    return new Intl.DateTimeFormat('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone,
-    }).format(new Date(iso));
-  } catch {
-    // Bad/unknown timezone → fall back to UTC (still deterministic).
-    return new Intl.DateTimeFormat('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'UTC',
-    }).format(new Date(iso));
-  }
-}
-
 function parseStatValue(val: string): { numeric: boolean; num: number; suffix: string } {
   const clean = val.trim();
   const match = clean.match(/^(\d+(?:\.\d+)?)\s*([%+]?)$/);
@@ -101,6 +99,10 @@ function parseStatValue(val: string): { numeric: boolean; num: number; suffix: s
 const PS_CSS = `
   .ps-root { font-family: 'Inter', sans-serif; background: var(--paper); color: #43514a; overflow-x: hidden; min-height: 100vh; }
   .ps-head { font-family: var(--font-head); color: var(--ink); letter-spacing: -.01em; }
+  /* This stylesheet loads after Tailwind, so .ps-head's ink color silently beat
+     Tailwind's .text-white on dark sections (invisible headings/names on the
+     Hall of Fame & Events). Re-assert white when both classes are present. */
+  .ps-head.text-white { color: #fff; }
 
   .ps-soft { box-shadow: 0 22px 48px -24px rgba(28,45,36,.38); }
   .ps-card { background: #fff; border: 1px solid rgba(28,45,36,.07); }
@@ -183,7 +185,7 @@ const PS_CSS = `
 export default function PublicSite({ data, view = 'home' }: Props) {
   const onAcademicsPage = view === 'academics';
   // Section anchors live on the homepage; from other pages they need the "/" prefix.
-  const base = onAcademicsPage ? '/' : '';
+  const base = view !== 'home' ? '/' : '';
   const brandColor = data.profile?.brandColorPrimary ?? '#2f6b4f';
   // Secondary drives the second gradient stop. If a school leaves it near-white
   // (the default), a lightened tint of the primary reads better than pure white.
@@ -216,6 +218,16 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   const hasAcademics = data.courses.length > 0;
   const hasAdmissions = admissionsHasContent(data.admissions, data.courses);
   const hasHof = hofCourses(data.courses).length > 0;
+  // Admin-controlled homepage visibility; full details always live on the
+  // dedicated pages (/admissions, /gallery, /connect, /contact).
+  const show = {
+    admissions: data.homepage?.showAdmissions ?? true,
+    gallery: data.homepage?.showGallery ?? true,
+    events: data.homepage?.showEvents ?? true,
+    contact: data.homepage?.showContact ?? true,
+  };
+  // Enquire CTAs anchor to the homepage section when it's shown, else go to /contact.
+  const enquireHref = show.contact && (hasContact || hasEnquiry) ? `${base}#enquire` : '/contact';
   const logoUrl = data.profile?.logoUrl;
   const principalName = data.homepage?.principalName;
   const principalMessage = data.homepage?.principalMessage;
@@ -379,24 +391,24 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               </div>
             )}
             {hasAdmissions && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#admissions`}>Admissions</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/admissions">Admissions</a>
             )}
             {hasHof && (
               <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#hall-of-fame`}>Hall of Fame</a>
             )}
             {hasGallery && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#gallery`}>Gallery</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/gallery">Gallery</a>
             )}
             {hasEvents && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#events`}>Connect</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/connect">Connect</a>
             )}
             {(hasContact || hasEnquiry) && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#enquire`}>Contact</a>
+              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/contact">Contact</a>
             )}
           </nav>
 
           <a
-            href={`${base}#enquire`}
+            href={enquireHref}
             className="btn-glow ps-accentbg text-sm font-semibold px-4 py-2 rounded-xl ps-soft hover:scale-[1.03] transition"
             style={{ color: ink }}
           >
@@ -405,32 +417,48 @@ export default function PublicSite({ data, view = 'home' }: Props) {
         </div>
       </header>
 
-      {onAcademicsPage ? (
+      {view !== 'home' ? (
         <>
-          {/* ── ACADEMICS PAGE BODY ── */}
+          {/* ── SUBPAGE BODY (academics / admissions / gallery / events / contact) ── */}
           <section className="max-w-6xl mx-auto px-6 pt-12">
             <a href="/" className="text-sm text-slate-500 hover:text-slate-800 transition">← Back to home</a>
-            <div className="reveal mt-6 max-w-2xl">
-              <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
-                Academics
+            {SUBPAGES[view] && (
+              <div className="reveal mt-6 max-w-2xl">
+                <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
+                  {SUBPAGES[view].eyebrow}
+                </div>
+                <h1 className="ps-head text-5xl font-bold mt-3">
+                  {SUBPAGES[view].title.replace('{school}', schoolName)}
+                </h1>
+                <p className="mt-4 text-slate-600">{SUBPAGES[view].blurb}</p>
               </div>
-              <h1 className="ps-head text-5xl font-bold mt-3">Programmes at {schoolName}</h1>
-              <p className="mt-4 text-slate-600">
-                Everything we offer, from the earliest years up — tap a programme in the menu above to jump straight to it.
-              </p>
-            </div>
+            )}
           </section>
-          <AcademicsSection courses={data.courses} />
-          <section className="max-w-6xl mx-auto px-6 py-16 text-center">
-            <h2 className="ps-head text-3xl font-bold">Want to know more?</h2>
-            <p className="mt-2 text-slate-600">Our admissions team is happy to walk you through any programme.</p>
-            <a
-              href="/#enquire"
-              className="btn-glow ps-cta-btn inline-block mt-6 font-semibold px-6 py-3.5 rounded-xl ps-soft hover:scale-[1.03] transition"
-            >
-              Enquire now →
-            </a>
-          </section>
+          {view === 'academics' && <AcademicsSection courses={data.courses} />}
+          {view === 'admissions' && <AdmissionsSection admissions={data.admissions} courses={data.courses} />}
+          {view === 'gallery' && <GallerySection gallery={data.gallery} schoolName={schoolName} />}
+          {view === 'events' && <EventsSection events={data.events} timezone={data.school.timezone} />}
+          {view === 'contact' && (
+            <ContactSection
+              profile={data.profile}
+              socialLinks={data.socialLinks}
+              hasEnquiry={hasEnquiry}
+              courses={data.courses.map((c) => c.name)}
+              schoolName={schoolName}
+            />
+          )}
+          {view !== 'contact' && (
+            <section className="max-w-6xl mx-auto px-6 py-16 text-center">
+              <h2 className="ps-head text-3xl font-bold">Want to know more?</h2>
+              <p className="mt-2 text-slate-600">Our admissions team is happy to help with any question.</p>
+              <a
+                href="/contact"
+                className="btn-glow ps-cta-btn inline-block mt-6 font-semibold px-6 py-3.5 rounded-xl ps-soft hover:scale-[1.03] transition"
+              >
+                Enquire now →
+              </a>
+            </section>
+          )}
         </>
       ) : (
         <>
@@ -495,7 +523,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
 
             <div className={`mt-8 flex flex-wrap items-center gap-3 ${minimal ? 'justify-center' : ''}`}>
               <a
-                href="#enquire"
+                href={enquireHref}
                 className="btn-glow ps-cta-btn font-semibold px-6 py-3.5 rounded-xl ps-soft hover:scale-[1.03] transition"
               >
                 Book a campus visit
@@ -631,111 +659,16 @@ export default function PublicSite({ data, view = 'home' }: Props) {
       )}
 
       {/* ── ADMISSIONS (process + fee structure) ── */}
-      {hasAdmissions && <AdmissionsSection admissions={data.admissions} courses={data.courses} />}
+      {hasAdmissions && show.admissions && <AdmissionsSection admissions={data.admissions} courses={data.courses} />}
 
       {/* ── GALLERY ── */}
-      {hasGallery && (
-        <section id="gallery" className="max-w-6xl mx-auto px-6 py-20">
-          <div className="reveal">
-            <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: brandColor }}>
-              Gallery
-            </div>
-            <h2 className="ps-head text-4xl font-bold mt-3">Life at {schoolName}</h2>
-          </div>
-          {data.gallery.length === 0 ? (
-            <div className="reveal mt-10 ps-card ps-soft rounded-3xl p-10 text-center">
-              <div className="text-5xl">📷</div>
-              <h3 className="ps-head font-bold text-lg mt-4">Photos coming soon</h3>
-              <p className="text-sm text-slate-500 mt-1">Moments from campus life will appear here.</p>
-            </div>
-          ) : (
-          <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
-            {data.gallery.map((img, i) => (
-              <div
-                key={i}
-                className="reveal group relative rounded-2xl overflow-hidden ps-card ps-soft"
-                style={{ transitionDelay: `${i * 0.05}s` }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={img.url}
-                  alt={img.caption ?? `${schoolName} gallery ${i + 1}`}
-                  className="h-48 w-full object-cover transition duration-500 group-hover:scale-105"
-                />
-                {img.caption && (
-                  <>
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#14261d]/75 to-transparent opacity-0 group-hover:opacity-100 transition" />
-                    <div className="absolute bottom-3 left-3 text-sm font-medium text-white opacity-0 group-hover:opacity-100 transition">
-                      {img.caption}
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-          )}
-        </section>
-      )}
+      {hasGallery && show.gallery && <GallerySection gallery={data.gallery} schoolName={schoolName} />}
 
       {/* ── HALL OF FAME (class-wise toppers) ── */}
       {hasHof && <HallOfFame courses={data.courses} />}
 
       {/* ── CONNECT / EVENTS ── */}
-      {hasEvents && (
-        <section id="events" className="ps-brandgrad text-white">
-          <div className="max-w-6xl mx-auto px-6 py-20">
-            <div className="reveal">
-              <div className="text-sm font-semibold uppercase tracking-widest text-white/80">Connect · Events</div>
-              <h2 className="ps-head text-4xl font-bold mt-3 text-white">What&rsquo;s on across our network</h2>
-              <p className="mt-2 text-white/80 max-w-xl">
-                Events from every school in the network — one shared calendar for the whole community.
-              </p>
-            </div>
-            {data.events.length === 0 ? (
-              <div className="reveal mt-10 bg-white/10 backdrop-blur rounded-3xl border border-white/15 p-10 text-center">
-                <div className="text-5xl">📅</div>
-                <h3 className="ps-head font-bold text-lg mt-4 text-white">No upcoming events right now</h3>
-                <p className="text-sm text-white/80 mt-1">Check back soon — new events land here as they&rsquo;re announced.</p>
-              </div>
-            ) : (
-            <div className="mt-10 grid md:grid-cols-3 gap-5">
-              {data.events.map((e, i) => {
-                const coverSrc = safeHttpUrl(e.coverUrl);
-                const metaLine = [formatEventDate(e.startAt, data.school.timezone), e.venue ? `· ${e.venue}` : null]
-                  .filter(Boolean)
-                  .join(' ');
-                return (
-                  <div
-                    key={e.id}
-                    className="reveal ps-lift bg-white/10 backdrop-blur rounded-3xl overflow-hidden border border-white/15"
-                    style={{ transitionDelay: `${i * 0.07}s` }}
-                  >
-                    {coverSrc ? (
-                      <div className="h-40 bg-cover bg-center" style={{ backgroundImage: `url('${coverSrc}')` }} />
-                    ) : (
-                      <div className="h-40 bg-white/10 grid place-items-center text-5xl">📅</div>
-                    )}
-                    <div className="p-5">
-                      {e.isHost ? (
-                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded ps-accentbg" style={{ color: ink }}>
-                          Our School
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white/25 text-white">
-                          Network · {e.originSchoolName ?? 'Network'}
-                        </span>
-                      )}
-                      <h3 className="ps-head font-bold text-lg mt-3 leading-snug text-white">{e.title}</h3>
-                      <div className="text-sm text-white/80 mt-1">{metaLine}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            )}
-          </div>
-        </section>
-      )}
+      {hasEvents && show.events && <EventsSection events={data.events} timezone={data.school.timezone} />}
 
       {/* ── EDUCATORS / STAFF ── */}
       {data.staff.length > 0 && (
@@ -770,69 +703,14 @@ export default function PublicSite({ data, view = 'home' }: Props) {
       )}
 
       {/* ── CONTACT + ENQUIRY ── */}
-      {(hasContact || hasEnquiry) && (
-        <section id="enquire" className="relative max-w-6xl mx-auto px-6 py-24">
-          <div className="relative ps-card ps-soft rounded-[2rem] overflow-hidden p-8 md:p-12 grid md:grid-cols-2 gap-12 items-center">
-            <div className="absolute -top-16 -right-10 h-64 w-64 rounded-full ps-about-glow" />
-            <div className="relative">
-              <h2 className="ps-head text-4xl font-bold">
-                Ready to <span className="ps-grad-text">join us?</span>
-              </h2>
-              <p className="mt-4 text-slate-600">
-                Leave your details and our admissions team reaches out within a working day.
-              </p>
-              {(data.profile?.phone || data.profile?.email || data.profile?.addressLine1) && (
-                <div className="mt-6 space-y-2 text-sm text-slate-700">
-                  {data.profile?.phone && <div>📞 {data.profile.phone}</div>}
-                  {data.profile?.email && <div>✉️ {data.profile.email}</div>}
-                  {data.profile?.addressLine1 && (
-                    <div>
-                      📍 {data.profile.addressLine1}
-                      {data.profile.city ? `, ${data.profile.city}` : ''}
-                      {data.profile.postalCode ? ` ${data.profile.postalCode}` : ''}
-                    </div>
-                  )}
-                </div>
-              )}
-              {data.socialLinks.length > 0 && (
-                <div className="mt-6 flex flex-wrap gap-3">
-                  {data.socialLinks
-                    .map((s) => ({ ...s, href: safeHttpUrl(s.url) }))
-                    .filter((s) => s.href)
-                    .map((s, i) => (
-                      <a
-                        key={i}
-                        href={s.href!}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="ps-chip rounded-lg px-3 py-1.5 text-xs font-medium hover:opacity-80 transition capitalize"
-                      >
-                        {s.platform}
-                      </a>
-                    ))}
-                </div>
-              )}
-              {safeHttpsUrl(data.profile?.mapEmbedUrl) && (
-                <div className="mt-6 rounded-2xl overflow-hidden ps-card">
-                  <iframe
-                    src={safeHttpsUrl(data.profile?.mapEmbedUrl)!}
-                    className="w-full h-40 border-0"
-                    loading="lazy"
-                    title={`${schoolName} location`}
-                  />
-                </div>
-              )}
-            </div>
-
-            {hasEnquiry ? (
-              <EnquiryForm ink={ink} courses={data.courses.map((c) => c.name)} />
-            ) : (
-              <div className="relative ps-chip rounded-2xl p-6 text-sm">
-                Reach out to us using the contact details on the left.
-              </div>
-            )}
-          </div>
-        </section>
+      {(hasContact || hasEnquiry) && show.contact && (
+        <ContactSection
+          profile={data.profile}
+          socialLinks={data.socialLinks}
+          hasEnquiry={hasEnquiry}
+          courses={data.courses.map((c) => c.name)}
+          schoolName={schoolName}
+        />
       )}
         </>
       )}
@@ -860,11 +738,11 @@ export default function PublicSite({ data, view = 'home' }: Props) {
             <ul className="space-y-2 text-sm text-slate-500">
               {hasAbout && <li><a href={`${base}#about`} className="hover:text-slate-900 transition">About</a></li>}
               {hasAcademics && <li><a href="/academics" className="hover:text-slate-900 transition">Academics</a></li>}
-              {hasAdmissions && <li><a href={`${base}#admissions`} className="hover:text-slate-900 transition">Admissions</a></li>}
+              {hasAdmissions && <li><a href="/admissions" className="hover:text-slate-900 transition">Admissions</a></li>}
               {hasHof && <li><a href={`${base}#hall-of-fame`} className="hover:text-slate-900 transition">Hall of Fame</a></li>}
-              {hasGallery && <li><a href={`${base}#gallery`} className="hover:text-slate-900 transition">Gallery</a></li>}
-              {hasEvents && <li><a href={`${base}#events`} className="hover:text-slate-900 transition">Connect</a></li>}
-              <li><a href={`${base}#enquire`} className="hover:text-slate-900 transition">Enquire</a></li>
+              {hasGallery && <li><a href="/gallery" className="hover:text-slate-900 transition">Gallery</a></li>}
+              {hasEvents && <li><a href="/connect" className="hover:text-slate-900 transition">Connect</a></li>}
+              <li><a href="/contact" className="hover:text-slate-900 transition">Enquire</a></li>
             </ul>
           </div>
           <div>
@@ -886,79 +764,5 @@ export default function PublicSite({ data, view = 'home' }: Props) {
         </div>
       </footer>
     </div>
-  );
-}
-
-// ── Enquiry form (client, posts to public API with school Host header) ──────────
-
-function EnquiryForm({ ink, courses }: { ink: string; courses: string[] }) {
-  const [status, setStatus] = useState<'idle' | 'sending' | 'ok' | 'rate' | 'error'>('idle');
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
-    const parentName = String(fd.get('parentName') ?? '').trim();
-    const phone = String(fd.get('phone') ?? '').trim();
-    const email = String(fd.get('email') ?? '').trim();
-    const gradeInterest = String(fd.get('gradeInterest') ?? '').trim();
-    const message = String(fd.get('message') ?? '').trim();
-    if (!parentName || !phone) return;
-
-    setStatus('sending');
-    const result = await submitEnquiry({ parentName, phone, email, gradeInterest, message });
-    if (result === 'ok') form.reset();
-    setStatus(result);
-  }
-
-  const inputCls =
-    'w-full ps-card rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--ps1)]/30';
-
-  return (
-    <form onSubmit={onSubmit} className="relative space-y-3">
-      {status === 'ok' && (
-        <div className="bg-emerald-500/15 text-emerald-700 text-sm rounded-xl px-4 py-2.5">
-          ✓ Thank you! Your enquiry has been received.
-        </div>
-      )}
-      {status === 'rate' && (
-        <div className="bg-amber-500/15 text-amber-700 text-sm rounded-xl px-4 py-2.5">
-          You&apos;ve submitted a few times — please try again shortly.
-        </div>
-      )}
-      {status === 'error' && (
-        <div className="bg-rose-500/15 text-rose-700 text-sm rounded-xl px-4 py-2.5">
-          Something went wrong. Please try again.
-        </div>
-      )}
-      <input required name="parentName" className={inputCls} placeholder="Parent name" />
-      <div className="grid grid-cols-2 gap-3">
-        <input required name="phone" className={inputCls} placeholder="Phone" />
-        {courses.length > 0 ? (
-          <select name="gradeInterest" className={inputCls} defaultValue="">
-            <option value="">Interested in…</option>
-            {courses.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input name="email" type="email" className={inputCls} placeholder="Email" />
-        )}
-      </div>
-      {courses.length > 0 && (
-        <input name="email" type="email" className={inputCls} placeholder="Email (optional)" />
-      )}
-      <textarea name="message" rows={3} className={inputCls} placeholder="Message (optional)" />
-      <button
-        type="submit"
-        disabled={status === 'sending'}
-        className="btn-glow w-full font-semibold py-3.5 rounded-xl ps-soft hover:scale-[1.01] transition disabled:opacity-60 ps-accentbg"
-        style={{ color: ink }}
-      >
-        {status === 'sending' ? 'Sending…' : 'Submit enquiry →'}
-      </button>
-    </form>
   );
 }

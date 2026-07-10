@@ -58,7 +58,18 @@ interface SiteHomepage {
   principalMessage?: string | null;
   heroAssetId?: string | null;
   principalPhotoAssetId?: string | null;
+  showAdmissions?: boolean;
+  showGallery?: boolean;
+  showEvents?: boolean;
+  showContact?: boolean;
 }
+
+const HOMEPAGE_SECTIONS = [
+  { key: 'showAdmissions', label: 'Admissions', detail: 'Process steps and fee table · full page at /admissions' },
+  { key: 'showGallery', label: 'Gallery', detail: 'Photo grid · full page at /gallery' },
+  { key: 'showEvents', label: 'Connect (events)', detail: 'Network events calendar · full page at /connect' },
+  { key: 'showContact', label: 'Contact & enquiry', detail: 'Contact card and enquiry form · full page at /contact' },
+] as const;
 
 interface StatRow {
   id?: string;
@@ -369,6 +380,17 @@ export default function WebsitePage() {
       );
     },
     onError: (err: Error) => toast.error(`Failed to update backdrop: ${err.message}`),
+  });
+
+  // Homepage-section visibility — instant-save toggles. Full details always
+  // stay available on the dedicated public pages.
+  const sectionToggleMutation = useMutation({
+    mutationFn: (patch: Partial<SiteHomepage>) => api.put('/site/homepage', patch),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['site-content'] });
+      toast.success('Homepage sections updated');
+    },
+    onError: (err: Error) => toast.error(`Failed to update sections: ${err.message}`),
   });
 
   // Apply a preset locally (does not save until "Save theme").
@@ -910,6 +932,29 @@ export default function WebsitePage() {
                 </span>
               </span>
             </label>
+
+            <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+              <p className="text-sm font-medium text-slate-800">Sections on the homepage</p>
+              <p className="text-xs text-slate-500">
+                Untick a section to keep the homepage shorter — visitors still get its full details on
+                the dedicated page (linked from the navbar). Saves immediately.
+              </p>
+              {HOMEPAGE_SECTIONS.map((s) => (
+                <label key={s.key} className="flex items-start gap-3 rounded-md bg-slate-50 border border-slate-200 p-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={data?.homepage[s.key] ?? true}
+                    disabled={sectionToggleMutation.isPending}
+                    onChange={(e) => sectionToggleMutation.mutate({ [s.key]: e.target.checked })}
+                    className="mt-0.5 h-4 w-4 accent-emerald-700"
+                  />
+                  <span>
+                    <span className="block text-sm text-slate-800">{s.label}</span>
+                    <span className="block text-xs text-slate-500">{s.detail}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
 
             {/* Stats editor */}
             <div className="space-y-3">

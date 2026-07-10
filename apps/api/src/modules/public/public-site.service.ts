@@ -102,6 +102,10 @@ export class PublicSiteService {
               principalName: has('ABOUT_CONTACT') ? homepage.principalName : null,
               principalMessage: has('ABOUT_CONTACT') ? homepage.principalMessage : null,
               principalPhotoUrl: has('ABOUT_CONTACT') ? urlOf(homepage.principalPhotoAssetId) : null,
+              showAdmissions: homepage.showAdmissions,
+              showGallery: homepage.showGallery,
+              showEvents: homepage.showEvents,
+              showContact: homepage.showContact,
             }
           : null,
         stats: stats.map((s) => ({ label: s.label, value: s.value })),

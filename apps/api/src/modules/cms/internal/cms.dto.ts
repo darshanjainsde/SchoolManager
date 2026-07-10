@@ -49,6 +49,10 @@ export class UpdateHomepageDto {
   @IsOptional() @IsString() @Length(0, 2000) principalMessage?: string;
   @IsOptional() @IsString() heroAssetId?: string;
   @IsOptional() @IsString() principalPhotoAssetId?: string;
+  @IsOptional() @IsBoolean() showAdmissions?: boolean;
+  @IsOptional() @IsBoolean() showGallery?: boolean;
+  @IsOptional() @IsBoolean() showEvents?: boolean;
+  @IsOptional() @IsBoolean() showContact?: boolean;
 }
 
 export class StatItemDto {

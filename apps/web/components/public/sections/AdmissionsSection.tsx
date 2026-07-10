@@ -1,12 +1,11 @@
 'use client';
 
 import type { PublicCourse, PublicSiteData } from '@/lib/public-api';
+import { admissionsHasContent } from '../site-utils';
 
 type Admissions = PublicSiteData['admissions'];
 
-export function admissionsHasContent(admissions: Admissions, courses: PublicCourse[]): boolean {
-  return admissions.steps.length > 0 || (admissions.showFees && courses.some((c) => c.fee));
-}
+export { admissionsHasContent };
 
 /** Admission process steps + optional fee table (one row per course with a fee). */
 export default function AdmissionsSection({

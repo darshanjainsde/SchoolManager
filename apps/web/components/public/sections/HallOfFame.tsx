@@ -54,7 +54,8 @@ export default function HallOfFame({ courses }: { courses: PublicCourse[] }) {
           </div>
         )}
 
-        <div key={animKey} className="mt-12 grid grid-cols-3 gap-4 items-end max-w-2xl">
+        {/* Podium centered on the page; the section heading above stays left-aligned. */}
+        <div key={animKey} className="mt-12 grid grid-cols-3 gap-4 items-end max-w-2xl mx-auto">
           {PODIUM_ORDER.map((rank) => {
             const entry = byRank.get(rank);
             if (!entry) return <div key={rank} />;

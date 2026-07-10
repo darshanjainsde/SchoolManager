@@ -63,6 +63,10 @@ export interface PublicSiteData {
     principalName: string | null;
     principalMessage: string | null;
     principalPhotoUrl: string | null;
+    showAdmissions: boolean;
+    showGallery: boolean;
+    showEvents: boolean;
+    showContact: boolean;
   } | null;
   stats: { label: string; value: string }[];
   socialLinks: { platform: string; url: string }[];
