@@ -165,6 +165,7 @@ model User {
   school              School?   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  impersonationTokens ImpersonationToken[]
 
   @@unique([schoolId, email])
   @@index([schoolId])
@@ -604,4 +605,56 @@ model Announcement {
 
   @@index([schoolId])
   @@index([schoolId, classSectionId])
+}
+
+// ── Platform-level marketing (sckools.com site) ─────────────────────────────
+// No tenant / RLS: these belong to the platform itself, like School and the
+// platform-scoped User rows.
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
+model MarketingLead {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      String?
+  phone     String
+  school    String?
+  interest  String?
+  source    String
+  status    LeadStatus @default(NEW)
+  createdAt DateTime   @default(now())
+
+  @@index([status, createdAt])
+}
+
+/// Singleton (id = "default"): owner-editable pricing + public contact info.
+model MarketingConfig {
+  id            String   @id @default("default")
+  priceBasicUsd Int      @default(19)
+  priceBasicInr Int      @default(999)
+  priceStdUsd   Int      @default(49)
+  priceStdInr   Int      @default(2499)
+  priceProUsd   Int      @default(99)
+  priceProInr   Int      @default(4999)
+  contactEmail  String   @default("admin@sckools.com")
+  contactPhone  String   @default("")
+  updatedAt     DateTime @updatedAt
+}
+
+/// One-time 15-minute owner→school-admin login handoff (sha256 at rest,
+/// single-use, host-bound at exchange time). Mirrors PasswordResetToken.
+model ImpersonationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  schoolId  String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

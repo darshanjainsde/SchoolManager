@@ -57,6 +57,10 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
 
+  // Single shared password that unlocks the owner console at /owner.
+  // Unset → the gate endpoint answers 503 and only email login works.
+  OWNER_GATE_PASSWORD: z.string().min(8).optional(),
+
   JWT_SCHOOL_ACCESS_SECRET: z.string().min(16),
   JWT_SCHOOL_REFRESH_SECRET: z.string().min(16),
   JWT_PLATFORM_ACCESS_SECRET: z.string().min(16),
