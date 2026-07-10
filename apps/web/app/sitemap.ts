@@ -8,6 +8,12 @@ import { fetchDirectory } from '@/lib/public-api';
  * school root is listed — sub-pages vary by tier/content and Google crawls
  * them from the homepage's own links.
  */
+/**
+ * Demo/sample schools that must never be advertised to search engines.
+ * Remove a slug here if that school ever becomes a real customer.
+ */
+const SAMPLE_SLUGS = new Set(['acme', 'beacon', 'darshan', 'rishika', 'riverdale']);
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const marketing: MetadataRoute.Sitemap = [
     { url: 'https://sckools.com/', changeFrequency: 'weekly', priority: 1 },
@@ -15,11 +21,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   const schools = await fetchDirectory();
-  const schoolUrls: MetadataRoute.Sitemap = schools.map((s) => ({
-    url: `https://${s.host.split(':')[0]}/`,
-    changeFrequency: 'weekly',
-    priority: 0.8,
-  }));
+  const schoolUrls: MetadataRoute.Sitemap = schools
+    .filter((s) => !SAMPLE_SLUGS.has(s.slug))
+    .map((s) => ({
+      url: `https://${s.host.split(':')[0]}/`,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    }));
 
   return [...marketing, ...schoolUrls];
 }
