@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Globe, LogOut, School, Users, GraduationCap, CalendarDays, Clock, CalendarHeart, Megaphone } from 'lucide-react';
+import { LayoutDashboard, Globe, Inbox, LogOut, School, Users, GraduationCap, CalendarDays, Clock, CalendarHeart, Megaphone } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -16,6 +16,7 @@ import { isSchoolHost, exampleSchoolHost, platformHref } from '@/lib/hosts';
 const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; requiredFeature?: string }[] = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/app/website', label: 'Website', icon: Globe },
+  { href: '/app/enquiries', label: 'Enquiries', icon: Inbox, requiredFeature: 'ENQUIRY' },
   { href: '/app/classes', label: 'Classes', icon: School, requiredFeature: 'MANAGEMENT' },
   { href: '/app/teachers', label: 'Teachers', icon: GraduationCap, requiredFeature: 'MANAGEMENT' },
   { href: '/app/students', label: 'Students', icon: Users, requiredFeature: 'MANAGEMENT' },
