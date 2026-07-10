@@ -20,7 +20,11 @@ export async function submitEnquiry(fields: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // Send both: Vercel's ingress OVERWRITES X-Forwarded-Host with the
+        // deployment host, which broke every prod submission (404 tenant).
+        // The API prefers the app-controlled X-Skoolos-Host.
         'X-Forwarded-Host': window.location.host,
+        'X-Skoolos-Host': window.location.host,
       },
       body: JSON.stringify(
         Object.fromEntries(Object.entries(fields).filter(([, v]) => v)),
