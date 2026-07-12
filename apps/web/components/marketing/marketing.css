@@ -92,7 +92,7 @@
 .mkt.go .hrv { opacity: 1; transform: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .mkt .rv, .mkt [data-a], .mkt .hrv, .mkt .ln i, .mkt .bld, .mkt .dkw,
+  .mkt .rv, .mkt [data-a], .mkt .hrv, .mkt .ln i, .mkt .bld, .mkt .dkw, .mkt .m-chip,
   .mkt .vs .old:not(.in), .mkt .vs .new:not(.in), .mkt .vs .col li, .mkt .vs .new li::before {
     opacity: 1 !important; transform: none !important; filter: none !important; transition: none !important;
   }
@@ -165,9 +165,12 @@
 @keyframes mkAura { from { transform: translate(0, 0) scale(1); } to { transform: translate(40px, -30px) scale(1.15); } }
 @media (max-width: 920px) { .mkt .aura { display: none; } }
 
-/* headline cascade — each line rises out of an overflow mask, gated on .go */
-.mkt .ln { display: block; overflow: hidden; }
-.mkt .ln i { display: block; font-style: normal; transform: translateY(110%); transition: transform 0.9s cubic-bezier(0.16, 0.9, 0.24, 1) var(--d, 0s); }
+/* headline cascade — each line rises out of an overflow mask, gated on .go.
+   The mask gets bottom padding (pulled back with a negative margin) so
+   descenders and the squiggle svg aren't clipped once the line lands;
+   the 130% start keeps the text fully below that padded window. */
+.mkt .ln { display: block; overflow: hidden; padding-bottom: 0.24em; margin-bottom: -0.24em; }
+.mkt .ln i { display: block; font-style: normal; transform: translateY(130%); transition: transform 0.9s cubic-bezier(0.16, 0.9, 0.24, 1) var(--d, 0s); }
 .mkt.go .ln i { transform: none; }
 .mkt .hero-in { position: relative; display: grid; grid-template-columns: 1.08fr 0.92fr; gap: 56px; align-items: center; }
 @media (max-width: 920px) { .mkt .hero-in { grid-template-columns: 1fr; } }
@@ -429,6 +432,34 @@
 .mkt .vs .new li { --fx: 14px; }
 .mkt .vs .col.in li { opacity: 1; transform: none; }
 .mkt .vs .new.in li::before { transform: scale(1); }
+/* mission band — the "schools are the ONLY thing we do" statement, aimed
+   at schools that already have a website. */
+.mkt .mission {
+  margin-top: 26px; border-radius: var(--r); padding: 48px 34px; text-align: center; position: relative; overflow: hidden; color: #fff;
+  background:
+    radial-gradient(ellipse 55% 70% at 8% 110%, rgba(20, 184, 166, 0.35), transparent 65%),
+    radial-gradient(ellipse 55% 70% at 92% -10%, rgba(109, 74, 255, 0.35), transparent 65%),
+    var(--ink);
+}
+.mkt .mission > * { position: relative; }
+.mkt .m-badge {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+  color: #ffce73; background: rgba(245, 166, 35, 0.16); border: 1px solid rgba(245, 166, 35, 0.35); padding: 6px 16px; border-radius: 999px; margin-bottom: 20px;
+}
+.mkt .mission h3 { font-size: clamp(1.4rem, 2.6vw, 2rem); max-width: 46rem; margin: 0 auto 14px; line-height: 1.25; }
+.mkt .mission h3 b { background: linear-gradient(90deg, #7ee8dc, #b9a6ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.mkt .mission p { font-size: 15px; color: #aec2d6; max-width: 42rem; margin: 0 auto; }
+.mkt .mission p em { color: #fff; font-style: normal; font-weight: 800; }
+.mkt .m-chips { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 26px; }
+.mkt .m-chip {
+  font-size: 13.5px; font-weight: 700; color: #e6f3f0; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 999px; padding: 9px 18px;
+  opacity: 0; transform: translateY(16px); transition: opacity 0.6s cubic-bezier(0.16, 0.8, 0.26, 1) calc(0.3s + var(--i, 0) * 0.1s), transform 0.6s cubic-bezier(0.16, 0.8, 0.26, 1) calc(0.3s + var(--i, 0) * 0.1s), border-color 0.25s;
+}
+.mkt .m-chip:hover { border-color: rgba(126, 232, 220, 0.6); }
+.mkt .mission.in .m-chip { opacity: 1; transform: none; }
+@media (max-width: 640px) { .mkt .m-chip { white-space: normal; text-align: center; } }
+
 .mkt .promise {
   margin-top: 28px; border-radius: var(--r); padding: 28px 32px; display: flex; gap: 22px; align-items: center; flex-wrap: wrap;
   background: linear-gradient(120deg, var(--violet-soft), var(--teal-soft)); border: 1px solid #d9d2f5;

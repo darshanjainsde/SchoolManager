@@ -452,6 +452,20 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
               </ul>
             </div>
           </div>
+          <div className="mission rv">
+            <span className="m-badge">🌍 Our only mission</span>
+            <h3>We are <b>totally dedicated</b> to building the digital infrastructure of schools — worldwide.</h3>
+            <p>
+              Not an agency juggling twenty industries. Schools aren&rsquo;t one of the things we do — they&rsquo;re the <em>only</em> thing we do.
+              Already have a website? Switching is effortless:
+            </p>
+            <div className="m-chips">
+              <span className="m-chip" style={{ '--i': 0 } as CSSProperties}>🔁 We migrate your current site — free</span>
+              <span className="m-chip" style={{ '--i': 1 } as CSSProperties}>🌐 Keep your domain &amp; branding</span>
+              <span className="m-chip" style={{ '--i': 2 } as CSSProperties}>⏱️ Zero downtime, zero effort from you</span>
+              <span className="m-chip" style={{ '--i': 3 } as CSSProperties}>📈 New features every month — no invoices</span>
+            </div>
+          </div>
           <div className="promise rv">
             <span style={{ fontSize: 32 }}>🛠️</span>
             <div>
