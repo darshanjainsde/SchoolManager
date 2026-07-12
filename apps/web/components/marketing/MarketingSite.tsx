@@ -1,6 +1,6 @@
 'use client';
 import './marketing.css';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { MarketingConfigData } from '@/lib/public-api';
 import CallbackModal from './CallbackModal';
 import FlipFeatureCards from './FlipFeatureCards';
@@ -234,13 +234,18 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
             Alone, a school event reaches your students. On the network, it reaches every school on Sckools — bigger crowds, real competition, and sponsors we bring to you.
           </p>
 
-          <div className="orbit-wrap rv" aria-hidden>
-            <div className="orbit o1" /><div className="orbit o2" />
-            <div className="core">YOUR<br />EVENT</div>
-            <div className="sat" style={{ transform: 'translate(-50%,-50%) translate(-190px,-90px)' }}>🏫 6 schools joined</div>
-            <div className="sat" style={{ transform: 'translate(-50%,-50%) translate(185px,-60px)' }}>👥 <b>2,400</b> students</div>
-            <div className="sat" style={{ transform: 'translate(-50%,-50%) translate(-170px,110px)' }}>🤝 sponsors matched</div>
-            <div className="sat" style={{ transform: 'translate(-50%,-50%) translate(160px,130px)' }}>💰 monetized</div>
+          <div className="ev-viz rv" aria-hidden>
+            <div className="ev-stage">
+              <div className="orbit o1" /><div className="orbit o2" />
+              <div className="core">YOUR<br />EVENT</div>
+            </div>
+            {/* Desktop: pills revolve around the core. Mobile: they become a chip row below. */}
+            <div className="sat-ring">
+              <div className="sat" style={{ '--a': '-35deg' } as CSSProperties}>🏫 6 schools joined</div>
+              <div className="sat" style={{ '--a': '55deg' } as CSSProperties}>👥 <b>2,400</b> students</div>
+              <div className="sat" style={{ '--a': '145deg' } as CSSProperties}>🤝 sponsors matched</div>
+              <div className="sat" style={{ '--a': '235deg' } as CSSProperties}>💰 monetized</div>
+            </div>
           </div>
 
           <div className="grid ev-pts">
