@@ -71,21 +71,72 @@
    state-driven className: React re-renders would wipe the observer's `in`). */
 .mkt .rv { opacity: 0; transform: translateY(34px) scale(0.98); transition: opacity 0.8s cubic-bezier(0.16, 0.8, 0.26, 1), transform 0.8s cubic-bezier(0.16, 0.8, 0.26, 1); }
 .mkt .rv.in { opacity: 1; transform: none; }
+
+/* reveal verbs — data-a gives each element its own entrance direction; --d staggers.
+   Same static-wrapper rule as .rv: the observer adds .in, React never touches it. */
+.mkt [data-a] {
+  opacity: 0;
+  transition: opacity 0.85s cubic-bezier(0.16, 0.8, 0.26, 1) var(--d, 0s), transform 0.85s cubic-bezier(0.16, 0.8, 0.26, 1) var(--d, 0s), filter 0.85s cubic-bezier(0.16, 0.8, 0.26, 1) var(--d, 0s);
+}
+.mkt [data-a='up'] { transform: translateY(40px); }
+.mkt [data-a='left'] { transform: translateX(-48px); }
+.mkt [data-a='right'] { transform: translateX(48px); }
+.mkt [data-a='zoom'] { transform: scale(0.92); }
+.mkt [data-a='blur'] { filter: blur(10px); transform: translateY(18px); }
+.mkt [data-a].in { opacity: 1; transform: none; filter: none; }
+
+/* hero reveals gate on .go (set when the intro curtain lifts) so the hero
+   sequence plays AFTER the curtain, not hidden behind it. */
+.mkt .hrv { opacity: 0; transform: translateY(26px); transition: opacity 0.8s cubic-bezier(0.16, 0.8, 0.26, 1) var(--d, 0s), transform 0.8s cubic-bezier(0.16, 0.8, 0.26, 1) var(--d, 0s); }
+.mkt .hrv.r { transform: translateX(48px); }
+.mkt.go .hrv { opacity: 1; transform: none; }
+
 @media (prefers-reduced-motion: reduce) {
-  .mkt .rv { opacity: 1; transform: none; transition: none; }
+  .mkt .rv, .mkt [data-a], .mkt .hrv, .mkt .ln i, .mkt .bld, .mkt .dkw,
+  .mkt .vs .old:not(.in), .mkt .vs .new:not(.in), .mkt .vs .col li, .mkt .vs .new li::before {
+    opacity: 1 !important; transform: none !important; filter: none !important; transition: none !important;
+  }
+  .mkt .sk-intro { display: none; }
+  .mkt .url .caret { display: none; }
   .mkt *, .mkt *::before, .mkt *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
 
+/* ---------- scroll progress + intro curtain ---------- */
+.mkt .sprog {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 90; pointer-events: none;
+  background: linear-gradient(90deg, var(--teal-hi), var(--violet), var(--gold));
+  transform: scaleX(0); transform-origin: 0 50%;
+}
+/* Rendered in the SSR HTML so it doubles as a load cover; JS lifts it
+   (instantly on repeat visits via sessionStorage / reduced motion). */
+.mkt .sk-intro {
+  position: fixed; inset: 0; z-index: 150; background: var(--paper); display: grid; place-items: center;
+  /* Self-lifting: pure CSS so a slow hydration can never trap the page. */
+  animation: mkCurtain 0.65s cubic-bezier(0.16, 0.8, 0.26, 1) 2.1s forwards;
+}
+.mkt .sk-intro.gone { animation: none; transform: translateY(-101%); opacity: 0; visibility: hidden; }
+@keyframes mkCurtain { to { transform: translateY(-101%); opacity: 0; visibility: hidden; } }
+.mkt .sk-intro .iis { stroke-dasharray: 130; stroke-dashoffset: 130; animation: mkDraw 1s cubic-bezier(0.16, 0.8, 0.26, 1) 0.15s forwards; }
+.mkt .sk-intro .iit { stroke-dasharray: 20; stroke-dashoffset: 20; animation: mkDraw 0.35s ease 0.95s forwards; }
+.mkt .sk-intro .iib { transform: scale(0); transform-origin: 41px 22px; transform-box: view-box; animation: mkPopIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 1.2s forwards; }
+.mkt .sk-intro .iw { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; opacity: 0; transform: translateY(12px); animation: mkWordUp 0.5s cubic-bezier(0.16, 0.8, 0.26, 1) 1s forwards; }
+@keyframes mkPopIn { to { transform: scale(1); } }
+@keyframes mkWordUp { to { opacity: 1; transform: none; } }
+
 /* ---------- nav ---------- */
-.mkt .mnav { position: sticky; top: 0; z-index: 80; background: rgba(252, 253, 255, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
-.mkt .mnav-in { max-width: 1140px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; gap: 30px; }
+.mkt .mnav { position: sticky; top: 0; z-index: 80; background: rgba(252, 253, 255, 0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); transition: box-shadow 0.35s ease, background 0.35s ease; }
+.mkt .mnav.scrolled { background: rgba(252, 253, 255, 0.94); box-shadow: 0 12px 32px -20px rgba(16, 36, 59, 0.35); }
+.mkt .mnav-in { max-width: 1140px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; gap: 30px; transition: padding 0.35s cubic-bezier(0.16, 0.8, 0.26, 1); }
+.mkt .mnav.scrolled .mnav-in { padding-top: 9px; padding-bottom: 9px; }
 .mkt .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
 .mkt .logo .s {
   width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-size: 17px; color: #fff;
   background: linear-gradient(135deg, var(--teal-hi), var(--violet)); box-shadow: 0 6px 16px rgba(109, 74, 255, 0.35);
 }
-.mkt .mnav a.lnk { font-size: 14.5px; font-weight: 700; color: var(--muted); transition: color 0.2s; }
+.mkt .mnav a.lnk { position: relative; font-size: 14.5px; font-weight: 700; color: var(--muted); transition: color 0.2s; }
+.mkt .mnav a.lnk::after { content: ''; position: absolute; left: 0; bottom: -4px; width: 100%; height: 2px; border-radius: 2px; background: var(--teal-hi); transform: scaleX(0); transform-origin: 0 50%; transition: transform 0.3s cubic-bezier(0.16, 0.8, 0.26, 1); }
 .mkt .mnav a.lnk:hover { color: var(--teal); }
+.mkt .mnav a.lnk:hover::after { transform: scaleX(1); }
 .mkt .mnav .btn { margin-left: auto; }
 @media (max-width: 780px) { .mkt .mnav a.lnk { display: none; } }
 
@@ -105,13 +156,27 @@
   mask-image: radial-gradient(ellipse 75% 60% at 50% 40%, black 20%, transparent 72%);
   pointer-events: none;
 }
+/* aurora blobs — slow drifting color washes behind the hero. Blur is heavy,
+   so they render only on wide screens; transform-only animation. */
+.mkt .aura { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.5; pointer-events: none; will-change: transform; animation: mkAura 18s ease-in-out infinite alternate; }
+.mkt .aura.a1 { width: 420px; height: 420px; top: -120px; right: -80px; background: radial-gradient(circle, rgba(109, 74, 255, 0.35), transparent 65%); }
+.mkt .aura.a2 { width: 380px; height: 380px; bottom: -140px; left: -100px; background: radial-gradient(circle, rgba(20, 184, 166, 0.4), transparent 65%); animation-delay: -6s; }
+.mkt .aura.a3 { width: 300px; height: 300px; bottom: -60px; left: 45%; background: radial-gradient(circle, rgba(255, 122, 69, 0.28), transparent 65%); animation-delay: -12s; }
+@keyframes mkAura { from { transform: translate(0, 0) scale(1); } to { transform: translate(40px, -30px) scale(1.15); } }
+@media (max-width: 920px) { .mkt .aura { display: none; } }
+
+/* headline cascade — each line rises out of an overflow mask, gated on .go */
+.mkt .ln { display: block; overflow: hidden; }
+.mkt .ln i { display: block; font-style: normal; transform: translateY(110%); transition: transform 0.9s cubic-bezier(0.16, 0.9, 0.24, 1) var(--d, 0s); }
+.mkt.go .ln i { transform: none; }
 .mkt .hero-in { position: relative; display: grid; grid-template-columns: 1.08fr 0.92fr; gap: 56px; align-items: center; }
 @media (max-width: 920px) { .mkt .hero-in { grid-template-columns: 1fr; } }
 .mkt .hero .lede { margin: 24px 0 34px; }
 .mkt .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; }
 .mkt .hl { position: relative; white-space: nowrap; }
 .mkt .hl svg { position: absolute; left: -2%; bottom: -0.14em; width: 104%; height: 0.34em; overflow: visible; }
-.mkt .hl path { fill: none; stroke: var(--coral); stroke-width: 7; stroke-linecap: round; stroke-dasharray: 320; stroke-dashoffset: 320; animation: mkDraw 1s 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.mkt .hl path { fill: none; stroke: var(--coral); stroke-width: 7; stroke-linecap: round; stroke-dasharray: 320; stroke-dashoffset: 320; }
+.mkt.go .hl path { animation: mkDraw 1s 1.1s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 @keyframes mkDraw { to { stroke-dashoffset: 0; } }
 .mkt .trust { margin-top: 44px; display: flex; gap: 14px; flex-wrap: wrap; }
 .mkt .trust .t { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px 20px; box-shadow: var(--sh); }
@@ -122,12 +187,17 @@
 .mkt .trust .t span { font-size: 12px; color: var(--muted); font-weight: 600; }
 
 /* hero visual: browser mock + floating chips */
-.mkt .stage { position: relative; }
-.mkt .browser { background: #fff; border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 40px 80px -30px rgba(16, 36, 59, 0.28); overflow: hidden; transform: rotate(1.2deg); }
+.mkt .stage { position: relative; perspective: 1200px; }
+.mkt .browser { background: #fff; border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 40px 80px -30px rgba(16, 36, 59, 0.28); overflow: hidden; transform: rotate(1.2deg); transition: transform 0.35s ease-out; }
 .mkt .bbar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: #f7fafc; }
 .mkt .bbar i { width: 10px; height: 10px; border-radius: 50%; display: block; }
-.mkt .bbar .url { margin-left: 8px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: var(--muted); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px; }
+.mkt .bbar .url { margin-left: 8px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11.5px; color: var(--muted); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px; min-height: 23px; min-width: 150px; }
+.mkt .url .caret { display: inline-block; width: 7px; height: 11px; margin-left: 2px; vertical-align: -1px; background: var(--teal-hi); animation: mkCaret 0.85s steps(1) infinite; }
+@keyframes mkCaret { 50% { opacity: 0; } }
 .mkt .bhero { padding: 26px 24px; background: linear-gradient(135deg, #e8fbf7, #f0edff); }
+/* the mock site "builds itself" once .built lands on the root */
+.mkt .bld { opacity: 0; transform: translateY(14px); transition: opacity 0.55s cubic-bezier(0.16, 0.8, 0.26, 1) var(--d, 0s), transform 0.55s cubic-bezier(0.16, 0.8, 0.26, 1) var(--d, 0s); }
+.mkt.built .bld { opacity: 1; transform: none; }
 .mkt .bhero .tag { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: var(--teal); }
 .mkt .bhero h4 { font-size: 20px; margin: 6px 0 4px; font-weight: 800; }
 .mkt .bhero p { font-size: 12px; color: var(--muted); }
@@ -135,7 +205,7 @@
 .mkt .brow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; padding: 16px 24px 22px; }
 .mkt .bcell { border: 1px solid var(--line); border-radius: 12px; padding: 10px; font-size: 10.5px; color: var(--muted); font-weight: 700; }
 .mkt .bcell b { display: block; font-size: 13px; color: var(--ink); }
-.mkt .chip { position: absolute; display: flex; gap: 10px; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 11px 16px; box-shadow: var(--sh-lift); animation: mkBob 6s ease-in-out infinite; }
+.mkt .chip { position: absolute; display: flex; gap: 10px; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 11px 16px; box-shadow: var(--sh-lift); animation: mkBob 6s ease-in-out infinite; transition: border-color 0.4s, box-shadow 0.4s; }
 .mkt .chip .ci { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 16px; }
 .mkt .chip b { font-size: 12.5px; display: block; line-height: 1.3; }
 .mkt .chip span { font-size: 10.5px; color: var(--muted); font-weight: 600; }
@@ -144,12 +214,20 @@
 .mkt .ch3 { bottom: -24px; left: 12%; animation-delay: -4s; }
 @media (max-width: 920px) { .mkt .ch1 { left: 0; } .mkt .ch2 { right: 0; } }
 @keyframes mkBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+/* notification loop — JS cycles .live across the chips; the live one glows */
+.mkt .chip.live { border-color: var(--teal-hi); box-shadow: 0 4px 10px rgba(16, 36, 59, 0.06), 0 30px 60px -20px rgba(13, 148, 136, 0.45), 0 0 0 4px rgba(20, 184, 166, 0.14); }
+.mkt .chip .ping { position: absolute; top: -4px; right: -4px; width: 11px; height: 11px; border-radius: 50%; background: var(--teal-hi); border: 2px solid #fff; opacity: 0; transform: scale(0); transition: opacity 0.3s, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.mkt .chip.live .ping { opacity: 1; transform: scale(1); }
 
-/* marquee */
-.mkt .marq { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fff; padding: 16px 0; overflow: hidden; }
+/* marquee — two counter-flowing rows; hover freezes both */
+.mkt .marq { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fff; padding: 14px 0; overflow: hidden; display: grid; gap: 10px; }
 .mkt .marq .track { display: flex; gap: 14px; width: max-content; animation: mkSlide 26s linear infinite; }
+.mkt .marq .track.rev { animation: mkSlideRev 32s linear infinite; }
+.mkt .marq:hover .track { animation-play-state: paused; }
 @keyframes mkSlide { to { transform: translateX(-50%); } }
-.mkt .mchip { font-size: 13px; font-weight: 700; color: var(--muted); border: 1px solid var(--line2); border-radius: 999px; padding: 7px 18px; white-space: nowrap; }
+@keyframes mkSlideRev { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+.mkt .mchip { font-size: 13px; font-weight: 700; color: var(--muted); border: 1px solid var(--line2); border-radius: 999px; padding: 7px 18px; white-space: nowrap; transition: color 0.25s, border-color 0.25s; }
+.mkt .mchip:hover { color: var(--teal); border-color: var(--teal-hi); }
 .mkt .mchip b { color: var(--teal); }
 
 /* ---------- feature grid : flip cards ---------- */
@@ -203,10 +281,12 @@
 .mkt .deck { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; margin-top: 52px; perspective: 1400px; }
 @media (max-width: 960px) { .mkt .deck { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 560px) { .mkt .deck { grid-template-columns: repeat(2, 1fr); } }
-.mkt .dkw { animation: mkDeckFloat 6s ease-in-out infinite; }
-.mkt .dkw:nth-child(2n) { animation-delay: -1.6s; }
-.mkt .dkw:nth-child(3n) { animation-delay: -3.1s; }
-.mkt .dkw:nth-child(5n) { animation-delay: -4.4s; }
+/* fan-out: cards deal in from a stacked pile when the deck scrolls into view
+   (--i staggers), then the idle float kicks in once the deal settles. The
+   float starts with a positive per-card delay so it never fights the deal-in
+   transition, and the stagger itself desyncs the bobbing. */
+.mkt .dkw { opacity: 0; transform: translateY(70px) rotate(calc(-8deg + var(--i, 0) * 3deg)) scale(0.85); transition: opacity 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.1) calc(var(--i, 0) * 0.09s), transform 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.1) calc(var(--i, 0) * 0.09s); }
+.mkt .deck.in .dkw { opacity: 1; transform: none; animation: mkDeckFloat 6s ease-in-out calc(1.2s + var(--i, 0) * 1.1s) infinite; }
 @keyframes mkDeckFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
 .mkt .dk {
   position: relative; border-radius: 20px; padding: 20px 16px 18px; min-height: 210px; color: #fff; overflow: hidden; cursor: pointer;
@@ -247,6 +327,14 @@
 }
 .mkt .events-sec .lede { color: #b8dad2; }
 .mkt .events-sec .eyebrow { background: rgba(245, 166, 35, 0.18); color: #ffce73; }
+/* spotlight beam — a conic wedge sweeping the stage from above */
+.mkt .beam {
+  position: absolute; top: -12%; left: 50%; width: 130%; aspect-ratio: 1; margin-left: -65%; pointer-events: none;
+  background: conic-gradient(from -16deg at 50% 0%, transparent 0deg, rgba(255, 206, 115, 0.14) 10deg, rgba(255, 206, 115, 0.22) 16deg, rgba(255, 206, 115, 0.14) 22deg, transparent 32deg);
+  transform-origin: 50% 0%; animation: mkBeam 9s ease-in-out infinite alternate; will-change: transform;
+}
+@keyframes mkBeam { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
+@media (max-width: 640px) { .mkt .beam { display: none; } }
 .mkt .ev-viz { position: relative; display: flex; flex-direction: column; align-items: center; margin-top: 26px; }
 .mkt .ev-stage { position: relative; width: min(100%, 480px); aspect-ratio: 1 / 1; display: grid; place-items: center; }
 .mkt .orbit { position: absolute; border: 1.5px dashed rgba(255, 206, 115, 0.4); border-radius: 50%; }
@@ -331,7 +419,16 @@
 .mkt .vs .old li { color: #8a7a72; }
 .mkt .vs .old li::before { content: '✕'; color: #e0684b; font-weight: 800; }
 .mkt .vs .new li { color: var(--ink); }
-.mkt .vs .new li::before { content: '✓'; color: var(--teal); font-weight: 800; }
+.mkt .vs .new li::before { content: '✓'; color: var(--teal); font-weight: 800; transform: scale(0); transition: transform 0.45s cubic-bezier(0.34, 1.7, 0.6, 1) calc(0.3s + var(--i, 0) * 0.12s); }
+/* tug-of-war entrance: old column drags in from the left slightly tilted,
+   new column sweeps in from the right; rows stagger via --i. */
+.mkt .vs .col { transition: opacity 0.8s cubic-bezier(0.16, 0.8, 0.26, 1), transform 0.8s cubic-bezier(0.16, 0.8, 0.26, 1); }
+.mkt .vs .old:not(.in) { opacity: 0; transform: translateX(-56px) rotate(-2deg); }
+.mkt .vs .new:not(.in) { opacity: 0; transform: translateX(56px) rotate(2deg); }
+.mkt .vs .col li { opacity: 0; transform: translateX(var(--fx, -14px)); transition: opacity 0.5s ease calc(0.25s + var(--i, 0) * 0.1s), transform 0.5s cubic-bezier(0.16, 0.8, 0.26, 1) calc(0.25s + var(--i, 0) * 0.1s); }
+.mkt .vs .new li { --fx: 14px; }
+.mkt .vs .col.in li { opacity: 1; transform: none; }
+.mkt .vs .new.in li::before { transform: scale(1); }
 .mkt .promise {
   margin-top: 28px; border-radius: var(--r); padding: 28px 32px; display: flex; gap: 22px; align-items: center; flex-wrap: wrap;
   background: linear-gradient(120deg, var(--violet-soft), var(--teal-soft)); border: 1px solid #d9d2f5;
@@ -349,6 +446,15 @@
     radial-gradient(ellipse 40% 55% at 85% 0%, rgba(109, 74, 255, 0.35), transparent 70%);
 }
 .mkt .cta-card > * { position: relative; }
+/* drifting aurora blobs inside the CTA card (desktop only — blur is costly) */
+.mkt .cta-card .blob { position: absolute; border-radius: 50%; filter: blur(60px); pointer-events: none; will-change: transform; animation: mkAura 14s ease-in-out infinite alternate; }
+.mkt .cta-card .blob.b1 { width: 340px; height: 340px; left: -80px; bottom: -120px; background: radial-gradient(circle, rgba(20, 184, 166, 0.5), transparent 65%); }
+.mkt .cta-card .blob.b2 { width: 320px; height: 320px; right: -70px; top: -110px; background: radial-gradient(circle, rgba(109, 74, 255, 0.5), transparent 65%); animation-delay: -7s; }
+@media (max-width: 920px) { .mkt .cta-card .blob { display: none; } }
+/* shine sweep across the hot CTA on hover */
+.mkt .btn-hot { position: relative; overflow: hidden; }
+.mkt .btn-hot::after { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.45) 50%, transparent 60%); transform: translateX(-120%); transition: transform 0.7s ease; pointer-events: none; }
+.mkt .btn-hot:hover::after { transform: translateX(120%); }
 .mkt .cta-card .lede { color: #b9c6d6; margin: 16px auto 32px; }
 .mkt .foot { border-top: 1px solid var(--line); padding: 46px 0; color: var(--muted); font-size: 14px; background: #fff; }
 .mkt .foot .wrap { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
