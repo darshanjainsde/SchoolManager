@@ -327,7 +327,11 @@
     radial-gradient(ellipse 70% 55% at 50% 0%, rgba(245, 166, 35, 0.18), transparent 65%),
     linear-gradient(165deg, var(--stage1), var(--stage2));
   color: #effcf8; border-radius: 44px; margin: 0 18px; overflow: hidden;
+  padding: 72px 0;
 }
+/* heading + orbit side by side so the whole story fits one screen */
+.mkt .ev-top { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 36px; align-items: center; }
+@media (max-width: 920px) { .mkt .ev-top { grid-template-columns: 1fr; } }
 .mkt .events-sec .lede { color: #b8dad2; }
 .mkt .events-sec .eyebrow { background: rgba(245, 166, 35, 0.18); color: #ffce73; }
 /* spotlight beam — a conic wedge sweeping the stage from above */
@@ -338,8 +342,8 @@
 }
 @keyframes mkBeam { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
 @media (max-width: 640px) { .mkt .beam { display: none; } }
-.mkt .ev-viz { position: relative; display: flex; flex-direction: column; align-items: center; margin-top: 26px; }
-.mkt .ev-stage { position: relative; width: min(100%, 480px); aspect-ratio: 1 / 1; display: grid; place-items: center; }
+.mkt .ev-viz { position: relative; display: flex; flex-direction: column; align-items: center; }
+.mkt .ev-stage { position: relative; width: min(100%, 400px); aspect-ratio: 1 / 1; display: grid; place-items: center; }
 .mkt .orbit { position: absolute; border: 1.5px dashed rgba(255, 206, 115, 0.4); border-radius: 50%; }
 .mkt .o1 { width: 54%; height: 54%; animation: mkSpin 26s linear infinite; }
 .mkt .o2 { width: 86%; height: 86%; animation: mkSpin 44s linear infinite reverse; }
@@ -352,7 +356,7 @@
   animation: mkCorePulse 3s ease-in-out infinite;
 }
 @keyframes mkCorePulse { 0%, 100% { box-shadow: 0 0 60px rgba(245, 166, 35, 0.5); } 50% { box-shadow: 0 0 100px rgba(245, 166, 35, 0.85); } }
-.mkt .sat-ring { position: absolute; inset: 0; --r: 205px; pointer-events: none; }
+.mkt .sat-ring { position: absolute; inset: 0; --r: 168px; pointer-events: none; }
 .mkt .sat {
   position: absolute; top: 50%; left: 50%; translate: -50% -50%;
   transform: rotate(var(--a, 0deg)) translateX(var(--r)) rotate(calc(-1 * var(--a, 0deg)));
@@ -381,7 +385,7 @@
   .mkt .orbit, .mkt .core, .mkt .sat { animation: none; }
   .mkt .sat { opacity: 1; transition: none; }
 }
-.mkt .ev-pts { grid-template-columns: repeat(3, 1fr); margin-top: 48px; }
+.mkt .ev-pts { grid-template-columns: repeat(3, 1fr); margin-top: 38px; }
 @media (max-width: 920px) { .mkt .ev-pts { grid-template-columns: 1fr; } }
 .mkt .ev-pt { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 18px; padding: 22px 24px; }
 .mkt .ev-pt h4 { font-size: 15.5px; margin-bottom: 8px; color: #ffce73; font-weight: 800; }
@@ -404,6 +408,15 @@
 .mkt .tier ul { list-style: none; margin: 20px 0 24px; padding: 0; display: grid; gap: 10px; }
 .mkt .tier li { font-size: 14px; display: flex; gap: 10px; align-items: flex-start; }
 .mkt .tier li::before { content: '✓'; color: var(--teal); font-weight: 800; flex-shrink: 0; }
+/* detailed grouped feature lists */
+.mkt .tier .inherit { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 800; border-radius: 999px; padding: 5px 14px; margin: 6px 0 4px; background: var(--teal-soft); color: var(--teal); }
+.mkt .tier.pro .inherit { background: var(--violet-soft); color: var(--violet); }
+.mkt .tier .tfeats { margin: 14px 0 22px; }
+.mkt .tier .tfeats .grp { font-size: 10.5px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin: 15px 0 8px; border-bottom: 1px dashed var(--line); padding-bottom: 5px; }
+.mkt .tier .tfeats > div:first-child .grp { margin-top: 0; }
+.mkt .tier .tfeats ul { margin: 0; gap: 8px; }
+.mkt .tier .tfeats li { font-size: 13.5px; line-height: 1.5; }
+.mkt .tier .tfeats li b { font-weight: 800; }
 .mkt .tier.pro { box-shadow: 0 6px 14px rgba(109, 74, 255, 0.08), 0 36px 70px -24px rgba(109, 74, 255, 0.35); }
 .mkt .tier.pro::after {
   content: 'MOST GROWTH'; position: absolute; top: -13px; right: 22px; font-size: 10px; font-weight: 800; letter-spacing: 0.16em;

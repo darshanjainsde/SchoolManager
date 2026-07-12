@@ -40,20 +40,32 @@ const TIERS = [
   {
     cls: 'basic', tk: 'Basic', h: 'Be found.',
     why: 'Your school looks world-class online and every interested parent becomes a tracked enquiry.',
-    items: ['Full public website + gallery', 'Courses, admissions & hall of fame', 'Enquiry inbox with status tracking', 'Your own domain & hosting'],
-    btn: 'btn-ghost',
+    btn: 'btn-ghost', inherit: null,
+    groups: [
+      { g: 'Your website', items: ['Complete school site — home, courses, gallery, admissions & hall of fame', 'Flip-card course explorer parents love', 'Photo & video gallery, lightning fast', 'Mobile-perfect, SEO-ready pages'] },
+      { g: 'Admissions engine', items: ['Enquiry inbox — every lead captured, tracked & statused', 'Admissions process & fee structure pages'] },
+      { g: 'Included forever', items: ['Your own domain, SSL & hosting', 'Monthly platform updates — free'] },
+    ],
   },
   {
     cls: 'std', tk: 'Standard', h: 'Be engaging.',
-    why: 'Everything in Basic, plus your community stays connected — events, about & contact pages, social reach.',
-    items: ['Everything in Basic', 'Events published to the network feed', 'About, contact & social presence', 'Priority support'],
-    btn: 'btn-hot',
+    why: 'Your community stays connected — and your events reach every school on the network.',
+    btn: 'btn-hot', inherit: 'Everything in Basic, plus',
+    groups: [
+      { g: 'Network reach', items: ['Your events published to the shared network feed — seen by every Sckools school', 'Students join inter-school events across the network'] },
+      { g: 'Community', items: ['About, contact & social presence pages', 'Announcements to parents & students'] },
+      { g: 'Care', items: ['Priority support — real humans, fast'] },
+    ],
   },
   {
     cls: 'pro', tk: 'Pro', h: 'Be the stage.',
     why: 'Host network events, get sponsor matchmaking, and run the school itself on our management suite.',
-    items: ['Everything in Standard', 'Host inter-school events + sponsors', 'Full management suite (students, fees, staff)', 'Custom feature support'],
-    btn: 'btn-ink',
+    btn: 'btn-ink', inherit: 'Everything in Standard, plus',
+    groups: [
+      { g: 'The stage', items: ['Host paid inter-school events — entry passes, bigger crowds', 'Sponsor matchmaking — we pitch brands to back your events'] },
+      { g: 'Management suite', items: ['Students, classes, teachers & staff records', 'Timetables, attendance & teacher availability', 'Assignments & announcements', 'Teacher & student portals'] },
+      { g: 'Partnership', items: ['Custom features built for your school', 'Dedicated onboarding — we set everything up'] },
+    ],
   },
 ];
 
@@ -371,23 +383,28 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
       <section className="events-sec" id="events" aria-label="Events network">
         <div className="beam" aria-hidden />
         <div className="wrap">
-          <div className="rv"><span className="eyebrow">🎪 The Sckools Events Network</span></div>
-          <h2 className="h-lg rv" style={{ transitionDelay: '.06s' }}>Inter-school events.<br />One shared stage.</h2>
-          <p className="lede rv" style={{ marginTop: 14, transitionDelay: '.12s' }}>
-            Alone, a school event reaches your students. On the network, it reaches every school on Sckools — bigger crowds, real competition, and sponsors we bring to you.
-          </p>
-
-          <div className="ev-viz rv" aria-hidden>
-            <div className="ev-stage">
-              <div className="orbit o1" /><div className="orbit o2" />
-              <div className="core">YOUR<br />EVENT</div>
+          {/* Heading and orbit share a row so the whole section fits one screen. */}
+          <div className="ev-top">
+            <div>
+              <div className="rv"><span className="eyebrow">🎪 The Sckools Events Network</span></div>
+              <h2 className="h-lg rv" style={{ transitionDelay: '.06s' }}>Inter-school events.<br />One shared stage.</h2>
+              <p className="lede rv" style={{ marginTop: 14, transitionDelay: '.12s' }}>
+                Alone, a school event reaches your students. On the network, it reaches every school on Sckools — bigger crowds, real competition, and sponsors we bring to you.
+              </p>
             </div>
-            {/* Desktop: pills revolve around the core. Mobile: they become a chip row below. */}
-            <div className="sat-ring">
-              <div className="sat" style={{ '--a': '-35deg' } as CSSProperties}>🏫 6 schools joined</div>
-              <div className="sat" style={{ '--a': '55deg' } as CSSProperties}>👥 <b>2,400</b> students</div>
-              <div className="sat" style={{ '--a': '145deg' } as CSSProperties}>🤝 sponsors matched</div>
-              <div className="sat" style={{ '--a': '235deg' } as CSSProperties}>💰 monetized</div>
+
+            <div className="ev-viz rv" aria-hidden>
+              <div className="ev-stage">
+                <div className="orbit o1" /><div className="orbit o2" />
+                <div className="core">YOUR<br />EVENT</div>
+              </div>
+              {/* Desktop: pills revolve around the core. Mobile: they become a chip row below. */}
+              <div className="sat-ring">
+                <div className="sat" style={{ '--a': '-35deg' } as CSSProperties}>🏫 6 schools joined</div>
+                <div className="sat" style={{ '--a': '55deg' } as CSSProperties}>👥 <b>2,400</b> students</div>
+                <div className="sat" style={{ '--a': '145deg' } as CSSProperties}>🤝 sponsors matched</div>
+                <div className="sat" style={{ '--a': '235deg' } as CSSProperties}>💰 monetized</div>
+              </div>
             </div>
           </div>
 
@@ -419,7 +436,15 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
                   <span className="tk">{t.tk}</span>
                   <h3>{t.h}</h3>
                   <p className="why">{t.why}</p>
-                  <ul>{t.items.map((it) => <li key={it}>{it}</li>)}</ul>
+                  {t.inherit && <span className="inherit">↑ {t.inherit}</span>}
+                  <div className="tfeats">
+                    {t.groups.map((gr) => (
+                      <div key={gr.g}>
+                        <div className="grp">{gr.g}</div>
+                        <ul>{gr.items.map((it) => <li key={it}>{it}</li>)}</ul>
+                      </div>
+                    ))}
+                  </div>
                   <button className={`btn ${t.btn} btn-sm`} onClick={() => openModal(t.tk)}>Request a callback</button>
                 </div>
               </div>

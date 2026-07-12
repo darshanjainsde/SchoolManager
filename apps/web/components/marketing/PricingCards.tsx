@@ -6,9 +6,30 @@ import CallbackModal from './CallbackModal';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
 const TIER_META = [
-  { key: 'basic' as const, cls: 'basic', tk: 'Basic', h: 'Be found.', btn: 'btn-ghost', items: ['Public website + gallery + courses', 'Admissions pages & hall of fame', 'Enquiry inbox', 'Custom domain & SSL'] },
-  { key: 'standard' as const, cls: 'std', tk: 'Standard', h: 'Be engaging.', btn: 'btn-hot', items: ['Everything in Basic', 'Events on the network feed', 'About, contact & social', 'Priority support'] },
-  { key: 'pro' as const, cls: 'pro', tk: 'Pro', h: 'Be the stage.', btn: 'btn-ink', items: ['Everything in Standard', 'Host inter-school events + sponsor matching', 'Full management suite', 'Custom feature support'] },
+  {
+    key: 'basic' as const, cls: 'basic', tk: 'Basic', h: 'Be found.', btn: 'btn-ghost', inherit: null,
+    groups: [
+      { g: 'Your website', items: ['Complete school site — home, courses, gallery, admissions & hall of fame', 'Flip-card course explorer parents love', 'Photo & video gallery, lightning fast', 'Mobile-perfect, SEO-ready pages'] },
+      { g: 'Admissions engine', items: ['Enquiry inbox — every lead captured, tracked & statused', 'Admissions process & fee structure pages'] },
+      { g: 'Included forever', items: ['Your own domain, SSL & hosting', 'Monthly platform updates — free'] },
+    ],
+  },
+  {
+    key: 'standard' as const, cls: 'std', tk: 'Standard', h: 'Be engaging.', btn: 'btn-hot', inherit: 'Everything in Basic, plus',
+    groups: [
+      { g: 'Network reach', items: ['Your events published to the shared network feed — seen by every Sckools school', 'Students join inter-school events across the network'] },
+      { g: 'Community', items: ['About, contact & social presence pages', 'Announcements to parents & students'] },
+      { g: 'Care', items: ['Priority support — real humans, fast'] },
+    ],
+  },
+  {
+    key: 'pro' as const, cls: 'pro', tk: 'Pro', h: 'Be the stage.', btn: 'btn-ink', inherit: 'Everything in Standard, plus',
+    groups: [
+      { g: 'The stage', items: ['Host paid inter-school events — entry passes, bigger crowds', 'Sponsor matchmaking — we pitch brands to back your events'] },
+      { g: 'Management suite', items: ['Students, classes, teachers & staff records', 'Timetables, attendance & teacher availability', 'Assignments & announcements', 'Teacher & student portals'] },
+      { g: 'Partnership', items: ['Custom features built for your school', 'Dedicated onboarding — we set everything up'] },
+    ],
+  },
 ];
 
 export default function PricingCards({ config }: { config: MarketingConfigData }) {
@@ -65,7 +86,15 @@ export default function PricingCards({ config }: { config: MarketingConfigData }
                   </span>
                   <span className="per"> /month</span>
                 </div>
-                <ul>{t.items.map((it) => <li key={it}>{it}</li>)}</ul>
+                {t.inherit && <span className="inherit" style={{ marginTop: 14 }}>↑ {t.inherit}</span>}
+                <div className="tfeats">
+                  {t.groups.map((gr) => (
+                    <div key={gr.g}>
+                      <div className="grp">{gr.g}</div>
+                      <ul>{gr.items.map((it) => <li key={it}>{it}</li>)}</ul>
+                    </div>
+                  ))}
+                </div>
                 <button className={`btn ${t.btn} btn-sm`} onClick={() => setModalInterest(t.tk)}>Request a callback</button>
               </div>
             );
