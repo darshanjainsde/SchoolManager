@@ -10,6 +10,7 @@ import { useHydrated } from '@/lib/use-hydrated';
 import { useHost } from '@/components/use-host';
 import { useApi } from '@/lib/use-api';
 import { isSchoolHost, exampleSchoolHost, platformHref } from '@/lib/hosts';
+import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
 // `requiredFeature` hides the item for schools whose tier lacks it. Items with
 // no requiredFeature are always shown.
@@ -109,9 +110,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {/* Sidebar */}
       <aside className="hidden w-60 flex-col bg-slate-900 text-slate-300 sm:flex">
         {/* Logo */}
-        <div className="flex items-center gap-2 p-5 font-extrabold text-white">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal-600 text-sm">S</span>
-          <span>School Admin</span>
+        <div className="flex flex-col gap-1 p-5">
+          <SckoolsLogo theme="dark" size={28} />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">School Admin</span>
         </div>
 
         {/* Nav */}

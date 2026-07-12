@@ -6,6 +6,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { LogOut } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
 /**
  * Owner-portal shell. Two responsibilities:
@@ -55,11 +56,8 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
       {/* Sidebar */}
       <aside className="hidden w-60 flex-col bg-slate-900 text-slate-300 sm:flex shrink-0">
         {/* Logo / brand */}
-        <div className="flex items-center gap-2 p-5 text-white font-extrabold text-lg">
-          <span className="h-8 w-8 rounded-lg bg-indigo-600 grid place-items-center text-sm font-bold">
-            S
-          </span>
-          <span>Sckools</span>
+        <div className="flex items-center gap-2 p-5">
+          <SckoolsLogo theme="dark" size={30} />
           <span className="ml-auto text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-semibold">
             OWNER
           </span>

@@ -5,3 +5,76 @@
 :root {
   color-scheme: light dark;
 }
+
+/* ===== Sckools brand mark (Tassel-S) — see components/brand/sckools-logo.tsx ===== */
+
+/* Pen-draw entrance: S strokes itself on, tassel cord drops, bead pops. */
+.sk-s-draw {
+  stroke-dasharray: 130;
+  stroke-dashoffset: 130;
+  animation: sk-draw 1s cubic-bezier(0.65, 0.05, 0.36, 1) 0.15s forwards;
+}
+.sk-tassel-draw {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: sk-draw 0.4s ease-out 1.05s forwards;
+}
+.sk-bead-pop {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sk-pop 0.35s ease-out 1.35s forwards;
+}
+.sk-wordmark-rise {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: sk-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 1.2s forwards;
+}
+
+/* Hover micro-interaction: the tassel swings. Never auto-plays. */
+.sk-tassel {
+  transform-box: view-box;
+  transform-origin: 41px 9px;
+}
+.sk-logo:hover .sk-tassel {
+  animation: sk-swing 1.4s ease-in-out;
+}
+
+@keyframes sk-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes sk-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  70% { opacity: 1; transform: scale(1.3); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes sk-rise {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes sk-swing {
+  0% { transform: rotate(0); }
+  20% { transform: rotate(13deg); }
+  45% { transform: rotate(-8deg); }
+  70% { transform: rotate(4deg); }
+  100% { transform: rotate(0); }
+}
+
+/* Accessibility: no motion for users who opted out. */
+@media (prefers-reduced-motion: reduce) {
+  .sk-s-draw,
+  .sk-tassel-draw,
+  .sk-bead-pop,
+  .sk-wordmark-rise,
+  .sk-logo:hover .sk-tassel {
+    animation: none;
+  }
+  .sk-s-draw,
+  .sk-tassel-draw {
+    stroke-dashoffset: 0;
+  }
+  .sk-bead-pop,
+  .sk-wordmark-rise {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -8,6 +8,7 @@ import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
 export default function MeLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -43,6 +44,7 @@ export default function MeLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="hidden w-64 flex-col border-r border-slate-200 bg-white p-4 sm:flex">
         <div className="mb-6 px-2">
+          <SckoolsLogo size={26} className="mb-2" />
           <div className="text-sm font-semibold">{me.data?.role === 'PARENT' ? 'Parent portal' : 'Student portal'}</div>
           <div className="text-xs text-slate-500">{host?.split(':')[0]}</div>
         </div>

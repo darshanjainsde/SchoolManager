@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useApi } from '@/lib/use-api';
 import { useAuthStore } from '@/lib/auth-store';
+import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
 const schema = z.object({
   email: z.string().email(),
@@ -65,7 +66,8 @@ export default function TenantLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
+      <SckoolsLogo animate size={40} />
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
