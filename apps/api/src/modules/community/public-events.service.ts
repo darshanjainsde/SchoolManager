@@ -2,17 +2,28 @@ import { Injectable } from '@nestjs/common';
 import type { TenantTx } from '@skoolos/db';
 import type { PublicEvent } from './community.dto';
 
+/**
+ * Events stay listed through the end of their (UTC) day, not until the exact
+ * minute they start/end — otherwise a same-day event vanishes from every
+ * school's page the moment it begins.
+ */
+export function eventsVisibleSince(now: Date): Date {
+  const d = new Date(now);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
 @Injectable()
 export class PublicEventsService {
   // Runs inside the caller's withTenant(hostSchoolId) transaction. RLS returns
   // the host's own rows (tenant_iso) OR any NETWORK+APPROVED row (read_network_events).
   async forHost(tx: TenantTx, hostSchoolId: string): Promise<PublicEvent[]> {
-    const now = new Date();
+    const since = eventsVisibleSince(new Date());
     const rows = await tx.event.findMany({
       where: {
         status: 'APPROVED',
         OR: [{ scope: 'SCHOOL' }, { scope: 'NETWORK' }],
-        AND: { OR: [{ endAt: { gte: now } }, { endAt: null, startAt: { gte: now } }] },
+        AND: { OR: [{ endAt: { gte: since } }, { endAt: null, startAt: { gte: since } }] },
       },
       orderBy: { startAt: 'asc' },
     });

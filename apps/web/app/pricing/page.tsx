@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   description:
     'Transparent pricing for school websites, admissions and the inter-school events network. Every plan includes hosting, your own domain and 2 months of custom feature support.',
   alternates: { canonical: 'https://sckools.com/pricing' },
+  icons: {
+    icon: [{ url: '/sckools-icon.svg', type: 'image/svg+xml' }],
+    apple: '/sckools-icon.svg',
+  },
   openGraph: {
     title: 'Sckools Pricing — Plans for Every School',
     description: 'Basic, Standard and Pro plans for school websites, admissions and inter-school events.',

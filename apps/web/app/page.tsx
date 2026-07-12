@@ -16,6 +16,10 @@ export async function generateMetadata(): Promise<Metadata> {
     keywords: ['sckools', 'school website builder', 'school management software', 'inter-school events', 'school admissions software', 'school website India'],
     alternates: { canonical: 'https://sckools.com/' },
     metadataBase: new URL('https://sckools.com'),
+    icons: {
+      icon: [{ url: '/sckools-icon.svg', type: 'image/svg+xml' }],
+      apple: '/sckools-icon.svg',
+    },
     openGraph: {
       title: 'Sckools — Your school, on a bigger stage',
       description: 'School websites, admissions, management and an inter-school events network — one platform, zero developers needed.',
@@ -53,6 +57,7 @@ export default async function HomePage() {
     '@type': 'Organization',
     name: 'Sckools',
     url: 'https://sckools.com',
+    logo: 'https://sckools.com/sckools-icon.svg',
     email: config.contactEmail,
     ...(config.contactPhone ? { telephone: config.contactPhone } : {}),
     description: 'School websites, admissions engine, management suite and an inter-school events network.',
