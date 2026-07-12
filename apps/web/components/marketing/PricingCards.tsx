@@ -3,6 +3,7 @@ import './marketing.css';
 import { useRef, useState } from 'react';
 import type { MarketingConfigData } from '@/lib/public-api';
 import CallbackModal from './CallbackModal';
+import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
 const TIER_META = [
   { key: 'basic' as const, cls: 'basic', tk: 'Basic', h: 'Be found.', btn: 'btn-ghost', items: ['Public website + gallery + courses', 'Admissions pages & hall of fame', 'Enquiry inbox', 'Custom domain & SSL'] },
@@ -26,7 +27,7 @@ export default function PricingCards({ config }: { config: MarketingConfigData }
     <div className="mkt">
       <nav className="mnav" aria-label="Main">
         <div className="mnav-in">
-          <a href="/" className="logo"><span className="s">S</span>Sckools</a>
+          <a href="/" className="logo"><SckoolsLogo size={32} /></a>
           <a className="lnk" href="/#feats">Features</a>
           <a className="lnk" href="/#events">Events Network</a>
           <a className="lnk" href="/#switch">Why switch</a>

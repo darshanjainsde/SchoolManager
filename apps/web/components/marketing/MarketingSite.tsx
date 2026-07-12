@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MarketingConfigData } from '@/lib/public-api';
 import CallbackModal from './CallbackModal';
 import FlipFeatureCards from './FlipFeatureCards';
+import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
 /* Sample trust counters — update as the network grows (also cited in JSON-LD? no: display only). */
 const TRUST = [
@@ -116,7 +117,7 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
     <div className="mkt" ref={root}>
       <nav className="mnav" aria-label="Main">
         <div className="mnav-in">
-          <span className="logo"><span className="s">S</span>Sckools</span>
+          <span className="logo"><SckoolsLogo size={32} /></span>
           <a className="lnk" href="#feats">Features</a>
           <a className="lnk" href="#events">Events Network</a>
           <a className="lnk" href="/pricing">Pricing</a>
@@ -329,7 +330,7 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
       <footer className="foot">
         <div className="wrap">
           <div>
-            <span className="logo" style={{ fontSize: 16 }}><span className="s" style={{ width: 28, height: 28, fontSize: 13 }}>S</span>Sckools</span>
+            <span className="logo"><SckoolsLogo size={24} /></span>
             <p style={{ marginTop: 8 }}>The next-gen revolution in school digital infrastructure.</p>
           </div>
           <div style={{ textAlign: 'right' }}>
