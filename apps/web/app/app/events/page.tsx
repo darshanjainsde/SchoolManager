@@ -37,6 +37,12 @@ interface CreateEventBody {
   endAt?: string;
   venue?: string;
   scope: EventScope;
+  coverAssetId?: string;
+}
+
+interface MediaAsset {
+  id: string;
+  url: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -99,12 +105,33 @@ interface EventFormProps {
 }
 
 function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
   const [venue, setVenue] = useState('');
   const [scope, setScope] = useState<EventScope>('SCHOOL');
+  const [coverAssetId, setCoverAssetId] = useState<string | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function uploadBanner(file: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const asset = await api.request<MediaAsset>('/site/media?kind=EVENT', { method: 'POST', body: fd });
+      setCoverAssetId(asset.id);
+      setCoverPreview(asset.url);
+      toast.success('Banner uploaded');
+    } catch (err) {
+      toast.error(`Banner upload failed: ${(err as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   function handleSubmit() {
     const body: CreateEventBody = {
@@ -115,6 +142,7 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
     if (description.trim()) body.description = description.trim();
     if (endAt) body.endAt = new Date(endAt).toISOString();
     if (venue.trim()) body.venue = venue.trim();
+    if (coverAssetId) body.coverAssetId = coverAssetId;
     onSave(body);
   }
 
@@ -175,6 +203,27 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
             onChange={(e) => setVenue(e.target.value)}
             placeholder="Main Hall"
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="ev-banner">Banner image (optional)</Label>
+          {coverPreview && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={coverPreview} alt="Event banner preview" className="h-32 w-full rounded-lg border border-slate-200 object-cover" />
+          )}
+          <Input
+            id="ev-banner"
+            type="file"
+            accept="image/*"
+            disabled={uploading}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadBanner(f);
+            }}
+          />
+          <p className="text-xs text-slate-400">
+            {uploading ? 'Uploading…' : 'Shown on your events page — and across the network for network events. Wide images (16:9) look best.'}
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -309,6 +358,10 @@ export default function EventsPage() {
           {eventsQuery.data!.map((event) => (
             <Card key={event.id}>
               <CardContent className="flex items-start justify-between gap-4 pt-4">
+                {event.coverUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={event.coverUrl} alt="" className="h-20 w-32 shrink-0 rounded-lg border border-slate-200 object-cover" />
+                )}
                 <div className="flex-1 min-w-0 space-y-1">
                   <p className="font-semibold text-slate-800 truncate">{event.title}</p>
                   <p className="text-sm text-slate-500">

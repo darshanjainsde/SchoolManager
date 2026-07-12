@@ -17,7 +17,7 @@ import { TenantContextService } from '../../tenancy';
 import { MediaService } from './media.service';
 import { ListMediaDto } from './cms.dto';
 
-const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT'];
+const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT', 'EVENT'];
 
 @Controller('site/media')
 @UseGuards(SchoolJwtGuard)
