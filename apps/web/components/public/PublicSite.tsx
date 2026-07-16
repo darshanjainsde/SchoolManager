@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
+import { isNearWhite, lighten, mix } from './site-utils';
+import HeroSection from './sections/HeroSection';
+import SiteNav from './sections/SiteNav';
 import CoursesFeatured from './sections/CoursesFeatured';
 import AcademicsSection from './sections/AcademicsSection';
 import AdmissionsSection, { admissionsHasContent } from './sections/AdmissionsSection';
@@ -56,34 +59,6 @@ const FONT_MAP: Record<string, string> = {
   NUNITO: "'Nunito', sans-serif",
 };
 const MOTION_MAP: Record<string, number> = { FULL: 1, SUBTLE: 0.5, NONE: 0 };
-
-// ── Brand-colour helpers ────────────────────────────────────────────────────
-function hexToRgb(hex: string): [number, number, number] | null {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return null;
-  const n = parseInt(m[1], 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function isNearWhite(hex: string): boolean {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return false;
-  return rgb.every((c) => c >= 235);
-}
-/** Blend a hex colour toward white by `amt` (0..1). */
-function lighten(hex: string, amt: number): string {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return hex;
-  const [r, g, b] = rgb.map((c) => Math.round(c + (255 - c) * amt));
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-}
-/** Blend one hex toward another by `amt` (0..1). */
-function mix(hex: string, target: string, amt: number): string {
-  const a = hexToRgb(hex);
-  const b = hexToRgb(target);
-  if (!a || !b) return hex;
-  const [r, g, bl] = a.map((v, i) => Math.round(v + (b[i] - v) * amt));
-  return `#${((1 << 24) + (r << 16) + (g << 8) + bl).toString(16).slice(1)}`;
-}
 
 function parseStatValue(val: string): { numeric: boolean; num: number; suffix: string } {
   const clean = val.trim();
@@ -166,6 +141,80 @@ const PS_CSS = `
   .ps-face-back { transform: rotateY(180deg);
     background: linear-gradient(150deg, var(--ps1), color-mix(in srgb, var(--ps1) 45%, #14261d)); }
 
+  /* ── Headline accent variants (admin-selectable) ── */
+  @keyframes ps-marker-sweep { to { background-size: 100% .38em; } }
+  .ps-marker { background-image: linear-gradient(0deg, color-mix(in srgb, var(--ps2) 50%, transparent), color-mix(in srgb, var(--ps2) 50%, transparent));
+    background-repeat: no-repeat; background-size: 0% .38em; background-position: 0 90%;
+    -webkit-box-decoration-break: clone; box-decoration-break: clone;
+    animation: ps-marker-sweep .9s cubic-bezier(.2,.7,.2,1) .4s forwards; }
+  @keyframes ps-accent-grow { to { transform: scaleX(1); } }
+  .ps-accent-grow { display: block; margin-top: 14px; height: 6px; width: 8rem; border-radius: 999px;
+    background: linear-gradient(90deg, var(--ps2), color-mix(in srgb, var(--ps2) 55%, var(--ps1)));
+    transform: scaleX(0); transform-origin: left;
+    animation: ps-accent-grow .8s cubic-bezier(.2,.7,.2,1) .35s forwards; }
+  .ps-accent-grow.mx-auto { transform-origin: center; }
+
+  /* ── Hero photo tiles + slideshow ── */
+  .ps-tile { background-size: cover; background-position: center; }
+  .ps-slide { position: absolute; inset: 0; background-size: cover; background-position: center;
+    opacity: 0; transition: opacity 1.1s ease; }
+  .ps-slide.on { opacity: 1; }
+  @keyframes ps-kb { from { transform: scale(1); } to { transform: scale(calc(1 + 0.07 * var(--motion))); } }
+  .ps-kb { animation: ps-kb 7.5s ease-out forwards; }
+
+  /* ── Navbar variants ── */
+  .ps-nav-strip { background: var(--ink); color: rgba(255,255,255,.85); }
+  .ps-nav-ghost { background: transparent; }
+  .ps-nav-ghost .ps-nav-link { color: rgba(255,255,255,.92); }
+  .ps-nav-ghost .ps-nav-link:hover { background: rgba(255,255,255,.14); }
+  .ps-nav-ghost .ps-nav-name { color: #fff; }
+  .ps-nav-ghost.ps-nav-scrolled { background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(8px); border-color: rgba(0,0,0,.05); }
+  .ps-nav-ghost.ps-nav-scrolled .ps-nav-link { color: #475569; }
+  .ps-nav-ghost.ps-nav-scrolled .ps-nav-link:hover { background: rgba(0,0,0,.05); }
+  .ps-nav-ghost.ps-nav-scrolled .ps-nav-name { color: var(--ink); }
+
+  /* ── Admissions: journey path (homepage) ── */
+  .ps-journey { position: relative; }
+  .ps-jline { position: absolute; top: 16px; left: 2%; right: 2%; height: 30px; }
+  .ps-jline-mask { width: 0%; height: 100%; overflow: hidden;
+    transition: width 1s cubic-bezier(.4,0,.2,1) .1s; }
+  .ps-journey.in .ps-jline-mask { width: 100%; }
+  .ps-jbadge { position: relative; z-index: 1; display: inline-grid; place-items: center;
+    min-width: 34px; height: 34px; border-radius: 999px; padding: 0 10px;
+    font-size: 11px; font-weight: 800; letter-spacing: .1em;
+    box-shadow: 0 0 0 6px var(--paper);
+    transform: scale(0); transition: transform .5s cubic-bezier(.34,1.56,.64,1); }
+  .ps-journey.in .ps-jbadge { transform: scale(1); }
+  .ps-jbody { opacity: 0; transform: translateY(calc(18px * var(--motion) + 4px)); margin-top: 10px;
+    transition: opacity .6s cubic-bezier(.2,.7,.2,1), transform .6s cubic-bezier(.2,.7,.2,1), box-shadow .35s; }
+  .ps-journey.in .ps-jbody { opacity: 1; transform: none; }
+  .ps-journey.in .ps-jbody:hover { transform: translateY(-6px); box-shadow: 0 30px 60px -28px rgba(28,45,36,.45); }
+
+  /* ── Admissions: timeline rail (/admissions page) ── */
+  .ps-rail { position: relative; }
+  .ps-rail-line, .ps-rail-fill { position: absolute; top: 8px; bottom: 8px; left: 14px; width: 3px; border-radius: 2px; }
+  .ps-rail-line { background: rgba(28,45,36,.1); }
+  .ps-rail-fill { background: linear-gradient(180deg, var(--ps1), var(--ps2)); bottom: auto; height: 0;
+    transition: height 1.6s cubic-bezier(.4,0,.2,1) .15s; }
+  .ps-rail.in .ps-rail-fill { height: calc(100% - 16px); }
+  .ps-rstep { position: relative; opacity: 0; transition: opacity .55s ease, transform .55s cubic-bezier(.2,.7,.2,1); }
+  .ps-rdot { position: absolute; top: 22px; width: 13px; height: 13px; border-radius: 999px;
+    background: var(--ps2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ps1) 25%, transparent); }
+  .ps-rail.in .ps-rstep { opacity: 1; transform: none; }
+  @media (min-width: 768px) {
+    .ps-rail-line, .ps-rail-fill { left: 50%; margin-left: -1.5px; }
+    .ps-rstep { width: 46%; }
+    .ps-rstep-l { margin-right: auto; transform: translateX(calc(-22px * var(--motion))); }
+    .ps-rstep-l .ps-rdot { right: -9.2%; margin-right: -6.5px; }
+    .ps-rstep-r { margin-left: auto; transform: translateX(calc(22px * var(--motion))); }
+    .ps-rstep-r .ps-rdot { left: -9.2%; margin-left: -6.5px; }
+  }
+  @media (max-width: 767.98px) {
+    .ps-rstep { margin-left: 40px; transform: translateY(calc(14px * var(--motion))); }
+    .ps-rstep .ps-rdot { left: -32.5px; }
+  }
+
   /* ── Hall of fame podium rise ── */
   @keyframes ps-rise { to { opacity: 1; transform: none; } }
   .ps-champ { opacity: 0; transform: translateY(26px); animation: ps-rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
@@ -179,7 +228,27 @@ const PS_CSS = `
     .ps-flip-inner { transition: none; }
     .ps-dropdown { transition: none; }
     .ps-champ { animation: none; opacity: 1; transform: none; }
+    .ps-marker { animation: none; background-size: 100% .38em; }
+    .ps-accent-grow { animation: none; transform: scaleX(1); }
+    .ps-slide { transition: none; }
+    .ps-kb { animation: none; }
+    .ps-jline-mask, .ps-jbadge, .ps-jbody, .ps-rail-fill, .ps-rstep { transition: none; }
+    .ps-jline-mask { width: 100%; }
+    .ps-jbadge { transform: scale(1); }
+    .ps-jbody, .ps-rstep { opacity: 1; transform: none; }
+    .ps-rail-fill { height: calc(100% - 16px); }
   }
+  /* Animation level = Off — same statics as reduced-motion, admin-driven. */
+  .ps-motion-off .ps-marker { animation: none; background-size: 100% .38em; }
+  .ps-motion-off .ps-accent-grow { animation: none; transform: scaleX(1); }
+  .ps-motion-off .ps-underline path { animation: none; stroke-dashoffset: 0; }
+  .ps-motion-off .ps-kb { animation: none; }
+  .ps-motion-off .ps-jline-mask, .ps-motion-off .ps-jbadge, .ps-motion-off .ps-jbody,
+  .ps-motion-off .ps-rail-fill, .ps-motion-off .ps-rstep { transition: none; }
+  .ps-motion-off .ps-jline-mask { width: 100%; }
+  .ps-motion-off .ps-jbadge { transform: scale(1); }
+  .ps-motion-off .ps-jbody, .ps-motion-off .ps-rstep { opacity: 1; transform: none; }
+  .ps-motion-off .ps-rail-fill { height: calc(100% - 16px); }
 `;
 
 export default function PublicSite({ data, view = 'home' }: Props) {
@@ -196,12 +265,14 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   // Theme controls
   const fontHead = FONT_MAP[data.profile?.headingFont ?? 'INTER'] ?? FONT_MAP.INTER;
   const motion = MOTION_MAP[data.profile?.animationLevel ?? 'FULL'] ?? 1;
-  const heroStyleRaw = data.profile?.heroStyle ?? 'ILLUSTRATION';
+  // Declared layout (before image fallbacks) drives the MINIMAL motion damping,
+  // exactly as the legacy heroStyle=MINIMAL did.
+  const declaredLayout =
+    data.profile?.heroLayout ??
+    (data.profile?.heroStyle === 'PHOTO' ? 'FULL_BLEED' : (data.profile?.heroStyle ?? 'ILLUSTRATION'));
+  const minimal = declaredLayout === 'MINIMAL';
 
   const schoolName = data.school.name;
-  const headline = data.homepage?.headline ?? schoolName;
-  const subheadline = data.homepage?.subheadline;
-  const heroUrl = data.homepage?.heroUrl;
   const aboutText = data.homepage?.aboutText;
   const hasAbout = !!aboutText;
   // Feature-backed sections are gated on the school's plan entitlements (not on
@@ -233,14 +304,6 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   const principalMessage = data.homepage?.principalMessage;
   const principalPhotoUrl = data.homepage?.principalPhotoUrl;
   const aboutImageUrl = data.homepage?.aboutImageUrl;
-
-  // PHOTO = the school's photo (building etc.) as a full-viewport backdrop
-  // BEHIND the regular animated hero — layout, animations and dark text stay
-  // exactly as the illustrated hero; a paper-tinted wash keeps it readable.
-  // Needs an image; without one it's just the illustrated hero.
-  const photoBackdrop = heroStyleRaw === 'PHOTO' && !!heroUrl;
-  const heroStyle = heroStyleRaw === 'PHOTO' ? 'ILLUSTRATION' : heroStyleRaw;
-  const minimal = heroStyle === 'MINIMAL';
 
   useEffect(() => {
     // Nav elevate on scroll
@@ -310,13 +373,9 @@ export default function PublicSite({ data, view = 'home' }: Props) {
     };
   }, []);
 
-  // Hero text stays dark even on the photo backdrop — the paper wash keeps it
-  // readable, so the ink/underline/chip styling is identical across themes.
-  const heroTextLight = false;
-
   return (
     <div
-      className="ps-root"
+      className={`ps-root${motion === 0 ? ' ps-motion-off' : ''}`}
       style={
         {
           '--ps1': brandColor,
@@ -338,85 +397,16 @@ export default function PublicSite({ data, view = 'home' }: Props) {
         rel="stylesheet"
       />
 
-      {/* ── NAV ── */}
-      <header
-        id="ps-nav"
-        className="sticky top-0 z-50 transition-all duration-300 bg-[var(--paper)]/85 backdrop-blur border-b border-black/5 [&.ps-nav-scrolled]:shadow-sm"
-      >
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            {logoUrl ? (
-              <img src={logoUrl} alt={schoolName} className="h-10 w-auto" />
-            ) : (
-              <span className="h-10 w-10 rounded-2xl ps-logo-bg grid place-items-center font-bold text-white ps-head">
-                {schoolName.charAt(0)}
-              </span>
-            )}
-            <span className="ps-head font-bold text-lg">{schoolName}</span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-1 text-sm text-slate-600">
-            <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#home`}>Home</a>
-            {hasAbout && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#about`}>About</a>
-            )}
-            {hasAcademics && (
-              <div className="ps-acad">
-                <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition inline-block" href="/academics">
-                  Academics <span className="text-[10px] opacity-60">▾</span>
-                </a>
-                <div className="ps-dropdown">
-                  {data.courses.map((c, i) => (
-                    <a
-                      key={c.id}
-                      href={onAcademicsPage ? `#course-${c.id}` : `/academics#course-${c.id}`}
-                      className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 hover:bg-black/[.04] transition"
-                    >
-                      <span className="h-9 w-9 rounded-lg ps-chip grid place-items-center text-base flex-none">
-                        {['🧸', '📚', '🔬', '🎓', '🎨', '🏆', '🌟', '💡'][i % 8]}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[13px] font-bold truncate" style={{ color: 'var(--ink)' }}>{c.name}</span>
-                        {c.ageRange && <span className="block text-[11px] text-slate-400 truncate">{c.ageRange}</span>}
-                      </span>
-                    </a>
-                  ))}
-                  <a
-                    href="/academics"
-                    className="col-span-2 border-t border-black/5 mt-1 pt-2 px-2.5 pb-0.5 text-xs font-semibold"
-                    style={{ color: 'var(--ps1)' }}
-                  >
-                    View all programmes →
-                  </a>
-                </div>
-              </div>
-            )}
-            {hasAdmissions && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/admissions">Admissions</a>
-            )}
-            {hasHof && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#hall-of-fame`}>Hall of Fame</a>
-            )}
-            {hasGallery && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/gallery">Gallery</a>
-            )}
-            {hasEvents && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/connect">Connect</a>
-            )}
-            {(hasContact || hasEnquiry) && (
-              <a className="px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/contact">Contact</a>
-            )}
-          </nav>
-
-          <a
-            href={enquireHref}
-            className="btn-glow ps-accentbg text-sm font-semibold px-4 py-2 rounded-xl ps-soft hover:scale-[1.03] transition"
-            style={{ color: ink }}
-          >
-            Enquire →
-          </a>
-        </div>
-      </header>
+      {/* ── NAV (style selected by the school admin) ── */}
+      <SiteNav
+        data={data}
+        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasContact, hasEnquiry }}
+        base={base}
+        view={view}
+        onAcademicsPage={onAcademicsPage}
+        enquireHref={enquireHref}
+        ink={ink}
+      />
 
       {view !== 'home' ? (
         <>
@@ -436,7 +426,9 @@ export default function PublicSite({ data, view = 'home' }: Props) {
             )}
           </section>
           {view === 'academics' && <AcademicsSection courses={data.courses} />}
-          {view === 'admissions' && <AdmissionsSection admissions={data.admissions} courses={data.courses} />}
+          {view === 'admissions' && (
+            <AdmissionsSection admissions={data.admissions} courses={data.courses} variant="rail" />
+          )}
           {view === 'gallery' && <GallerySection gallery={data.gallery} schoolName={schoolName} />}
           {view === 'events' && <EventsSection events={data.events} timezone={data.school.timezone} />}
           {view === 'contact' && (
@@ -463,117 +455,8 @@ export default function PublicSite({ data, view = 'home' }: Props) {
         </>
       ) : (
         <>
-      {/* ── HERO ── */}
-      <section
-        id="home"
-        className={`relative overflow-hidden ${photoBackdrop ? 'min-h-[calc(100vh-4rem)] flex items-center' : ''}`}
-      >
-        {/* School photo backdrop behind the regular hero (PHOTO theme) */}
-        {photoBackdrop && (
-          <div className="absolute inset-0" aria-hidden="true">
-            <div
-              className="absolute inset-0 bg-cover bg-center"
-              style={{ backgroundImage: `url('${heroUrl}')` }}
-            />
-            {/* Paper wash: strong over the text column, light on the right so
-                the photo reads clearly behind the floating cards. */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  'linear-gradient(90deg, rgba(247,245,239,.9) 0%, rgba(247,245,239,.72) 42%, rgba(247,245,239,.3) 100%)',
-              }}
-            />
-            {/* Fade into the page background so the next section blends in. */}
-            <div
-              className="absolute inset-x-0 bottom-0 h-24"
-              style={{ background: 'linear-gradient(180deg, transparent, var(--paper))' }}
-            />
-          </div>
-        )}
-
-        <div
-          className={`relative max-w-6xl mx-auto px-6 ${
-            minimal ? 'py-24 text-center max-w-3xl' : 'pt-14 pb-20'
-          } grid ${minimal ? 'grid-cols-1' : 'lg:grid-cols-2'} gap-12 items-center w-full`}
-        >
-          <div className={minimal ? 'mx-auto' : ''}>
-            <div
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold mb-6 ${
-                heroTextLight ? 'bg-white/15 text-white' : 'ps-chip'
-              }`}
-            >
-              <span className="h-2 w-2 rounded-full ps-twinkle" style={{ background: brandColor2 }} />
-              Admissions open · 2026–27
-            </div>
-
-            <h1 className={`ps-head text-5xl md:text-6xl font-bold leading-[1.06] ${heroTextLight ? 'text-white' : ''}`}>
-              {headline}
-              {!heroTextLight && (
-                <svg className="ps-underline block mt-1 w-56 max-w-full" height="14" viewBox="0 0 260 14" fill="none">
-                  <path d="M2 10 C 70 2, 190 2, 258 9" stroke="var(--ps2)" strokeWidth="5" strokeLinecap="round" />
-                </svg>
-              )}
-            </h1>
-
-            {subheadline && (
-              <p className={`mt-6 text-lg max-w-md ${heroTextLight ? 'text-white/85' : 'text-slate-600'} ${minimal ? 'mx-auto' : ''}`}>
-                {subheadline}
-              </p>
-            )}
-
-            <div className={`mt-8 flex flex-wrap items-center gap-3 ${minimal ? 'justify-center' : ''}`}>
-              <a
-                href={enquireHref}
-                className="btn-glow ps-cta-btn font-semibold px-6 py-3.5 rounded-xl ps-soft hover:scale-[1.03] transition"
-              >
-                Book a campus visit
-              </a>
-              {hasAbout && (
-                <a
-                  href="#about"
-                  className={`px-6 py-3.5 rounded-xl font-semibold border transition ${
-                    heroTextLight ? 'border-white/30 hover:bg-white/10 text-white' : 'ps-card hover:bg-black/[.03]'
-                  }`}
-                >
-                  Explore ↓
-                </a>
-              )}
-            </div>
-          </div>
-
-          {/* Illustrated animated cluster (only in the illustrated hero) */}
-          {heroStyle === 'ILLUSTRATION' && (
-            <div className="relative h-[400px] hidden lg:block">
-              <div className="ps-float absolute top-2 right-4 w-64 rounded-3xl ps-card ps-soft p-2">
-                {heroUrl ? (
-                  <div className="rounded-2xl h-44 bg-cover bg-center" style={{ backgroundImage: `url('${heroUrl}')` }} />
-                ) : (
-                  <div className="rounded-2xl h-44 ps-brandgrad grid place-items-center text-white text-6xl">🏫</div>
-                )}
-                <div className="p-3 text-sm">
-                  <b className="ps-head">Open Day</b>
-                  <div className="text-slate-500 text-xs">Book a visit this term</div>
-                </div>
-              </div>
-              <div className="ps-sway absolute bottom-4 left-2 text-6xl">🎓</div>
-              <div className="ps-float ps-d1 absolute bottom-24 right-0 ps-card ps-soft rounded-2xl p-4 flex items-center gap-3">
-                <span className="h-11 w-11 rounded-xl ps-accentbg grid place-items-center text-2xl">📚</span>
-                <div>
-                  <b className="ps-head text-sm">Reading club</b>
-                  <div className="text-xs text-slate-500">every Friday</div>
-                </div>
-              </div>
-              <div className="ps-float ps-d2 absolute top-6 left-8 ps-card ps-soft rounded-2xl p-4 w-44">
-                <div className="text-xs text-slate-500">Every child</div>
-                <div className="ps-head text-lg font-bold">known by name</div>
-              </div>
-              <div className="ps-twinkle absolute top-16 left-40 text-3xl">✏️</div>
-              <div className="ps-twinkle absolute top-44 left-28 text-2xl" style={{ animationDelay: '-1s' }}>⭐</div>
-            </div>
-          )}
-        </div>
-      </section>
+      {/* ── HERO (layout selected by the school admin) ── */}
+      <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
 
       {/* ── STATS ── */}
       {data.stats.length > 0 && (

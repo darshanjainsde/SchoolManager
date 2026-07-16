@@ -26,8 +26,15 @@ export class SiteContentService {
         : data.heroLayout === 'MINIMAL' ? 'MINIMAL'
         : 'PHOTO';
     } else if (data.heroStyle && !data.heroLayout) {
-      data.heroLayout =
-        data.heroStyle === 'PHOTO' ? 'FULL_BLEED' : data.heroStyle;
+      // Only remap when the legacy value actually changed — several layouts
+      // share heroStyle=PHOTO, so an unchanged re-send (e.g. an old admin
+      // bundle saving the Theme form) must not clobber a specific layout.
+      const existing = await withTenant(schoolId, (tx) =>
+        tx.schoolProfile.findUnique({ where: { schoolId }, select: { heroStyle: true } }),
+      );
+      if (existing?.heroStyle !== data.heroStyle) {
+        data.heroLayout = data.heroStyle === 'PHOTO' ? 'FULL_BLEED' : data.heroStyle;
+      }
     }
     await withTenant(schoolId, (tx) =>
       tx.schoolProfile.upsert({ where: { schoolId }, update: data, create: { schoolId, ...data } }),
