@@ -54,11 +54,21 @@ export interface PublicSiteData {
     headingFont: string;
     heroStyle: string;
     animationLevel: string;
+    heroLayout: string;
+    heroTextAlign: string;
+    heroOverlayStyle: string;
+    heroOverlayOpacity: number;
+    heroHeight: string;
+    headlineAccent: string;
+    navStyle: string;
+    navCtaLabel: string;
+    navShowCta: boolean;
   } | null;
   homepage: {
     headline: string;
     subheadline: string | null;
     heroUrl: string | null;
+    heroImages: string[];
     aboutText: string | null;
     principalName: string | null;
     principalMessage: string | null;

@@ -49,6 +49,7 @@ export class PublicSiteService {
         profile?.logoAssetId,
         profile?.faviconAssetId,
         homepage?.heroAssetId,
+        ...(homepage?.heroImageAssetIds ?? []),
         homepage?.principalPhotoAssetId,
         homepage?.aboutImageAssetId,
         ...staff.map((s) => s.photoAssetId),
@@ -92,13 +93,27 @@ export class PublicSiteService {
               headingFont: profile.headingFont,
               heroStyle: profile.heroStyle,
               animationLevel: profile.animationLevel,
+              heroLayout: profile.heroLayout,
+              heroTextAlign: profile.heroTextAlign,
+              heroOverlayStyle: profile.heroOverlayStyle,
+              heroOverlayOpacity: profile.heroOverlayOpacity,
+              heroHeight: profile.heroHeight,
+              headlineAccent: profile.headlineAccent,
+              navStyle: profile.navStyle,
+              navCtaLabel: profile.navCtaLabel,
+              navShowCta: profile.navShowCta,
             }
           : null,
         homepage: homepage
           ? {
               headline: homepage.headline,
               subheadline: homepage.subheadline,
-              heroUrl: urlOf(homepage.heroAssetId),
+              heroUrl:
+                homepage.heroImageAssetIds.map(urlOf).find(Boolean) ??
+                urlOf(homepage.heroAssetId),
+              heroImages: homepage.heroImageAssetIds
+                .map(urlOf)
+                .filter((u): u is string => !!u),
               aboutText: has('ABOUT_CONTACT') ? homepage.aboutText : null,
               principalName: has('ABOUT_CONTACT') ? homepage.principalName : null,
               principalMessage: has('ABOUT_CONTACT') ? homepage.principalMessage : null,

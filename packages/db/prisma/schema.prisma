@@ -213,6 +213,17 @@ model SchoolProfile {
   heroStyle         String  @default("ILLUSTRATION")
   animationLevel    String  @default("FULL")
   themePreset       String?
+  // First-screen layout system. heroStyle above is the legacy 3-value field,
+  // kept in sync by the CMS service (PHOTO→FULL_BLEED etc.) for old clients.
+  heroLayout         String  @default("ILLUSTRATION")
+  heroTextAlign      String  @default("LEFT")
+  heroOverlayStyle   String  @default("WASH")
+  heroOverlayOpacity Int     @default(65)
+  heroHeight         String  @default("FULL")
+  headlineAccent     String  @default("DRAW")
+  navStyle           String  @default("CLASSIC")
+  navCtaLabel        String  @default("Enquire")
+  navShowCta         Boolean @default(true)
   phone             String?
   email             String?
   addressLine1      String?
@@ -240,6 +251,9 @@ model HomepageContent {
   // Wide image for the About section's picture card (campus/community photo);
   // falls back to the principal photo, then a placeholder.
   aboutImageAssetId  String? @db.Uuid
+  // Ordered hero image slots (MediaAsset kind HERO, max 5) for multi-image
+  // layouts; heroAssetId above stays in sync with slot 1 for old clients.
+  heroImageAssetIds  String[] @default([]) @db.Uuid
   // Which content sections render on the homepage. Full details always live on
   // the dedicated pages (/admissions, /gallery, /connect, /contact).
   showAdmissions     Boolean @default(true)

@@ -39,6 +39,17 @@ export class UpdateProfileDto {
   @IsOptional() @IsIn(['ILLUSTRATION', 'PHOTO', 'MINIMAL']) heroStyle?: string;
   @IsOptional() @IsIn(['FULL', 'SUBTLE', 'NONE']) animationLevel?: string;
   @IsOptional() @IsIn(['ACADEMIC', 'MODERN', 'PLAYFUL', 'ELEGANT', 'CUSTOM']) themePreset?: string;
+  @IsOptional()
+  @IsIn(['ILLUSTRATION', 'FULL_BLEED', 'SPLIT_MOSAIC', 'SPLIT_EDITORIAL', 'COLLAGE', 'SLIDESHOW', 'MINIMAL'])
+  heroLayout?: string;
+  @IsOptional() @IsIn(['LEFT', 'CENTER']) heroTextAlign?: string;
+  @IsOptional() @IsIn(['WASH', 'TINT', 'DARK']) heroOverlayStyle?: string;
+  @IsOptional() @IsInt() @Min(10) @Max(95) heroOverlayOpacity?: number;
+  @IsOptional() @IsIn(['FULL', 'COMPACT']) heroHeight?: string;
+  @IsOptional() @IsIn(['DRAW', 'MARKER', 'GROW', 'NONE']) headlineAccent?: string;
+  @IsOptional() @IsIn(['CLASSIC', 'CENTER', 'PILL', 'STRIP', 'GHOST']) navStyle?: string;
+  @IsOptional() @IsString() @Length(1, 40) navCtaLabel?: string;
+  @IsOptional() @IsBoolean() navShowCta?: boolean;
 }
 
 export class UpdateHomepageDto {
@@ -48,6 +59,7 @@ export class UpdateHomepageDto {
   @IsOptional() @IsString() @Length(0, 120) principalName?: string;
   @IsOptional() @IsString() @Length(0, 2000) principalMessage?: string;
   @IsOptional() @IsString() heroAssetId?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(5) @IsString({ each: true }) heroImageAssetIds?: string[];
   @IsOptional() @IsString() principalPhotoAssetId?: string;
   @IsOptional() @IsString() aboutImageAssetId?: string;
   @IsOptional() @IsBoolean() showAdmissions?: boolean;
