@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
-import { getPost, BLOG_POSTS } from '@/lib/blog';
+import { getPost } from '@/lib/blog';
 import '@/components/marketing/marketing.css';
 
 interface Props { params: { slug: string } }
