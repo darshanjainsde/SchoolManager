@@ -61,6 +61,7 @@ export interface PublicSiteData {
     heroHeight: string;
     headlineAccent: string;
     navStyle: string;
+    navColor: string;
     navCtaLabel: string;
     navShowCta: boolean;
   } | null;

@@ -143,6 +143,21 @@ export default function SiteNav({
   const ghost = style === 'GHOST';
   const pill = style === 'PILL';
 
+  // Admin-picked bar colour. `onDark` flips link/name colours via ps-nav-ondark.
+  const navColor = profile?.navColor ?? 'PAPER';
+  const color =
+    {
+      PAPER: { bar: 'ps-navc-paper', onDark: false },
+      WHITE: { bar: 'ps-navc-white', onDark: false },
+      DARK: { bar: 'ps-navc-dark', onDark: true },
+      BRAND: { bar: 'ps-navc-brand', onDark: true },
+    }[navColor] ?? { bar: 'ps-navc-paper', onDark: false };
+  const onDarkCls = color.onDark ? ' ps-nav-ondark' : '';
+
+  // On a photo homepage the pill overlays the hero (fixed) so the photo fills
+  // the screen edge-to-edge behind it — that's what makes it read as floating.
+  const pillOverlay = pill && view === 'home' && heroIsPhotoLayout(data);
+
   const strip = style === 'STRIP' && (profile?.phone || profile?.email) && (
     <div className="ps-nav-strip text-xs flex items-center justify-end gap-5 px-6 py-1.5">
       {profile?.phone && <span>📞 {profile.phone}</span>}
@@ -150,11 +165,21 @@ export default function SiteNav({
     </div>
   );
 
-  // PILL: transparent sticky shell, floating rounded bar inside.
+  // PILL: detached rounded bar. Fixed over photo heroes; sticky elsewhere with
+  // a transparent shell so scrolling content passes behind the pill's sides.
   if (pill) {
     return (
-      <header id="ps-nav" className="sticky top-0 z-50 px-4 pt-3 transition-all duration-300 [&.ps-nav-scrolled_.ps-pill-bar]:shadow-md">
-        <div className="ps-pill-bar max-w-5xl mx-auto px-5 h-14 flex items-center justify-between gap-3 rounded-full bg-[var(--paper)]/85 backdrop-blur border border-black/5 shadow-sm transition-shadow">
+      <header
+        id="ps-nav"
+        className={`${
+          pillOverlay ? 'fixed inset-x-0 top-0' : 'sticky top-0'
+        } z-50 px-4 pt-3 transition-all duration-300 [&.ps-nav-scrolled_.ps-pill-bar]:shadow-xl`}
+      >
+        {/* w-fit + nowrap: the pill hugs its content and grows in WIDTH only —
+            links never wrap to a second line, the name truncates if tight. */}
+        <div
+          className={`ps-pill-bar${onDarkCls} ${color.bar} w-fit max-w-full mx-auto px-5 h-14 flex flex-nowrap items-center gap-4 rounded-full backdrop-blur border border-black/5 shadow-lg transition-shadow`}
+        >
           <Logo data={data} small />
           <nav className="hidden md:flex items-center gap-1 text-sm text-slate-600">
             <NavLinks data={data} flags={flags} base={base} onAcademicsPage={onAcademicsPage} />
@@ -170,7 +195,7 @@ export default function SiteNav({
     return (
       <header
         id="ps-nav"
-        className="sticky top-0 z-50 transition-all duration-300 bg-[var(--paper)]/85 backdrop-blur border-b border-black/5 [&.ps-nav-scrolled]:shadow-sm"
+        className={`sticky top-0 z-50 transition-all duration-300 ${color.bar}${onDarkCls} backdrop-blur border-b border-black/5 [&.ps-nav-scrolled]:shadow-sm`}
       >
         <div className="max-w-6xl mx-auto px-6 h-16 hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-4">
           <nav className="flex items-center justify-end gap-1 text-sm text-slate-600">
@@ -211,8 +236,8 @@ export default function SiteNav({
       id="ps-nav"
       className={
         ghost
-          ? 'ps-nav-ghost fixed top-0 inset-x-0 z-50 transition-all duration-300 border-b border-transparent [&.ps-nav-scrolled]:shadow-sm'
-          : 'sticky top-0 z-50 transition-all duration-300 bg-[var(--paper)]/85 backdrop-blur border-b border-black/5 [&.ps-nav-scrolled]:shadow-sm'
+          ? `ps-nav-ghost ${color.bar}${onDarkCls} fixed top-0 inset-x-0 z-50 transition-all duration-300 border-b border-transparent [&.ps-nav-scrolled]:shadow-sm`
+          : `sticky top-0 z-50 transition-all duration-300 ${color.bar}${onDarkCls} backdrop-blur border-b border-black/5 [&.ps-nav-scrolled]:shadow-sm`
       }
     >
       {strip}

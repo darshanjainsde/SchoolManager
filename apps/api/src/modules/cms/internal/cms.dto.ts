@@ -48,6 +48,7 @@ export class UpdateProfileDto {
   @IsOptional() @IsIn(['FULL', 'COMPACT']) heroHeight?: string;
   @IsOptional() @IsIn(['DRAW', 'MARKER', 'GROW', 'NONE']) headlineAccent?: string;
   @IsOptional() @IsIn(['CLASSIC', 'CENTER', 'PILL', 'STRIP', 'GHOST']) navStyle?: string;
+  @IsOptional() @IsIn(['PAPER', 'WHITE', 'DARK', 'BRAND']) navColor?: string;
   @IsOptional() @IsString() @Length(1, 40) navCtaLabel?: string;
   @IsOptional() @IsBoolean() navShowCta?: boolean;
 }

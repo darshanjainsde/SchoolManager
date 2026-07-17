@@ -163,16 +163,31 @@ const PS_CSS = `
   .ps-kb { animation: ps-kb 7.5s ease-out forwards; }
 
   /* ── Navbar variants ── */
+  /* Links never break mid-label ("Hall of Fame" stays one line). */
+  .ps-nav-link { white-space: nowrap; }
   .ps-nav-strip { background: var(--ink); color: rgba(255,255,255,.85); }
-  .ps-nav-ghost { background: transparent; }
+
+  /* Admin-picked bar colour (applies to classic/center/pill/strip, and to
+     ghost's scrolled state). */
+  .ps-navc-paper { background: color-mix(in srgb, var(--paper) 85%, transparent); }
+  .ps-navc-white { background: rgba(255,255,255,.92); }
+  .ps-navc-dark  { background: color-mix(in srgb, var(--ink) 96%, transparent); }
+  .ps-navc-brand { background: color-mix(in srgb, var(--ps1) 96%, transparent); }
+  /* Dark/brand bars flip text to light. */
+  .ps-nav-ondark { border-color: rgba(255,255,255,.08); }
+  .ps-nav-ondark nav { color: rgba(255,255,255,.85); }
+  .ps-nav-ondark .ps-nav-link:hover { background: rgba(255,255,255,.12); }
+  .ps-nav-ondark .ps-nav-name { color: #fff; }
+
+  /* Ghost: fully transparent until scrolled, then the colour class shows. */
+  .ps-nav-ghost:not(.ps-nav-scrolled) { background: transparent; }
   .ps-nav-ghost .ps-nav-link { color: rgba(255,255,255,.92); }
   .ps-nav-ghost .ps-nav-link:hover { background: rgba(255,255,255,.14); }
   .ps-nav-ghost .ps-nav-name { color: #fff; }
-  .ps-nav-ghost.ps-nav-scrolled { background: color-mix(in srgb, var(--paper) 88%, transparent);
-    backdrop-filter: blur(8px); border-color: rgba(0,0,0,.05); }
-  .ps-nav-ghost.ps-nav-scrolled .ps-nav-link { color: #475569; }
-  .ps-nav-ghost.ps-nav-scrolled .ps-nav-link:hover { background: rgba(0,0,0,.05); }
-  .ps-nav-ghost.ps-nav-scrolled .ps-nav-name { color: var(--ink); }
+  .ps-nav-ghost.ps-nav-scrolled { backdrop-filter: blur(8px); border-color: rgba(0,0,0,.05); }
+  .ps-nav-ghost.ps-nav-scrolled:not(.ps-nav-ondark) .ps-nav-link { color: #475569; }
+  .ps-nav-ghost.ps-nav-scrolled:not(.ps-nav-ondark) .ps-nav-link:hover { background: rgba(0,0,0,.05); }
+  .ps-nav-ghost.ps-nav-scrolled:not(.ps-nav-ondark) .ps-nav-name { color: var(--ink); }
 
   /* ── Admissions: journey path (homepage) ── */
   .ps-journey { position: relative; }

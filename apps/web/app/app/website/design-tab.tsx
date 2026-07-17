@@ -20,8 +20,10 @@ interface SiteProfile {
   heroHeight?: string | null;
   headlineAccent?: string | null;
   navStyle?: string | null;
+  navColor?: string | null;
   navCtaLabel?: string | null;
   navShowCta?: boolean | null;
+  brandColorPrimary?: string | null;
   phone?: string | null;
   email?: string | null;
 }
@@ -52,10 +54,17 @@ const ACCENTS: { value: string; label: string; hint: string }[] = [
   { value: 'NONE', label: 'None', hint: 'No accent under the headline' },
 ];
 
+const NAV_COLORS: { value: string; label: string; hint: string; swatch: (brand: string) => string; darkText: boolean }[] = [
+  { value: 'PAPER', label: 'Paper', hint: 'Warm off-white (current)', swatch: () => '#f7f5ef', darkText: false },
+  { value: 'WHITE', label: 'White', hint: 'Crisp white — stands out on paper', swatch: () => '#ffffff', darkText: false },
+  { value: 'DARK', label: 'Dark', hint: 'Deep ink, white links', swatch: () => '#22352a', darkText: true },
+  { value: 'BRAND', label: 'School colour', hint: 'Your primary colour, white links', swatch: (b) => b, darkText: true },
+];
+
 const NAVS: { value: string; label: string; hint: string }[] = [
   { value: 'CLASSIC', label: 'Classic', hint: 'Logo left, links right (current)' },
   { value: 'CENTER', label: 'Centered crest', hint: 'Links split around a centered logo' },
-  { value: 'PILL', label: 'Floating pill', hint: 'Detached rounded bar over the page' },
+  { value: 'PILL', label: 'Floating pill', hint: 'Detached bar floating over your photo hero' },
   { value: 'STRIP', label: 'Info strip', hint: 'Phone & email ribbon above the bar' },
   { value: 'GHOST', label: 'Transparent', hint: 'Invisible over a photo hero, solid on scroll' },
 ];
@@ -533,6 +542,44 @@ export default function DesignTab() {
               );
             })}
           </div>
+          {/* Bar colour */}
+          <div className="space-y-2">
+            <Label>Navbar colour</Label>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {NAV_COLORS.map((c) => {
+                const on = (profile?.navColor ?? 'PAPER') === c.value;
+                const swatch = c.swatch(profile?.brandColorPrimary ?? '#2f6b4f');
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => profileMutation.mutate({ navColor: c.value })}
+                    className={[
+                      'rounded-xl border p-2 text-left transition',
+                      on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                    ].join(' ')}
+                  >
+                    <span
+                      className="flex h-8 w-full items-center gap-1.5 rounded-md border border-slate-200 px-2"
+                      style={{ background: swatch }}
+                    >
+                      <span className="h-1.5 w-6 rounded-sm" style={{ background: c.darkText ? 'rgba(255,255,255,.85)' : '#94a3b8' }} />
+                      <span className="h-1.5 w-4 rounded-sm" style={{ background: c.darkText ? 'rgba(255,255,255,.6)' : '#cbd5e1' }} />
+                      <span className="ml-auto h-2.5 w-6 rounded-sm bg-amber-400" />
+                    </span>
+                    <span className="mt-1.5 block text-xs font-semibold text-slate-700">{c.label}</span>
+                    <span className="block text-[11px] leading-snug text-slate-400">{c.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-slate-400">
+              Applies to every navbar style. On &ldquo;Transparent&rdquo; it becomes the colour the bar takes
+              after scrolling.
+            </p>
+          </div>
+
           {(profile?.navStyle ?? 'CLASSIC') === 'GHOST' && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Transparent needs a photo-based first screen (full canvas, mosaic, editorial, collage or

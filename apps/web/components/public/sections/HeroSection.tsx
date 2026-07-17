@@ -259,6 +259,10 @@ export default function HeroSection({
   const accent = data.profile?.headlineAccent ?? 'DRAW';
   const motionOff = (data.profile?.animationLevel ?? 'FULL') === 'NONE';
   const overlay = overlayFor(ovStyle, ovOpacity, center, brand);
+  // PILL/GHOST navs overlay a photo hero (fixed, no reserved strip), so the
+  // hero must fill the whole viewport and pad its content below the bar.
+  const navOverlay =
+    PHOTO_LAYOUTS.has(layout) && ['PILL', 'GHOST'].includes(data.profile?.navStyle ?? 'CLASSIC');
 
   const copyProps = { data, enquireHref, hasAbout, brandColor2, accent } as const;
 
@@ -294,7 +298,9 @@ export default function HeroSection({
     return (
       <section
         id="home"
-        className={`relative overflow-hidden ${full ? 'min-h-[calc(100vh-4rem)]' : 'min-h-[70vh]'} flex items-center`}
+        className={`relative overflow-hidden ${
+          full ? (navOverlay ? 'min-h-screen' : 'min-h-[calc(100vh-4rem)]') : 'min-h-[70vh]'
+        } flex items-center`}
       >
         <div className="absolute inset-0" aria-hidden="true">
           {slideshow ? (
@@ -310,7 +316,7 @@ export default function HeroSection({
         </div>
 
         <div
-          className={`relative max-w-6xl mx-auto px-6 pt-14 pb-20 grid ${
+          className={`relative max-w-6xl mx-auto px-6 ${navOverlay ? 'pt-28' : 'pt-14'} pb-20 grid ${
             legacyWash ? 'lg:grid-cols-2' : 'grid-cols-1'
           } gap-12 items-center w-full`}
         >
@@ -326,7 +332,7 @@ export default function HeroSection({
     const smalls = images.slice(1, 3);
     return (
       <section id="home" className="relative overflow-hidden">
-        <div className="max-w-6xl mx-auto px-6 pt-6 pb-14 w-full">
+        <div className={`max-w-6xl mx-auto px-6 ${navOverlay ? 'pt-24' : 'pt-6'} pb-14 w-full`}>
           <div className={`grid gap-3 ${smalls.length ? 'lg:grid-cols-[1.6fr_1fr]' : ''}`}>
             <div
               className={`reveal relative rounded-3xl overflow-hidden ps-soft flex items-end ${
@@ -361,7 +367,7 @@ export default function HeroSection({
     return (
       <section id="home" className="relative overflow-hidden">
         <div
-          className={`max-w-6xl mx-auto px-6 pt-6 pb-14 grid gap-8 lg:grid-cols-2 items-stretch ${
+          className={`max-w-6xl mx-auto px-6 ${navOverlay ? 'pt-24' : 'pt-6'} pb-14 grid gap-8 lg:grid-cols-2 items-stretch ${
             full ? 'lg:min-h-[78vh]' : 'lg:min-h-[60vh]'
           }`}
         >

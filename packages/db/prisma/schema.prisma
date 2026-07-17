@@ -222,6 +222,7 @@ model SchoolProfile {
   heroHeight         String  @default("FULL")
   headlineAccent     String  @default("DRAW")
   navStyle           String  @default("CLASSIC")
+  navColor           String  @default("PAPER")
   navCtaLabel        String  @default("Enquire")
   navShowCta         Boolean @default(true)
   phone             String?
