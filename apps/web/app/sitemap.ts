@@ -18,6 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const marketing: MetadataRoute.Sitemap = [
     { url: 'https://sckools.com/', changeFrequency: 'weekly', priority: 1 },
     { url: 'https://sckools.com/pricing', changeFrequency: 'weekly', priority: 0.9 },
+    { url: 'https://sckools.com/school-website-builder', changeFrequency: 'weekly', priority: 0.9 },
   ];
 
   const schools = await fetchDirectory();
