@@ -351,7 +351,8 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
           <div className="rv"><span className="eyebrow">Everything a modern school needs</span></div>
           <h2 className="h-lg rv" style={{ transitionDelay: '.06s' }}>One platform. Zero developers needed.</h2>
           <p className="lede rv" style={{ marginTop: 14, transitionDelay: '.12s' }}>
-            Edit everything yourself from a simple admin — we handle design, hosting, domains and security.
+            Sckools is a school website builder, admissions engine and school management platform in one.
+            Edit everything yourself from a simple admin — we handle design, hosting, your domain and security.
           </p>
           <p className="hint rv">↻ Click any card — flip it over and drop your number, we call you back.</p>
           <FlipFeatureCards />
