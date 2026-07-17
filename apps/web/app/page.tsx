@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { cache } from 'react';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { fetchPublicSite, fetchMarketingConfig } from '@/lib/public-api';
@@ -30,9 +31,37 @@ const OG_IMAGE = {
   alt: 'Sckools — school websites, admissions and the inter-school events network',
 };
 
+/** One fetch per request even though generateMetadata and the page both need it. */
+const getPublicSite = cache(fetchPublicSite);
+
+async function schoolMetadata(host: string): Promise<Metadata> {
+  const data = await getPublicSite(host);
+  if (!data) return {};
+  const { school, profile, homepage } = data;
+  const title = profile?.city ? `${school.name} — ${profile.city}` : school.name;
+  const rawDesc =
+    homepage?.subheadline ||
+    homepage?.aboutText ||
+    `${school.name}: admissions, academics, gallery, events and contact details.`;
+  const description = rawDesc.replace(/\s+/g, ' ').trim().slice(0, 160);
+  const icon = profile?.faviconUrl ?? profile?.logoUrl ?? null;
+  return {
+    title,
+    description,
+    ...(icon ? { icons: { icon } } : {}),
+    openGraph: {
+      title,
+      description,
+      siteName: school.name,
+      type: 'website',
+      ...(homepage?.heroUrl ? { images: [{ url: homepage.heroUrl }] } : {}),
+    },
+  };
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const host = headers().get('host') ?? '';
-  if (!isPlatformHost(host)) return {}; // school sites keep the layout default
+  if (!isPlatformHost(host)) return schoolMetadata(host);
   return {
     title: 'Sckools — School Websites, Admissions & Inter-School Events Network',
     description:
@@ -64,7 +93,7 @@ export default async function HomePage() {
   const host = headers().get('host') ?? '';
 
   if (!isPlatformHost(host)) {
-    const data = await fetchPublicSite(host);
+    const data = await getPublicSite(host);
     if (data) {
       return <PublicSite data={data} />;
     }
