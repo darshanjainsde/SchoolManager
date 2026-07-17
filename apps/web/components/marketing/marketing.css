@@ -534,3 +534,13 @@
 .mkt .per { color: var(--dim); font-size: 13.5px; font-weight: 700; }
 .mkt .p-note { margin: 56px auto 0; text-align: center; font-size: 14px; color: var(--muted); background: var(--gold-soft); border: 1px solid #f2e2bc; border-radius: 16px; padding: 16px 24px; max-width: 640px; }
 .mkt .p-note b { color: #b27200; }
+
+/* ---------- Pricing FAQ ---------- */
+.faq-sec { padding: 72px 0 96px; }
+.faq-list { margin-top: 32px; display: grid; gap: 12px; }
+.faq-item { border: 1px solid var(--line); border-radius: 14px; background: var(--paper2); padding: 0 20px; }
+.faq-item summary { cursor: pointer; font-weight: 700; padding: 18px 0; list-style: none; position: relative; padding-right: 32px; }
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after { content: '+'; position: absolute; right: 4px; top: 14px; font-size: 22px; font-weight: 400; opacity: .55; }
+.faq-item[open] summary::after { content: '\2212'; }
+.faq-item p { margin: 0; padding: 0 0 20px; line-height: 1.65; opacity: .85; }
