@@ -223,6 +223,7 @@ model SchoolProfile {
   headlineAccent     String  @default("DRAW")
   navStyle           String  @default("CLASSIC")
   navColor           String  @default("PAPER")
+  navTextColor       String  @default("AUTO")
   navCtaLabel        String  @default("Enquire")
   navShowCta         Boolean @default(true)
   phone             String?

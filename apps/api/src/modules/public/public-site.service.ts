@@ -101,6 +101,7 @@ export class PublicSiteService {
               headlineAccent: profile.headlineAccent,
               navStyle: profile.navStyle,
               navColor: profile.navColor,
+              navTextColor: profile.navTextColor,
               navCtaLabel: profile.navCtaLabel,
               navShowCta: profile.navShowCta,
             }

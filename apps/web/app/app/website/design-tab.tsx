@@ -21,6 +21,7 @@ interface SiteProfile {
   headlineAccent?: string | null;
   navStyle?: string | null;
   navColor?: string | null;
+  navTextColor?: string | null;
   navCtaLabel?: string | null;
   navShowCta?: boolean | null;
   brandColorPrimary?: string | null;
@@ -581,10 +582,30 @@ export default function DesignTab() {
           </div>
 
           {(profile?.navStyle ?? 'CLASSIC') === 'GHOST' && (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Transparent needs a photo-based first screen (full canvas, mosaic, editorial, collage or
-              slideshow). On other layouts it falls back to Classic.
-            </p>
+            <>
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Transparent needs a photo-based first screen (full canvas, mosaic, editorial, collage or
+                slideshow). On other layouts it falls back to Classic.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="design-navtext">Text on photo (before scrolling)</Label>
+                <Select
+                  id="design-navtext"
+                  value={profile?.navTextColor ?? 'AUTO'}
+                  disabled={busy}
+                  onChange={(e) => profileMutation.mutate({ navTextColor: e.target.value })}
+                  className="max-w-xs"
+                >
+                  <option value="AUTO">Auto — match the photo overlay (recommended)</option>
+                  <option value="LIGHT">White — for dark photos</option>
+                  <option value="DARK">Dark — for bright photos</option>
+                </Select>
+                <p className="text-xs text-slate-400">
+                  Auto picks dark text over a light paper wash and white text over brand-tint or dark-cinema
+                  overlays. After scrolling, the navbar colour above takes over.
+                </p>
+              </div>
+            </>
           )}
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-2">

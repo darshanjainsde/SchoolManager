@@ -49,6 +49,7 @@ export class UpdateProfileDto {
   @IsOptional() @IsIn(['DRAW', 'MARKER', 'GROW', 'NONE']) headlineAccent?: string;
   @IsOptional() @IsIn(['CLASSIC', 'CENTER', 'PILL', 'STRIP', 'GHOST']) navStyle?: string;
   @IsOptional() @IsIn(['PAPER', 'WHITE', 'DARK', 'BRAND']) navColor?: string;
+  @IsOptional() @IsIn(['AUTO', 'LIGHT', 'DARK']) navTextColor?: string;
   @IsOptional() @IsString() @Length(1, 40) navCtaLabel?: string;
   @IsOptional() @IsBoolean() navShowCta?: boolean;
 }

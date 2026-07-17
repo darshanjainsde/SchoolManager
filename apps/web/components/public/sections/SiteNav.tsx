@@ -158,6 +158,15 @@ export default function SiteNav({
   // the screen edge-to-edge behind it — that's what makes it read as floating.
   const pillOverlay = pill && view === 'home' && heroIsPhotoLayout(data);
 
+  // Ghost link colour before scroll. AUTO follows the hero overlay: a paper
+  // wash lightens the photo (white links vanish) so it gets dark ink; tint and
+  // dark-cinema overlays keep white.
+  const navText = profile?.navTextColor ?? 'AUTO';
+  const ghostDarkText =
+    ghost &&
+    (navText === 'DARK' || (navText === 'AUTO' && (profile?.heroOverlayStyle ?? 'WASH') === 'WASH'));
+  const ghostCls = ghost ? ` ps-nav-ghost${ghostDarkText ? ' ps-nav-ghost-darktext' : ''}` : '';
+
   const strip = style === 'STRIP' && (profile?.phone || profile?.email) && (
     <div className="ps-nav-strip text-xs flex items-center justify-end gap-5 px-6 py-1.5">
       {profile?.phone && <span>📞 {profile.phone}</span>}
@@ -236,7 +245,7 @@ export default function SiteNav({
       id="ps-nav"
       className={
         ghost
-          ? `ps-nav-ghost ${color.bar}${onDarkCls} fixed top-0 inset-x-0 z-50 transition-all duration-300 border-b border-transparent [&.ps-nav-scrolled]:shadow-sm`
+          ? `${color.bar}${onDarkCls}${ghostCls} fixed top-0 inset-x-0 z-50 transition-all duration-300 border-b border-transparent [&.ps-nav-scrolled]:shadow-sm`
           : `sticky top-0 z-50 transition-all duration-300 ${color.bar}${onDarkCls} backdrop-blur border-b border-black/5 [&.ps-nav-scrolled]:shadow-sm`
       }
     >

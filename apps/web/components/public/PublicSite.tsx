@@ -184,6 +184,11 @@ const PS_CSS = `
   .ps-nav-ghost .ps-nav-link { color: rgba(255,255,255,.92); }
   .ps-nav-ghost .ps-nav-link:hover { background: rgba(255,255,255,.14); }
   .ps-nav-ghost .ps-nav-name { color: #fff; }
+  /* Ghost with dark text at top (admin "Text on photo" = Dark, or Auto over a
+     light paper wash) — white links are invisible on a washed-out photo. */
+  .ps-nav-ghost-darktext:not(.ps-nav-scrolled) .ps-nav-link { color: #475569; }
+  .ps-nav-ghost-darktext:not(.ps-nav-scrolled) .ps-nav-link:hover { background: rgba(0,0,0,.06); }
+  .ps-nav-ghost-darktext:not(.ps-nav-scrolled) .ps-nav-name { color: var(--ink); }
   .ps-nav-ghost.ps-nav-scrolled { backdrop-filter: blur(8px); border-color: rgba(0,0,0,.05); }
   .ps-nav-ghost.ps-nav-scrolled:not(.ps-nav-ondark) .ps-nav-link { color: #475569; }
   .ps-nav-ghost.ps-nav-scrolled:not(.ps-nav-ondark) .ps-nav-link:hover { background: rgba(0,0,0,.05); }
