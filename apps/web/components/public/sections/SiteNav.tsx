@@ -152,7 +152,11 @@ export default function SiteNav({
       DARK: { bar: 'ps-navc-dark', onDark: true },
       BRAND: { bar: 'ps-navc-brand', onDark: true },
     }[navColor] ?? { bar: 'ps-navc-paper', onDark: false };
-  const onDarkCls = color.onDark ? ' ps-nav-ondark' : '';
+  // Text colour: AUTO follows the bar colour; LIGHT/DARK are explicit admin
+  // overrides that win on every style.
+  const navText = profile?.navTextColor ?? 'AUTO';
+  const lightText = navText === 'LIGHT' || (navText === 'AUTO' && color.onDark);
+  const onDarkCls = lightText ? ' ps-nav-ondark' : '';
 
   // On a photo homepage the pill overlays the hero (fixed) so the photo fills
   // the screen edge-to-edge behind it — that's what makes it read as floating.
@@ -161,7 +165,6 @@ export default function SiteNav({
   // Ghost link colour before scroll. AUTO follows the hero overlay: a paper
   // wash lightens the photo (white links vanish) so it gets dark ink; tint and
   // dark-cinema overlays keep white.
-  const navText = profile?.navTextColor ?? 'AUTO';
   const ghostDarkText =
     ghost &&
     (navText === 'DARK' || (navText === 'AUTO' && (profile?.heroOverlayStyle ?? 'WASH') === 'WASH'));
