@@ -235,6 +235,17 @@ const PS_CSS = `
     .ps-rstep .ps-rdot { left: -32.5px; }
   }
 
+  /* ── Gallery lightbox ── */
+  .ps-lb { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1.25rem;
+    background: rgba(16,26,20,.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    animation: ps-lb-fade .25s ease; }
+  @keyframes ps-lb-fade { from { opacity: 0; } to { opacity: 1; } }
+  .ps-lb-img { animation: ps-lb-zoom .32s cubic-bezier(.2,.7,.2,1); }
+  @keyframes ps-lb-zoom { from { opacity: 0; transform: scale(.92) translateY(10px); } to { opacity: 1; transform: none; } }
+  .ps-lb-closing { animation: ps-lb-fade .2s ease reverse forwards; }
+  .ps-lb-closing .ps-lb-img { animation: ps-lb-zoomout .2s ease forwards; }
+  @keyframes ps-lb-zoomout { to { opacity: 0; transform: scale(.94); } }
+
   /* ── Hall of fame podium rise ── */
   @keyframes ps-rise { to { opacity: 1; transform: none; } }
   .ps-champ { opacity: 0; transform: translateY(26px); animation: ps-rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
@@ -252,6 +263,7 @@ const PS_CSS = `
     .ps-accent-grow { animation: none; transform: scaleX(1); }
     .ps-slide { transition: none; }
     .ps-kb { animation: none; }
+    .ps-lb, .ps-lb-img, .ps-lb-closing, .ps-lb-closing .ps-lb-img { animation: none; }
     .ps-jline-mask, .ps-jbadge, .ps-jbody, .ps-rail-fill, .ps-rstep { transition: none; }
     .ps-jline-mask { width: 100%; }
     .ps-jbadge { transform: scale(1); }
