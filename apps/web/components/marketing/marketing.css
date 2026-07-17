@@ -559,3 +559,16 @@
 .lp-card b { display: block; margin-bottom: 8px; font-size: 17px; }
 .lp-card p { margin: 0; line-height: 1.6; opacity: .82; }
 .lp-n { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #14B8A6, #6D4AFF); color: #fff; font-weight: 800; margin-bottom: 10px; }
+
+/* ---------- Blog ---------- */
+.post-list { display: grid; gap: 16px; }
+.post-card { display: block; border: 1px solid var(--line); border-radius: 16px; padding: 24px; background: var(--paper2); }
+.post-card b { display: block; font-size: 19px; margin-bottom: 8px; }
+.post-card p { margin: 0 0 10px; line-height: 1.6; opacity: .82; }
+.post-meta { font-size: 13px; opacity: .6; }
+.post { padding: 110px 0 90px; }
+.post h2 { font-size: 24px; margin: 36px 0 12px; }
+.post p { line-height: 1.75; margin: 0 0 16px; }
+.post ul { margin: 0 0 16px 22px; display: grid; gap: 8px; line-height: 1.65; }
+.post-cta { margin-top: 40px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper2); }
+.post-cta a { font-weight: 700; }

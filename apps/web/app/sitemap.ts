@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { fetchDirectory } from '@/lib/public-api';
+import { BLOG_POSTS } from '@/lib/blog';
 
 /**
  * Marketing pages + every LIVE school's homepage. sckools.com is verified as
@@ -19,6 +20,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: 'https://sckools.com/', changeFrequency: 'weekly', priority: 1 },
     { url: 'https://sckools.com/pricing', changeFrequency: 'weekly', priority: 0.9 },
     { url: 'https://sckools.com/school-website-builder', changeFrequency: 'weekly', priority: 0.9 },
+    { url: 'https://sckools.com/blog', changeFrequency: 'weekly', priority: 0.7 },
+    ...BLOG_POSTS.map((p) => ({
+      url: `https://sckools.com/blog/${p.slug}`,
+      changeFrequency: 'monthly' as const,
+      priority: 0.7,
+    })),
   ];
 
   const schools = await fetchDirectory();
