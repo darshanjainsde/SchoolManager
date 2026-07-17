@@ -3,5 +3,13 @@
   "framework": "nextjs",
   "regions": ["bom1"],
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile=false",
-  "buildCommand": "cd ../.. && pnpm --filter @skoolos/db generate && pnpm --filter @skoolos/web build"
+  "buildCommand": "cd ../.. && pnpm --filter @skoolos/db generate && pnpm --filter @skoolos/web build",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.sckools.com" }],
+      "destination": "https://sckools.com/:path*",
+      "permanent": true
+    }
+  ]
 }
