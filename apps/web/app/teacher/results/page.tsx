@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -35,6 +36,12 @@ interface Exam {
 interface ExamList {
   upcoming: Exam[];
   past: Exam[];
+}
+
+interface SavedResult {
+  studentId: string;
+  marks: number;
+  publishedAt: string | null;
 }
 
 interface SaveResultsResult {
@@ -114,6 +121,29 @@ export default function TeacherResultsPage() {
       ),
   });
 
+  // Marks already saved for the selected exam, so the teacher sees what is on
+  // record instead of a blank grid (and can't be fooled into re-keying it).
+  const saved = useQuery({
+    queryKey: ['t-results-saved', examId],
+    enabled: !!host && !!examId,
+    queryFn: () => api.get<SavedResult[]>(`/manage/exams/${encodeURIComponent(examId)}/results`),
+  });
+
+  // Seed the inputs from the saved marks whenever a different exam's marks
+  // arrive. Keyed on examId so switching exams re-seeds, but typing does not
+  // get clobbered by a refetch of the same exam.
+  const seededExamRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!examId || !saved.data) return;
+    if (seededExamRef.current === examId) return;
+    seededExamRef.current = examId;
+    setEntries(
+      Object.fromEntries(saved.data.map((r) => [r.studentId, String(r.marks)])),
+    );
+  }, [examId, saved.data]);
+
+  const alreadyPublished = (saved.data ?? []).some((r) => r.publishedAt !== null);
+
   // Past exams come first — those are the ones a teacher actually has marks for.
   const allExams = useMemo(
     () => [...(exams.data?.past ?? []), ...(exams.data?.upcoming ?? [])],
@@ -148,7 +178,10 @@ export default function TeacherResultsPage() {
   const save = useMutation({
     mutationFn: () =>
       api.put<SaveResultsResult>(`/manage/exams/${examId}/results`, { marks: parsed }),
-    onSuccess: (result) => toast.success(`Saved marks for ${result.saved} students.`),
+    onSuccess: (result) => {
+      toast.success(`Saved marks for ${result.saved} students.`);
+      void saved.refetch();
+    },
     // { code, message } envelope — includes the server's 0..maxMarks VALIDATION text.
     onError: (e: Error) => toast.error(e.message),
   });
@@ -162,6 +195,7 @@ export default function TeacherResultsPage() {
           ? 'Nothing to publish — save some marks first.'
           : `Published ${result.published} results. Students and parents are being emailed.`,
       );
+      void saved.refetch();
     },
     onError: (e: Error) => {
       setConfirming(false);
@@ -250,14 +284,30 @@ export default function TeacherResultsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Marks</CardTitle>
-          <CardDescription>
-            {exam
-              ? `Out of ${exam.maxMarks} · ${parsed.length} of ${students.length} entered${
-                  average === null ? '' : ` · class average ${average.toFixed(1)}`
-                }`
-              : 'Pick a class and a test above.'}
-          </CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>Marks</CardTitle>
+              <CardDescription>
+                {exam
+                  ? `Out of ${exam.maxMarks} · ${parsed.length} of ${students.length} entered${
+                      average === null ? '' : ` · class average ${average.toFixed(1)}`
+                    }`
+                  : 'Pick a class and a test above.'}
+              </CardDescription>
+            </div>
+            {exam && alreadyPublished && (
+              <Badge tone="success">Published</Badge>
+            )}
+          </div>
+          {exam && alreadyPublished && (
+            <p className="mt-2 text-xs text-amber-700">
+              These results are already published. Publishing again re-sends the notification
+              email to every student and parent in this class.
+            </p>
+          )}
+          {exam && saved.isLoading && (
+            <p className="mt-2 text-xs text-slate-400">Loading saved marks…</p>
+          )}
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {classSectionId && roster.isLoading && (

@@ -48,7 +48,12 @@ interface SaveAttendanceResult {
   absentees: number;
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+/** Today in the browser's own timezone — `toISOString()` would give the UTC day. */
+const todayIso = () => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
 
 export default function TeacherAttendancePage() {
   return (
@@ -138,7 +143,8 @@ function TeacherAttendanceInner() {
       <header>
         <h1 className="text-2xl font-semibold text-slate-900">Attendance</h1>
         <p className="text-sm text-slate-500">
-          Saving is idempotent — re-saving the same day just updates statuses.
+          Re-saving the same day just updates statuses. Only guardians of students newly
+          marked absent are emailed, so correcting a mark won&apos;t re-notify the rest.
         </p>
       </header>
 
@@ -178,7 +184,7 @@ function TeacherAttendanceInner() {
               />
             </div>
             <Button
-              disabled={!classSectionId || students.length === 0 || save.isPending}
+              disabled={!classSectionId || !date || students.length === 0 || save.isPending}
               onClick={() => save.mutate()}
             >
               {save.isPending ? 'Saving…' : 'Save attendance'}
