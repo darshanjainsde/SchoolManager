@@ -11,7 +11,6 @@ import {
   User,
   LogOut,
 } from 'lucide-react';
-import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useHost } from '@/components/use-host';
