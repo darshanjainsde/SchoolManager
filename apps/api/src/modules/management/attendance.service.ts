@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant, type AttendanceStatus } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { formatDateIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveStudentRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
@@ -163,7 +164,7 @@ export class AttendanceService {
             'ABSENCE_NOTICE',
             recipients.map((r) => ({
               email: r.email,
-              payload: { schoolName, studentName: r.studentName, date: dto.date },
+              payload: { schoolName, studentName: r.studentName, date: formatDateIST(day) },
             })),
           );
         },

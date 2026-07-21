@@ -108,7 +108,7 @@ describe('ExamsService', () => {
             schoolName: 'Green Valley School',
             subjectName: 'Mathematics',
             examTitle: 'Unit Test',
-            scheduledAt: '2026-08-01T09:00:00.000Z',
+            scheduledAt: 'Sat, 1 Aug 2026, 2:30 PM',
           },
         },
       ]);

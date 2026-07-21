@@ -15,7 +15,11 @@ describe('CronSecretGuard', () => {
   const ORIGINAL_ENV = process.env.CRON_SECRET;
 
   afterEach(() => {
-    process.env.CRON_SECRET = ORIGINAL_ENV;
+    if (ORIGINAL_ENV === undefined) {
+      delete process.env.CRON_SECRET;
+    } else {
+      process.env.CRON_SECRET = ORIGINAL_ENV;
+    }
   });
 
   it('allows the request when x-cron-secret matches CRON_SECRET', () => {

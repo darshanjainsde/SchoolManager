@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { formatDateTimeIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
@@ -131,7 +132,7 @@ export class ExamsService {
           schoolName,
           subjectName,
           examTitle: exam.title,
-          scheduledAt: new Date(exam.scheduledAt).toISOString(),
+          scheduledAt: formatDateTimeIST(new Date(exam.scheduledAt)),
         };
         await this.notifications.notify(
           'TEST_SCHEDULED',

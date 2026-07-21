@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
+import { formatDateTimeIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveSectionRecipients } from '../../common/notifications/recipients';
 import { reminderDaysUntil, reminderWindows } from './reminder-window';
@@ -145,7 +146,7 @@ export class ExamRemindersService {
       schoolName: names.schools.get(exam.schoolId) ?? FALLBACK_SCHOOL_NAME,
       subjectName: names.subjects.get(exam.subjectId) ?? FALLBACK_SUBJECT_NAME,
       examTitle: exam.title,
-      scheduledAt: new Date(exam.scheduledAt).toISOString(),
+      scheduledAt: formatDateTimeIST(new Date(exam.scheduledAt)),
       daysUntil,
     };
 

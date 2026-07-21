@@ -120,7 +120,7 @@ describe('AttendanceService', () => {
           payload: {
             schoolName: 'Green Valley School',
             studentName: 'Aisha Khan',
-            date: '2026-07-21',
+            date: 'Tue, 21 Jul 2026',
           },
         },
       ]);
@@ -158,7 +158,7 @@ describe('AttendanceService', () => {
           payload: {
             schoolName: 'Green Valley School',
             studentName: 'Aisha Khan',
-            date: '2026-07-21',
+            date: 'Tue, 21 Jul 2026',
           },
         },
         {
@@ -166,7 +166,7 @@ describe('AttendanceService', () => {
           payload: {
             schoolName: 'Green Valley School',
             studentName: 'Rohan Mehta',
-            date: '2026-07-21',
+            date: 'Tue, 21 Jul 2026',
           },
         },
       ]);

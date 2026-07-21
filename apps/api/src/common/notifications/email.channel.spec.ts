@@ -37,20 +37,20 @@ function harness(): { channel: EmailChannel; sent: SentMail[] } {
   return { channel: new EmailChannel(mail), sent };
 }
 
-/** The exact payload `ExamsService.create` builds today. */
+/** The exact payload `ExamsService.create` builds today — already IST-formatted. */
 const TEST_SCHEDULED: TestScheduledPayload = {
   schoolName: 'Green Valley School',
   subjectName: 'Mathematics',
   examTitle: 'Unit Test 1',
-  scheduledAt: '2026-08-01T09:00:00.000Z',
+  scheduledAt: 'Sat, 1 Aug 2026, 2:30 PM',
 };
 
-/** The exact payload `ExamRemindersService.run` builds today. */
+/** The exact payload `ExamRemindersService.run` builds today — already IST-formatted. */
 const TEST_REMINDER: TestReminderPayload = {
   schoolName: 'Green Valley School',
   subjectName: 'Physics',
   examTitle: 'Midterm',
-  scheduledAt: '2026-07-23T09:00:00.000Z',
+  scheduledAt: 'Thu, 23 Jul 2026, 2:30 PM',
   daysUntil: 2,
 };
 
@@ -61,11 +61,11 @@ const RESULTS_PUBLISHED: ResultsPublishedPayload = {
   examTitle: 'Half Yearly',
 };
 
-/** The exact payload `AttendanceService.save` builds today. */
+/** The exact payload `AttendanceService.save` builds today — already IST-formatted. */
 const ABSENCE_NOTICE: AbsenceNoticePayload = {
   schoolName: 'Green Valley School',
   studentName: 'Aisha Khan',
-  date: '2026-07-21',
+  date: 'Tue, 21 Jul 2026',
 };
 
 describe('EmailChannel', () => {
@@ -84,11 +84,15 @@ describe('EmailChannel', () => {
     expect(mail.subject).toBe('New test scheduled: Unit Test 1');
     expect(mail.text).toContain('Green Valley School');
     expect(mail.text).toContain('Mathematics');
-    expect(mail.text).toContain('2026-08-01T09:00:00.000Z');
+    expect(mail.text).toContain('Sat, 1 Aug 2026, 2:30 PM');
     expect(mail.html).toContain('Green Valley School');
     expect(mail.html).toContain('Mathematics');
     expect(mail.html).toContain('Unit Test 1');
     expect(`${mail.subject} ${mail.html} ${mail.text}`).not.toContain('undefined');
+    // Regression net for the raw-ISO-timestamp bug: a parent must never see
+    // e.g. `2026-08-01T03:30:00.000Z` in a rendered email body.
+    expect(mail.html).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+    expect(mail.text).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
   });
 
   it('renders TEST_REMINDER with the days-until countdown — no "undefined"', async () => {
@@ -102,7 +106,10 @@ describe('EmailChannel', () => {
     expect(mail.text).toContain('Physics');
     expect(mail.html).toContain('Midterm');
     expect(mail.html).toContain('2 day');
+    expect(mail.text).toContain('Thu, 23 Jul 2026, 2:30 PM');
     expect(`${mail.subject} ${mail.html} ${mail.text}`).not.toContain('undefined');
+    expect(mail.html).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+    expect(mail.text).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
   });
 
   it('renders TEST_REMINDER in the singular for a 1-day-out exam', async () => {
@@ -142,9 +149,11 @@ describe('EmailChannel', () => {
     expect(mail.subject).toBe('Absence notice: Aisha Khan');
     expect(mail.text).toContain('Green Valley School');
     expect(mail.text).toContain('Aisha Khan');
-    expect(mail.text).toContain('2026-07-21');
+    expect(mail.text).toContain('Tue, 21 Jul 2026');
     expect(mail.html).toContain('Aisha Khan');
     expect(`${mail.subject} ${mail.html} ${mail.text}`).not.toContain('undefined');
+    expect(mail.html).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
+    expect(mail.text).not.toMatch(/\d{4}-\d{2}-\d{2}T/);
   });
 
   it('escapes school-authored text before it reaches the HTML body', async () => {
