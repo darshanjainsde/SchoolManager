@@ -121,6 +121,35 @@ function Cta({ data, enquireHref, ink }: { data: PublicSiteData; enquireHref: st
   );
 }
 
+/**
+ * Portal sign-in. Secondary to the Enquire CTA on purpose: it reuses the plain
+ * `ps-nav-link` treatment so it inherits navColor/navTextColor/navStyle and
+ * stays legible on PAPER/WHITE/DARK/BRAND bars, while the accent colour stays
+ * reserved for the single primary action.
+ */
+function LoginLink({ data }: { data: PublicSiteData }) {
+  if (data.profile?.navShowLogin === false) return null;
+  const label = data.profile?.navLoginLabel?.trim() || 'Login';
+  return (
+    <a
+      href="/login"
+      className="ps-nav-link text-sm font-semibold px-3 py-2 rounded-lg hover:bg-black/5 transition whitespace-nowrap"
+    >
+      {label}
+    </a>
+  );
+}
+
+/** The nav's action pair — secondary Login then the primary CTA. */
+function NavActions({ data, enquireHref, ink }: { data: PublicSiteData; enquireHref: string; ink: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <LoginLink data={data} />
+      <Cta data={data} enquireHref={enquireHref} ink={ink} />
+    </div>
+  );
+}
+
 export default function SiteNav({
   data,
   flags,
@@ -196,7 +225,7 @@ export default function SiteNav({
           <nav className="hidden md:flex items-center gap-1 text-sm text-slate-600">
             <NavLinks data={data} flags={flags} base={base} onAcademicsPage={onAcademicsPage} />
           </nav>
-          <Cta data={data} enquireHref={enquireHref} ink={ink} />
+          <NavActions data={data} enquireHref={enquireHref} ink={ink} />
         </div>
       </header>
     );
@@ -230,12 +259,12 @@ export default function SiteNav({
             {(flags.hasContact || flags.hasEnquiry) && (
               <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/contact">Contact</a>
             )}
-            <span className="ml-2"><Cta data={data} enquireHref={enquireHref} ink={ink} /></span>
+            <span className="ml-2"><NavActions data={data} enquireHref={enquireHref} ink={ink} /></span>
           </nav>
         </div>
         <div className="max-w-6xl mx-auto px-6 h-16 flex md:hidden items-center justify-between">
           <Logo data={data} />
-          <Cta data={data} enquireHref={enquireHref} ink={ink} />
+          <NavActions data={data} enquireHref={enquireHref} ink={ink} />
         </div>
       </header>
     );
@@ -258,7 +287,7 @@ export default function SiteNav({
         <nav className="hidden md:flex items-center gap-1 text-sm text-slate-600">
           <NavLinks data={data} flags={flags} base={base} onAcademicsPage={onAcademicsPage} />
         </nav>
-        <Cta data={data} enquireHref={enquireHref} ink={ink} />
+        <NavActions data={data} enquireHref={enquireHref} ink={ink} />
       </div>
     </header>
   );

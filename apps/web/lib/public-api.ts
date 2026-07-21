@@ -34,6 +34,8 @@ export interface PublicSiteData {
     navTextColor: string;
     navCtaLabel: string;
     navShowCta: boolean;
+    navShowLogin: boolean;
+    navLoginLabel: string;
   } | null;
   homepage: {
     headline: string;

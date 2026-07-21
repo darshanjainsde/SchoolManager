@@ -13,11 +13,43 @@ import { useApi } from '@/lib/use-api';
 import { useAuthStore } from '@/lib/auth-store';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
+// The identifier is an email for staff and an admission no. OR email for
+// students, so it can't be a blanket z.string().email().
 const schema = z.object({
-  email: z.string().email(),
+  identifier: z.string().min(1, 'Required'),
   password: z.string().min(1),
 });
 type FormValues = z.infer<typeof schema>;
+
+type RoleTab = 'STUDENT' | 'TEACHER' | 'ADMIN';
+
+/**
+ * The slider is a convenience only — it picks the copy/keyboard, never the
+ * destination. Routing after login always follows the role the API reports.
+ */
+const ROLE_TABS: { value: RoleTab; label: string; idLabel: string; submit: string; hint: string }[] = [
+  {
+    value: 'STUDENT',
+    label: 'Student',
+    idLabel: 'Admission no. or email',
+    submit: 'Sign in to student portal',
+    hint: 'Students and parents sign in with the admission number on the school record.',
+  },
+  {
+    value: 'TEACHER',
+    label: 'Teacher',
+    idLabel: 'Email',
+    submit: 'Sign in to teacher portal',
+    hint: 'Teachers use the email address the school invited them with.',
+  },
+  {
+    value: 'ADMIN',
+    label: 'Admin',
+    idLabel: 'Email',
+    submit: 'Sign in to admin',
+    hint: 'School admins and office staff manage the school here.',
+  },
+];
 
 export default function TenantLoginPage() {
   const router = useRouter();
@@ -26,7 +58,13 @@ export default function TenantLoginPage() {
   useEffect(() => setHost(window.location.host), []);
   const api = useApi({ audience: 'school', hostHeader: host });
 
-  const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: '', password: '' } });
+  const [role, setRole] = useState<RoleTab>('STUDENT');
+  const tab = ROLE_TABS.find((t) => t.value === role) ?? ROLE_TABS[0];
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { identifier: '', password: '' },
+  });
 
   const setMe = useAuthStore((s) => s.setMe);
   const [exchangingImp, setExchangingImp] = useState(false);
@@ -54,12 +92,16 @@ export default function TenantLoginPage() {
 
   async function onSubmit(values: FormValues) {
     try {
-      const res = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', values);
+      const res = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', {
+        identifier: values.identifier.trim(),
+        password: values.password,
+      });
       setTokens({ ...res, audience: 'school' });
       const me = await api.get<{ userId: string; schoolId?: string; role?: string }>('/auth/me');
       setMe(me);
       toast.success('Welcome back');
-      router.replace(me.role === 'STUDENT' ? '/portal' : '/app');
+      // Never trust the slider — the API's role decides where the user lands.
+      router.replace(me.role === 'STUDENT' ? '/portal' : me.role === 'TEACHER' ? '/teacher' : '/app');
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -75,10 +117,40 @@ export default function TenantLoginPage() {
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={form.handleSubmit(onSubmit)}>
+            <div
+              role="radiogroup"
+              aria-label="I am a"
+              className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1"
+            >
+              {ROLE_TABS.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={role === t.value}
+                  onClick={() => setRole(t.value)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                    role === t.value
+                      ? 'bg-white text-teal-700 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
             <div>
-              <Label htmlFor="email" required>Email</Label>
-              <Input id="email" type="email" autoComplete="username" {...form.register('email')} />
-              {form.formState.errors.email && <p className="mt-1 text-xs text-rose-600">{form.formState.errors.email.message}</p>}
+              <Label htmlFor="identifier" required>{tab.idLabel}</Label>
+              <Input
+                id="identifier"
+                type={role === 'STUDENT' ? 'text' : 'email'}
+                autoComplete="username"
+                {...form.register('identifier')}
+              />
+              {form.formState.errors.identifier && (
+                <p className="mt-1 text-xs text-rose-600">{form.formState.errors.identifier.message}</p>
+              )}
+              <p className="mt-1 text-xs text-slate-400">{tab.hint}</p>
             </div>
             <div>
               <Label htmlFor="password" required>Password</Label>
@@ -86,7 +158,7 @@ export default function TenantLoginPage() {
               {form.formState.errors.password && <p className="mt-1 text-xs text-rose-600">{form.formState.errors.password.message}</p>}
             </div>
             <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? 'Signing in…' : 'Sign in'}
+              {form.formState.isSubmitting ? 'Signing in…' : tab.submit}
             </Button>
             <a href="/forgot-password" className="text-center text-sm text-slate-500 hover:text-teal-700 transition">
               Forgot password?

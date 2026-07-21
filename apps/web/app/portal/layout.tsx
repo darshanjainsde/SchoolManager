@@ -2,7 +2,15 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
-import { LayoutDashboard, CalendarDays, Megaphone, User, LogOut } from 'lucide-react';
+import {
+  LayoutDashboard,
+  CalendarDays,
+  CalendarCheck,
+  GraduationCap,
+  Megaphone,
+  User,
+  LogOut,
+} from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -12,6 +20,8 @@ import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
 const NAV_ITEMS = [
   { href: '/portal', label: 'Home', icon: LayoutDashboard },
   { href: '/portal/timetable', label: 'Timetable', icon: CalendarDays },
+  { href: '/portal/attendance', label: 'Attendance', icon: CalendarCheck },
+  { href: '/portal/results', label: 'Results', icon: GraduationCap },
   { href: '/portal/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/portal/profile', label: 'Profile', icon: User },
 ];

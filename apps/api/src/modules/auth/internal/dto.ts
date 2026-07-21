@@ -1,15 +1,53 @@
-import { IsEmail, IsString, Length, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString, Length, MinLength } from 'class-validator';
+import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
-  @ApiProperty()
-  @IsEmail()
-  email!: string;
+  /**
+   * Either an email address or a student admission number. `email` is kept as
+   * an optional alias so existing `{ email, password }` callers keep working.
+   *
+   * NOTE: `identifier` and `email` are validated independently (each is
+   * type-checked whenever present, regardless of whether the other field is
+   * also present). Do NOT reintroduce a mutual `@ValidateIf((dto) =>
+   * !dto.other)` pattern here — when both fields are truthy, both predicates
+   * evaluate false and NEITHER field gets type-checked, letting a
+   * non-string value (e.g. `identifier: 123`) slip through validation and
+   * crash `AuthService.login` with an uncaught TypeError (500) instead of a
+   * clean 400. The "at least one of identifier/email must be present" rule
+   * is instead enforced by the `identifierOrEmail` getter below, which is
+   * never skipped by `@IsOptional()`.
+   */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  identifier?: string;
+
+  /**
+   * `@IsEmail()` is intentionally NOT used: the admission-flow may reuse this
+   * field for a non-RFC-strict value, so a plain string check is sufficient.
+   */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  email?: string;
 
   @ApiProperty()
   @IsString()
   @MinLength(1)
   password!: string;
+
+  /**
+   * Virtual field (not sent by clients) that enforces "at least one of
+   * identifier/email must be provided". It is intentionally NOT wrapped in
+   * `@IsOptional()` so it is always validated, even when both `identifier`
+   * and `email` are absent/undefined.
+   */
+  @IsString()
+  @MinLength(1, { message: 'Either identifier or email must be provided' })
+  get identifierOrEmail(): string {
+    return this.identifier ?? this.email ?? '';
+  }
 }
 
 export class RefreshDto {

@@ -85,6 +85,12 @@ enum EnquiryStatus {
   CLOSED
 }
 
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
+
 // ── Tenancy & access ─────────────────────────────────────
 model School {
   id        String       @id @default(uuid()) @db.Uuid
@@ -124,6 +130,7 @@ model School {
   admissionSteps     AdmissionStep[]
   admissionsSettings AdmissionsSettings?
   hallOfFameEntries  HallOfFameEntry[]
+  attendance         Attendance[]
 }
 
 model Domain {
@@ -226,6 +233,8 @@ model SchoolProfile {
   navTextColor       String  @default("AUTO")
   navCtaLabel        String  @default("Enquire")
   navShowCta         Boolean @default(true)
+  navShowLogin       Boolean @default(true)
+  navLoginLabel      String  @default("Login")
   phone             String?
   email             String?
   addressLine1      String?
@@ -515,6 +524,8 @@ model Student {
   createdAt      DateTime @default(now())
   school         School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
+  attendance     Attendance[]
+  results        Result[]
 
   @@unique([schoolId, admissionNo])
   @@index([schoolId, classSectionId])
@@ -553,6 +564,48 @@ model TimetableSlot {
   @@unique([schoolId, classSectionId, dayOfWeek, periodId, academicYearId], name: "class_slot")
   @@unique([schoolId, teacherId, dayOfWeek, periodId, academicYearId], name: "teacher_slot")
   @@index([schoolId])
+}
+
+// ── Academics: attendance, exams, results ────────────────
+model Attendance {
+  id             String  @id @default(uuid()) @db.Uuid
+  schoolId       String  @db.Uuid
+  studentId      String  @db.Uuid
+  classSectionId String  @db.Uuid
+  date           DateTime @db.Date
+  status         AttendanceStatus
+  markedById     String  @db.Uuid   // Teacher.id
+  createdAt      DateTime @default(now())
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@unique([studentId, date], name: "one_mark_per_student_day")
+  @@index([schoolId, classSectionId, date])
+}
+
+model Exam {
+  id             String  @id @default(uuid()) @db.Uuid
+  schoolId       String  @db.Uuid
+  classSectionId String  @db.Uuid
+  subjectId      String  @db.Uuid
+  title          String
+  scheduledAt    DateTime
+  syllabus       String?
+  maxMarks       Int
+  createdById    String  @db.Uuid
+  createdAt      DateTime @default(now())
+  results Result[]
+  @@index([schoolId, classSectionId, scheduledAt])
+}
+
+model Result {
+  id          String  @id @default(uuid()) @db.Uuid
+  examId      String  @db.Uuid
+  studentId   String  @db.Uuid
+  marks       Float
+  publishedAt DateTime?
+  exam    Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@unique([examId, studentId], name: "one_result_per_exam_student")
 }
 
 // ── Community ────────────────────────────────────────────

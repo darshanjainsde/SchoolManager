@@ -52,6 +52,8 @@ export class UpdateProfileDto {
   @IsOptional() @IsIn(['AUTO', 'LIGHT', 'DARK']) navTextColor?: string;
   @IsOptional() @IsString() @Length(1, 40) navCtaLabel?: string;
   @IsOptional() @IsBoolean() navShowCta?: boolean;
+  @IsOptional() @IsString() @Length(1, 40) navLoginLabel?: string;
+  @IsOptional() @IsBoolean() navShowLogin?: boolean;
 }
 
 export class UpdateHomepageDto {

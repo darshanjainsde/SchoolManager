@@ -10,6 +10,7 @@ import { CommonAuthModule } from './common/auth/auth.module';
 import { AuditModule } from './common/audit/audit.module';
 import { StorageModule } from './common/storage/storage.module';
 import { MailModule } from './common/mail/mail.module';
+import { NotificationModule } from './common/notifications/notification.module';
 import { AuditInterceptor } from './common/audit/audit.interceptor';
 import { AuthModule } from './modules/auth';
 import { TenancyModule } from './modules/tenancy';
@@ -50,6 +51,7 @@ import { AdminCredentialsModule } from './modules/admin-credentials';
     AuditModule,
     StorageModule,
     MailModule,
+    NotificationModule,
     EventBusModule,
     HealthModule,
 

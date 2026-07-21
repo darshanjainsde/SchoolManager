@@ -1,15 +1,21 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsDateString,
   IsEmail,
+  IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Length,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 // ── Academic Year ────────────────────────────────────────────────────────────
 
@@ -383,4 +389,70 @@ export class UpdateAnnouncementDto {
   @IsOptional()
   @IsUUID()
   classSectionId?: string;
+}
+
+// ── Attendance ───────────────────────────────────────────────────────────────
+
+export class AttendanceMarkDto {
+  @IsUUID()
+  studentId!: string;
+
+  @IsIn(['PRESENT', 'ABSENT', 'LATE'])
+  status!: 'PRESENT' | 'ABSENT' | 'LATE';
+}
+
+export class SaveAttendanceDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @IsDateString()
+  date!: string;
+
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => AttendanceMarkDto)
+  marks!: AttendanceMarkDto[];
+}
+
+// ── Exam / Results ───────────────────────────────────────────────────────────
+
+export class CreateExamDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @IsUUID()
+  subjectId!: string;
+
+  @IsString()
+  @Length(1, 160)
+  title!: string;
+
+  @IsDateString()
+  scheduledAt!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 4000)
+  syllabus?: string;
+
+  @IsInt()
+  @Min(1)
+  maxMarks!: number;
+}
+
+export class ExamResultMarkDto {
+  @IsUUID()
+  studentId!: string;
+
+  @IsNumber()
+  marks!: number;
+}
+
+export class SaveExamResultsDto {
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => ExamResultMarkDto)
+  marks!: ExamResultMarkDto[];
 }
