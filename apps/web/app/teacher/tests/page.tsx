@@ -2,14 +2,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -43,6 +38,11 @@ interface ExamList {
 }
 
 const EMPTY_FORM = { subjectId: '', title: '', scheduledAt: '', syllabus: '', maxMarks: '100' };
+
+const fieldCls =
+  'rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-[11px] py-[9px] text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60 disabled:cursor-not-allowed';
+
+const SUBJECT_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
 
 export default function TeacherTestsPage() {
   const host = useHost();
@@ -110,24 +110,23 @@ export default function TeacherTestsPage() {
   const past = exams.data?.past ?? [];
 
   return (
-    <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-slate-900">Tests</h1>
-        <p className="text-sm text-slate-500">
-          Schedule a test and the class&apos;s students and guardians get an email straight away.
-        </p>
+    <>
+      <header className="sk-pagehead">
+        <h1>Tests</h1>
+        <p>Schedule a test and the class&apos;s students and guardians get an email straight away.</p>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Class</CardTitle>
-          <CardDescription>Everything on this page is scoped to the class you pick.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          <Label htmlFor="tests-class">Class</Label>
+      <div className="sk-card" style={{ marginBottom: 16 }}>
+        <div className="sk-card-h">
+          <h3>Class</h3>
+        </div>
+        <div className="sk-card-b">
+          <label htmlFor="tests-class" className="sk-lab">
+            Class
+          </label>
           <Select
             id="tests-class"
-            className="max-w-sm"
+            className={`${fieldCls} max-w-sm`}
             value={classSectionId}
             onChange={(e) => setClassSectionId(e.target.value)}
           >
@@ -138,23 +137,26 @@ export default function TeacherTestsPage() {
               </option>
             ))}
           </Select>
-          {classes.error && (
-            <p className="text-sm text-rose-600">{(classes.error as Error).message}</p>
-          )}
-        </CardContent>
-      </Card>
+          {classes.error && <p className="sk-state err">{(classes.error as Error).message}</p>}
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Schedule a test</CardTitle>
-          <CardDescription>Students and guardians are emailed as soon as you save.</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="sk-card" style={{ marginBottom: 16 }}>
+        <div className="sk-card-h">
+          <h3>Schedule a test</h3>
+          <p className="sk-muted" style={{ marginTop: 4 }}>
+            Students and guardians are emailed as soon as you save.
+          </p>
+        </div>
+        <div className="sk-card-b">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="tests-subject">Subject</Label>
+              <label htmlFor="tests-subject" className="sk-lab">
+                Subject
+              </label>
               <Select
                 id="tests-subject"
+                className={`${fieldCls} w-full`}
                 value={form.subjectId}
                 onChange={(e) => setForm((f) => ({ ...f, subjectId: e.target.value }))}
               >
@@ -167,28 +169,37 @@ export default function TeacherTestsPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="tests-title">Title</Label>
+              <label htmlFor="tests-title" className="sk-lab">
+                Title
+              </label>
               <Input
                 id="tests-title"
+                className={`${fieldCls} w-full`}
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 placeholder="Unit test 1"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="tests-when">Date &amp; time</Label>
+              <label htmlFor="tests-when" className="sk-lab">
+                Date &amp; time
+              </label>
               <Input
                 id="tests-when"
                 type="datetime-local"
+                className={`${fieldCls} w-full`}
                 value={form.scheduledAt}
                 onChange={(e) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="tests-max">Max marks</Label>
+              <label htmlFor="tests-max" className="sk-lab">
+                Max marks
+              </label>
               <Input
                 id="tests-max"
                 inputMode="numeric"
+                className={`${fieldCls} w-full`}
                 value={form.maxMarks}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, maxMarks: e.target.value.replace(/\D/g, '') }))
@@ -196,92 +207,101 @@ export default function TeacherTestsPage() {
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="tests-syllabus">Syllabus (optional)</Label>
+              <label htmlFor="tests-syllabus" className="sk-lab">
+                Syllabus (optional)
+              </label>
               <Textarea
                 id="tests-syllabus"
                 rows={4}
+                className={`${fieldCls} w-full`}
                 value={form.syllabus}
                 onChange={(e) => setForm((f) => ({ ...f, syllabus: e.target.value }))}
                 placeholder="Chapters 1–4, plus the worksheet from last week."
               />
             </div>
-            <div className="sm:col-span-2">
-              <Button disabled={!canCreate || create.isPending} onClick={() => create.mutate()}>
+            <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                className="sk-btn"
+                data-variant="primary"
+                disabled={!canCreate || create.isPending}
+                onClick={() => create.mutate()}
+              >
                 {create.isPending ? 'Scheduling…' : 'Schedule test'}
-              </Button>
-              {!classSectionId && (
-                <p className="mt-2 text-sm text-slate-400">Pick a class first.</p>
-              )}
+              </button>
+              {!classSectionId && <span className="sk-muted">Pick a class first.</span>}
             </div>
           </div>
           {subjects.error && (
-            <p className="mt-3 text-sm text-rose-600">{(subjects.error as Error).message}</p>
+            <p className="sk-state err" style={{ marginTop: 12 }}>
+              {(subjects.error as Error).message}
+            </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Scheduled tests</CardTitle>
-          <CardDescription>
+      <div className="sk-card">
+        <div className="sk-card-h">
+          <h3>Scheduled tests</h3>
+          <p className="sk-muted" style={{ marginTop: 4 }}>
             {classSectionId
               ? `${upcoming.length} upcoming · ${past.length} past`
               : 'Pick a class to see its tests.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {classSectionId && exams.isLoading && (
-            <p className="text-sm text-slate-500">Loading tests…</p>
-          )}
-          {exams.error && <p className="text-sm text-rose-600">{(exams.error as Error).message}</p>}
+          </p>
+        </div>
+        <div className="sk-card-b">
+          {classSectionId && exams.isLoading && <p className="sk-state">Loading tests…</p>}
+          {exams.error && <p className="sk-state err">{(exams.error as Error).message}</p>}
           {classSectionId &&
             !exams.isLoading &&
             !exams.error &&
             upcoming.length === 0 &&
-            past.length === 0 && (
-              <p className="text-sm text-slate-400">No tests for this class yet.</p>
-            )}
+            past.length === 0 && <p className="sk-state">No tests for this class yet.</p>}
 
           {[
             { label: 'Upcoming', rows: upcoming, tone: 'info' as const },
-            { label: 'Past', rows: past, tone: 'neutral' as const },
+            { label: 'Past', rows: past, tone: undefined },
           ]
             .filter((group) => group.rows.length > 0)
             .map((group) => (
-              <div key={group.label} className="flex flex-col gap-2">
-                <h2 className="text-sm font-semibold text-slate-700">{group.label}</h2>
-                <Table>
-                  <THead>
-                    <Tr>
-                      <Th>Title</Th>
-                      <Th>Subject</Th>
-                      <Th>When</Th>
-                      <Th>Max marks</Th>
-                      <Th>Syllabus</Th>
-                    </Tr>
-                  </THead>
-                  <TBody>
-                    {group.rows.map((exam) => (
-                      <Tr key={exam.id}>
-                        <Td className="font-medium text-slate-900">{exam.title}</Td>
-                        <Td className="text-slate-500">{subjectLabel(exam.subjectId)}</Td>
-                        <Td>
-                          <Badge tone={group.tone}>
-                            {new Date(exam.scheduledAt).toLocaleString()}
-                          </Badge>
-                        </Td>
-                        <Td>{exam.maxMarks}</Td>
-                        <Td className="max-w-xs truncate text-slate-500">
-                          {exam.syllabus ?? '—'}
-                        </Td>
-                      </Tr>
-                    ))}
-                  </TBody>
-                </Table>
+              <div key={group.label} style={{ marginBottom: 16 }}>
+                <span className="sk-lab">{group.label}</span>
+                <div style={{ marginTop: 8 }}>
+                  {group.rows.map((exam, i) => (
+                    <div className="sk-row" key={exam.id}>
+                      <span
+                        className="badge"
+                        style={{ background: SUBJECT_COLORS[i % SUBJECT_COLORS.length] }}
+                      >
+                        {(subjects.data ?? []).find((s) => s.id === exam.subjectId)?.code.slice(0, 2).toUpperCase() ??
+                          '—'}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="nm">{exam.title}</div>
+                        <div className="meta">
+                          {subjectLabel(exam.subjectId)} · {new Date(exam.scheduledAt).toLocaleString()} · out of{' '}
+                          {exam.maxMarks}
+                        </div>
+                        {exam.syllabus && (
+                          <div
+                            className="meta"
+                            style={{ marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          >
+                            {exam.syllabus}
+                          </div>
+                        )}
+                      </div>
+                      <span className="sp" />
+                      <span className="sk-pill" data-tone={group.tone}>
+                        {group.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }

@@ -2,13 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -52,6 +47,15 @@ interface PublishResult {
   published: number;
 }
 
+const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
+
+const fieldCls =
+  'rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-[11px] py-[9px] text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60 disabled:cursor-not-allowed';
+
+function initials(firstName: string, lastName: string): string {
+  return `${firstName.slice(0, 1)}${lastName.slice(0, 1)}`.toUpperCase();
+}
+
 function ConfirmPublish({
   examTitle,
   isPending,
@@ -65,25 +69,35 @@ function ConfirmPublish({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Publish results for {examTitle}?</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+      <div className="sk-card" style={{ width: '100%', maxWidth: 400 }}>
+        <div className="sk-card-h">
+          <h3>Publish results for {examTitle}?</h3>
+        </div>
+        <div className="sk-card-b">
+          <div
+            style={{
+              borderRadius: 12,
+              padding: '12px 14px',
+              fontSize: 12.5,
+              lineHeight: 1.5,
+              background: 'var(--sk-amber-tint)',
+              color: 'var(--sk-late)',
+              borderLeft: '3px solid var(--sk-amber)',
+            }}
+          >
             Publishing makes every saved mark visible to students and parents, and emails them that
             results are out. Save any pending marks first — only marks already saved get published.
-          </p>
-        </CardContent>
-        <CardFooter className="gap-2">
-          <Button disabled={isPending} onClick={onConfirm}>
-            {isPending ? 'Publishing…' : 'Yes, publish'}
-          </Button>
-          <Button variant="outline" disabled={isPending} onClick={onCancel}>
-            Cancel
-          </Button>
-        </CardFooter>
-      </Card>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="sk-btn" data-variant="primary" disabled={isPending} onClick={onConfirm}>
+              {isPending ? 'Publishing…' : 'Yes, publish'}
+            </button>
+            <button type="button" className="sk-btn" disabled={isPending} onClick={onCancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -206,7 +220,7 @@ export default function TeacherResultsPage() {
   const rosterError = roster.error as Error | undefined;
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       {confirming && exam && (
         <ConfirmPublish
           examTitle={exam.title}
@@ -216,176 +230,182 @@ export default function TeacherResultsPage() {
         />
       )}
 
-      <header>
-        <h1 className="text-2xl font-semibold text-slate-900">Results</h1>
-        <p className="text-sm text-slate-500">
+      <header className="sk-pagehead">
+        <h1>Results</h1>
+        <p>
           Enter marks for a test, then publish when you&apos;re ready for students and parents to
           see them.
         </p>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pick a test</CardTitle>
-          <CardDescription>Marks are entered against the class roster.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="res-class">Class</Label>
-            <Select
-              id="res-class"
-              value={classSectionId}
-              onChange={(e) => {
-                setClassSectionId(e.target.value);
-                setExamId('');
-                setEntries({});
-              }}
-            >
-              <option value="">Pick a class…</option>
-              {(classes.data ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.grade.name} · {c.name}
-                </option>
-              ))}
-            </Select>
+      <div className="sk-card" style={{ marginBottom: 16 }}>
+        <div className="sk-card-h">
+          <h3>Pick a test</h3>
+          <p className="sk-muted" style={{ marginTop: 4 }}>
+            Marks are entered against the class roster.
+          </p>
+        </div>
+        <div className="sk-card-b">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label htmlFor="res-class" className="sk-lab">
+                Class
+              </label>
+              <Select
+                id="res-class"
+                className={`${fieldCls} w-full`}
+                value={classSectionId}
+                onChange={(e) => {
+                  setClassSectionId(e.target.value);
+                  setExamId('');
+                  setEntries({});
+                }}
+              >
+                <option value="">Pick a class…</option>
+                {(classes.data ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.grade.name} · {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="res-exam" className="sk-lab">
+                Test
+              </label>
+              <Select
+                id="res-exam"
+                className={`${fieldCls} w-full`}
+                value={examId}
+                disabled={!classSectionId || allExams.length === 0}
+                onChange={(e) => {
+                  setExamId(e.target.value);
+                  setEntries({});
+                }}
+              >
+                <option value="">Pick a test…</option>
+                {allExams.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.title} · {new Date(e.scheduledAt).toLocaleDateString()} · /{e.maxMarks}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="res-exam">Test</Label>
-            <Select
-              id="res-exam"
-              value={examId}
-              disabled={!classSectionId || allExams.length === 0}
-              onChange={(e) => {
-                setExamId(e.target.value);
-                setEntries({});
-              }}
-            >
-              <option value="">Pick a test…</option>
-              {allExams.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.title} · {new Date(e.scheduledAt).toLocaleDateString()} · /{e.maxMarks}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {classes.error && (
-            <p className="text-sm text-rose-600 sm:col-span-2">{(classes.error as Error).message}</p>
-          )}
-          {exams.error && (
-            <p className="text-sm text-rose-600 sm:col-span-2">{(exams.error as Error).message}</p>
-          )}
+          {classes.error && <p className="sk-state err">{(classes.error as Error).message}</p>}
+          {exams.error && <p className="sk-state err">{(exams.error as Error).message}</p>}
           {classSectionId && !exams.isLoading && !exams.error && allExams.length === 0 && (
-            <p className="text-sm text-slate-400 sm:col-span-2">
-              No tests scheduled for this class yet — schedule one from the Tests page.
-            </p>
+            <p className="sk-state">No tests scheduled for this class yet — schedule one from the Tests page.</p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
+      <div className="sk-card">
+        <div className="sk-card-h">
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
             <div>
-              <CardTitle>Marks</CardTitle>
-              <CardDescription>
+              <h3>Marks</h3>
+              <p className="sk-muted" style={{ marginTop: 4 }}>
                 {exam
                   ? `Out of ${exam.maxMarks} · ${parsed.length} of ${students.length} entered${
                       average === null ? '' : ` · class average ${average.toFixed(1)}`
                     }`
                   : 'Pick a class and a test above.'}
-              </CardDescription>
+              </p>
             </div>
             {exam && alreadyPublished && (
-              <Badge tone="success">Published</Badge>
+              <span className="sk-pill" data-tone="good">
+                Published
+              </span>
             )}
           </div>
           {exam && alreadyPublished && (
-            <p className="mt-2 text-xs text-amber-700">
+            <p className="sk-muted" style={{ marginTop: 8, color: 'var(--sk-late)' }}>
               These results are already published. Publishing again re-sends the notification
               email to every student and parent in this class.
             </p>
           )}
           {exam && saved.isLoading && (
-            <p className="mt-2 text-xs text-slate-400">Loading saved marks…</p>
-          )}
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {classSectionId && roster.isLoading && (
-            <p className="text-sm text-slate-500">Loading roster…</p>
-          )}
-          {rosterError && <p className="text-sm text-rose-600">{rosterError.message}</p>}
-          {classSectionId && !roster.isLoading && !rosterError && students.length === 0 && (
-            <p className="text-sm text-slate-400">
-              No students in this class yet — your admin needs to enrol them.
+            <p className="sk-muted" style={{ marginTop: 8 }}>
+              Loading saved marks…
             </p>
+          )}
+        </div>
+        <div className="sk-card-b">
+          {classSectionId && roster.isLoading && <p className="sk-state">Loading roster…</p>}
+          {rosterError && <p className="sk-state err">{rosterError.message}</p>}
+          {classSectionId && !roster.isLoading && !rosterError && students.length === 0 && (
+            <p className="sk-state">No students in this class yet — your admin needs to enrol them.</p>
           )}
 
           {exam && students.length > 0 && (
             <>
-              <Table>
-                <THead>
-                  <Tr>
-                    <Th>Roll no.</Th>
-                    <Th>Student</Th>
-                    <Th>Marks (out of {exam.maxMarks})</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {students.map((s) => {
-                    const raw = entries[s.id] ?? '';
-                    const num = Number(raw);
-                    const bad =
-                      raw.trim() !== '' &&
-                      (!Number.isFinite(num) || num < 0 || num > exam.maxMarks);
-                    return (
-                      <Tr key={s.id}>
-                        <Td className="text-slate-500">{s.rollNo ?? '—'}</Td>
-                        <Td className="font-medium text-slate-900">
+              <div>
+                {students.map((s, i) => {
+                  const raw = entries[s.id] ?? '';
+                  const num = Number(raw);
+                  const bad =
+                    raw.trim() !== '' &&
+                    (!Number.isFinite(num) || num < 0 || num > exam.maxMarks);
+                  return (
+                    <div className="sk-row" key={s.id}>
+                      <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                        {initials(s.firstName, s.lastName)}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="nm">
                           {s.firstName} {s.lastName}
-                        </Td>
-                        <Td>
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            max={exam.maxMarks}
-                            step="any"
-                            aria-invalid={bad}
-                            aria-label={`Marks for ${s.firstName} ${s.lastName}`}
-                            className={bad ? 'max-w-[7rem] border-rose-400' : 'max-w-[7rem]'}
-                            value={raw}
-                            onChange={(ev) =>
-                              setEntries((m) => ({ ...m, [s.id]: ev.target.value }))
-                            }
-                          />
-                        </Td>
-                      </Tr>
-                    );
-                  })}
-                </TBody>
-              </Table>
+                        </div>
+                        <div className="meta">Roll {s.rollNo ?? '—'}</div>
+                      </div>
+                      <span className="sp" />
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        max={exam.maxMarks}
+                        step="any"
+                        aria-invalid={bad}
+                        aria-label={`Marks for ${s.firstName} ${s.lastName}`}
+                        className={`${fieldCls} w-24 text-right ${bad ? 'border-[var(--sk-bad)]' : ''}`}
+                        value={raw}
+                        onChange={(ev) =>
+                          setEntries((m) => ({ ...m, [s.id]: ev.target.value }))
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="sk-btn"
+                  data-variant="primary"
+                  disabled={!valid || save.isPending}
+                  onClick={() => save.mutate()}
+                >
                   {save.isPending ? 'Saving…' : 'Save marks'}
-                </Button>
-                <Button
-                  variant="outline"
+                </button>
+                <button
+                  type="button"
+                  className="sk-btn"
                   disabled={publish.isPending}
                   onClick={() => setConfirming(true)}
                 >
                   Publish results
-                </Button>
+                </button>
                 {parsed.length > 0 && !valid && (
-                  <span className="text-sm text-rose-600">
+                  <span style={{ fontSize: 12.5, color: 'var(--sk-bad)' }}>
                     Every mark must be between 0 and {exam.maxMarks}.
                   </span>
                 )}
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }

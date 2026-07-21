@@ -3,13 +3,8 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -18,11 +13,21 @@ import { useHost } from '@/components/use-host';
 type Status = 'PRESENT' | 'ABSENT' | 'LATE';
 const STATUSES: Status[] = ['PRESENT', 'ABSENT', 'LATE'];
 const STATUS_LABEL: Record<Status, string> = { PRESENT: 'Present', ABSENT: 'Absent', LATE: 'Late' };
-const STATUS_TONE: Record<Status, 'success' | 'danger' | 'warning'> = {
-  PRESENT: 'success',
-  ABSENT: 'danger',
-  LATE: 'warning',
+// Traffic-light tones from the theme: green/red/amber.
+const STATUS_COLOR: Record<Status, string> = {
+  PRESENT: 'var(--sk-good)',
+  ABSENT: 'var(--sk-bad)',
+  LATE: 'var(--sk-amber)',
 };
+
+const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
+
+const fieldCls =
+  'rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-[11px] py-[9px] text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60 disabled:cursor-not-allowed';
+
+function initials(firstName: string, lastName: string): string {
+  return `${firstName.slice(0, 1)}${lastName.slice(0, 1)}`.toUpperCase();
+}
 
 interface ClassSection {
   id: string;
@@ -57,7 +62,7 @@ const todayIso = () => {
 
 export default function TeacherAttendancePage() {
   return (
-    <Suspense fallback={<div className="text-sm text-slate-500">Loading…</div>}>
+    <Suspense fallback={<p className="sk-state">Loading…</p>}>
       <TeacherAttendanceInner />
     </Suspense>
   );
@@ -139,30 +144,28 @@ function TeacherAttendanceInner() {
   const listLoading = roster.isLoading || existing.isLoading;
 
   return (
-    <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-semibold text-slate-900">Attendance</h1>
-        <p className="text-sm text-slate-500">
+    <>
+      <header className="sk-pagehead">
+        <h1>Attendance</h1>
+        <p>
           Re-saving the same day just updates statuses. Only guardians of students newly
           marked absent are emailed, so correcting a mark won&apos;t re-notify the rest.
         </p>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Roster</CardTitle>
-          <CardDescription>
-            {classSectionId
-              ? `${students.length} students · ${counts.PRESENT} present · ${counts.ABSENT} absent · ${counts.LATE} late`
-              : 'Pick a class and a date to begin.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+      <div className="sk-card" style={{ marginBottom: 16 }}>
+        <div className="sk-card-h">
+          <h3>Class &amp; date</h3>
+        </div>
+        <div className="sk-card-b">
           <div className="grid gap-3 sm:grid-cols-[1fr_200px_auto] sm:items-end">
             <div className="space-y-1.5">
-              <Label htmlFor="attn-class">Class</Label>
+              <label htmlFor="attn-class" className="sk-lab">
+                Class
+              </label>
               <Select
                 id="attn-class"
+                className={`${fieldCls} w-full`}
                 value={classSectionId}
                 onChange={(e) => setClassSectionId(e.target.value)}
               >
@@ -175,95 +178,112 @@ function TeacherAttendanceInner() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="attn-date">Date</Label>
+              <label htmlFor="attn-date" className="sk-lab">
+                Date
+              </label>
               <Input
                 id="attn-date"
                 type="date"
+                className={`${fieldCls} w-full`}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
             </div>
-            <Button
+            <button
+              type="button"
+              className="sk-btn"
+              data-variant="primary"
               disabled={!classSectionId || !date || students.length === 0 || save.isPending}
               onClick={() => save.mutate()}
             >
               {save.isPending ? 'Saving…' : 'Save attendance'}
-            </Button>
+            </button>
           </div>
 
-          {classes.error && (
-            <p className="text-sm text-rose-600">{(classes.error as Error).message}</p>
-          )}
-          {listError && <p className="text-sm text-rose-600">{listError.message}</p>}
+          {classes.error && <p className="sk-state err">{(classes.error as Error).message}</p>}
+          {listError && <p className="sk-state err">{listError.message}</p>}
 
           {students.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
+            <div>
+              <button
+                type="button"
+                className="sk-btn"
                 onClick={() =>
                   setMarks(Object.fromEntries(students.map((s) => [s.id, 'PRESENT' as Status])))
                 }
               >
                 Mark all present
-              </Button>
+              </button>
             </div>
           )}
+        </div>
+      </div>
 
-          {classSectionId && listLoading && <p className="text-sm text-slate-500">Loading roster…</p>}
+      <div className="sk-card">
+        <div className="sk-card-h">
+          <h3>Roster</h3>
+          <p className="sk-muted" style={{ marginTop: 4 }}>
+            {classSectionId
+              ? `${students.length} students · ${counts.PRESENT} present · ${counts.ABSENT} absent · ${counts.LATE} late`
+              : 'Pick a class and a date to begin.'}
+          </p>
+        </div>
+        <div className="sk-card-b">
+          {classSectionId && listLoading && <p className="sk-state">Loading roster…</p>}
 
           {classSectionId && !listLoading && !listError && students.length === 0 && (
-            <p className="text-sm text-slate-400">
-              No students in this class yet — your admin needs to enrol them.
-            </p>
+            <p className="sk-state">No students in this class yet — your admin needs to enrol them.</p>
           )}
 
           {students.length > 0 && (
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Roll no.</Th>
-                  <Th>Student</Th>
-                  <Th>Status</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {students.map((s) => {
-                  const status = marks[s.id] ?? 'PRESENT';
-                  return (
-                    <Tr key={s.id}>
-                      <Td className="text-slate-500">{s.rollNo ?? '—'}</Td>
-                      <Td className="font-medium text-slate-900">
+            <div>
+              {students.map((s, i) => {
+                const status = marks[s.id] ?? 'PRESENT';
+                return (
+                  <div className="sk-row" key={s.id}>
+                    <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                      {initials(s.firstName, s.lastName)}
+                    </span>
+                    <div>
+                      <div className="nm">
                         {s.firstName} {s.lastName}
-                      </Td>
-                      <Td>
-                        <div className="flex flex-wrap items-center gap-1">
-                          {STATUSES.map((option) => (
-                            <button
-                              key={option}
-                              type="button"
-                              aria-pressed={status === option}
-                              onClick={() => setMarks((m) => ({ ...m, [s.id]: option }))}
-                              className={
-                                status === option
-                                  ? 'rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white'
-                                  : 'rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50'
-                              }
-                            >
-                              {STATUS_LABEL[option]}
-                            </button>
-                          ))}
-                          <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
-                        </div>
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </TBody>
-            </Table>
+                      </div>
+                      <div className="meta">Roll {s.rollNo ?? '—'}</div>
+                    </div>
+                    <span className="sp" />
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {STATUSES.map((option) => {
+                        const active = status === option;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => setMarks((m) => ({ ...m, [s.id]: option }))}
+                            style={{
+                              borderRadius: 8,
+                              padding: '6px 11px',
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              border: `1.5px solid ${active ? STATUS_COLOR[option] : 'var(--sk-line-2)'}`,
+                              background: active ? STATUS_COLOR[option] : 'var(--sk-card)',
+                              color: active ? '#fff' : 'var(--sk-ink-2)',
+                              transition: 'background 0.12s ease, border-color 0.12s ease, color 0.12s ease',
+                            }}
+                          >
+                            {STATUS_LABEL[option]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }
