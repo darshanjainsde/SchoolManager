@@ -43,7 +43,10 @@ apps/api/src/modules/auth/internal/auth.service.ts:36      (MODIFY: login by adm
 apps/api/src/common/mail/mail.service.ts                   (MODIFY: sendTestReminder, sendResultsPublished)
 apps/api/src/common/queue/*                                 (MODIFY: reminder scheduler — reuse existing queue)
 apps/web/app/login/page.tsx                                (MODIFY: role slider + admissionNo field)
-apps/web/components/<tenant-public-site>/…                 (MODIFY: add Login button to nav + hero)
+apps/web/components/public/sections/SiteNav.tsx           (MODIFY: add themeable Login link in navbar ONLY — no hero button)
+apps/web/app/app/website/design-tab.tsx                   (MODIFY: "Show Login button" toggle + label field)
+apps/web/e2e/*                                             (NEW: Playwright functional tests)
+playwright.config.ts                                       (NEW at apps/web root)
 apps/web/app/portal/attendance/page.tsx                   (NEW)
 apps/web/app/portal/results/page.tsx                       (NEW)
 apps/web/app/teacher/tests/page.tsx                        (NEW)
@@ -54,6 +57,27 @@ apps/web/app/teacher/attendance/page.tsx                  (MODIFY: wire to new e
 Suggested routing: T1–T5 → general-purpose (backend). T6–T10 → general-purpose + frontend-design skill. Parallel pairs: (T2 attendance, T3 exams), (T7 student-portal, T8 teacher-portal).
 
 ---
+
+### Task 0: Web functional-test harness (Playwright)
+
+**Why:** `apps/web` has no test runner today (only `apps/api` uses jest). The web UI changes below need real functional coverage — rendering, customization states, navigation, and the login→portal flow. Playwright drives the actual app, which is the honest way to test a Next.js UI.
+
+**Files:** `apps/web/playwright.config.ts` (NEW), `apps/web/e2e/helpers.ts` (NEW), `apps/web/package.json` (add `@playwright/test` devDep + `"e2e": "playwright test"` script), `apps/web/e2e/smoke.spec.ts` (NEW).
+
+**Interfaces (later tasks consume these):**
+```ts
+// e2e/helpers.ts
+export const HOSTS = { site: 'http://acme.localhost:3000', };
+export async function loginAs(page, role: 'student'|'teacher'|'admin'): Promise<void>;
+// seeded creds on localhost/staging: student SUN-2231 / Passw0rd!, teacher <email>/Passw0rd!, admin admin@acme.test/Passw0rd!
+export async function apiSeedReset(): Promise<void>; // optional: hit a test-only reset if present, else no-op
+```
+- Config: `baseURL` from env `E2E_BASE_URL` (defaults to `http://acme.localhost:3000`), `webServer` runs `pnpm --filter @skoolos/web dev` locally; on CI/staging point `E2E_BASE_URL=https://acme.test.sckools.com`. Projects: chromium + mobile-chrome (the portals must work on phone browsers).
+
+- [ ] Step 1: add dep + config + helpers.
+- [ ] Step 2: write `smoke.spec.ts` — visits the school site, asserts the nav renders the school name.
+- [ ] Step 3: `pnpm --filter @skoolos/web exec playwright install --with-deps chromium` then `pnpm --filter @skoolos/web e2e` → smoke passes.
+- [ ] Step 4: Commit `test(web): Playwright functional-test harness`.
 
 ### Task 1: Domain models — Attendance, Exam, Result
 
@@ -151,15 +175,49 @@ Add back-relations on `School`/`Student` as Prisma requires.
 
 - [ ] TDD the scheduler math + recipient filtering (mock queue + mail). Implement. Gates. Commit `feat(api): notification service — email reminders for tests/results/absence`.
 
-### Task 6: Public-site Login button + role-slider login page
+### Task 6: Navbar Login button (customization-compliant) + role-slider login page
 
-**Files:** the tenant public-site nav/hero component (locate via the components rendering `sunrise.sckools.com` homepage — grep for the public site layout); `apps/web/app/login/page.tsx`.
+**Design decision (locked):** the Login entry lives in the **navbar ONLY** — no hero/homepage button. It is a first-class **website customization option**, behaving exactly like the existing "Enquire" CTA in `SiteNav.tsx` (`Cta` component): a themeable nav item that honors the school's `navColor`, `navTextColor`, `navStyle` (CLASSIC/CENTER/GHOST) and accent, is toggleable, and has an editable label. It must not break any existing nav layout or color choice.
 
-**Interfaces:**
-- Public site: a `Login` button in the site header (and a secondary in the hero) → `/login`. Shown on every tenant public page; styled with the school's accent.
-- Login page: a role segmented control (Student / Teacher / Admin) that swaps the identifier label (Admission no.-or-email vs Email), the submit copy, and (for student/teacher) shows the future "Continue with Google" button (disabled placeholder until Task 9). Submits `{ identifier, password }` to `/auth/login`; role-routing already exists (STUDENT → `/portal`, else `/app`; add TEACHER → `/teacher`).
+**Files:**
+- `packages/db/prisma/schema.prisma` — add to `SchoolProfile` (near `navShowCta`/`navCtaLabel`): `navShowLogin Boolean @default(true)` and `navLoginLabel String @default("Login")`. Migration `20260721_020000_nav_login`.
+- `apps/web/components/public/sections/SiteNav.tsx` — render a `Login` link beside the `Cta`, in **all three nav layouts** (CLASSIC/CENTER, and the mobile menu). Style it as the **secondary** nav action: use the existing `ps-nav-link` treatment (a subtle outline/ghost that inherits `navTextColor`), NOT `ps-accentbg` (the accent stays reserved for the primary Enquire CTA so the two don't compete). Link `href="/login"`. Respect `data.profile?.navShowLogin === false` → render nothing; label from `navLoginLabel?.trim() || 'Login'`.
+- `apps/web/lib/public-api.ts` — include `navShowLogin`, `navLoginLabel` in `PublicSiteData.profile` type + the query select.
+- `apps/web/app/app/website/design-tab.tsx` — add a "Show Login button" toggle + label input in the same nav section as the existing CTA controls; PUT to the profile via the existing management endpoint (add the two fields to that DTO in `apps/api`).
+- `apps/web/app/login/page.tsx` — role segmented control (Student / Teacher / Admin) swapping identifier label + submit copy; student/teacher show the disabled "Continue with Google" placeholder (Task 9). Submit `{ identifier, password }` → `/auth/login`. Role-routing: STUDENT → `/portal`, TEACHER → `/teacher`, else `/app`.
 
-- [ ] Implement; typecheck+lint; manual check on localhost (all three roles route correctly). Commit `feat(web): public-site login button + role-slider login`.
+**Interfaces produced:** `PublicSiteData.profile.navShowLogin: boolean`, `.navLoginLabel: string`; login page posts `{ identifier, password }` (Task 4 backend).
+
+- [ ] **Step 1 (API test):** in `apps/api`, extend the profile-update DTO + service test — updating `navShowLogin=false` persists and the public-site read returns it. Run jest → FAIL → implement → PASS.
+- [ ] **Step 2 (migration):** add fields + migration; apply to staging DB; `pnpm db:generate`.
+- [ ] **Step 3 (SiteNav render):** implement the Login link across CLASSIC/CENTER + mobile menu; wire `navShowLogin`/`navLoginLabel`.
+- [ ] **Step 4 (functional test — customization compliance):** `apps/web/e2e/nav-login.spec.ts`:
+  ```ts
+  test('login link renders in navbar and honors customization', async ({ page }) => {
+    await page.goto(HOSTS.site);                                   // acme homepage
+    const login = page.getByRole('link', { name: /login/i });
+    await expect(login).toBeVisible();
+    await expect(login).toHaveAttribute('href', /\/login$/);
+    // not in the hero: only one login control on the page
+    await expect(page.getByRole('link', { name: /login/i })).toHaveCount(1);
+    await login.click();
+    await expect(page).toHaveURL(/\/login$/);
+  });
+  test('login button hides when navShowLogin=false', async ({ page }) => {
+    // admin toggles it off, then public site omits it
+    await loginAs(page, 'admin');
+    await page.goto(`${HOSTS.site}/app/website`);
+    await page.getByLabel(/show login button/i).uncheck();
+    await page.getByRole('button', { name: /save|publish/i }).first().click();
+    await page.goto(HOSTS.site);
+    await expect(page.getByRole('link', { name: /login/i })).toHaveCount(0);
+  });
+  ```
+- [ ] **Step 5 (functional test — role routing):** `apps/web/e2e/login-roles.spec.ts` — student (SUN-2231) → lands on `/portal`; teacher → `/teacher`; admin → `/app`; each asserts a role-specific element is visible.
+- [ ] **Step 6:** run `pnpm --filter @skoolos/web e2e` → all pass; `pnpm typecheck && pnpm lint`.
+- [ ] **Step 7:** Commit `feat(web): navbar Login button as a website customization + role-slider login`.
+
+**Verification of the "complies with customizations" requirement:** the two nav tests above run under the default theme; additionally assert (Step 4) that switching `navColor` to `DARK` keeps the Login link legible — extend `nav-login.spec.ts` to set `navColor=DARK` via the design tab and assert the link's computed color contrast (or simply that it remains visible and clickable). No new nav layout is introduced; the Login link reuses `ps-nav-link`, so every existing `navStyle`/`navColor`/`navTextColor` combination already covers it.
 
 ### Task 7: Student portal — attendance + results/tests
 
@@ -169,7 +227,7 @@ Add back-relations on `School`/`Student` as Prisma requires.
 - New portal endpoints: `GET /me/attendance?month=` → per-day statuses + monthly %; `GET /me/results` → published results with class average; `GET /me/exams` → upcoming tests for the student's section. (Add to `portal.controller.ts` / `portal.service.ts`, scoped to the caller's `Student.userId`.)
 - Student attendance page: month calendar + %; results page: trend vs class average (small SVG) + list; overview surfaces the next test + latest result (matches the approved artifact).
 
-- [ ] Build endpoints (TDD) then pages; gates; manual QA. Commit `feat(web): student portal attendance + results`.
+- [ ] Build endpoints (jest TDD) then pages. **Functional test** `apps/web/e2e/student-portal.spec.ts`: `loginAs('student')` → Attendance tab shows a month grid and a % ; Results tab shows the published UT2 row (13/25) and the trend svg. Run `pnpm --filter @skoolos/web e2e`. Gates. Commit `feat(web): student portal attendance + results`.
 
 ### Task 8: Teacher portal — attendance, tests, results
 
@@ -177,7 +235,7 @@ Add back-relations on `School`/`Student` as Prisma requires.
 
 **Interfaces:** consume Tasks 2 & 3. Attendance: roster with Present/Absent/Late toggles + "mark all present" + save. Tests: schedule form (class, subject, date, syllabus, max marks) → confirmation "N students & parents emailed". Results: per-student marks entry + publish.
 
-- [ ] Build; gates; manual QA (teacher marks attendance → student portal reflects it; schedules test → student sees it + email in Mailhog locally / `[TEST]` on staging). Commit `feat(web): teacher portal attendance, tests, results`.
+- [ ] Build. **Functional test** `apps/web/e2e/teacher-flow.spec.ts` (the cross-role proof): `loginAs('teacher')` → mark Aarav Absent → Save → then `loginAs('student')` in a new context → Overview shows today Absent and the monthly % dropped; separately, teacher schedules a test → student Overview shows the countdown, and (locally) the reminder email appears in Mailhog. Run `pnpm --filter @skoolos/web e2e`. Gates. Commit `feat(web): teacher portal attendance, tests, results`.
 
 ### Task 9 (fast-follow, gated on user): "Continue with Google"
 
@@ -191,6 +249,7 @@ Add back-relations on `School`/`Student` as Prisma requires.
 
 ### Task 10: Staging QA + prod PR
 
+- [ ] Run the **full Playwright suite against staging**: `E2E_BASE_URL=https://acme.test.sckools.com pnpm --filter @skoolos/web e2e` — every spec (nav-login, login-roles, student-portal, teacher-flow) green on real infra.
 - [ ] Merge 2A to `staging`; test.sckools.com green.
 - [ ] Acceptance on `acme.test.sckools.com`: student logs in by admission-no; teacher marks attendance → student sees today Present + monthly %; teacher schedules test → student sees countdown + `[TEST]` reminder email arrives; teacher publishes results → student + parent view marks vs class avg; tenant isolation holds.
 - [ ] PR `staging → main`, title "Phase 2A: web login + student/teacher portals". No merge without user approval. Prod: migrate first (Supabase Management API flow), then merge, then flag on.
