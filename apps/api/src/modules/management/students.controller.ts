@@ -14,6 +14,9 @@ import {
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
+import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
+import { ApiError } from '../../common/errors/api-error';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { StudentsService } from './students.service';
@@ -39,14 +42,36 @@ export class StudentsController {
    * the handler-level @Roles widens the class-level SCHOOL_ADMIN rule (the
    * RolesGuard resolves handler metadata first). Every mutating handler below
    * stays SCHOOL_ADMIN-only.
+   *
+   * A TEACHER is NOT an administrator of the school's student records:
+   *  - `classSectionId` is REQUIRED for them, so they can only pull one class
+   *    section at a time rather than the entire school's minor roster; and
+   *  - they get the `roster` projection ({ id, firstName, lastName, rollNo }),
+   *    which omits guardianName / guardianPhone / dob / gender / admissionNo.
+   *
+   * SCHOOL_ADMIN keeps the original contract (optional filter, full rows) —
+   * the admin students screen depends on it. The projection is passed to the
+   * service explicitly; the service never inspects the caller's role.
    */
   @Get()
   @Roles('SCHOOL_ADMIN', 'TEACHER')
   list(
+    @CurrentUser() u: SchoolJwtPayload,
     @Query('classSectionId', new ParseUUIDPipe({ optional: true }))
     classSectionId?: string,
   ) {
-    return this.students.list(this.sid(), { classSectionId });
+    if (u.role !== 'SCHOOL_ADMIN') {
+      if (!classSectionId) {
+        throw new ApiError(
+          'VALIDATION',
+          'classSectionId is required',
+          400,
+          'classSectionId',
+        );
+      }
+      return this.students.list(this.sid(), { classSectionId, projection: 'roster' });
+    }
+    return this.students.list(this.sid(), { classSectionId, projection: 'full' });
   }
 
   @Post()

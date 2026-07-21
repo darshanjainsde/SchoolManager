@@ -5,7 +5,7 @@ const txMock = {
   user: { findMany: jest.fn() },
   school: { findFirst: jest.fn() },
   subject: { findFirst: jest.fn() },
-  result: { upsert: jest.fn(), updateMany: jest.fn() },
+  result: { upsert: jest.fn(), updateMany: jest.fn(), findMany: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -252,6 +252,49 @@ describe('ExamsService', () => {
         response: { code: 'CLASS_NOT_FOUND' },
       });
       expect(txMock.exam.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('results', () => {
+    it('returns studentId/marks/publishedAt for every stored mark', async () => {
+      txMock.exam.findFirst.mockResolvedValue({ id: EXAM_ID, schoolId: SCHOOL });
+      const published = new Date('2026-08-02T10:00:00.000Z');
+      txMock.result.findMany.mockResolvedValue([
+        { studentId: 's-1', marks: 41, publishedAt: published },
+        { studentId: 's-2', marks: 88, publishedAt: null },
+      ]);
+
+      const rows = await svc.results(SCHOOL, EXAM_ID);
+
+      expect(rows).toEqual([
+        { studentId: 's-1', marks: 41, publishedAt: published },
+        { studentId: 's-2', marks: 88, publishedAt: null },
+      ]);
+      expect(txMock.result.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { examId: EXAM_ID },
+          select: { studentId: true, marks: true, publishedAt: true },
+        }),
+      );
+    });
+
+    it('scopes the exam lookup to the caller school and 404s on a foreign exam id', async () => {
+      txMock.exam.findFirst.mockResolvedValue(null);
+
+      await expect(svc.results(SCHOOL, EXAM_ID)).rejects.toMatchObject({
+        response: { code: 'NOT_FOUND' },
+      });
+      expect(txMock.exam.findFirst).toHaveBeenCalledWith({
+        where: { id: EXAM_ID, schoolId: SCHOOL },
+      });
+      expect(txMock.result.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns an empty array when nothing has been marked yet', async () => {
+      txMock.exam.findFirst.mockResolvedValue({ id: EXAM_ID, schoolId: SCHOOL });
+      txMock.result.findMany.mockResolvedValue([]);
+
+      await expect(svc.results(SCHOOL, EXAM_ID)).resolves.toEqual([]);
     });
   });
 

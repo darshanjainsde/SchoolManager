@@ -42,6 +42,13 @@ export interface SaveResultsResult {
   saved: number;
 }
 
+/** One stored mark for an exam. `publishedAt` is null until publish() runs. */
+export interface ExamResultRow {
+  studentId: string;
+  marks: number;
+  publishedAt: Date | null;
+}
+
 export interface PublishResultsResult {
   published: number;
 }
@@ -181,6 +188,31 @@ export class ExamsService {
       }
 
       return { upcoming, past };
+    });
+  }
+
+  /**
+   * The marks already stored for an exam, so the results-entry screen can
+   * prefill rather than showing a fully-marked exam as blank (which invites a
+   * teacher to re-key every mark).
+   *
+   * `Exam`/`Result` carry no RLS, so loading the exam via `{ id, schoolId }`
+   * is load-bearing: a foreign exam id must 404 rather than leak another
+   * school's marks. Students with no stored mark are simply absent from the
+   * array — the caller pairs it against the roster it already has.
+   */
+  async results(schoolId: string, examId: string): Promise<ExamResultRow[]> {
+    return withTenant(schoolId, async (tx) => {
+      const exam = await tx.exam.findFirst({ where: { id: examId, schoolId } });
+      if (!exam) {
+        throw new ApiError('NOT_FOUND', 'exam not found', 404, 'id');
+      }
+
+      return tx.result.findMany({
+        where: { examId },
+        select: { studentId: true, marks: true, publishedAt: true },
+        orderBy: [{ studentId: 'asc' }],
+      });
     });
   }
 

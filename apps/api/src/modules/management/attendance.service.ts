@@ -76,9 +76,13 @@ export class AttendanceService {
    * way the column always holds a real identity for audit purposes.
    *
    * After the transaction commits, an ABSENCE_NOTICE is fired best-effort to
-   * the linked-user emails of students marked ABSENT in this call only
-   * (not the whole roster) — see `resolveStudentRecipients`. Never blocks or
-   * fails this method: notification errors are logged and swallowed.
+   * the linked-user emails of students who became ABSENT in *this* call —
+   * i.e. whose stored status for the day was previously something other than
+   * ABSENT (or who had no row at all). Re-saving the same roster therefore
+   * never re-emails a guardian whose child was already recorded absent; the
+   * de-duplication lives here, on the server, so it holds for every client.
+   * Never blocks or fails this method: notification errors are logged and
+   * swallowed.
    */
   async save(
     schoolId: string,
@@ -116,6 +120,17 @@ export class AttendanceService {
       const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
       const markedById = teacher?.id ?? callerUserId;
 
+      // Read the marks as they stand BEFORE this save, inside the same
+      // transaction as the upserts, so "was this student already absent?" is
+      // answered against a consistent snapshot. Anything not in this map has
+      // no stored row yet and therefore counts as newly absent.
+      const before = await tx.attendance.findMany({
+        where: { classSectionId: dto.classSectionId, date: day },
+        select: { studentId: true, status: true },
+      });
+      const previousStatus = new Map(before.map((m) => [m.studentId, m.status]));
+
+      const newlyAbsent: string[] = [];
       let absentees = 0;
       for (const mark of dto.marks) {
         await tx.attendance.upsert({
@@ -134,13 +149,18 @@ export class AttendanceService {
             markedById,
           },
         });
-        if (mark.status === 'ABSENT') absentees += 1;
+        if (mark.status === 'ABSENT') {
+          absentees += 1;
+          if (previousStatus.get(mark.studentId) !== 'ABSENT') {
+            newlyAbsent.push(mark.studentId);
+          }
+        }
       }
 
-      return { saved: dto.marks.length, absentees };
+      return { saved: dto.marks.length, absentees, newlyAbsent };
     });
 
-    const absentStudentIds = dto.marks.filter((m) => m.status === 'ABSENT').map((m) => m.studentId);
+    const { newlyAbsent: absentStudentIds, ...response } = result;
 
     if (absentStudentIds.length > 0) {
       // Best-effort, after the attendance write has committed. Recipient
@@ -172,6 +192,6 @@ export class AttendanceService {
       );
     }
 
-    return result;
+    return response;
   }
 }

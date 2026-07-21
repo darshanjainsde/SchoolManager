@@ -10,8 +10,38 @@ import { PasswordService } from '../auth';
 import { isP2002, isP2003, isP2025 } from './internal/prisma-errors';
 import type { CreateStudentDto, UpdateStudentDto } from './management.dto';
 
+/**
+ * How much of a Student row the caller is allowed to see.
+ *
+ * - `full`   — every column plus the class/grade names. SCHOOL_ADMIN only.
+ * - `roster` — the four fields needed to render a name next to a studentId
+ *              (attendance / exam-result entry). Deliberately excludes the
+ *              minor's PII: guardianName, guardianPhone, dob, gender,
+ *              admissionNo, userId.
+ *
+ * The caller (controller) decides which projection applies — this service
+ * never reads the request/role itself.
+ */
+export type StudentProjection = 'full' | 'roster';
+
+/** Exactly the columns a `roster` projection may return. */
+export const ROSTER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  rollNo: true,
+} as const;
+
+export interface RosterStudent {
+  id: string;
+  firstName: string;
+  lastName: string;
+  rollNo: string | null;
+}
+
 interface ListFilters {
   classSectionId?: string;
+  projection?: StudentProjection;
 }
 
 @Injectable()
@@ -19,13 +49,24 @@ export class StudentsService {
   constructor(private readonly passwords: PasswordService) {}
 
   async list(schoolId: string, filters: ListFilters = {}) {
+    const where = {
+      schoolId,
+      ...(filters.classSectionId ? { classSectionId: filters.classSectionId } : {}),
+    };
+    const orderBy = [{ admissionNo: 'asc' as const }];
+
+    if (filters.projection === 'roster') {
+      // Narrow projection: nothing here is minor PII, so a TEACHER may read it
+      // for the one class section they asked about.
+      return withTenant(schoolId, (tx) =>
+        tx.student.findMany({ where, orderBy, select: { ...ROSTER_SELECT } }),
+      ) as Promise<RosterStudent[]>;
+    }
+
     return withTenant(schoolId, (tx) =>
       tx.student.findMany({
-        where: {
-          schoolId,
-          ...(filters.classSectionId ? { classSectionId: filters.classSectionId } : {}),
-        },
-        orderBy: [{ admissionNo: 'asc' }],
+        where,
+        orderBy,
         include: {
           classSection: {
             select: {

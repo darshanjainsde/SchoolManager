@@ -36,6 +36,10 @@ describe('AttendanceService', () => {
     notifications.notify.mockResolvedValue({ sent: 0, failed: 0 });
     txMock.user.findMany.mockResolvedValue([]);
     txMock.school.findFirst.mockResolvedValue({ name: 'Green Valley School' });
+    // `save` reads the pre-existing marks for the day to work out who is
+    // NEWLY absent; default to "nothing stored yet" so every test that does
+    // not care about re-saves behaves like a first save.
+    txMock.attendance.findMany.mockResolvedValue([]);
   });
 
   describe('list', () => {
@@ -393,6 +397,93 @@ describe('AttendanceService', () => {
         response: { code: 'VALIDATION' },
       });
       expect(txMock.attendance.upsert).not.toHaveBeenCalled();
+    });
+
+    it('notifies a guardian only on the FIRST save of an ABSENT mark, not on a re-save', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+      // Roster check (call 1) then recipient resolution (call 2) on save #1;
+      // roster check again (call 3) on save #2 — no recipient lookup should
+      // follow it, because nobody became newly absent.
+      txMock.student.findMany
+        .mockResolvedValueOnce([{ id: 's-1' }])
+        .mockResolvedValueOnce([{ userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' }])
+        .mockResolvedValueOnce([{ id: 's-1' }]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [{ studentId: 's-1', status: 'ABSENT' }],
+      };
+
+      // Save #1 — nothing stored yet, so s-1 is newly absent.
+      txMock.attendance.findMany.mockResolvedValueOnce([]);
+      const first = await svc.save(SCHOOL, 'user-teacher-1', dto);
+      await flushBackgroundWork();
+
+      expect(first).toEqual({ saved: 1, absentees: 1 });
+      expect(notifications.notify).toHaveBeenCalledTimes(1);
+      expect(notifications.notify).toHaveBeenCalledWith('ABSENCE_NOTICE', [
+        expect.objectContaining({ email: 'parent@x.com' }),
+      ]);
+
+      // Save #2 — the very same payload, but the row now already says ABSENT.
+      notifications.notify.mockClear();
+      txMock.attendance.findMany.mockResolvedValueOnce([
+        { studentId: 's-1', status: 'ABSENT' },
+      ]);
+      const second = await svc.save(SCHOOL, 'user-teacher-1', dto);
+      await flushBackgroundWork();
+
+      // The mark is still written (and still counted), only the email is skipped.
+      expect(second).toEqual({ saved: 1, absentees: 1 });
+      expect(txMock.attendance.upsert).toHaveBeenCalledTimes(2);
+      expect(notifications.notify).not.toHaveBeenCalled();
+    });
+
+    it('does notify when a student flips from PRESENT to ABSENT on a re-save', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.student.findMany
+        .mockResolvedValueOnce([{ id: 's-1' }])
+        .mockResolvedValueOnce([{ userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' }]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
+      txMock.attendance.findMany.mockResolvedValue([{ studentId: 's-1', status: 'PRESENT' }]);
+
+      await svc.save(SCHOOL, 'user-teacher-1', {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [{ studentId: 's-1', status: 'ABSENT' }],
+      });
+      await flushBackgroundWork();
+
+      expect(notifications.notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads the pre-existing marks for the same class/date inside the write transaction', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+
+      await svc.save(SCHOOL, 'user-teacher-1', {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [{ studentId: 's-1', status: 'PRESENT' }],
+      });
+
+      expect(txMock.attendance.findMany).toHaveBeenCalledWith({
+        where: { classSectionId: CLASS_SECTION, date: new Date('2026-07-21') },
+        select: { studentId: true, status: true },
+      });
+      // Read before the writes, so the "was already absent" answer is not
+      // poisoned by this call's own upserts.
+      expect(txMock.attendance.findMany.mock.invocationCallOrder[0]).toBeLessThan(
+        txMock.attendance.upsert.mock.invocationCallOrder[0],
+      );
     });
   });
 });

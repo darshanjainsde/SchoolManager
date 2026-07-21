@@ -33,6 +33,12 @@ export class ExamsController {
     return this.exams.list(this.sid(), classSectionId);
   }
 
+  /** Marks already stored for this exam — lets the entry screen prefill. */
+  @Get(':id/results')
+  listResults(@Param('id', ParseUUIDPipe) id: string) {
+    return this.exams.results(this.sid(), id);
+  }
+
   @Put(':id/results')
   saveResults(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SaveExamResultsDto) {
     return this.exams.saveResults(this.sid(), id, dto);
