@@ -1,33 +1,35 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createTransport, type Transporter } from 'nodemailer';
 import { loadEnv } from '@skoolos/config';
+import type {
+  AbsenceNoticePayload,
+  ResultsPublishedPayload,
+  TestReminderPayload,
+  TestScheduledPayload,
+} from '../notifications/notification.types';
 
-export interface TestScheduledInfo {
-  schoolName: string;
-  subjectName: string;
-  examTitle: string;
-  scheduledAt: string;
-  classSectionName?: string;
-}
+/**
+ * The notification payload interfaces live in `notification.types.ts` (the
+ * authoritative contract shared with every caller and channel); these aliases
+ * exist only so the composer signatures below read naturally.
+ */
+export type TestScheduledInfo = TestScheduledPayload;
+export type TestReminderInfo = TestReminderPayload;
+export type ResultsPublishedInfo = ResultsPublishedPayload;
+export type AbsenceNoticeInfo = AbsenceNoticePayload;
 
-export interface TestReminderInfo {
-  schoolName: string;
-  subjectName: string;
-  examTitle: string;
-  scheduledAt: string;
-  daysUntil: number;
-}
-
-export interface ResultsPublishedInfo {
-  schoolName: string;
-  subjectName: string;
-  examTitle: string;
-}
-
-export interface AbsenceNoticeInfo {
-  schoolName: string;
-  studentName: string;
-  date: string;
+/**
+ * Escapes a value for interpolation into an HTML email body. School-authored
+ * text (exam titles, school names, student names) reaches parents' inboxes,
+ * so it must never be able to inject markup.
+ */
+export function escapeHtml(value: string | number): string {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**
@@ -116,11 +118,11 @@ export class MailService {
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
         <h2 style="color:#134e4a;margin:0 0 12px">📝 New test scheduled</h2>
-        <p style="color:#334155;line-height:1.6"><b>${info.schoolName}</b> has scheduled a new test.</p>
+        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b> has scheduled a new test.</p>
         <table style="border-collapse:collapse;width:100%;font-size:14px;color:#334155">
-          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Subject</td><td style="padding:6px 0;font-weight:bold">${info.subjectName}</td></tr>
-          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Test</td><td style="padding:6px 0;font-weight:bold">${info.examTitle}</td></tr>
-          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Date</td><td style="padding:6px 0;font-weight:bold">${info.scheduledAt}</td></tr>
+          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Subject</td><td style="padding:6px 0;font-weight:bold">${escapeHtml(info.subjectName)}</td></tr>
+          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Test</td><td style="padding:6px 0;font-weight:bold">${escapeHtml(info.examTitle)}</td></tr>
+          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Date</td><td style="padding:6px 0;font-weight:bold">${escapeHtml(info.scheduledAt)}</td></tr>
         </table>
         <p style="color:#64748b;font-size:13px;margin-top:20px">Check the school portal for more details.</p>
       </div>`;
@@ -133,7 +135,7 @@ export class MailService {
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
         <h2 style="color:#134e4a;margin:0 0 12px">⏰ Upcoming test reminder</h2>
-        <p style="color:#334155;line-height:1.6"><b>${info.schoolName}</b>: <b>${info.examTitle}</b> (${info.subjectName}) is coming up on ${info.scheduledAt} — ${info.daysUntil} day${info.daysUntil === 1 ? '' : 's'} from now.</p>
+        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b>: <b>${escapeHtml(info.examTitle)}</b> (${escapeHtml(info.subjectName)}) is coming up on ${escapeHtml(info.scheduledAt)} — ${escapeHtml(info.daysUntil)} day${info.daysUntil === 1 ? '' : 's'} from now.</p>
       </div>`;
     return this.send(to, subject, html, text);
   }
@@ -144,7 +146,7 @@ export class MailService {
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
         <h2 style="color:#134e4a;margin:0 0 12px">✅ Results published</h2>
-        <p style="color:#334155;line-height:1.6"><b>${info.schoolName}</b> has published results for <b>${info.examTitle}</b> (${info.subjectName}).</p>
+        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b> has published results for <b>${escapeHtml(info.examTitle)}</b> (${escapeHtml(info.subjectName)}).</p>
         <p style="color:#64748b;font-size:13px;margin-top:20px">Check the school portal to view them.</p>
       </div>`;
     return this.send(to, subject, html, text);
@@ -156,7 +158,7 @@ export class MailService {
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
         <h2 style="color:#134e4a;margin:0 0 12px">Absence notice</h2>
-        <p style="color:#334155;line-height:1.6"><b>${info.schoolName}</b> marked <b>${info.studentName}</b> absent on ${info.date}.</p>
+        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b> marked <b>${escapeHtml(info.studentName)}</b> absent on ${escapeHtml(info.date)}.</p>
         <p style="color:#64748b;font-size:13px;margin-top:20px">If this is unexpected, please contact the school office.</p>
       </div>`;
     return this.send(to, subject, html, text);

@@ -3,11 +3,15 @@ const txMock = {
   exam: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn() },
   student: { findMany: jest.fn() },
   user: { findMany: jest.fn() },
+  school: { findFirst: jest.fn() },
+  subject: { findFirst: jest.fn() },
   result: { upsert: jest.fn(), updateMany: jest.fn() },
 };
 
+const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+
 jest.mock('@skoolos/db', () => ({
-  withTenant: jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock)),
+  withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
 }));
 
 import { ExamsService } from './exams.service';
@@ -21,18 +25,26 @@ const SUBJECT = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 const CALLER = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 const EXAM_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 
+/** Let the post-response (fire-and-forget) notification work run to completion. */
+const flushBackgroundWork = () => new Promise((resolve) => setImmediate(resolve));
+
 describe('ExamsService', () => {
   const notifications = { notify: jest.fn() };
   const svc = new ExamsService(notifications as unknown as NotificationService);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) =>
+      fn(txMock),
+    );
     notifications.notify.mockResolvedValue({ sent: 0, failed: 0 });
-    // Recipient resolution runs on every create()/publish() — default to no
+    // Recipient resolution runs after every create()/publish() — default to no
     // linked-user students so tests that don't care about notifications
     // don't need to stub these too.
     txMock.student.findMany.mockResolvedValue([]);
     txMock.user.findMany.mockResolvedValue([]);
+    txMock.school.findFirst.mockResolvedValue({ name: 'Green Valley School' });
+    txMock.subject.findFirst.mockResolvedValue({ name: 'Mathematics' });
   });
 
   describe('create', () => {
@@ -78,20 +90,92 @@ describe('ExamsService', () => {
         createdById: CALLER,
       });
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
-      txMock.user.findMany.mockResolvedValue([{ email: 'parent@x.com' }]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
 
       await svc.create(SCHOOL, CALLER, dto);
-      await Promise.resolve(); // let the fire-and-forget notify() microtask run
+      await flushBackgroundWork();
 
       expect(txMock.student.findMany).toHaveBeenCalledWith({
-        where: { classSectionId: CLASS_SECTION, userId: { not: null } },
+        where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION, userId: { not: null } },
         select: { userId: true },
       });
-      expect(notifications.notify).toHaveBeenCalledWith(
-        'TEST_SCHEDULED',
-        ['parent@x.com'],
-        expect.objectContaining({ examId: EXAM_ID, classSectionId: CLASS_SECTION }),
+      // The payload must carry exactly what the mail composer reads — the
+      // names, not the ids — or the email renders "undefined".
+      expect(notifications.notify).toHaveBeenCalledWith('TEST_SCHEDULED', [
+        {
+          email: 'parent@x.com',
+          payload: {
+            schoolName: 'Green Valley School',
+            subjectName: 'Mathematics',
+            examTitle: 'Unit Test',
+            scheduledAt: '2026-08-01T09:00:00.000Z',
+          },
+        },
+      ]);
+    });
+
+    it('loads the school and subject names it needs, scoped to this school', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.exam.create.mockResolvedValue({
+        id: EXAM_ID,
+        ...dto,
+        scheduledAt: new Date(dto.scheduledAt),
+        createdById: CALLER,
+      });
+      txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
+
+      await svc.create(SCHOOL, CALLER, dto);
+      await flushBackgroundWork();
+
+      expect(txMock.school.findFirst).toHaveBeenCalledWith({
+        where: { id: SCHOOL },
+        select: { name: true },
+      });
+      expect(txMock.subject.findFirst).toHaveBeenCalledWith({
+        where: { id: SUBJECT, schoolId: SCHOOL },
+        select: { name: true },
+      });
+    });
+
+    it('resolves recipients in a SEPARATE transaction, after the exam write has committed', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.exam.create.mockResolvedValue({
+        id: EXAM_ID,
+        ...dto,
+        scheduledAt: new Date(dto.scheduledAt),
+        createdById: CALLER,
+      });
+
+      await svc.create(SCHOOL, CALLER, dto);
+      await flushBackgroundWork();
+
+      // One transaction for the mutation, a second for the notification reads.
+      expect(withTenantMock).toHaveBeenCalledTimes(2);
+      // …and the recipient lookup happens strictly after the exam write.
+      expect(txMock.student.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(
+        txMock.exam.create.mock.invocationCallOrder[0],
       );
+    });
+
+    it('still creates the exam when recipient resolution itself blows up (no rollback of the write)', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.exam.create.mockResolvedValue({
+        id: EXAM_ID,
+        ...dto,
+        scheduledAt: new Date(dto.scheduledAt),
+        createdById: CALLER,
+      });
+      // First withTenant (the mutation) succeeds; the notification one fails.
+      withTenantMock
+        .mockImplementationOnce((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock))
+        .mockImplementationOnce(() => Promise.reject(new Error('connection reset')));
+
+      const result = await svc.create(SCHOOL, CALLER, dto);
+      await flushBackgroundWork();
+
+      expect(result).toEqual(expect.objectContaining({ id: EXAM_ID }));
+      expect(notifications.notify).not.toHaveBeenCalled();
     });
 
     it('still creates the exam and returns it even when the notification service rejects', async () => {
@@ -102,9 +186,12 @@ describe('ExamsService', () => {
         scheduledAt: new Date(dto.scheduledAt),
         createdById: CALLER,
       });
+      txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
       notifications.notify.mockRejectedValue(new Error('smtp down'));
 
       const result = await svc.create(SCHOOL, CALLER, dto);
+      await flushBackgroundWork();
 
       expect(result).toEqual(expect.objectContaining({ id: EXAM_ID }));
     });
@@ -292,15 +379,61 @@ describe('ExamsService', () => {
       });
       txMock.result.updateMany.mockResolvedValue({ count: 2 });
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
-      txMock.user.findMany.mockResolvedValue([{ email: 'parent@x.com' }]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
+      txMock.subject.findFirst.mockResolvedValue({ name: 'Chemistry' });
 
       await svc.publish(SCHOOL, EXAM_ID);
-      await Promise.resolve();
+      await flushBackgroundWork();
 
-      expect(notifications.notify).toHaveBeenCalledWith(
-        'RESULTS_PUBLISHED',
-        ['parent@x.com'],
-        expect.objectContaining({ examId: EXAM_ID, classSectionId: CLASS_SECTION }),
+      expect(notifications.notify).toHaveBeenCalledWith('RESULTS_PUBLISHED', [
+        {
+          email: 'parent@x.com',
+          payload: {
+            schoolName: 'Green Valley School',
+            subjectName: 'Chemistry',
+            examTitle: 'Midterm',
+          },
+        },
+      ]);
+    });
+
+    it('does not announce "results published" when nothing was actually published', async () => {
+      txMock.exam.findFirst.mockResolvedValue({
+        id: EXAM_ID,
+        schoolId: SCHOOL,
+        classSectionId: CLASS_SECTION,
+        subjectId: SUBJECT,
+        title: 'Midterm',
+        maxMarks: 100,
+      });
+      txMock.result.updateMany.mockResolvedValue({ count: 0 });
+      txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
+
+      const result = await svc.publish(SCHOOL, EXAM_ID);
+      await flushBackgroundWork();
+
+      expect(result).toEqual({ published: 0 });
+      expect(notifications.notify).not.toHaveBeenCalled();
+    });
+
+    it('resolves recipients in a SEPARATE transaction, after the publish write has committed', async () => {
+      txMock.exam.findFirst.mockResolvedValue({
+        id: EXAM_ID,
+        schoolId: SCHOOL,
+        classSectionId: CLASS_SECTION,
+        subjectId: SUBJECT,
+        title: 'Midterm',
+        maxMarks: 100,
+      });
+      txMock.result.updateMany.mockResolvedValue({ count: 2 });
+
+      await svc.publish(SCHOOL, EXAM_ID);
+      await flushBackgroundWork();
+
+      expect(withTenantMock).toHaveBeenCalledTimes(2);
+      expect(txMock.student.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(
+        txMock.result.updateMany.mock.invocationCallOrder[0],
       );
     });
 
@@ -309,12 +442,17 @@ describe('ExamsService', () => {
         id: EXAM_ID,
         schoolId: SCHOOL,
         classSectionId: CLASS_SECTION,
+        subjectId: SUBJECT,
+        title: 'Midterm',
         maxMarks: 100,
       });
       txMock.result.updateMany.mockResolvedValue({ count: 3 });
+      txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
       notifications.notify.mockRejectedValue(new Error('smtp down'));
 
       const result = await svc.publish(SCHOOL, EXAM_ID);
+      await flushBackgroundWork();
 
       expect(result).toEqual({ published: 3 });
     });

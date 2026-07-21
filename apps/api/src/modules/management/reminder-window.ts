@@ -37,11 +37,18 @@ export function reminderWindows(now: Date): ReminderWindows {
   };
 }
 
-/** True iff `scheduledAt` falls in the T-2-day or T-1-day window relative to `now`. */
-export function isWithinReminderWindow(scheduledAt: Date, now: Date): boolean {
+/**
+ * How many days out `scheduledAt` is, for reminder purposes: `2` or `1` when
+ * it falls inside the T-2 / T-1 window relative to `now`, and `null` when it
+ * is outside both (i.e. no reminder is due).
+ *
+ * `ExamRemindersService` calls this for the exams the date-range query
+ * returned, so the "which window is this?" rule lives in exactly one place
+ * and is unit tested against fixed clocks.
+ */
+export function reminderDaysUntil(scheduledAt: Date, now: Date): 1 | 2 | null {
   const { twoDaysOut, oneDayOut } = reminderWindows(now);
-  return (
-    (scheduledAt >= twoDaysOut.gte && scheduledAt < twoDaysOut.lt) ||
-    (scheduledAt >= oneDayOut.gte && scheduledAt < oneDayOut.lt)
-  );
+  if (scheduledAt >= twoDaysOut.gte && scheduledAt < twoDaysOut.lt) return 2;
+  if (scheduledAt >= oneDayOut.gte && scheduledAt < oneDayOut.lt) return 1;
+  return null;
 }

@@ -44,6 +44,42 @@ describe('CronSecretGuard', () => {
     }
   });
 
+  it('reports an auth failure as UNAUTHORIZED, not as a feature-gating code', () => {
+    process.env.CRON_SECRET = 'super-secret';
+    const ctx = ctxWithHeaders({ 'x-cron-secret': 'wrong' });
+
+    try {
+      guard.canActivate(ctx);
+      throw new Error('expected the guard to reject');
+    } catch (e) {
+      expect((e as ApiError).getResponse()).toEqual({
+        code: 'UNAUTHORIZED',
+        message: expect.any(String),
+      });
+    }
+  });
+
+  it('rejects a same-length-but-different secret (constant-time comparison still compares)', () => {
+    process.env.CRON_SECRET = 'super-secret';
+    const ctx = ctxWithHeaders({ 'x-cron-secret': 'super-secreT' });
+
+    expect(() => guard.canActivate(ctx)).toThrow(ApiError);
+  });
+
+  it('rejects a prefix of the real secret rather than throwing on the length mismatch', () => {
+    process.env.CRON_SECRET = 'super-secret';
+    const ctx = ctxWithHeaders({ 'x-cron-secret': 'super' });
+
+    expect(() => guard.canActivate(ctx)).toThrow(ApiError);
+  });
+
+  it('fails closed when CRON_SECRET is set but empty', () => {
+    process.env.CRON_SECRET = '';
+    const ctx = ctxWithHeaders({ 'x-cron-secret': '' });
+
+    expect(() => guard.canActivate(ctx)).toThrow(ApiError);
+  });
+
   it('rejects with a 401 ApiError when the header is missing entirely', () => {
     process.env.CRON_SECRET = 'super-secret';
     const ctx = ctxWithHeaders({});

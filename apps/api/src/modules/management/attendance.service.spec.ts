@@ -2,12 +2,15 @@ const txMock = {
   classSection: { findFirst: jest.fn() },
   student: { findMany: jest.fn() },
   user: { findMany: jest.fn() },
+  school: { findFirst: jest.fn() },
   attendance: { findMany: jest.fn(), upsert: jest.fn() },
   teacher: { findFirst: jest.fn() },
 };
 
+const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+
 jest.mock('@skoolos/db', () => ({
-  withTenant: jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock)),
+  withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
 }));
 
 import { AttendanceService } from './attendance.service';
@@ -18,14 +21,21 @@ import type { SaveAttendanceDto } from './management.dto';
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const CLASS_SECTION = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
+/** Let the post-response (fire-and-forget) notification work run to completion. */
+const flushBackgroundWork = () => new Promise((resolve) => setImmediate(resolve));
+
 describe('AttendanceService', () => {
   const notifications = { notify: jest.fn() };
   const svc = new AttendanceService(notifications as unknown as NotificationService);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) =>
+      fn(txMock),
+    );
     notifications.notify.mockResolvedValue({ sent: 0, failed: 0 });
     txMock.user.findMany.mockResolvedValue([]);
+    txMock.school.findFirst.mockResolvedValue({ name: 'Green Valley School' });
   });
 
   describe('list', () => {
@@ -81,8 +91,10 @@ describe('AttendanceService', () => {
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
       txMock.attendance.upsert.mockResolvedValue({});
       // Recipient resolution for the ABSENT student(s) only (s-1).
-      txMock.student.findMany.mockResolvedValueOnce([{ userId: 'u-1' }]);
-      txMock.user.findMany.mockResolvedValue([{ email: 'parent@x.com' }]);
+      txMock.student.findMany.mockResolvedValueOnce([
+        { userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' },
+      ]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
 
       const dto: SaveAttendanceDto = {
         classSectionId: CLASS_SECTION,
@@ -95,17 +107,116 @@ describe('AttendanceService', () => {
       };
 
       await svc.save(SCHOOL, 'user-teacher-1', dto);
-      await Promise.resolve();
+      await flushBackgroundWork();
 
       expect(txMock.student.findMany).toHaveBeenNthCalledWith(2, {
-        where: { id: { in: ['s-1'] }, userId: { not: null } },
-        select: { userId: true },
+        where: { schoolId: SCHOOL, id: { in: ['s-1'] }, userId: { not: null } },
+        select: { userId: true, firstName: true, lastName: true },
       });
-      expect(notifications.notify).toHaveBeenCalledWith(
-        'ABSENCE_NOTICE',
-        ['parent@x.com'],
-        expect.objectContaining({ classSectionId: CLASS_SECTION, date: '2026-07-21' }),
+      // Exactly the fields sendAbsenceNotice reads — nothing renders "undefined".
+      expect(notifications.notify).toHaveBeenCalledWith('ABSENCE_NOTICE', [
+        {
+          email: 'parent@x.com',
+          payload: {
+            schoolName: 'Green Valley School',
+            studentName: 'Aisha Khan',
+            date: '2026-07-21',
+          },
+        },
+      ]);
+    });
+
+    it('names each guardian\'s own child when several students are absent', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }, { id: 's-2' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.student.findMany.mockResolvedValueOnce([
+        { userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' },
+        { userId: 'u-2', firstName: 'Rohan', lastName: 'Mehta' },
+      ]);
+      txMock.user.findMany.mockResolvedValue([
+        { id: 'u-1', email: 'aisha.parent@x.com' },
+        { id: 'u-2', email: 'rohan.parent@x.com' },
+      ]);
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [
+          { studentId: 's-1', status: 'ABSENT' },
+          { studentId: 's-2', status: 'ABSENT' },
+        ],
+      };
+
+      await svc.save(SCHOOL, 'user-teacher-1', dto);
+      await flushBackgroundWork();
+
+      expect(notifications.notify).toHaveBeenCalledWith('ABSENCE_NOTICE', [
+        {
+          email: 'aisha.parent@x.com',
+          payload: {
+            schoolName: 'Green Valley School',
+            studentName: 'Aisha Khan',
+            date: '2026-07-21',
+          },
+        },
+        {
+          email: 'rohan.parent@x.com',
+          payload: {
+            schoolName: 'Green Valley School',
+            studentName: 'Rohan Mehta',
+            date: '2026-07-21',
+          },
+        },
+      ]);
+    });
+
+    it('resolves recipients in a SEPARATE transaction, after the attendance write has committed', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.student.findMany.mockResolvedValueOnce([
+        { userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' },
+      ]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [{ studentId: 's-1', status: 'ABSENT' }],
+      };
+
+      await svc.save(SCHOOL, 'user-teacher-1', dto);
+      await flushBackgroundWork();
+
+      expect(withTenantMock).toHaveBeenCalledTimes(2);
+      expect(txMock.student.findMany.mock.invocationCallOrder[1]).toBeGreaterThan(
+        txMock.attendance.upsert.mock.invocationCallOrder[0],
       );
+    });
+
+    it('still saves attendance when recipient resolution itself blows up (no rollback of the write)', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+      withTenantMock
+        .mockImplementationOnce((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock))
+        .mockImplementationOnce(() => Promise.reject(new Error('connection reset')));
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [{ studentId: 's-1', status: 'ABSENT' }],
+      };
+
+      const result = await svc.save(SCHOOL, 'user-teacher-1', dto);
+      await flushBackgroundWork();
+
+      expect(result).toEqual({ saved: 1, absentees: 1 });
+      expect(notifications.notify).not.toHaveBeenCalled();
     });
 
     it('does not call the notification service when no student is marked ABSENT', async () => {
@@ -130,8 +241,10 @@ describe('AttendanceService', () => {
       txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
       txMock.attendance.upsert.mockResolvedValue({});
-      txMock.student.findMany.mockResolvedValueOnce([{ userId: 'u-1' }]);
-      txMock.user.findMany.mockResolvedValue([{ email: 'parent@x.com' }]);
+      txMock.student.findMany.mockResolvedValueOnce([
+        { userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' },
+      ]);
+      txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
       notifications.notify.mockRejectedValue(new Error('smtp down'));
 
       const dto: SaveAttendanceDto = {
@@ -141,6 +254,7 @@ describe('AttendanceService', () => {
       };
 
       const result = await svc.save(SCHOOL, 'user-teacher-1', dto);
+      await flushBackgroundWork();
 
       expect(result).toEqual({ saved: 1, absentees: 1 });
     });

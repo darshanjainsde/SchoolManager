@@ -14,6 +14,9 @@ export type ErrorCode =
   | 'CLASS_NOT_EMPTY'
   | 'TEACHER_CONFLICT'
   | 'VALIDATION'
+  /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
+  | 'UNAUTHORIZED'
+  /** Caller is authenticated but the school's plan does not include this — 403. */
   | 'FORBIDDEN_FEATURE'
   | 'NOT_FOUND'
   | 'INTERNAL';

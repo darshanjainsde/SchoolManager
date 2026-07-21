@@ -1,19 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { MailService } from '../mail/mail.service';
-import type {
-  AbsenceNoticeInfo,
-  ResultsPublishedInfo,
-  TestReminderInfo,
-  TestScheduledInfo,
-} from '../mail/mail.service';
-import type { NotificationChannel, NotificationKind } from './notification.types';
+import type { NotificationChannel, NotificationMessage } from './notification.types';
 
 /**
  * Wraps `MailService` as a `NotificationChannel`. Each `NotificationKind`
- * maps to one of the `MailService.send*` composers — the payload shape
- * expected for each kind matches that composer's parameter, and is the
- * caller's responsibility to supply (see exams.service.ts / attendance.service.ts
- * / exam-reminders.service.ts for the shapes actually sent today).
+ * maps to one of the `MailService.send*` composers, and the payload handed to
+ * that composer is the SAME interface the caller had to satisfy (see
+ * notification.types.ts) — `switch (message.kind)` narrows the discriminated
+ * union, so there is no cast anywhere in this file. If a caller's payload
+ * ever drifts from what a composer reads, it fails to compile at the call
+ * site instead of rendering "undefined" into a parent's inbox.
  */
 @Injectable()
 export class EmailChannel implements NotificationChannel {
@@ -21,19 +17,19 @@ export class EmailChannel implements NotificationChannel {
 
   constructor(private readonly mail: MailService) {}
 
-  async send(kind: NotificationKind, to: string, payload: Record<string, unknown>): Promise<boolean> {
-    switch (kind) {
+  async send(to: string, message: NotificationMessage): Promise<boolean> {
+    switch (message.kind) {
       case 'TEST_SCHEDULED':
-        return this.mail.sendTestScheduled(to, payload as unknown as TestScheduledInfo);
+        return this.mail.sendTestScheduled(to, message.payload);
       case 'TEST_REMINDER':
-        return this.mail.sendTestReminder(to, payload as unknown as TestReminderInfo);
+        return this.mail.sendTestReminder(to, message.payload);
       case 'RESULTS_PUBLISHED':
-        return this.mail.sendResultsPublished(to, payload as unknown as ResultsPublishedInfo);
+        return this.mail.sendResultsPublished(to, message.payload);
       case 'ABSENCE_NOTICE':
-        return this.mail.sendAbsenceNotice(to, payload as unknown as AbsenceNoticeInfo);
+        return this.mail.sendAbsenceNotice(to, message.payload);
       default: {
         // Exhaustiveness guard — a new NotificationKind must be handled above.
-        const _exhaustive: never = kind;
+        const _exhaustive: never = message;
         return _exhaustive;
       }
     }

@@ -3,9 +3,13 @@ import { withTenant, type AttendanceStatus } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveStudentRecipients } from '../../common/notifications/recipients';
+import { runInBackground } from '../../common/notifications/run-in-background';
 import type { SaveAttendanceDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Never let a missing School row render as `undefined` in a parent's inbox. */
+const FALLBACK_SCHOOL_NAME = 'Your school';
 
 export interface AttendanceMarkResult {
   studentId: string;
@@ -82,7 +86,7 @@ export class AttendanceService {
   ): Promise<SaveAttendanceResult> {
     const day = new Date(dto.date);
 
-    const { result, absentRecipients } = await withTenant(schoolId, async (tx) => {
+    const result = await withTenant(schoolId, async (tx) => {
       const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
@@ -132,22 +136,39 @@ export class AttendanceService {
         if (mark.status === 'ABSENT') absentees += 1;
       }
 
-      const absentStudentIds = dto.marks
-        .filter((m) => m.status === 'ABSENT')
-        .map((m) => m.studentId);
-      const absentRecipients = await resolveStudentRecipients(tx, absentStudentIds);
-
-      return { result: { saved: dto.marks.length, absentees }, absentRecipients };
+      return { saved: dto.marks.length, absentees };
     });
 
-    if (absentRecipients.length > 0) {
-      // Best-effort, fire-and-forget — never blocks or fails saving attendance.
-      void this.notifications
-        .notify('ABSENCE_NOTICE', absentRecipients, {
-          classSectionId: dto.classSectionId,
-          date: dto.date,
-        })
-        .catch((e) => this.logger.error(`ABSENCE_NOTICE notify failed: ${(e as Error).message}`));
+    const absentStudentIds = dto.marks.filter((m) => m.status === 'ABSENT').map((m) => m.studentId);
+
+    if (absentStudentIds.length > 0) {
+      // Best-effort, after the attendance write has committed. Recipient
+      // resolution and the school-name lookup run in their own transaction so
+      // a transient failure there can never roll back the teacher's save.
+      runInBackground(
+        async () => {
+          const { schoolName, recipients } = await withTenant(schoolId, async (tx) => {
+            const school = await tx.school.findFirst({
+              where: { id: schoolId },
+              select: { name: true },
+            });
+            const recipients = await resolveStudentRecipients(tx, schoolId, absentStudentIds);
+            return { schoolName: school?.name ?? FALLBACK_SCHOOL_NAME, recipients };
+          });
+          if (recipients.length === 0) return;
+
+          // One payload PER recipient — each guardian's notice must name
+          // their own child.
+          await this.notifications.notify(
+            'ABSENCE_NOTICE',
+            recipients.map((r) => ({
+              email: r.email,
+              payload: { schoolName, studentName: r.studentName, date: dto.date },
+            })),
+          );
+        },
+        (e) => this.logger.error(`ABSENCE_NOTICE notify failed: ${(e as Error).message}`),
+      );
     }
 
     return result;
