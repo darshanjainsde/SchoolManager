@@ -1,10 +1,21 @@
-import { IsEmail, IsString, Length, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString, Length, MinLength, ValidateIf } from 'class-validator';
+import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
-  @ApiProperty()
+  /**
+   * Either an email address or a student admission number. `email` is kept as
+   * an optional alias so existing `{ email, password }` callers keep working.
+   */
+  @ApiPropertyOptional()
+  @ValidateIf((dto: LoginDto) => !dto.email)
+  @IsString()
+  @MinLength(1)
+  identifier?: string;
+
+  @ApiPropertyOptional()
+  @ValidateIf((dto: LoginDto) => !dto.identifier)
   @IsEmail()
-  email!: string;
+  email?: string;
 
   @ApiProperty()
   @IsString()

@@ -29,15 +29,19 @@ export class AuthService {
   ) {}
 
   /**
-   * Look up by (schoolId, email). User row lookup uses the platform connection
-   * because we have not yet established the request's tenant scope from a JWT;
-   * the schoolId is trusted because it comes from the tenant-resolved Host.
+   * Look up by (schoolId, identifier), where identifier is either an email
+   * address or a student admission number (web-first portals, Phase 2A).
+   * User row lookup uses the platform connection because we have not yet
+   * established the request's tenant scope from a JWT; the schoolId is
+   * trusted because it comes from the tenant-resolved Host.
    */
-  async login(schoolId: string, email: string, password: string): Promise<IssuedTokens> {
+  async login(schoolId: string, identifier: string, password: string): Promise<IssuedTokens> {
     const platform = getPlatformPrisma();
-    const user = await platform.user.findUnique({
-      where: { schoolId_email: { schoolId, email: email.toLowerCase() } },
-    });
+    const user = identifier.includes('@')
+      ? await platform.user.findUnique({
+          where: { schoolId_email: { schoolId, email: identifier.toLowerCase() } },
+        })
+      : await this.resolveUserByAdmissionNo(platform, schoolId, identifier);
     if (!user || !user.isActive) throw new UnauthorizedException('Invalid credentials');
 
     if (user.lockedUntil && user.lockedUntil > new Date()) {
@@ -232,6 +236,25 @@ export class AuthService {
       audience: 'school-refresh',
       expiresIn: this.env.JWT_REFRESH_TTL,
     });
+  }
+
+  /**
+   * Resolves a student's linked User by admission number (case-insensitive).
+   * Returns null (never throws) for an unknown admission number or a student
+   * with no linked account, so the caller can fall through to the same
+   * generic "Invalid credentials" response used for the email path — no
+   * enumeration of which admission numbers exist.
+   */
+  private async resolveUserByAdmissionNo(
+    platform: ReturnType<typeof getPlatformPrisma>,
+    schoolId: string,
+    admissionNo: string,
+  ): Promise<User | null> {
+    const student = await platform.student.findFirst({
+      where: { schoolId, admissionNo: { equals: admissionNo, mode: 'insensitive' } },
+    });
+    if (!student?.userId) return null;
+    return platform.user.findUnique({ where: { id: student.userId } });
   }
 
   private async recordFailedAttempt(user: User): Promise<void> {
