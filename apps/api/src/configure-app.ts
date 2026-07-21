@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { AppEnv } from '@skoolos/config';
+import { ApiErrorFilter } from './common/errors/api-error.filter';
 
 /**
  * Shared application configuration applied by BOTH the local server
@@ -12,6 +13,11 @@ import type { AppEnv } from '@skoolos/config';
 export function configureApp(app: INestApplication, env: AppEnv): void {
   app.useLogger(app.get(Logger));
   app.enableShutdownHooks();
+
+  // Normalizes every thrown error (ApiError, ValidationPipe failures, plain
+  // HttpExceptions, unknown 500s) into the `{ code, message, field? }`
+  // envelope so every client — including /manage/* — can switch on `code`.
+  app.useGlobalFilters(new ApiErrorFilter());
 
   // Honour X-Forwarded-Host behind an ingress / CDN (Vercel, custom domains).
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
