@@ -1,5 +1,7 @@
 # Android App — Launch Prerequisites (start today, user actions)
 
+> **RESEQUENCED 2026-07-21:** Web ships first and app-independent — see `2026-07-21-web-first-portals.md`. The Android app (Expo) is now Phase 2B: a launch *event* that reuses the web's Attendance/Exam/Result API, gated only by Google's account/testing clocks below.
+
 The mobile implementation plan (Expo Teacher + Student/Parent apps) is written AFTER these accounts exist, because package name, Firebase project and signing identity go into the code. Everything below can be started today; items marked ⏳ have waiting periods you cannot compress — start them first.
 
 ## Decisions already locked (from brainstorming)
