@@ -6,6 +6,7 @@ import {
   IsEmail,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -412,4 +413,46 @@ export class SaveAttendanceDto {
   @ValidateNested({ each: true })
   @Type(() => AttendanceMarkDto)
   marks!: AttendanceMarkDto[];
+}
+
+// ── Exam / Results ───────────────────────────────────────────────────────────
+
+export class CreateExamDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @IsUUID()
+  subjectId!: string;
+
+  @IsString()
+  @Length(1, 160)
+  title!: string;
+
+  @IsDateString()
+  scheduledAt!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 4000)
+  syllabus?: string;
+
+  @IsInt()
+  @Min(1)
+  maxMarks!: number;
+}
+
+export class ExamResultMarkDto {
+  @IsUUID()
+  studentId!: string;
+
+  @IsNumber()
+  marks!: number;
+}
+
+export class SaveExamResultsDto {
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => ExamResultMarkDto)
+  marks!: ExamResultMarkDto[];
 }

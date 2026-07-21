@@ -1,0 +1,45 @@
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
+import { RolesGuard } from '../../common/auth/roles.guard';
+import { Roles } from '../../common/auth/roles.decorator';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
+import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
+import { RequireFeature, RequireFeatureGuard } from '../features';
+import { TenantContextService } from '../tenancy';
+import { ExamsService } from './exams.service';
+import { CreateExamDto, SaveExamResultsDto } from './management.dto';
+
+@Controller('manage/exams')
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
+@RequireFeature('MANAGEMENT')
+@Roles('TEACHER', 'SCHOOL_ADMIN')
+export class ExamsController {
+  constructor(
+    private readonly exams: ExamsService,
+    private readonly tenant: TenantContextService,
+  ) {}
+
+  private sid(): string {
+    return this.tenant.requireTenant().schoolId;
+  }
+
+  @Post()
+  create(@Body() dto: CreateExamDto, @CurrentUser() u: SchoolJwtPayload) {
+    return this.exams.create(this.sid(), u.sub, dto);
+  }
+
+  @Get()
+  list(@Query('classSectionId', ParseUUIDPipe) classSectionId: string) {
+    return this.exams.list(this.sid(), classSectionId);
+  }
+
+  @Put(':id/results')
+  saveResults(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SaveExamResultsDto) {
+    return this.exams.saveResults(this.sid(), id, dto);
+  }
+
+  @Post(':id/publish')
+  publish(@Param('id', ParseUUIDPipe) id: string) {
+    return this.exams.publish(this.sid(), id);
+  }
+}

@@ -16,10 +16,12 @@ import { AnnouncementsService } from './announcements.service';
 import { AnnouncementsController } from './announcements.controller';
 import { AttendanceService } from './attendance.service';
 import { AttendanceController } from './attendance.controller';
+import { ExamsService } from './exams.service';
+import { ExamsController } from './exams.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService],
+  providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -28,7 +30,8 @@ import { AttendanceController } from './attendance.controller';
     TimetableController,
     AnnouncementsController,
     AttendanceController,
+    ExamsController,
   ],
-  exports: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService],
+  exports: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService],
 })
 export class ManagementModule {}
