@@ -24,6 +24,8 @@ interface SiteProfile {
   navTextColor?: string | null;
   navCtaLabel?: string | null;
   navShowCta?: boolean | null;
+  navShowLogin?: boolean | null;
+  navLoginLabel?: string | null;
   brandColorPrimary?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -205,14 +207,16 @@ export default function DesignTab() {
   const slotIds = data?.homepage.heroImageAssetIds ?? [];
   const urlOf = (id: string) => heroMedia.data?.find((m) => m.id === id)?.url ?? null;
 
-  // Slider + CTA label are edited locally, saved on release/blur.
+  // Slider + CTA/Login labels are edited locally, saved on release/blur.
   const [opacity, setOpacity] = useState(65);
   const [ctaLabel, setCtaLabel] = useState('Enquire');
+  const [loginLabel, setLoginLabel] = useState('Login');
   const [isUploadingSlot, setIsUploadingSlot] = useState(false);
   useEffect(() => {
     if (!profile) return;
     setOpacity(profile.heroOverlayOpacity ?? 65);
     setCtaLabel(profile.navCtaLabel ?? 'Enquire');
+    setLoginLabel(profile.navLoginLabel ?? 'Login');
   }, [profile]);
 
   const profileMutation = useMutation({
@@ -641,6 +645,47 @@ export default function DesignTab() {
               Show the button
             </label>
           </div>
+
+          {/* Secondary nav action: the portal sign-in link. Styled as a plain
+              nav link on the public site so it never competes with the CTA. */}
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="design-login">Login link text</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="design-login"
+                  value={loginLabel}
+                  maxLength={40}
+                  onChange={(e) => setLoginLabel(e.target.value)}
+                  placeholder="Login"
+                  className="w-56"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy || !loginLabel.trim() || loginLabel.trim() === (profile?.navLoginLabel ?? 'Login')}
+                  onClick={() => profileMutation.mutate({ navLoginLabel: loginLabel.trim() })}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 pb-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={profile?.navShowLogin ?? true}
+                disabled={busy}
+                onChange={(e) => profileMutation.mutate({ navShowLogin: e.target.checked })}
+                className="h-4 w-4 accent-emerald-700"
+              />
+              Show Login button
+            </label>
+          </div>
+          <p className="text-xs text-slate-400">
+            The Login link sits next to your enquiry button in the navbar and takes staff, students and
+            parents to their portal sign-in. It inherits your navbar colours, so it stays readable on
+            every bar colour.
+          </p>
         </CardContent>
       </Card>
     </div>

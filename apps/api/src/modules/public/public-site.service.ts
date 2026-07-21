@@ -104,6 +104,8 @@ export class PublicSiteService {
               navTextColor: profile.navTextColor,
               navCtaLabel: profile.navCtaLabel,
               navShowCta: profile.navShowCta,
+              navShowLogin: profile.navShowLogin,
+              navLoginLabel: profile.navLoginLabel,
             }
           : null,
         homepage: homepage

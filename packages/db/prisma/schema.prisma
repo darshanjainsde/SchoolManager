@@ -233,6 +233,8 @@ model SchoolProfile {
   navTextColor       String  @default("AUTO")
   navCtaLabel        String  @default("Enquire")
   navShowCta         Boolean @default(true)
+  navShowLogin       Boolean @default(true)
+  navLoginLabel      String  @default("Login")
   phone             String?
   email             String?
   addressLine1      String?
