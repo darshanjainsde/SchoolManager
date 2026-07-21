@@ -33,7 +33,15 @@ export class StudentsController {
     return this.tenant.requireTenant().schoolId;
   }
 
+  /**
+   * Read-only roster. Teachers need this to render names next to the
+   * studentIds returned by /manage/attendance and to enter exam results, so
+   * the handler-level @Roles widens the class-level SCHOOL_ADMIN rule (the
+   * RolesGuard resolves handler metadata first). Every mutating handler below
+   * stays SCHOOL_ADMIN-only.
+   */
   @Get()
+  @Roles('SCHOOL_ADMIN', 'TEACHER')
   list(
     @Query('classSectionId', new ParseUUIDPipe({ optional: true }))
     classSectionId?: string,

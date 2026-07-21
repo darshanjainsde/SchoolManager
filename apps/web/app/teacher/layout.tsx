@@ -3,7 +3,16 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, ClipboardCheck, BookOpen, Megaphone, Inbox, LogOut } from 'lucide-react';
+import {
+  LayoutDashboard,
+  ClipboardCheck,
+  BookOpen,
+  FileText,
+  GraduationCap,
+  Megaphone,
+  Inbox,
+  LogOut,
+} from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useApi } from '@/lib/use-api';
@@ -35,6 +44,8 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
   const items = [
     { href: '/teacher', label: 'My classes', icon: LayoutDashboard },
     { href: '/teacher/attendance', label: 'Attendance', icon: ClipboardCheck },
+    { href: '/teacher/tests', label: 'Tests', icon: FileText },
+    { href: '/teacher/results', label: 'Results', icon: GraduationCap },
     { href: '/teacher/assignments', label: 'Assignments', icon: BookOpen },
     { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
     { href: '/teacher/inbox', label: 'Inbox', icon: Inbox },
