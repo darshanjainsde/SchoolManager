@@ -16,6 +16,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useHost } from '@/components/use-host';
 import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
+import './portal-theme.css';
 
 const NAV_ITEMS = [
   { href: '/portal', label: 'Home', icon: LayoutDashboard },
@@ -63,85 +64,41 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
 
   if (!refreshToken || audience !== 'school') return null;
 
+  const isActive = (href: string) =>
+    href === '/portal' ? pathname === '/portal' : pathname === href || pathname.startsWith(href + '/');
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Top navigation bar */}
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          {/* Brand */}
-          <div className="flex items-center gap-2 font-extrabold text-slate-800">
-            <span className="grid h-7 w-7 place-items-center rounded-md bg-teal-500 text-xs text-white">
-              S
-            </span>
-            <span>Student Portal</span>
+    <div className="skosx sk-shell">
+      <header className="sk-topbar">
+        <div className="sk-topbar-inner">
+          <span className="sk-crest" style={{ background: 'var(--sk-brand)' }}>S</span>
+          <div className="sk-who">
+            <div className="n">Student portal</div>
+            <div className="s">Sckools</div>
           </div>
-
-          {/* Nav links */}
-          <nav className="hidden sm:flex items-center gap-1 text-sm">
-            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-              const active =
-                href === '/portal'
-                  ? pathname === '/portal'
-                  : pathname === href || pathname.startsWith(href + '/');
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-md px-3 py-1.5 font-medium',
-                    active
-                      ? 'bg-teal-50 text-teal-700'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Logout */}
+          <div style={{ flex: 1 }} />
           <button
+            className="sk-signout"
             onClick={() => {
               clear();
               router.replace('/login');
             }}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800"
           >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Log out</span>
+            <LogOut className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Sign out</span>
           </button>
         </div>
-
-        {/* Mobile nav (below header row) */}
-        <nav className="flex sm:hidden items-center gap-1 overflow-x-auto border-t border-slate-100 px-3 py-1.5 text-xs">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active =
-              href === '/portal'
-                ? pathname === '/portal'
-                : pathname === href || pathname.startsWith(href + '/');
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  'flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 font-medium',
-                  active
-                    ? 'bg-teal-50 text-teal-700'
-                    : 'text-slate-600 hover:bg-slate-100',
-                )}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                {label}
-              </Link>
-            );
-          })}
+        <nav className="sk-tabs" aria-label="Portal sections">
+          {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+            <Link key={href} href={href} className="sk-tab" data-active={isActive(href)}>
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {label}
+            </Link>
+          ))}
         </nav>
       </header>
 
-      {/* Page content */}
-      <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      <main className="sk-main">{children}</main>
     </div>
   );
 }

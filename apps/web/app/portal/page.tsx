@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { CalendarCheck, GraduationCap, ClipboardList, Percent } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,10 +71,10 @@ const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
   LATE: 'Late',
 };
 
-const ATTENDANCE_TONES: Record<AttendanceStatus, string> = {
-  PRESENT: 'text-emerald-700',
-  ABSENT: 'text-rose-700',
-  LATE: 'text-amber-700',
+const ATTENDANCE_TONES: Record<AttendanceStatus, 'good' | 'warn' | 'bad'> = {
+  PRESENT: 'good',
+  ABSENT: 'bad',
+  LATE: 'warn',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -118,7 +117,7 @@ function daysUntilLabel(iso: string): string {
   return `In ${d} days`;
 }
 
-/** A compact stat tile, optionally linking through to the full page. */
+/** A compact KPI tile, optionally linking through to the full page. */
 function StatTile({
   icon: Icon,
   label,
@@ -131,27 +130,27 @@ function StatTile({
   label: string;
   value: string;
   hint?: string;
-  tone?: string;
+  tone?: 'good' | 'warn' | 'bad';
   href?: string;
 }) {
-  const body = (
-    <Card className={href ? 'h-full transition-colors hover:border-teal-300' : 'h-full'}>
-      <CardContent className="flex h-full flex-col gap-1 p-4">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-          <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {label}
-        </div>
-        <p className={`text-lg font-bold ${tone ?? 'text-slate-900'}`}>{value}</p>
-        {hint && <p className="text-xs text-slate-400">{hint}</p>}
-      </CardContent>
-    </Card>
+  const inner = (
+    <>
+      <span className="lab">
+        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {label}
+      </span>
+      <span className="n">{value}</span>
+      {hint && <span className="hint">{hint}</span>}
+    </>
   );
   return href ? (
-    <Link href={href} className="block h-full">
-      {body}
+    <Link href={href} className="sk-kpi" data-tone={tone}>
+      {inner}
     </Link>
   ) : (
-    body
+    <div className="sk-kpi" data-tone={tone}>
+      {inner}
+    </div>
   );
 }
 
@@ -236,143 +235,143 @@ export default function PortalDashboardPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Greeting */}
+    <div className="sk-anim" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <header>
-        <h1 className="text-2xl font-bold text-slate-900">
-          {profile ? `Welcome back, ${profile.firstName}!` : 'Welcome back!'}
-        </h1>
-        {profile?.className && (
-          <p className="mt-1 text-sm text-slate-500">Class: {profile.className}</p>
-        )}
+        <div className="sk-greet">
+          {profile ? (
+            <>
+              Hi, {profile.firstName} <span className="wave">👋</span>
+            </>
+          ) : (
+            'Welcome back'
+          )}
+        </div>
+        {profile?.className && <div className="sk-sub">{profile.className} · Roll {profile.rollNo ?? '—'}</div>}
       </header>
 
-      {/* At-a-glance: attendance, next test, latest result */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {/* Upcoming-test reminder — the thing a student should never miss */}
+      {nextExam && (
+        <div className="sk-remind">
+          <span className="ic">🔔</span>
+          <div style={{ flex: 1 }}>
+            <b>
+              {nextExam.subjectName} · {nextExam.title} — {daysUntilLabel(nextExam.scheduledAt).toLowerCase()}
+            </b>
+            <p>
+              {formatDate(nextExam.scheduledAt)}
+              {nextExam.syllabus ? ` · ${nextExam.syllabus}` : ''} · out of {nextExam.maxMarks}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* At-a-glance KPIs */}
+      <div className="sk-kpis">
         <StatTile
           icon={CalendarCheck}
           label="Today"
           href="/portal/attendance"
           tone={todayStatus ? ATTENDANCE_TONES[todayStatus] : undefined}
-          value={tileText(
-            attendanceQuery,
-            todayStatus ? ATTENDANCE_LABELS[todayStatus] : undefined,
-            'Not marked',
-          )}
+          value={tileText(attendanceQuery, todayStatus ? ATTENDANCE_LABELS[todayStatus] : undefined, 'Not marked')}
           hint="Attendance"
         />
         <StatTile
           icon={Percent}
           label="This month"
           href="/portal/attendance"
-          value={tileText(
-            attendanceQuery,
-            attendanceMarked > 0 ? `${attendance?.percent}%` : undefined,
-            'No records',
-          )}
-          hint={
-            attendanceMarked > 0
-              ? `${attendance?.present} of ${attendanceMarked} days present`
-              : 'No attendance recorded yet'
-          }
+          tone={attendance && attendanceMarked > 0 && attendance.percent < 75 ? 'warn' : undefined}
+          value={tileText(attendanceQuery, attendanceMarked > 0 ? `${attendance?.percent}%` : undefined, 'No records')}
+          hint={attendanceMarked > 0 ? `${attendance?.present} of ${attendanceMarked} days present` : 'Nothing recorded yet'}
         />
         <StatTile
           icon={ClipboardList}
           label="Next test"
           value={tileText(examsQuery, nextExam?.subjectName, 'None scheduled')}
-          hint={
-            nextExam
-              ? `${nextExam.title} — ${daysUntilLabel(nextExam.scheduledAt)}`
-              : 'No upcoming tests'
-          }
+          hint={nextExam ? `${nextExam.title} — ${daysUntilLabel(nextExam.scheduledAt).toLowerCase()}` : 'No upcoming tests'}
         />
         <StatTile
           icon={GraduationCap}
           label="Latest result"
           href="/portal/results"
+          tone={
+            latestResult
+              ? latestResult.marks < latestResult.classAverage
+                ? 'bad'
+                : 'good'
+              : undefined
+          }
           value={tileText(
             resultsQuery,
             latestResult ? `${latestResult.marks}/${latestResult.maxMarks}` : undefined,
             'None yet',
           )}
-          hint={
-            latestResult
-              ? `${latestResult.subjectName} — class avg ${latestResult.classAverage}`
-              : 'No results published yet'
-          }
+          hint={latestResult ? `${latestResult.subjectName} · class avg ${latestResult.classAverage}` : 'None published yet'}
         />
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="sk-grid2">
         {/* Today's timetable */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Today&apos;s schedule</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {timetableQuery.isLoading && (
-              <p className="text-sm text-slate-400">Loading…</p>
-            )}
-            {timetableQuery.error && (
-              <p className="text-sm text-rose-500">
-                {(timetableQuery.error as Error).message}
-              </p>
-            )}
-            {!timetableQuery.isLoading && todaySlots.length === 0 && (
-              <p className="text-sm text-slate-400">No classes scheduled for today.</p>
+        <div className="sk-card">
+          <div className="sk-card-h">
+            <h3>Today&apos;s schedule</h3>
+          </div>
+          <div className="sk-card-b">
+            {timetableQuery.isLoading && <p className="sk-state">Loading…</p>}
+            {timetableQuery.error && <p className="sk-state err">{(timetableQuery.error as Error).message}</p>}
+            {!timetableQuery.isLoading && !timetableQuery.error && todaySlots.length === 0 && (
+              <p className="sk-state">No classes scheduled for today.</p>
             )}
             {todaySlots.length > 0 && (
-              <ul className="flex flex-col gap-2">
+              <div>
                 {todaySlots.map((slot) => (
-                  <li
-                    key={slot.id}
-                    className="flex items-start justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
-                  >
-                    <div>
-                      <p className="font-medium text-slate-800">{slot.subject.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {slot.teacher.firstName} {slot.teacher.lastName}
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">
+                  <div className="sk-row" key={slot.id}>
+                    <span
+                      className="badge"
+                      style={{ background: 'var(--sk-brand-2)', width: 34, height: 34, fontSize: 11 }}
+                    >
                       {slot.period.label}
                     </span>
-                  </li>
+                    <div>
+                      <div className="nm">{slot.subject.name}</div>
+                      <div className="meta">
+                        {slot.teacher.firstName} {slot.teacher.lastName}
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Latest announcements */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Latest announcements</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {announcementsQuery.isLoading && (
-              <p className="text-sm text-slate-400">Loading…</p>
-            )}
-            {announcementsQuery.error && (
-              <p className="text-sm text-rose-500">
-                {(announcementsQuery.error as Error).message}
-              </p>
-            )}
-            {!announcementsQuery.isLoading && latestAnnouncements.length === 0 && (
-              <p className="text-sm text-slate-400">No announcements yet.</p>
+        <div className="sk-card">
+          <div className="sk-card-h">
+            <h3>Latest announcements</h3>
+          </div>
+          <div className="sk-card-b">
+            {announcementsQuery.isLoading && <p className="sk-state">Loading…</p>}
+            {announcementsQuery.error && <p className="sk-state err">{(announcementsQuery.error as Error).message}</p>}
+            {!announcementsQuery.isLoading && !announcementsQuery.error && latestAnnouncements.length === 0 && (
+              <p className="sk-state">No announcements yet.</p>
             )}
             {latestAnnouncements.length > 0 && (
-              <ul className="flex flex-col gap-3">
+              <div>
                 {latestAnnouncements.map((ann) => (
-                  <li key={ann.id} className="border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                    <p className="text-sm font-medium text-slate-800">{ann.title}</p>
-                    <p className="mt-0.5 text-xs text-slate-400">{formatDate(ann.createdAt)}</p>
-                  </li>
+                  <div className="sk-row" key={ann.id} style={{ alignItems: 'flex-start' }}>
+                    <span className="badge" style={{ background: 'var(--sk-amber)', color: '#2a1c04', width: 34, height: 34 }}>
+                      📣
+                    </span>
+                    <div>
+                      <div className="nm">{ann.title}</div>
+                      <div className="meta">{formatDate(ann.createdAt)}</div>
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
