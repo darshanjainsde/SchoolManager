@@ -25,11 +25,14 @@ type FilterErrorBody = { code: string; message: string; field?: string };
  *
  * Handles, in order:
  *  1. `ApiError` — already carries its own envelope + status, pass through.
- *  2. `BadRequestException` produced by the global `ValidationPipe` —
- *     rewritten to `code: 'VALIDATION'`, with a best-effort `field` pulled
- *     from the first class-validator message (they're formatted as
- *     `"<property> <constraint description>"`, e.g. `"email must be an
- *     email"`, so the leading token is the property name).
+ *  2. `BadRequestException` — rewritten to `code: 'VALIDATION'`. Only when
+ *     the exception's response carries an ARRAY `message` (the shape the
+ *     global `ValidationPipe`/class-validator produces) do we attempt a
+ *     best-effort `field`, pulled from the first message (they're formatted
+ *     as `"<property> <constraint description>"`, e.g. `"email must be an
+ *     email"`, so the leading token is the property name). A hand-thrown
+ *     `new BadRequestException('some message')` has a scalar `message` and
+ *     never gets a guessed `field` — it stays `{ code, message }` only.
  *  3. Any other `HttpException` — mapped to a sensible code (`NOT_FOUND`
  *     for 404s, `FORBIDDEN` for 403s, etc.) while preserving `message` and
  *     status.
@@ -76,8 +79,17 @@ export class ApiErrorFilter implements ExceptionFilter {
     const rawMessage =
       typeof res === 'string' ? res : ((res as { message?: unknown }).message ?? exception.message);
 
-    const messages = Array.isArray(rawMessage) ? rawMessage : [rawMessage];
-    const first = String(messages[0] ?? 'Validation failed');
+    // Only the `ValidationPipe`/class-validator shape carries an ARRAY
+    // `message` (the list of constraint-violation strings). A hand-thrown
+    // `new BadRequestException('some business message')` always has a
+    // scalar `message`, and must never have a `field` guessed onto it —
+    // the leading token of a business message is not a property name.
+    if (!Array.isArray(rawMessage)) {
+      const message = String(rawMessage ?? 'Validation failed');
+      return { code: 'VALIDATION', message };
+    }
+
+    const first = String(rawMessage[0] ?? 'Validation failed');
     const field = this.extractField(first);
 
     return field
@@ -91,6 +103,9 @@ export class ApiErrorFilter implements ExceptionFilter {
    * email"` or `"name should not be empty"`. The leading token is the
    * property name as long as it looks like an identifier; otherwise there's
    * no field to extract (best effort, not guaranteed).
+   *
+   * Only called from the array-`message` (class-validator) branch above —
+   * never on a hand-thrown scalar-message `BadRequestException`.
    */
   private extractField(message: string): string | undefined {
     const firstWord = message.trim().split(/\s+/)[0];

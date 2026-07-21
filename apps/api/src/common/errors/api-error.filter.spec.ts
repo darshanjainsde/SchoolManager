@@ -49,6 +49,39 @@ describe('ApiErrorFilter', () => {
     });
   });
 
+  it('normalizes a hand-thrown scalar-message BadRequestException without guessing a field', () => {
+    const { host, status, json } = mockHost();
+    filter.catch(new BadRequestException('invalid kind'), host);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({ code: 'VALIDATION', message: 'invalid kind' });
+    expect(json.mock.calls[0][0]).not.toHaveProperty('field');
+  });
+
+  it('does not extract a field from a scalar message even when the leading token looks identifier-like', () => {
+    const { host, status, json } = mockHost();
+    filter.catch(new BadRequestException('only images allowed'), host);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({ code: 'VALIDATION', message: 'only images allowed' });
+    expect(json.mock.calls[0][0]).not.toHaveProperty('field');
+  });
+
+  it('does not misattribute a field from a business-rule message with a capitalized leading word', () => {
+    const { host, status, json } = mockHost();
+    filter.catch(
+      new BadRequestException('New password must be different from the current password'),
+      host,
+    );
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      code: 'VALIDATION',
+      message: 'New password must be different from the current password',
+    });
+    expect(json.mock.calls[0][0]).not.toHaveProperty('field');
+  });
+
   it('normalizes a plain HttpException (404) with a sensible code', () => {
     const { host, status, json } = mockHost();
     filter.catch(new NotFoundException('Student not found'), host);
