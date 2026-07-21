@@ -142,7 +142,8 @@ export class PortalService {
   async attendance(userId: string, month?: string): Promise<AttendanceSummary> {
     const { schoolId } = this.tenant.requireTenant();
 
-    const monthKey = month ?? IST_DAY_FORMATTER.format(new Date()).slice(0, 7);
+    const trimmedMonth = month?.trim();
+    const monthKey = trimmedMonth ? trimmedMonth : IST_DAY_FORMATTER.format(new Date()).slice(0, 7);
     if (!MONTH_RE.test(monthKey)) {
       throw new ApiError('VALIDATION', 'month must be formatted as YYYY-MM', 400, 'month');
     }

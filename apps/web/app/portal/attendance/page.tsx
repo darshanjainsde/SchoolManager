@@ -96,11 +96,12 @@ export default function PortalAttendancePage() {
   const [month, setMonth] = useState(thisMonth);
   const today = dayKey(new Date());
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, isPlaceholderData } = useQuery({
     queryKey: ['portal-attendance', month],
     queryFn: () => api.get<AttendanceSummary>(`/me/attendance?month=${month}`),
     enabled: !!host,
     staleTime: 60_000,
+    placeholderData: (prev) => prev,
   });
 
   const statusByDate = new Map<string, AttendanceStatus>(
@@ -155,7 +156,10 @@ export default function PortalAttendancePage() {
       {error && <p className="text-sm text-rose-500">{(error as Error).message}</p>}
 
       {!isLoading && !error && data && (
-        <>
+        <div
+          aria-busy={isPlaceholderData}
+          className={cn('flex flex-col gap-6 transition-opacity', isPlaceholderData && 'opacity-50')}
+        >
           {/* Month summary */}
           <Card>
             <CardHeader className="pb-2">
@@ -202,11 +206,14 @@ export default function PortalAttendancePage() {
               <CardTitle className="text-base">{monthLabel(month)}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-7 gap-1.5" role="grid" aria-label={`Attendance for ${monthLabel(month)}`}>
+              <div
+                className="grid grid-cols-7 gap-1.5"
+                aria-label={`Attendance calendar for ${monthLabel(month)}`}
+              >
                 {WEEKDAY_LABELS.map((label) => (
                   <div
                     key={label}
-                    role="columnheader"
+                    aria-hidden="true"
                     className="pb-1 text-center text-xs font-medium text-slate-400"
                   >
                     {label}
@@ -223,7 +230,6 @@ export default function PortalAttendancePage() {
                   return (
                     <div
                       key={date}
-                      role="gridcell"
                       aria-label={`${date}: ${status ? STATUS_LABELS[status] : 'no record'}`}
                       className={cn(
                         'flex aspect-square items-center justify-center rounded-md border text-xs font-medium',
@@ -254,7 +260,7 @@ export default function PortalAttendancePage() {
               </ul>
             </CardContent>
           </Card>
-        </>
+        </div>
       )}
     </div>
   );

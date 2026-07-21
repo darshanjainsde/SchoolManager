@@ -175,6 +175,19 @@ describe('PortalService', () => {
       jest.useRealTimers();
     });
 
+    it('defaults to the current IST month when month is an empty or whitespace-only string', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-07-21T12:00:00.000Z'));
+      txMock.attendance.findMany.mockResolvedValue([]);
+
+      const empty = await svc.attendance(USER, '');
+      expect(empty.month).toBe('2026-07');
+
+      const whitespace = await svc.attendance(USER, '   ');
+      expect(whitespace.month).toBe('2026-07');
+
+      jest.useRealTimers();
+    });
+
     it('rejects a malformed month with VALIDATION before reading anything', async () => {
       await expect(svc.attendance(USER, 'July 2026')).rejects.toMatchObject({
         response: { code: 'VALIDATION', field: 'month' },
