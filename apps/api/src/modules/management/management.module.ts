@@ -18,10 +18,13 @@ import { AttendanceService } from './attendance.service';
 import { AttendanceController } from './attendance.controller';
 import { ExamsService } from './exams.service';
 import { ExamsController } from './exams.controller';
+import { ExamRemindersService } from './exam-reminders.service';
+import { ExamRemindersController } from './exam-reminders.controller';
+import { CronSecretGuard } from './cron-secret.guard';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService],
+  providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService, ExamRemindersService, CronSecretGuard],
   controllers: [
     CatalogController,
     TeachersController,
@@ -31,6 +34,7 @@ import { ExamsController } from './exams.controller';
     AnnouncementsController,
     AttendanceController,
     ExamsController,
+    ExamRemindersController,
   ],
   exports: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService],
 })

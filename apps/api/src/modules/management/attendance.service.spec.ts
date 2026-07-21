@@ -1,6 +1,7 @@
 const txMock = {
   classSection: { findFirst: jest.fn() },
   student: { findMany: jest.fn() },
+  user: { findMany: jest.fn() },
   attendance: { findMany: jest.fn(), upsert: jest.fn() },
   teacher: { findFirst: jest.fn() },
 };
@@ -11,16 +12,20 @@ jest.mock('@skoolos/db', () => ({
 
 import { AttendanceService } from './attendance.service';
 import { ApiError } from '../../common/errors/api-error';
+import type { NotificationService } from '../../common/notifications/notification.service';
 import type { SaveAttendanceDto } from './management.dto';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const CLASS_SECTION = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
 describe('AttendanceService', () => {
-  const svc = new AttendanceService();
+  const notifications = { notify: jest.fn() };
+  const svc = new AttendanceService(notifications as unknown as NotificationService);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    notifications.notify.mockResolvedValue({ sent: 0, failed: 0 });
+    txMock.user.findMany.mockResolvedValue([]);
   });
 
   describe('list', () => {
@@ -69,6 +74,77 @@ describe('AttendanceService', () => {
   });
 
   describe('save', () => {
+    it('fires an ABSENCE_NOTICE only to the linked-user emails of students marked ABSENT in this call', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      // Roster-membership check (all 3 students).
+      txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }, { id: 's-2' }, { id: 's-3' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+      // Recipient resolution for the ABSENT student(s) only (s-1).
+      txMock.student.findMany.mockResolvedValueOnce([{ userId: 'u-1' }]);
+      txMock.user.findMany.mockResolvedValue([{ email: 'parent@x.com' }]);
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [
+          { studentId: 's-1', status: 'ABSENT' },
+          { studentId: 's-2', status: 'PRESENT' },
+          { studentId: 's-3', status: 'LATE' },
+        ],
+      };
+
+      await svc.save(SCHOOL, 'user-teacher-1', dto);
+      await Promise.resolve();
+
+      expect(txMock.student.findMany).toHaveBeenNthCalledWith(2, {
+        where: { id: { in: ['s-1'] }, userId: { not: null } },
+        select: { userId: true },
+      });
+      expect(notifications.notify).toHaveBeenCalledWith(
+        'ABSENCE_NOTICE',
+        ['parent@x.com'],
+        expect.objectContaining({ classSectionId: CLASS_SECTION, date: '2026-07-21' }),
+      );
+    });
+
+    it('does not call the notification service when no student is marked ABSENT', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [{ studentId: 's-1', status: 'PRESENT' }],
+      };
+
+      await svc.save(SCHOOL, 'user-teacher-1', dto);
+
+      expect(notifications.notify).not.toHaveBeenCalled();
+    });
+
+    it('still saves attendance and returns the normal result even when the notification service rejects', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.student.findMany.mockResolvedValueOnce([{ userId: 'u-1' }]);
+      txMock.user.findMany.mockResolvedValue([{ email: 'parent@x.com' }]);
+      notifications.notify.mockRejectedValue(new Error('smtp down'));
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [{ studentId: 's-1', status: 'ABSENT' }],
+      };
+
+      const result = await svc.save(SCHOOL, 'user-teacher-1', dto);
+
+      expect(result).toEqual({ saved: 1, absentees: 1 });
+    });
+
     it('upserts every mark once and returns the correct saved/absentees counts', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValue([

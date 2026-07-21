@@ -2,6 +2,34 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createTransport, type Transporter } from 'nodemailer';
 import { loadEnv } from '@skoolos/config';
 
+export interface TestScheduledInfo {
+  schoolName: string;
+  subjectName: string;
+  examTitle: string;
+  scheduledAt: string;
+  classSectionName?: string;
+}
+
+export interface TestReminderInfo {
+  schoolName: string;
+  subjectName: string;
+  examTitle: string;
+  scheduledAt: string;
+  daysUntil: number;
+}
+
+export interface ResultsPublishedInfo {
+  schoolName: string;
+  subjectName: string;
+  examTitle: string;
+}
+
+export interface AbsenceNoticeInfo {
+  schoolName: string;
+  studentName: string;
+  date: string;
+}
+
 /**
  * Thin SMTP wrapper. Hostinger (authenticated, port 465/SSL) in prod,
  * Mailhog (unauthenticated, port 1025) in local dev — env-swap only.
@@ -78,6 +106,58 @@ export class MailService {
         </p>
         <p style="color:#64748b;font-size:13px;line-height:1.6">The link is valid for 30 minutes and can be used once.<br>
         If this wasn't you, ignore this email — your password is unchanged.</p>
+      </div>`;
+    return this.send(to, subject, html, text);
+  }
+
+  async sendTestScheduled(to: string, info: TestScheduledInfo): Promise<boolean> {
+    const subject = `New test scheduled: ${info.examTitle}`;
+    const text = `${info.schoolName} has scheduled a new test.\n\nSubject: ${info.subjectName}\nTest: ${info.examTitle}\nDate: ${info.scheduledAt}\n\nCheck the school portal for more details.`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#134e4a;margin:0 0 12px">📝 New test scheduled</h2>
+        <p style="color:#334155;line-height:1.6"><b>${info.schoolName}</b> has scheduled a new test.</p>
+        <table style="border-collapse:collapse;width:100%;font-size:14px;color:#334155">
+          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Subject</td><td style="padding:6px 0;font-weight:bold">${info.subjectName}</td></tr>
+          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Test</td><td style="padding:6px 0;font-weight:bold">${info.examTitle}</td></tr>
+          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Date</td><td style="padding:6px 0;font-weight:bold">${info.scheduledAt}</td></tr>
+        </table>
+        <p style="color:#64748b;font-size:13px;margin-top:20px">Check the school portal for more details.</p>
+      </div>`;
+    return this.send(to, subject, html, text);
+  }
+
+  async sendTestReminder(to: string, info: TestReminderInfo): Promise<boolean> {
+    const subject = `Reminder: ${info.examTitle} in ${info.daysUntil} day${info.daysUntil === 1 ? '' : 's'}`;
+    const text = `Reminder from ${info.schoolName}: "${info.examTitle}" (${info.subjectName}) is scheduled for ${info.scheduledAt} — that's ${info.daysUntil} day${info.daysUntil === 1 ? '' : 's'} away.`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#134e4a;margin:0 0 12px">⏰ Upcoming test reminder</h2>
+        <p style="color:#334155;line-height:1.6"><b>${info.schoolName}</b>: <b>${info.examTitle}</b> (${info.subjectName}) is coming up on ${info.scheduledAt} — ${info.daysUntil} day${info.daysUntil === 1 ? '' : 's'} from now.</p>
+      </div>`;
+    return this.send(to, subject, html, text);
+  }
+
+  async sendResultsPublished(to: string, info: ResultsPublishedInfo): Promise<boolean> {
+    const subject = `Results published: ${info.examTitle}`;
+    const text = `${info.schoolName} has published results for "${info.examTitle}" (${info.subjectName}). Check the school portal to view them.`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#134e4a;margin:0 0 12px">✅ Results published</h2>
+        <p style="color:#334155;line-height:1.6"><b>${info.schoolName}</b> has published results for <b>${info.examTitle}</b> (${info.subjectName}).</p>
+        <p style="color:#64748b;font-size:13px;margin-top:20px">Check the school portal to view them.</p>
+      </div>`;
+    return this.send(to, subject, html, text);
+  }
+
+  async sendAbsenceNotice(to: string, info: AbsenceNoticeInfo): Promise<boolean> {
+    const subject = `Absence notice: ${info.studentName}`;
+    const text = `${info.schoolName} marked ${info.studentName} absent on ${info.date}. If this is unexpected, please contact the school office.`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#134e4a;margin:0 0 12px">Absence notice</h2>
+        <p style="color:#334155;line-height:1.6"><b>${info.schoolName}</b> marked <b>${info.studentName}</b> absent on ${info.date}.</p>
+        <p style="color:#64748b;font-size:13px;margin-top:20px">If this is unexpected, please contact the school office.</p>
       </div>`;
     return this.send(to, subject, html, text);
   }

@@ -14,5 +14,11 @@
       "src": "/(.*)",
       "dest": "/api/index.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/internal/cron/exam-reminders",
+      "schedule": "0 3 * * *"
+    }
   ]
 }

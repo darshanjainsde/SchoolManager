@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { withTenant, type AttendanceStatus } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { NotificationService } from '../../common/notifications/notification.service';
+import { resolveStudentRecipients } from '../../common/notifications/recipients';
 import type { SaveAttendanceDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -17,6 +19,10 @@ export interface SaveAttendanceResult {
 
 @Injectable()
 export class AttendanceService {
+  private readonly logger = new Logger(AttendanceService.name);
+
+  constructor(private readonly notifications: NotificationService) {}
+
   /**
    * The students in `classSectionId`, each paired with their stored mark for
    * `date` (an unmarked student defaults to PRESENT rather than being
@@ -64,10 +70,10 @@ export class AttendanceService {
    * row, so we fall back to storing their own User.id in `markedById`; either
    * way the column always holds a real identity for audit purposes.
    *
-   * Notification (Task 5: emailing absentee parents) is deliberately NOT
-   * triggered here — this method only computes and returns the `absentees`
-   * count so a notification hook can be added later without reworking the
-   * save logic itself.
+   * After the transaction commits, an ABSENCE_NOTICE is fired best-effort to
+   * the linked-user emails of students marked ABSENT in this call only
+   * (not the whole roster) — see `resolveStudentRecipients`. Never blocks or
+   * fails this method: notification errors are logged and swallowed.
    */
   async save(
     schoolId: string,
@@ -76,7 +82,7 @@ export class AttendanceService {
   ): Promise<SaveAttendanceResult> {
     const day = new Date(dto.date);
 
-    return withTenant(schoolId, async (tx) => {
+    const { result, absentRecipients } = await withTenant(schoolId, async (tx) => {
       const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
@@ -126,7 +132,24 @@ export class AttendanceService {
         if (mark.status === 'ABSENT') absentees += 1;
       }
 
-      return { saved: dto.marks.length, absentees };
+      const absentStudentIds = dto.marks
+        .filter((m) => m.status === 'ABSENT')
+        .map((m) => m.studentId);
+      const absentRecipients = await resolveStudentRecipients(tx, absentStudentIds);
+
+      return { result: { saved: dto.marks.length, absentees }, absentRecipients };
     });
+
+    if (absentRecipients.length > 0) {
+      // Best-effort, fire-and-forget — never blocks or fails saving attendance.
+      void this.notifications
+        .notify('ABSENCE_NOTICE', absentRecipients, {
+          classSectionId: dto.classSectionId,
+          date: dto.date,
+        })
+        .catch((e) => this.logger.error(`ABSENCE_NOTICE notify failed: ${(e as Error).message}`));
+    }
+
+    return result;
   }
 }

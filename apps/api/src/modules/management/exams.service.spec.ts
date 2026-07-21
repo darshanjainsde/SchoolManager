@@ -2,6 +2,7 @@ const txMock = {
   classSection: { findFirst: jest.fn() },
   exam: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn() },
   student: { findMany: jest.fn() },
+  user: { findMany: jest.fn() },
   result: { upsert: jest.fn(), updateMany: jest.fn() },
 };
 
@@ -11,6 +12,7 @@ jest.mock('@skoolos/db', () => ({
 
 import { ExamsService } from './exams.service';
 import { ApiError } from '../../common/errors/api-error';
+import type { NotificationService } from '../../common/notifications/notification.service';
 import type { CreateExamDto, SaveExamResultsDto } from './management.dto';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -20,10 +22,17 @@ const CALLER = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 const EXAM_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 
 describe('ExamsService', () => {
-  const svc = new ExamsService();
+  const notifications = { notify: jest.fn() };
+  const svc = new ExamsService(notifications as unknown as NotificationService);
 
   beforeEach(() => {
     jest.clearAllMocks();
+    notifications.notify.mockResolvedValue({ sent: 0, failed: 0 });
+    // Recipient resolution runs on every create()/publish() — default to no
+    // linked-user students so tests that don't care about notifications
+    // don't need to stub these too.
+    txMock.student.findMany.mockResolvedValue([]);
+    txMock.user.findMany.mockResolvedValue([]);
   });
 
   describe('create', () => {
@@ -37,7 +46,12 @@ describe('ExamsService', () => {
 
     it('validates the classSection belongs to the school and sets createdById from the caller', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
-      txMock.exam.create.mockResolvedValue({ id: EXAM_ID, ...dto, createdById: CALLER });
+      txMock.exam.create.mockResolvedValue({
+        id: EXAM_ID,
+        ...dto,
+        scheduledAt: new Date(dto.scheduledAt),
+        createdById: CALLER,
+      });
 
       const result = await svc.create(SCHOOL, CALLER, dto);
 
@@ -52,6 +66,46 @@ describe('ExamsService', () => {
           createdById: CALLER,
         }),
       });
+      expect(result).toEqual(expect.objectContaining({ id: EXAM_ID }));
+    });
+
+    it('resolves section recipients and fires a TEST_SCHEDULED notification after the exam is created', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.exam.create.mockResolvedValue({
+        id: EXAM_ID,
+        ...dto,
+        scheduledAt: new Date(dto.scheduledAt),
+        createdById: CALLER,
+      });
+      txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
+      txMock.user.findMany.mockResolvedValue([{ email: 'parent@x.com' }]);
+
+      await svc.create(SCHOOL, CALLER, dto);
+      await Promise.resolve(); // let the fire-and-forget notify() microtask run
+
+      expect(txMock.student.findMany).toHaveBeenCalledWith({
+        where: { classSectionId: CLASS_SECTION, userId: { not: null } },
+        select: { userId: true },
+      });
+      expect(notifications.notify).toHaveBeenCalledWith(
+        'TEST_SCHEDULED',
+        ['parent@x.com'],
+        expect.objectContaining({ examId: EXAM_ID, classSectionId: CLASS_SECTION }),
+      );
+    });
+
+    it('still creates the exam and returns it even when the notification service rejects', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.exam.create.mockResolvedValue({
+        id: EXAM_ID,
+        ...dto,
+        scheduledAt: new Date(dto.scheduledAt),
+        createdById: CALLER,
+      });
+      notifications.notify.mockRejectedValue(new Error('smtp down'));
+
+      const result = await svc.create(SCHOOL, CALLER, dto);
+
       expect(result).toEqual(expect.objectContaining({ id: EXAM_ID }));
     });
 
@@ -225,6 +279,44 @@ describe('ExamsService', () => {
         where: { examId: EXAM_ID },
         data: { publishedAt: expect.any(Date) },
       });
+    });
+
+    it('resolves section recipients and fires a RESULTS_PUBLISHED notification after publishing', async () => {
+      txMock.exam.findFirst.mockResolvedValue({
+        id: EXAM_ID,
+        schoolId: SCHOOL,
+        classSectionId: CLASS_SECTION,
+        subjectId: SUBJECT,
+        title: 'Midterm',
+        maxMarks: 100,
+      });
+      txMock.result.updateMany.mockResolvedValue({ count: 2 });
+      txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
+      txMock.user.findMany.mockResolvedValue([{ email: 'parent@x.com' }]);
+
+      await svc.publish(SCHOOL, EXAM_ID);
+      await Promise.resolve();
+
+      expect(notifications.notify).toHaveBeenCalledWith(
+        'RESULTS_PUBLISHED',
+        ['parent@x.com'],
+        expect.objectContaining({ examId: EXAM_ID, classSectionId: CLASS_SECTION }),
+      );
+    });
+
+    it('still returns the published count even when the notification service rejects', async () => {
+      txMock.exam.findFirst.mockResolvedValue({
+        id: EXAM_ID,
+        schoolId: SCHOOL,
+        classSectionId: CLASS_SECTION,
+        maxMarks: 100,
+      });
+      txMock.result.updateMany.mockResolvedValue({ count: 3 });
+      notifications.notify.mockRejectedValue(new Error('smtp down'));
+
+      const result = await svc.publish(SCHOOL, EXAM_ID);
+
+      expect(result).toEqual({ published: 3 });
     });
 
     it('throws ApiError NOT_FOUND for a foreign/invalid exam id and never touches results', async () => {

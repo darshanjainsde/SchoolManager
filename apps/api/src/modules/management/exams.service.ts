@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { NotificationService } from '../../common/notifications/notification.service';
+import { resolveSectionRecipients } from '../../common/notifications/recipients';
 import type { CreateExamDto, SaveExamResultsDto } from './management.dto';
 
 export interface ExamSummary {
@@ -30,6 +32,10 @@ export interface PublishResultsResult {
 
 @Injectable()
 export class ExamsService {
+  private readonly logger = new Logger(ExamsService.name);
+
+  constructor(private readonly notifications: NotificationService) {}
+
   /**
    * Creates an Exam for a class section, after confirming the section
    * actually belongs to this school (ClassSection has RLS, so a foreign
@@ -41,13 +47,13 @@ export class ExamsService {
       throw new ApiError('VALIDATION', 'maxMarks must be a positive integer', 400, 'maxMarks');
     }
 
-    return withTenant(schoolId, async (tx) => {
+    const { exam, recipients } = await withTenant(schoolId, async (tx) => {
       const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
-      return tx.exam.create({
+      const exam = await tx.exam.create({
         data: {
           schoolId,
           classSectionId: dto.classSectionId,
@@ -59,7 +65,23 @@ export class ExamsService {
           createdById: callerUserId,
         },
       });
+
+      const recipients = await resolveSectionRecipients(tx, dto.classSectionId);
+      return { exam, recipients };
     });
+
+    // Best-effort, fire-and-forget — never blocks or fails exam creation.
+    void this.notifications
+      .notify('TEST_SCHEDULED', recipients, {
+        examId: exam.id,
+        title: exam.title,
+        subjectId: exam.subjectId,
+        classSectionId: exam.classSectionId,
+        scheduledAt: new Date(exam.scheduledAt).toISOString(),
+      })
+      .catch((e) => this.logger.error(`TEST_SCHEDULED notify failed: ${(e as Error).message}`));
+
+    return exam;
   }
 
   /**
@@ -170,7 +192,7 @@ export class ExamsService {
    * again load-bearing since `Exam` carries no RLS.
    */
   async publish(schoolId: string, examId: string): Promise<PublishResultsResult> {
-    return withTenant(schoolId, async (tx) => {
+    const { published, exam, recipients } = await withTenant(schoolId, async (tx) => {
       const exam = await tx.exam.findFirst({ where: { id: examId, schoolId } });
       if (!exam) {
         throw new ApiError('NOT_FOUND', 'exam not found', 404, 'id');
@@ -181,7 +203,20 @@ export class ExamsService {
         data: { publishedAt: new Date() },
       });
 
-      return { published: count };
+      const recipients = await resolveSectionRecipients(tx, exam.classSectionId);
+      return { published: count, exam, recipients };
     });
+
+    // Best-effort, fire-and-forget — never blocks or fails publishing.
+    void this.notifications
+      .notify('RESULTS_PUBLISHED', recipients, {
+        examId: exam.id,
+        title: exam.title,
+        subjectId: exam.subjectId,
+        classSectionId: exam.classSectionId,
+      })
+      .catch((e) => this.logger.error(`RESULTS_PUBLISHED notify failed: ${(e as Error).message}`));
+
+    return { published };
   }
 }
