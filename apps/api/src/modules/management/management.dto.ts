@@ -1,7 +1,10 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsDateString,
   IsEmail,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -9,7 +12,9 @@ import {
   Length,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 // ── Academic Year ────────────────────────────────────────────────────────────
 
@@ -383,4 +388,28 @@ export class UpdateAnnouncementDto {
   @IsOptional()
   @IsUUID()
   classSectionId?: string;
+}
+
+// ── Attendance ───────────────────────────────────────────────────────────────
+
+export class AttendanceMarkDto {
+  @IsUUID()
+  studentId!: string;
+
+  @IsIn(['PRESENT', 'ABSENT', 'LATE'])
+  status!: 'PRESENT' | 'ABSENT' | 'LATE';
+}
+
+export class SaveAttendanceDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @IsDateString()
+  date!: string;
+
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => AttendanceMarkDto)
+  marks!: AttendanceMarkDto[];
 }
