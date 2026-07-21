@@ -82,6 +82,26 @@ export class AttendanceService {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
+      // Every mark must target a student who is actually enrolled in this
+      // class section. `Student` has active RLS, so a foreign-school
+      // studentId will not appear in this query at all — closing the
+      // cross-tenant write hole (Attendance itself has no RLS and its
+      // unique key [studentId, date] is not school-scoped).
+      const roster = await tx.student.findMany({
+        where: { classSectionId: dto.classSectionId },
+        select: { id: true },
+      });
+      const rosterIds = new Set(roster.map((s) => s.id));
+      for (const mark of dto.marks) {
+        if (!rosterIds.has(mark.studentId)) {
+          throw new ApiError(
+            'VALIDATION',
+            'One or more students do not belong to this class section',
+            400,
+          );
+        }
+      }
+
       const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
       const markedById = teacher?.id ?? callerUserId;
 

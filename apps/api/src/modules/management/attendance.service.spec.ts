@@ -71,6 +71,12 @@ describe('AttendanceService', () => {
   describe('save', () => {
     it('upserts every mark once and returns the correct saved/absentees counts', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValue([
+        { id: 's-1' },
+        { id: 's-2' },
+        { id: 's-3' },
+        { id: 's-4' },
+      ]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
       txMock.attendance.upsert.mockResolvedValue({});
 
@@ -106,6 +112,7 @@ describe('AttendanceService', () => {
 
     it('resolves markedById to the caller Teacher.id when a linked Teacher row exists', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-42' });
       txMock.attendance.upsert.mockResolvedValue({});
 
@@ -123,6 +130,7 @@ describe('AttendanceService', () => {
 
     it('falls back to the caller User.id when no Teacher row is linked (e.g. SCHOOL_ADMIN)', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue(null);
       txMock.attendance.upsert.mockResolvedValue({});
 
@@ -139,6 +147,7 @@ describe('AttendanceService', () => {
 
     it('is idempotent: re-saving the same student/date targets the identical unique key so it upserts rather than duplicates', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
       txMock.attendance.upsert.mockResolvedValue({});
 
@@ -169,6 +178,30 @@ describe('AttendanceService', () => {
       };
 
       await expect(svc.save(SCHOOL, 'user-teacher-1', dto)).rejects.toThrow(ApiError);
+      expect(txMock.attendance.upsert).not.toHaveBeenCalled();
+    });
+
+    it('throws ApiError VALIDATION and writes nothing when a mark.studentId is not on the class section roster (cross-tenant write guard)', async () => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      // Roster only contains s-1/s-2. Because `Student` has active RLS, a
+      // foreign-school studentId would never appear here either — this is
+      // the same check that closes the cross-tenant hole.
+      txMock.student.findMany.mockResolvedValue([{ id: 's-1' }, { id: 's-2' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.upsert.mockResolvedValue({});
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [
+          { studentId: 's-1', status: 'PRESENT' },
+          { studentId: 'foreign-school-student', status: 'ABSENT' },
+        ],
+      };
+
+      await expect(svc.save(SCHOOL, 'user-teacher-1', dto)).rejects.toMatchObject({
+        response: { code: 'VALIDATION' },
+      });
       expect(txMock.attendance.upsert).not.toHaveBeenCalled();
     });
   });
