@@ -163,3 +163,54 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 .sk-anim > *:nth-child(3) { animation-delay: 0.1s; }
 .sk-anim > *:nth-child(4) { animation-delay: 0.15s; }
 @media (prefers-reduced-motion: reduce) { .sk-anim > * { animation: none; } }
+
+/* ---- sidebar app shell (teacher / admin) ---- */
+.sk-app { display: flex; min-height: 100vh; background: var(--sk-paper); }
+.sk-side {
+  width: 244px; flex: none; display: flex; flex-direction: column; gap: 3px;
+  background: var(--sk-card); border-right: 1px solid var(--sk-line); padding: 16px 12px;
+}
+.sk-side-brand { padding: 4px 8px 14px; }
+.sk-side-brand .role { font-weight: 730; font-size: 14px; letter-spacing: -0.01em; margin-top: 10px; }
+.sk-side-brand .sub { font-size: 11px; color: var(--sk-ink-3); margin-top: 2px; }
+.sk-navlabel { font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sk-ink-3); padding: 12px 10px 5px; }
+.sk-nav {
+  display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 11px;
+  font-size: 13.5px; font-weight: 560; color: var(--sk-ink-2); text-decoration: none; transition: background 0.12s, color 0.12s;
+}
+.sk-nav:hover { background: var(--sk-brand-tint); color: var(--sk-ink); }
+.sk-nav[data-active="true"] { background: var(--sk-brand); color: #fff; font-weight: 660; box-shadow: var(--sk-shadow-sm); }
+@media (prefers-color-scheme: dark) { .sk-nav[data-active="true"] { color: #07130e; } }
+.sk-nav .ic { width: 18px; height: 18px; flex: none; }
+.sk-side-foot { margin-top: auto; }
+.sk-content { flex: 1; min-width: 0; padding: 26px 30px 56px; max-width: 1120px; }
+@media (max-width: 640px) { .sk-side { display: none; } .sk-content { padding: 20px; } }
+
+/* ---- page header ---- */
+.sk-pagehead { margin-bottom: 20px; }
+.sk-pagehead h1 { font-size: clamp(21px, 2.6vw, 26px); font-weight: 800; letter-spacing: -0.025em; }
+.sk-pagehead p { color: var(--sk-ink-3); font-size: 13.5px; margin-top: 4px; }
+
+/* ---- class / entity cards ---- */
+.sk-cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 13px; }
+.sk-entity {
+  display: flex; align-items: center; gap: 12px; background: var(--sk-card); border: 1px solid var(--sk-line);
+  border-radius: var(--sk-r); padding: 15px; box-shadow: var(--sk-shadow); text-decoration: none; color: inherit;
+  transition: transform 0.14s ease, border-color 0.14s ease;
+}
+a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
+.sk-entity .av { width: 44px; height: 44px; border-radius: 13px; flex: none; display: grid; place-items: center; color: #fff; font-weight: 780; font-size: 14px; letter-spacing: -0.02em; }
+.sk-entity .nm { font-weight: 720; font-size: 15px; letter-spacing: -0.01em; }
+.sk-entity .meta { font-size: 11.5px; color: var(--sk-ink-3); margin-top: 2px; }
+
+/* ---- buttons ---- */
+.sk-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 650; font-size: 13px;
+  padding: 9px 15px; border-radius: 11px; border: 1px solid var(--sk-line-2); background: var(--sk-card);
+  color: var(--sk-ink); cursor: pointer; transition: border-color 0.12s, filter 0.12s;
+}
+.sk-btn:hover { border-color: var(--sk-brand); }
+.sk-btn[data-variant="primary"] { background: var(--sk-brand); color: #fff; border-color: transparent; }
+@media (prefers-color-scheme: dark) { .sk-btn[data-variant="primary"] { color: #07130e; } }
+.sk-btn[data-variant="primary"]:hover { filter: brightness(1.06); }
+.sk-btn:disabled { opacity: 0.5; cursor: not-allowed; }

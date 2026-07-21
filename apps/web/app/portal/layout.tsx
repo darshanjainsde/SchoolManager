@@ -15,7 +15,8 @@ import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useHost } from '@/components/use-host';
 import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
-import './portal-theme.css';
+import { SckoolsLogo } from '@/components/brand/sckools-logo';
+import '../sk-theme.css';
 
 const NAV_ITEMS = [
   { href: '/portal', label: 'Home', icon: LayoutDashboard },
@@ -70,10 +71,10 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     <div className="skosx sk-shell">
       <header className="sk-topbar">
         <div className="sk-topbar-inner">
-          <span className="sk-crest" style={{ background: 'var(--sk-brand)' }}>S</span>
+          <SckoolsLogo variant="symbol" size={30} />
           <div className="sk-who">
             <div className="n">Student portal</div>
-            <div className="s">Sckools</div>
+            <div className="s">{host?.split(':')[0] ?? 'Sckools'}</div>
           </div>
           <div style={{ flex: 1 }} />
           <button
