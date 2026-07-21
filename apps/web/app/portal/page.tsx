@@ -1,5 +1,7 @@
 'use client';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { CalendarCheck, GraduationCap, ClipboardList, Percent } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +34,50 @@ interface Announcement {
   createdAt: string;
 }
 
+type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
+
+interface AttendanceSummary {
+  month: string;
+  percent: number;
+  present: number;
+  absent: number;
+  late: number;
+  days: { date: string; status: AttendanceStatus }[];
+}
+
+interface UpcomingExam {
+  id: string;
+  title: string;
+  subjectName: string;
+  scheduledAt: string;
+  maxMarks: number;
+  syllabus: string | null;
+}
+
+interface PublishedResult {
+  examId: string;
+  title: string;
+  subjectName: string;
+  scheduledAt: string;
+  marks: number;
+  maxMarks: number;
+  classAverage: number;
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
+  PRESENT: 'Present',
+  ABSENT: 'Absent',
+  LATE: 'Late',
+};
+
+const ATTENDANCE_TONES: Record<AttendanceStatus, string> = {
+  PRESENT: 'text-emerald-700',
+  ABSENT: 'text-rose-700',
+  LATE: 'text-amber-700',
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** JS getDay() → 1-7 (Mon=1, Sun=7) */
@@ -41,6 +87,72 @@ function todayDayOfWeek(): number {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
+}
+
+/** `YYYY-MM` for the given local date — the key `/me/attendance` expects. */
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** `YYYY-MM-DD` for the given local date. */
+function dayKey(d: Date): string {
+  return `${monthKey(d)}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Whole days from today until `iso`, counted on calendar-day boundaries so a
+ * test at 09:00 tomorrow reads "in 1 day", not "in 0 days".
+ */
+function daysUntil(iso: string): number {
+  const target = new Date(iso);
+  const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((startOfTarget.getTime() - startOfToday.getTime()) / 86_400_000);
+}
+
+function daysUntilLabel(iso: string): string {
+  const d = daysUntil(iso);
+  if (d <= 0) return 'Today';
+  if (d === 1) return 'Tomorrow';
+  return `In ${d} days`;
+}
+
+/** A compact stat tile, optionally linking through to the full page. */
+function StatTile({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  tone,
+  href,
+}: {
+  icon: typeof CalendarCheck;
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: string;
+  href?: string;
+}) {
+  const body = (
+    <Card className={href ? 'h-full transition-colors hover:border-teal-300' : 'h-full'}>
+      <CardContent className="flex h-full flex-col gap-1 p-4">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+          <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {label}
+        </div>
+        <p className={`text-lg font-bold ${tone ?? 'text-slate-900'}`}>{value}</p>
+        {hint && <p className="text-xs text-slate-400">{hint}</p>}
+      </CardContent>
+    </Card>
+  );
+  return href ? (
+    <Link href={href} className="block h-full">
+      {body}
+    </Link>
+  ) : (
+    body
+  );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -70,11 +182,58 @@ export default function PortalDashboardPage() {
     staleTime: 60_000,
   });
 
+  const thisMonth = monthKey(new Date());
+
+  const attendanceQuery = useQuery({
+    queryKey: ['portal-attendance', thisMonth],
+    queryFn: () => api.get<AttendanceSummary>(`/me/attendance?month=${thisMonth}`),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+
+  const examsQuery = useQuery({
+    queryKey: ['portal-exams'],
+    queryFn: () => api.get<UpcomingExam[]>('/me/exams'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+
+  const resultsQuery = useQuery({
+    queryKey: ['portal-results'],
+    queryFn: () => api.get<PublishedResult[]>('/me/results'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+
   const profile = profileQuery.data;
   const todaySlots = (timetableQuery.data ?? [])
     .filter((s) => s.dayOfWeek === todayDayOfWeek())
     .sort((a, b) => a.period.order - b.period.order);
   const latestAnnouncements = (announcementsQuery.data ?? []).slice(0, 3);
+
+  // `/me/attendance` returns only the days that were actually marked, so a
+  // missing entry means "not marked yet today" — not "absent".
+  const attendance = attendanceQuery.data;
+  const todayStatus = attendance?.days.find((d) => d.date === dayKey(new Date()))?.status;
+  const attendanceMarked = attendance
+    ? attendance.present + attendance.absent + attendance.late
+    : 0;
+
+  // Both lists arrive pre-ordered by the API: exams ascending (soonest first),
+  // results descending (most recent first).
+  const nextExam = examsQuery.data?.[0];
+  const latestResult = resultsQuery.data?.[0];
+
+  /** Loading/error/empty all collapse to one short string per tile. */
+  const tileText = (
+    query: { isLoading: boolean; error: unknown },
+    value: string | undefined,
+    empty: string,
+  ): string => {
+    if (query.isLoading) return '…';
+    if (query.error) return 'Unavailable';
+    return value ?? empty;
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,6 +246,62 @@ export default function PortalDashboardPage() {
           <p className="mt-1 text-sm text-slate-500">Class: {profile.className}</p>
         )}
       </header>
+
+      {/* At-a-glance: attendance, next test, latest result */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <StatTile
+          icon={CalendarCheck}
+          label="Today"
+          href="/portal/attendance"
+          tone={todayStatus ? ATTENDANCE_TONES[todayStatus] : undefined}
+          value={tileText(
+            attendanceQuery,
+            todayStatus ? ATTENDANCE_LABELS[todayStatus] : undefined,
+            'Not marked',
+          )}
+          hint="Attendance"
+        />
+        <StatTile
+          icon={Percent}
+          label="This month"
+          href="/portal/attendance"
+          value={tileText(
+            attendanceQuery,
+            attendanceMarked > 0 ? `${attendance?.percent}%` : undefined,
+            'No records',
+          )}
+          hint={
+            attendanceMarked > 0
+              ? `${attendance?.present} of ${attendanceMarked} days present`
+              : 'No attendance recorded yet'
+          }
+        />
+        <StatTile
+          icon={ClipboardList}
+          label="Next test"
+          value={tileText(examsQuery, nextExam?.subjectName, 'None scheduled')}
+          hint={
+            nextExam
+              ? `${nextExam.title} — ${daysUntilLabel(nextExam.scheduledAt)}`
+              : 'No upcoming tests'
+          }
+        />
+        <StatTile
+          icon={GraduationCap}
+          label="Latest result"
+          href="/portal/results"
+          value={tileText(
+            resultsQuery,
+            latestResult ? `${latestResult.marks}/${latestResult.maxMarks}` : undefined,
+            'None yet',
+          )}
+          hint={
+            latestResult
+              ? `${latestResult.subjectName} — class avg ${latestResult.classAverage}`
+              : 'No results published yet'
+          }
+        />
+      </div>
 
       <div className="grid gap-6 sm:grid-cols-2">
         {/* Today's timetable */}
