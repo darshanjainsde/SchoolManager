@@ -1,29 +1,247 @@
+'use client';
 import Link from 'next/link';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { Globe } from 'lucide-react';
+import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface AcademicYear {
+  id: string;
+  isCurrent?: boolean;
+}
+interface Period {
+  id: string;
+}
+interface Subject {
+  id: string;
+}
+interface ClassRow {
+  id: string;
+  _count?: { students: number };
+}
+interface Teacher {
+  id: string;
+}
+interface Student {
+  id: string;
+}
+
+interface SetupStep {
+  key: string;
+  label: string;
+  helper: string;
+  href: string;
+  done: boolean;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Loading -> "…", errored -> "—" (never crashes the dashboard), else the count. */
+function kpiValue(query: UseQueryResult<unknown, unknown>, count: number): string {
+  if (query.isLoading) return '…';
+  if (query.isError) return '—';
+  return String(count);
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+
+  const yearsQuery = useQuery({
+    queryKey: ['dash-years'],
+    queryFn: () => api.get<AcademicYear[]>('/manage/years'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+  const periodsQuery = useQuery({
+    queryKey: ['dash-periods'],
+    queryFn: () => api.get<Period[]>('/manage/periods'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+  const subjectsQuery = useQuery({
+    queryKey: ['dash-subjects'],
+    queryFn: () => api.get<Subject[]>('/manage/subjects'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+  const classesQuery = useQuery({
+    queryKey: ['dash-classes'],
+    queryFn: () => api.get<ClassRow[]>('/manage/classes'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+  const teachersQuery = useQuery({
+    queryKey: ['dash-teachers'],
+    queryFn: () => api.get<Teacher[]>('/manage/teachers'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+  const studentsQuery = useQuery({
+    queryKey: ['dash-students'],
+    queryFn: () => api.get<Student[] | { items: Student[] }>('/manage/students'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+
+  const years = yearsQuery.data ?? [];
+  const periods = periodsQuery.data ?? [];
+  const subjects = subjectsQuery.data ?? [];
+  const classes = classesQuery.data ?? [];
+  const teachers = teachersQuery.data ?? [];
+  const studentsRaw = studentsQuery.data;
+  const students = Array.isArray(studentsRaw) ? studentsRaw : (studentsRaw?.items ?? []);
+
+  // A resource that errors resolves to an empty array above, so a step just
+  // reads as "not done yet" rather than crashing the page.
+  const steps: SetupStep[] = [
+    {
+      key: 'year',
+      label: 'Set your academic year',
+      helper: 'Define the current school year so records have somewhere to live.',
+      href: '/app/settings',
+      // Any year is enough, but a year marked "current" satisfies it too.
+      done: years.some((y) => y.isCurrent) || years.length > 0,
+    },
+    {
+      key: 'periods',
+      label: 'Add class periods (bell times)',
+      helper: 'Set up the daily schedule blocks your classes will run in.',
+      href: '/app/settings',
+      done: periods.length > 0,
+    },
+    {
+      key: 'subjects',
+      label: 'Add grades & subjects',
+      helper: 'Create the grade levels and subjects your school teaches.',
+      href: '/app/classes/structure',
+      done: subjects.length > 0,
+    },
+    {
+      key: 'classes',
+      label: 'Create classes',
+      helper: 'Set up class sections for each grade.',
+      href: '/app/classes',
+      done: classes.length > 0,
+    },
+    {
+      key: 'teachers',
+      label: 'Add teachers',
+      helper: 'Invite teachers so they can take attendance and record results.',
+      href: '/app/teachers',
+      done: teachers.length > 0,
+    },
+    {
+      key: 'students',
+      label: 'Add students',
+      helper: 'Enroll students and assign them to their classes.',
+      href: '/app/students',
+      done: students.length > 0,
+    },
+    {
+      key: 'timetable',
+      label: 'Build the timetable',
+      helper: 'Assign subjects and teachers to periods for each class.',
+      href: '/app/timetable',
+      // No endpoint to check timetable entries directly — once classes exist
+      // the timetable is buildable, so we treat that as this step's signal.
+      done: classes.length > 0,
+    },
+  ];
+
+  const doneCount = steps.filter((s) => s.done).length;
+  const allDone = doneCount === steps.length;
+  const anySetupLoading = [
+    yearsQuery,
+    periodsQuery,
+    subjectsQuery,
+    classesQuery,
+    teachersQuery,
+    studentsQuery,
+  ].some((q) => q.isLoading);
+
   return (
-    <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Welcome to your school portal</h1>
-        <p className="mt-1 text-sm text-slate-500">Manage your school's online presence from here.</p>
+    <>
+      <header className="sk-pagehead">
+        <h1>Welcome back</h1>
+        <p>Set up your school and manage it from here.</p>
       </header>
 
-      {/* CTA card */}
-      <Link
-        href="/app/website"
-        className="group flex max-w-sm items-start gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-teal-300 hover:shadow-md"
-      >
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-600 group-hover:bg-teal-100">
+      {/* At-a-glance KPIs — always shown */}
+      <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
+        <div className="sk-kpi">
+          <span className="lab">Students</span>
+          <span className="n">{kpiValue(studentsQuery, students.length)}</span>
+        </div>
+        <div className="sk-kpi">
+          <span className="lab">Teachers</span>
+          <span className="n">{kpiValue(teachersQuery, teachers.length)}</span>
+        </div>
+        <div className="sk-kpi">
+          <span className="lab">Classes</span>
+          <span className="n">{kpiValue(classesQuery, classes.length)}</span>
+        </div>
+      </div>
+
+      {/* Setup checklist — hidden once everything is done */}
+      {!allDone && (
+        <div className="sk-card" style={{ marginBottom: 18 }}>
+          <div
+            className="sk-card-h"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+          >
+            <h3>Finish setting up your school</h3>
+            <span className="sk-muted">
+              {doneCount} of {steps.length} done
+            </span>
+          </div>
+          <div className="sk-card-b">
+            {anySetupLoading && <p className="sk-state">Checking your setup…</p>}
+            {!anySetupLoading &&
+              steps.map((step) => (
+                <div key={step.key} className="sk-row" style={{ alignItems: 'center' }}>
+                  <span className="sk-pill" data-tone={step.done ? 'good' : 'warn'}>
+                    {step.done ? 'Done' : 'To do'}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="nm">{step.label}</div>
+                    <div className="meta">{step.helper}</div>
+                  </div>
+                  <Link href={step.href} className="sk-btn">
+                    {step.done ? 'Review' : 'Set up'}
+                  </Link>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {allDone && (
+        <div className="sk-card" style={{ marginBottom: 18, padding: '14px 16px' }}>
+          <p style={{ margin: 0, fontWeight: 650 }}>Your school is set up 🎉</p>
+          <p className="sk-muted" style={{ margin: '2px 0 0' }}>
+            Everything&rsquo;s configured — manage your school from the sections in the sidebar.
+          </p>
+        </div>
+      )}
+
+      {/* Quick action */}
+      <Link href="/app/website" className="sk-entity" style={{ maxWidth: 360 }}>
+        <span
+          className="av"
+          style={{ background: 'var(--sk-brand)' }}
+        >
           <Globe className="h-5 w-5" />
         </span>
         <div>
-          <div className="font-semibold text-slate-900">Edit your website</div>
-          <div className="mt-0.5 text-sm text-slate-500">
-            Update your homepage, gallery, and contact info.
-          </div>
+          <div className="nm">Edit your website</div>
+          <div className="meta">Update your homepage, gallery, and contact info.</div>
         </div>
       </Link>
-    </div>
+    </>
   );
 }
