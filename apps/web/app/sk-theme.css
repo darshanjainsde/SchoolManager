@@ -183,8 +183,49 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 @media (prefers-color-scheme: dark) { .sk-nav[data-active="true"] { color: #07130e; } }
 .sk-nav .ic { width: 18px; height: 18px; flex: none; }
 .sk-side-foot { margin-top: auto; }
-.sk-content { flex: 1; min-width: 0; padding: 26px 30px 56px; max-width: 1120px; }
-@media (max-width: 640px) { .sk-side { display: none; } .sk-content { padding: 20px; } }
+.sk-content { flex: 1; min-width: 0; padding: 26px 30px 56px; max-width: 1120px; overflow-x: hidden; }
+@media (max-width: 640px) {
+  .sk-side { display: none; }
+  .sk-content { padding: 20px; }
+  .sk-app { flex-direction: column; }
+  .sk-mobile-topbar { display: flex; }
+}
+
+/* ---- mobile top bar + drawer (teacher shell) ---- */
+.sk-mobile-topbar {
+  display: none; /* shown only under the 640px breakpoint above */
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--sk-card);
+  border-bottom: 1px solid var(--sk-line);
+}
+.sk-mobile-topbar .brand { display: flex; align-items: center; gap: 8px; }
+.sk-mobile-topbar .role { font-size: 12px; font-weight: 700; letter-spacing: -0.01em; color: var(--sk-ink); }
+.sk-mobile-menu-btn,
+.sk-drawer-close {
+  display: grid; place-items: center; width: 44px; height: 44px; border: 0; background: transparent;
+  border-radius: 11px; color: var(--sk-ink-2); cursor: pointer;
+}
+.sk-mobile-menu-btn:hover,
+.sk-drawer-close:hover { background: var(--sk-brand-tint); color: var(--sk-ink); }
+.sk-mobile-menu-btn:focus-visible,
+.sk-drawer-close:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+
+.sk-drawer-scrim {
+  position: fixed; inset: 0; z-index: 50; background: rgba(10, 16, 13, 0.5); border: 0; cursor: pointer;
+}
+.sk-drawer-panel {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 51; width: 260px; max-width: 80vw;
+  background: var(--sk-card); border-right: 1px solid var(--sk-line);
+  display: flex; flex-direction: column; padding: 16px 12px; outline: none;
+  box-shadow: var(--sk-shadow);
+  animation: sk-drawer-in 0.22s ease-out both;
+}
+@keyframes sk-drawer-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .sk-drawer-panel { animation: none; } }
+.sk-drawer-panel .sk-navlabel,
+.sk-drawer-panel nav { overflow-y: auto; }
 
 /* ---- page header ---- */
 .sk-pagehead { margin-bottom: 20px; }
