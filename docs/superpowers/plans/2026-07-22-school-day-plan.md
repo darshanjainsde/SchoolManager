@@ -28,4 +28,9 @@
 - **T6 · Leave:** teacher-portal apply + admin Leave Applications tab (approve/reject).
 - **T7 · Coverage/realignment:** approve → Substitution gaps → coverage panel (dashboard+timetable notice) with free-teacher dropdown + open-class-timetable per gap.
 
-Status: T0 in progress. All additive; behind MANAGEMENT feature; no risk to existing data.
+Status (2026-07-22): ALL DONE on staging.
+- T0 schema (1ce90c1) · T1 bell schedule (3305b92) · T2 timetable temporal+week (e04f5cf)
+- T3 staff tab (c56244e, +STAFF role) · T4+T5 staff attendance+card (b7b64d7)
+- T6+T7 leave+coverage (8aa31f0). Migrations applied to staging. Tests green throughout.
+Follow-ups (noted): RLS on new tables (Staff/StaffAttendance/Substitution/Leave) before prod;
+management.e2e-spec updated but not DB-run; SMTP_PASS still needed for invite emails.
