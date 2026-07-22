@@ -1,15 +1,11 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type CSSProperties, type FocusEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { X } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -63,6 +59,43 @@ const DAYS: { label: string; value: number }[] = [
   { label: 'Fri', value: 5 },
 ];
 
+// Themed inputs/selects: no dedicated CSS class, styled inline, with a
+// brand-colored focus ring applied directly to the DOM node on focus/blur.
+const fieldStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  border: '1px solid var(--sk-line-2)',
+  borderRadius: 10,
+  padding: '9px 11px',
+  background: 'var(--sk-card)',
+  color: 'var(--sk-ink)',
+  fontSize: 13.5,
+  fontFamily: 'inherit',
+  transition: 'border-color 0.12s, box-shadow 0.12s',
+};
+
+function ringFocus(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-brand)';
+  e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--sk-brand) 18%, transparent)';
+}
+
+function ringBlur(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-line-2)';
+  e.currentTarget.style.boxShadow = 'none';
+}
+
+const headCellStyle: CSSProperties = {
+  padding: '10px 12px',
+  fontSize: 10.5,
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: 'var(--sk-ink-3)',
+  textAlign: 'center',
+  whiteSpace: 'nowrap',
+  borderBottom: '1px solid var(--sk-line)',
+};
+
 // ── Assign Modal ──────────────────────────────────────────────────────────────
 
 interface AssignModalProps {
@@ -88,26 +121,38 @@ function AssignModal({
   const [teacherId, setTeacherId] = useState(teachers[0]?.id ?? '');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <Card className="w-full max-w-sm shadow-2xl">
-        <CardHeader className="flex flex-row items-center justify-between border-b pb-3">
-          <CardTitle className="text-base">
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(15, 30, 24, 0.5)',
+        padding: 16,
+      }}
+    >
+      <div className="sk-card" style={{ width: '100%', maxWidth: 380 }}>
+        <div className="sk-card-h" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <h3>
             Assign period — {dayLabel}, {periodLabel}
-          </CardTitle>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600"
-            aria-label="Close"
-          >
+          </h3>
+          <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
             <X className="h-4 w-4" />
           </button>
-        </CardHeader>
+        </div>
 
-        <CardContent className="space-y-4 pt-4">
-          <div className="space-y-2">
-            <Label htmlFor="tt-subject">Subject</Label>
-            <Select
+        <div className="sk-card-b">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label htmlFor="tt-subject" className="sk-lab">
+              Subject
+            </label>
+            <select
               id="tt-subject"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={subjectId}
               onChange={(e) => setSubjectId(e.target.value)}
             >
@@ -118,13 +163,18 @@ function AssignModal({
                   {s.code ? ` (${s.code})` : ''}
                 </option>
               ))}
-            </Select>
+            </select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="tt-teacher">Teacher</Label>
-            <Select
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label htmlFor="tt-teacher" className="sk-lab">
+              Teacher
+            </label>
+            <select
               id="tt-teacher"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={teacherId}
               onChange={(e) => setTeacherId(e.target.value)}
             >
@@ -134,22 +184,24 @@ function AssignModal({
                   {t.firstName} {t.lastName}
                 </option>
               ))}
-            </Select>
+            </select>
           </div>
-        </CardContent>
 
-        <CardFooter className="gap-2 border-t pt-3">
-          <Button
-            onClick={() => onAssign(subjectId, teacherId)}
-            disabled={isAssigning || !subjectId || !teacherId}
-          >
-            {isAssigning ? 'Assigning…' : 'Assign'}
-          </Button>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-        </CardFooter>
-      </Card>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button
+              className="sk-btn"
+              data-variant="primary"
+              onClick={() => onAssign(subjectId, teacherId)}
+              disabled={isAssigning || !subjectId || !teacherId}
+            >
+              {isAssigning ? 'Assigning…' : 'Assign'}
+            </button>
+            <button className="sk-btn" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -271,27 +323,35 @@ export default function TimetablePage() {
     onError: (err: Error) => toast.error(`Failed to remove slot: ${err.message}`),
   });
 
+  // Safe-delete: confirm before firing the destructive mutation.
+  function confirmDeleteSlot(slot: TimetableSlot, dayLabel: string) {
+    const ok = window.confirm(
+      `Remove ${slot.subject.name} from ${dayLabel} ${slot.period.label}? This can’t be undone.`,
+    );
+    if (ok) deleteMutation.mutate(slot.id);
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-6">
+    <>
       {/* Page header */}
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Timetable builder</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Assign teacher + subject to each period. Clashes are flagged automatically.
-        </p>
+      <header className="sk-pagehead">
+        <h1>Timetable builder</h1>
+        <p>Assign teacher + subject to each period. Clashes are flagged automatically.</p>
       </header>
 
       {/* Class selector */}
-      <div className="flex items-center gap-3">
-        <Label htmlFor="tt-class" className="shrink-0 text-sm font-medium text-slate-700">
-          Class:
-        </Label>
-        <Select
+      <div className="sk-card" style={{ marginBottom: 18, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <label htmlFor="tt-class" className="sk-lab" style={{ flex: 'none' }}>
+          Class
+        </label>
+        <select
           id="tt-class"
+          style={{ ...fieldStyle, maxWidth: 260 }}
+          onFocus={ringFocus}
+          onBlur={ringBlur}
           value={classSectionId}
           onChange={(e) => setClassSectionId(e.target.value)}
-          className="max-w-xs"
         >
           <option value="">— Select a class —</option>
           {(classesQuery.data ?? []).map((c) => (
@@ -299,119 +359,164 @@ export default function TimetablePage() {
               {c.grade.name} — {c.name}
             </option>
           ))}
-        </Select>
-        {classesQuery.isLoading && (
-          <span className="text-sm text-slate-400">Loading classes…</span>
-        )}
+        </select>
+        {classesQuery.isLoading && <span className="sk-state">Loading classes…</span>}
       </div>
 
       {/* Prompt when no class selected */}
-      {!classSectionId && (
-        <p className="text-sm text-slate-400">Select a class above to view and edit its timetable.</p>
-      )}
+      {!classSectionId && <p className="sk-state">Select a class above to view and edit its timetable.</p>}
 
       {/* Loading timetable */}
-      {classSectionId && timetableQuery.isLoading && (
-        <p className="text-sm text-slate-500">Loading timetable…</p>
-      )}
+      {classSectionId && timetableQuery.isLoading && <p className="sk-state">Loading timetable…</p>}
 
       {/* Error */}
       {classSectionId && timetableQuery.error && (
-        <p className="text-sm text-rose-600">{(timetableQuery.error as Error).message}</p>
+        <p className="sk-state err">{(timetableQuery.error as Error).message}</p>
       )}
 
       {/* Grid */}
       {classSectionId && !timetableQuery.isLoading && (
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="min-w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500">
-                <th className="border-b border-r border-slate-200 p-3 text-left whitespace-nowrap">
-                  Period
-                </th>
-                {DAYS.map((d) => (
-                  <th
-                    key={d.value}
-                    className="border-b border-slate-200 p-3 text-center font-medium"
-                  >
-                    {d.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedPeriods.length === 0 && (
+        <div className="sk-card" style={{ overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+              <thead>
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="p-4 text-center text-sm text-slate-400"
-                  >
-                    No periods configured. Add periods via the API or settings.
-                  </td>
+                  <th style={{ ...headCellStyle, textAlign: 'left' }}>Period</th>
+                  {DAYS.map((d) => (
+                    <th key={d.value} style={headCellStyle}>
+                      {d.label}
+                    </th>
+                  ))}
                 </tr>
-              )}
-              {sortedPeriods.map((period) => (
-                <tr key={period.id} className="hover:bg-slate-50/50">
-                  {/* Period label */}
-                  <td className="border-b border-r border-slate-200 p-3 whitespace-nowrap text-slate-500">
-                    <div className="font-medium text-slate-700">{period.label}</div>
-                    <div className="text-xs text-slate-400">
-                      {period.startTime} – {period.endTime}
-                    </div>
-                  </td>
+              </thead>
+              <tbody>
+                {sortedPeriods.length === 0 && (
+                  <tr>
+                    <td colSpan={DAYS.length + 1} style={{ padding: 20, textAlign: 'center' }}>
+                      <span className="sk-state">No periods configured. Add periods via the API or settings.</span>
+                    </td>
+                  </tr>
+                )}
+                {sortedPeriods.map((period) => (
+                  <tr key={period.id}>
+                    {/* Period label */}
+                    <td
+                      style={{
+                        padding: '10px 12px',
+                        borderTop: '1px solid var(--sk-line)',
+                        whiteSpace: 'nowrap',
+                        verticalAlign: 'top',
+                      }}
+                    >
+                      <div style={{ fontWeight: 650, fontSize: 13 }}>{period.label}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)' }}>
+                        {period.startTime} – {period.endTime}
+                      </div>
+                    </td>
 
-                  {/* Day columns */}
-                  {DAYS.map((day) => {
-                    const key = `${day.value}-${period.id}`;
-                    const slot = slotMap.get(key);
+                    {/* Day columns */}
+                    {DAYS.map((day) => {
+                      const key = `${day.value}-${period.id}`;
+                      const slot = slotMap.get(key);
 
-                    if (slot) {
-                      return (
-                        <td key={day.value} className="border-b border-slate-200 p-2">
-                          <div className="group relative rounded-lg bg-teal-50 px-2 py-2 text-xs">
-                            <div className="font-semibold text-teal-800">
-                              {slot.subject.name}
-                            </div>
-                            <div className="text-teal-600">
-                              {slot.teacher.firstName} {slot.teacher.lastName}
-                            </div>
-                            {/* Delete action */}
-                            <button
-                              onClick={() => deleteMutation.mutate(slot.id)}
-                              disabled={deleteMutation.isPending}
-                              className="absolute right-1 top-1 hidden rounded p-0.5 text-teal-400 hover:bg-teal-100 hover:text-rose-500 group-hover:block disabled:opacity-50"
-                              aria-label={`Remove ${slot.subject.name} from ${day.label} ${period.label}`}
+                      if (slot) {
+                        return (
+                          <td key={day.value} style={{ padding: 6, borderTop: '1px solid var(--sk-line)' }}>
+                            <div
+                              className="group"
+                              style={{
+                                position: 'relative',
+                                border: '1px solid var(--sk-line)',
+                                borderRadius: 9,
+                                background: 'var(--sk-card)',
+                                padding: '8px 10px',
+                              }}
                             >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
+                              <div style={{ fontWeight: 700, fontSize: 13 }}>{slot.subject.name}</div>
+                              <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)' }}>
+                                {slot.teacher.firstName} {slot.teacher.lastName}
+                              </div>
+                              {/* Delete action */}
+                              <button
+                                onClick={() => confirmDeleteSlot(slot, day.label)}
+                                disabled={deleteMutation.isPending}
+                                aria-label={`Remove ${slot.subject.name} from ${day.label} ${period.label}`}
+                                className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+                                style={{
+                                  position: 'absolute',
+                                  top: 4,
+                                  right: 4,
+                                  display: 'grid',
+                                  placeItems: 'center',
+                                  width: 20,
+                                  height: 20,
+                                  borderRadius: 6,
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: 'var(--sk-ink-3)',
+                                  cursor: 'pointer',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = 'var(--sk-bad-tint)';
+                                  e.currentTarget.style.color = 'var(--sk-bad)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'transparent';
+                                  e.currentTarget.style.color = 'var(--sk-ink-3)';
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      return (
+                        <td key={day.value} style={{ padding: 6, borderTop: '1px solid var(--sk-line)' }}>
+                          <button
+                            onClick={() =>
+                              setPendingCell({
+                                dayOfWeek: day.value,
+                                periodId: period.id,
+                                dayLabel: day.label,
+                                periodLabel: period.label,
+                              })
+                            }
+                            aria-label={`Assign ${day.label} ${period.label}`}
+                            style={{
+                              display: 'flex',
+                              width: '100%',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 4,
+                              padding: '11px 0',
+                              borderRadius: 9,
+                              border: '1px dashed var(--sk-line-2)',
+                              background: 'transparent',
+                              color: 'var(--sk-brand-2)',
+                              cursor: 'pointer',
+                              transition: 'background 0.12s, border-color 0.12s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'var(--sk-brand-tint)';
+                              e.currentTarget.style.borderColor = 'var(--sk-brand)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'transparent';
+                              e.currentTarget.style.borderColor = 'var(--sk-line-2)';
+                            }}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
                         </td>
                       );
-                    }
-
-                    return (
-                      <td key={day.value} className="border-b border-slate-200 p-2">
-                        <button
-                          onClick={() =>
-                            setPendingCell({
-                              dayOfWeek: day.value,
-                              periodId: period.id,
-                              dayLabel: day.label,
-                              periodLabel: period.label,
-                            })
-                          }
-                          className="flex h-full w-full items-center justify-center rounded-lg border-2 border-dashed border-slate-200 py-3 text-slate-300 hover:border-teal-300 hover:text-teal-400 transition-colors"
-                          aria-label={`Assign ${day.label} ${period.label}`}
-                        >
-                          ＋
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -440,6 +545,6 @@ export default function TimetablePage() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }

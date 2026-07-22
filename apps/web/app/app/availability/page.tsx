@@ -1,11 +1,8 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type CSSProperties, type FocusEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +38,36 @@ const DAYS = [
   { value: 5, label: 'Friday' },
 ];
 
+const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
+
+function teacherInitials(t: AvailabilityTeacher): string {
+  return `${t.firstName.charAt(0)}${t.lastName.charAt(0)}`.toUpperCase();
+}
+
+// Themed select: no dedicated CSS class, styled inline, with a brand-colored
+// focus ring applied directly to the DOM node on focus/blur.
+const fieldStyle: CSSProperties = {
+  display: 'block',
+  border: '1px solid var(--sk-line-2)',
+  borderRadius: 10,
+  padding: '9px 11px',
+  background: 'var(--sk-card)',
+  color: 'var(--sk-ink)',
+  fontSize: 13.5,
+  fontFamily: 'inherit',
+  transition: 'border-color 0.12s, box-shadow 0.12s',
+};
+
+function ringFocus(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-brand)';
+  e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--sk-brand) 18%, transparent)';
+}
+
+function ringBlur(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-line-2)';
+  e.currentTarget.style.boxShadow = 'none';
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AvailabilityPage() {
@@ -63,99 +90,100 @@ export default function AvailabilityPage() {
 
   const teachers = data?.teachers ?? [];
   const periods = [...(data?.periods ?? [])].sort((a, b) => a.order - b.order);
+  const dayLabel = DAYS.find((d) => d.value === day)?.label ?? '';
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <>
+      {/* Page header */}
+      <header className="sk-pagehead" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Teacher availability</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Who is free and who is teaching, per period. Green = free.
-          </p>
+          <h1>Teacher availability</h1>
+          <p>Who is free and who is teaching, per period.</p>
         </div>
-        <div>
-          <Label htmlFor="day">Day</Label>
-          <Select id="day" value={day} onChange={(e) => setDay(Number(e.target.value))}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <label htmlFor="day" className="sk-lab">
+            Day
+          </label>
+          <select
+            id="day"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
+            value={day}
+            onChange={(e) => setDay(Number(e.target.value))}
+          >
             {DAYS.map((d) => (
               <option key={d.value} value={d.value}>
                 {d.label}
               </option>
             ))}
-          </Select>
+          </select>
         </div>
       </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{DAYS.find((d) => d.value === day)?.label}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading && <div className="text-sm text-slate-500">Loading…</div>}
-          {error && <div className="text-sm text-rose-600">{(error as Error).message}</div>}
+      <div className="sk-card">
+        <div className="sk-card-h">
+          <h3>{dayLabel}</h3>
+        </div>
+        <div className="sk-card-b">
+          {isLoading && <p className="sk-state">Loading…</p>}
+          {!!error && <p className="sk-state err">{(error as Error).message}</p>}
 
           {!isLoading && !error && teachers.length === 0 && (
-            <div className="text-sm text-slate-500">No teachers yet — add teachers first.</div>
+            <p className="sk-state">No teachers yet — add teachers first.</p>
           )}
           {!isLoading && !error && teachers.length > 0 && periods.length === 0 && (
-            <div className="text-sm text-slate-500">No periods defined yet.</div>
+            <p className="sk-state">No periods defined yet.</p>
           )}
 
           {!isLoading && !error && teachers.length > 0 && periods.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="text-slate-500">
-                    <th className="border-b p-3 text-left font-medium">Teacher</th>
-                    {periods.map((p) => (
-                      <th key={p.id} className="border-b p-3 text-center font-medium">
-                        {p.label}
-                      </th>
-                    ))}
-                    <th className="border-b p-3 text-center font-medium">Load</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {teachers.map((t) => {
-                    const busyCount = periods.filter((p) =>
-                      busySet.has(`${t.id}-${day}-${p.id}`),
-                    ).length;
-                    return (
-                      <tr key={t.id} className="border-b">
-                        <td className="p-3 font-medium text-slate-800">
-                          {t.firstName} {t.lastName}
-                        </td>
-                        {periods.map((p) => {
-                          const busy = busySet.has(`${t.id}-${day}-${p.id}`);
-                          return (
-                            <td key={p.id} className="p-2">
-                              <div
-                                className={`h-8 rounded ${busy ? 'bg-slate-200' : 'bg-teal-400'}`}
-                                title={busy ? 'Teaching' : 'Free'}
-                              />
-                            </td>
-                          );
-                        })}
-                        <td className="p-3 text-center text-slate-500">
-                          {busyCount}/{periods.length}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <>
+              {teachers.map((t, i) => {
+                const busyCount = periods.filter((p) => busySet.has(`${t.id}-${day}-${p.id}`)).length;
+                const allFree = busyCount === 0;
+                const allBusy = busyCount === periods.length;
+                return (
+                  <div key={t.id} className="sk-row" style={{ alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 10 }}>
+                    <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                      {teacherInitials(t)}
+                    </span>
+                    <div style={{ minWidth: 160 }}>
+                      <div className="nm">
+                        {t.firstName} {t.lastName}
+                      </div>
+                      <div className="meta">
+                        {busyCount}/{periods.length} periods teaching
+                      </div>
+                    </div>
 
-              <div className="mt-4 flex gap-4 text-xs text-slate-500">
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block h-3 w-3 rounded bg-teal-400" /> Free
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block h-3 w-3 rounded bg-slate-200" /> Teaching
-                </span>
-              </div>
-            </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flex: '1 1 260px' }}>
+                      {periods.map((p) => {
+                        const busy = busySet.has(`${t.id}-${day}-${p.id}`);
+                        return (
+                          <span
+                            key={p.id}
+                            className="sk-pill"
+                            data-tone={busy ? 'bad' : 'good'}
+                            title={`${p.label}: ${busy ? 'Teaching' : 'Free'}`}
+                          >
+                            {p.label}
+                          </span>
+                        );
+                      })}
+                    </div>
+
+                    <span className="sp" />
+                    <span className="sk-pill" data-tone={allFree ? 'good' : allBusy ? 'bad' : 'warn'}>
+                      {allFree ? 'Free all day' : allBusy ? 'Fully booked' : 'Partially free'}
+                    </span>
+                  </div>
+                );
+              })}
+            </>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }
