@@ -11,6 +11,11 @@ import type {
   UpdatePeriodDto,
 } from './management.dto';
 
+/** Dedupe + ascending-sort a raw day-of-week list (1=Mon … 7=Sun). */
+function normalizeWorkingDays(days: number[]): number[] {
+  return Array.from(new Set(days)).sort((a, b) => a - b);
+}
+
 @Injectable()
 export class CatalogService {
   // ── Academic Years ─────────────────────────────────────────────────────────
@@ -161,6 +166,29 @@ export class CatalogService {
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('Period not found');
       if (isP2003(e)) throw new ConflictException('Cannot delete: other records still reference this period');
+      throw e;
+    }
+  }
+
+  // ── Working days ─────────────────────────────────────────────────────────────
+
+  async getWorkingDays(schoolId: string) {
+    const school = await withTenant(schoolId, (tx) =>
+      tx.school.findUnique({ where: { id: schoolId }, select: { workingDays: true } }),
+    );
+    if (!school) throw new NotFoundException('School not found');
+    return { workingDays: school.workingDays };
+  }
+
+  async updateWorkingDays(schoolId: string, workingDays: number[]) {
+    const normalized = normalizeWorkingDays(workingDays);
+    try {
+      const school = await withTenant(schoolId, (tx) =>
+        tx.school.update({ where: { id: schoolId }, data: { workingDays: normalized } }),
+      );
+      return { workingDays: school.workingDays };
+    } catch (e) {
+      if (isP2025(e)) throw new NotFoundException('School not found');
       throw e;
     }
   }

@@ -2,7 +2,7 @@
 import { useMemo, useState, type CSSProperties, type FocusEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Pencil, Check, Coffee, Utensils } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -16,12 +16,37 @@ interface AcademicYear {
   isCurrent?: boolean;
 }
 
+type PeriodKind = 'CLASS' | 'BREAK';
+
 interface Period {
   id: string;
   label: string;
   order: number;
   startTime: string;
   endTime: string;
+  kind: PeriodKind;
+}
+
+/** 1 = Monday … 7 = Sunday, matching `School.workingDays` in the schema. */
+const DAYS_OF_WEEK: { value: number; label: string }[] = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 7, label: 'Sun' },
+];
+
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** `"HH:MM"` + minutes → `"HH:MM"`, wrapping past midnight. */
+function addMinutesToTime(time: string, minutes: number): string {
+  const [h, m] = time.split(':').map(Number);
+  const total = (((h * 60 + m + minutes) % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hh = String(Math.floor(total / 60)).padStart(2, '0');
+  const mm = String(total % 60).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 // Themed inputs: no dedicated CSS class, styled inline, with a brand-colored
@@ -232,6 +257,308 @@ function AddPeriodForm({
   );
 }
 
+// ── Working days chips ────────────────────────────────────────────────────────
+
+function WorkingDaysRow({
+  workingDays,
+  isLoading,
+  isSaving,
+  onToggle,
+}: {
+  workingDays: number[];
+  isLoading: boolean;
+  isSaving: boolean;
+  onToggle: (day: number) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="sk-lab">Working days</span>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {DAYS_OF_WEEK.map((d) => {
+          const active = workingDays.includes(d.value);
+          return (
+            <button
+              key={d.value}
+              type="button"
+              disabled={isLoading || isSaving}
+              aria-pressed={active}
+              onClick={() => onToggle(d.value)}
+              className="sk-btn"
+              data-variant={active ? 'primary' : undefined}
+              style={{ padding: '7px 12px', borderRadius: 999 }}
+            >
+              {d.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Quick setup (generate a whole day of periods) ─────────────────────────────
+
+function QuickSetupForm({
+  hasExistingPeriods,
+  isGenerating,
+  onGenerate,
+}: {
+  hasExistingPeriods: boolean;
+  isGenerating: boolean;
+  onGenerate: (data: { count: number; minutes: number; dayStart: string }) => void;
+}) {
+  const [count, setCount] = useState('8');
+  const [minutes, setMinutes] = useState('45');
+  const [dayStart, setDayStart] = useState('08:00');
+
+  function submit() {
+    const countNum = Number(count);
+    const minutesNum = Number(minutes);
+    if (!Number.isInteger(countNum) || countNum < 1 || countNum > 20) {
+      toast.error('Enter a number of periods between 1 and 20');
+      return;
+    }
+    if (!Number.isInteger(minutesNum) || minutesNum < 1 || minutesNum > 300) {
+      toast.error('Enter a valid number of minutes per period');
+      return;
+    }
+    if (!dayStart) {
+      toast.error('Pick a start time for the day');
+      return;
+    }
+    if (hasExistingPeriods) {
+      const ok = window.confirm(
+        `This school already has periods configured. Generate ${countNum} more period(s) on top of the existing schedule?`,
+      );
+      if (!ok) return;
+    }
+    onGenerate({ count: countNum, minutes: minutesNum, dayStart });
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        padding: 12,
+        borderRadius: 12,
+        background: 'var(--sk-brand-tint)',
+      }}
+    >
+      <span className="sk-lab">Quick setup</span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: '1 1 130px' }}>
+          <label htmlFor="qs-count" className="sk-lab">
+            Number of periods
+          </label>
+          <input
+            id="qs-count"
+            type="number"
+            min={1}
+            max={20}
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
+            value={count}
+            onChange={(e) => setCount(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: '1 1 130px' }}>
+          <label htmlFor="qs-minutes" className="sk-lab">
+            Minutes each
+          </label>
+          <input
+            id="qs-minutes"
+            type="number"
+            min={1}
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
+            value={minutes}
+            onChange={(e) => setMinutes(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: '1 1 130px' }}>
+          <label htmlFor="qs-start" className="sk-lab">
+            Day starts
+          </label>
+          <input
+            id="qs-start"
+            type="time"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
+            value={dayStart}
+            onChange={(e) => setDayStart(e.target.value)}
+          />
+        </div>
+      </div>
+      <div>
+        <button className="sk-btn" data-variant="primary" disabled={isGenerating} onClick={submit}>
+          {isGenerating ? 'Generating…' : 'Generate day'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Period row (view + inline edit) ───────────────────────────────────────────
+
+function PeriodRow({
+  period,
+  isUpdating,
+  isDeleting,
+  onSave,
+  onDelete,
+}: {
+  period: Period;
+  isUpdating: boolean;
+  isDeleting: boolean;
+  onSave: (id: string, data: { label: string; startTime: string; endTime: string; kind: PeriodKind }) => void;
+  onDelete: (period: Period) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [label, setLabel] = useState(period.label);
+  const [startTime, setStartTime] = useState(period.startTime);
+  const [endTime, setEndTime] = useState(period.endTime);
+  const [kind, setKind] = useState<PeriodKind>(period.kind);
+
+  function startEdit() {
+    setLabel(period.label);
+    setStartTime(period.startTime);
+    setEndTime(period.endTime);
+    setKind(period.kind);
+    setEditing(true);
+  }
+
+  function save() {
+    if (!label.trim() || !startTime || !endTime) return;
+    onSave(period.id, { label: label.trim(), startTime, endTime, kind });
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="sk-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: '2 1 140px' }}>
+            <label htmlFor={`period-edit-label-${period.id}`} className="sk-lab">
+              Label
+            </label>
+            <input
+              id={`period-edit-label-${period.id}`}
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: '1 1 110px' }}>
+            <label htmlFor={`period-edit-start-${period.id}`} className="sk-lab">
+              Start time
+            </label>
+            <input
+              id={`period-edit-start-${period.id}`}
+              type="time"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: '1 1 110px' }}>
+            <label htmlFor={`period-edit-end-${period.id}`} className="sk-lab">
+              End time
+            </label>
+            <input
+              id={`period-edit-end-${period.id}`}
+              type="time"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <span className="sk-lab">Kind</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                className="sk-btn"
+                data-variant={kind === 'CLASS' ? 'primary' : undefined}
+                style={{ padding: '9px 12px' }}
+                onClick={() => setKind('CLASS')}
+              >
+                Class
+              </button>
+              <button
+                type="button"
+                className="sk-btn"
+                data-variant={kind === 'BREAK' ? 'primary' : undefined}
+                style={{ padding: '9px 12px' }}
+                onClick={() => setKind('BREAK')}
+              >
+                Break
+              </button>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="sk-btn"
+            data-variant="primary"
+            disabled={isUpdating || !label.trim() || !startTime || !endTime}
+            onClick={save}
+          >
+            <Check className="h-3.5 w-3.5" />
+            Save
+          </button>
+          <button className="sk-btn" onClick={() => setEditing(false)}>
+            <X className="h-3.5 w-3.5" />
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sk-row">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="nm">{period.label}</div>
+        <div className="meta">
+          {period.startTime} – {period.endTime}
+        </div>
+      </div>
+      <span className="sk-pill" data-tone={period.kind === 'BREAK' ? 'warn' : 'info'}>
+        {period.kind === 'BREAK' ? 'Break' : 'Class'}
+      </span>
+      <button
+        onClick={startEdit}
+        aria-label={`Edit period ${period.label}`}
+        className="sk-btn"
+        style={{ padding: '6px 9px' }}
+      >
+        <Pencil className="h-4 w-4" />
+      </button>
+      <button
+        onClick={() => onDelete(period)}
+        disabled={isDeleting}
+        aria-label={`Remove period ${period.label}`}
+        className="sk-btn"
+        style={{ color: 'var(--sk-bad)', padding: '6px 9px' }}
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -256,6 +583,14 @@ export default function SettingsPage() {
     enabled: !!host,
   });
 
+  const workingDaysQuery = useQuery({
+    queryKey: ['mng-working-days'],
+    queryFn: () => api.get<{ workingDays: number[] }>('/manage/school/working-days'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
+  });
+
   const sortedPeriods = useMemo(
     () => [...(periodsQuery.data ?? [])].sort((a, b) => a.order - b.order),
     [periodsQuery.data],
@@ -273,13 +608,28 @@ export default function SettingsPage() {
   });
 
   const addPeriodMutation = useMutation({
-    mutationFn: (body: { label: string; order: number; startTime: string; endTime: string }) =>
+    mutationFn: (body: { label: string; order: number; startTime: string; endTime: string; kind?: PeriodKind }) =>
       api.post<Period>('/manage/periods', body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['mng-periods'] });
       toast.success('Period added');
     },
     onError: (err: Error) => toast.error(`Failed to add period: ${err.message}`),
+  });
+
+  const updatePeriodMutation = useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: { label: string; startTime: string; endTime: string; kind: PeriodKind };
+    }) => api.put<Period>(`/manage/periods/${id}`, data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-periods'] });
+      toast.success('Period updated');
+    },
+    onError: (err: Error) => toast.error(`Failed to update period: ${err.message}`),
   });
 
   const deletePeriodMutation = useMutation({
@@ -291,10 +641,83 @@ export default function SettingsPage() {
     onError: (err: Error) => toast.error(`Failed to delete period: ${err.message}`),
   });
 
+  const updateWorkingDaysMutation = useMutation({
+    mutationFn: (days: number[]) =>
+      api.put<{ workingDays: number[] }>('/manage/school/working-days', { workingDays: days }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-working-days'] });
+      toast.success('Working days updated');
+    },
+    onError: (err: Error) => toast.error(`Failed to update working days: ${err.message}`),
+  });
+
+  const [isGenerating, setIsGenerating] = useState(false);
+
   // Safe-delete: confirm before firing the destructive mutation.
   function confirmDeletePeriod(period: Period) {
     const ok = window.confirm(`Delete period "${period.label}"? This can’t be undone.`);
     if (ok) deletePeriodMutation.mutate(period.id);
+  }
+
+  function toggleWorkingDay(day: number) {
+    const current = workingDaysQuery.data?.workingDays ?? [];
+    const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
+    updateWorkingDaysMutation.mutate(next);
+  }
+
+  // Sequentially POSTs N class periods (P1…PN) starting from the next free
+  // `order`, so Quick setup never clobbers whatever periods already exist.
+  async function generateDay({ count, minutes, dayStart }: { count: number; minutes: number; dayStart: string }) {
+    setIsGenerating(true);
+    let order = (sortedPeriods[sortedPeriods.length - 1]?.order ?? 0) + 1;
+    let time = dayStart;
+    try {
+      for (let i = 1; i <= count; i += 1) {
+        const startTime = time;
+        const endTime = addMinutesToTime(startTime, minutes);
+        // eslint-disable-next-line no-await-in-loop -- each period's start time
+        // depends on the previous one's end time, so these must run in order.
+        await api.post<Period>('/manage/periods', {
+          label: `P${i}`,
+          order,
+          startTime,
+          endTime,
+          kind: 'CLASS',
+        });
+        time = endTime;
+        order += 1;
+      }
+      await queryClient.invalidateQueries({ queryKey: ['mng-periods'] });
+      toast.success(`Generated ${count} period${count === 1 ? '' : 's'}`);
+    } catch (e) {
+      toast.error(`Failed to generate periods: ${(e as Error).message}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  function addBreakLike(defaultLabel: string) {
+    const startTime = window.prompt(`Start time for ${defaultLabel} (24h, e.g. 10:30)?`, '10:30');
+    if (startTime === null) return;
+    if (!TIME_RE.test(startTime)) {
+      toast.error('Enter a valid time in HH:MM (24h) format');
+      return;
+    }
+    const durationStr = window.prompt(`${defaultLabel} duration in minutes?`, '15');
+    if (durationStr === null) return;
+    const duration = Number(durationStr);
+    if (!Number.isInteger(duration) || duration < 1 || duration > 300) {
+      toast.error('Enter a valid duration in minutes');
+      return;
+    }
+    const nextOrder = (sortedPeriods[sortedPeriods.length - 1]?.order ?? 0) + 1;
+    addPeriodMutation.mutate({
+      label: defaultLabel,
+      order: nextOrder,
+      startTime,
+      endTime: addMinutesToTime(startTime, duration),
+      kind: 'BREAK',
+    });
   }
 
   const years = yearsQuery.data ?? [];
@@ -352,37 +775,55 @@ export default function SettingsPage() {
             <h3>Periods / bell times</h3>
           </div>
           <div className="sk-card-b">
+            <WorkingDaysRow
+              workingDays={workingDaysQuery.data?.workingDays ?? []}
+              isLoading={workingDaysQuery.isLoading}
+              isSaving={updateWorkingDaysMutation.isPending}
+              onToggle={toggleWorkingDay}
+            />
+            {workingDaysQuery.error && (
+              <p className="sk-state err">{(workingDaysQuery.error as Error).message}</p>
+            )}
+
+            <QuickSetupForm
+              hasExistingPeriods={sortedPeriods.length > 0}
+              isGenerating={isGenerating}
+              onGenerate={generateDay}
+            />
+
             <AddPeriodForm
               nextOrder={(sortedPeriods[sortedPeriods.length - 1]?.order ?? 0) + 1}
               isSaving={addPeriodMutation.isPending}
               onSave={(data) => addPeriodMutation.mutate(data)}
             />
 
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="sk-btn" onClick={() => addBreakLike('Break')} disabled={addPeriodMutation.isPending}>
+                <Coffee className="h-4 w-4" />
+                Add break
+              </button>
+              <button className="sk-btn" onClick={() => addBreakLike('Lunch')} disabled={addPeriodMutation.isPending}>
+                <Utensils className="h-4 w-4" />
+                Add lunch
+              </button>
+            </div>
+
             {periodsQuery.isLoading && <p className="sk-state">Loading periods…</p>}
             {periodsQuery.error && <p className="sk-state err">{(periodsQuery.error as Error).message}</p>}
             {!periodsQuery.isLoading && sortedPeriods.length === 0 && (
-              <p className="sk-state">No periods yet. Add one above.</p>
+              <p className="sk-state">No periods yet. Use Quick setup, or add one above.</p>
             )}
             {sortedPeriods.length > 0 && (
               <div>
                 {sortedPeriods.map((p) => (
-                  <div key={p.id} className="sk-row">
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="nm">{p.label}</div>
-                      <div className="meta">
-                        {p.startTime} – {p.endTime}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => confirmDeletePeriod(p)}
-                      disabled={deletePeriodMutation.isPending}
-                      aria-label={`Remove period ${p.label}`}
-                      className="sk-btn"
-                      style={{ color: 'var(--sk-bad)', padding: '6px 9px' }}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <PeriodRow
+                    key={p.id}
+                    period={p}
+                    isUpdating={updatePeriodMutation.isPending}
+                    isDeleting={deletePeriodMutation.isPending}
+                    onSave={(id, data) => updatePeriodMutation.mutate({ id, data })}
+                    onDelete={confirmDeletePeriod}
+                  />
                 ))}
               </div>
             )}

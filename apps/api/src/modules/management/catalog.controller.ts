@@ -12,6 +12,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
+import { RolesGuard } from '../../common/auth/roles.guard';
+import { Roles } from '../../common/auth/roles.decorator';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { CatalogService } from './catalog.service';
@@ -25,6 +27,7 @@ import {
   UpdateGradeDto,
   UpdatePeriodDto,
   UpdateSubjectDto,
+  UpdateWorkingDaysDto,
 } from './management.dto';
 
 @Controller('manage')
@@ -129,6 +132,26 @@ export class CatalogController {
   @HttpCode(204)
   deletePeriod(@Param('id', ParseUUIDPipe) id: string) {
     return this.catalog.deletePeriod(this.sid(), id);
+  }
+
+  // ── School / working days ────────────────────────────────────────────────────
+  // Admin-only settings, so RolesGuard + @Roles are applied per-handler (mirrors
+  // TeachersController) rather than promoting RolesGuard to the class level —
+  // the rest of this controller intentionally stays open to any authenticated
+  // MANAGEMENT-feature role.
+
+  @Get('school/working-days')
+  @UseGuards(RolesGuard)
+  @Roles('SCHOOL_ADMIN')
+  getWorkingDays() {
+    return this.catalog.getWorkingDays(this.sid());
+  }
+
+  @Put('school/working-days')
+  @UseGuards(RolesGuard)
+  @Roles('SCHOOL_ADMIN')
+  updateWorkingDays(@Body() dto: UpdateWorkingDaysDto) {
+    return this.catalog.updateWorkingDays(this.sid(), dto.workingDays);
   }
 
   // ── Availability ───────────────────────────────────────────────────────────

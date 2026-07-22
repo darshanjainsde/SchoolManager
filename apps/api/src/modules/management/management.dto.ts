@@ -101,6 +101,11 @@ export class CreatePeriodDto {
   @IsString()
   @Length(1, 10)
   endTime!: string;
+
+  /** Defaults to CLASS at the DB layer; a BREAK period is how lunch/recess is modeled. */
+  @IsOptional()
+  @IsIn(['CLASS', 'BREAK'])
+  kind?: 'CLASS' | 'BREAK';
 }
 
 export class UpdatePeriodDto {
@@ -123,6 +128,21 @@ export class UpdatePeriodDto {
   @IsString()
   @Length(1, 10)
   endTime?: string;
+
+  @IsOptional()
+  @IsIn(['CLASS', 'BREAK'])
+  kind?: 'CLASS' | 'BREAK';
+}
+
+// ── Working days ─────────────────────────────────────────────────────────────
+
+export class UpdateWorkingDaysDto {
+  @IsArray()
+  @ArrayMaxSize(7)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(7, { each: true })
+  workingDays!: number[];
 }
 
 // ── Teacher ──────────────────────────────────────────────────────────────────
