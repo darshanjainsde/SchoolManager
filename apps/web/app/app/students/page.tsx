@@ -1,8 +1,8 @@
 'use client';
-import { useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -19,12 +19,22 @@ interface Student {
   admissionNo: string;
   firstName: string;
   lastName: string;
+  email: string | null;
   classSectionId: string | null;
   rollNo: string | null;
   guardianName: string | null;
   guardianPhone: string | null;
   classSection: { name: string; grade: { name: string } } | null;
   userId: string | null;
+}
+
+/** Shape returned by both `.../login` and `.../invite/resend`. */
+interface LoginInviteResult {
+  email: string;
+  username: string | null;
+  loginName: string;
+  invited: true;
+  emailSent: boolean;
 }
 
 // ── Field helper ─────────────────────────────────────────────────────────────
@@ -65,14 +75,56 @@ function ringBlur(e: FocusEvent<HTMLElement>) {
   e.currentTarget.style.boxShadow = 'none';
 }
 
-// ── Create Login Modal ────────────────────────────────────────────────────────
+// ── Dialog shell (Escape-to-close + basic focus trap) ────────────────────────
 
-interface LoginCredentials {
-  email: string;
-  tempPassword: string;
-}
+function DialogShell({
+  onClose,
+  labelledBy,
+  maxWidth = 420,
+  children,
+}: {
+  onClose: () => void;
+  labelledBy: string;
+  maxWidth?: number;
+  children: ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
 
-function CreateLoginModal({ credentials, onClose }: { credentials: LoginCredentials; onClose: () => void }) {
+  useEffect(() => {
+    const el = containerRef.current;
+    const focusable = el?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    focusable?.[0]?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && el) {
+        const items = Array.from(
+          el.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        );
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [onClose]);
+
   return (
     <div
       style={{
@@ -85,50 +137,142 @@ function CreateLoginModal({ credentials, onClose }: { credentials: LoginCredenti
         background: 'rgba(15, 30, 24, 0.5)',
         padding: 16,
       }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <div className="sk-card" style={{ width: '100%', maxWidth: 380 }}>
-        <div className="sk-card-h">
-          <h3>Login created — save these now</h3>
-        </div>
-        <div className="sk-card-b">
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12.5,
-              color: 'var(--sk-amber)',
-              background: 'var(--sk-amber-tint)',
-              borderRadius: 10,
-              padding: '10px 12px',
-            }}
-          >
-            The temporary password is shown only once. Save it before closing this dialog.
+      <div
+        ref={containerRef}
+        className="sk-card"
+        style={{ width: '100%', maxWidth }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Invite-sent confirmation modal ───────────────────────────────────────────
+// Never shows a password — the recipient sets their own via the emailed link.
+
+function InviteSentModal({
+  result,
+  onClose,
+  onResend,
+  resending,
+}: {
+  result: LoginInviteResult;
+  onClose: () => void;
+  onResend: () => void;
+  resending: boolean;
+}) {
+  return (
+    <DialogShell onClose={onClose} labelledBy="invite-sent-h">
+      <div className="sk-card-h" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h3 id="invite-sent-h">Invite sent</h3>
+        <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="sk-card-b">
+        {result.emailSent ? (
+          <p style={{ margin: 0, fontSize: 13.5 }}>
+            An email was sent to <strong>{result.email}</strong>. They can sign in as{' '}
+            <strong>{result.loginName}</strong> — the link lets them set their own password.
           </p>
-          <Field label="Email" htmlFor="cl-email">
-            <input
-              id="cl-email"
-              readOnly
-              value={credentials.email}
-              style={{ ...fieldStyle, fontFamily: 'monospace', fontSize: 13 }}
-              onFocus={ringFocus}
-              onBlur={ringBlur}
-            />
-          </Field>
-          <Field label="Temporary password" htmlFor="cl-pw">
-            <input
-              id="cl-pw"
-              readOnly
-              value={credentials.tempPassword}
-              style={{ ...fieldStyle, fontFamily: 'monospace', fontSize: 13 }}
-              onFocus={ringFocus}
-              onBlur={ringBlur}
-            />
-          </Field>
-          <button className="sk-btn" data-variant="primary" onClick={onClose}>
-            I&apos;ve saved these — close
+        ) : (
+          <>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12.5,
+                color: 'var(--sk-amber)',
+                background: 'var(--sk-amber-tint)',
+                borderRadius: 10,
+                padding: '10px 12px',
+              }}
+            >
+              The account was created, but the invite email to {result.email} could not be sent right
+              now.
+            </p>
+            <p style={{ margin: 0, fontSize: 13.5 }}>
+              They can sign in as <strong>{result.loginName}</strong> and set their own password once the
+              email arrives — try resending it below.
+            </p>
+          </>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          {!result.emailSent && (
+            <button className="sk-btn" data-variant="primary" disabled={resending} onClick={onResend}>
+              <Send className="h-3.5 w-3.5" />
+              {resending ? 'Resending…' : 'Resend invite'}
+            </button>
+          )}
+          <button className="sk-btn" onClick={onClose}>
+            Close
           </button>
         </div>
       </div>
-    </div>
+    </DialogShell>
+  );
+}
+
+// ── Email-prompt modal (used when the student has no email on record) ───────
+
+function EmailPromptModal({
+  studentName,
+  onSubmit,
+  onClose,
+  isSaving,
+}: {
+  studentName: string;
+  onSubmit: (email: string) => void;
+  onClose: () => void;
+  isSaving: boolean;
+}) {
+  const [email, setEmail] = useState('');
+  return (
+    <DialogShell onClose={onClose} labelledBy="email-prompt-h">
+      <div className="sk-card-h" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h3 id="email-prompt-h">Send login invite</h3>
+        <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="sk-card-b">
+        <p className="sk-muted" style={{ margin: 0 }}>
+          No email on file for {studentName}. Enter one to send the portal login invite.
+        </p>
+        <Field label="Email" htmlFor="ep-email">
+          <input
+            id="ep-email"
+            type="email"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="jane.doe@example.com"
+          />
+        </Field>
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button
+            className="sk-btn"
+            data-variant="primary"
+            disabled={isSaving || !email.trim()}
+            onClick={() => onSubmit(email.trim())}
+          >
+            {isSaving ? 'Sending…' : 'Send invite'}
+          </button>
+          <button className="sk-btn" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </DialogShell>
   );
 }
 
@@ -142,6 +286,7 @@ interface StudentFormData {
   classSectionId: string;
   guardianName: string;
   guardianPhone: string;
+  email: string;
 }
 
 interface StudentFormProps {
@@ -161,6 +306,7 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
   const [classSectionId, setClassSectionId] = useState(initial.classSectionId ?? '');
   const [guardianName, setGuardianName] = useState(initial.guardianName ?? '');
   const [guardianPhone, setGuardianPhone] = useState(initial.guardianPhone ?? '');
+  const [email, setEmail] = useState(initial.email ?? '');
 
   const canSave = firstName.trim() && lastName.trim() && admissionNo.trim();
 
@@ -263,6 +409,19 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
           </Field>
         </div>
 
+        <Field label="Email (for portal login, optional)" htmlFor="sf-email">
+          <input
+            id="sf-email"
+            type="email"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="jane.doe@example.com"
+          />
+        </Field>
+
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
             className="sk-btn"
@@ -276,6 +435,7 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
                 classSectionId,
                 guardianName: guardianName.trim(),
                 guardianPhone: guardianPhone.trim(),
+                email: email.trim(),
               })
             }
             disabled={isSaving || !canSave}
@@ -330,7 +490,10 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState('');
-  const [loginCredentials, setLoginCredentials] = useState<LoginCredentials | null>(null);
+  const [inviteResult, setInviteResult] = useState<(LoginInviteResult & { studentId: string }) | null>(
+    null,
+  );
+  const [promptStudent, setPromptStudent] = useState<Student | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const classesQuery = useQuery({
@@ -363,6 +526,7 @@ export default function StudentsPage() {
         classSectionId: data.classSectionId || undefined,
         guardianName: data.guardianName || undefined,
         guardianPhone: data.guardianPhone || undefined,
+        email: data.email || undefined,
       };
       return api.post<Student>('/manage/students', body);
     },
@@ -393,6 +557,7 @@ export default function StudentsPage() {
         classSectionId: data.classSectionId || undefined,
         guardianName: data.guardianName || undefined,
         guardianPhone: data.guardianPhone || undefined,
+        email: data.email || undefined,
       };
       return api.put<Student>(`/manage/students/${id}`, body);
     },
@@ -423,20 +588,25 @@ export default function StudentsPage() {
   });
 
   const createLoginMutation = useMutation({
-    mutationFn: (studentId: string) =>
-      api.post<LoginCredentials>(`/manage/students/${studentId}/login`, {}),
-    onSuccess: (credentials) => {
+    mutationFn: ({ studentId, email }: { studentId: string; email: string }) =>
+      api.post<LoginInviteResult>(`/manage/students/${studentId}/login`, { email }),
+    onSuccess: (result, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
-      setLoginCredentials(credentials);
+      setInviteResult({ ...result, studentId: variables.studentId });
+      setPromptStudent(null);
     },
-    onError: (err: Error) => {
-      const msg = err.message;
-      if (msg.includes('409') || msg.toLowerCase().includes('already')) {
-        toast.error('This student already has a login.');
-      } else {
-        toast.error(`Failed to create login: ${msg}`);
-      }
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const resendInviteMutation = useMutation({
+    mutationFn: (studentId: string) =>
+      api.post<LoginInviteResult>(`/manage/students/${studentId}/invite/resend`),
+    onSuccess: (result, studentId) => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
+      toast.success(`Invite resent to ${result.email}`);
+      setInviteResult((prev) => (prev && prev.studentId === studentId ? { ...result, studentId } : prev));
     },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   // Derive the initial values for the edit form from current student data
@@ -448,6 +618,16 @@ export default function StudentsPage() {
     if (ok) deleteMutation.mutate(student.id);
   }
 
+  // "Create login": use the email on record if there is one, otherwise prompt
+  // for one — the invite endpoint always requires a real address.
+  function handleCreateLogin(student: Student) {
+    if (student.email) {
+      createLoginMutation.mutate({ studentId: student.id, email: student.email });
+    } else {
+      setPromptStudent(student);
+    }
+  }
+
   const students = studentsQuery.data ?? [];
   const unassignedCount = students.filter((s) => !s.classSectionId).length;
   const loginCount = students.filter((s) => s.userId).length;
@@ -455,11 +635,23 @@ export default function StudentsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Create Login credentials modal */}
-      {loginCredentials && (
-        <CreateLoginModal
-          credentials={loginCredentials}
-          onClose={() => setLoginCredentials(null)}
+      {/* Invite-sent confirmation modal */}
+      {inviteResult && (
+        <InviteSentModal
+          result={inviteResult}
+          onClose={() => setInviteResult(null)}
+          onResend={() => resendInviteMutation.mutate(inviteResult.studentId)}
+          resending={resendInviteMutation.isPending}
+        />
+      )}
+
+      {/* Email-prompt modal (student has no email on record yet) */}
+      {promptStudent && (
+        <EmailPromptModal
+          studentName={`${promptStudent.firstName} ${promptStudent.lastName}`}
+          onSubmit={(email) => createLoginMutation.mutate({ studentId: promptStudent.id, email })}
+          onClose={() => setPromptStudent(null)}
+          isSaving={createLoginMutation.isPending}
         />
       )}
 
@@ -533,6 +725,7 @@ export default function StudentsPage() {
               classSectionId: editingStudent.classSectionId ?? '',
               guardianName: editingStudent.guardianName ?? '',
               guardianPhone: editingStudent.guardianPhone ?? '',
+              email: editingStudent.email ?? '',
             }}
             classes={classesQuery.data ?? []}
             onSave={(data) => updateMutation.mutate({ id: editId, data })}
@@ -611,15 +804,25 @@ export default function StudentsPage() {
                     <td style={tdStyle}>{student.guardianPhone ?? <span className="sk-muted">—</span>}</td>
                     <td style={tdStyle}>
                       {student.userId ? (
-                        <span className="sk-pill" data-tone="good" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <CheckCircle2 className="h-3 w-3" />
-                          Has login
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span className="sk-pill" data-tone="good" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <CheckCircle2 className="h-3 w-3" />
+                            Has login
+                          </span>
+                          <button
+                            className="sk-btn"
+                            disabled={resendInviteMutation.isPending}
+                            onClick={() => resendInviteMutation.mutate(student.id)}
+                          >
+                            <Send className="h-3.5 w-3.5" />
+                            Resend invite
+                          </button>
+                        </div>
                       ) : (
                         <button
                           className="sk-btn"
                           disabled={createLoginMutation.isPending}
-                          onClick={() => createLoginMutation.mutate(student.id)}
+                          onClick={() => handleCreateLogin(student)}
                         >
                           <KeyRound className="h-3.5 w-3.5" />
                           Create login
