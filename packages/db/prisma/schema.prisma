@@ -91,6 +91,41 @@ enum AttendanceStatus {
   LATE
 }
 
+enum PeriodKind {
+  CLASS
+  BREAK
+}
+
+enum StaffRole {
+  OFFICE
+  SUPPORT
+  DRIVER
+  HELPER
+  SECURITY
+  OTHER
+}
+
+enum LeaveType {
+  SICK
+  CASUAL
+  EARNED
+  UNPAID
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PersonAttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  ON_LEAVE
+}
+
 // ── Tenancy & access ─────────────────────────────────────
 model School {
   id        String       @id @default(uuid()) @db.Uuid
@@ -100,6 +135,7 @@ model School {
   status    SchoolStatus @default(SETUP)
   timezone  String       @default("Asia/Kolkata")
   locale    String       @default("en-IN")
+  workingDays Int[]      @default([1, 2, 3, 4, 5, 6])
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
@@ -131,6 +167,10 @@ model School {
   admissionsSettings AdmissionsSettings?
   hallOfFameEntries  HallOfFameEntry[]
   attendance         Attendance[]
+  substitutions      Substitution[]
+  staff              Staff[]
+  staffAttendance    StaffAttendance[]
+  leaveApplications  LeaveApplication[]
 }
 
 model Domain {
@@ -535,12 +575,13 @@ model Student {
 }
 
 model Period {
-  id        String @id @default(uuid()) @db.Uuid
-  schoolId  String @db.Uuid
+  id        String     @id @default(uuid()) @db.Uuid
+  schoolId  String     @db.Uuid
   order     Int
   label     String
   startTime String
   endTime   String
+  kind      PeriodKind @default(CLASS)
   school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   timetableSlots TimetableSlot[]
 
@@ -557,6 +598,8 @@ model TimetableSlot {
   subjectId      String @db.Uuid
   teacherId      String @db.Uuid
   academicYearId String @db.Uuid
+  effectiveFrom  DateTime @default(now())
+  effectiveTo    DateTime?
   school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
   period         Period       @relation(fields: [periodId], references: [id], onDelete: Cascade)
@@ -564,9 +607,11 @@ model TimetableSlot {
   teacher        Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
 
-  @@unique([schoolId, classSectionId, dayOfWeek, periodId, academicYearId], name: "class_slot")
-  @@unique([schoolId, teacherId, dayOfWeek, periodId, academicYearId], name: "teacher_slot")
+  @@unique([schoolId, classSectionId, dayOfWeek, periodId, academicYearId, effectiveFrom], name: "class_slot")
+  @@unique([schoolId, teacherId, dayOfWeek, periodId, academicYearId, effectiveFrom], name: "teacher_slot")
   @@index([schoolId])
+  @@index([schoolId, classSectionId, effectiveFrom])
+  @@index([schoolId, teacherId, effectiveFrom])
 }
 
 // ── Academics: attendance, exams, results ────────────────
@@ -583,6 +628,72 @@ model Attendance {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   @@unique([studentId, date], name: "one_mark_per_student_day")
   @@index([schoolId, classSectionId, date])
+}
+
+model Substitution {
+  id                  String   @id @default(uuid()) @db.Uuid
+  schoolId            String   @db.Uuid
+  classSectionId      String   @db.Uuid
+  periodId            String   @db.Uuid
+  date                DateTime @db.Date
+  originalTeacherId   String   @db.Uuid
+  substituteTeacherId String?  @db.Uuid // null = uncovered gap
+  reason              String? // e.g. "leave"
+  createdAt           DateTime @default(now())
+  school              School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([classSectionId, periodId, date], name: "one_sub_per_slot_date")
+  @@index([schoolId, date])
+}
+
+model Staff {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @db.Uuid
+  firstName String
+  lastName  String
+  role      StaffRole @default(OTHER)
+  email     String?
+  phone     String?
+  userId    String?   @db.Uuid
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+model StaffAttendance {
+  id         String                 @id @default(uuid()) @db.Uuid
+  schoolId   String                 @db.Uuid
+  teacherId  String?                @db.Uuid
+  staffId    String?                @db.Uuid
+  date       DateTime               @db.Date
+  status     PersonAttendanceStatus
+  markedById String?                @db.Uuid
+  createdAt  DateTime               @default(now())
+  school     School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, date], name: "one_teacher_mark_per_day")
+  @@unique([staffId, date], name: "one_staff_mark_per_day")
+  @@index([schoolId, date])
+}
+
+model LeaveApplication {
+  id           String      @id @default(uuid()) @db.Uuid
+  schoolId     String      @db.Uuid
+  teacherId    String      @db.Uuid
+  type         LeaveType
+  startDate    DateTime    @db.Date
+  endDate      DateTime    @db.Date
+  reason       String?
+  status       LeaveStatus @default(PENDING)
+  reviewedById String?     @db.Uuid
+  reviewedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  school       School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@index([schoolId, teacherId])
 }
 
 model Exam {
