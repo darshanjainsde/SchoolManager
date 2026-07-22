@@ -1,15 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Pencil, X, Users } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Users, Layers, Check } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,13 +40,61 @@ interface SchoolClass {
   _count: { students: number };
 }
 
-interface Subject {
-  id: string;
-  name: string;
-  code?: string | null;
+// ── Field helper ─────────────────────────────────────────────────────────────
+
+function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <label htmlFor={htmlFor} className="sk-lab">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
 }
 
-// ── Add Class Modal ───────────────────────────────────────────────────────────
+// Themed inputs/selects: no dedicated CSS class, styled inline, with a
+// brand-colored focus ring applied directly to the DOM node on focus/blur.
+const fieldStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  border: '1px solid var(--sk-line-2)',
+  borderRadius: 10,
+  padding: '9px 11px',
+  background: 'var(--sk-card)',
+  color: 'var(--sk-ink)',
+  fontSize: 13.5,
+  fontFamily: 'inherit',
+  transition: 'border-color 0.12s, box-shadow 0.12s',
+};
+
+function ringFocus(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-brand)';
+  e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--sk-brand) 18%, transparent)';
+}
+
+function ringBlur(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-line-2)';
+  e.currentTarget.style.boxShadow = 'none';
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
+
+function classAvatarLabel(cls: SchoolClass): string {
+  const digits = cls.grade.name.match(/\d+/)?.[0];
+  const base = digits ?? cls.grade.name.slice(0, 2).toUpperCase();
+  const section = cls.name.charAt(0).toUpperCase();
+  return `${base}${section}`.slice(0, 3);
+}
+
+function classTeacherLabel(cls: SchoolClass): string {
+  if (!cls.classTeacher) return 'No class teacher assigned';
+  return `Class teacher: ${cls.classTeacher.firstName} ${cls.classTeacher.lastName}`;
+}
+
+// ── Add Class form ────────────────────────────────────────────────────────────
 
 interface AddClassFormProps {
   grades: Grade[];
@@ -74,42 +118,59 @@ function AddClassForm({ grades, years, teachers, onSave, isSaving, onCancel }: A
   );
   const [classTeacherId, setClassTeacherId] = useState('');
 
+  const canSave = gradeId && name.trim() && academicYearId;
+
   return (
-    <Card className="max-w-lg">
-      <CardHeader>
-        <CardTitle>Add class</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="cls-grade">Grade</Label>
-          <Select
+    <div className="sk-card" style={{ maxWidth: 560 }}>
+      <div className="sk-card-h">
+        <h3>Add class</h3>
+      </div>
+      <div className="sk-card-b">
+        <Field label="Grade" htmlFor="cls-grade">
+          <select
             id="cls-grade"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
             value={gradeId}
             onChange={(e) => setGradeId(e.target.value)}
           >
-            {grades.length === 0 && <option value="">No grades — add one below</option>}
+            {grades.length === 0 && <option value="">No grades — add one first</option>}
             {grades.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
               </option>
             ))}
-          </Select>
-        </div>
+          </select>
+          {grades.length === 0 && (
+            <p className="sk-muted" style={{ margin: 0 }}>
+              Add a grade on the{' '}
+              <Link href="/app/classes/structure" style={{ color: 'var(--sk-brand-2)' }}>
+                grades &amp; subjects
+              </Link>{' '}
+              page first.
+            </p>
+          )}
+        </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="cls-name">Section / name</Label>
-          <Input
+        <Field label="Section / name" htmlFor="cls-name">
+          <input
             id="cls-name"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="A"
           />
-        </div>
+        </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="cls-year">Academic year</Label>
-          <Select
+        <Field label="Academic year" htmlFor="cls-year">
+          <select
             id="cls-year"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
             value={academicYearId}
             onChange={(e) => setAcademicYearId(e.target.value)}
           >
@@ -120,13 +181,15 @@ function AddClassForm({ grades, years, teachers, onSave, isSaving, onCancel }: A
                 {y.isCurrent ? ' (current)' : ''}
               </option>
             ))}
-          </Select>
-        </div>
+          </select>
+        </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="cls-teacher">Class teacher (optional)</Label>
-          <Select
+        <Field label="Class teacher (optional)" htmlFor="cls-teacher">
+          <select
             id="cls-teacher"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
             value={classTeacherId}
             onChange={(e) => setClassTeacherId(e.target.value)}
           >
@@ -136,81 +199,30 @@ function AddClassForm({ grades, years, teachers, onSave, isSaving, onCancel }: A
                 {t.firstName} {t.lastName}
               </option>
             ))}
-          </Select>
+          </select>
+        </Field>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button
+            className="sk-btn"
+            data-variant="primary"
+            onClick={() =>
+              onSave({
+                gradeId,
+                name: name.trim(),
+                academicYearId,
+                classTeacherId: classTeacherId || null,
+              })
+            }
+            disabled={isSaving || !canSave}
+          >
+            {isSaving ? 'Adding…' : 'Add class'}
+          </button>
+          <button className="sk-btn" onClick={onCancel}>
+            Cancel
+          </button>
         </div>
-      </CardContent>
-      <CardFooter className="gap-2">
-        <Button
-          onClick={() =>
-            onSave({
-              gradeId,
-              name: name.trim(),
-              academicYearId,
-              classTeacherId: classTeacherId || null,
-            })
-          }
-          disabled={isSaving || !gradeId || !name.trim() || !academicYearId}
-        >
-          {isSaving ? 'Adding…' : 'Add class'}
-        </Button>
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-}
-
-// ── Inline add-one input ──────────────────────────────────────────────────────
-
-interface InlineAddProps {
-  placeholder: string;
-  buttonLabel: string;
-  isSaving: boolean;
-  onSave: (value: string) => void;
-  extraField?: {
-    placeholder: string;
-    value: string;
-    onChange: (v: string) => void;
-  };
-}
-
-function InlineAdd({ placeholder, buttonLabel, isSaving, onSave, extraField }: InlineAddProps) {
-  const [value, setValue] = useState('');
-  return (
-    <div className="flex items-center gap-2">
-      <Input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={placeholder}
-        className="max-w-[160px]"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && value.trim()) {
-            onSave(value.trim());
-            setValue('');
-          }
-        }}
-      />
-      {extraField && (
-        <Input
-          value={extraField.value}
-          onChange={(e) => extraField.onChange(e.target.value)}
-          placeholder={extraField.placeholder}
-          className="max-w-[100px]"
-        />
-      )}
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={isSaving || !value.trim()}
-        onClick={() => {
-          onSave(value.trim());
-          setValue('');
-        }}
-      >
-        <Plus className="h-4 w-4 mr-1" />
-        {buttonLabel}
-      </Button>
+      </div>
     </div>
   );
 }
@@ -225,7 +237,6 @@ export default function ClassesPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
-  const [newSubjectCode, setNewSubjectCode] = useState('');
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const classesQuery = useQuery({
@@ -255,14 +266,6 @@ export default function ClassesPage() {
   const teachersQuery = useQuery({
     queryKey: ['mng-teachers'],
     queryFn: () => api.get<Teacher[]>('/manage/teachers'),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-    enabled: !!host,
-  });
-
-  const subjectsQuery = useQuery({
-    queryKey: ['mng-subjects'],
-    queryFn: () => api.get<Subject[]>('/manage/subjects'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     enabled: !!host,
@@ -307,253 +310,149 @@ export default function ClassesPage() {
     onError: (err: Error) => toast.error(`Failed to delete class: ${err.message}`),
   });
 
-  const addGradeMutation = useMutation({
-    mutationFn: (name: string) =>
-      api.post<Grade>('/manage/grades', {
-        name,
-        order: (gradesQuery.data?.length ?? 0) + 1,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['mng-grades'] });
-      toast.success('Grade added');
-    },
-    onError: (err: Error) => toast.error(`Failed to add grade: ${err.message}`),
-  });
+  // Safe-delete: confirm before firing the destructive mutation.
+  function confirmDeleteClass(cls: SchoolClass) {
+    const ok = window.confirm(`Delete class "${cls.grade.name} · ${cls.name}"? This can’t be undone.`);
+    if (ok) deleteClassMutation.mutate(cls.id);
+  }
 
-  const addSubjectMutation = useMutation({
-    mutationFn: ({ name, code }: { name: string; code?: string }) =>
-      api.post<Subject>('/manage/subjects', { name, code: code || undefined }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['mng-subjects'] });
-      setNewSubjectCode('');
-      toast.success('Subject added');
-    },
-    onError: (err: Error) => toast.error(`Failed to add subject: ${err.message}`),
-  });
-
-  const deleteGradeMutation = useMutation({
-    mutationFn: (id: string) => api.del<{ ok: boolean }>(`/manage/grades/${id}`),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['mng-grades'] });
-      toast.success('Grade removed');
-    },
-    onError: (err: Error) => toast.error(`Failed to delete grade: ${err.message}`),
-  });
-
-  const deleteSubjectMutation = useMutation({
-    mutationFn: (id: string) => api.del<{ ok: boolean }>(`/manage/subjects/${id}`),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['mng-subjects'] });
-      toast.success('Subject removed');
-    },
-    onError: (err: Error) => toast.error(`Failed to delete subject: ${err.message}`),
-  });
+  const classes = classesQuery.data ?? [];
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-8">
+    <>
       {/* Page header */}
-      <header className="flex items-center justify-between">
+      <header className="sk-pagehead" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Classes</h1>
-          <p className="mt-1 text-sm text-slate-500">Manage your school&apos;s classes by grade and section.</p>
+          <h1>Classes</h1>
+          <p>Manage your school&apos;s classes by grade and section.</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setShowAdd((v) => !v);
-            setEditId(null);
-          }}
-        >
-          {showAdd ? (
-            <>
-              <X className="h-4 w-4 mr-1" /> Cancel
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4 mr-1" /> Add class
-            </>
-          )}
-        </Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link href="/app/classes/structure" className="sk-btn">
+            <Layers className="h-4 w-4" />
+            Manage grades &amp; subjects
+          </Link>
+          <button
+            className="sk-btn"
+            data-variant="primary"
+            onClick={() => {
+              setShowAdd((v) => !v);
+              setEditId(null);
+            }}
+          >
+            {showAdd ? (
+              <>
+                <X className="h-4 w-4" /> Cancel
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" /> Add class
+              </>
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Add class form */}
       {showAdd && (
-        <AddClassForm
-          grades={gradesQuery.data ?? []}
-          years={yearsQuery.data ?? []}
-          teachers={teachersQuery.data ?? []}
-          onSave={(data) => addClassMutation.mutate(data)}
-          isSaving={addClassMutation.isPending}
-          onCancel={() => setShowAdd(false)}
-        />
+        <div style={{ marginBottom: 18 }}>
+          <AddClassForm
+            grades={gradesQuery.data ?? []}
+            years={yearsQuery.data ?? []}
+            teachers={teachersQuery.data ?? []}
+            onSave={(data) => addClassMutation.mutate(data)}
+            isSaving={addClassMutation.isPending}
+            onCancel={() => setShowAdd(false)}
+          />
+        </div>
       )}
 
       {/* Loading / error */}
-      {classesQuery.isLoading && <p className="text-sm text-slate-500">Loading…</p>}
-      {classesQuery.error && (
-        <p className="text-sm text-rose-600">{(classesQuery.error as Error).message}</p>
-      )}
+      {classesQuery.isLoading && <p className="sk-state">Loading…</p>}
+      {classesQuery.error && <p className="sk-state err">{(classesQuery.error as Error).message}</p>}
 
       {/* Empty state */}
-      {!classesQuery.isLoading && (classesQuery.data?.length ?? 0) === 0 && (
-        <p className="text-sm text-slate-400">No classes yet. Add one above.</p>
+      {!classesQuery.isLoading && classes.length === 0 && (
+        <p className="sk-state">No classes yet. Add one above.</p>
       )}
 
       {/* Class cards grid */}
-      {(classesQuery.data?.length ?? 0) > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {classesQuery.data!.map((cls) => (
-            <Card key={cls.id}>
-              <CardHeader className="pb-2">
-                {editId === cls.id ? (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      className="h-8 text-sm"
-                      autoFocus
-                    />
-                    <Button
-                      size="sm"
-                      disabled={updateClassMutation.isPending || !editName.trim()}
-                      onClick={() => updateClassMutation.mutate({ id: cls.id, name: editName.trim() })}
-                    >
-                      Save
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setEditId(null)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <CardTitle className="text-base">
-                    {cls.grade.name} &mdash; {cls.name}
-                  </CardTitle>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-1 pb-2">
-                {cls.classTeacher ? (
-                  <p className="text-sm text-slate-600">
-                    Class teacher: {cls.classTeacher.firstName} {cls.classTeacher.lastName}
-                  </p>
-                ) : (
-                  <p className="text-sm text-slate-400 italic">No class teacher assigned</p>
-                )}
-                <div className="flex items-center gap-1.5 text-sm text-slate-500">
-                  <Users className="h-3.5 w-3.5" />
-                  <span>{cls._count.students} student{cls._count.students !== 1 ? 's' : ''}</span>
+      {classes.length > 0 && (
+        <div className="sk-cardgrid">
+          {classes.map((cls, i) =>
+            editId === cls.id ? (
+              <div key={cls.id} className="sk-entity" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+                <Field label="Section / name" htmlFor={`cls-edit-${cls.id}`}>
+                  <input
+                    id={`cls-edit-${cls.id}`}
+                    style={fieldStyle}
+                    onFocus={ringFocus}
+                    onBlur={ringBlur}
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    autoFocus
+                  />
+                </Field>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="sk-btn"
+                    data-variant="primary"
+                    disabled={updateClassMutation.isPending || !editName.trim()}
+                    onClick={() => updateClassMutation.mutate({ id: cls.id, name: editName.trim() })}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    Save
+                  </button>
+                  <button className="sk-btn" onClick={() => setEditId(null)}>
+                    <X className="h-3.5 w-3.5" />
+                    Cancel
+                  </button>
                 </div>
-              </CardContent>
-              <CardFooter className="gap-2 pt-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setShowAdd(false);
-                    setEditId(cls.id);
-                    setEditName(cls.name);
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5 mr-1" />
-                  Rename
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={deleteClassMutation.isPending}
-                  onClick={() => deleteClassMutation.mutate(cls.id)}
-                  className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Delete
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+              </div>
+            ) : (
+              <div key={cls.id} className="sk-entity" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span className="av" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                    {classAvatarLabel(cls)}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="nm">
+                      {cls.grade.name} · {cls.name}
+                    </div>
+                    <div className="meta">{classTeacherLabel(cls)}</div>
+                  </div>
+                  <span className="sk-pill" data-tone="info" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Users className="h-3 w-3" />
+                    {cls._count.students}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="sk-btn"
+                    onClick={() => {
+                      setShowAdd(false);
+                      setEditId(cls.id);
+                      setEditName(cls.name);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Rename
+                  </button>
+                  <button
+                    className="sk-btn"
+                    disabled={deleteClassMutation.isPending}
+                    onClick={() => confirmDeleteClass(cls)}
+                    style={{ color: 'var(--sk-bad)' }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ),
+          )}
         </div>
       )}
-
-      {/* ── Grades management ─────────────────────────────────────────────── */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-800">Grades</h2>
-          <p className="text-sm text-slate-500">Grades are required before you can create classes.</p>
-        </div>
-
-        <InlineAdd
-          placeholder="e.g. Grade 1"
-          buttonLabel="Add grade"
-          isSaving={addGradeMutation.isPending}
-          onSave={(name) => addGradeMutation.mutate(name)}
-        />
-
-        {gradesQuery.isLoading && <p className="text-sm text-slate-500">Loading grades…</p>}
-        {(gradesQuery.data?.length ?? 0) > 0 && (
-          <ul className="space-y-1">
-            {gradesQuery.data!.map((g) => (
-              <li key={g.id} className="flex items-center gap-2 text-sm">
-                <span className="flex-1 text-slate-700">{g.name}</span>
-                <button
-                  onClick={() => deleteGradeMutation.mutate(g.id)}
-                  disabled={deleteGradeMutation.isPending}
-                  className="text-slate-400 hover:text-rose-500 disabled:opacity-50"
-                  aria-label={`Remove grade ${g.name}`}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {!gradesQuery.isLoading && (gradesQuery.data?.length ?? 0) === 0 && (
-          <p className="text-sm text-slate-400">No grades yet.</p>
-        )}
-      </section>
-
-      {/* ── Subjects management ───────────────────────────────────────────── */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-800">Subjects</h2>
-          <p className="text-sm text-slate-500">Subjects can be assigned to teachers.</p>
-        </div>
-
-        <InlineAdd
-          placeholder="e.g. Mathematics"
-          buttonLabel="Add subject"
-          isSaving={addSubjectMutation.isPending}
-          onSave={(name) => addSubjectMutation.mutate({ name, code: newSubjectCode })}
-          extraField={{
-            placeholder: 'Code (opt.)',
-            value: newSubjectCode,
-            onChange: setNewSubjectCode,
-          }}
-        />
-
-        {subjectsQuery.isLoading && <p className="text-sm text-slate-500">Loading subjects…</p>}
-        {(subjectsQuery.data?.length ?? 0) > 0 && (
-          <ul className="space-y-1">
-            {subjectsQuery.data!.map((s) => (
-              <li key={s.id} className="flex items-center gap-2 text-sm">
-                <span className="flex-1 text-slate-700">
-                  {s.name}
-                  {s.code && <span className="ml-2 text-slate-400">({s.code})</span>}
-                </span>
-                <button
-                  onClick={() => deleteSubjectMutation.mutate(s.id)}
-                  disabled={deleteSubjectMutation.isPending}
-                  className="text-slate-400 hover:text-rose-500 disabled:opacity-50"
-                  aria-label={`Remove subject ${s.name}`}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {!subjectsQuery.isLoading && (subjectsQuery.data?.length ?? 0) === 0 && (
-          <p className="text-sm text-slate-400">No subjects yet.</p>
-        )}
-      </section>
-    </div>
+    </>
   );
 }
