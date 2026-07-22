@@ -3,7 +3,7 @@ const txMock = {
   student: { findMany: jest.fn() },
   user: { findMany: jest.fn() },
   school: { findFirst: jest.fn() },
-  attendance: { findMany: jest.fn(), upsert: jest.fn() },
+  attendance: { findMany: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
   teacher: { findFirst: jest.fn() },
 };
 
@@ -93,7 +93,7 @@ describe('AttendanceService', () => {
       // Roster-membership check (all 3 students).
       txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }, { id: 's-2' }, { id: 's-3' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
       // Recipient resolution for the ABSENT student(s) only (s-1).
       txMock.student.findMany.mockResolvedValueOnce([
         { userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' },
@@ -134,7 +134,7 @@ describe('AttendanceService', () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }, { id: 's-2' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
       txMock.student.findMany.mockResolvedValueOnce([
         { userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' },
         { userId: 'u-2', firstName: 'Rohan', lastName: 'Mehta' },
@@ -180,7 +180,7 @@ describe('AttendanceService', () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
       txMock.student.findMany.mockResolvedValueOnce([
         { userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' },
       ]);
@@ -197,7 +197,7 @@ describe('AttendanceService', () => {
 
       expect(withTenantMock).toHaveBeenCalledTimes(2);
       expect(txMock.student.findMany.mock.invocationCallOrder[1]).toBeGreaterThan(
-        txMock.attendance.upsert.mock.invocationCallOrder[0],
+        txMock.attendance.createMany.mock.invocationCallOrder[0],
       );
     });
 
@@ -205,7 +205,7 @@ describe('AttendanceService', () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
       withTenantMock
         .mockImplementationOnce((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock))
         .mockImplementationOnce(() => Promise.reject(new Error('connection reset')));
@@ -227,7 +227,7 @@ describe('AttendanceService', () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
 
       const dto: SaveAttendanceDto = {
         classSectionId: CLASS_SECTION,
@@ -244,7 +244,7 @@ describe('AttendanceService', () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValueOnce([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
       txMock.student.findMany.mockResolvedValueOnce([
         { userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' },
       ]);
@@ -263,7 +263,7 @@ describe('AttendanceService', () => {
       expect(result).toEqual({ saved: 1, absentees: 1 });
     });
 
-    it('upserts every mark once and returns the correct saved/absentees counts', async () => {
+    it('batches the write and returns the correct saved/absentees counts', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValue([
         { id: 's-1' },
@@ -272,7 +272,7 @@ describe('AttendanceService', () => {
         { id: 's-4' },
       ]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
 
       const dto: SaveAttendanceDto = {
         classSectionId: CLASS_SECTION,
@@ -288,27 +288,35 @@ describe('AttendanceService', () => {
       const result = await svc.save(SCHOOL, 'user-teacher-1', dto);
 
       expect(result).toEqual({ saved: 4, absentees: 2 });
-      expect(txMock.attendance.upsert).toHaveBeenCalledTimes(4);
-      expect(txMock.attendance.upsert).toHaveBeenCalledWith(
+      expect(txMock.attendance.createMany).toHaveBeenCalledTimes(1);
+      // Batched write: existing rows for these students on this date are
+      // cleared, then all marks inserted in one createMany.
+      expect(txMock.attendance.deleteMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { one_mark_per_student_day: { studentId: 's-1', date: new Date('2026-07-21') } },
-          create: expect.objectContaining({
+          where: expect.objectContaining({
+            date: new Date('2026-07-21'),
+            studentId: { in: expect.arrayContaining(['s-1']) },
+          }),
+        }),
+      );
+      expect(txMock.attendance.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({
             schoolId: SCHOOL,
             studentId: 's-1',
             classSectionId: CLASS_SECTION,
             status: 'ABSENT',
             markedById: 'teacher-1',
           }),
-          update: expect.objectContaining({ status: 'ABSENT', markedById: 'teacher-1' }),
-        }),
-      );
+        ]),
+      });
     });
 
     it('resolves markedById to the caller Teacher.id when a linked Teacher row exists', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-42' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
 
       const dto: SaveAttendanceDto = {
         classSectionId: CLASS_SECTION,
@@ -319,14 +327,14 @@ describe('AttendanceService', () => {
       await svc.save(SCHOOL, 'user-teacher-42', dto);
 
       expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { userId: 'user-teacher-42' } });
-      expect(txMock.attendance.upsert.mock.calls[0][0].create.markedById).toBe('teacher-42');
+      expect(txMock.attendance.createMany.mock.calls[0][0].data[0].markedById).toBe('teacher-42');
     });
 
     it('falls back to the caller User.id when no Teacher row is linked (e.g. SCHOOL_ADMIN)', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue(null);
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
 
       const dto: SaveAttendanceDto = {
         classSectionId: CLASS_SECTION,
@@ -336,14 +344,14 @@ describe('AttendanceService', () => {
 
       await svc.save(SCHOOL, 'admin-user-1', dto);
 
-      expect(txMock.attendance.upsert.mock.calls[0][0].create.markedById).toBe('admin-user-1');
+      expect(txMock.attendance.createMany.mock.calls[0][0].data[0].markedById).toBe('admin-user-1');
     });
 
-    it('is idempotent: re-saving the same student/date targets the identical unique key so it upserts rather than duplicates', async () => {
+    it('is idempotent: re-saving clears then re-inserts so it cannot duplicate', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
 
       const dto: SaveAttendanceDto = {
         classSectionId: CLASS_SECTION,
@@ -354,12 +362,12 @@ describe('AttendanceService', () => {
       await svc.save(SCHOOL, 'user-teacher-1', dto);
       await svc.save(SCHOOL, 'user-teacher-1', { ...dto, marks: [{ studentId: 's-1', status: 'PRESENT' }] });
 
-      expect(txMock.attendance.upsert).toHaveBeenCalledTimes(2);
-      expect(txMock.attendance.upsert.mock.calls[0][0].where).toEqual(
-        txMock.attendance.upsert.mock.calls[1][0].where,
-      );
-      // The second, corrected mark is what should win on re-save.
-      expect(txMock.attendance.upsert.mock.calls[1][0].update.status).toBe('PRESENT');
+      // Each save clears the day's rows for that student then re-inserts, so a
+      // re-save can't duplicate — and the second, corrected mark wins.
+      expect(txMock.attendance.createMany).toHaveBeenCalledTimes(2);
+      expect(txMock.attendance.deleteMany).toHaveBeenCalledTimes(2);
+      expect(txMock.attendance.createMany.mock.calls[0][0].data[0].status).toBe('ABSENT');
+      expect(txMock.attendance.createMany.mock.calls[1][0].data[0].status).toBe('PRESENT');
     });
 
     it('throws ApiError CLASS_NOT_FOUND for a foreign/invalid classSectionId and never touches attendance rows', async () => {
@@ -372,7 +380,7 @@ describe('AttendanceService', () => {
       };
 
       await expect(svc.save(SCHOOL, 'user-teacher-1', dto)).rejects.toThrow(ApiError);
-      expect(txMock.attendance.upsert).not.toHaveBeenCalled();
+      expect(txMock.attendance.createMany).not.toHaveBeenCalled();
     });
 
     it('throws ApiError VALIDATION and writes nothing when a mark.studentId is not on the class section roster (cross-tenant write guard)', async () => {
@@ -382,7 +390,7 @@ describe('AttendanceService', () => {
       // the same check that closes the cross-tenant hole.
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }, { id: 's-2' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
 
       const dto: SaveAttendanceDto = {
         classSectionId: CLASS_SECTION,
@@ -396,13 +404,13 @@ describe('AttendanceService', () => {
       await expect(svc.save(SCHOOL, 'user-teacher-1', dto)).rejects.toMatchObject({
         response: { code: 'VALIDATION' },
       });
-      expect(txMock.attendance.upsert).not.toHaveBeenCalled();
+      expect(txMock.attendance.createMany).not.toHaveBeenCalled();
     });
 
     it('notifies a guardian only on the FIRST save of an ABSENT mark, not on a re-save', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
       // Roster check (call 1) then recipient resolution (call 2) on save #1;
       // roster check again (call 3) on save #2 — no recipient lookup should
       // follow it, because nobody became newly absent.
@@ -438,15 +446,16 @@ describe('AttendanceService', () => {
       await flushBackgroundWork();
 
       // The mark is still written (and still counted), only the email is skipped.
+      // createMany runs once per save → twice across the first save + re-save.
       expect(second).toEqual({ saved: 1, absentees: 1 });
-      expect(txMock.attendance.upsert).toHaveBeenCalledTimes(2);
+      expect(txMock.attendance.createMany).toHaveBeenCalledTimes(2);
       expect(notifications.notify).not.toHaveBeenCalled();
     });
 
     it('does notify when a student flips from PRESENT to ABSENT on a re-save', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
       txMock.student.findMany
         .mockResolvedValueOnce([{ id: 's-1' }])
         .mockResolvedValueOnce([{ userId: 'u-1', firstName: 'Aisha', lastName: 'Khan' }]);
@@ -467,7 +476,7 @@ describe('AttendanceService', () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
       txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
-      txMock.attendance.upsert.mockResolvedValue({});
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 }); txMock.attendance.createMany.mockResolvedValue({ count: 0 });
 
       await svc.save(SCHOOL, 'user-teacher-1', {
         classSectionId: CLASS_SECTION,
@@ -482,7 +491,7 @@ describe('AttendanceService', () => {
       // Read before the writes, so the "was already absent" answer is not
       // poisoned by this call's own upserts.
       expect(txMock.attendance.findMany.mock.invocationCallOrder[0]).toBeLessThan(
-        txMock.attendance.upsert.mock.invocationCallOrder[0],
+        txMock.attendance.createMany.mock.invocationCallOrder[0],
       );
     });
   });

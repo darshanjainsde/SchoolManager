@@ -130,25 +130,11 @@ export class AttendanceService {
       });
       const previousStatus = new Map(before.map((m) => [m.studentId, m.status]));
 
+      // The newly-absent diff and the absentee count are pure in-memory work
+      // over the marks + the pre-save snapshot — no DB round-trip needed here.
       const newlyAbsent: string[] = [];
       let absentees = 0;
       for (const mark of dto.marks) {
-        await tx.attendance.upsert({
-          where: { one_mark_per_student_day: { studentId: mark.studentId, date: day } },
-          create: {
-            schoolId,
-            studentId: mark.studentId,
-            classSectionId: dto.classSectionId,
-            date: day,
-            status: mark.status,
-            markedById,
-          },
-          update: {
-            classSectionId: dto.classSectionId,
-            status: mark.status,
-            markedById,
-          },
-        });
         if (mark.status === 'ABSENT') {
           absentees += 1;
           if (previousStatus.get(mark.studentId) !== 'ABSENT') {
@@ -156,6 +142,25 @@ export class AttendanceService {
           }
         }
       }
+
+      // Batch the write: one delete + one insert instead of N sequential
+      // upserts (a class of ~40 was 40 round-trips inside the txn). Deleting
+      // this day's rows for exactly these students, then re-creating, keeps
+      // the (studentId, date) uniqueness and stays idempotent.
+      const studentIds = dto.marks.map((m) => m.studentId);
+      await tx.attendance.deleteMany({
+        where: { date: day, studentId: { in: studentIds } },
+      });
+      await tx.attendance.createMany({
+        data: dto.marks.map((mark) => ({
+          schoolId,
+          studentId: mark.studentId,
+          classSectionId: dto.classSectionId,
+          date: day,
+          status: mark.status,
+          markedById,
+        })),
+      });
 
       return { saved: dto.marks.length, absentees, newlyAbsent };
     });

@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import Redis from 'ioredis';
 import { getPlatformPrisma } from '@skoolos/db';
+import { loadEnv } from '@skoolos/config';
 
 export interface SchoolMetrics {
   id: string;
@@ -37,12 +39,40 @@ export function csvField(v: string | null | undefined): string {
 
 @Injectable()
 export class OwnerOverviewService {
-  /**
-   * One dashboard payload: a groupBy per metric (4 queries total, regardless
-   * of school count) joined in memory. Owner is cross-tenant by design, so
-   * everything runs on the platform client.
-   */
+  private readonly env = loadEnv();
+  private readonly redis = new Redis(this.env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 2 });
+  // These metrics are cross-tenant full-table aggregations (groupBy over every
+  // school's students/images/enquiries). They do not need to be real-time for
+  // the owner console, so cache the whole payload briefly — this turns a
+  // multi-million-row scan on each view into one cheap Redis read.
+  private static readonly CACHE_KEY = 'owner:overview';
+  private static readonly TTL = 120; // seconds
+
   async overview(): Promise<OverviewResponse> {
+    try {
+      if (this.redis.status === 'wait' || this.redis.status === 'end') await this.redis.connect();
+      const cached = await this.redis.get(OwnerOverviewService.CACHE_KEY);
+      if (cached) return JSON.parse(cached) as OverviewResponse;
+    } catch {
+      /* cache miss / Redis down → fall through to a live query */
+    }
+
+    const fresh = await this.computeOverview();
+
+    try {
+      await this.redis.set(
+        OwnerOverviewService.CACHE_KEY,
+        JSON.stringify(fresh),
+        'EX',
+        OwnerOverviewService.TTL,
+      );
+    } catch {
+      /* best-effort */
+    }
+    return fresh;
+  }
+
+  private async computeOverview(): Promise<OverviewResponse> {
     const db = getPlatformPrisma();
     const monthStart = new Date();
     monthStart.setDate(1);
