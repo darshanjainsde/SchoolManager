@@ -17,6 +17,10 @@ export type ErrorCode =
   | 'NOT_A_TEACHER'
   /** The LeaveApplication is no longer PENDING — already approved/rejected. */
   | 'LEAVE_NOT_PENDING'
+  /** The LeaveApplication is REJECTED or already CANCELLED — nothing to cancel. */
+  | 'LEAVE_NOT_CANCELLABLE'
+  /** Caller is neither the owning teacher nor a SCHOOL_ADMIN — pair with 403. */
+  | 'LEAVE_CANCEL_FORBIDDEN'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { withTenant, type TenantTx, type UserRole } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
-import { dateRangeInclusive, isValidDateStr, isoWeekdayOf, toDateStr } from './internal/leave-dates';
+import { dateRangeInclusive, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 
-const LEAVE_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
+const LEAVE_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
 type LeaveStatusValue = (typeof LEAVE_STATUSES)[number];
 
 @Injectable()
@@ -100,7 +100,10 @@ export class LeaveService {
   /**
    * Approves the application, then generates a coverage gap — an unfilled
    * `Substitution` row — for every one of the teacher's ACTIVE timetable
-   * slots (`effectiveTo IS NULL`) on every weekday the leave spans.
+   * slots (`effectiveTo IS NULL`) on every weekday the leave spans, AND
+   * marks the teacher `ON_LEAVE` in `StaffAttendance` for every calendar
+   * date the leave spans that is today-or-later (IST) — see
+   * `markOnLeaveIfDue` below.
    *
    * Idempotent by construction: for each (classSectionId, periodId, date) we
    * check for an existing `Substitution` row before creating one, so
@@ -129,6 +132,7 @@ export class LeaveService {
       });
 
       const dates = dateRangeInclusive(toDateStr(app.startDate), toDateStr(app.endDate));
+      const todayStr = todayIstDateStr(new Date());
 
       let gaps = 0;
       for (const dateStr of dates) {
@@ -158,9 +162,112 @@ export class LeaveService {
           });
           gaps += 1;
         }
+
+        if (dateStr >= todayStr) {
+          await this.markOnLeaveIfDue(tx, schoolId, app.teacherId, date, adminUserId);
+        }
       }
 
       return { gaps };
+    });
+  }
+
+  /**
+   * Marks `teacherId` `ON_LEAVE` in `StaffAttendance` for `date`, unless a
+   * mark already exists for that day and is anything other than the default
+   * `PRESENT` — an `ABSENT`/`LATE` mark was set deliberately (e.g. by the
+   * daily roster) and must not be clobbered by this approve-time side
+   * effect. Re-approving is impossible (see class doc above), and marking
+   * the same date twice via overlapping applications is a no-op the second
+   * time since the row is by then already `ON_LEAVE`.
+   */
+  private async markOnLeaveIfDue(
+    tx: TenantTx,
+    schoolId: string,
+    teacherId: string,
+    date: Date,
+    markedById: string,
+  ): Promise<void> {
+    const existing = await tx.staffAttendance.findFirst({ where: { schoolId, teacherId, date } });
+    if (!existing) {
+      await tx.staffAttendance.create({
+        data: { schoolId, teacherId, date, status: 'ON_LEAVE', markedById },
+      });
+    } else if (existing.status === 'PRESENT') {
+      await tx.staffAttendance.update({
+        where: { id: existing.id },
+        data: { status: 'ON_LEAVE', markedById },
+      });
+    }
+  }
+
+  /**
+   * Cancels a leave application — no approval step, unlike reject. Allowed
+   * for the OWNING teacher (`callerRole === 'TEACHER'` and their own
+   * `Teacher.id === app.teacherId`) or any `SCHOOL_ADMIN`; anyone else gets
+   * `LEAVE_CANCEL_FORBIDDEN`. `REJECTED`/already-`CANCELLED` applications
+   * have nothing to cancel (`LEAVE_NOT_CANCELLABLE`).
+   *
+   * - `PENDING` → straight to `CANCELLED`, no side effects (nothing was ever
+   *   generated for a pending application).
+   * - `APPROVED` → for every date in `[startDate, endDate]` that is
+   *   today-or-later (IST) — PAST dates are immutable and are left exactly
+   *   as they were — deletes that teacher's `Substitution` gaps for the
+   *   date (covered or not: removing the override row restores the
+   *   original teacher on the recurring timetable with no further write
+   *   needed) and clears the `ON_LEAVE` `StaffAttendance` mark for the date
+   *   IF it is still `ON_LEAVE` (a mark since changed by hand, e.g. to
+   *   `ABSENT`, is left alone). Then the application itself is set to
+   *   `CANCELLED`.
+   *
+   * Returns `{ status: 'CANCELLED', restoredDates }` — `restoredDates` is
+   * the count of today-or-later dates that were processed (0 for a
+   * `PENDING` cancel, or for an `APPROVED` cancel whose whole window is
+   * already in the past).
+   */
+  async cancel(schoolId: string, id: string, callerUserId: string, callerRole: UserRole) {
+    return withTenant(schoolId, async (tx) => {
+      const app = await tx.leaveApplication.findFirst({ where: { id, schoolId } });
+      if (!app) throw new NotFoundException('Leave application not found');
+
+      if (callerRole !== 'SCHOOL_ADMIN') {
+        const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
+        if (!teacher || teacher.id !== app.teacherId) {
+          throw new ApiError('LEAVE_CANCEL_FORBIDDEN', 'You can only cancel your own leave', 403);
+        }
+      }
+
+      if (app.status === 'REJECTED' || app.status === 'CANCELLED') {
+        throw new ApiError('LEAVE_NOT_CANCELLABLE', 'This application has nothing to cancel', 409);
+      }
+
+      if (app.status === 'PENDING') {
+        await tx.leaveApplication.update({ where: { id }, data: { status: 'CANCELLED' } });
+        return { status: 'CANCELLED' as const, restoredDates: 0 };
+      }
+
+      // APPROVED: restore every today-or-later date, leaving past dates untouched.
+      const todayStr = todayIstDateStr(new Date());
+      const dates = dateRangeInclusive(toDateStr(app.startDate), toDateStr(app.endDate)).filter(
+        (d) => d >= todayStr,
+      );
+
+      for (const dateStr of dates) {
+        const date = new Date(dateStr);
+
+        await tx.substitution.deleteMany({
+          where: { schoolId, originalTeacherId: app.teacherId, date },
+        });
+
+        const mark = await tx.staffAttendance.findFirst({ where: { schoolId, teacherId: app.teacherId, date } });
+        if (mark && mark.status === 'ON_LEAVE') {
+          await tx.staffAttendance.delete({ where: { id: mark.id } });
+        }
+      }
+
+      await tx.leaveApplication.update({ where: { id }, data: { status: 'CANCELLED' } });
+
+      return { status: 'CANCELLED' as const, restoredDates: dates.length };
     });
   }
 
@@ -298,6 +405,6 @@ export class LeaveService {
   private resolveStatus(status: string | undefined): LeaveStatusValue {
     if (!status) return 'PENDING';
     if ((LEAVE_STATUSES as readonly string[]).includes(status)) return status as LeaveStatusValue;
-    throw new ApiError('VALIDATION', 'status must be one of PENDING, APPROVED, REJECTED', 400, 'status');
+    throw new ApiError('VALIDATION', 'status must be one of PENDING, APPROVED, REJECTED, CANCELLED', 400, 'status');
   }
 }

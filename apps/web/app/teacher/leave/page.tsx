@@ -11,7 +11,7 @@ import { useHost } from '@/components/use-host';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type LeaveType = 'SICK' | 'CASUAL' | 'EARNED' | 'UNPAID' | 'OTHER';
-type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 /** Dates arrive as ISO strings over the wire even though the API types them as Date. */
 interface LeaveApplication {
@@ -32,10 +32,11 @@ const LEAVE_TYPES: { value: LeaveType; label: string }[] = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const STATUS_TONE: Record<LeaveStatus, 'warn' | 'good' | 'bad'> = {
+const STATUS_TONE: Record<LeaveStatus, 'warn' | 'good' | 'bad' | 'info'> = {
   PENDING: 'warn',
   APPROVED: 'good',
   REJECTED: 'bad',
+  CANCELLED: 'info',
 };
 
 const EMPTY_FORM = { type: 'SICK' as LeaveType, startDate: '', endDate: '', reason: '' };
@@ -85,6 +86,20 @@ export default function TeacherLeavePage() {
     // { code, message } envelope — surface the message as-is.
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const cancel = useMutation({
+    mutationFn: (id: string) => api.post<{ status: string; restoredDates: number }>(`/manage/leave/${id}/cancel`),
+    onSuccess: () => {
+      toast.success('Leave cancelled — your classes and attendance have been restored.');
+      void qc.invalidateQueries({ queryKey: ['t-leave-mine'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function onCancel(id: string) {
+    if (!window.confirm('Cancel this leave? Your classes will be restored.')) return;
+    cancel.mutate(id);
+  }
 
   const applications = mine.data ?? [];
 
@@ -187,21 +202,35 @@ export default function TeacherLeavePage() {
           {!mine.isLoading && !mine.error && applications.length === 0 && (
             <p className="sk-state">No leave requests yet.</p>
           )}
-          {applications.map((a) => (
-            <div className="sk-row" key={a.id}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="nm">{typeLabel(a.type)}</div>
-                <div className="meta">
-                  {formatDate(a.startDate)} – {formatDate(a.endDate)}
-                  {a.reason ? ` · ${a.reason}` : ''}
+          {applications.map((a) => {
+            const cancellable = a.status === 'PENDING' || a.status === 'APPROVED';
+            return (
+              <div className="sk-row" key={a.id}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="nm">{typeLabel(a.type)}</div>
+                  <div className="meta">
+                    {formatDate(a.startDate)} – {formatDate(a.endDate)}
+                    {a.reason ? ` · ${a.reason}` : ''}
+                  </div>
                 </div>
+                <span className="sp" />
+                {cancellable && (
+                  <button
+                    type="button"
+                    className="sk-btn"
+                    disabled={cancel.isPending}
+                    onClick={() => onCancel(a.id)}
+                    style={{ marginRight: 8 }}
+                  >
+                    Cancel
+                  </button>
+                )}
+                <span className="sk-pill" data-tone={STATUS_TONE[a.status]}>
+                  {a.status.charAt(0) + a.status.slice(1).toLowerCase()}
+                </span>
               </div>
-              <span className="sp" />
-              <span className="sk-pill" data-tone={STATUS_TONE[a.status]}>
-                {a.status.charAt(0) + a.status.slice(1).toLowerCase()}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </>

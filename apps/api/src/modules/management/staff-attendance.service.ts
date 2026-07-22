@@ -36,7 +36,12 @@ export interface PersonAttendanceSummary {
   absent: number;
   late: number;
   onLeave: number;
-  /** present / (present + absent + late + onLeave) * 100, rounded. 0 with no records. */
+  /**
+   * present / (present + absent + late) * 100, rounded — `onLeave` days are
+   * excluded from BOTH sides of the ratio so an approved leave doesn't count
+   * against the person's attendance. 0 with no non-leave records (including
+   * when every recorded day that month is `ON_LEAVE`).
+   */
   percent: number;
   days: PersonAttendanceDay[];
 }
@@ -253,8 +258,11 @@ export class StaffAttendanceService {
         else if (row.status === 'ON_LEAVE') onLeave += 1;
       }
 
-      const total = present + absent + late + onLeave;
-      const percent = total === 0 ? 0 : Math.round((present / total) * 100);
+      // `onLeave` is deliberately excluded from the denominator — a day the
+      // person was on approved leave shouldn't drag down their attendance
+      // percentage the way an unexcused absence would.
+      const nonLeaveTotal = present + absent + late;
+      const percent = nonLeaveTotal === 0 ? 0 : Math.round((present / nonLeaveTotal) * 100);
 
       return {
         present,

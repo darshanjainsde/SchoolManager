@@ -232,12 +232,15 @@ describe('StaffAttendanceService', () => {
 
       const result = await svc.person(SCHOOL, 'TEACHER', TEACHER_1, '2026-07');
 
+      // percent = present / (present + absent + late) — onLeave (1) is
+      // excluded from the denominator, so 2 / (2 + 1 + 1) = 50, not
+      // 2 / 5 = 40 — leave shouldn't count against attendance.
       expect(result).toEqual({
         present: 2,
         absent: 1,
         late: 1,
         onLeave: 1,
-        percent: 40,
+        percent: 50,
         days: [
           { date: '2026-07-01', status: 'PRESENT' },
           { date: '2026-07-02', status: 'PRESENT' },
@@ -246,6 +249,19 @@ describe('StaffAttendanceService', () => {
           { date: '2026-07-05', status: 'ON_LEAVE' },
         ],
       });
+    });
+
+    it('returns 0 percent (not NaN) when every recorded day is ON_LEAVE', async () => {
+      txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_1 });
+      txMock.staffAttendance.findMany.mockResolvedValue([
+        { date: new Date('2026-07-01'), status: 'ON_LEAVE' },
+        { date: new Date('2026-07-02'), status: 'ON_LEAVE' },
+      ]);
+
+      const result = await svc.person(SCHOOL, 'TEACHER', TEACHER_1, '2026-07');
+
+      expect(result.onLeave).toBe(2);
+      expect(result.percent).toBe(0);
     });
 
     it('scopes the query to the half-open UTC month range, schoolId, and the given staffId', async () => {

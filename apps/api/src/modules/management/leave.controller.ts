@@ -57,6 +57,17 @@ export class LeaveController {
   reject(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
     return this.leave.reject(this.sid(), id, u.sub);
   }
+
+  /**
+   * Open to both roles — `LeaveService.cancel` enforces that a TEACHER
+   * caller may only cancel their OWN application; a SCHOOL_ADMIN may cancel
+   * any.
+   */
+  @Post(':id/cancel')
+  @Roles('TEACHER', 'SCHOOL_ADMIN')
+  cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
+    return this.leave.cancel(this.sid(), id, u.sub, u.role);
+  }
 }
 
 /**

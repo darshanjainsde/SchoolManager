@@ -14,6 +14,28 @@
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Mirrors `timetable-date.ts`'s IST-anchored "today" (school days are IST
+// days), duplicated rather than imported since that module's formatter is
+// private and its own date math is IST-*instant* based (`effectiveFrom`/
+// `effectiveTo`), whereas everything else in this file is plain UTC-anchored
+// `@db.Date` arithmetic — see the file header above.
+const IST_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * `YYYY-MM-DD` for the IST calendar day containing `now` — "today" for
+ * deciding which leave/attendance dates are still in the future. Comparing
+ * this against another `YYYY-MM-DD` string with `>=`/`<` works directly
+ * (lexicographic order matches chronological order for this format).
+ */
+export function todayIstDateStr(now: Date): string {
+  return IST_DAY_FORMATTER.format(now);
+}
+
 export function isValidDateStr(s: string): boolean {
   return DATE_RE.test(s);
 }

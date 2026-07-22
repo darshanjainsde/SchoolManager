@@ -9,6 +9,13 @@ const txMock = {
     findMany: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    deleteMany: jest.fn(),
+  },
+  staffAttendance: {
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
   },
   classSection: { findMany: jest.fn() },
   period: { findMany: jest.fn() },
@@ -158,6 +165,255 @@ describe('LeaveService', () => {
         response: { code: 'LEAVE_NOT_PENDING' },
       });
       expect(txMock.leaveApplication.update).not.toHaveBeenCalled();
+    });
+
+    describe('auto-marks ON_LEAVE in StaffAttendance', () => {
+      // "Now" is 2026-07-21T03:00Z = 2026-07-21T08:30 IST, so IST "today" is
+      // 2026-07-21 — 07-20 is past, 07-21 is today, 07-22 is future.
+      beforeEach(() => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-07-21T03:00:00.000Z'));
+        txMock.leaveApplication.findFirst.mockResolvedValue({
+          id: LEAVE_ID,
+          schoolId: SCHOOL,
+          teacherId: TEACHER,
+          status: 'PENDING',
+          startDate: new Date('2026-07-20'),
+          endDate: new Date('2026-07-22'),
+        });
+        txMock.leaveApplication.update.mockResolvedValue({});
+        txMock.timetableSlot.findMany.mockResolvedValue([]); // isolate attendance behavior from gap generation
+      });
+
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      it('creates an ON_LEAVE mark for today/future dates, skips the past date entirely, and never clobbers a non-PRESENT mark', async () => {
+        txMock.staffAttendance.findFirst.mockImplementation(({ where }: { where: { date: Date } }) => {
+          const d = where.date.toISOString().slice(0, 10);
+          if (d === '2026-07-21') return Promise.resolve(null); // unmarked -> create
+          if (d === '2026-07-22') return Promise.resolve({ id: 'mark-22', status: 'ABSENT' }); // deliberate -> leave alone
+          return Promise.resolve(null);
+        });
+        txMock.staffAttendance.create.mockResolvedValue({});
+
+        await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+
+        // Past date (07-20): never queried at all.
+        for (const call of txMock.staffAttendance.findFirst.mock.calls) {
+          expect(call[0].where.date).not.toEqual(new Date('2026-07-20'));
+        }
+        // Today (07-21): no existing mark -> created as ON_LEAVE.
+        expect(txMock.staffAttendance.create).toHaveBeenCalledTimes(1);
+        expect(txMock.staffAttendance.create).toHaveBeenCalledWith({
+          data: {
+            schoolId: SCHOOL,
+            teacherId: TEACHER,
+            date: new Date('2026-07-21'),
+            status: 'ON_LEAVE',
+            markedById: ADMIN_USER,
+          },
+        });
+        // Future date (07-22) had a deliberate ABSENT mark -> untouched.
+        expect(txMock.staffAttendance.update).not.toHaveBeenCalled();
+      });
+
+      it('overwrites a default PRESENT mark with ON_LEAVE', async () => {
+        txMock.staffAttendance.findFirst.mockResolvedValue({ id: 'mark-present', status: 'PRESENT' });
+
+        await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+
+        expect(txMock.staffAttendance.update).toHaveBeenCalledWith({
+          where: { id: 'mark-present' },
+          data: { status: 'ON_LEAVE', markedById: ADMIN_USER },
+        });
+        expect(txMock.staffAttendance.create).not.toHaveBeenCalled();
+      });
+
+      it('is idempotent: an already-ON_LEAVE mark is left alone (no create, no update)', async () => {
+        txMock.staffAttendance.findFirst.mockResolvedValue({ id: 'mark-leave', status: 'ON_LEAVE' });
+
+        await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+
+        expect(txMock.staffAttendance.create).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.update).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('cancel', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('rejects a caller who is neither the owning teacher nor a SCHOOL_ADMIN', async () => {
+      txMock.leaveApplication.findFirst.mockResolvedValue({
+        id: LEAVE_ID,
+        schoolId: SCHOOL,
+        teacherId: TEACHER,
+        status: 'PENDING',
+      });
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'some-other-teacher-id' });
+
+      await expect(svc.cancel(SCHOOL, LEAVE_ID, 'stranger-user', 'TEACHER')).rejects.toMatchObject({
+        response: { code: 'LEAVE_CANCEL_FORBIDDEN' },
+      });
+      expect(txMock.leaveApplication.update).not.toHaveBeenCalled();
+    });
+
+    it('throws LEAVE_NOT_CANCELLABLE for a REJECTED application', async () => {
+      txMock.leaveApplication.findFirst.mockResolvedValue({
+        id: LEAVE_ID,
+        schoolId: SCHOOL,
+        teacherId: TEACHER,
+        status: 'REJECTED',
+      });
+
+      await expect(svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
+        response: { code: 'LEAVE_NOT_CANCELLABLE' },
+      });
+      expect(txMock.leaveApplication.update).not.toHaveBeenCalled();
+    });
+
+    it('throws LEAVE_NOT_CANCELLABLE for an already-CANCELLED application', async () => {
+      txMock.leaveApplication.findFirst.mockResolvedValue({
+        id: LEAVE_ID,
+        schoolId: SCHOOL,
+        teacherId: TEACHER,
+        status: 'CANCELLED',
+      });
+
+      await expect(svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
+        response: { code: 'LEAVE_NOT_CANCELLABLE' },
+      });
+    });
+
+    it('cancels a PENDING application with no side effects', async () => {
+      txMock.leaveApplication.findFirst.mockResolvedValue({
+        id: LEAVE_ID,
+        schoolId: SCHOOL,
+        teacherId: TEACHER,
+        status: 'PENDING',
+        startDate: new Date('2026-07-20'),
+        endDate: new Date('2026-07-22'),
+      });
+      txMock.leaveApplication.update.mockResolvedValue({});
+
+      const result = await svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN');
+
+      expect(txMock.leaveApplication.update).toHaveBeenCalledWith({
+        where: { id: LEAVE_ID },
+        data: { status: 'CANCELLED' },
+      });
+      expect(txMock.substitution.deleteMany).not.toHaveBeenCalled();
+      expect(txMock.staffAttendance.findFirst).not.toHaveBeenCalled();
+      expect(result).toEqual({ status: 'CANCELLED', restoredDates: 0 });
+    });
+
+    it('lets the owning teacher cancel their own PENDING application', async () => {
+      txMock.leaveApplication.findFirst.mockResolvedValue({
+        id: LEAVE_ID,
+        schoolId: SCHOOL,
+        teacherId: TEACHER,
+        status: 'PENDING',
+        startDate: new Date('2026-07-20'),
+        endDate: new Date('2026-07-20'),
+      });
+      txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER });
+      txMock.leaveApplication.update.mockResolvedValue({});
+
+      const result = await svc.cancel(SCHOOL, LEAVE_ID, TEACHER_USER, 'TEACHER');
+
+      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { userId: TEACHER_USER } });
+      expect(result).toEqual({ status: 'CANCELLED', restoredDates: 0 });
+    });
+
+    describe('an APPROVED application', () => {
+      // Same fixed "now" as the approve auto-mark tests: 2026-07-21 is IST today.
+      beforeEach(() => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-07-21T03:00:00.000Z'));
+        txMock.leaveApplication.findFirst.mockResolvedValue({
+          id: LEAVE_ID,
+          schoolId: SCHOOL,
+          teacherId: TEACHER,
+          status: 'APPROVED',
+          startDate: new Date('2026-07-20'), // past
+          endDate: new Date('2026-07-22'), // today + 1 future day
+        });
+        txMock.leaveApplication.update.mockResolvedValue({});
+        txMock.substitution.deleteMany.mockResolvedValue({ count: 1 });
+      });
+
+      it('deletes future Substitution gaps and clears future ON_LEAVE marks, but never touches the past date', async () => {
+        txMock.staffAttendance.findFirst.mockResolvedValue({ id: 'mark-x', status: 'ON_LEAVE' });
+        txMock.staffAttendance.delete.mockResolvedValue({});
+
+        const result = await svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN');
+
+        // Only 07-21 and 07-22 (today + future) are processed — 07-20 is past.
+        expect(txMock.substitution.deleteMany).toHaveBeenCalledTimes(2);
+        expect(txMock.substitution.deleteMany).toHaveBeenCalledWith({
+          where: { schoolId: SCHOOL, originalTeacherId: TEACHER, date: new Date('2026-07-21') },
+        });
+        expect(txMock.substitution.deleteMany).toHaveBeenCalledWith({
+          where: { schoolId: SCHOOL, originalTeacherId: TEACHER, date: new Date('2026-07-22') },
+        });
+        expect(txMock.substitution.deleteMany).not.toHaveBeenCalledWith({
+          where: { schoolId: SCHOOL, originalTeacherId: TEACHER, date: new Date('2026-07-20') },
+        });
+
+        expect(txMock.staffAttendance.delete).toHaveBeenCalledTimes(2);
+        expect(txMock.staffAttendance.delete).toHaveBeenCalledWith({ where: { id: 'mark-x' } });
+
+        expect(txMock.leaveApplication.update).toHaveBeenCalledWith({
+          where: { id: LEAVE_ID },
+          data: { status: 'CANCELLED' },
+        });
+        expect(result).toEqual({ status: 'CANCELLED', restoredDates: 2 });
+      });
+
+      it('does not delete a StaffAttendance mark that was manually changed away from ON_LEAVE', async () => {
+        txMock.staffAttendance.findFirst.mockResolvedValue({ id: 'mark-y', status: 'ABSENT' });
+
+        await svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN');
+
+        expect(txMock.staffAttendance.delete).not.toHaveBeenCalled();
+      });
+
+      it('lets the owning teacher cancel their own APPROVED leave', async () => {
+        txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER });
+        txMock.staffAttendance.findFirst.mockResolvedValue(null);
+
+        const result = await svc.cancel(SCHOOL, LEAVE_ID, TEACHER_USER, 'TEACHER');
+
+        expect(result).toEqual({ status: 'CANCELLED', restoredDates: 2 });
+      });
+
+      it('rejects a different teacher trying to cancel someone else\'s APPROVED leave', async () => {
+        txMock.teacher.findFirst.mockResolvedValue({ id: 'not-the-owner' });
+
+        await expect(svc.cancel(SCHOOL, LEAVE_ID, 'other-teacher-user', 'TEACHER')).rejects.toMatchObject({
+          response: { code: 'LEAVE_CANCEL_FORBIDDEN' },
+        });
+        expect(txMock.substitution.deleteMany).not.toHaveBeenCalled();
+      });
+
+      it('is a no-op restore when the whole leave window is already in the past', async () => {
+        txMock.leaveApplication.findFirst.mockResolvedValue({
+          id: LEAVE_ID,
+          schoolId: SCHOOL,
+          teacherId: TEACHER,
+          status: 'APPROVED',
+          startDate: new Date('2026-07-18'),
+          endDate: new Date('2026-07-19'),
+        });
+
+        const result = await svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN');
+
+        expect(txMock.substitution.deleteMany).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.findFirst).not.toHaveBeenCalled();
+        expect(result).toEqual({ status: 'CANCELLED', restoredDates: 0 });
+      });
     });
   });
 

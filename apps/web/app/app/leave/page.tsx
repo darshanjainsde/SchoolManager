@@ -10,7 +10,7 @@ import { useHost } from '@/components/use-host';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type LeaveType = 'SICK' | 'CASUAL' | 'EARNED' | 'UNPAID' | 'OTHER';
-type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 /** Dates arrive as ISO strings over the wire even though the API types them as Date. */
 interface LeaveApplication {
@@ -140,6 +140,12 @@ export default function AdminLeavePage() {
     queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=PENDING'),
   });
 
+  const approved = useQuery({
+    queryKey: ['a-leave-approved'],
+    enabled: !!host,
+    queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=APPROVED'),
+  });
+
   const coverage = useQuery({
     queryKey: ['a-leave-coverage', range.from, range.to],
     enabled: !!host && !!range.from && !!range.to,
@@ -179,6 +185,7 @@ export default function AdminLeavePage() {
           : 'Approved — no scheduled classes to cover on those dates.',
       );
       void qc.invalidateQueries({ queryKey: ['a-leave-pending'] });
+      void qc.invalidateQueries({ queryKey: ['a-leave-approved'] });
       setRange({ from: toDateStr(app.startDate), to: toDateStr(app.endDate) });
       void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
     },
@@ -193,6 +200,22 @@ export default function AdminLeavePage() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const cancel = useMutation({
+    mutationFn: (id: string) => api.post<{ status: string; restoredDates: number }>(`/manage/leave/${id}/cancel`),
+    onSuccess: () => {
+      toast.success('Leave cancelled — classes and attendance restored.');
+      void qc.invalidateQueries({ queryKey: ['a-leave-pending'] });
+      void qc.invalidateQueries({ queryKey: ['a-leave-approved'] });
+      void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function onCancel(app: LeaveApplication) {
+    if (!window.confirm(`Cancel ${app.teacherName}'s leave? Their classes will be restored.`)) return;
+    cancel.mutate(app.id);
+  }
 
   const assign = useMutation({
     mutationFn: ({ gapId, substituteTeacherId }: { gapId: string; substituteTeacherId: string }) =>
@@ -213,6 +236,7 @@ export default function AdminLeavePage() {
   });
 
   const pendingApps = pending.data ?? [];
+  const approvedApps = approved.data ?? [];
   const gaps = [...(coverage.data ?? [])].sort((a, b) => a.date.localeCompare(b.date));
   const uncoveredCount = gaps.filter((g) => !g.substituteTeacherId).length;
 
@@ -269,6 +293,46 @@ export default function AdminLeavePage() {
                   Reject
                 </button>
               </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Approved leaves — cancellable, no approval step needed */}
+      <div className="sk-card" style={{ marginBottom: 16 }}>
+        <div className="sk-card-h">
+          <h3>Approved leaves</h3>
+          <p className="sk-muted" style={{ marginTop: 4 }}>
+            {approvedApps.length} approved
+          </p>
+        </div>
+        <div className="sk-card-b">
+          {approved.isLoading && <p className="sk-state">Loading…</p>}
+          {approved.error && <p className="sk-state err">{(approved.error as Error).message}</p>}
+          {!approved.isLoading && !approved.error && approvedApps.length === 0 && (
+            <p className="sk-state">No approved leaves.</p>
+          )}
+          {approvedApps.map((a, i) => (
+            <div className="sk-row" key={a.id} style={{ alignItems: 'flex-start' }}>
+              <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                {initials(a.teacherName)}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="nm">{a.teacherName}</div>
+                <div className="meta">
+                  {LEAVE_TYPE_LABEL[a.type]} · {formatDate(a.startDate)} – {formatDate(a.endDate)}
+                  {a.reason ? ` · ${a.reason}` : ''}
+                </div>
+              </div>
+              <span className="sp" />
+              <button
+                type="button"
+                className="sk-btn"
+                disabled={cancel.isPending}
+                onClick={() => onCancel(a)}
+              >
+                Cancel
+              </button>
             </div>
           ))}
         </div>
