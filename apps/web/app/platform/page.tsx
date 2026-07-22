@@ -19,10 +19,20 @@ interface SchoolMetrics {
   enquiries: number;
   newEnquiries: number;
   events: number;
+  students: number;
+  images: number;
 }
 
 interface OverviewResponse {
-  totals: { schools: number; live: number; storageBytes: number; enquiriesThisMonth: number; newLeads: number };
+  totals: {
+    schools: number;
+    live: number;
+    storageBytes: number;
+    enquiriesThisMonth: number;
+    newLeads: number;
+    students: number;
+    images: number;
+  };
   schools: SchoolMetrics[];
 }
 

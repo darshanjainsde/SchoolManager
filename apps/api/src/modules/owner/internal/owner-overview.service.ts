@@ -12,6 +12,8 @@ export interface SchoolMetrics {
   enquiries: number;
   newEnquiries: number;
   events: number;
+  students: number;
+  images: number;
 }
 
 export interface OverviewResponse {
@@ -21,6 +23,8 @@ export interface OverviewResponse {
     storageBytes: number;
     enquiriesThisMonth: number;
     newLeads: number;
+    students: number;
+    images: number;
   };
   schools: SchoolMetrics[];
 }
@@ -44,18 +48,21 @@ export class OwnerOverviewService {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const [schools, storage, enquiries, newEnquiries, events, enquiriesThisMonth, newLeads] = await Promise.all([
-      db.school.findMany({
-        orderBy: { name: 'asc' },
-        include: { domains: { where: { isPrimary: true }, take: 1 } },
-      }),
-      db.mediaAsset.groupBy({ by: ['schoolId'], _sum: { byteSize: true } }),
-      db.enquiry.groupBy({ by: ['schoolId'], _count: true }),
-      db.enquiry.groupBy({ by: ['schoolId'], _count: true, where: { status: 'NEW' } }),
-      db.event.groupBy({ by: ['schoolId'], _count: true }),
-      db.enquiry.count({ where: { createdAt: { gte: monthStart } } }),
-      db.marketingLead.count({ where: { status: 'NEW' } }),
-    ]);
+    const [schools, storage, enquiries, newEnquiries, events, enquiriesThisMonth, newLeads, students, images] =
+      await Promise.all([
+        db.school.findMany({
+          orderBy: { name: 'asc' },
+          include: { domains: { where: { isPrimary: true }, take: 1 } },
+        }),
+        db.mediaAsset.groupBy({ by: ['schoolId'], _sum: { byteSize: true } }),
+        db.enquiry.groupBy({ by: ['schoolId'], _count: true }),
+        db.enquiry.groupBy({ by: ['schoolId'], _count: true, where: { status: 'NEW' } }),
+        db.event.groupBy({ by: ['schoolId'], _count: true }),
+        db.enquiry.count({ where: { createdAt: { gte: monthStart } } }),
+        db.marketingLead.count({ where: { status: 'NEW' } }),
+        db.student.groupBy({ by: ['schoolId'], _count: true }),
+        db.mediaAsset.groupBy({ by: ['schoolId'], _count: true }),
+      ]);
 
     const byId = <T extends { schoolId: string }>(rows: T[]) =>
       new Map(rows.map((r) => [r.schoolId, r]));
@@ -63,6 +70,8 @@ export class OwnerOverviewService {
     const enqMap = byId(enquiries);
     const newEnqMap = byId(newEnquiries);
     const eventMap = byId(events);
+    const studentMap = byId(students);
+    const imageMap = byId(images);
 
     const rows: SchoolMetrics[] = schools.map((s) => ({
       id: s.id,
@@ -75,6 +84,8 @@ export class OwnerOverviewService {
       enquiries: enqMap.get(s.id)?._count ?? 0,
       newEnquiries: newEnqMap.get(s.id)?._count ?? 0,
       events: eventMap.get(s.id)?._count ?? 0,
+      students: studentMap.get(s.id)?._count ?? 0,
+      images: imageMap.get(s.id)?._count ?? 0,
     }));
 
     return {
@@ -84,6 +95,8 @@ export class OwnerOverviewService {
         storageBytes: rows.reduce((sum, r) => sum + r.storageBytes, 0),
         enquiriesThisMonth,
         newLeads,
+        students: rows.reduce((sum, r) => sum + r.students, 0),
+        images: rows.reduce((sum, r) => sum + r.images, 0),
       },
       schools: rows,
     };
