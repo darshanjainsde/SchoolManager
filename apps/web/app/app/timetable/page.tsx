@@ -290,7 +290,14 @@ export default function TimetablePage() {
   const isCurrentWeek = weekOffset === 0;
   const isPastWeek = weekOffset < 0;
   const viewedMonday = addDays(mondayOf(now), weekOffset * 7);
-  const dateParam = toDateParam(viewedMonday);
+  // Read the timetable as-of a date INSIDE the viewed week: today for the
+  // current week (so a slot assigned today — effectiveFrom=today — shows),
+  // the week's last day for a past week (what was live then), and the week's
+  // Monday for a future week. Reading as-of Monday alone would hide an edit
+  // made later in the current week.
+  const viewedSunday = addDays(viewedMonday, 6);
+  const asOfDate = now < viewedMonday ? viewedMonday : now > viewedSunday ? viewedSunday : now;
+  const dateParam = toDateParam(asOfDate);
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const classesQuery = useQuery({
@@ -346,7 +353,12 @@ export default function TimetablePage() {
 
   // ── Derived data ─────────────────────────────────────────────────────────
   const sortedPeriods = useMemo(
-    () => [...(periodsQuery.data ?? [])].sort((a, b) => a.order - b.order),
+    () =>
+      [...(periodsQuery.data ?? [])].sort(
+        // Chronological, so a break/lunch sits between the periods it separates
+        // rather than at the bottom (its `order` may not reflect its time).
+        (a, b) => a.startTime.localeCompare(b.startTime) || a.order - b.order,
+      ),
     [periodsQuery.data],
   );
 

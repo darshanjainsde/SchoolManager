@@ -592,7 +592,10 @@ export default function SettingsPage() {
   });
 
   const sortedPeriods = useMemo(
-    () => [...(periodsQuery.data ?? [])].sort((a, b) => a.order - b.order),
+    () =>
+      [...(periodsQuery.data ?? [])].sort(
+        (a, b) => a.startTime.localeCompare(b.startTime) || a.order - b.order,
+      ),
     [periodsQuery.data],
   );
 
@@ -652,6 +655,7 @@ export default function SettingsPage() {
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [breakDraft, setBreakDraft] = useState<{ label: string; startTime: string; duration: string } | null>(null);
 
   // Safe-delete: confirm before firing the destructive mutation.
   function confirmDeletePeriod(period: Period) {
@@ -697,33 +701,112 @@ export default function SettingsPage() {
   }
 
   function addBreakLike(defaultLabel: string) {
-    const startTime = window.prompt(`Start time for ${defaultLabel} (24h, e.g. 10:30)?`, '10:30');
-    if (startTime === null) return;
-    if (!TIME_RE.test(startTime)) {
+    // Default the start time to right after the last period, so it lands in place.
+    const last = sortedPeriods[sortedPeriods.length - 1];
+    setBreakDraft({ label: defaultLabel, startTime: last?.endTime ?? '10:30', duration: defaultLabel === 'Lunch' ? '30' : '15' });
+  }
+
+  function saveBreakDraft() {
+    if (!breakDraft) return;
+    if (!TIME_RE.test(breakDraft.startTime)) {
       toast.error('Enter a valid time in HH:MM (24h) format');
       return;
     }
-    const durationStr = window.prompt(`${defaultLabel} duration in minutes?`, '15');
-    if (durationStr === null) return;
-    const duration = Number(durationStr);
+    const duration = Number(breakDraft.duration);
     if (!Number.isInteger(duration) || duration < 1 || duration > 300) {
       toast.error('Enter a valid duration in minutes');
       return;
     }
     const nextOrder = (sortedPeriods[sortedPeriods.length - 1]?.order ?? 0) + 1;
-    addPeriodMutation.mutate({
-      label: defaultLabel,
-      order: nextOrder,
-      startTime,
-      endTime: addMinutesToTime(startTime, duration),
-      kind: 'BREAK',
-    });
+    addPeriodMutation.mutate(
+      {
+        label: breakDraft.label,
+        order: nextOrder,
+        startTime: breakDraft.startTime,
+        endTime: addMinutesToTime(breakDraft.startTime, duration),
+        kind: 'BREAK',
+      },
+      { onSuccess: () => setBreakDraft(null) },
+    );
   }
 
   const years = yearsQuery.data ?? [];
 
   return (
     <>
+      {/* Add-break modal (replaces the browser prompt) */}
+      {breakDraft && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Add ${breakDraft.label.toLowerCase()}`}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setBreakDraft(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setBreakDraft(null);
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(15, 30, 24, 0.5)',
+            padding: 16,
+          }}
+        >
+          <div className="sk-card" style={{ width: '100%', maxWidth: 380 }}>
+            <div className="sk-card-h">
+              <h3>Add {breakDraft.label.toLowerCase()}</h3>
+            </div>
+            <div className="sk-card-b" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <label className="sk-lab" htmlFor="bk-start">Starts at</label>
+                <input
+                  id="bk-start"
+                  type="time"
+                  style={fieldStyle}
+                  onFocus={ringFocus}
+                  onBlur={ringBlur}
+                  value={breakDraft.startTime}
+                  autoFocus
+                  onChange={(e) => setBreakDraft({ ...breakDraft, startTime: e.target.value })}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <label className="sk-lab" htmlFor="bk-dur">Duration (minutes)</label>
+                <input
+                  id="bk-dur"
+                  type="number"
+                  min={1}
+                  max={300}
+                  style={fieldStyle}
+                  onFocus={ringFocus}
+                  onBlur={ringBlur}
+                  value={breakDraft.duration}
+                  onChange={(e) => setBreakDraft({ ...breakDraft, duration: e.target.value })}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                <button
+                  className="sk-btn"
+                  data-variant="primary"
+                  disabled={addPeriodMutation.isPending}
+                  onClick={saveBreakDraft}
+                >
+                  {addPeriodMutation.isPending ? 'Adding…' : `Add ${breakDraft.label.toLowerCase()}`}
+                </button>
+                <button className="sk-btn" onClick={() => setBreakDraft(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Page header */}
       <header className="sk-pagehead">
         <h1>Settings</h1>
