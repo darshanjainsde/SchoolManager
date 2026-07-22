@@ -1,65 +1,87 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
-import { isP2002, isP2025, p2002Target } from './internal/prisma-errors';
+import { ApiError } from '../../common/errors/api-error';
+import { isP2002, p2002Target } from './internal/prisma-errors';
+import { isSameIstDay, resolveAsOfDate, startOfIstDay } from './internal/timetable-date';
 import type { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
+
+const SLOT_INCLUDE = {
+  period: true,
+  subject: { select: { id: true, name: true, code: true } },
+  teacher: { select: { id: true, firstName: true, lastName: true } },
+  classSection: { select: { id: true, name: true } },
+} as const;
 
 @Injectable()
 export class TimetableService {
-  async listForClass(schoolId: string, classSectionId: string) {
+  /**
+   * The slot versions ACTIVE on `date` (default: today) for `classSectionId`
+   * — i.e. `effectiveFrom <= date AND (effectiveTo IS NULL OR effectiveTo > date)`.
+   * Reading a past `date` returns whatever version was active back then, even
+   * if it has since been superseded — that's what makes past weeks immutable.
+   */
+  async listForClass(schoolId: string, classSectionId: string, date?: string) {
+    const asOf = resolveAsOfDate(date, new Date());
     return withTenant(schoolId, (tx) =>
       tx.timetableSlot.findMany({
-        where: { schoolId, classSectionId },
-        orderBy: [{ dayOfWeek: 'asc' }, { period: { order: 'asc' } }],
-        include: {
-          period: true,
-          subject: { select: { id: true, name: true, code: true } },
-          teacher: { select: { id: true, firstName: true, lastName: true } },
-          classSection: { select: { id: true, name: true } },
+        where: {
+          schoolId,
+          classSectionId,
+          effectiveFrom: { lte: asOf },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
         },
+        orderBy: [{ dayOfWeek: 'asc' }, { period: { order: 'asc' } }],
+        include: SLOT_INCLUDE,
       }),
     );
   }
 
+  /**
+   * Versioned assign: never mutates an existing slot's teacher/subject in
+   * place. For the target (classSectionId, dayOfWeek, periodId, academicYearId):
+   *  - no ACTIVE version (effectiveTo IS NULL) → create one, effectiveFrom = today.
+   *  - an ACTIVE version exists and differs → close it (effectiveTo = today)
+   *    and create a new ACTIVE version (effectiveFrom = today). The old row
+   *    is kept forever, so a past `date` read still sees it.
+   *  - an ACTIVE version exists, was itself first created today, and differs
+   *    → update it in place instead of stacking two versions on the same
+   *    calendar day (versioning is day-granular; there is no "past" instant
+   *    to preserve within the same day, and the effectiveFrom unique index
+   *    would otherwise collide).
+   *  - an ACTIVE version exists and matches exactly (same subject + teacher)
+   *    → no-op, return it as-is.
+   * Teacher-clash detection is unchanged in spirit: a teacher can't hold two
+   * ACTIVE slots in the same day+period, excluding the very slot being
+   * replaced.
+   */
   async assign(schoolId: string, dto: AssignSlotDto) {
-    // Validate all referenced ids belong to this school (withTenant scopes by RLS).
-    await withTenant(schoolId, async (tx) => {
-      const cs = await tx.classSection.findUnique({ where: { id: dto.classSectionId } });
-      if (!cs) throw new BadRequestException('classSectionId not found in this school');
-
-      const period = await tx.period.findUnique({ where: { id: dto.periodId } });
-      if (!period) throw new BadRequestException('periodId not found in this school');
-
-      const subject = await tx.subject.findUnique({ where: { id: dto.subjectId } });
-      if (!subject) throw new BadRequestException('subjectId not found in this school');
-
-      const teacher = await tx.teacher.findUnique({ where: { id: dto.teacherId } });
-      if (!teacher) throw new BadRequestException('teacherId not found in this school');
-
-      const year = await tx.academicYear.findUnique({ where: { id: dto.academicYearId } });
-      if (!year) throw new BadRequestException('academicYearId not found in this school');
-    });
-
     try {
       return await withTenant(schoolId, async (tx) => {
-        // Pre-check for class slot clash — gives correct 409 message before hitting DB unique.
-        // We must check class clash first, then teacher clash, so error priority is consistent.
-        const classClash = await tx.timetableSlot.findFirst({
+        const [cs, period, subject, teacher, year] = await Promise.all([
+          tx.classSection.findUnique({ where: { id: dto.classSectionId } }),
+          tx.period.findUnique({ where: { id: dto.periodId } }),
+          tx.subject.findUnique({ where: { id: dto.subjectId } }),
+          tx.teacher.findUnique({ where: { id: dto.teacherId } }),
+          tx.academicYear.findUnique({ where: { id: dto.academicYearId } }),
+        ]);
+        if (!cs) throw new BadRequestException('classSectionId not found in this school');
+        if (!period) throw new BadRequestException('periodId not found in this school');
+        if (!subject) throw new BadRequestException('subjectId not found in this school');
+        if (!teacher) throw new BadRequestException('teacherId not found in this school');
+        if (!year) throw new BadRequestException('academicYearId not found in this school');
+
+        const today = startOfIstDay(new Date());
+
+        const activeForSlot = await tx.timetableSlot.findFirst({
           where: {
             schoolId,
             classSectionId: dto.classSectionId,
             dayOfWeek: dto.dayOfWeek,
             periodId: dto.periodId,
             academicYearId: dto.academicYearId,
+            effectiveTo: null,
           },
         });
-        if (classClash) {
-          throw new ConflictException('This class already has a subject in that period');
-        }
 
         const teacherClash = await tx.timetableSlot.findFirst({
           where: {
@@ -68,10 +90,43 @@ export class TimetableService {
             dayOfWeek: dto.dayOfWeek,
             periodId: dto.periodId,
             academicYearId: dto.academicYearId,
+            effectiveTo: null,
+            ...(activeForSlot ? { NOT: { id: activeForSlot.id } } : {}),
           },
         });
         if (teacherClash) {
-          throw new ConflictException('That teacher is already booked in that period');
+          throw new ApiError(
+            'TEACHER_CONFLICT',
+            'That teacher is already booked in that period',
+            409,
+            'teacherId',
+          );
+        }
+
+        if (activeForSlot) {
+          const unchanged =
+            activeForSlot.subjectId === dto.subjectId && activeForSlot.teacherId === dto.teacherId;
+          if (unchanged) {
+            return tx.timetableSlot.findUniqueOrThrow({
+              where: { id: activeForSlot.id },
+              include: SLOT_INCLUDE,
+            });
+          }
+
+          if (isSameIstDay(activeForSlot.effectiveFrom, today)) {
+            // Same-day correction: update in place rather than stacking a
+            // second version on the same calendar day.
+            return tx.timetableSlot.update({
+              where: { id: activeForSlot.id },
+              data: { subjectId: dto.subjectId, teacherId: dto.teacherId },
+              include: SLOT_INCLUDE,
+            });
+          }
+
+          await tx.timetableSlot.update({
+            where: { id: activeForSlot.id },
+            data: { effectiveTo: today },
+          });
         }
 
         return tx.timetableSlot.create({
@@ -83,27 +138,24 @@ export class TimetableService {
             subjectId: dto.subjectId,
             teacherId: dto.teacherId,
             academicYearId: dto.academicYearId,
+            effectiveFrom: today,
           },
-          include: {
-            period: true,
-            subject: { select: { id: true, name: true, code: true } },
-            teacher: { select: { id: true, firstName: true, lastName: true } },
-            classSection: { select: { id: true, name: true } },
-          },
+          include: SLOT_INCLUDE,
         });
       });
     } catch (e) {
-      // Safety net: if a race condition causes a P2002 to slip through the pre-checks,
-      // inspect meta.target. On Prisma 5 + PG this version, meta.target is null (constraint
-      // name not available in PG error message), so we fall back to a secondary lookup.
+      // Safety net: a race condition between the pre-checks above and the
+      // create/update can still surface as a P2002 on either unique index.
       if (isP2002(e)) {
         const target = p2002Target(e);
-        // If Prisma did return a usable target, check it first.
         if (target.includes('teacher')) {
-          throw new ConflictException('That teacher is already booked in that period');
+          throw new ApiError(
+            'TEACHER_CONFLICT',
+            'That teacher is already booked in that period',
+            409,
+            'teacherId',
+          );
         }
-        // When target is null/empty (observed: meta = { modelName: 'TimetableSlot', target: null }),
-        // determine the violated constraint with a secondary query.
         if (!target) {
           const teacherExists = await withTenant(schoolId, (tx) =>
             tx.timetableSlot.findFirst({
@@ -113,14 +165,20 @@ export class TimetableService {
                 dayOfWeek: dto.dayOfWeek,
                 periodId: dto.periodId,
                 academicYearId: dto.academicYearId,
+                effectiveTo: null,
               },
             }),
           );
           if (teacherExists) {
-            throw new ConflictException('That teacher is already booked in that period');
+            throw new ApiError(
+              'TEACHER_CONFLICT',
+              'That teacher is already booked in that period',
+              409,
+              'teacherId',
+            );
           }
         }
-        throw new ConflictException('This class already has a subject in that period');
+        throw new BadRequestException('This slot was just updated by someone else — please retry');
       }
       throw e;
     }
@@ -165,7 +223,7 @@ export class TimetableService {
           orderBy: { order: 'asc' },
         }),
         tx.timetableSlot.findMany({
-          where: { schoolId, academicYearId },
+          where: { schoolId, academicYearId, effectiveTo: null },
           select: { teacherId: true, dayOfWeek: true, periodId: true },
         }),
       ]);
@@ -174,14 +232,19 @@ export class TimetableService {
     });
   }
 
+  /** Closes the active version (`effectiveTo = today`) rather than deleting — history is preserved. */
   async unassign(schoolId: string, id: string) {
-    try {
-      await withTenant(schoolId, (tx) =>
-        tx.timetableSlot.delete({ where: { id } }),
-      );
-    } catch (e) {
-      if (isP2025(e)) throw new NotFoundException('Timetable slot not found');
-      throw e;
-    }
+    const today = startOfIstDay(new Date());
+    await withTenant(schoolId, async (tx) => {
+      const slot = await tx.timetableSlot.findFirst({
+        where: { id, schoolId, effectiveTo: null },
+      });
+      if (!slot) throw new NotFoundException('Timetable slot not found');
+
+      await tx.timetableSlot.update({
+        where: { id },
+        data: { effectiveTo: today },
+      });
+    });
   }
 }

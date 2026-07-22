@@ -14,7 +14,8 @@
  * Proved by this suite:
  *   1. Feature gate  — acme (STANDARD) → 403 on every /manage/* route; beacon (PRO) → 200.
  *   2. Isolation     — beacon token on acme host → 401; no token → 401.
- *   3. Clash         — class clash → 409 "class already has a subject"; teacher clash → 409 "teacher is already booked".
+ *   3. Versioning + clash — reassigning the same class/day/period (effective-dated) updates
+ *      in place same-day instead of 409ing; teacher clash still → 409 "teacher is already booked".
  *   4. Availability  — GET /manage/availability reflects the assigned slot in the busy array.
  *   5. Cleanup       — afterAll deletes all rows created by this suite (slots→classes→teacher→subject→period→grade).
  */
@@ -129,6 +130,7 @@ describe('Management e2e', () => {
     // IDs captured during setup — used in assertions and afterAll cleanup.
     let gradeId: string;
     let subjectId: string;
+    let subjectId2: string;
     let periodId: string;
     let teacherId: string;
     let yearId: string;
@@ -139,6 +141,10 @@ describe('Management e2e', () => {
     afterAll(async () => {
       // Delete in reverse FK order: slot → classes → teacher → subject → period → grade.
       // Errors are intentionally swallowed so partial cleanup doesn't block the suite exit.
+      // NOTE: unassign now closes the slot (effectiveTo = today) rather than
+      // hard-deleting it, so this DELETE call leaves a historical row behind
+      // by design — that's fine for e2e cleanup since we only assert on
+      // classSectionId2 being unreferenced before its own delete.
       const headers = {
         'X-Forwarded-Host': 'beacon.localhost',
         Authorization: `Bearer ${beaconToken}`,
@@ -147,10 +153,11 @@ describe('Management e2e', () => {
         fetch(`${BASE}${path}`, { method: 'DELETE', headers }).catch(() => undefined);
 
       if (slotId) await del(`/manage/timetable/${slotId}`);
-      // Delete class 2 first (no slots), then class 1 (slot already gone).
+      // Delete class 2 first (no slots), then class 1 (slot already closed).
       if (classSectionId2) await del(`/manage/classes/${classSectionId2}`);
       if (classSectionId) await del(`/manage/classes/${classSectionId}`);
       if (teacherId) await del(`/manage/teachers/${teacherId}`);
+      if (subjectId2) await del(`/manage/subjects/${subjectId2}`);
       if (subjectId) await del(`/manage/subjects/${subjectId}`);
       if (periodId) await del(`/manage/periods/${periodId}`);
       if (gradeId) await del(`/manage/grades/${gradeId}`);
@@ -179,6 +186,17 @@ describe('Management e2e', () => {
       });
       expect(sRes.status).toBe(201);
       subjectId = ((await sRes.json()) as { id: string }).id;
+
+      // Second subject — used to prove same-day reassignment updates in place
+      // instead of 409ing (the versioned `assign` no longer treats "this
+      // class already has an active slot here" as a conflict).
+      const s2Res = await fetch(`${BASE}/manage/subjects`, {
+        method: 'POST',
+        headers: bh(),
+        body: JSON.stringify({ name: `E2E Subject B ${ts}`, code: `F${ts % 100000}` }),
+      });
+      expect(s2Res.status).toBe(201);
+      subjectId2 = ((await s2Res.json()) as { id: string }).id;
 
       // Period
       const pRes = await fetch(`${BASE}/manage/periods`, {
@@ -245,9 +263,9 @@ describe('Management e2e', () => {
       expect(typeof slotId).toBe('string');
     });
 
-    // ── Clash 1: same class + day + period ────────────────────────────────
+    // ── Versioning: reassigning the same class + day + period ──────────────
 
-    it('returns 409 with class-clash message when the same class has a slot in that period', async () => {
+    it('reassigning the same class/day/period (different subject) updates in place same-day instead of 409ing', async () => {
       const res = await fetch(`${BASE}/manage/timetable`, {
         method: 'POST',
         headers: bh(),
@@ -255,14 +273,17 @@ describe('Management e2e', () => {
           classSectionId, // same class
           dayOfWeek: DAY,
           periodId,       // same period
-          subjectId,
-          teacherId,      // class clash fires before teacher clash
+          subjectId: subjectId2, // different subject → not a no-op
+          teacherId,      // same teacher, so this isn't a teacher clash either
           academicYearId: yearId,
         }),
       });
-      expect(res.status).toBe(409);
-      const body = (await res.json()) as { message: string };
-      expect(body.message).toMatch(/class already has a subject/i);
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as { id: string; subject: { id: string } };
+      // Same-day correction: the active row is updated in place (same id),
+      // not stacked as a second version dated the same calendar day.
+      expect(body.id).toBe(slotId);
+      expect(body.subject.id).toBe(subjectId2);
     });
 
     // ── Clash 2: different class, same teacher + day + period ─────────────

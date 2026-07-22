@@ -30,8 +30,11 @@ export class TimetableController {
   }
 
   @Get()
-  listForClass(@Query('classSectionId', ParseUUIDPipe) classSectionId: string) {
-    return this.timetable.listForClass(this.sid(), classSectionId);
+  listForClass(
+    @Query('classSectionId', ParseUUIDPipe) classSectionId: string,
+    @Query('date') date?: string,
+  ) {
+    return this.timetable.listForClass(this.sid(), classSectionId, date);
   }
 
   @Post()

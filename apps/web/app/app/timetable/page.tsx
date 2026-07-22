@@ -3,7 +3,7 @@ import { useState, useMemo, type CSSProperties, type FocusEvent } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
@@ -23,6 +23,7 @@ interface Period {
   order: number;
   startTime: string;
   endTime: string;
+  kind: 'CLASS' | 'BREAK';
 }
 
 interface Subject {
@@ -50,15 +51,72 @@ interface TimetableSlot {
   teacher: { firstName: string; lastName: string };
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Date helpers ──────────────────────────────────────────────────────────────
+// Plain, dependency-free date math (no date-fns in this app) matching the
+// `School.workingDays` convention: 1 = Monday … 7 = Sunday.
 
-const DAYS: { label: string; value: number }[] = [
-  { label: 'Mon', value: 1 },
-  { label: 'Tue', value: 2 },
-  { label: 'Wed', value: 3 },
-  { label: 'Thu', value: 4 },
-  { label: 'Fri', value: 5 },
-];
+const WEEKDAY_LABELS: Record<number, string> = {
+  1: 'Mon',
+  2: 'Tue',
+  3: 'Wed',
+  4: 'Thu',
+  5: 'Fri',
+  6: 'Sat',
+  7: 'Sun',
+};
+
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** ISO weekday of `d`: Mon=1 … Sun=7 (matches `School.workingDays`). */
+function isoWeekday(d: Date): number {
+  const js = d.getDay(); // 0=Sun..6=Sat
+  return js === 0 ? 7 : js;
+}
+
+/** Local midnight for the Monday of the week containing `d`. */
+function mondayOf(d: Date): Date {
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  monday.setDate(monday.getDate() - (isoWeekday(d) - 1));
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function addDays(d: Date, n: number): Date {
+  const copy = new Date(d);
+  copy.setDate(copy.getDate() + n);
+  return copy;
+}
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/** `YYYY-MM-DD` — the shape the API's `?date=` query param expects. */
+function toDateParam(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function formatShort(d: Date): string {
+  return `${MONTH_LABELS[d.getMonth()]} ${d.getDate()}`;
+}
+
+/** e.g. "Jul 20–26, 2026" (or "Jul 28 – Aug 3, 2026" across a month boundary). */
+function weekRangeLabel(monday: Date): string {
+  const sunday = addDays(monday, 6);
+  if (monday.getMonth() === sunday.getMonth()) {
+    return `${MONTH_LABELS[monday.getMonth()]} ${monday.getDate()}–${sunday.getDate()}, ${sunday.getFullYear()}`;
+  }
+  return `${formatShort(monday)} – ${formatShort(sunday)}, ${sunday.getFullYear()}`;
+}
+
+interface DayColumn {
+  value: number;
+  label: string;
+  date: Date;
+}
 
 // Themed inputs/selects: no dedicated CSS class, styled inline, with a
 // brand-colored focus ring applied directly to the DOM node on focus/blur.
@@ -224,6 +282,15 @@ export default function TimetablePage() {
   // ── Local state ──────────────────────────────────────────────────────────
   const [classSectionId, setClassSectionId] = useState('');
   const [pendingCell, setPendingCell] = useState<PendingCell | null>(null);
+  // 0 = the week containing today; -1 = last week; +1 = next week, etc.
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // ── Week math ──────────────────────────────────────────────────────────────
+  const now = new Date();
+  const isCurrentWeek = weekOffset === 0;
+  const isPastWeek = weekOffset < 0;
+  const viewedMonday = addDays(mondayOf(now), weekOffset * 7);
+  const dateParam = toDateParam(viewedMonday);
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const classesQuery = useQuery({
@@ -237,6 +304,14 @@ export default function TimetablePage() {
   const periodsQuery = useQuery({
     queryKey: ['mng-periods'],
     queryFn: () => api.get<Period[]>('/manage/periods'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
+  });
+
+  const workingDaysQuery = useQuery({
+    queryKey: ['mng-working-days'],
+    queryFn: () => api.get<{ workingDays: number[] }>('/manage/school/working-days'),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
     enabled: !!host,
@@ -259,9 +334,11 @@ export default function TimetablePage() {
   });
 
   const timetableQuery = useQuery({
-    queryKey: ['timetable', classSectionId],
+    queryKey: ['timetable', classSectionId, dateParam],
     queryFn: () =>
-      api.get<TimetableSlot[]>(`/manage/timetable?classSectionId=${encodeURIComponent(classSectionId)}`),
+      api.get<TimetableSlot[]>(
+        `/manage/timetable?classSectionId=${encodeURIComponent(classSectionId)}&date=${dateParam}`,
+      ),
     enabled: !!host && !!classSectionId,
     staleTime: 15_000,
     refetchOnWindowFocus: false,
@@ -272,6 +349,17 @@ export default function TimetablePage() {
     () => [...(periodsQuery.data ?? [])].sort((a, b) => a.order - b.order),
     [periodsQuery.data],
   );
+
+  // Working days default to Mon–Sat (the schema default) until the real
+  // value loads, so the grid doesn't flash empty on first paint.
+  const workingDays = workingDaysQuery.data?.workingDays ?? [1, 2, 3, 4, 5, 6];
+  const dayColumns: DayColumn[] = [...workingDays]
+    .sort((a, b) => a - b)
+    .map((value) => ({
+      value,
+      label: WEEKDAY_LABELS[value] ?? `Day ${value}`,
+      date: addDays(viewedMonday, value - 1),
+    }));
 
   // O(1) lookup: `${dayOfWeek}-${periodId}` → slot
   const slotMap = useMemo(() => {
@@ -299,6 +387,8 @@ export default function TimetablePage() {
       academicYearId: string;
     }) => api.post<TimetableSlot>('/manage/timetable', body),
     onSuccess: () => {
+      // Prefix-matches every `['timetable', classSectionId, <date>]` query,
+      // regardless of which week was being viewed when this fired.
       void queryClient.invalidateQueries({ queryKey: ['timetable', classSectionId] });
       setPendingCell(null);
       toast.success('Slot assigned');
@@ -367,6 +457,63 @@ export default function TimetablePage() {
       {/* Prompt when no class selected */}
       {!classSectionId && <p className="sk-state">Select a class above to view and edit its timetable.</p>}
 
+      {classSectionId && (
+        <>
+          {/* Week navigation */}
+          <div
+            className="sk-card"
+            style={{
+              marginBottom: 12,
+              padding: '10px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}
+          >
+            <button
+              className="sk-btn"
+              onClick={() => setWeekOffset((w) => w - 1)}
+              aria-label="Previous week"
+              style={{ padding: '7px 10px' }}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div style={{ fontWeight: 700, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {weekRangeLabel(viewedMonday)}
+              {isCurrentWeek && (
+                <span className="sk-pill" data-tone="info">
+                  This week
+                </span>
+              )}
+              {isPastWeek && (
+                <span className="sk-pill" data-tone="warn">
+                  Past
+                </span>
+              )}
+            </div>
+            <button
+              className="sk-btn"
+              onClick={() => setWeekOffset((w) => w + 1)}
+              aria-label="Next week"
+              style={{ padding: '7px 10px' }}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <button
+              className="sk-btn"
+              onClick={() => setWeekOffset(0)}
+              disabled={isCurrentWeek}
+              style={{ marginLeft: 'auto' }}
+            >
+              Today
+            </button>
+          </div>
+
+          {isPastWeek && <p className="sk-state">🔒 Past week — read-only</p>}
+        </>
+      )}
+
       {/* Loading timetable */}
       {classSectionId && timetableQuery.isLoading && <p className="sk-state">Loading timetable…</p>}
 
@@ -376,24 +523,37 @@ export default function TimetablePage() {
       )}
 
       {/* Grid */}
-      {classSectionId && !timetableQuery.isLoading && (
+      {classSectionId && !timetableQuery.isLoading && !timetableQuery.error && (
         <div className="sk-card" style={{ overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
               <thead>
                 <tr>
                   <th style={{ ...headCellStyle, textAlign: 'left' }}>Period</th>
-                  {DAYS.map((d) => (
-                    <th key={d.value} style={headCellStyle}>
-                      {d.label}
-                    </th>
-                  ))}
+                  {dayColumns.map((day) => {
+                    const highlight = isCurrentWeek && isSameCalendarDay(day.date, now);
+                    return (
+                      <th
+                        key={day.value}
+                        style={{
+                          ...headCellStyle,
+                          background: highlight ? 'var(--sk-brand-tint)' : undefined,
+                          color: highlight ? 'var(--sk-brand-2)' : headCellStyle.color,
+                        }}
+                      >
+                        <div>{day.label}</div>
+                        <div style={{ fontWeight: 500, letterSpacing: 'normal', textTransform: 'none', fontSize: 9.5, marginTop: 2 }}>
+                          {formatShort(day.date)}
+                        </div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {sortedPeriods.length === 0 && (
                   <tr>
-                    <td colSpan={DAYS.length + 1} style={{ padding: 20, textAlign: 'center' }}>
+                    <td colSpan={dayColumns.length + 1} style={{ padding: 20, textAlign: 'center' }}>
                       <span className="sk-state">
                         No periods configured.{' '}
                         <Link href="/app/settings" style={{ color: 'var(--sk-brand-2)', fontWeight: 600 }}>
@@ -403,123 +563,169 @@ export default function TimetablePage() {
                     </td>
                   </tr>
                 )}
-                {sortedPeriods.map((period) => (
-                  <tr key={period.id}>
-                    {/* Period label */}
-                    <td
-                      style={{
-                        padding: '10px 12px',
-                        borderTop: '1px solid var(--sk-line)',
-                        whiteSpace: 'nowrap',
-                        verticalAlign: 'top',
-                      }}
-                    >
-                      <div style={{ fontWeight: 650, fontSize: 13 }}>{period.label}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)' }}>
-                        {period.startTime} – {period.endTime}
-                      </div>
-                    </td>
 
-                    {/* Day columns */}
-                    {DAYS.map((day) => {
-                      const key = `${day.value}-${period.id}`;
-                      const slot = slotMap.get(key);
+                {sortedPeriods.map((period) => {
+                  // Breaks render as a single full-width band, not per-day
+                  // assignable cells — there's nothing to assign in a break.
+                  if (period.kind === 'BREAK') {
+                    return (
+                      <tr key={period.id}>
+                        <td
+                          colSpan={dayColumns.length + 1}
+                          style={{
+                            padding: '9px 12px',
+                            borderTop: '1px solid var(--sk-line)',
+                            background: 'var(--sk-amber-tint)',
+                            fontSize: 12,
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, color: 'var(--sk-amber)' }}>{period.label}</span>{' '}
+                          <span style={{ color: 'var(--sk-ink-3)' }}>
+                            · {period.startTime} – {period.endTime}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  }
 
-                      if (slot) {
-                        return (
-                          <td key={day.value} style={{ padding: 6, borderTop: '1px solid var(--sk-line)' }}>
-                            <div
-                              className="group"
-                              style={{
-                                position: 'relative',
-                                border: '1px solid var(--sk-line)',
-                                borderRadius: 9,
-                                background: 'var(--sk-card)',
-                                padding: '8px 10px',
-                              }}
-                            >
-                              <div style={{ fontWeight: 700, fontSize: 13 }}>{slot.subject.name}</div>
-                              <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)' }}>
-                                {slot.teacher.firstName} {slot.teacher.lastName}
-                              </div>
-                              {/* Delete action */}
-                              <button
-                                onClick={() => confirmDeleteSlot(slot, day.label)}
-                                disabled={deleteMutation.isPending}
-                                aria-label={`Remove ${slot.subject.name} from ${day.label} ${period.label}`}
-                                className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+                  return (
+                    <tr key={period.id}>
+                      {/* Period label */}
+                      <td
+                        style={{
+                          padding: '10px 12px',
+                          borderTop: '1px solid var(--sk-line)',
+                          whiteSpace: 'nowrap',
+                          verticalAlign: 'top',
+                        }}
+                      >
+                        <div style={{ fontWeight: 650, fontSize: 13 }}>{period.label}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)' }}>
+                          {period.startTime} – {period.endTime}
+                        </div>
+                      </td>
+
+                      {/* Day columns */}
+                      {dayColumns.map((day) => {
+                        const key = `${day.value}-${period.id}`;
+                        const slot = slotMap.get(key);
+
+                        if (slot) {
+                          return (
+                            <td key={day.value} style={{ padding: 6, borderTop: '1px solid var(--sk-line)' }}>
+                              <div
+                                className="group"
                                 style={{
-                                  position: 'absolute',
-                                  top: 4,
-                                  right: 4,
-                                  display: 'grid',
-                                  placeItems: 'center',
-                                  width: 20,
-                                  height: 20,
-                                  borderRadius: 6,
-                                  border: 'none',
-                                  background: 'transparent',
-                                  color: 'var(--sk-ink-3)',
-                                  cursor: 'pointer',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = 'var(--sk-bad-tint)';
-                                  e.currentTarget.style.color = 'var(--sk-bad)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = 'transparent';
-                                  e.currentTarget.style.color = 'var(--sk-ink-3)';
+                                  position: 'relative',
+                                  border: '1px solid var(--sk-line)',
+                                  borderRadius: 9,
+                                  background: 'var(--sk-card)',
+                                  padding: '8px 10px',
                                 }}
                               >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
+                                <div style={{ fontWeight: 700, fontSize: 13 }}>{slot.subject.name}</div>
+                                <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)' }}>
+                                  {slot.teacher.firstName} {slot.teacher.lastName}
+                                </div>
+                                {/* Delete action — hidden for read-only past weeks */}
+                                {!isPastWeek && (
+                                  <button
+                                    onClick={() => confirmDeleteSlot(slot, day.label)}
+                                    disabled={deleteMutation.isPending}
+                                    aria-label={`Remove ${slot.subject.name} from ${day.label} ${period.label}`}
+                                    className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+                                    style={{
+                                      position: 'absolute',
+                                      top: 4,
+                                      right: 4,
+                                      display: 'grid',
+                                      placeItems: 'center',
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: 6,
+                                      border: 'none',
+                                      background: 'transparent',
+                                      color: 'var(--sk-ink-3)',
+                                      cursor: 'pointer',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = 'var(--sk-bad-tint)';
+                                      e.currentTarget.style.color = 'var(--sk-bad)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = 'transparent';
+                                      e.currentTarget.style.color = 'var(--sk-ink-3)';
+                                    }}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        }
+
+                        // Past weeks are read-only: no assign affordance on empty cells.
+                        if (isPastWeek) {
+                          return (
+                            <td key={day.value} style={{ padding: 6, borderTop: '1px solid var(--sk-line)' }}>
+                              <div
+                                style={{
+                                  textAlign: 'center',
+                                  padding: '11px 0',
+                                  fontSize: 12,
+                                  color: 'var(--sk-ink-3)',
+                                }}
+                              >
+                                —
+                              </div>
+                            </td>
+                          );
+                        }
+
+                        return (
+                          <td key={day.value} style={{ padding: 6, borderTop: '1px solid var(--sk-line)' }}>
+                            <button
+                              onClick={() =>
+                                setPendingCell({
+                                  dayOfWeek: day.value,
+                                  periodId: period.id,
+                                  dayLabel: `${day.label} ${formatShort(day.date)}`,
+                                  periodLabel: period.label,
+                                })
+                              }
+                              aria-label={`Assign ${day.label} ${period.label}`}
+                              style={{
+                                display: 'flex',
+                                width: '100%',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 4,
+                                padding: '11px 0',
+                                borderRadius: 9,
+                                border: '1px dashed var(--sk-line-2)',
+                                background: 'transparent',
+                                color: 'var(--sk-brand-2)',
+                                cursor: 'pointer',
+                                transition: 'background 0.12s, border-color 0.12s',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'var(--sk-brand-tint)';
+                                e.currentTarget.style.borderColor = 'var(--sk-brand)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.borderColor = 'var(--sk-line-2)';
+                              }}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
                           </td>
                         );
-                      }
-
-                      return (
-                        <td key={day.value} style={{ padding: 6, borderTop: '1px solid var(--sk-line)' }}>
-                          <button
-                            onClick={() =>
-                              setPendingCell({
-                                dayOfWeek: day.value,
-                                periodId: period.id,
-                                dayLabel: day.label,
-                                periodLabel: period.label,
-                              })
-                            }
-                            aria-label={`Assign ${day.label} ${period.label}`}
-                            style={{
-                              display: 'flex',
-                              width: '100%',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 4,
-                              padding: '11px 0',
-                              borderRadius: 9,
-                              border: '1px dashed var(--sk-line-2)',
-                              background: 'transparent',
-                              color: 'var(--sk-brand-2)',
-                              cursor: 'pointer',
-                              transition: 'background 0.12s, border-color 0.12s',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = 'var(--sk-brand-tint)';
-                              e.currentTarget.style.borderColor = 'var(--sk-brand)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'transparent';
-                              e.currentTarget.style.borderColor = 'var(--sk-line-2)';
-                            }}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
