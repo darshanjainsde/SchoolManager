@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Megaphone,
   Inbox,
+  CalendarOff,
   LogOut,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
@@ -50,6 +51,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
     { href: '/teacher/assignments', label: 'Assignments', icon: BookOpen },
     { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
     { href: '/teacher/inbox', label: 'Inbox', icon: Inbox },
+    { href: '/teacher/leave', label: 'Leave', icon: CalendarOff },
   ];
 
   const isActive = (href: string) => pathname === href || (href !== '/teacher' && pathname.startsWith(href));

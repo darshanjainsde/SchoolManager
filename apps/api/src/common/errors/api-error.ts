@@ -13,6 +13,10 @@ export type ErrorCode =
   | 'INVITE_ALREADY_ACCEPTED'
   | 'CLASS_NOT_EMPTY'
   | 'TEACHER_CONFLICT'
+  /** Caller has no linked Teacher record — e.g. a SCHOOL_ADMIN hitting a teacher-only leave route. */
+  | 'NOT_A_TEACHER'
+  /** The LeaveApplication is no longer PENDING — already approved/rejected. */
+  | 'LEAVE_NOT_PENDING'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

@@ -1,0 +1,256 @@
+import 'reflect-metadata';
+
+const txMock = {
+  teacher: { findFirst: jest.fn(), findMany: jest.fn() },
+  leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+  timetableSlot: { findMany: jest.fn(), findFirst: jest.fn() },
+  substitution: {
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+  },
+  classSection: { findMany: jest.fn() },
+  period: { findMany: jest.fn() },
+};
+
+const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+
+jest.mock('@skoolos/db', () => ({
+  ...jest.requireActual('@skoolos/db'),
+  withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
+}));
+
+import { LeaveService } from './leave.service';
+import { ApiError } from '../../common/errors/api-error';
+import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
+
+const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const TEACHER = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+const ADMIN_USER = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const TEACHER_USER = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+const LEAVE_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+const CLASS_SECTION = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+const PERIOD = '11111111-1111-1111-1111-111111111111';
+const SUB_ID = '22222222-2222-2222-2222-222222222222';
+const OTHER_TEACHER = '33333333-3333-3333-3333-333333333333';
+
+describe('LeaveService', () => {
+  const svc = new LeaveService();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+  });
+
+  describe('apply', () => {
+    const dto: CreateLeaveDto = { type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-22' };
+
+    it('creates a PENDING application for the caller\'s own Teacher record', async () => {
+      txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER });
+      txMock.leaveApplication.create.mockResolvedValue({
+        id: LEAVE_ID,
+        teacherId: TEACHER,
+        status: 'PENDING',
+        ...dto,
+      });
+
+      const result = await svc.apply(SCHOOL, TEACHER_USER, dto);
+
+      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { userId: TEACHER_USER } });
+      expect(txMock.leaveApplication.create).toHaveBeenCalledWith({
+        data: {
+          schoolId: SCHOOL,
+          teacherId: TEACHER,
+          type: 'SICK',
+          startDate: new Date('2026-07-20'),
+          endDate: new Date('2026-07-22'),
+          reason: undefined,
+        },
+      });
+      expect(result.status).toBe('PENDING');
+    });
+
+    it('throws NOT_A_TEACHER when the caller has no linked Teacher row', async () => {
+      txMock.teacher.findFirst.mockResolvedValue(null);
+
+      await expect(svc.apply(SCHOOL, 'admin-only-user', dto)).rejects.toMatchObject({
+        response: { code: 'NOT_A_TEACHER' },
+      });
+      expect(txMock.leaveApplication.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects endDate before startDate without opening a transaction', async () => {
+      await expect(
+        svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-07-22', endDate: '2026-07-20' }),
+      ).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
+      expect(withTenantMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('approve', () => {
+    /** One ACTIVE slot on Monday(1) and one on Wednesday(3) — leave spans both. */
+    function mockPendingLeave() {
+      txMock.leaveApplication.findFirst.mockResolvedValue({
+        id: LEAVE_ID,
+        schoolId: SCHOOL,
+        teacherId: TEACHER,
+        status: 'PENDING',
+        startDate: new Date('2026-07-20'), // Monday
+        endDate: new Date('2026-07-22'), // Wednesday
+      });
+      txMock.leaveApplication.update.mockResolvedValue({});
+    }
+
+    it('generates a Substitution gap for each of the teacher\'s ACTIVE slots on each leave weekday', async () => {
+      mockPendingLeave();
+      // Mon (20th) -> one slot; Tue (21st) -> none; Wed (22nd) -> one slot.
+      txMock.timetableSlot.findMany.mockImplementation(({ where }: { where: { dayOfWeek: number } }) => {
+        if (where.dayOfWeek === 1) return Promise.resolve([{ classSectionId: CLASS_SECTION, periodId: PERIOD }]);
+        if (where.dayOfWeek === 3) return Promise.resolve([{ classSectionId: CLASS_SECTION, periodId: 'period-2' }]);
+        return Promise.resolve([]);
+      });
+      txMock.substitution.findFirst.mockResolvedValue(null); // no pre-existing gap
+      txMock.substitution.create.mockResolvedValue({});
+
+      const result = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+
+      expect(txMock.leaveApplication.update).toHaveBeenCalledWith({
+        where: { id: LEAVE_ID },
+        data: expect.objectContaining({ status: 'APPROVED', reviewedById: ADMIN_USER }),
+      });
+      expect(txMock.substitution.create).toHaveBeenCalledTimes(2);
+      expect(txMock.substitution.create).toHaveBeenCalledWith({
+        data: {
+          schoolId: SCHOOL,
+          classSectionId: CLASS_SECTION,
+          periodId: PERIOD,
+          date: new Date('2026-07-20'),
+          originalTeacherId: TEACHER,
+          reason: 'leave',
+        },
+      });
+      expect(result).toEqual({ gaps: 2 });
+    });
+
+    it('is idempotent: skips creating a gap that already exists for that slot/date', async () => {
+      mockPendingLeave();
+      txMock.timetableSlot.findMany.mockResolvedValue([{ classSectionId: CLASS_SECTION, periodId: PERIOD }]);
+      // Every date's slot already has a Substitution row.
+      txMock.substitution.findFirst.mockResolvedValue({ id: 'already-there' });
+
+      const result = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+
+      expect(txMock.substitution.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ gaps: 0 });
+    });
+
+    it('throws LEAVE_NOT_PENDING for an application that is not PENDING', async () => {
+      txMock.leaveApplication.findFirst.mockResolvedValue({
+        id: LEAVE_ID,
+        status: 'APPROVED',
+        teacherId: TEACHER,
+        startDate: new Date('2026-07-20'),
+        endDate: new Date('2026-07-20'),
+      });
+
+      await expect(svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER)).rejects.toMatchObject({
+        response: { code: 'LEAVE_NOT_PENDING' },
+      });
+      expect(txMock.leaveApplication.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('assign', () => {
+    const dto: AssignSubstitutionDto = { substituteTeacherId: OTHER_TEACHER };
+
+    function mockGap() {
+      txMock.substitution.findFirst.mockResolvedValue({
+        id: SUB_ID,
+        schoolId: SCHOOL,
+        date: new Date('2026-07-20'), // Monday -> dayOfWeek 1
+        periodId: PERIOD,
+      });
+    }
+
+    it('sets the substitute when the teacher is free', async () => {
+      // First `substitution.findFirst` call looks up the gap itself; the
+      // second is the "already covering another gap" clash check.
+      txMock.substitution.findFirst
+        .mockResolvedValueOnce({ id: SUB_ID, schoolId: SCHOOL, date: new Date('2026-07-20'), periodId: PERIOD })
+        .mockResolvedValueOnce(null);
+      txMock.teacher.findFirst.mockResolvedValue({ id: OTHER_TEACHER });
+      txMock.timetableSlot.findFirst.mockResolvedValue(null); // no regular clash
+      txMock.substitution.update.mockResolvedValue({ id: SUB_ID, substituteTeacherId: OTHER_TEACHER });
+
+      const result = await svc.assign(SCHOOL, SUB_ID, dto);
+
+      expect(txMock.substitution.update).toHaveBeenCalledWith({
+        where: { id: SUB_ID },
+        data: { substituteTeacherId: OTHER_TEACHER },
+      });
+      expect(result).toEqual({ id: SUB_ID, substituteTeacherId: OTHER_TEACHER });
+    });
+
+    it('throws TEACHER_CONFLICT when the substitute already has a regular class in that period', async () => {
+      mockGap();
+      txMock.teacher.findFirst.mockResolvedValue({ id: OTHER_TEACHER });
+      txMock.timetableSlot.findFirst.mockResolvedValue({ id: 'busy-slot' });
+
+      await expect(svc.assign(SCHOOL, SUB_ID, dto)).rejects.toMatchObject({
+        response: { code: 'TEACHER_CONFLICT' },
+      });
+      expect(txMock.substitution.update).not.toHaveBeenCalled();
+    });
+
+    it('throws TEACHER_CONFLICT when the substitute is already covering another gap at that date+period', async () => {
+      txMock.substitution.findFirst
+        .mockResolvedValueOnce({ id: SUB_ID, schoolId: SCHOOL, date: new Date('2026-07-20'), periodId: PERIOD })
+        .mockResolvedValueOnce({ id: 'other-gap' });
+      txMock.teacher.findFirst.mockResolvedValue({ id: OTHER_TEACHER });
+      txMock.timetableSlot.findFirst.mockResolvedValue(null);
+
+      await expect(svc.assign(SCHOOL, SUB_ID, dto)).rejects.toMatchObject({
+        response: { code: 'TEACHER_CONFLICT' },
+      });
+      expect(txMock.substitution.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('clear', () => {
+    it('nulls out the substitute', async () => {
+      txMock.substitution.findFirst.mockResolvedValue({ id: SUB_ID, schoolId: SCHOOL });
+      txMock.substitution.update.mockResolvedValue({ id: SUB_ID, substituteTeacherId: null });
+
+      const result = await svc.clear(SCHOOL, SUB_ID);
+
+      expect(txMock.substitution.update).toHaveBeenCalledWith({
+        where: { id: SUB_ID },
+        data: { substituteTeacherId: null },
+      });
+      expect(result.substituteTeacherId).toBeNull();
+    });
+  });
+
+  describe('list', () => {
+    it('defaults to PENDING and joins the teacher name', async () => {
+      txMock.leaveApplication.findMany.mockResolvedValue([
+        { id: LEAVE_ID, teacherId: TEACHER, status: 'PENDING' },
+      ]);
+      txMock.teacher.findMany.mockResolvedValue([{ id: TEACHER, firstName: 'Asha', lastName: 'Rao' }]);
+
+      const result = await svc.list(SCHOOL);
+
+      expect(txMock.leaveApplication.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { schoolId: SCHOOL, status: 'PENDING' } }),
+      );
+      expect(result).toEqual([
+        { id: LEAVE_ID, teacherId: TEACHER, status: 'PENDING', teacherName: 'Asha Rao' },
+      ]);
+    });
+
+    it('rejects an invalid status value', async () => {
+      await expect(svc.list(SCHOOL, 'BOGUS')).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
+    });
+  });
+});

@@ -578,3 +578,29 @@ export class SaveExamResultsDto {
   @Type(() => ExamResultMarkDto)
   marks!: ExamResultMarkDto[];
 }
+
+// ── Leave applications & substitution coverage ───────────────────────────────
+
+const LEAVE_TYPES = ['SICK', 'CASUAL', 'EARNED', 'UNPAID', 'OTHER'] as const;
+export type LeaveTypeValue = (typeof LEAVE_TYPES)[number];
+
+export class CreateLeaveDto {
+  @IsIn(LEAVE_TYPES)
+  type!: LeaveTypeValue;
+
+  @IsDateString()
+  startDate!: string;
+
+  @IsDateString()
+  endDate!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 2000)
+  reason?: string;
+}
+
+export class AssignSubstitutionDto {
+  @IsUUID()
+  substituteTeacherId!: string;
+}

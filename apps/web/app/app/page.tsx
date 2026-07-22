@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { Globe } from 'lucide-react';
+import { Globe, CalendarX } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -26,6 +26,15 @@ interface Teacher {
 }
 interface Student {
   id: string;
+}
+
+interface LeaveApplication {
+  id: string;
+}
+
+interface CoverageGap {
+  id: string;
+  substituteTeacherId: string | null;
 }
 
 interface SetupStep {
@@ -84,6 +93,24 @@ export default function DashboardPage() {
   const studentsQuery = useQuery({
     queryKey: ['dash-students'],
     queryFn: () => api.get<Student[] | { items: Student[] }>('/manage/students'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+  const pendingLeaveQuery = useQuery({
+    queryKey: ['dash-leave-pending'],
+    queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=PENDING'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+  const leaveCoverageQuery = useQuery({
+    queryKey: ['dash-leave-coverage'],
+    queryFn: () => {
+      const from = new Date().toISOString().slice(0, 10);
+      const toDate = new Date(`${from}T00:00:00Z`);
+      toDate.setUTCDate(toDate.getUTCDate() + 30);
+      const to = toDate.toISOString().slice(0, 10);
+      return api.get<CoverageGap[]>(`/manage/leave/coverage?from=${from}&to=${to}`);
+    },
     enabled: !!host,
     staleTime: 60_000,
   });
@@ -153,6 +180,10 @@ export default function DashboardPage() {
     },
   ];
 
+  const pendingLeaveCount = pendingLeaveQuery.data?.length ?? 0;
+  const uncoveredGapCount = (leaveCoverageQuery.data ?? []).filter((g) => !g.substituteTeacherId).length;
+  const showLeaveAlert = pendingLeaveCount > 0 || uncoveredGapCount > 0;
+
   const doneCount = steps.filter((s) => s.done).length;
   const allDone = doneCount === steps.length;
   const anySetupLoading = [
@@ -170,6 +201,28 @@ export default function DashboardPage() {
         <h1>Welcome back</h1>
         <p>Set up your school and manage it from here.</p>
       </header>
+
+      {/* Leave & coverage signal — only shown when something needs attention */}
+      {showLeaveAlert && (
+        <Link href="/app/leave" className="sk-remind" style={{ marginBottom: 18 }}>
+          <span className="ic">
+            <CalendarX className="h-4 w-4" />
+          </span>
+          <div style={{ flex: 1 }}>
+            <b>
+              {[
+                pendingLeaveCount > 0 &&
+                  `${pendingLeaveCount} leave ${pendingLeaveCount === 1 ? 'request' : 'requests'} awaiting review`,
+                uncoveredGapCount > 0 &&
+                  `${uncoveredGapCount} class ${uncoveredGapCount === 1 ? 'period needs' : 'periods need'} a substitute`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </b>
+            <p>Go to Leave to review requests and cover the gaps.</p>
+          </div>
+        </Link>
+      )}
 
       {/* At-a-glance KPIs — always shown */}
       <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>

@@ -26,10 +26,12 @@ import { ExamRemindersService } from './exam-reminders.service';
 import { ExamRemindersController } from './exam-reminders.controller';
 import { CronSecretGuard } from './cron-secret.guard';
 import { LoginInviteService } from './internal/login-invite.service';
+import { LeaveService } from './leave.service';
+import { LeaveController, SubstitutionController } from './leave.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService, LeaveService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -42,7 +44,9 @@ import { LoginInviteService } from './internal/login-invite.service';
     StaffAttendanceController,
     ExamsController,
     ExamRemindersController,
+    LeaveController,
+    SubstitutionController,
   ],
-  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService],
+  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService],
 })
 export class ManagementModule {}
