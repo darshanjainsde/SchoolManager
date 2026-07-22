@@ -20,7 +20,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { StudentsService } from './students.service';
-import { CreateStudentDto, UpdateStudentDto } from './management.dto';
+import { CreateLoginDto, CreateStudentDto, UpdateStudentDto } from './management.dto';
 
 @Controller('manage/students')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
@@ -80,8 +80,13 @@ export class StudentsController {
   }
 
   @Post(':id/login')
-  createLogin(@Param('id', ParseUUIDPipe) id: string) {
-    return this.students.createLogin(this.sid(), id);
+  createLogin(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateLoginDto) {
+    return this.students.createLogin(this.sid(), id, dto);
+  }
+
+  @Post(':id/invite/resend')
+  resendInvite(@Param('id', ParseUUIDPipe) id: string) {
+    return this.students.resendInvite(this.sid(), id);
   }
 
   @Put(':id')

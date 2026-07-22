@@ -4,6 +4,7 @@ import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 const prismaMock = {
   user: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     update: jest.fn().mockResolvedValue({}),
   },
   student: {
@@ -69,6 +70,10 @@ describe('AuthService.login', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.user.update.mockResolvedValue({});
+    // Non-email logins try username first; default to "no such username" so
+    // existing admission-number-path tests fall through unchanged unless a
+    // test overrides this explicitly.
+    prismaMock.user.findFirst.mockResolvedValue(null);
     txMock.refreshToken.create.mockResolvedValue({ id: 'refresh-row-1' });
   });
 
@@ -81,6 +86,9 @@ describe('AuthService.login', () => {
 
     expect(res.accessToken).toBeTruthy();
     expect(res.refreshToken).toBeTruthy();
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+      where: { schoolId: SCHOOL, username: { equals: 'SUN-2231', mode: 'insensitive' } },
+    });
     expect(prismaMock.student.findFirst).toHaveBeenCalledWith({
       where: { schoolId: SCHOOL, admissionNo: { equals: 'SUN-2231', mode: 'insensitive' } },
     });
@@ -98,6 +106,34 @@ describe('AuthService.login', () => {
     prismaMock.student.findFirst.mockResolvedValue(null);
 
     await expect(svc.login(SCHOOL, 'NOT-A-REAL-ADM-NO', 'whatever')).rejects.toThrow(
+      new UnauthorizedException('Invalid credentials'),
+    );
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('logs in by username without ever touching the admission-number path', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(userRow({ id: 'user-2', username: 'jane.doe' }));
+    prismaMock.user.findUnique.mockResolvedValue(userRow({ id: 'user-2', username: 'jane.doe' }));
+    passwords.verify.mockResolvedValue(true);
+
+    const res = await svc.login(SCHOOL, 'jane.doe', 'correct-password');
+
+    expect(res.accessToken).toBeTruthy();
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+      where: { schoolId: SCHOOL, username: { equals: 'jane.doe', mode: 'insensitive' } },
+    });
+    expect(prismaMock.student.findFirst).not.toHaveBeenCalled();
+    // findFirst already resolved the full user row — no extra findUnique
+    // round-trip needed on the username path (unlike admission-number, which
+    // resolves Student -> userId -> User in two hops).
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown username with the same generic message (no enumeration)', async () => {
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    prismaMock.student.findFirst.mockResolvedValue(null);
+
+    await expect(svc.login(SCHOOL, 'no-such-user', 'whatever')).rejects.toThrow(
       new UnauthorizedException('Invalid credentials'),
     );
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();

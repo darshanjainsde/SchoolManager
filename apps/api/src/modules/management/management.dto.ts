@@ -327,6 +327,26 @@ export class UpdateStudentDto {
   isActive?: boolean;
 }
 
+// ── Login invites (students + teachers) ──────────────────────────────────────
+
+/**
+ * `email` is intentionally optional here (not `@IsEmail() email!: string`):
+ * the "required" business rule differs per caller (always required for
+ * students; falls back to the existing Teacher.email for teachers) and the
+ * service throws a typed `EMAIL_REQUIRED` ApiError rather than a generic
+ * class-validator 400, so the check has to happen after this DTO parses.
+ */
+export class CreateLoginDto {
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 60)
+  username?: string;
+}
+
 // ── TimetableSlot ─────────────────────────────────────────────────────────────
 
 export class AssignSlotDto {

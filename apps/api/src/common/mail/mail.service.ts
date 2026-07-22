@@ -112,6 +112,30 @@ export class MailService {
     return this.send(to, subject, html, text);
   }
 
+  async sendWelcomeInvite(
+    to: string,
+    schoolName: string,
+    loginName: string,
+    setPasswordUrl: string,
+  ): Promise<boolean> {
+    const subject = `Welcome to ${schoolName} — set your password`;
+    const text = `You now have an account at ${schoolName}.\n\nYour sign-in name is: ${loginName}\n\nSet your password here (valid 30 minutes): ${setPasswordUrl}\n\nIf you weren't expecting this, you can safely ignore this email.`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#134e4a;margin:0 0 12px">Welcome to ${escapeHtml(schoolName)}</h2>
+        <p style="color:#334155;line-height:1.6">You now have an account at <b>${escapeHtml(schoolName)}</b>.</p>
+        <p style="color:#334155;line-height:1.6">Your sign-in name is: <b>${escapeHtml(loginName)}</b></p>
+        <p style="margin:24px 0">
+          <a href="${setPasswordUrl}" style="background:#0d9488;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold;display:inline-block">
+            Set your password
+          </a>
+        </p>
+        <p style="color:#64748b;font-size:13px;line-height:1.6">The link is valid for 30 minutes and can be used once.<br>
+        If you weren't expecting this, you can safely ignore this email.</p>
+      </div>`;
+    return this.send(to, subject, html, text);
+  }
+
   async sendTestScheduled(to: string, info: TestScheduledInfo): Promise<boolean> {
     const subject = `New test scheduled: ${info.examTitle}`;
     const text = `${info.schoolName} has scheduled a new test.\n\nSubject: ${info.subjectName}\nTest: ${info.examTitle}\nDate: ${info.scheduledAt}\n\nCheck the school portal for more details.`;

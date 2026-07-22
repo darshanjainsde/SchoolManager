@@ -21,10 +21,11 @@ import { ExamsController } from './exams.controller';
 import { ExamRemindersService } from './exam-reminders.service';
 import { ExamRemindersController } from './exam-reminders.controller';
 import { CronSecretGuard } from './cron-secret.guard';
+import { LoginInviteService } from './internal/login-invite.service';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService, ExamRemindersService, CronSecretGuard],
+  providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService],
   controllers: [
     CatalogController,
     TeachersController,

@@ -29,11 +29,11 @@ export class AuthService {
   ) {}
 
   /**
-   * Look up by (schoolId, identifier), where identifier is either an email
-   * address or a student admission number (web-first portals, Phase 2A).
-   * User row lookup uses the platform connection because we have not yet
-   * established the request's tenant scope from a JWT; the schoolId is
-   * trusted because it comes from the tenant-resolved Host.
+   * Look up by (schoolId, identifier), where identifier is an email address,
+   * a login username, or a student admission number (web-first portals,
+   * Phase 2A). User row lookup uses the platform connection because we have
+   * not yet established the request's tenant scope from a JWT; the schoolId
+   * is trusted because it comes from the tenant-resolved Host.
    */
   async login(schoolId: string, identifier: string, password: string): Promise<IssuedTokens> {
     const platform = getPlatformPrisma();
@@ -41,7 +41,7 @@ export class AuthService {
       ? await platform.user.findUnique({
           where: { schoolId_email: { schoolId, email: identifier.toLowerCase() } },
         })
-      : await this.resolveUserByAdmissionNo(platform, schoolId, identifier);
+      : await this.resolveUserByUsernameOrAdmissionNo(platform, schoolId, identifier);
     if (!user || !user.isActive) throw new UnauthorizedException('Invalid credentials');
 
     if (user.lockedUntil && user.lockedUntil > new Date()) {
@@ -236,6 +236,25 @@ export class AuthService {
       audience: 'school-refresh',
       expiresIn: this.env.JWT_REFRESH_TTL,
     });
+  }
+
+  /**
+   * Non-email identifiers can be a login username (students or teachers may
+   * have one) or a student admission number. Username is tried first —
+   * cheap, direct lookup — then falls through to the admission-number path.
+   * Either miss falls through to the SAME generic "Invalid credentials" the
+   * caller already throws for a null result — no enumeration either way.
+   */
+  private async resolveUserByUsernameOrAdmissionNo(
+    platform: ReturnType<typeof getPlatformPrisma>,
+    schoolId: string,
+    identifier: string,
+  ): Promise<User | null> {
+    const byUsername = await platform.user.findFirst({
+      where: { schoolId, username: { equals: identifier, mode: 'insensitive' } },
+    });
+    if (byUsername) return byUsername;
+    return this.resolveUserByAdmissionNo(platform, schoolId, identifier);
   }
 
   /**
