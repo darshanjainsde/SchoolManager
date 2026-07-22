@@ -18,6 +18,8 @@ import { AnnouncementsService } from './announcements.service';
 import { AnnouncementsController } from './announcements.controller';
 import { AttendanceService } from './attendance.service';
 import { AttendanceController } from './attendance.controller';
+import { StaffAttendanceService } from './staff-attendance.service';
+import { StaffAttendanceController } from './staff-attendance.controller';
 import { ExamsService } from './exams.service';
 import { ExamsController } from './exams.controller';
 import { ExamRemindersService } from './exam-reminders.service';
@@ -27,7 +29,7 @@ import { LoginInviteService } from './internal/login-invite.service';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -37,9 +39,10 @@ import { LoginInviteService } from './internal/login-invite.service';
     TimetableController,
     AnnouncementsController,
     AttendanceController,
+    StaffAttendanceController,
     ExamsController,
     ExamRemindersController,
   ],
-  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService],
+  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService],
 })
 export class ManagementModule {}

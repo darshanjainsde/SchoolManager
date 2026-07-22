@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Globe, Inbox, LogOut, School, Users, GraduationCap, UserCog, CalendarDays, Clock, CalendarHeart, Megaphone, Settings } from 'lucide-react';
+import { LayoutDashboard, Globe, Inbox, LogOut, School, Users, GraduationCap, UserCog, CalendarDays, Clock, CalendarHeart, Megaphone, Settings, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -23,6 +23,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; re
   { href: '/app/classes', label: 'Classes', icon: School, requiredFeature: 'MANAGEMENT' },
   { href: '/app/teachers', label: 'Teachers', icon: GraduationCap, requiredFeature: 'MANAGEMENT' },
   { href: '/app/staff', label: 'Staff', icon: UserCog, requiredFeature: 'MANAGEMENT' },
+  { href: '/app/staff-attendance', label: 'Staff attendance', icon: ClipboardList, requiredFeature: 'MANAGEMENT' },
   { href: '/app/students', label: 'Students', icon: Users, requiredFeature: 'MANAGEMENT' },
   { href: '/app/timetable', label: 'Timetable', icon: CalendarDays, requiredFeature: 'MANAGEMENT' },
   { href: '/app/availability', label: 'Availability', icon: Clock, requiredFeature: 'MANAGEMENT' },

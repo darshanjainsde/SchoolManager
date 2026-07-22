@@ -513,6 +513,30 @@ export class SaveAttendanceDto {
   marks!: AttendanceMarkDto[];
 }
 
+// ── Staff attendance (teachers + non-teaching staff) ─────────────────────────
+
+export class StaffAttendanceMarkDto {
+  @IsUUID()
+  personId!: string;
+
+  @IsIn(['TEACHER', 'STAFF'])
+  kind!: 'TEACHER' | 'STAFF';
+
+  @IsIn(['PRESENT', 'ABSENT', 'LATE', 'ON_LEAVE'])
+  status!: 'PRESENT' | 'ABSENT' | 'LATE' | 'ON_LEAVE';
+}
+
+export class SaveStaffAttendanceDto {
+  @IsDateString()
+  date!: string;
+
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => StaffAttendanceMarkDto)
+  marks!: StaffAttendanceMarkDto[];
+}
+
 // ── Exam / Results ───────────────────────────────────────────────────────────
 
 export class CreateExamDto {
