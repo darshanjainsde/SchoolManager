@@ -1178,14 +1178,17 @@ export default function WebsitePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="map-embed" hint="Paste the src URL from a Google Maps embed code">
-                Map embed URL
+              <Label
+                htmlFor="map-embed"
+                hint="In Google Maps: Share → Embed a map → copy the src=&quot;…&quot; URL. A plain share link (maps.app.goo.gl) won't work in an iframe — but if you leave this blank, the map falls back to your address above."
+              >
+                Map embed URL (optional)
               </Label>
               <Input
                 id="map-embed"
                 value={mapEmbedUrl}
                 onChange={(e) => setMapEmbedUrl(e.target.value)}
-                placeholder="https://maps.google.com/maps?..."
+                placeholder="https://www.google.com/maps/embed?pb=…"
               />
             </div>
 

@@ -5,6 +5,39 @@ import type { PublicSiteData } from '@/lib/public-api';
 import { safeHttpUrl, safeHttpsUrl } from '../site-utils';
 import { submitEnquiry } from '../enquiry-client';
 
+type MapProfile = NonNullable<PublicSiteData['profile']>;
+
+/**
+ * Only Google Maps *Embed* URLs can live in an <iframe>. A share/short link
+ * (maps.app.goo.gl, a /maps/place URL, goo.gl/maps) sends X-Frame-Options:DENY,
+ * so framing it shows "refused to connect".
+ */
+function isEmbeddableMapUrl(url: string): boolean {
+  return /output=embed/i.test(url) || /\/maps\/embed/i.test(url);
+}
+
+/** Build a framable embed from the school's address — works with no API key. */
+function addressEmbedUrl(profile: MapProfile | null | undefined): string | null {
+  const parts = [profile?.addressLine1, profile?.addressLine2, profile?.city, profile?.postalCode].filter(Boolean);
+  if (parts.length === 0) return null;
+  return `https://maps.google.com/maps?q=${encodeURIComponent(parts.join(', '))}&output=embed`;
+}
+
+/**
+ * Resolve the map to something that actually renders:
+ *  - a real embed URL → iframe it
+ *  - otherwise, if we have an address → iframe an address-based embed
+ *  - a share link we can't frame → surface it as a plain "open in Maps" link
+ */
+function resolveMap(profile: MapProfile | null | undefined): { embedSrc?: string; linkHref?: string } {
+  const raw = safeHttpsUrl(profile?.mapEmbedUrl);
+  if (raw && isEmbeddableMapUrl(raw)) return { embedSrc: raw };
+  const fromAddress = addressEmbedUrl(profile);
+  if (fromAddress) return { embedSrc: fromAddress };
+  if (raw) return { linkHref: raw };
+  return {};
+}
+
 export default function ContactSection({
   profile,
   socialLinks,
@@ -60,16 +93,34 @@ export default function ContactSection({
                 ))}
             </div>
           )}
-          {safeHttpsUrl(profile?.mapEmbedUrl) && (
-            <div className="mt-6 rounded-2xl overflow-hidden ps-card">
-              <iframe
-                src={safeHttpsUrl(profile?.mapEmbedUrl)!}
-                className="w-full h-40 border-0"
-                loading="lazy"
-                title={`${schoolName} location`}
-              />
-            </div>
-          )}
+          {(() => {
+            const map = resolveMap(profile);
+            if (map.embedSrc) {
+              return (
+                <div className="mt-6 rounded-2xl overflow-hidden ps-card">
+                  <iframe
+                    src={map.embedSrc}
+                    className="w-full h-40 border-0"
+                    loading="lazy"
+                    title={`${schoolName} location`}
+                  />
+                </div>
+              );
+            }
+            if (map.linkHref) {
+              return (
+                <a
+                  href={map.linkHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ps-chip mt-6 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium hover:opacity-80 transition"
+                >
+                  📍 View on Google Maps
+                </a>
+              );
+            }
+            return null;
+          })()}
         </div>
 
         {hasEnquiry ? (
