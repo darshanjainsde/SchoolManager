@@ -1,8 +1,8 @@
 'use client';
-import { useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Upload, Pencil, X } from 'lucide-react';
+import { Plus, Trash2, Upload, Pencil, X, KeyRound, CheckCircle2, Send } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -13,16 +13,27 @@ interface Teacher {
   firstName: string;
   lastName: string;
   email?: string | null;
+  username?: string | null;
   phone?: string | null;
   photoAssetId?: string | null;
   primarySubjectId?: string | null;
   bio?: string | null;
   isActive: boolean;
+  userId?: string | null;
 }
 
 interface MediaAsset {
   id: string;
   url: string;
+}
+
+/** Shape returned by both `.../login` and `.../invite/resend`. */
+interface LoginInviteResult {
+  email: string;
+  username: string | null;
+  loginName: string;
+  invited: true;
+  emailSent: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -90,6 +101,103 @@ interface TeacherFormProps {
   onPhotoUpload: (file: File) => void;
   isUploadingPhoto: boolean;
   uploadedPhotoUrl: string | null;
+}
+
+/**
+ * Confirms an invite was sent. Never shows a password — the teacher sets their
+ * own via the emailed link.
+ */
+function InviteSentModal({
+  result,
+  onClose,
+  onResend,
+  resending,
+}: {
+  result: LoginInviteResult;
+  onClose: () => void;
+  onResend: () => void;
+  resending: boolean;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(15, 30, 24, 0.5)',
+        padding: 16,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="sk-card"
+        style={{ width: '100%', maxWidth: 420 }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="t-invite-h"
+      >
+        <div
+          className="sk-card-h"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+        >
+          <h3 id="t-invite-h">Invite sent</h3>
+          <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="sk-card-b">
+          {result.emailSent ? (
+            <p style={{ margin: 0, fontSize: 13.5 }}>
+              An email was sent to <strong>{result.email}</strong>. They sign in as{' '}
+              <strong>{result.loginName}</strong> — the link lets them set their own password.
+            </p>
+          ) : (
+            <>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 12.5,
+                  color: 'var(--sk-amber)',
+                  background: 'var(--sk-amber-tint)',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                }}
+              >
+                The account was created, but the invite email to {result.email} could not be sent right now.
+              </p>
+              <p style={{ margin: 0, fontSize: 13.5 }}>
+                They sign in as <strong>{result.loginName}</strong> once the email arrives — try resending it.
+              </p>
+            </>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            {!result.emailSent && (
+              <button className="sk-btn" data-variant="primary" disabled={resending} onClick={onResend}>
+                <Send className="h-3.5 w-3.5" />
+                {resending ? 'Resending…' : 'Resend invite'}
+              </button>
+            )}
+            <button className="sk-btn" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TeacherForm({
@@ -235,6 +343,9 @@ export default function TeachersPage() {
   // ── Local state ──────────────────────────────────────────────────────────
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [inviteResult, setInviteResult] = useState<(LoginInviteResult & { teacherId: string }) | null>(
+    null,
+  );
 
   // Photo state for the add form
   const [addPhotoAssetId, setAddPhotoAssetId] = useState<string | null>(null);
@@ -312,6 +423,28 @@ export default function TeachersPage() {
     onError: (err: Error) => toast.error(`Failed to delete teacher: ${err.message}`),
   });
 
+  // The API falls back to the teacher's stored email when none is passed, so a
+  // teacher with an address on file needs no extra input.
+  const createLoginMutation = useMutation({
+    mutationFn: (teacherId: string) =>
+      api.post<LoginInviteResult>(`/manage/teachers/${teacherId}/login`, {}),
+    onSuccess: (result, teacherId) => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-teachers'] });
+      setInviteResult({ ...result, teacherId });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const resendInviteMutation = useMutation({
+    mutationFn: (teacherId: string) =>
+      api.post<LoginInviteResult>(`/manage/teachers/${teacherId}/invite/resend`, {}),
+    onSuccess: (result, teacherId) => {
+      setInviteResult((prev) => (prev && prev.teacherId === teacherId ? { ...result, teacherId } : prev));
+      if (result.emailSent) toast.success(`Invite resent to ${result.email}`);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // ── Upload helpers ────────────────────────────────────────────────────────
   async function uploadPhoto(
     file: File,
@@ -360,6 +493,14 @@ export default function TeachersPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      {inviteResult && (
+        <InviteSentModal
+          result={inviteResult}
+          onClose={() => setInviteResult(null)}
+          onResend={() => resendInviteMutation.mutate(inviteResult.teacherId)}
+          resending={resendInviteMutation.isPending}
+        />
+      )}
       <header className="sk-pagehead" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <h1>Teachers</h1>
@@ -488,14 +629,48 @@ export default function TeachersPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="nm">{fullName(teacher)}</div>
                     {teacher.email && <div className="meta">{teacher.email}</div>}
-                    {!teacher.isActive && (
-                      <span className="sk-pill" data-tone="warn" style={{ marginTop: 6 }}>
-                        Inactive
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                      {!teacher.isActive && (
+                        <span className="sk-pill" data-tone="warn">
+                          Inactive
+                        </span>
+                      )}
+                      {teacher.userId ? (
+                        <span className="sk-pill" data-tone="good">
+                          <CheckCircle2 className="h-3 w-3" style={{ display: 'inline', verticalAlign: '-2px' }} />{' '}
+                          Has login
+                        </span>
+                      ) : (
+                        <span className="sk-pill" data-tone="info">
+                          No login yet
+                        </span>
+                      )}
+                      {teacher.username && <span className="sk-pill" data-tone="info">@{teacher.username}</span>}
+                    </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {teacher.userId ? (
+                    <button
+                      className="sk-btn"
+                      disabled={resendInviteMutation.isPending}
+                      onClick={() => resendInviteMutation.mutate(teacher.id)}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      Resend invite
+                    </button>
+                  ) : (
+                    <button
+                      className="sk-btn"
+                      data-variant="primary"
+                      disabled={createLoginMutation.isPending}
+                      onClick={() => createLoginMutation.mutate(teacher.id)}
+                      title={teacher.email ? undefined : 'Add an email to this teacher first'}
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                      Create login
+                    </button>
+                  )}
                   <button
                     className="sk-btn"
                     onClick={() => {
