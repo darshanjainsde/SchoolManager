@@ -182,6 +182,15 @@ function AddClassForm({ grades, years, teachers, onSave, isSaving, onCancel }: A
               </option>
             ))}
           </select>
+          {years.length === 0 && (
+            <p className="sk-muted" style={{ margin: 0 }}>
+              Create one in{' '}
+              <Link href="/app/settings" style={{ color: 'var(--sk-brand-2)' }}>
+                Settings
+              </Link>{' '}
+              first.
+            </p>
+          )}
         </Field>
 
         <Field label="Class teacher (optional)" htmlFor="cls-teacher">

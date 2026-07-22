@@ -1,5 +1,6 @@
 'use client';
 import { useState, useMemo, type CSSProperties, type FocusEvent } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { X, Plus } from 'lucide-react';
@@ -393,7 +394,12 @@ export default function TimetablePage() {
                 {sortedPeriods.length === 0 && (
                   <tr>
                     <td colSpan={DAYS.length + 1} style={{ padding: 20, textAlign: 'center' }}>
-                      <span className="sk-state">No periods configured. Add periods via the API or settings.</span>
+                      <span className="sk-state">
+                        No periods configured.{' '}
+                        <Link href="/app/settings" style={{ color: 'var(--sk-brand-2)', fontWeight: 600 }}>
+                          Add periods in Settings →
+                        </Link>
+                      </span>
                     </td>
                   </tr>
                 )}
