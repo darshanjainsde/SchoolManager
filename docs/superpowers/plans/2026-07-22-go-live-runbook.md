@@ -7,6 +7,12 @@
 ## What ships: 54 commits (staging → main)
 School-day subsystem (bell schedule + breaks, Mon-Sat timetable w/ immutable versioned past + dates/today/week-nav, staff mgmt+attendance+monthly cards, leave apply→approve→coverage→cancel), email-invite logins (no temp pw), light/dark theme, Settings page, dashboard checklist, owner Scale tab, + perf (batched attendance write, cached owner overview) + RLS on 7 new tables.
 
+## Mobile responsiveness (done 2026-07-22, commits 7008c45 + 6b6aaaf)
+- Admin / Teacher / Owner portals: were hiding the sidebar on mobile with NO nav → added hamburger + slide-in drawer (accessible: focus trap, Esc, scrim, body-scroll lock, reduced-motion). Desktop unchanged.
+- Public website SiteNav: page links were hidden on mobile → added hamburger dropdown across all nav layouts, theme-aware, respects navShowLogin/navShowCta.
+- Student portal: scrolling top-tabs (already mobile-ok). Wide tables (timetable/platform) scroll inside overflow-x containers; leave/availability rows flex-wrap. KPI/card grids stack via responsive grid-template-columns.
+- NOTE: shell + nav + key pages fixed; a final human visual pass on mobile Chrome per portal is still worthwhile (can't render pixels here).
+
 ## GO-LIVE ORDER (critical — migrate BEFORE deploy)
 1. **Apply 7 migrations to PROD DB, in order** (via Supabase Management API — established flow; write query to scratchpad, user runs `curl`). Order:
    `20260721_010000_attendance_exams_results` → `20260721_020000_nav_login` → `20260722_000000_login_invites` → `20260722_010000_school_day` → `20260722_020000_staff_user_role` → `20260722_030000_leave_cancelled` → `20260722_040000_rls_new_tables`
