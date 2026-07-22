@@ -1,17 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +27,44 @@ interface Student {
   userId: string | null;
 }
 
+// ── Field helper ─────────────────────────────────────────────────────────────
+
+function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <label htmlFor={htmlFor} className="sk-lab">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+// Themed inputs/selects: no dedicated CSS class, styled inline, with a
+// brand-colored focus ring applied directly to the DOM node on focus/blur.
+const fieldStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  border: '1px solid var(--sk-line-2)',
+  borderRadius: 10,
+  padding: '9px 11px',
+  background: 'var(--sk-card)',
+  color: 'var(--sk-ink)',
+  fontSize: 13.5,
+  fontFamily: 'inherit',
+  transition: 'border-color 0.12s, box-shadow 0.12s',
+};
+
+function ringFocus(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-brand)';
+  e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--sk-brand) 18%, transparent)';
+}
+
+function ringBlur(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-line-2)';
+  e.currentTarget.style.boxShadow = 'none';
+}
+
 // ── Create Login Modal ────────────────────────────────────────────────────────
 
 interface LoginCredentials {
@@ -43,28 +74,60 @@ interface LoginCredentials {
 
 function CreateLoginModal({ credentials, onClose }: { credentials: LoginCredentials; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <Card className="w-full max-w-sm mx-4">
-        <CardHeader>
-          <CardTitle>Login created — save these now</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(15, 30, 24, 0.5)',
+        padding: 16,
+      }}
+    >
+      <div className="sk-card" style={{ width: '100%', maxWidth: 380 }}>
+        <div className="sk-card-h">
+          <h3>Login created — save these now</h3>
+        </div>
+        <div className="sk-card-b">
+          <p
+            style={{
+              margin: 0,
+              fontSize: 12.5,
+              color: 'var(--sk-amber)',
+              background: 'var(--sk-amber-tint)',
+              borderRadius: 10,
+              padding: '10px 12px',
+            }}
+          >
             The temporary password is shown only once. Save it before closing this dialog.
           </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="cl-email">Email</Label>
-            <Input id="cl-email" readOnly value={credentials.email} className="font-mono text-sm" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="cl-pw">Temporary password</Label>
-            <Input id="cl-pw" readOnly value={credentials.tempPassword} className="font-mono text-sm" />
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={onClose}>I've saved these — close</Button>
-        </CardFooter>
-      </Card>
+          <Field label="Email" htmlFor="cl-email">
+            <input
+              id="cl-email"
+              readOnly
+              value={credentials.email}
+              style={{ ...fieldStyle, fontFamily: 'monospace', fontSize: 13 }}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
+            />
+          </Field>
+          <Field label="Temporary password" htmlFor="cl-pw">
+            <input
+              id="cl-pw"
+              readOnly
+              value={credentials.tempPassword}
+              style={{ ...fieldStyle, fontFamily: 'monospace', fontSize: 13 }}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
+            />
+          </Field>
+          <button className="sk-btn" data-variant="primary" onClick={onClose}>
+            I&apos;ve saved these — close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -102,57 +165,67 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
   const canSave = firstName.trim() && lastName.trim() && admissionNo.trim();
 
   return (
-    <Card className="max-w-lg">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="sf-first">First name</Label>
-            <Input
+    <div className="sk-card" style={{ maxWidth: 560 }}>
+      <div className="sk-card-h">
+        <h3>{title}</h3>
+      </div>
+      <div className="sk-card-b">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="First name" htmlFor="sf-first">
+            <input
               id="sf-first"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               placeholder="Jane"
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="sf-last">Last name</Label>
-            <Input
+          </Field>
+          <Field label="Last name" htmlFor="sf-last">
+            <input
               id="sf-last"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               placeholder="Doe"
             />
-          </div>
+          </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="sf-admission">Admission no.</Label>
-            <Input
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="Admission no." htmlFor="sf-admission">
+            <input
               id="sf-admission"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={admissionNo}
               onChange={(e) => setAdmissionNo(e.target.value)}
               placeholder="ADM-001"
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="sf-roll">Roll no. (optional)</Label>
-            <Input
+          </Field>
+          <Field label="Roll no. (optional)" htmlFor="sf-roll">
+            <input
               id="sf-roll"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={rollNo}
               onChange={(e) => setRollNo(e.target.value)}
               placeholder="1"
             />
-          </div>
+          </Field>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="sf-class">Class (optional)</Label>
-          <Select
+        <Field label="Class (optional)" htmlFor="sf-class">
+          <select
             id="sf-class"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
             value={classSectionId}
             onChange={(e) => setClassSectionId(e.target.value)}
           >
@@ -162,52 +235,59 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
                 {c.grade.name} — {c.name}
               </option>
             ))}
-          </Select>
-        </div>
+          </select>
+        </Field>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="sf-guardian-name">Guardian name (optional)</Label>
-            <Input
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="Guardian name (optional)" htmlFor="sf-guardian-name">
+            <input
               id="sf-guardian-name"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={guardianName}
               onChange={(e) => setGuardianName(e.target.value)}
               placeholder="John Doe"
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="sf-guardian-phone">Guardian phone (optional)</Label>
-            <Input
+          </Field>
+          <Field label="Guardian phone (optional)" htmlFor="sf-guardian-phone">
+            <input
               id="sf-guardian-phone"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={guardianPhone}
               onChange={(e) => setGuardianPhone(e.target.value)}
               placeholder="+1 555 0100"
             />
-          </div>
+          </Field>
         </div>
-      </CardContent>
-      <CardFooter className="gap-2">
-        <Button
-          onClick={() =>
-            onSave({
-              firstName: firstName.trim(),
-              lastName: lastName.trim(),
-              admissionNo: admissionNo.trim(),
-              rollNo: rollNo.trim(),
-              classSectionId,
-              guardianName: guardianName.trim(),
-              guardianPhone: guardianPhone.trim(),
-            })
-          }
-          disabled={isSaving || !canSave}
-        >
-          {isSaving ? 'Saving…' : 'Save'}
-        </Button>
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-      </CardFooter>
-    </Card>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button
+            className="sk-btn"
+            data-variant="primary"
+            onClick={() =>
+              onSave({
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
+                admissionNo: admissionNo.trim(),
+                rollNo: rollNo.trim(),
+                classSectionId,
+                guardianName: guardianName.trim(),
+                guardianPhone: guardianPhone.trim(),
+              })
+            }
+            disabled={isSaving || !canSave}
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
+          <button className="sk-btn" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -221,6 +301,23 @@ function classBadgeLabel(student: Student): string | null {
 function apiErrorMessage(err: Error): string {
   return err.message;
 }
+
+const thStyle: CSSProperties = {
+  textAlign: 'left',
+  padding: '11px 14px',
+  fontSize: 10.5,
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: 'var(--sk-ink-3)',
+  whiteSpace: 'nowrap',
+};
+
+const tdStyle: CSSProperties = {
+  padding: '11px 14px',
+  fontSize: 13,
+  borderTop: '1px solid var(--sk-line)',
+};
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -345,9 +442,19 @@ export default function StudentsPage() {
   // Derive the initial values for the edit form from current student data
   const editingStudent = editId ? (studentsQuery.data ?? []).find((s) => s.id === editId) : null;
 
+  // Safe-delete: confirm before firing the destructive mutation.
+  function confirmDeleteStudent(student: Student) {
+    const ok = window.confirm(`Remove ${student.firstName} ${student.lastName}? This can’t be undone.`);
+    if (ok) deleteMutation.mutate(student.id);
+  }
+
+  const students = studentsQuery.data ?? [];
+  const unassignedCount = students.filter((s) => !s.classSectionId).length;
+  const loginCount = students.filter((s) => s.userId).length;
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-6">
+    <>
       {/* Create Login credentials modal */}
       {loginCredentials && (
         <CreateLoginModal
@@ -355,14 +462,16 @@ export default function StudentsPage() {
           onClose={() => setLoginCredentials(null)}
         />
       )}
+
       {/* Page header */}
-      <header className="flex items-center justify-between">
+      <header className="sk-pagehead" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Students</h1>
-          <p className="mt-1 text-sm text-slate-500">Manage enrolled students.</p>
+          <h1>Students</h1>
+          <p>Manage enrolled students.</p>
         </div>
-        <Button
-          variant="outline"
+        <button
+          className="sk-btn"
+          data-variant="primary"
           onClick={() => {
             setShowAdd((v) => !v);
             setEditId(null);
@@ -370,57 +479,81 @@ export default function StudentsPage() {
         >
           {showAdd ? (
             <>
-              <X className="h-4 w-4 mr-1" /> Cancel
+              <X className="h-4 w-4" /> Cancel
             </>
           ) : (
             <>
-              <Plus className="h-4 w-4 mr-1" /> Add student
+              <Plus className="h-4 w-4" /> Add student
             </>
           )}
-        </Button>
+        </button>
       </header>
+
+      {students.length > 0 && (
+        <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
+          <div className="sk-kpi">
+            <span className="lab">Students shown</span>
+            <span className="n">{students.length}</span>
+            {classFilter && <span className="hint">Filtered by class</span>}
+          </div>
+          <div className="sk-kpi" data-tone={unassignedCount > 0 ? 'warn' : undefined}>
+            <span className="lab">Without a class</span>
+            <span className="n">{unassignedCount}</span>
+          </div>
+          <div className="sk-kpi" data-tone="good">
+            <span className="lab">Portal logins</span>
+            <span className="n">{loginCount}</span>
+          </div>
+        </div>
+      )}
 
       {/* Add form */}
       {showAdd && (
-        <StudentForm
-          title="Add student"
-          classes={classesQuery.data ?? []}
-          onSave={(data) => addMutation.mutate(data)}
-          isSaving={addMutation.isPending}
-          onCancel={() => setShowAdd(false)}
-        />
+        <div style={{ marginBottom: 18 }}>
+          <StudentForm
+            title="Add student"
+            classes={classesQuery.data ?? []}
+            onSave={(data) => addMutation.mutate(data)}
+            isSaving={addMutation.isPending}
+            onCancel={() => setShowAdd(false)}
+          />
+        </div>
       )}
 
       {/* Edit form */}
       {editId && editingStudent && (
-        <StudentForm
-          title="Edit student"
-          initial={{
-            firstName: editingStudent.firstName,
-            lastName: editingStudent.lastName,
-            admissionNo: editingStudent.admissionNo,
-            rollNo: editingStudent.rollNo ?? '',
-            classSectionId: editingStudent.classSectionId ?? '',
-            guardianName: editingStudent.guardianName ?? '',
-            guardianPhone: editingStudent.guardianPhone ?? '',
-          }}
-          classes={classesQuery.data ?? []}
-          onSave={(data) => updateMutation.mutate({ id: editId, data })}
-          isSaving={updateMutation.isPending}
-          onCancel={() => setEditId(null)}
-        />
+        <div style={{ marginBottom: 18 }}>
+          <StudentForm
+            title="Edit student"
+            initial={{
+              firstName: editingStudent.firstName,
+              lastName: editingStudent.lastName,
+              admissionNo: editingStudent.admissionNo,
+              rollNo: editingStudent.rollNo ?? '',
+              classSectionId: editingStudent.classSectionId ?? '',
+              guardianName: editingStudent.guardianName ?? '',
+              guardianPhone: editingStudent.guardianPhone ?? '',
+            }}
+            classes={classesQuery.data ?? []}
+            onSave={(data) => updateMutation.mutate({ id: editId, data })}
+            isSaving={updateMutation.isPending}
+            onCancel={() => setEditId(null)}
+          />
+        </div>
       )}
 
       {/* Class filter */}
-      <div className="flex items-center gap-3">
-        <Label htmlFor="class-filter" className="shrink-0 text-sm font-medium text-slate-700">
-          Filter by class:
-        </Label>
-        <Select
+      <div className="sk-card" style={{ marginBottom: 18, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <label htmlFor="class-filter" className="sk-lab" style={{ flex: 'none' }}>
+          Filter by class
+        </label>
+        <select
           id="class-filter"
           value={classFilter}
           onChange={(e) => setClassFilter(e.target.value)}
-          className="max-w-xs"
+          style={{ ...fieldStyle, maxWidth: 260 }}
+          onFocus={ringFocus}
+          onBlur={ringBlur}
         >
           <option value="">All classes</option>
           {(classesQuery.data ?? []).map((c) => (
@@ -428,100 +561,101 @@ export default function StudentsPage() {
               {c.grade.name} — {c.name}
             </option>
           ))}
-        </Select>
+        </select>
       </div>
 
       {/* Loading / error */}
-      {studentsQuery.isLoading && <p className="text-sm text-slate-500">Loading…</p>}
-      {studentsQuery.error && (
-        <p className="text-sm text-rose-600">{(studentsQuery.error as Error).message}</p>
-      )}
+      {studentsQuery.isLoading && <p className="sk-state">Loading…</p>}
+      {studentsQuery.error && <p className="sk-state err">{(studentsQuery.error as Error).message}</p>}
 
       {/* Empty state */}
-      {!studentsQuery.isLoading && (studentsQuery.data?.length ?? 0) === 0 && (
-        <p className="text-sm text-slate-400">No students found. Add one above.</p>
+      {!studentsQuery.isLoading && students.length === 0 && (
+        <p className="sk-state">No students found. Add one above.</p>
       )}
 
       {/* Students table */}
-      {(studentsQuery.data?.length ?? 0) > 0 && (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Roll no.</Th>
-              <Th>Name</Th>
-              <Th>Admission no.</Th>
-              <Th>Class</Th>
-              <Th>Guardian</Th>
-              <Th>Contact</Th>
-              <Th>Portal login</Th>
-              <Th />
-            </Tr>
-          </THead>
-          <TBody>
-            {studentsQuery.data!.map((student) => (
-              <Tr key={student.id}>
-                <Td className="text-slate-500">{student.rollNo ?? '—'}</Td>
-                <Td className="font-medium text-slate-900">
-                  {student.firstName} {student.lastName}
-                </Td>
-                <Td className="text-slate-500">{student.admissionNo}</Td>
-                <Td>
-                  {classBadgeLabel(student) ? (
-                    <Badge tone="info">{classBadgeLabel(student)}</Badge>
-                  ) : (
-                    <span className="text-slate-400">—</span>
-                  )}
-                </Td>
-                <Td>{student.guardianName ?? <span className="text-slate-400">—</span>}</Td>
-                <Td>{student.guardianPhone ?? <span className="text-slate-400">—</span>}</Td>
-                <Td>
-                  {student.userId ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-teal-700 font-medium">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Has login
-                    </span>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={createLoginMutation.isPending}
-                      onClick={() => createLoginMutation.mutate(student.id)}
-                    >
-                      <KeyRound className="h-3.5 w-3.5 mr-1" />
-                      Create login
-                    </Button>
-                  )}
-                </Td>
-                <Td>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setShowAdd(false);
-                        setEditId(student.id);
-                      }}
-                    >
-                      <Pencil className="h-3.5 w-3.5 mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={deleteMutation.isPending}
-                      onClick={() => deleteMutation.mutate(student.id)}
-                      className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
-                </Td>
-              </Tr>
-            ))}
-          </TBody>
-        </Table>
+      {students.length > 0 && (
+        <div className="sk-card" style={{ overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Roll no.</th>
+                  <th style={thStyle}>Name</th>
+                  <th style={thStyle}>Admission no.</th>
+                  <th style={thStyle}>Class</th>
+                  <th style={thStyle}>Guardian</th>
+                  <th style={thStyle}>Contact</th>
+                  <th style={thStyle}>Portal login</th>
+                  <th style={thStyle} />
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student.id}>
+                    <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }}>{student.rollNo ?? '—'}</td>
+                    <td style={{ ...tdStyle, fontWeight: 650 }}>
+                      {student.firstName} {student.lastName}
+                    </td>
+                    <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }}>{student.admissionNo}</td>
+                    <td style={tdStyle}>
+                      {classBadgeLabel(student) ? (
+                        <span className="sk-pill" data-tone="info">
+                          {classBadgeLabel(student)}
+                        </span>
+                      ) : (
+                        <span className="sk-muted">—</span>
+                      )}
+                    </td>
+                    <td style={tdStyle}>{student.guardianName ?? <span className="sk-muted">—</span>}</td>
+                    <td style={tdStyle}>{student.guardianPhone ?? <span className="sk-muted">—</span>}</td>
+                    <td style={tdStyle}>
+                      {student.userId ? (
+                        <span className="sk-pill" data-tone="good" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <CheckCircle2 className="h-3 w-3" />
+                          Has login
+                        </span>
+                      ) : (
+                        <button
+                          className="sk-btn"
+                          disabled={createLoginMutation.isPending}
+                          onClick={() => createLoginMutation.mutate(student.id)}
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          Create login
+                        </button>
+                      )}
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button
+                          className="sk-btn"
+                          onClick={() => {
+                            setShowAdd(false);
+                            setEditId(student.id);
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
+                        <button
+                          className="sk-btn"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => confirmDeleteStudent(student)}
+                          style={{ color: 'var(--sk-bad)' }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }

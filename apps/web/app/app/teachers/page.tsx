@@ -1,14 +1,10 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Trash2, Upload, Pencil, X } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +27,8 @@ interface MediaAsset {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
+
 function initials(t: Teacher) {
   return `${t.firstName.charAt(0)}${t.lastName.charAt(0)}`.toUpperCase();
 }
@@ -39,7 +37,43 @@ function fullName(t: Teacher) {
   return `${t.firstName} ${t.lastName}`;
 }
 
-// ── Add / Edit modal ─────────────────────────────────────────────────────────
+function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <label htmlFor={htmlFor} className="sk-lab">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+// Themed inputs: no dedicated CSS class, styled inline, with a brand-colored
+// focus ring applied directly to the DOM node on focus/blur.
+const fieldStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  border: '1px solid var(--sk-line-2)',
+  borderRadius: 10,
+  padding: '9px 11px',
+  background: 'var(--sk-card)',
+  color: 'var(--sk-ink)',
+  fontSize: 13.5,
+  fontFamily: 'inherit',
+  transition: 'border-color 0.12s, box-shadow 0.12s',
+};
+
+function ringFocus(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-brand)';
+  e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--sk-brand) 18%, transparent)';
+}
+
+function ringBlur(e: FocusEvent<HTMLElement>) {
+  e.currentTarget.style.borderColor = 'var(--sk-line-2)';
+  e.currentTarget.style.boxShadow = 'none';
+}
+
+// ── Add / Edit form ──────────────────────────────────────────────────────────
 
 interface TeacherFormProps {
   title: string;
@@ -77,55 +111,71 @@ function TeacherForm({
   const previewUrl = uploadedPhotoUrl ?? photoUrl;
 
   return (
-    <Card className="max-w-lg">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="tf-first">First name</Label>
-            <Input
+    <div className="sk-card" style={{ maxWidth: 560 }}>
+      <div className="sk-card-h">
+        <h3>{title}</h3>
+      </div>
+      <div className="sk-card-b">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="First name" htmlFor="tf-first">
+            <input
               id="tf-first"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               placeholder="Jane"
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="tf-last">Last name</Label>
-            <Input
+          </Field>
+          <Field label="Last name" htmlFor="tf-last">
+            <input
               id="tf-last"
+              style={fieldStyle}
+              onFocus={ringFocus}
+              onBlur={ringBlur}
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
               placeholder="Smith"
             />
-          </div>
+          </Field>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="tf-email">Email (optional)</Label>
-          <Input
+        <Field label="Email (optional)" htmlFor="tf-email">
+          <input
             id="tf-email"
             type="email"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="jane.smith@school.com"
           />
-        </div>
+        </Field>
 
         {/* Photo upload */}
-        <div className="space-y-2">
-          <Label>Photo (optional)</Label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span className="sk-lab">Photo (optional)</span>
           {previewUrl ? (
             <img
               src={previewUrl}
               alt="Teacher photo"
-              className="h-20 w-20 rounded-full object-cover border border-slate-200"
+              style={{
+                height: 72,
+                width: 72,
+                borderRadius: '50%',
+                objectFit: 'cover',
+                border: '1px solid var(--sk-line)',
+              }}
             />
           ) : initial.photoAssetId ? (
-            <p className="text-sm text-slate-500 italic">Photo set — upload to replace.</p>
+            <p className="sk-muted" style={{ margin: 0, fontStyle: 'italic' }}>
+              Photo set — upload to replace.
+            </p>
           ) : (
-            <p className="text-sm text-slate-400">No photo set.</p>
+            <p className="sk-muted" style={{ margin: 0 }}>
+              No photo set.
+            </p>
           )}
           <input
             ref={photoInputRef}
@@ -138,37 +188,40 @@ function TeacherForm({
               e.target.value = '';
             }}
           />
-          <Button
+          <button
             type="button"
-            variant="outline"
-            size="sm"
+            className="sk-btn"
+            style={{ alignSelf: 'flex-start' }}
             disabled={isUploadingPhoto}
             onClick={() => photoInputRef.current?.click()}
           >
-            <Upload className="h-4 w-4 mr-1" />
+            <Upload className="h-4 w-4" />
             {isUploadingPhoto ? 'Uploading…' : previewUrl || initial.photoAssetId ? 'Replace photo' : 'Upload photo'}
-          </Button>
+          </button>
         </div>
-      </CardContent>
-      <CardFooter className="gap-2">
-        <Button
-          onClick={() =>
-            onSave({
-              firstName: firstName.trim(),
-              lastName: lastName.trim(),
-              email: email.trim(),
-              photoAssetId: initial.photoAssetId ?? null,
-            })
-          }
-          disabled={isSaving || !firstName.trim() || !lastName.trim()}
-        >
-          {isSaving ? 'Saving…' : 'Save'}
-        </Button>
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-      </CardFooter>
-    </Card>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <button
+            className="sk-btn"
+            data-variant="primary"
+            onClick={() =>
+              onSave({
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
+                email: email.trim(),
+                photoAssetId: initial.photoAssetId ?? null,
+              })
+            }
+            disabled={isSaving || !firstName.trim() || !lastName.trim()}
+          >
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
+          <button className="sk-btn" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -295,73 +348,96 @@ export default function TeachersPage() {
     setEditPhotoUrl(null);
   }
 
+  // Safe-delete: confirm before firing the destructive mutation.
+  function confirmDeleteTeacher(teacher: Teacher) {
+    const ok = window.confirm(`Remove ${fullName(teacher)}? This can’t be undone.`);
+    if (ok) deleteMutation.mutate(teacher.id);
+  }
+
+  const teachers = teachersQuery.data ?? [];
+  const activeCount = teachers.filter((t) => t.isActive).length;
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex items-center justify-between">
+    <>
+      <header className="sk-pagehead" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Teachers</h1>
-          <p className="mt-1 text-sm text-slate-500">Manage your school&apos;s teaching staff.</p>
+          <h1>Teachers</h1>
+          <p>Manage your school&apos;s teaching staff.</p>
         </div>
-        <Button
+        <button
+          className="sk-btn"
+          data-variant="primary"
           onClick={() => {
             setShowAdd((v) => !v);
             setEditId(null);
           }}
-          variant="outline"
         >
           {showAdd ? (
             <>
-              <X className="h-4 w-4 mr-1" /> Cancel
+              <X className="h-4 w-4" /> Cancel
             </>
           ) : (
             <>
-              <Plus className="h-4 w-4 mr-1" /> Add teacher
+              <Plus className="h-4 w-4" /> Add teacher
             </>
           )}
-        </Button>
+        </button>
       </header>
+
+      {teachers.length > 0 && (
+        <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(2, minmax(0,1fr))' }}>
+          <div className="sk-kpi">
+            <span className="lab">Total teachers</span>
+            <span className="n">{teachers.length}</span>
+          </div>
+          <div className="sk-kpi" data-tone="good">
+            <span className="lab">Active</span>
+            <span className="n">{activeCount}</span>
+          </div>
+        </div>
+      )}
 
       {/* Add form */}
       {showAdd && (
-        <TeacherForm
-          title="Add teacher"
-          onSave={({ firstName, lastName, email, photoAssetId }) =>
-            addMutation.mutate({
-              firstName,
-              lastName,
-              email: email || undefined,
-              photoAssetId: addPhotoAssetId ?? photoAssetId,
-            })
-          }
-          isSaving={addMutation.isPending}
-          onCancel={() => {
-            setShowAdd(false);
-            resetAddForm();
-          }}
-          onPhotoUpload={(f) =>
-            void uploadPhoto(f, setAddPhotoAssetId, setAddPhotoUrl, setIsUploadingAddPhoto)
-          }
-          isUploadingPhoto={isUploadingAddPhoto}
-          uploadedPhotoUrl={addPhotoUrl}
-        />
+        <div style={{ marginBottom: 18 }}>
+          <TeacherForm
+            title="Add teacher"
+            onSave={({ firstName, lastName, email, photoAssetId }) =>
+              addMutation.mutate({
+                firstName,
+                lastName,
+                email: email || undefined,
+                photoAssetId: addPhotoAssetId ?? photoAssetId,
+              })
+            }
+            isSaving={addMutation.isPending}
+            onCancel={() => {
+              setShowAdd(false);
+              resetAddForm();
+            }}
+            onPhotoUpload={(f) =>
+              void uploadPhoto(f, setAddPhotoAssetId, setAddPhotoUrl, setIsUploadingAddPhoto)
+            }
+            isUploadingPhoto={isUploadingAddPhoto}
+            uploadedPhotoUrl={addPhotoUrl}
+          />
+        </div>
       )}
 
       {/* Loading / error states */}
-      {teachersQuery.isLoading && <p className="text-sm text-slate-500">Loading…</p>}
-      {teachersQuery.error && (
-        <p className="text-sm text-rose-600">{(teachersQuery.error as Error).message}</p>
-      )}
+      {teachersQuery.isLoading && <p className="sk-state">Loading…</p>}
+      {teachersQuery.error && <p className="sk-state err">{(teachersQuery.error as Error).message}</p>}
 
       {/* Empty state */}
-      {!teachersQuery.isLoading && teachersQuery.data?.length === 0 && (
-        <p className="text-sm text-slate-400">No teachers yet. Add one above.</p>
+      {!teachersQuery.isLoading && teachers.length === 0 && (
+        <p className="sk-state">No teachers yet. Add one above.</p>
       )}
 
       {/* Teacher grid */}
-      {(teachersQuery.data?.length ?? 0) > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {teachersQuery.data!.map((teacher) =>
+      {teachers.length > 0 && (
+        <div className="sk-cardgrid">
+          {teachers.map((teacher, i) =>
             editId === teacher.id ? (
               <TeacherForm
                 key={teacher.id}
@@ -389,60 +465,63 @@ export default function TeachersPage() {
                 uploadedPhotoUrl={editPhotoUrl}
               />
             ) : (
-              <Card key={teacher.id}>
-                <CardContent className="flex items-start gap-4 pt-4">
+              <div key={teacher.id} className="sk-entity" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   {teacher.photoAssetId && photoUrlMap[teacher.photoAssetId] ? (
                     <img
                       src={photoUrlMap[teacher.photoAssetId]}
                       alt={fullName(teacher)}
-                      className="h-14 w-14 rounded-full object-cover border border-slate-200 shrink-0"
+                      style={{
+                        height: 44,
+                        width: 44,
+                        borderRadius: 13,
+                        objectFit: 'cover',
+                        border: '1px solid var(--sk-line)',
+                        flex: 'none',
+                      }}
                     />
                   ) : (
-                    <div className="h-14 w-14 rounded-full bg-teal-100 flex items-center justify-center shrink-0 text-teal-700 font-semibold select-none">
+                    <span className="av" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
                       {initials(teacher)}
-                    </div>
+                    </span>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-800 truncate">{fullName(teacher)}</p>
-                    {teacher.email && (
-                      <p className="text-sm text-slate-500 truncate">{teacher.email}</p>
-                    )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="nm">{fullName(teacher)}</div>
+                    {teacher.email && <div className="meta">{teacher.email}</div>}
                     {!teacher.isActive && (
-                      <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                      <span className="sk-pill" data-tone="warn" style={{ marginTop: 6 }}>
                         Inactive
                       </span>
                     )}
                   </div>
-                </CardContent>
-                <CardFooter className="gap-2 pt-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="sk-btn"
                     onClick={() => {
                       setShowAdd(false);
                       setEditId(teacher.id);
                       resetEditForm();
                     }}
                   >
-                    <Pencil className="h-3.5 w-3.5 mr-1" />
+                    <Pencil className="h-3.5 w-3.5" />
                     Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  </button>
+                  <button
+                    className="sk-btn"
                     disabled={deleteMutation.isPending}
-                    onClick={() => deleteMutation.mutate(teacher.id)}
-                    className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                    onClick={() => confirmDeleteTeacher(teacher)}
+                    style={{ color: 'var(--sk-bad)' }}
                   >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    <Trash2 className="h-3.5 w-3.5" />
                     Delete
-                  </Button>
-                </CardFooter>
-              </Card>
-            )
+                  </button>
+                </div>
+              </div>
+            ),
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
