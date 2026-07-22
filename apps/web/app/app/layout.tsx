@@ -11,6 +11,7 @@ import { useHost } from '@/components/use-host';
 import { useApi } from '@/lib/use-api';
 import { isSchoolHost, exampleSchoolHost, platformHref } from '@/lib/hosts';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
 
 // `requiredFeature` hides the item for schools whose tier lacks it. Items with
@@ -143,6 +144,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Logout */}
         <div className="border-t border-white/10 p-4">
+          <div className="skosx mb-3"><ThemeToggle /></div>
           <button
             onClick={() => {
               clear();

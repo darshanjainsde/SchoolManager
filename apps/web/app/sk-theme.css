@@ -214,3 +214,61 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
 @media (prefers-color-scheme: dark) { .sk-btn[data-variant="primary"] { color: #07130e; } }
 .sk-btn[data-variant="primary"]:hover { filter: brightness(1.06); }
 .sk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ============================================================================
+   Explicit theme choice — the toggle stamps data-theme on <html> and must beat
+   the OS preference in BOTH directions. Tokens are re-declared here because
+   they live on .skosx, not :root.
+   ========================================================================== */
+html[data-theme='light'] .skosx {
+  --sk-paper: #f6f8f6; --sk-ink: #142019; --sk-ink-2: #46564d; --sk-ink-3: #75847a;
+  --sk-card: #ffffff; --sk-line: #e4e9e3; --sk-line-2: #d3dbd3;
+  --sk-brand: #134d3b; --sk-brand-2: #1c6c52; --sk-brand-tint: #e4efe9;
+  --sk-amber: #cf7d16; --sk-amber-tint: #fbf0dc;
+  --sk-good: #188f60; --sk-good-tint: #e2f3ea;
+  --sk-bad: #c24a2c; --sk-bad-tint: #f9e8e1; --sk-late: #9a6b12;
+  --sk-shadow: 0 1px 2px rgba(15, 30, 24, 0.05), 0 10px 30px -14px rgba(15, 30, 24, 0.18);
+  --sk-shadow-sm: 0 1px 2px rgba(15, 30, 24, 0.06);
+}
+html[data-theme='dark'] .skosx {
+  --sk-paper: #0c1310; --sk-ink: #e8eeea; --sk-ink-2: #a6b3ab; --sk-ink-3: #79877f;
+  --sk-card: #131c17; --sk-line: #223028; --sk-line-2: #2e3e35;
+  --sk-brand: #3faf8c; --sk-brand-2: #5cc4a3; --sk-brand-tint: #17251f;
+  --sk-amber: #e5a345; --sk-amber-tint: #291f10;
+  --sk-good: #35b57e; --sk-good-tint: #122720;
+  --sk-bad: #e0694a; --sk-bad-tint: #2a1712; --sk-late: #d9a43a;
+  --sk-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -16px rgba(0, 0, 0, 0.6);
+  --sk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================================================
+   Legacy utility remap. Pages predating the theme hardcode Tailwind slate
+   colours, which turn invisible when the surface flips (dark text on a dark
+   card). Mapping them onto tokens fixes every such page in both themes at
+   once — `.skosx .text-slate-900` outranks the bare utility without
+   !important, and the tokens already know which theme is active.
+   ========================================================================== */
+.skosx .text-slate-900, .skosx .text-slate-800 { color: var(--sk-ink); }
+.skosx .text-slate-700, .skosx .text-slate-600 { color: var(--sk-ink-2); }
+.skosx .text-slate-500, .skosx .text-slate-400 { color: var(--sk-ink-3); }
+.skosx .bg-white { background-color: var(--sk-card); }
+.skosx .bg-slate-50, .skosx .bg-slate-100 { background-color: var(--sk-paper); }
+.skosx .border-slate-200, .skosx .border-slate-100 { border-color: var(--sk-line); }
+.skosx .text-teal-700, .skosx .text-teal-600 { color: var(--sk-brand-2); }
+.skosx .bg-teal-50 { background-color: var(--sk-brand-tint); }
+.skosx .text-rose-600, .skosx .text-rose-500 { color: var(--sk-bad); }
+.skosx .text-amber-700 { color: var(--sk-amber); }
+.skosx .text-emerald-700 { color: var(--sk-good); }
+
+/* ---- theme toggle control ---- */
+.sk-themetoggle {
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+  border: 1px solid var(--sk-line-2); border-radius: 999px; background: var(--sk-card);
+}
+.sk-themetoggle button {
+  display: grid; place-items: center; width: 26px; height: 26px; border: 0; cursor: pointer;
+  border-radius: 999px; background: transparent; color: var(--sk-ink-3); font-size: 13px; line-height: 1;
+}
+.sk-themetoggle button:hover { color: var(--sk-ink); }
+.sk-themetoggle button[aria-pressed='true'] { background: var(--sk-brand); color: #fff; }
+html[data-theme='dark'] .sk-themetoggle button[aria-pressed='true'] { color: #07130e; }

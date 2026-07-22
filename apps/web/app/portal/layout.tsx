@@ -16,6 +16,7 @@ import { useHydrated } from '@/lib/use-hydrated';
 import { useHost } from '@/components/use-host';
 import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
 
 const NAV_ITEMS = [
@@ -77,6 +78,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
             <div className="s">{host?.split(':')[0] ?? 'Sckools'}</div>
           </div>
           <div style={{ flex: 1 }} />
+          <ThemeToggle />
           <button
             className="sk-signout"
             onClick={() => {

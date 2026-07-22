@@ -17,6 +17,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
 
 export default function TeacherLayout({ children }: { children: ReactNode }) {
@@ -70,6 +71,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="sk-side-foot">
+          <div style={{ padding: '8px 11px' }}><ThemeToggle /></div>
           <button
             onClick={async () => {
               const rt = useAuthStore.getState().refreshToken;
