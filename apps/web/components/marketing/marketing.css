@@ -577,13 +577,19 @@
    The premium tier, set apart in dark between the light sections. Left rail
    explains the real features (accordion); right stage is deliberately abstract
    motion — capability, not a UI a competitor could copy. */
+/* Dark rounded "spotlight" card floating on the light page — same shape
+   language as the Events stage and the final CTA, so it stops reading as an
+   inserted full-bleed slab. The bottom margin leaves a clean paper gap before
+   the Events card below. */
 .mkt .pro-band {
-  position: relative; overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  position: relative; overflow: hidden; margin: 0 18px 28px; border-radius: 44px; padding: 78px 0;
   background:
     radial-gradient(90% 120% at 12% 0%, rgba(20, 184, 166, 0.16), transparent 55%),
     radial-gradient(70% 90% at 100% 100%, rgba(109, 74, 255, 0.16), transparent 55%),
     linear-gradient(160deg, #073732, #04211f 60%, #041a19);
 }
+.mkt .pro-grain { border-radius: inherit; }
+@media (max-width: 620px) { .mkt .pro-band { margin: 0 12px 22px; border-radius: 32px; padding: 56px 0; } }
 .mkt .pro-grain {
   position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
   background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px); background-size: 22px 22px;
