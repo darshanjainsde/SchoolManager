@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { MarketingConfigData } from '@/lib/public-api';
 import CallbackModal from './CallbackModal';
 import FlipFeatureCards from './FlipFeatureCards';
+import ProShowcase from './ProShowcase';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
 /* Sample trust counters — update as the network grows (also cited in JSON-LD? no: display only). */
@@ -380,6 +381,8 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
           </p>
         </div>
       </section>
+
+      <ProShowcase onCallback={() => openModal('Pro')} />
 
       <section className="events-sec" id="events" aria-label="Events network">
         <div className="beam" aria-hidden />

@@ -572,3 +572,143 @@
 .post ul { margin: 0 0 16px 22px; display: grid; gap: 8px; line-height: 1.65; }
 .post-cta { margin-top: 40px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper2); }
 .post-cta a { font-weight: 700; }
+
+/* ═══════════ Pro showcase — dark abstract band ═══════════
+   The premium tier, set apart in dark between the light sections. Left rail
+   explains the real features (accordion); right stage is deliberately abstract
+   motion — capability, not a UI a competitor could copy. */
+.mkt .pro-band {
+  position: relative; overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(90% 120% at 12% 0%, rgba(20, 184, 166, 0.16), transparent 55%),
+    radial-gradient(70% 90% at 100% 100%, rgba(109, 74, 255, 0.16), transparent 55%),
+    linear-gradient(160deg, #073732, #04211f 60%, #041a19);
+}
+.mkt .pro-grain {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px); background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000, transparent 78%);
+          mask-image: radial-gradient(120% 90% at 50% 0%, #000, transparent 78%);
+}
+.mkt .pro-band .wrap { position: relative; }
+.mkt .pro-kick {
+  display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 800;
+  letter-spacing: 0.18em; text-transform: uppercase; color: #7ff0dd;
+}
+.mkt .pro-kick .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px 2px rgba(245, 166, 35, 0.6); }
+.mkt .pro-band h2 { color: #fff; margin-top: 16px; }
+.mkt .pro-sub { color: rgba(215, 240, 235, 0.72); margin-top: 14px; }
+.mkt .pro-sub em { color: #fff; font-style: normal; }
+
+.mkt .pro-th { position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: clamp(24px, 4vw, 54px); align-items: center; margin-top: 46px; }
+@media (max-width: 900px) { .mkt .pro-th { grid-template-columns: 1fr; gap: 26px; } }
+
+/* left rail — accordion of real features */
+.mkt .pro-rail { display: flex; flex-direction: column; gap: 8px; }
+.mkt .pro-item { border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 16px; background: rgba(255, 255, 255, 0.02); overflow: hidden; transition: background 0.3s, border-color 0.3s; }
+.mkt .pro-item.on { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.15); }
+.mkt .pro-tab { position: relative; width: 100%; display: flex; align-items: center; gap: 13px; padding: 15px 17px; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; }
+.mkt .pro-tab .ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-size: 18px; flex: none; background: rgba(255, 255, 255, 0.06); transition: box-shadow 0.3s, background 0.3s; }
+.mkt .pro-item.on .pro-tab .ic { background: var(--pa-t); box-shadow: 0 0 24px -2px var(--pa-g); }
+.mkt .pro-tab .tt { min-width: 0; }
+.mkt .pro-tab .tt b { display: block; font-size: 15.5px; font-weight: 800; color: #fff; letter-spacing: -0.01em; }
+.mkt .pro-tab .tt span { display: block; font-size: 12px; color: rgba(200, 225, 220, 0.55); margin-top: 1px; }
+.mkt .pro-tab .bar { position: absolute; left: 0; bottom: 0; height: 2.5px; width: 100%; transform: scaleX(0); transform-origin: left; background: var(--pa); border-radius: 3px; box-shadow: 0 0 8px var(--pa-g); }
+.mkt .pro-item.on .pro-tab .bar { animation: proBar var(--pro-dur, 6500ms) linear forwards; }
+.mkt .pro-rail.paused .pro-item.on .pro-tab .bar { animation-play-state: paused; }
+@keyframes proBar { to { transform: scaleX(1); } }
+.mkt .pro-detail { max-height: 0; opacity: 0; padding: 0 17px; transition: max-height 0.5s cubic-bezier(0.16, 0.8, 0.26, 1), opacity 0.45s, padding 0.5s; }
+.mkt .pro-item.on .pro-detail { max-height: 260px; opacity: 1; padding: 0 17px 16px 17px; }
+.mkt .pro-detail p { margin: 0 0 11px; font-size: 13.5px; color: rgba(220, 240, 236, 0.78); line-height: 1.55; }
+.mkt .pro-feats { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.mkt .pro-feats li { position: relative; padding-left: 22px; font-size: 12.8px; color: rgba(230, 245, 242, 0.9); line-height: 1.4; }
+.mkt .pro-feats li::before { content: "✦"; position: absolute; left: 0; top: 0; color: var(--pa-c); font-size: 12px; }
+
+/* right — abstract stage */
+.mkt .pro-stage { position: relative; border-radius: 20px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.09); background: radial-gradient(120% 120% at 50% 10%, rgba(255, 255, 255, 0.04), transparent 60%), rgba(3, 20, 18, 0.55); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 30px 60px -30px rgba(0, 0, 0, 0.6); }
+.mkt .pro-screen { position: relative; aspect-ratio: 16 / 10.4; animation: proFade 0.6s ease; }
+@keyframes proFade { from { opacity: 0; } to { opacity: 1; } }
+.mkt .pro-field { position: absolute; inset: 0; }
+.mkt .pro-star { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; opacity: 0.22; animation: proTwk 3.5s ease-in-out infinite; }
+@keyframes proTwk { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.5; } }
+.mkt .pro-scene-label { position: absolute; left: 22px; right: 22px; bottom: 20px; z-index: 6; }
+.mkt .pro-scene-label b { display: block; color: #fff; font-size: clamp(1rem, 1.9vw, 1.4rem); font-weight: 800; letter-spacing: -0.02em; }
+.mkt .pro-scene-label span { display: block; color: rgba(210, 235, 230, 0.62); font-size: 12.5px; margin-top: 3px; }
+.mkt .pro-glow { position: absolute; border-radius: 50%; filter: blur(46px); opacity: 0.5; pointer-events: none; }
+
+/* Scene A · living website — composition morph */
+.mkt .pa { position: absolute; inset: 0; display: grid; place-items: center; }
+.mkt .pa-canvas { position: relative; width: 55%; aspect-ratio: 1.5; border-radius: 16px; background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)); border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.5); overflow: hidden; padding: 13px; }
+.mkt .pa-comp { position: absolute; inset: 13px; opacity: 0; }
+.mkt .pa-comp.c1 { animation: paC 6s ease-in-out infinite; }
+.mkt .pa-comp.c2 { animation: paC 6s ease-in-out infinite 2s; }
+.mkt .pa-comp.c3 { animation: paC 6s ease-in-out infinite 4s; }
+@keyframes paC { 0%, 4% { opacity: 0; transform: scale(0.98); } 8%, 28% { opacity: 1; transform: none; } 32%, 100% { opacity: 0; transform: scale(1.02); } }
+.mkt .pa-blk { position: absolute; border-radius: 8px; background: linear-gradient(135deg, rgba(20, 184, 166, 0.55), rgba(58, 166, 221, 0.4)); }
+.mkt .pa-line { position: absolute; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.28); }
+.mkt .pa-accent { position: absolute; height: 5px; width: 46px; border-radius: 3px; background: var(--gold); box-shadow: 0 0 12px rgba(245, 166, 35, 0.7); }
+.mkt .c1 .pa-blk { inset: 0 0 45% 0; background: linear-gradient(135deg, rgba(109, 74, 255, 0.5), rgba(20, 184, 166, 0.45)); }
+.mkt .c1 .l1 { left: 0; bottom: 30%; width: 60%; } .mkt .c1 .l2 { left: 0; bottom: 18%; width: 40%; } .mkt .c1 .pa-accent { left: 0; bottom: 7%; }
+.mkt .c2 .pa-blk { right: 0; top: 0; bottom: 0; width: 46%; }
+.mkt .c2 .l1 { left: 0; top: 22%; width: 42%; } .mkt .c2 .l2 { left: 0; top: 38%; width: 32%; } .mkt .c2 .pa-accent { left: 0; top: 58%; }
+.mkt .c3 .pa-blk.b1 { left: 0; top: 0; bottom: 0; width: 58%; }
+.mkt .c3 .pa-blk.b2 { right: 0; top: 0; height: 46%; width: 38%; background: linear-gradient(135deg, rgba(58, 166, 221, 0.5), rgba(20, 184, 166, 0.4)); }
+.mkt .c3 .pa-blk.b3 { right: 0; bottom: 0; height: 46%; width: 38%; background: linear-gradient(135deg, rgba(245, 166, 35, 0.4), rgba(255, 122, 69, 0.4)); }
+
+/* Scene B · operating system — orbit */
+.mkt .pb { position: absolute; inset: 0; display: grid; place-items: center; }
+.mkt .pb-sys { position: relative; width: 60%; aspect-ratio: 1; }
+.mkt .pb-core { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #7ff0dd, var(--teal)); box-shadow: 0 0 40px -4px rgba(20, 184, 166, 0.8), inset 0 0 12px rgba(255, 255, 255, 0.4); animation: pbCore 3s ease-in-out infinite; }
+@keyframes pbCore { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+.mkt .pb-ring { position: absolute; inset: 0; }
+.mkt .pb-ring.r1 { animation: proSpin 26s linear infinite; }
+.mkt .pb-ring.r2 { animation: proSpin 38s linear infinite reverse; }
+@keyframes proSpin { to { transform: rotate(360deg); } }
+.mkt .pb-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.mkt .pb-ring svg line { stroke: rgba(127, 240, 221, 0.22); stroke-width: 1.2; }
+.mkt .pb-node { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.22); display: grid; place-items: center; font-size: 13px; box-shadow: 0 0 18px -6px rgba(127, 240, 221, 0.5); animation: pbNode 2.6s ease-in-out infinite; }
+@keyframes pbNode { 0%, 100% { box-shadow: 0 0 14px -6px rgba(127, 240, 221, 0.4); } 50% { box-shadow: 0 0 26px -4px rgba(127, 240, 221, 0.8); } }
+.mkt .pb-pulse { position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #bff8ec; box-shadow: 0 0 10px 2px rgba(191, 248, 236, 0.9); opacity: 0; animation: pbPulse 2.4s ease-in infinite; }
+@keyframes pbPulse { 0% { opacity: 0; transform: translate(var(--fx), var(--fy)) scale(0.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(0, 0) scale(1); } }
+
+/* Scene C · portals — streams */
+.mkt .pc { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.mkt .pc-mono { width: 20%; aspect-ratio: 0.62; border-radius: 16px; position: relative; flex: none; background: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)); border: 1px solid rgba(255, 255, 255, 0.16); box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.6); overflow: hidden; }
+.mkt .pc-mono::before { content: ""; position: absolute; inset: 0; background: radial-gradient(80% 50% at 50% 18%, var(--mg), transparent 70%); animation: pcGlow 3s ease-in-out infinite; }
+@keyframes pcGlow { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.85; } }
+.mkt .pc-mono.left { --mg: rgba(255, 122, 69, 0.5); } .mkt .pc-mono.right { --mg: rgba(245, 166, 35, 0.5); }
+.mkt .pc-mono .ct { position: absolute; left: 10px; right: 10px; top: 12px; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.35); }
+.mkt .pc-mono .cl { position: absolute; left: 10px; border-radius: 4px; height: 5px; background: rgba(255, 255, 255, 0.16); }
+.mkt .pc-lane { flex: 1; max-width: 34%; height: 100%; position: relative; }
+.mkt .pc-p { position: absolute; top: 50%; width: 8px; height: 8px; border-radius: 50%; margin-top: -4px; opacity: 0; animation: pcFlow 2.8s linear infinite; }
+.mkt .pc-p.a { background: #ffb38a; box-shadow: 0 0 10px 1px rgba(255, 122, 69, 0.8); }
+.mkt .pc-p.b { background: #ffd98a; box-shadow: 0 0 10px 1px rgba(245, 166, 35, 0.8); animation-direction: reverse; }
+@keyframes pcFlow { 0% { left: 0; opacity: 0; transform: translateY(0); } 12% { opacity: 1; } 50% { transform: translateY(-8px); } 88% { opacity: 1; } 100% { left: 100%; opacity: 0; transform: translateY(0); } }
+.mkt .pc-flare { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, 0.8), transparent 65%); opacity: 0; animation: pcFlare 2.8s ease-in-out infinite; }
+@keyframes pcFlare { 0%, 100% { opacity: 0; transform: scale(0.5); } 50% { opacity: 0.55; transform: scale(1); } }
+
+/* Scene D · the stage — ripples */
+.mkt .pd { position: absolute; inset: 0; display: grid; place-items: center; }
+.mkt .pd-sys { position: relative; width: 62%; aspect-ratio: 1; display: grid; place-items: center; }
+.mkt .pd-core { width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, var(--gold)); box-shadow: 0 0 34px -2px rgba(245, 166, 35, 0.9); z-index: 2; }
+.mkt .pd-ripple { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; border: 1.5px solid rgba(245, 166, 35, 0.5); opacity: 0; animation: pdRipple 3.4s ease-out infinite; }
+.mkt .pd-ripple.d2 { animation-delay: 1.13s; } .mkt .pd-ripple.d3 { animation-delay: 2.26s; }
+@keyframes pdRipple { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(7); opacity: 0; } }
+.mkt .pd-sat { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 6px; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.25); display: grid; place-items: center; font-size: 9px; animation: pdSat 3.4s ease-in-out infinite; }
+@keyframes pdSat { 0%, 60%, 100% { background: rgba(255, 255, 255, 0.12); box-shadow: none; } 72% { background: rgba(127, 240, 221, 0.7); box-shadow: 0 0 16px -2px rgba(127, 240, 221, 0.8); } }
+.mkt .pd-sat.spark { animation: pdSpark 3.4s ease-in-out infinite; }
+@keyframes pdSpark { 0%, 60%, 100% { background: rgba(255, 255, 255, 0.12); box-shadow: none; } 74% { background: var(--gold); box-shadow: 0 0 20px 1px rgba(245, 166, 35, 0.9); } }
+
+.mkt .pro-cta { margin-top: 42px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.mkt .pro-cta .pro-note { color: rgba(200, 228, 222, 0.7); font-size: 14px; }
+
+/* Pro band keeps a readable resting state when motion is reduced */
+@media (prefers-reduced-motion: reduce) {
+  .mkt .pa-comp.c3 { opacity: 1; }
+  .mkt .pa-comp.c1, .mkt .pa-comp.c2 { opacity: 0; }
+  .mkt .pc-p { opacity: 0.55; }
+  .mkt .pc-p.a { left: 32%; } .mkt .pc-p.b { left: 62%; }
+  .mkt .pd-ripple.d1 { opacity: 0.5; transform: scale(3.4); }
+  .mkt .pd-ripple.d2, .mkt .pd-ripple.d3 { opacity: 0; }
+  .mkt .pro-item.on .pro-tab .bar { transform: scaleX(1); }
+}
