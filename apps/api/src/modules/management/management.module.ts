@@ -6,6 +6,8 @@ import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
 import { TeachersService } from './teachers.service';
 import { TeachersController } from './teachers.controller';
+import { StaffService } from './staff.service';
+import { StaffController } from './staff.controller';
 import { ClassesService } from './classes.service';
 import { ClassesController } from './classes.controller';
 import { StudentsService } from './students.service';
@@ -25,10 +27,11 @@ import { LoginInviteService } from './internal/login-invite.service';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService],
   controllers: [
     CatalogController,
     TeachersController,
+    StaffController,
     ClassesController,
     StudentsController,
     TimetableController,
@@ -37,6 +40,6 @@ import { LoginInviteService } from './internal/login-invite.service';
     ExamsController,
     ExamRemindersController,
   ],
-  exports: [CatalogService, TeachersService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService],
+  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, ExamsService],
 })
 export class ManagementModule {}

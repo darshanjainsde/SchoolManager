@@ -54,6 +54,7 @@ const ROLE_TABS: { value: RoleTab; label: string; idLabel: string; submit: strin
 export default function TenantLoginPage() {
   const router = useRouter();
   const setTokens = useAuthStore((s) => s.setTokens);
+  const clearTokensOnUnsupportedRole = useAuthStore((s) => s.clear);
   const [host, setHost] = useState<string | undefined>();
   useEffect(() => setHost(window.location.host), []);
   const api = useApi({ audience: 'school', hostHeader: host });
@@ -98,6 +99,18 @@ export default function TenantLoginPage() {
       });
       setTokens({ ...res, audience: 'school' });
       const me = await api.get<{ userId: string; schoolId?: string; role?: string }>('/auth/me');
+
+      // Non-teaching staff (role STAFF) have no dedicated portal yet — the
+      // login exists only so a school admin can invite them, not so they can
+      // browse the admin console. Bounce them out rather than falling
+      // through to the generic '/app' branch below, which would otherwise
+      // hand any non-STUDENT/TEACHER role the full admin UI.
+      if (me.role === 'STAFF') {
+        clearTokensOnUnsupportedRole();
+        toast.error('Staff sign-in is not available yet — ask your school admin for access.');
+        return;
+      }
+
       setMe(me);
       toast.success('Welcome back');
       // Never trust the slider — the API's role decides where the user lands.

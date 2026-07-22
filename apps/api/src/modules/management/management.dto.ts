@@ -217,6 +217,64 @@ export class UpdateTeacherDto {
   isActive?: boolean;
 }
 
+// ── Staff (non-teaching) ────────────────────────────────────────────────────
+
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'OTHER'] as const;
+export type StaffRoleValue = (typeof STAFF_ROLES)[number];
+
+export class CreateStaffDto {
+  @IsString()
+  @Length(1, 120)
+  firstName!: string;
+
+  @IsString()
+  @Length(1, 120)
+  lastName!: string;
+
+  @IsIn(STAFF_ROLES)
+  role!: StaffRoleValue;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class UpdateStaffDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 120)
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 120)
+  lastName?: string;
+
+  @IsOptional()
+  @IsIn(STAFF_ROLES)
+  role?: StaffRoleValue;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
 // ── ClassSection ─────────────────────────────────────────────────────────────
 
 export class CreateClassDto {

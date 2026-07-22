@@ -38,6 +38,11 @@ enum UserRole {
   SCHOOL_ADMIN
   TEACHER
   STUDENT
+  /// Non-teaching staff login — distinct from TEACHER/STUDENT so it is never
+  /// mistaken for (or granted the portal reach of) either. See
+  /// apps/api/src/modules/management/staff.service.ts and
+  /// apps/web/app/login/page.tsx.
+  STAFF
 }
 
 enum MediaKind {
