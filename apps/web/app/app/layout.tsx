@@ -11,6 +11,7 @@ import { useHost } from '@/components/use-host';
 import { useApi } from '@/lib/use-api';
 import { isSchoolHost, exampleSchoolHost, platformHref } from '@/lib/hosts';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
+import '../sk-theme.css';
 
 // `requiredFeature` hides the item for schools whose tier lacks it. Items with
 // no requiredFeature are always shown.
@@ -127,9 +128,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 key={href}
                 href={href}
                 className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5',
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
                   active
-                    ? 'bg-teal-100 font-semibold text-teal-700'
+                    ? 'bg-emerald-400/15 font-semibold text-emerald-300'
                     : 'hover:bg-white/5',
                 )}
               >
@@ -156,7 +157,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto p-6 sm:p-10">{children}</main>
+      <main className="skosx sk-anim flex-1 overflow-auto p-6 sm:p-10" style={{ background: 'var(--sk-paper)' }}>
+        {children}
+      </main>
       </div>
     </div>
   );
