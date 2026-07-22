@@ -538,10 +538,10 @@ export default function TimetablePage() {
       {classSectionId && !timetableQuery.isLoading && !timetableQuery.error && (
         <div className="sk-card" style={{ overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720, tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={{ ...headCellStyle, textAlign: 'left' }}>Period</th>
+                  <th style={{ ...headCellStyle, textAlign: 'left', width: 116 }}>Period</th>
                   {dayColumns.map((day) => {
                     const highlight = isCurrentWeek && isSameCalendarDay(day.date, now);
                     return (
@@ -633,10 +633,14 @@ export default function TimetablePage() {
                                   borderRadius: 9,
                                   background: 'var(--sk-card)',
                                   padding: '8px 10px',
+                                  minHeight: 50,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'center',
                                 }}
                               >
-                                <div style={{ fontWeight: 700, fontSize: 13 }}>{slot.subject.name}</div>
-                                <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)' }}>
+                                <div style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{slot.subject.name}</div>
+                                <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {slot.teacher.firstName} {slot.teacher.lastName}
                                 </div>
                                 {/* Delete action — hidden for read-only past weeks */}
@@ -683,8 +687,10 @@ export default function TimetablePage() {
                             <td key={day.value} style={{ padding: 6, borderTop: '1px solid var(--sk-line)' }}>
                               <div
                                 style={{
-                                  textAlign: 'center',
-                                  padding: '11px 0',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  minHeight: 50,
                                   fontSize: 12,
                                   color: 'var(--sk-ink-3)',
                                 }}
@@ -710,10 +716,10 @@ export default function TimetablePage() {
                               style={{
                                 display: 'flex',
                                 width: '100%',
+                                minHeight: 50,
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: 4,
-                                padding: '11px 0',
                                 borderRadius: 9,
                                 border: '1px dashed var(--sk-line-2)',
                                 background: 'transparent',
