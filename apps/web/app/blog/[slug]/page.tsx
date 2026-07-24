@@ -51,6 +51,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const [post, site] = await Promise.all([fetchSchoolPost(host, params.slug), fetchPublicSite(host)]);
   if (!post) return {};
   const name = site?.school.name ?? host;
+  const tenantOrigin = schoolHref(host);
+  const image = absoluteUrl(tenantOrigin, post.heroImageUrl);
   return {
     title: `${post.title} | ${name}`,
     description: post.description,
@@ -58,12 +60,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // it points at the global URL for syndicated/global posts and at this
     // tenant's own URL only for posts that are genuinely unique to it.
     alternates: { canonical: post.canonicalUrl },
+    metadataBase: new URL(tenantOrigin),
     openGraph: {
       title: post.title,
       description: post.description,
       type: 'article',
       publishedTime: post.publishedAt ?? undefined,
-      ...(post.heroImageUrl ? { images: [{ url: post.heroImageUrl }] } : {}),
+      ...(image ? { images: [{ url: image }] } : {}),
     },
   };
 }
@@ -144,6 +147,7 @@ export default async function BlogPostPage({ params }: Props) {
   // byline to the visible article (that stays keyed on post.author only).
   const jsonLdAuthorName = post.author?.name ?? site?.school.name;
   const jsonLdAuthorHost = post.author?.host ?? host;
+  const jsonLdImage = absoluteUrl(schoolHref(host), post.heroImageUrl);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -152,7 +156,7 @@ export default async function BlogPostPage({ params }: Props) {
     description: post.description,
     datePublished: post.publishedAt ?? undefined,
     dateModified: post.publishedAt ?? undefined,
-    ...(post.heroImageUrl ? { image: post.heroImageUrl } : {}),
+    ...(jsonLdImage ? { image: jsonLdImage } : {}),
     ...(jsonLdAuthorName
       ? { author: { '@type': 'Organization', name: jsonLdAuthorName, url: schoolHref(jsonLdAuthorHost) } }
       : {}),
