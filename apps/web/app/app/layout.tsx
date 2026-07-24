@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Globe, Inbox, LogOut, School, Users, GraduationCap, UserCog, CalendarDays, Clock, CalendarHeart, Megaphone, Settings, ClipboardList, CalendarX, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Globe, Inbox, LogOut, School, Users, GraduationCap, UserCog, CalendarDays, Clock, CalendarHeart, Megaphone, Settings, ClipboardList, CalendarX, Menu, X, Newspaper } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -19,6 +19,7 @@ import '../sk-theme.css';
 const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; requiredFeature?: string }[] = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/app/website', label: 'Website', icon: Globe },
+  { href: '/app/blog', label: 'Blog', icon: Newspaper, requiredFeature: 'BLOG' },
   { href: '/app/enquiries', label: 'Enquiries', icon: Inbox, requiredFeature: 'ENQUIRY' },
   { href: '/app/classes', label: 'Classes', icon: School, requiredFeature: 'MANAGEMENT' },
   { href: '/app/teachers', label: 'Teachers', icon: GraduationCap, requiredFeature: 'MANAGEMENT' },

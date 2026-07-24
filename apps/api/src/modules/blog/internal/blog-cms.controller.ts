@@ -59,6 +59,11 @@ export class BlogCmsController {
     return this.cms.library(this.sid());
   }
 
+  @Get('selections')
+  listSelections() {
+    return this.cms.listSelections(this.sid());
+  }
+
   @Post('selections')
   addSelection(@Body() dto: AddSelectionDto) {
     return this.cms.addSelection(this.sid(), dto.postId);
@@ -72,6 +77,11 @@ export class BlogCmsController {
   @Patch('selections/:postId')
   patchSelection(@Param('postId', ParseUUIDPipe) postId: string, @Body() dto: PatchSelectionDto) {
     return this.cms.patchSelection(this.sid(), postId, dto);
+  }
+
+  @Get('settings')
+  getSettings() {
+    return this.cms.getSettings(this.sid());
   }
 
   @Patch('settings')

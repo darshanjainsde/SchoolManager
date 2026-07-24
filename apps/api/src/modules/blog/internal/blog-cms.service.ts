@@ -129,6 +129,32 @@ export class BlogCmsService {
     }));
   }
 
+  /**
+   * All of this school's selection rows (own published posts get one
+   * auto-created on publish; curated posts get one via addSelection), each
+   * joined with the post's display fields — the school console's Layout tab
+   * needs isHero/sortOrder per post, which neither list()/library() expose.
+   */
+  async listSelections(schoolId: string) {
+    const rows = await this.db().schoolBlogSelection.findMany({
+      where: { schoolId },
+      orderBy: [{ isHero: 'desc' }, { sortOrder: 'asc' }],
+      include: { post: { include: { school: { select: { name: true } } } } },
+    });
+    return rows.map((r) => ({
+      postId: r.postId,
+      isHero: r.isHero,
+      sortOrder: r.sortOrder,
+      post: {
+        title: r.post.title,
+        slug: r.post.slug,
+        heroImageUrl: r.post.heroImageUrl,
+        isOwn: r.post.schoolId === schoolId,
+        authorName: r.post.scope === 'SCHOOL' && r.post.schoolId !== schoolId ? (r.post.school?.name ?? null) : null,
+      },
+    }));
+  }
+
   async addSelection(schoolId: string, postId: string) {
     const db = this.db();
     const post = await db.blogPost.findFirst({ where: { id: postId, status: 'PUBLISHED', globalStatus: 'APPROVED' } });
@@ -170,6 +196,14 @@ export class BlogCmsService {
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
       },
     });
+  }
+
+  async getSettings(schoolId: string) {
+    const profile = await this.db().schoolProfile.findUnique({
+      where: { schoolId },
+      select: { blogLayout: true, blogHeroLimit: true },
+    });
+    return { blogLayout: profile?.blogLayout ?? 'HERO_GRID', blogHeroLimit: profile?.blogHeroLimit ?? 1 };
   }
 
   async updateSettings(schoolId: string, dto: BlogSettingsDto) {
