@@ -1,4 +1,4 @@
-import { resolveSectionRecipients, resolveStudentRecipients } from './recipients';
+import { resolveSchoolRecipients, resolveSectionRecipients, resolveStudentRecipients } from './recipients';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
@@ -47,6 +47,35 @@ describe('resolveSectionRecipients', () => {
     db.student.findMany.mockResolvedValue([]);
 
     const emails = await resolveSectionRecipients(db as never, SCHOOL, 'cs-1');
+
+    expect(emails).toEqual([]);
+    expect(db.user.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveSchoolRecipients', () => {
+  it('resolves emails for every linked-user student in the school, not scoped to any class section', async () => {
+    const db = fakeDb();
+    db.student.findMany.mockResolvedValue([{ userId: 'u-1' }, { userId: 'u-2' }]);
+    db.user.findMany.mockResolvedValue([
+      { id: 'u-1', email: 'a@x.com' },
+      { id: 'u-2', email: 'b@x.com' },
+    ]);
+
+    const emails = await resolveSchoolRecipients(db as never, SCHOOL);
+
+    expect(db.student.findMany).toHaveBeenCalledWith({
+      where: { schoolId: SCHOOL, userId: { not: null } },
+      select: { userId: true },
+    });
+    expect(emails).toEqual(['a@x.com', 'b@x.com']);
+  });
+
+  it('returns an empty list without querying users when no student in the school has a linked userId', async () => {
+    const db = fakeDb();
+    db.student.findMany.mockResolvedValue([]);
+
+    const emails = await resolveSchoolRecipients(db as never, SCHOOL);
 
     expect(emails).toEqual([]);
     expect(db.user.findMany).not.toHaveBeenCalled();

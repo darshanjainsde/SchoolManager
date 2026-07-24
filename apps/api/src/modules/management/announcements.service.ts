@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { withTenant, type UserRole } from '@skoolos/db';
+import { withTenant, type Announcement, type UserRole } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { NotificationService } from '../../common/notifications/notification.service';
-import { resolveSectionRecipients } from '../../common/notifications/recipients';
+import { resolveSchoolRecipients, resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
 import { isP2002, isP2025 } from './internal/prisma-errors';
 import { AttendanceService } from './attendance.service';
@@ -10,6 +10,13 @@ import type { CreateAnnouncementDto, UpdateAnnouncementDto } from './management.
 
 /** Never let a missing School row render as `undefined` in a parent's inbox. */
 const FALLBACK_SCHOOL_NAME = 'Your school';
+
+/** `ArrayMaxSize(30)` on the DTO only bounds each field individually — a
+ * caller can still send 30 in `classSectionIds` PLUS a distinct
+ * `classSectionId`, netting 31 after the merge below. This is the cap on
+ * the MERGED, de-duplicated set, so "at most 30" means what it says
+ * regardless of which field(s) a caller used to get there. */
+const MAX_TARGET_SECTIONS = 30;
 
 @Injectable()
 export class AnnouncementsService {
@@ -51,22 +58,29 @@ export class AnnouncementsService {
    *
    * Push/email fan-out (`ANNOUNCEMENT`) runs best-effort, in the background
    * (`runInBackground`) after the write transaction commits, so the caller's
-   * response is never blocked on notification delivery. It resolves
-   * recipients per targeted section — via the same `resolveSectionRecipients`
-   * helper `AttendanceService.save`'s ABSENCE_NOTICE fan-out uses — and is
-   * scoped to targeted sections only; a whole-school announcement's
-   * broadcast reach is intentionally out of scope here (nothing was
-   * "targeted" to resolve recipients from).
+   * response is never blocked on notification delivery. For a class-targeted
+   * announcement it resolves recipients per targeted section — via the same
+   * `resolveSectionRecipients` helper `AttendanceService.save`'s
+   * ABSENCE_NOTICE fan-out uses — so each recipient's payload carries THEIR
+   * class's name. For a whole-school announcement it resolves EVERY
+   * linked-user student in the school via `resolveSchoolRecipients` (the
+   * school-wide counterpart, no classSectionId filter) and every recipient
+   * gets `className: null`.
    */
   async create(
     schoolId: string,
     createdByUserId: string,
     role: UserRole,
     dto: CreateAnnouncementDto,
-  ) {
+  ): Promise<Announcement[]> {
     const requestedIds = [
       ...new Set([...(dto.classSectionId ? [dto.classSectionId] : []), ...(dto.classSectionIds ?? [])]),
     ];
+    if (requestedIds.length > MAX_TARGET_SECTIONS) {
+      throw new BadRequestException(
+        `Cannot target more than ${MAX_TARGET_SECTIONS} class sections in one announcement`,
+      );
+    }
 
     let targetIds: string[] | null; // null => whole-school
     if (role === 'TEACHER') {
@@ -120,14 +134,14 @@ export class AnnouncementsService {
       }
     });
 
-    if (targetIds) {
-      const targetSectionIds = targetIds;
-      runInBackground(
-        async () => {
-          const { recipients } = await withTenant(schoolId, async (tx) => {
-            const school = await tx.school.findFirst({ where: { id: schoolId }, select: { name: true } });
-            const schoolName = school?.name ?? FALLBACK_SCHOOL_NAME;
+    const targetSectionIds = targetIds; // captured for the closure below (string[] | null)
+    runInBackground(
+      async () => {
+        const { recipients } = await withTenant(schoolId, async (tx) => {
+          const school = await tx.school.findFirst({ where: { id: schoolId }, select: { name: true } });
+          const schoolName = school?.name ?? FALLBACK_SCHOOL_NAME;
 
+          if (targetSectionIds) {
             const perClass = await Promise.all(
               targetSectionIds.map(async (id) => {
                 const emails = await resolveSectionRecipients(tx, schoolId, id);
@@ -138,15 +152,25 @@ export class AnnouncementsService {
                 }));
               }),
             );
-            return { schoolName, recipients: perClass.flat() };
-          });
+            return { recipients: perClass.flat() };
+          }
 
-          if (recipients.length === 0) return;
-          await this.notifications.notify('ANNOUNCEMENT', recipients);
-        },
-        (e) => this.logger.error(`ANNOUNCEMENT notify failed: ${(e as Error).message}`),
-      );
-    }
+          // Whole-school: every linked-user student in the school, not
+          // scoped to any section.
+          const emails = await resolveSchoolRecipients(tx, schoolId);
+          return {
+            recipients: emails.map((email) => ({
+              email,
+              payload: { schoolName, title: dto.title, body: dto.body, className: null },
+            })),
+          };
+        });
+
+        if (recipients.length === 0) return;
+        await this.notifications.notify('ANNOUNCEMENT', recipients);
+      },
+      (e) => this.logger.error(`ANNOUNCEMENT notify failed: ${(e as Error).message}`),
+    );
 
     return rows;
   }

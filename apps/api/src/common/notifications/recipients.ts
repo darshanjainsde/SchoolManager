@@ -56,6 +56,27 @@ export async function resolveSectionRecipients(
 }
 
 /**
+ * Every linked-user email for every student in the school, regardless of
+ * class section — the whole-school counterpart to `resolveSectionRecipients`,
+ * for a broadcast (e.g. a whole-school ANNOUNCEMENT) that has no single
+ * class to scope the query to. Still tenant-scoped via the explicit
+ * `schoolId` in `where` (see the file-level LIMITATION comment for why that
+ * matters even inside `withTenant`'s RLS-scoped `tx`).
+ */
+export async function resolveSchoolRecipients(
+  db: TenantTx,
+  schoolId: string,
+): Promise<string[]> {
+  const students = await db.student.findMany({
+    where: { schoolId, userId: { not: null } },
+    select: { userId: true },
+  });
+  const userIds = students.map((s) => s.userId).filter((id): id is string => Boolean(id));
+  const byId = await emailsByUserId(db, schoolId, userIds);
+  return userIds.map((id) => byId.get(id)).filter((e): e is string => Boolean(e));
+}
+
+/**
  * Every linked-user email for a specific, explicit set of student ids, each
  * paired with that student's name so the caller can personalise per recipient
  * (an absence notice must name the right child).
