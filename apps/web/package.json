@@ -8,7 +8,8 @@
     "start": "next start -p ${WEB_PORT:-3000}",
     "lint": "next lint --dir app",
     "typecheck": "tsc --noEmit",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "blog-art": "node scripts/generate-blog-art.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.4.2",

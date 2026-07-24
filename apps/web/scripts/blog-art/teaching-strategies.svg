@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <linearGradient id="barDim" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#14B8A6" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#6D4AFF" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="barMid" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#14B8A6" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#6D4AFF" stop-opacity="0.78"/>
+    </linearGradient>
+    <linearGradient id="barHot" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5EEAD4"/>
+      <stop offset="0.55" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#8B6BFF"/>
+    </linearGradient>
+    <radialGradient id="ambientTeal" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#14B8A6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#14B8A6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ambientViolet" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6D4AFF" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#6D4AFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softBlur" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <filter id="hardBlur" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+    <filter id="dotGlow" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+  </defs>
+
+  <!-- ground -->
+  <rect width="1600" height="900" fill="url(#bg)"/>
+
+  <!-- ambient atmosphere -->
+  <circle cx="1260" cy="180" r="360" fill="url(#ambientViolet)"/>
+  <circle cx="260" cy="760" r="320" fill="url(#ambientTeal)"/>
+
+  <!-- faint baseline the bars rise from -->
+  <rect x="330" y="748" width="900" height="2" fill="#A5B4FC" opacity="0.18"/>
+
+  <!-- ranked bars: ascending evidence, longest bar (top rank) glowing -->
+  <!-- rank 5 -->
+  <rect x="330" y="668" width="330" height="46" rx="23" fill="url(#barDim)"/>
+  <circle cx="330" cy="691" r="23" fill="#0F172A" opacity="0.001"/>
+
+  <!-- rank 4 -->
+  <rect x="330" y="588" width="430" height="46" rx="23" fill="url(#barDim)"/>
+
+  <!-- rank 3 -->
+  <rect x="330" y="508" width="540" height="48" rx="24" fill="url(#barMid)"/>
+
+  <!-- rank 2 -->
+  <rect x="330" y="426" width="650" height="50" rx="25" fill="url(#barMid)"/>
+
+  <!-- rank 1: glow halo behind -->
+  <rect x="320" y="326" width="820" height="72" rx="36" fill="#14B8A6" opacity="0.45" filter="url(#softBlur)"/>
+  <rect x="330" y="336" width="800" height="60" rx="30" fill="url(#barHot)"/>
+  <!-- leading tip glow dot on the winning bar -->
+  <circle cx="1130" cy="366" r="30" fill="#5EEAD4" opacity="0.55" filter="url(#dotGlow)"/>
+  <circle cx="1130" cy="366" r="12" fill="#F0FDFA"/>
+
+  <!-- small rank markers at the start of each bar for a podium feel -->
+  <circle cx="330" cy="366" r="8" fill="#F0FDFA"/>
+  <circle cx="330" cy="451" r="6" fill="#CFFAFE" opacity="0.9"/>
+  <circle cx="330" cy="532" r="6" fill="#CFFAFE" opacity="0.75"/>
+  <circle cx="330" cy="611" r="5" fill="#CFFAFE" opacity="0.6"/>
+  <circle cx="330" cy="691" r="5" fill="#CFFAFE" opacity="0.5"/>
+</svg>
