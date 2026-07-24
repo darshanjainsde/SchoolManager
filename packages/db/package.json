@@ -11,6 +11,7 @@
     "migrate:check": "prisma migrate status",
     "studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
+    "seed:blog": "tsx seed-blog.ts",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json || true",
