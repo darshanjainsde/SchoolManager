@@ -22,6 +22,22 @@ export interface SaveAttendanceResult {
   absentees: number;
 }
 
+export interface MyClassSection {
+  classSectionId: string;
+  name: string;
+  studentCount: number;
+}
+
+export interface ClassDayStatus {
+  classSectionId: string;
+  name: string;
+  total: number;
+  present: number;
+  taken: boolean;
+  markedBy: string | null;
+  markedAt: string | null;
+}
+
 @Injectable()
 export class AttendanceService {
   private readonly logger = new Logger(AttendanceService.name);
@@ -61,6 +77,124 @@ export class AttendanceService {
         studentId: s.id,
         status: byStudent.get(s.id) ?? ('PRESENT' as AttendanceStatus),
       }));
+    });
+  }
+
+  /** Shared select/mapping so `myClassSections` and `dayStatus` render the same `name`/`studentCount` for a section. */
+  private static readonly CLASS_SELECT = {
+    id: true,
+    name: true,
+    grade: { select: { name: true } },
+    _count: { select: { students: true } },
+  } as const;
+
+  private static toMyClassSection(c: {
+    id: string;
+    name: string;
+    grade: { name: string };
+    _count: { students: number };
+  }): MyClassSection {
+    return {
+      classSectionId: c.id,
+      name: `${c.grade.name}-${c.name}`,
+      studentCount: c._count.students,
+    };
+  }
+
+  /**
+   * The sections a caller may take/view attendance for. SCHOOL_ADMIN sees
+   * every section in the school; a TEACHER sees the sections where they are
+   * the class teacher OR hold at least one timetable slot — the Prisma `OR`
+   * naturally dedupes a section that satisfies both.
+   */
+  async myClassSections(
+    schoolId: string,
+    userId: string,
+    role: string,
+  ): Promise<MyClassSection[]> {
+    return withTenant(schoolId, async (tx) => {
+      if (role === 'SCHOOL_ADMIN') {
+        const sections = await tx.classSection.findMany({
+          select: AttendanceService.CLASS_SELECT,
+          orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
+        });
+        return sections.map((c) => AttendanceService.toMyClassSection(c));
+      }
+
+      const teacher = await tx.teacher.findFirst({ where: { userId } });
+      if (!teacher) return [];
+
+      const sections = await tx.classSection.findMany({
+        where: {
+          OR: [
+            { classTeacherId: teacher.id },
+            { timetableSlots: { some: { teacherId: teacher.id } } },
+          ],
+        },
+        select: AttendanceService.CLASS_SELECT,
+        orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
+      });
+      return sections.map((c) => AttendanceService.toMyClassSection(c));
+    });
+  }
+
+  /**
+   * Per-class attendance status for `date`, across the caller's sections
+   * (see `myClassSections`). `taken` is true once at least one Attendance
+   * row exists for that section+date; `markedBy` resolves the EARLIEST
+   * row's `markedById` to a Teacher name, falling back to `'School admin'`
+   * when it does not resolve to a Teacher row — the same fallback `save`
+   * uses when a SCHOOL_ADMIN caller has no linked Teacher and `markedById`
+   * ends up holding their raw User.id.
+   *
+   * One `attendance.findMany` plus (at most) one `teacher.findFirst` per
+   * class section — an N+1 loop, but bounded by how many sections a single
+   * teacher or admin realistically works with in a day (~2-8), so left as
+   * straightforward per-class queries rather than a batched lookup.
+   */
+  async dayStatus(
+    schoolId: string,
+    userId: string,
+    role: string,
+    date: string,
+  ): Promise<ClassDayStatus[]> {
+    if (!DATE_RE.test(date)) {
+      throw new ApiError('VALIDATION', 'date must be formatted as YYYY-MM-DD', 400, 'date');
+    }
+    const classes = await this.myClassSections(schoolId, userId, role);
+    const day = new Date(date);
+
+    return withTenant(schoolId, async (tx) => {
+      const out: ClassDayStatus[] = [];
+      for (const c of classes) {
+        const rows = await tx.attendance.findMany({
+          where: { classSectionId: c.classSectionId, date: day },
+          select: { status: true, markedById: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        let markedBy: string | null = null;
+        let markedAt: string | null = null;
+        if (rows.length > 0) {
+          markedAt = rows[0].createdAt.toISOString();
+          const marker = await tx.teacher.findFirst({
+            where: { id: rows[0].markedById },
+            select: { firstName: true, lastName: true },
+          });
+          markedBy = marker ? `${marker.firstName} ${marker.lastName}` : 'School admin';
+        }
+
+        out.push({
+          classSectionId: c.classSectionId,
+          name: c.name,
+          total: c.studentCount,
+          present: rows.filter((r) => r.status === 'PRESENT').length,
+          taken: rows.length > 0,
+          markedBy,
+          markedAt,
+        });
+      }
+      return out;
     });
   }
 

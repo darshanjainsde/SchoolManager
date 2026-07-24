@@ -23,6 +23,20 @@ export class AttendanceController {
     return this.tenant.requireTenant().schoolId;
   }
 
+  // Static paths declared ABOVE the `@Get()` below so they match before it
+  // (Nest resolves routes in declaration order; `@Get()` would otherwise
+  // shadow `/my-classes` and `/status` as an empty `classSectionId` query).
+
+  @Get('my-classes')
+  myClasses(@CurrentUser() u: SchoolJwtPayload) {
+    return this.attendance.myClassSections(this.sid(), u.sub, u.role);
+  }
+
+  @Get('status')
+  status(@CurrentUser() u: SchoolJwtPayload, @Query('date') date: string) {
+    return this.attendance.dayStatus(this.sid(), u.sub, u.role, date);
+  }
+
   @Get()
   list(
     @Query('classSectionId', ParseUUIDPipe) classSectionId: string,
