@@ -124,7 +124,15 @@ export class BlogCmsService {
     const db = this.db();
     const [posts, mine] = await Promise.all([
       db.blogPost.findMany({
-        where: { status: 'PUBLISHED', globalStatus: 'APPROVED', schoolId: { not: schoolId } },
+        // Platform editorial posts (schoolId=null) AND other schools' approved
+        // posts — but never the school's own. NOTE: `schoolId: { not: id }` alone
+        // drops NULL rows (SQL: NULL != id → NULL, not TRUE), which would hide
+        // every platform post; the explicit `{ schoolId: null }` branch keeps them.
+        where: {
+          status: 'PUBLISHED',
+          globalStatus: 'APPROVED',
+          OR: [{ schoolId: null }, { schoolId: { not: schoolId } }],
+        },
         orderBy: { publishedAt: 'desc' },
         include: { school: { select: { name: true } } },
       }),

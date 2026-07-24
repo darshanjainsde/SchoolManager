@@ -161,3 +161,38 @@ describe('BlogCmsService.addSelection — global-approval guard', () => {
     expect(txMock.schoolBlogSelection.create).not.toHaveBeenCalled();
   });
 });
+
+describe('BlogCmsService.library — includes platform posts (schoolId=null)', () => {
+  const svc = new BlogCmsService();
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('queries with an OR that keeps NULL-schoolId platform posts and excludes own posts', async () => {
+    txMock.blogPost.findMany.mockResolvedValue([]);
+    txMock.schoolBlogSelection.findMany.mockResolvedValue([]);
+
+    await svc.library(SCHOOL);
+
+    // Regression guard: `schoolId: { not }` alone drops platform posts because
+    // in SQL `NULL != id` is NULL (not TRUE). The where clause MUST include the
+    // explicit `{ schoolId: null }` branch or the Global Library shows nothing.
+    const whereArg = txMock.blogPost.findMany.mock.calls[0][0].where;
+    expect(whereArg.status).toBe('PUBLISHED');
+    expect(whereArg.globalStatus).toBe('APPROVED');
+    expect(whereArg.OR).toEqual([{ schoolId: null }, { schoolId: { not: SCHOOL } }]);
+  });
+
+  it('flags already-selected posts and surfaces school name only for SCHOOL-scope posts', async () => {
+    txMock.blogPost.findMany.mockResolvedValue([
+      { id: 'p-platform', slug: 's1', globalSlug: 's1', title: 'T1', description: 'D1', heroImageUrl: null, readMinutes: 5, publishedAt: new Date(), scope: 'PLATFORM', school: null },
+      { id: 'p-school', slug: 's2', globalSlug: 's2', title: 'T2', description: 'D2', heroImageUrl: null, readMinutes: 5, publishedAt: new Date(), scope: 'SCHOOL', school: { name: 'Acme' } },
+    ]);
+    txMock.schoolBlogSelection.findMany.mockResolvedValue([{ postId: 'p-platform' }]);
+
+    const out = await svc.library(SCHOOL);
+
+    expect(out).toHaveLength(2);
+    expect(out.find((p) => p.id === 'p-platform')).toMatchObject({ selected: true, authorName: null });
+    expect(out.find((p) => p.id === 'p-school')).toMatchObject({ selected: false, authorName: 'Acme' });
+  });
+});
