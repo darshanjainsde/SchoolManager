@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, type BlogBlock, type BlogPost } from '@skoolos/db';
+import { isP2002 } from '../../management/internal/prisma-errors';
 
 @Injectable()
 export class BlogOwnerService {
@@ -50,10 +51,18 @@ export class BlogOwnerService {
       if (stillClashing) throw new ConflictException('Could not resolve a unique global slug for this post');
     }
 
-    return db.blogPost.update({
-      where: { id },
-      data: { globalStatus: 'APPROVED', globalSlug, rejectReason: null },
-    });
+    try {
+      return await db.blogPost.update({
+        where: { id },
+        data: { globalStatus: 'APPROVED', globalSlug, rejectReason: null },
+      });
+    } catch (e) {
+      // The pre-check above is a TOCTOU race against a concurrent approval
+      // landing the same globalSlug — the unique constraint is the real
+      // backstop, so surface it as a retryable conflict rather than a 500.
+      if (isP2002(e)) throw new ConflictException('global slug conflict, retry approval');
+      throw e;
+    }
   }
 
   async reject(id: string, reason: string): Promise<BlogPost> {

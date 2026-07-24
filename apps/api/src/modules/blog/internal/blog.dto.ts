@@ -13,7 +13,7 @@ import {
   Validate,
 } from 'class-validator';
 import type { BlogBlock } from '@skoolos/db';
-import { BlogSectionsConstraint } from './blog-sections.validator';
+import { BlogSectionsConstraint, ImageUrlConstraint } from './blog-sections.validator';
 
 const SLUG_RE = /^[a-z0-9-]{3,80}$/;
 
@@ -21,7 +21,7 @@ export class CreatePostDto {
   @IsString() @Length(1, 120) title!: string;
   @IsString() @Length(1, 200) description!: string;
   @IsString() @Matches(SLUG_RE, { message: 'slug must match ^[a-z0-9-]{3,80}$' }) slug!: string;
-  @IsOptional() @IsString() heroImageUrl?: string;
+  @IsOptional() @IsString() @Validate(ImageUrlConstraint) heroImageUrl?: string;
   @IsOptional() @IsInt() @Min(1) @Max(60) readMinutes?: number;
   @IsArray() @Validate(BlogSectionsConstraint) sections!: BlogBlock[];
 }
@@ -31,7 +31,7 @@ export class UpdatePostDto {
   @IsOptional() @IsString() @Length(1, 200) description?: string;
   // Slug is editable pre-publish only; publish locks it (enforced in the service).
   @IsOptional() @IsString() @Matches(SLUG_RE, { message: 'slug must match ^[a-z0-9-]{3,80}$' }) slug?: string;
-  @IsOptional() @IsString() heroImageUrl?: string;
+  @IsOptional() @IsString() @Validate(ImageUrlConstraint) heroImageUrl?: string;
   @IsOptional() @IsInt() @Min(1) @Max(60) readMinutes?: number;
   @IsOptional() @IsArray() @Validate(BlogSectionsConstraint) sections?: BlogBlock[];
 }

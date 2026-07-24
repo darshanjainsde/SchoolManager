@@ -6,6 +6,23 @@ import {
 import type { BlogBlock } from '@skoolos/db';
 
 const MAX_BLOCKS = 40;
+const MAX_TEXT_LEN = 20_000;
+
+/**
+ * Allow-list scheme check for user-supplied image URLs (hero images, `img`
+ * blocks). Only https:// (http:// for local dev) or a same-origin relative
+ * path starting with a single `/` are accepted — this rejects `javascript:`,
+ * `data:`, and every other scheme, and also rejects protocol-relative
+ * `//host` URLs (which start with `/` but escape the origin).
+ */
+export function isValidImageUrl(url: string): boolean {
+  if (/^https?:\/\//i.test(url)) return true;
+  if (url.startsWith('/') && !url.startsWith('//')) return true;
+  return false;
+}
+
+const IMAGE_URL_MESSAGE =
+  '"url" must be an https:// (or http:// for local dev) URL or a path starting with a single "/"';
 
 /**
  * Structural validation for `BlogPost.sections` (BlogBlock[] stored as Json).
@@ -30,17 +47,22 @@ function blockError(block: unknown): string | null {
   switch (b.t) {
     case 'h':
     case 'p':
-      return typeof b.text === 'string' && b.text.length > 0
-        ? null
-        : '"text" must be a non-empty string';
+      if (typeof b.text !== 'string' || b.text.length === 0) return '"text" must be a non-empty string';
+      if (b.text.length > MAX_TEXT_LEN) return `"text" must be at most ${MAX_TEXT_LEN} characters`;
+      return null;
 
-    case 'ul':
-      return Array.isArray(b.items) && b.items.length > 0 && b.items.every((i) => typeof i === 'string')
-        ? null
-        : '"items" must be a non-empty array of strings';
+    case 'ul': {
+      if (!Array.isArray(b.items) || b.items.length === 0) return '"items" must be a non-empty array of strings';
+      for (const item of b.items) {
+        if (typeof item !== 'string') return '"items" must be a non-empty array of strings';
+        if (item.length > MAX_TEXT_LEN) return `each "items" entry must be at most ${MAX_TEXT_LEN} characters`;
+      }
+      return null;
+    }
 
     case 'img':
       if (typeof b.url !== 'string' || !b.url) return '"url" is required';
+      if (!isValidImageUrl(b.url)) return IMAGE_URL_MESSAGE;
       if (typeof b.alt !== 'string') return '"alt" is required';
       if (b.caption !== undefined && typeof b.caption !== 'string') return '"caption" must be a string';
       return null;
@@ -75,14 +97,19 @@ function blockError(block: unknown): string | null {
 
     case 'quiz': {
       if (typeof b.q !== 'string' || !b.q) return '"q" is required';
+      if (b.q.length > MAX_TEXT_LEN) return `"q" must be at most ${MAX_TEXT_LEN} characters`;
       if (!Array.isArray(b.options) || b.options.length < 2 || b.options.length > 4) {
         return 'quiz "options" must have between 2 and 4 entries';
       }
       if (!b.options.every((o) => typeof o === 'string')) return 'quiz "options" must be strings';
+      if (b.options.some((o: string) => o.length > MAX_TEXT_LEN)) {
+        return `each "options" entry must be at most ${MAX_TEXT_LEN} characters`;
+      }
       if (typeof b.correct !== 'number' || !Number.isInteger(b.correct) || b.correct < 0 || b.correct >= b.options.length) {
         return '"correct" must be a valid index into "options"';
       }
       if (typeof b.why !== 'string' || !b.why) return '"why" is required';
+      if (b.why.length > MAX_TEXT_LEN) return `"why" must be at most ${MAX_TEXT_LEN} characters`;
       if (b.tag !== undefined && typeof b.tag !== 'string') return '"tag" must be a string';
       return null;
     }
@@ -99,6 +126,17 @@ export class BlogSectionsConstraint implements ValidatorConstraintInterface {
   }
   defaultMessage(args: ValidationArguments): string {
     return blogSectionsError(args.value) ?? 'sections is invalid';
+  }
+}
+
+/** Validates DTO-level image URL fields (e.g. `heroImageUrl`) against the same allow-list as `img` blocks. */
+@ValidatorConstraint({ name: 'imageUrl', async: false })
+export class ImageUrlConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return typeof value === 'string' && isValidImageUrl(value);
+  }
+  defaultMessage(): string {
+    return IMAGE_URL_MESSAGE;
   }
 }
 

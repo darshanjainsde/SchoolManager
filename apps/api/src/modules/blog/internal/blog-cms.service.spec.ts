@@ -33,7 +33,7 @@ jest.mock('@skoolos/db', () => ({
   getPlatformPrisma: () => getPlatformPrismaMock(),
 }));
 
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { BlogCmsService } from './blog-cms.service';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -110,5 +110,54 @@ describe('BlogCmsService.patchSelection — heroLimit enforcement', () => {
     txMock.schoolBlogSelection.count.mockResolvedValue(1);
 
     await expect(svc.patchSelection(SCHOOL, POST, { isHero: true })).rejects.toThrow(ConflictException);
+  });
+});
+
+describe('BlogCmsService — tenant isolation (get/update/remove)', () => {
+  const svc = new BlogCmsService();
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('get() throws NotFoundException for a post owned by another school', async () => {
+    // The scoped where { id, schoolId } finds nothing for a foreign post,
+    // regardless of whether a post with that id exists under another school.
+    txMock.blogPost.findFirst.mockResolvedValue(null);
+
+    await expect(svc.get(SCHOOL, POST)).rejects.toThrow(NotFoundException);
+    expect(txMock.blogPost.findFirst).toHaveBeenCalledWith({ where: { id: POST, schoolId: SCHOOL } });
+  });
+
+  it('update() throws NotFoundException for a foreign post and never calls blogPost.update', async () => {
+    txMock.blogPost.findFirst.mockResolvedValue(null);
+
+    await expect(svc.update(SCHOOL, POST, { title: 'Hijacked title' })).rejects.toThrow(NotFoundException);
+    expect(txMock.blogPost.update).not.toHaveBeenCalled();
+  });
+
+  it('remove() throws NotFoundException for a foreign post and never calls blogPost.delete', async () => {
+    txMock.blogPost.findFirst.mockResolvedValue(null);
+
+    await expect(svc.remove(SCHOOL, POST)).rejects.toThrow(NotFoundException);
+    expect(txMock.blogPost.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('BlogCmsService.addSelection — global-approval guard', () => {
+  const svc = new BlogCmsService();
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('rejects a post that is not APPROVED-global and not own', async () => {
+    // addSelection's lookup is scoped to { id, status: PUBLISHED, globalStatus:
+    // APPROVED } — a post that is pending/rejected/draft (whether it's this
+    // school's own or a foreign school's) simply fails to match and 404s,
+    // rather than leaking whether the id exists at all.
+    txMock.blogPost.findFirst.mockResolvedValue(null);
+
+    await expect(svc.addSelection(SCHOOL, POST)).rejects.toThrow(NotFoundException);
+    expect(txMock.blogPost.findFirst).toHaveBeenCalledWith({
+      where: { id: POST, status: 'PUBLISHED', globalStatus: 'APPROVED' },
+    });
+    expect(txMock.schoolBlogSelection.create).not.toHaveBeenCalled();
   });
 });
