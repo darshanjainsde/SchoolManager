@@ -177,6 +177,8 @@ model School {
   staff              Staff[]
   staffAttendance    StaffAttendance[]
   leaveApplications  LeaveApplication[]
+  blogPosts          BlogPost[]
+  blogSelections     SchoolBlogSelection[]
 }
 
 model Domain {
@@ -283,6 +285,8 @@ model SchoolProfile {
   navShowCta         Boolean @default(true)
   navShowLogin       Boolean @default(true)
   navLoginLabel      String  @default("Login")
+  blogLayout         String  @default("HERO_GRID")
+  blogHeroLimit      Int     @default(1)
   phone             String?
   email             String?
   addressLine1      String?
@@ -846,4 +850,62 @@ model ImpersonationToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ── Blog platform ────────────────────────────────────────────────────────
+
+enum BlogScope {
+  PLATFORM
+  SCHOOL
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum BlogGlobalStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model BlogPost {
+  id           String           @id @default(uuid()) @db.Uuid
+  scope        BlogScope
+  schoolId     String?          @db.Uuid
+  slug         String
+  title        String
+  description  String
+  heroImageUrl String?
+  readMinutes  Int              @default(4)
+  sections     Json             // BlogBlock[] — see Block Schema
+  status       BlogStatus       @default(DRAFT)
+  globalStatus BlogGlobalStatus @default(NONE)
+  globalSlug   String?          @unique   // set on global approval; PLATFORM posts: = slug
+  rejectReason String?
+  publishedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  school       School?          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  selections   SchoolBlogSelection[]
+
+  @@unique([schoolId, slug])
+  @@index([scope, globalStatus, status, publishedAt(sort: Desc)])
+  @@index([schoolId, status, publishedAt(sort: Desc)])
+}
+
+model SchoolBlogSelection {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  postId    String   @db.Uuid
+  isHero    Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  post      BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, postId])
+  @@index([schoolId, isHero, sortOrder])
 }
