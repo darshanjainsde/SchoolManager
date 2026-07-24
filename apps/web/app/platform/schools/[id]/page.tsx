@@ -37,14 +37,18 @@ const ALL_FEATURES = [
   'ABOUT_CONTACT',
   'EVENTS',
   'MANAGEMENT',
+  'BLOG',
 ] as const;
 
 type FeatureKey = (typeof ALL_FEATURES)[number];
 
+// Mirrors packages/db/src/features.ts's TIER_FEATURES (BLOG ships with
+// Standard & Pro by default; this local copy exists because the web app
+// can't import API/db-internal types — see the file header comment above).
 const TIER_FEATURES: Record<SchoolDetail['tier'], ReadonlySet<FeatureKey>> = {
   BASIC: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL']),
-  STANDARD: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS']),
-  PRO: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT']),
+  STANDARD: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'BLOG']),
+  PRO: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG']),
 };
 
 const TIER_TONE: Record<SchoolDetail['tier'], 'neutral' | 'info' | 'success'> = {

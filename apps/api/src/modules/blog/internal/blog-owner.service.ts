@@ -23,6 +23,7 @@ export class BlogOwnerService {
       readMinutes: p.readMinutes,
       sections: p.sections as unknown as BlogBlock[],
       publishedAt: p.publishedAt,
+      updatedAt: p.updatedAt,
       schoolName: p.school?.name ?? null,
       schoolSlug: p.school?.slug ?? null,
     }));

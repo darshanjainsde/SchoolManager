@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: '/platform', label: 'Dashboard', emoji: '📊' },
   { href: '/platform/scale', label: 'Scale', emoji: '📈' },
   { href: '/platform/schools', label: 'Schools', emoji: '🏫' },
+  { href: '/platform/blog', label: 'Blog Queue', emoji: '📝' },
   { href: '/platform/onboard', label: 'Add School', emoji: '➕' },
   { href: '/platform/connect', label: 'Connect', emoji: '🔗' },
 ];
