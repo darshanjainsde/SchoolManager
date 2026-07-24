@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { withTenant, type AttendanceStatus, type TenantTx } from '@skoolos/db';
+import { getPlatformPrisma, withTenant, type AttendanceStatus, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { isP2002 } from '../management/internal/prisma-errors';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from '../management/timetable.service';
 
@@ -83,18 +84,43 @@ export class PortalService {
    * accumulating duplicates. `PushChannel` later reads these rows by email
    * with the platform (cross-tenant) client — see push.channel.ts — but
    * writing them stays tenant-scoped like every other portal mutation.
+   *
+   * CROSS-TENANT REASSIGNMENT: `token` is globally unique, but the upsert
+   * below runs RLS-bound to THIS school. If the same physical device
+   * previously registered under a DIFFERENT school (a shared/demo device, or
+   * someone who is staff at one school and a guardian at another), that row
+   * is invisible to this transaction's tenant scope — yet Postgres's
+   * (RLS-blind) unique index still reports a conflict that `ON CONFLICT DO
+   * UPDATE` cannot resolve, so Prisma throws P2002. A device token is a
+   * per-DEVICE identity, not a per-tenant one, so the correct response is to
+   * REASSIGN the row to the new registrant (last-writer-wins) rather than
+   * error — erroring would leave that device stuck receiving the OLD
+   * tenant's push notifications on every retry. The reassignment itself uses
+   * `getPlatformPrisma()` (BYPASSRLS, the same client `PushChannel` reads
+   * with) since updating a row outside this transaction's tenant scope
+   * requires bypassing RLS by design, not as a workaround.
    */
   async registerPushToken(userId: string, token: string, platform: string) {
     const { schoolId } = this.tenant.requireTenant();
-    return withTenant(schoolId, async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
-      if (!user) throw new NotFoundException('No user record for this login');
-      return tx.pushToken.upsert({
-        where: { token },
-        update: { schoolId, userId, email: user.email, lastSeenAt: new Date() },
-        create: { schoolId, userId, email: user.email, token, platform },
+    let email!: string;
+    try {
+      return await withTenant(schoolId, async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
+        if (!user) throw new NotFoundException('No user record for this login');
+        email = user.email;
+        return tx.pushToken.upsert({
+          where: { token },
+          update: { schoolId, userId, email: user.email, lastSeenAt: new Date() },
+          create: { schoolId, userId, email: user.email, token, platform },
+        });
       });
-    });
+    } catch (e) {
+      if (!isP2002(e)) throw e;
+      return getPlatformPrisma().pushToken.update({
+        where: { token },
+        data: { schoolId, userId, email, platform, lastSeenAt: new Date() },
+      });
+    }
   }
 
   private async myStudent(schoolId: string, userId: string) {

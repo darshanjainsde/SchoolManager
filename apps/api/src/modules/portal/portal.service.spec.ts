@@ -12,8 +12,19 @@ const txMock = {
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
 
+/** The platform (BYPASSRLS) client — only `pushToken.update` is exercised, for the
+ * cross-tenant-token-reassignment path in `registerPushToken`. */
+const platformMock = {
+  pushToken: { update: jest.fn() },
+};
+
+// Keep the real `Prisma` export (prisma-errors.ts's isP2002 relies on
+// `instanceof Prisma.PrismaClientKnownRequestError`); only `withTenant` and
+// `getPlatformPrisma` are stubbed so no real DB connection is ever attempted.
 jest.mock('@skoolos/db', () => ({
+  ...jest.requireActual('@skoolos/db'),
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
+  getPlatformPrisma: () => platformMock,
 }));
 
 /**
@@ -509,6 +520,56 @@ describe('PortalService', () => {
         svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android'),
       ).rejects.toMatchObject({ status: 404 });
       expect(txMock.pushToken.upsert).not.toHaveBeenCalled();
+    });
+
+    /**
+     * `PushToken.token` is globally unique, but the upsert above runs inside
+     * `withTenant()` (RLS-bound to THIS school). If the same physical device
+     * previously registered under a DIFFERENT school's tenant, that row is
+     * invisible to this transaction's RLS scope, so Postgres's (unfiltered)
+     * unique index still reports a conflict that `ON CONFLICT DO UPDATE`
+     * cannot resolve — Prisma surfaces this as P2002. A device token is a
+     * per-DEVICE identity, not a per-tenant one (see push.channel.ts's
+     * docstring), so the correct behavior on that conflict is to REASSIGN the
+     * row to the new registrant (last-writer-wins) via the platform
+     * (BYPASSRLS) client, not to error and leave the device receiving the
+     * old tenant's notifications.
+     */
+    it('reassigns a token that already exists under a DIFFERENT tenant instead of throwing', async () => {
+      const { Prisma } = jest.requireActual('@skoolos/db');
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the fields: (`token`)',
+        { code: 'P2002', clientVersion: 'test', meta: { target: ['token'] } },
+      );
+      txMock.pushToken.upsert.mockRejectedValue(p2002);
+      platformMock.pushToken.update.mockResolvedValue({
+        id: 'pt-shared',
+        schoolId: SCHOOL,
+        userId: USER,
+      });
+
+      const result = await svc.registerPushToken(USER, 'ExponentPushToken[shared]', 'ios');
+
+      expect(platformMock.pushToken.update).toHaveBeenCalledWith({
+        where: { token: 'ExponentPushToken[shared]' },
+        data: {
+          schoolId: SCHOOL,
+          userId: USER,
+          email: 'teacher@green.test',
+          platform: 'ios',
+          lastSeenAt: expect.any(Date),
+        },
+      });
+      expect(result).toEqual({ id: 'pt-shared', schoolId: SCHOOL, userId: USER });
+    });
+
+    it('does not attempt reassignment for a non-P2002 error — rethrows as-is', async () => {
+      txMock.pushToken.upsert.mockRejectedValue(new Error('connection reset'));
+
+      await expect(
+        svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android'),
+      ).rejects.toThrow('connection reset');
+      expect(platformMock.pushToken.update).not.toHaveBeenCalled();
     });
   });
 
