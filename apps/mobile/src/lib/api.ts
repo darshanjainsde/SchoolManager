@@ -29,21 +29,39 @@ interface MeResponse {
   features: string[];
 }
 
+// MINOR 1: fetch rejects (offline, DNS failure, ...) with a raw TypeError.
+// Normalize every network call through here so callers only ever see ApiError.
+async function safeFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new ApiError(0, 'Could not reach the school server.');
+  }
+}
+
 async function rawFetch(path: string, s: Session | null, opts: Opts) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (s) {
     headers['X-Skoolos-Host'] = s.schoolHost;
     if (opts.auth !== false) headers['Authorization'] = `Bearer ${s.accessToken}`;
   }
-  return fetch(`${BASE}${path}`, {
+  return safeFetch(`${BASE}${path}`, {
     method: opts.method ?? (opts.body ? 'POST' : 'GET'),
     headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
 }
 
-async function tryRefresh(s: Session): Promise<Session | null> {
-  const res = await fetch(`${BASE}/auth/refresh`, {
+// IMPORTANT: the backend rotates refresh tokens per use and revokes the whole
+// token family if a stale refresh token is replayed (reuse detection — see
+// AuthService.refresh in apps/api/src/modules/auth/internal/auth.service.ts,
+// lines ~82-95). Two api.request() calls racing on an expired access token
+// must not each spend the same refresh token — single-flight the refresh so
+// concurrent 401s share one in-flight /auth/refresh call and its result.
+let refreshInFlight: Promise<Session | null> | null = null;
+
+async function doRefresh(s: Session): Promise<Session | null> {
+  const res = await safeFetch(`${BASE}/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Skoolos-Host': s.schoolHost },
     body: JSON.stringify({ refreshToken: s.refreshToken }),
@@ -53,6 +71,15 @@ async function tryRefresh(s: Session): Promise<Session | null> {
   const next: Session = { ...s, accessToken: data.accessToken, refreshToken: data.refreshToken };
   await session.set(next);
   return next;
+}
+
+async function tryRefresh(s: Session): Promise<Session | null> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefresh(s).finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
 }
 
 export const api = {
@@ -76,7 +103,7 @@ export const api = {
   },
 
   async login(host: string, identifier: string, password: string): Promise<Session> {
-    const loginRes = await fetch(`${BASE}/auth/login`, {
+    const loginRes = await safeFetch(`${BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Skoolos-Host': host },
       body: JSON.stringify({ identifier, password }),
@@ -89,7 +116,7 @@ export const api = {
 
     // The login response carries no role/name — fetch the role from /auth/me
     // using the freshly issued access token.
-    const meRes = await fetch(`${BASE}/auth/me`, {
+    const meRes = await safeFetch(`${BASE}/auth/me`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

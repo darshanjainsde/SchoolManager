@@ -40,6 +40,9 @@ it('refreshes once on 401 then retries', async () => {
   expect(out.ok).toBe(1);
   expect(mockFetch).toHaveBeenCalledTimes(3);
   expect((await session.get())?.accessToken).toBe('at2');
+  // MINOR 2: the retried request must carry the NEW token, not the stale one.
+  const [, retryInit] = mockFetch.mock.calls[2];
+  expect(retryInit.headers['Authorization']).toBe('Bearer at2');
 });
 
 it('throws ApiError and clears session when refresh also fails', async () => {
@@ -49,6 +52,47 @@ it('throws ApiError and clears session when refresh also fails', async () => {
     .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
   await expect(api.request('/me/profile')).rejects.toBeInstanceOf(ApiError);
   expect(await session.get()).toBeNull();
+});
+
+// MINOR 1: an offline/DNS failure (fetch rejects) must surface as an ApiError,
+// not a raw TypeError, so callers only ever need to catch one error type.
+it('normalizes a network failure to ApiError', async () => {
+  await seed();
+  mockFetch.mockRejectedValueOnce(new TypeError('Network request failed'));
+  await expect(api.request('/me/profile')).rejects.toBeInstanceOf(ApiError);
+});
+
+// IMPORTANT: the backend rotates refresh tokens on every use and revokes the
+// whole token family if a stale refresh token is replayed (reuse detection —
+// see auth.service.ts refresh()). Two api.request() calls racing on an
+// expired access token must NOT each fire their own /auth/refresh with the
+// same (soon-to-be-stale) refresh token — only one refresh call may happen,
+// and the second caller must reuse its result.
+it('single-flights concurrent refreshes on 401 instead of double-refreshing', async () => {
+  await seed();
+  mockFetch.mockImplementation(async (url: string, init: any) => {
+    if (url.includes('/auth/refresh')) {
+      return {
+        ok: true, status: 200,
+        json: async () => ({ accessToken: 'at2', refreshToken: 'rt2', expiresIn: 900 }),
+      };
+    }
+    if (init.headers['Authorization'] === 'Bearer at1') {
+      return { ok: false, status: 401, json: async () => ({}) };
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: 1 }) };
+  });
+
+  const [r1, r2] = await Promise.all([
+    api.request<{ ok: number }>('/me/profile'),
+    api.request<{ ok: number }>('/me/other'),
+  ]);
+
+  expect(r1.ok).toBe(1);
+  expect(r2.ok).toBe(1);
+  const refreshCalls = mockFetch.mock.calls.filter(([url]: [string]) => url.includes('/auth/refresh'));
+  expect(refreshCalls.length).toBe(1);
+  expect((await session.get())?.accessToken).toBe('at2');
 });
 
 // The real POST /auth/login response is `{ accessToken, refreshToken, expiresIn }`
