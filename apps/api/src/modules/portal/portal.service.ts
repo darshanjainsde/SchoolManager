@@ -70,6 +70,33 @@ export class PortalService {
     private readonly timetableSvc: TimetableService,
   ) {}
 
+  /**
+   * Registers (or refreshes) an Expo device token for the CALLING user —
+   * any authenticated school role, not just STUDENT. Deliberately does NOT
+   * go through `myStudent`: a TEACHER/STAFF/SCHOOL_ADMIN login has no
+   * `Student` row at all, and this endpoint must work for every role the
+   * mobile app supports.
+   *
+   * Upserts by `token` (its own unique key — Expo issues one per
+   * app-install) inside this school's tenant scope, so a re-registering
+   * device just refreshes its existing row's owner/timestamp rather than
+   * accumulating duplicates. `PushChannel` later reads these rows by email
+   * with the platform (cross-tenant) client — see push.channel.ts — but
+   * writing them stays tenant-scoped like every other portal mutation.
+   */
+  async registerPushToken(userId: string, token: string, platform: string) {
+    const { schoolId } = this.tenant.requireTenant();
+    return withTenant(schoolId, async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
+      if (!user) throw new NotFoundException('No user record for this login');
+      return tx.pushToken.upsert({
+        where: { token },
+        update: { schoolId, userId, email: user.email, lastSeenAt: new Date() },
+        create: { schoolId, userId, email: user.email, token, platform },
+      });
+    });
+  }
+
   private async myStudent(schoolId: string, userId: string) {
     return withTenant(schoolId, (tx) =>
       tx.student.findFirst({

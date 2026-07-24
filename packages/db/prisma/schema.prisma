@@ -177,6 +177,7 @@ model School {
   staff              Staff[]
   staffAttendance    StaffAttendance[]
   leaveApplications  LeaveApplication[]
+  pushTokens         PushToken[]
 }
 
 model Domain {
@@ -239,6 +240,29 @@ model RefreshToken {
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
+  @@index([userId])
+}
+
+/// One registered Expo push device per row, keyed by `token` (Expo issues a
+/// new token per app-install, so upsert-by-token is how a re-registering
+/// device replaces its stale row rather than accumulating duplicates).
+///
+/// `email` is denormalised from `User.email` at registration time so
+/// `PushChannel.send(email, message)` — which runs with no tenant/schoolId in
+/// scope, see notification.types.ts — can look tokens up by the same email
+/// address `NotificationService` already fans a message out to.
+model PushToken {
+  id         String   @id @default(uuid()) @db.Uuid
+  schoolId   String   @db.Uuid
+  userId     String   @db.Uuid
+  email      String
+  token      String   @unique
+  platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, email])
   @@index([userId])
 }
 

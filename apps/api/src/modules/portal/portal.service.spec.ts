@@ -6,6 +6,8 @@ const txMock = {
   subject: { findMany: jest.fn() },
   mediaAsset: { findFirst: jest.fn() },
   announcement: { findMany: jest.fn() },
+  user: { findUnique: jest.fn() },
+  pushToken: { upsert: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -455,6 +457,58 @@ describe('PortalService', () => {
 
       await expect(svc.results(USER)).rejects.toMatchObject({ status: 404 });
       expect(txMock.result.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── registerPushToken ──────────────────────────────────────────────────
+  // Deliberately does NOT go through `myStudent` — a TEACHER/STAFF/
+  // SCHOOL_ADMIN login must be able to register a device too, and has no
+  // `Student` row at all. None of these tests touch `txMock.student`.
+
+  describe('registerPushToken', () => {
+    beforeEach(() => {
+      txMock.user.findUnique.mockResolvedValue({ email: 'teacher@green.test' });
+      txMock.pushToken.upsert.mockResolvedValue({ id: 'pt-1' });
+    });
+
+    it('resolves the email from the JWT sub via User, not via myStudent', async () => {
+      await svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android');
+
+      expect(txMock.user.findUnique).toHaveBeenCalledWith({
+        where: { id: USER },
+        select: { email: true },
+      });
+      expect(txMock.student.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('upserts by token, scoped to the tenant schoolId', async () => {
+      await svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android');
+
+      expect(txMock.pushToken.upsert).toHaveBeenCalledWith({
+        where: { token: 'ExponentPushToken[a]' },
+        update: {
+          schoolId: SCHOOL,
+          userId: USER,
+          email: 'teacher@green.test',
+          lastSeenAt: expect.any(Date),
+        },
+        create: {
+          schoolId: SCHOOL,
+          userId: USER,
+          email: 'teacher@green.test',
+          token: 'ExponentPushToken[a]',
+          platform: 'android',
+        },
+      });
+    });
+
+    it('404s when the JWT sub has no User row', async () => {
+      txMock.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android'),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(txMock.pushToken.upsert).not.toHaveBeenCalled();
     });
   });
 
