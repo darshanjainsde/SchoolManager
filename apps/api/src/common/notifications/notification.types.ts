@@ -2,7 +2,7 @@
  * Notification contracts. THIS FILE IS AUTHORITATIVE: the payload interface
  * for a `NotificationKind` is declared here and consumed unchanged by both
  * ends of the wire — callers (`ExamsService`, `AttendanceService`,
- * `ExamRemindersService`) build it, and `EmailChannel` hands it straight to
+ * `ExamRemindersService`, `AnnouncementsService`) build it, and `EmailChannel` hands it straight to
  * the matching `MailService.send*` composer with no cast in between.
  *
  * Adding an event = add one `{ KIND: PayloadInterface }` entry to
@@ -49,12 +49,28 @@ export interface AbsenceNoticePayload {
   date: string;
 }
 
+/**
+ * Payload for ANNOUNCEMENT — mirrors `MailService.sendAnnouncement` (fired
+ * by `AnnouncementsService.create` for both SCHOOL_ADMIN and TEACHER
+ * callers). `className` is `null` for a whole-school announcement and the
+ * targeted section's display name (e.g. `"5-B"`) otherwise; a multi-class
+ * fan-out sends one payload per targeted section so each recipient sees
+ * their own child's class, not a merged list.
+ */
+export interface AnnouncementPayload {
+  schoolName: string;
+  title: string;
+  body: string;
+  className: string | null;
+}
+
 /** The single source of truth mapping each event to its payload shape. */
 export interface NotificationPayloadMap {
   TEST_SCHEDULED: TestScheduledPayload;
   TEST_REMINDER: TestReminderPayload;
   RESULTS_PUBLISHED: ResultsPublishedPayload;
   ABSENCE_NOTICE: AbsenceNoticePayload;
+  ANNOUNCEMENT: AnnouncementPayload;
 }
 
 /**

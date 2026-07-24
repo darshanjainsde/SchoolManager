@@ -106,6 +106,11 @@ export function formatNotification(message: NotificationMessage): NotificationTe
         title: `Absence notice: ${message.payload.studentName}`,
         body: `Marked absent on ${message.payload.date} at ${message.payload.schoolName}.`,
       };
+    case 'ANNOUNCEMENT':
+      return {
+        title: `📣 ${message.payload.schoolName}`,
+        body: `${message.payload.title} — ${message.payload.body.slice(0, 120)}`,
+      };
     default: {
       // Exhaustiveness guard — a new NotificationKind must be handled above.
       const _exhaustive: never = message;
