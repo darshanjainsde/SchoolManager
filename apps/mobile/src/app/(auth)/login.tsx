@@ -17,7 +17,17 @@ export default function Login() {
     try {
       const host = (await session.getSchoolHost())!;
       const s = await api.login(host, identifier.trim(), password);
-      router.replace(portalForRole(s.role));
+      // api.login() already persisted `s` before returning. If the role can't
+      // be routed on mobile (OWNER — web-only), that persisted session must
+      // not survive: leaving it behind would brick the next app launch (see
+      // resolveStartRoute in @/lib/roles). Show the real reason instead of
+      // letting it fall into the generic connectivity-error branch below.
+      try {
+        router.replace(portalForRole(s.role));
+      } catch (roleErr) {
+        await session.clear();
+        setError(roleErr instanceof Error ? roleErr.message : 'Owner accounts use the web console.');
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not reach the school server.');
     } finally {
