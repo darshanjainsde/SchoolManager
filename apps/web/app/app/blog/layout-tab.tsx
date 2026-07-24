@@ -84,6 +84,8 @@ export default function LayoutTab({
     onError: (e: Error) => toast.error(`Update failed: ${e.message}`),
   });
 
+  const [isReordering, setIsReordering] = useState(false);
+
   const selections = selectionsQuery.data ?? [];
   const heroCount = selections.filter((s) => s.isHero).length;
   const effectiveHeroLimit = settingsQuery.data?.blogHeroLimit ?? heroLimit;
@@ -96,13 +98,37 @@ export default function LayoutTab({
     patchSelectionMutation.mutate({ postId: sel.postId, patch: { isHero: !sel.isHero } });
   }
 
-  function move(idx: number, dir: -1 | 1) {
-    const swap = idx + dir;
-    if (swap < 0 || swap >= selections.length) return;
-    const a = selections[idx];
-    const b = selections[swap];
-    patchSelectionMutation.mutate({ postId: a.postId, patch: { sortOrder: b.sortOrder } });
-    patchSelectionMutation.mutate({ postId: b.postId, patch: { sortOrder: a.sortOrder } });
+  // Renumbers the ENTIRE displayed list sequentially rather than swapping two
+  // sortOrder values. Swapping breaks down whenever rows tie (e.g. every
+  // selection created with the same sortOrder) — swapping 0<->0 is a silent
+  // no-op. Renumbering by index is correct regardless of what the current
+  // sortOrder values are.
+  async function move(idx: number, dir: -1 | 1) {
+    const target = idx + dir;
+    if (target < 0 || target >= selections.length || isReordering) return;
+
+    const reordered = [...selections];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(target, 0, moved);
+
+    const patches = reordered
+      .map((sel, i) => ({ postId: sel.postId, sortOrder: i, changed: sel.sortOrder !== i }))
+      .filter((p) => p.changed);
+
+    if (patches.length === 0) return;
+
+    setIsReordering(true);
+    try {
+      for (const p of patches) {
+        await api.patch(`/cms/blog/selections/${p.postId}`, { sortOrder: p.sortOrder });
+      }
+      toast.success('Order updated');
+    } catch (e) {
+      toast.error(`Reorder failed: ${(e as Error).message}`);
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: ['blog-selections'] });
+      setIsReordering(false);
+    }
   }
 
   return (
@@ -182,14 +208,20 @@ export default function LayoutTab({
                 Hero
               </label>
               <div className="flex shrink-0 items-center gap-1">
-                <Button variant="ghost" size="icon" disabled={i === 0 || patchSelectionMutation.isPending} onClick={() => move(i, -1)} aria-label="Move up">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={i === 0 || isReordering}
+                  onClick={() => void move(i, -1)}
+                  aria-label="Move up"
+                >
                   <ArrowUp className="h-4 w-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  disabled={i === selections.length - 1 || patchSelectionMutation.isPending}
-                  onClick={() => move(i, 1)}
+                  disabled={i === selections.length - 1 || isReordering}
+                  onClick={() => void move(i, 1)}
                   aria-label="Move down"
                 >
                   <ArrowDown className="h-4 w-4" />

@@ -55,13 +55,18 @@ export class BlogPublicService {
       }),
     ]);
 
+    // sortOrder is the school's chosen order (set via the Layout tab's
+    // up/down reordering); createdAt desc is the tiebreaker for rows that
+    // still share a sortOrder, matching blog-cms.service.ts's
+    // listSelections() so the admin preview and the live site agree.
+    const bySortOrder = (a: (typeof selections)[number], b: (typeof selections)[number]) =>
+      a.sortOrder - b.sortOrder || b.createdAt.getTime() - a.createdAt.getTime();
+
     const heroLimit = profile?.blogHeroLimit ?? 1;
-    const heroRows = selections.filter((s) => s.isHero).sort((a, b) => a.sortOrder - b.sortOrder);
+    const heroRows = selections.filter((s) => s.isHero).sort(bySortOrder);
     const cappedHeroes = heroRows.slice(0, heroLimit);
     const cappedHeroIds = new Set(cappedHeroes.map((h) => h.postId));
-    const rest = selections
-      .filter((s) => !cappedHeroIds.has(s.postId))
-      .sort((a, b) => (b.post.publishedAt?.getTime() ?? 0) - (a.post.publishedAt?.getTime() ?? 0));
+    const rest = selections.filter((s) => !cappedHeroIds.has(s.postId)).sort(bySortOrder);
 
     const ordered = [...cappedHeroes, ...rest];
     const posts = ordered.map((s) => {

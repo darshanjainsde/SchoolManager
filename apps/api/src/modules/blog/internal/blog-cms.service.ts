@@ -76,6 +76,20 @@ export class BlogCmsService {
     return { ok: true };
   }
 
+  /**
+   * Next sortOrder for a new selection row: appended to the end of the
+   * school's list (max existing + 1), so new selections don't all tie at 0
+   * and silently defeat the Layout tab's up/down reordering.
+   */
+  private async nextSortOrder(schoolId: string): Promise<number> {
+    const last = await this.db().schoolBlogSelection.findFirst({
+      where: { schoolId },
+      orderBy: { sortOrder: 'desc' },
+      select: { sortOrder: true },
+    });
+    return (last?.sortOrder ?? -1) + 1;
+  }
+
   /** Publish + auto-create (or leave alone) this school's own selection row. */
   async publish(schoolId: string, id: string): Promise<BlogPost> {
     const existing = await this.get(schoolId, id);
@@ -83,10 +97,11 @@ export class BlogCmsService {
       where: { id },
       data: { status: 'PUBLISHED', publishedAt: existing.publishedAt ?? new Date() },
     });
+    const sortOrder = await this.nextSortOrder(schoolId);
     await this.db().schoolBlogSelection.upsert({
       where: { schoolId_postId: { schoolId, postId: id } },
       update: {},
-      create: { schoolId, postId: id, isHero: false, sortOrder: 0 },
+      create: { schoolId, postId: id, isHero: false, sortOrder },
     });
     return post;
   }
@@ -138,7 +153,11 @@ export class BlogCmsService {
   async listSelections(schoolId: string) {
     const rows = await this.db().schoolBlogSelection.findMany({
       where: { schoolId },
-      orderBy: [{ isHero: 'desc' }, { sortOrder: 'asc' }],
+      // sortOrder is the intended ordering, but rows created before a
+      // sortOrder was assigned (or created in the same tick) can still tie —
+      // createdAt desc keeps that deterministic and matches the tiebreaker
+      // blog-public.service.ts uses for the live site.
+      orderBy: [{ isHero: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: { post: { include: { school: { select: { name: true } } } } },
     });
     return rows.map((r) => ({
@@ -161,7 +180,8 @@ export class BlogCmsService {
     if (!post) throw new NotFoundException('Global post not found');
     if (post.schoolId === schoolId) throw new BadRequestException('Cannot select your own post from the library');
     try {
-      return await db.schoolBlogSelection.create({ data: { schoolId, postId, isHero: false, sortOrder: 0 } });
+      const sortOrder = await this.nextSortOrder(schoolId);
+      return await db.schoolBlogSelection.create({ data: { schoolId, postId, isHero: false, sortOrder } });
     } catch (e) {
       if (isP2002(e)) throw new ConflictException('Already selected');
       throw e;
