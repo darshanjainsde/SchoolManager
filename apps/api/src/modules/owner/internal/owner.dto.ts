@@ -32,7 +32,7 @@ export class SetStatusDto {
 }
 
 export class SetFeatureDto {
-  @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT']) featureKey!: string;
+  @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG']) featureKey!: string;
   @IsBoolean() enabled!: boolean;
 }
 

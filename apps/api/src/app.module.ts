@@ -24,6 +24,7 @@ import { PortalModule } from './modules/portal';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
+import { BlogModule } from './modules/blog';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { AdminCredentialsModule } from './modules/admin-credentials';
     PortalModule,
     DirectoryModule,
     MarketingModule,
+    BlogModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
