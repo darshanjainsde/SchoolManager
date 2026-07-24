@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant, type AttendanceStatus } from '@skoolos/db';
+import { AuditService } from '../../common/audit/audit.service';
 import { ApiError } from '../../common/errors/api-error';
 import { formatDateIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
@@ -42,7 +43,10 @@ export interface ClassDayStatus {
 export class AttendanceService {
   private readonly logger = new Logger(AttendanceService.name);
 
-  constructor(private readonly notifications: NotificationService) {}
+  constructor(
+    private readonly notifications: NotificationService,
+    private readonly audit: AuditService,
+  ) {}
 
   /**
    * The students in `classSectionId`, each paired with their stored mark for
@@ -141,16 +145,27 @@ export class AttendanceService {
   /**
    * Per-class attendance status for `date`, across the caller's sections
    * (see `myClassSections`). `taken` is true once at least one Attendance
-   * row exists for that section+date; `markedBy` resolves the EARLIEST
-   * row's `markedById` to a Teacher name, falling back to `'School admin'`
-   * when it does not resolve to a Teacher row — the same fallback `save`
-   * uses when a SCHOOL_ADMIN caller has no linked Teacher and `markedById`
-   * ends up holding their raw User.id.
+   * row exists for that section+date. When taken, `total` is the number of
+   * rows actually marked that day — NOT the section's current live roster
+   * count, which can drift after the fact (transfers, new admissions) and
+   * would otherwise make a past day's "26/28" silently stop matching what
+   * was really marked; only an untaken day falls back to the live roster
+   * count (there is nothing else to report). `markedBy` resolves the
+   * EARLIEST-surviving row's `markedById` to a Teacher name, falling back
+   * to `'School admin'` when it does not resolve to a Teacher row — the
+   * same fallback `save` uses when a SCHOOL_ADMIN caller has no linked
+   * Teacher and `markedById` ends up holding their raw User.id. Because
+   * `save` deletes and recreates every row on each save, only one save's
+   * rows are ever alive at a time — "earliest" here means "first in the
+   * current, surviving batch", i.e. the marker of the latest save, not
+   * necessarily whoever marked the class first that day.
    *
-   * One `attendance.findMany` plus (at most) one `teacher.findFirst` per
-   * class section — an N+1 loop, but bounded by how many sections a single
-   * teacher or admin realistically works with in a day (~2-8), so left as
-   * straightforward per-class queries rather than a batched lookup.
+   * Exactly two queries regardless of how many sections are returned: one
+   * `attendance.findMany` covering every section's rows for `date` in a
+   * single `classSectionId IN (...)` call, and one `teacher.findMany` for
+   * the distinct `markedById`s found. This matters most for SCHOOL_ADMIN,
+   * who can see every section in the school — a per-section loop there
+   * would have scaled with school size instead of staying constant.
    */
   async dayStatus(
     schoolId: string,
@@ -162,39 +177,55 @@ export class AttendanceService {
       throw new ApiError('VALIDATION', 'date must be formatted as YYYY-MM-DD', 400, 'date');
     }
     const classes = await this.myClassSections(schoolId, userId, role);
+    if (classes.length === 0) return [];
     const day = new Date(date);
+    const classSectionIds = classes.map((c) => c.classSectionId);
 
     return withTenant(schoolId, async (tx) => {
-      const out: ClassDayStatus[] = [];
-      for (const c of classes) {
-        const rows = await tx.attendance.findMany({
-          where: { classSectionId: c.classSectionId, date: day },
-          select: { status: true, markedById: true, createdAt: true },
-          orderBy: { createdAt: 'asc' },
-        });
+      const rows = await tx.attendance.findMany({
+        where: { classSectionId: { in: classSectionIds }, date: day },
+        select: { classSectionId: true, status: true, markedById: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      });
 
-        let markedBy: string | null = null;
-        let markedAt: string | null = null;
-        if (rows.length > 0) {
-          markedAt = rows[0].createdAt.toISOString();
-          const marker = await tx.teacher.findFirst({
-            where: { id: rows[0].markedById },
-            select: { firstName: true, lastName: true },
-          });
-          markedBy = marker ? `${marker.firstName} ${marker.lastName}` : 'School admin';
-        }
+      const bySection = new Map<string, typeof rows>();
+      for (const row of rows) {
+        const existing = bySection.get(row.classSectionId);
+        if (existing) existing.push(row);
+        else bySection.set(row.classSectionId, [row]);
+      }
 
-        out.push({
+      // `rows` is already sorted by createdAt asc, so the first row seen
+      // per section while building `bySection` above is that section's
+      // earliest-surviving row.
+      const markerIds = new Set<string>();
+      for (const sectionRows of bySection.values()) {
+        markerIds.add(sectionRows[0].markedById);
+      }
+      const markers =
+        markerIds.size > 0
+          ? await tx.teacher.findMany({
+              where: { id: { in: [...markerIds] } },
+              select: { id: true, firstName: true, lastName: true },
+            })
+          : [];
+      const markerNames = new Map(markers.map((m) => [m.id, `${m.firstName} ${m.lastName}`]));
+
+      return classes.map((c) => {
+        const sectionRows = bySection.get(c.classSectionId) ?? [];
+        const taken = sectionRows.length > 0;
+        return {
           classSectionId: c.classSectionId,
           name: c.name,
-          total: c.studentCount,
-          present: rows.filter((r) => r.status === 'PRESENT').length,
-          taken: rows.length > 0,
-          markedBy,
-          markedAt,
-        });
-      }
-      return out;
+          total: taken ? sectionRows.length : c.studentCount,
+          present: sectionRows.filter((r) => r.status === 'PRESENT').length,
+          taken,
+          markedBy: taken
+            ? (markerNames.get(sectionRows[0].markedById) ?? 'School admin')
+            : null,
+          markedAt: taken ? sectionRows[0].createdAt.toISOString() : null,
+        };
+      });
     });
   }
 
@@ -257,10 +288,12 @@ export class AttendanceService {
       // Read the marks as they stand BEFORE this save, inside the same
       // transaction as the upserts, so "was this student already absent?" is
       // answered against a consistent snapshot. Anything not in this map has
-      // no stored row yet and therefore counts as newly absent.
+      // no stored row yet and therefore counts as newly absent. This same
+      // snapshot also feeds the retake audit entry below — `markedById` is
+      // selected for that purpose (unused by the newly-absent diff).
       const before = await tx.attendance.findMany({
         where: { classSectionId: dto.classSectionId, date: day },
-        select: { studentId: true, status: true },
+        select: { studentId: true, status: true, markedById: true },
       });
       const previousStatus = new Map(before.map((m) => [m.studentId, m.status]));
 
@@ -295,6 +328,35 @@ export class AttendanceService {
           markedById,
         })),
       });
+
+      // A retake: this save overwrote rows that already existed for this
+      // class/date. `save`'s delete-then-recreate leaves no other trace of
+      // who marked it first or what the prior counts were, so — unlike the
+      // generic `PUT /manage/attendance` row the global AuditInterceptor
+      // already writes for every save — this entry exists specifically to
+      // preserve that "previous version" for the audit trail. Never fired
+      // for a first-ever save of a day (nothing was overwritten).
+      if (before.length > 0) {
+        const countByStatus = (marks: { status: string }[]) => ({
+          present: marks.filter((m) => m.status === 'PRESENT').length,
+          absent: marks.filter((m) => m.status === 'ABSENT').length,
+          late: marks.filter((m) => m.status === 'LATE').length,
+          total: marks.length,
+        });
+        await this.audit.record({
+          schoolId,
+          actorUserId: callerUserId,
+          action: 'ATTENDANCE_RETAKE',
+          entity: 'Attendance',
+          entityId: dto.classSectionId,
+          meta: {
+            classSectionId: dto.classSectionId,
+            date: dto.date,
+            previous: { ...countByStatus(before), markedById: before[0]?.markedById ?? null },
+            current: { ...countByStatus(dto.marks), markedById },
+          },
+        });
+      }
 
       return { saved: dto.marks.length, absentees, newlyAbsent };
     });
