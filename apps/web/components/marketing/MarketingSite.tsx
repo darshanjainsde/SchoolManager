@@ -268,6 +268,7 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
           <a className="lnk" href="#events">Events Network</a>
           <a className="lnk" href="/pricing">Pricing</a>
           <a className="lnk" href="#switch">Why switch</a>
+          <a className="lnk" href="/blog">Blog</a>
           <button className="btn btn-hot btn-sm" onClick={() => openModal()}>Request a callback</button>
         </div>
       </nav>

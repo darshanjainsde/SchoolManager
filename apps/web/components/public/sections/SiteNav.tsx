@@ -25,6 +25,7 @@ export interface NavFlags {
   hasHof: boolean;
   hasGallery: boolean;
   hasEvents: boolean;
+  hasBlog: boolean;
   hasContact: boolean;
   hasEnquiry: boolean;
 }
@@ -127,6 +128,9 @@ function NavLinks({
       )}
       {flags.hasEvents && (
         <a className={linkCls} href="/connect">Connect</a>
+      )}
+      {flags.hasBlog && (
+        <a className={linkCls} href="/blog">Blog</a>
       )}
       {(flags.hasContact || flags.hasEnquiry) && (
         <a className={linkCls} href="/contact">Contact</a>
@@ -476,6 +480,9 @@ export default function SiteNav({
               )}
               {flags.hasEvents && (
                 <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/connect">Connect</a>
+              )}
+              {flags.hasBlog && (
+                <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/blog">Blog</a>
               )}
               {(flags.hasContact || flags.hasEnquiry) && (
                 <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/contact">Contact</a>

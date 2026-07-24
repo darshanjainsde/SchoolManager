@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.4.2",
+    "@skoolos/db": "workspace:*",
     "@tanstack/react-query": "^5.40.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.395.0",

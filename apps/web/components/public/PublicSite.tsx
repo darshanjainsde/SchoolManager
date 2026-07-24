@@ -318,6 +318,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   );
   const hasEnquiry = data.school.features.includes('ENQUIRY');
   const hasEvents = data.school.features.includes('EVENTS');
+  const hasBlog = data.school.features.includes('BLOG');
   const hasAcademics = data.courses.length > 0;
   const hasAdmissions = admissionsHasContent(data.admissions, data.courses);
   const hasHof = hofCourses(data.courses).length > 0;
@@ -432,7 +433,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
       {/* ── NAV (style selected by the school admin) ── */}
       <SiteNav
         data={data}
-        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasContact, hasEnquiry }}
+        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasBlog, hasContact, hasEnquiry }}
         base={base}
         view={view}
         onAcademicsPage={onAcademicsPage}
@@ -663,6 +664,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               {hasHof && <li><a href={`${base}#hall-of-fame`} className="hover:text-slate-900 transition">Hall of Fame</a></li>}
               {hasGallery && <li><a href="/gallery" className="hover:text-slate-900 transition">Gallery</a></li>}
               {hasEvents && <li><a href="/connect" className="hover:text-slate-900 transition">Connect</a></li>}
+              {hasBlog && <li><a href="/blog" className="hover:text-slate-900 transition">Blog</a></li>}
               <li><a href="/contact" className="hover:text-slate-900 transition">Enquire</a></li>
             </ul>
           </div>

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { fetchDirectory } from '@/lib/public-api';
-import { BLOG_POSTS } from '@/lib/blog';
+import { fetchGlobalBlog } from '@/lib/blog-api';
 
 /**
  * Marketing pages + every LIVE school's homepage. sckools.com is verified as
@@ -16,12 +16,13 @@ import { BLOG_POSTS } from '@/lib/blog';
 const SAMPLE_SLUGS = new Set(['acme', 'beacon', 'darshan', 'rishika', 'riverdale']);
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const globalBlog = await fetchGlobalBlog();
   const marketing: MetadataRoute.Sitemap = [
     { url: 'https://sckools.com/', changeFrequency: 'weekly', priority: 1 },
     { url: 'https://sckools.com/pricing', changeFrequency: 'weekly', priority: 0.9 },
     { url: 'https://sckools.com/school-website-builder', changeFrequency: 'weekly', priority: 0.9 },
     { url: 'https://sckools.com/blog', changeFrequency: 'weekly', priority: 0.7 },
-    ...BLOG_POSTS.map((p) => ({
+    ...(globalBlog?.posts ?? []).map((p) => ({
       url: `https://sckools.com/blog/${p.slug}`,
       changeFrequency: 'monthly' as const,
       priority: 0.7,

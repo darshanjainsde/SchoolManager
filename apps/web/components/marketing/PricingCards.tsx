@@ -52,6 +52,7 @@ export default function PricingCards({ config }: { config: MarketingConfigData }
           <a className="lnk" href="/#feats">Features</a>
           <a className="lnk" href="/#events">Events Network</a>
           <a className="lnk" href="/#switch">Why switch</a>
+          <a className="lnk" href="/blog">Blog</a>
           <button className="btn btn-hot btn-sm" onClick={() => setModalInterest(null)}>Request a callback</button>
         </div>
       </nav>
