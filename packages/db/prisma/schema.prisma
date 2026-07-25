@@ -178,6 +178,7 @@ model School {
   staffAttendance    StaffAttendance[]
   leaveApplications  LeaveApplication[]
   pushTokens         PushToken[]
+  holidays           Holiday[]
 }
 
 model Domain {
@@ -264,6 +265,28 @@ model PushToken {
 
   @@index([schoolId, email])
   @@index([userId])
+}
+
+/// A school-configured holiday/closure shown on both mobile portals'
+/// read-only `/me/holidays` calendar. `type` is a plain String rather than a
+/// Prisma enum (mirrors `Period.kind`/`LeaveApplication.type`) — one of
+/// `'PUBLIC' | 'FESTIVAL' | 'SCHOOL'`, enforced at the DTO/service layer, not
+/// the database.
+///
+/// `startDate`/`endDate` are `@db.Date` — plain calendar dates, no time
+/// component — matching `LeaveApplication.startDate`/`endDate`. `endDate` is
+/// optional: a single-day holiday only needs `startDate`.
+model Holiday {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @db.Uuid
+  name      String
+  type      String
+  startDate DateTime  @db.Date
+  endDate   DateTime? @db.Date
+  createdAt DateTime  @default(now())
+  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, startDate])
 }
 
 model AuditLog {

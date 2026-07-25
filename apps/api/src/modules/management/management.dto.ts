@@ -620,3 +620,24 @@ export class AssignSubstitutionDto {
   @IsUUID()
   substituteTeacherId!: string;
 }
+
+// ── Holidays ─────────────────────────────────────────────────────────────────
+
+export const HOLIDAY_TYPES = ['PUBLIC', 'FESTIVAL', 'SCHOOL'] as const;
+export type HolidayTypeValue = (typeof HOLIDAY_TYPES)[number];
+
+export class CreateHolidayDto {
+  @IsString()
+  @Length(1, 120)
+  name!: string;
+
+  @IsIn(HOLIDAY_TYPES)
+  type!: HolidayTypeValue;
+
+  @IsDateString()
+  startDate!: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+}
