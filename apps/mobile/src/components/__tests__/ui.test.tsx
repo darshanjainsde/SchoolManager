@@ -13,6 +13,21 @@ it('Pill renders tone text', () => {
   expect(getByText('Present')).toBeTruthy();
 });
 
+/**
+ * Regression net for N3 (Holiday.type crash guard): `pillTones[tone]` used
+ * to be destructured with no fallback, so an unrecognized tone (e.g. from a
+ * `Holiday.type` value that isn't DB-enum-enforced, only `@IsIn`-validated
+ * at write time) threw and crashed the whole screen. `tone` is cast here
+ * the same way an unvalidated API value would arrive at runtime, bypassing
+ * the compile-time `keyof typeof pillTones` guarantee.
+ */
+it('Pill falls back to the neutral tone instead of throwing for an unrecognized tone', () => {
+  const { getByText } = render(
+    <Pill tone={'SOME_UNKNOWN_TYPE' as never}>Mystery</Pill>,
+  );
+  expect(getByText('Mystery')).toBeTruthy();
+});
+
 it('SectionTitle shows title', () => {
   const { getByText } = render(<SectionTitle title="Quick actions" />);
   expect(getByText('Quick actions')).toBeTruthy();

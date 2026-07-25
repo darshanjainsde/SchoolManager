@@ -8,6 +8,17 @@ import { tokens } from '@/theme/tokens';
 
 const TYPE_TONE = { PUBLIC: 'green', FESTIVAL: 'amber', SCHOOL: 'indigo' } as const;
 
+/**
+ * `Holiday.type` has no DB-level enum — only `@IsIn`-validated at write time
+ * (packages/db/prisma/schema.prisma) — so an unexpected value here is
+ * defensible, not impossible. `?? 'neutral'` keeps this indexed lookup safe
+ * even before `Pill`'s own fallback; belt-and-suspenders per the same
+ * finding.
+ */
+function typeTone(type: Holiday['type']): 'green' | 'amber' | 'indigo' | 'neutral' {
+  return TYPE_TONE[type] ?? 'neutral';
+}
+
 export default function Holidays() {
   const [items, setItems] = useState<Holiday[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +85,7 @@ export default function Holidays() {
               <Text style={{ fontSize: 13, fontWeight: '600', color: tokens.color.ink }}>{h.name}</Text>
               <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{weekday}</Text>
             </View>
-            <Pill tone={TYPE_TONE[h.type]}>{h.type}</Pill>
+            <Pill tone={typeTone(h.type)}>{h.type}</Pill>
           </Card>
         );
       })}

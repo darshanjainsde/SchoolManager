@@ -47,7 +47,13 @@ const pillTones = {
 } as const;
 
 export function Pill({ tone, children }: PropsWithChildren<{ tone: keyof typeof pillTones }>) {
-  const t = pillTones[tone];
+  // Defensive fallback: `tone` is typed to a known key, but a caller can
+  // still hand this an untrusted/unvalidated string at runtime (e.g.
+  // `Holiday.type`, which is a plain DB string with no enum, only
+  // `@IsIn`-validated at write time — see holidays.tsx). Falling back to
+  // 'neutral' instead of crashing on `t.bg`/`t.fg` keeps one bad value from
+  // taking down the whole screen.
+  const t = pillTones[tone] ?? pillTones.neutral;
   return (
     <View style={{ backgroundColor: t.bg, borderRadius: tokens.radius.chip,
       paddingHorizontal: 9, paddingVertical: 3, alignSelf: 'flex-start' }}>

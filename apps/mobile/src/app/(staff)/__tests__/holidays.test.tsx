@@ -51,3 +51,20 @@ it('shows the API error message when the fetch fails', async () => {
   const { findByText } = render(<Holidays />);
   expect(await findByText('Could not reach the school server.')).toBeTruthy();
 });
+
+/**
+ * Regression net for N3: `Holiday.type` has no DB-level enum (only
+ * `@IsIn`-validated at write time), so a value the shipped UI doesn't
+ * recognize is a real possibility from any other writer. The screen must
+ * render the holiday (falling back to the neutral tone) instead of crashing.
+ */
+it('renders a holiday with an unrecognized type instead of crashing the screen', async () => {
+  (api.request as jest.Mock).mockResolvedValue([
+    { id: 'h1', name: 'Mystery Day', type: 'SOME_FUTURE_TYPE', startDate: '2026-08-15T00:00:00.000Z', endDate: null },
+  ]);
+
+  const { findByText } = render(<Holidays />);
+
+  expect(await findByText('Mystery Day')).toBeTruthy();
+  expect(await findByText('SOME_FUTURE_TYPE')).toBeTruthy();
+});
