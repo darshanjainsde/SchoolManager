@@ -43,6 +43,7 @@ jest.mock('../tenancy', () => ({
 import { PortalService } from './portal.service';
 import type { TenantContextService } from '../tenancy';
 import type { TimetableService } from '../management/timetable.service';
+import type { HolidaysService } from '../management/holidays.service';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const USER = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -59,9 +60,11 @@ const day = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 describe('PortalService', () => {
   const tenant = { requireTenant: jest.fn() };
   const timetable = { listForClass: jest.fn() };
+  const holidaysSvc = { list: jest.fn() };
   const svc = new PortalService(
     tenant as unknown as TenantContextService,
     timetable as unknown as TimetableService,
+    holidaysSvc as unknown as HolidaysService,
   );
 
   beforeEach(() => {
@@ -570,6 +573,26 @@ describe('PortalService', () => {
         svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android'),
       ).rejects.toThrow('connection reset');
       expect(platformMock.pushToken.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── holidays ────────────────────────────────────────────────────────────
+  // Deliberately does NOT go through `myStudent` — a TEACHER/STAFF/
+  // SCHOOL_ADMIN login must be able to read the holiday calendar too, and
+  // has no `Student` row at all. None of these tests touch `txMock.student`.
+
+  describe('holidays', () => {
+    it('delegates to HolidaysService.list for the tenant schoolId and returns its result — works for a non-student role', async () => {
+      const upcoming = [
+        { id: 'h-1', name: 'Founders Day', type: 'SCHOOL', startDate: new Date('2026-08-01'), endDate: null },
+      ];
+      holidaysSvc.list.mockResolvedValue(upcoming);
+
+      const result = await svc.holidays();
+
+      expect(holidaysSvc.list).toHaveBeenCalledWith(SCHOOL);
+      expect(result).toBe(upcoming);
+      expect(txMock.student.findFirst).not.toHaveBeenCalled();
     });
   });
 

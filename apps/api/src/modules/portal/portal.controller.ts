@@ -40,4 +40,15 @@ export class PortalController {
   registerPushToken(@CurrentUser() u: SchoolJwtPayload, @Body() dto: RegisterPushTokenDto) {
     return this.portal.registerPushToken(u.sub, dto.token, dto.platform);
   }
+
+  /**
+   * Overrides the class-level `@Roles('STUDENT')` — same reasoning as
+   * `push-token` above. The school holiday calendar is school-wide, not
+   * per-student, so every authenticated role reads the same list.
+   */
+  @Roles('STUDENT', 'TEACHER', 'STAFF', 'SCHOOL_ADMIN')
+  @Get('holidays')
+  holidays() {
+    return this.portal.holidays();
+  }
 }

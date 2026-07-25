@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { getPlatformPrisma, withTenant, type AttendanceStatus, type TenantTx } from '@skoolos/db';
+import { getPlatformPrisma, withTenant, type AttendanceStatus, type Holiday, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002 } from '../management/internal/prisma-errors';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from '../management/timetable.service';
+import { HolidaysService } from '../management/holidays.service';
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -69,7 +70,22 @@ export class PortalService {
   constructor(
     private readonly tenant: TenantContextService,
     private readonly timetableSvc: TimetableService,
+    private readonly holidaysSvc: HolidaysService,
   ) {}
+
+  /**
+   * Upcoming school holidays for the CALLING user — any authenticated school
+   * role, not just STUDENT. Deliberately does NOT go through `myStudent`
+   * (same caution as `registerPushToken` above): a TEACHER/STAFF/
+   * SCHOOL_ADMIN login has no `Student` row at all, and the holiday
+   * calendar is school-wide, not per-student. `HolidaysService.list` is the
+   * SAME query `/manage/holidays` (admin CRUD) reads with — one upcoming
+   * list, two callers.
+   */
+  async holidays(): Promise<Holiday[]> {
+    const { schoolId } = this.tenant.requireTenant();
+    return this.holidaysSvc.list(schoolId);
+  }
 
   /**
    * Registers (or refreshes) an Expo device token for the CALLING user —
