@@ -72,21 +72,34 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 function ArticleBody({ post }: { post: BlogPostFull }) {
+  const meta = `${formatDate(post.publishedAt)} · ${post.readMinutes} min read`;
+  const byline = post.author && (
+    <p className="blog-byline">
+      By <a href={schoolHref(post.author.host)}>{post.author.name}</a>
+    </p>
+  );
   return (
     <article className="blog-article">
       <div className="wrap" style={{ maxWidth: 760 }}>
-        {post.heroImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="blog-article-hero" src={post.heroImageUrl} alt={post.title} width={1600} height={700} loading="lazy" />
-        )}
-        <span className="blog-meta">
-          {formatDate(post.publishedAt)} · {post.readMinutes} min read
-        </span>
-        <h1>{post.title}</h1>
-        {post.author && (
-          <p className="blog-byline">
-            By <a href={schoolHref(post.author.host)}>{post.author.name}</a>
-          </p>
+        {post.heroImageUrl ? (
+          // Title overlaid on the hero with a gradient scrim: the branded art is
+          // dark, so on a dark page it would otherwise read as an empty void —
+          // filling it with the headline makes it an intentional banner instead.
+          <header className="blog-hero-cover">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={post.heroImageUrl} alt="" width={1600} height={800} />
+            <div className="blog-hero-cover-text">
+              <span className="blog-meta">{meta}</span>
+              <h1>{post.title}</h1>
+              {byline}
+            </div>
+          </header>
+        ) : (
+          <header className="blog-article-head">
+            <span className="blog-meta">{meta}</span>
+            <h1>{post.title}</h1>
+            {byline}
+          </header>
         )}
         <BlogBlocks blocks={post.sections} />
       </div>
