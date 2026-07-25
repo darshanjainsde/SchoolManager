@@ -1,9 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Expo } from 'expo-server-sdk';
-import type { ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
+import type { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import type { PrismaClient } from '@skoolos/db';
 import { formatNotification } from './format';
 import type { NotificationChannel, NotificationMessage } from './notification.types';
+
+/**
+ * LAZY-LOADED on purpose. `expo-server-sdk` v6 has a circular internal
+ * require that the Vercel serverless bundler (ncc) mis-orders, throwing
+ * `ReferenceError: Cannot access 'ExpoClient' before initialization` at
+ * MODULE LOAD — which, because this file is imported at API bootstrap,
+ * crashes the ENTIRE serverless function at cold start (every endpoint 500s).
+ * The build succeeds; only the deployed function crashes — so it is invisible
+ * to tsc/nest-build and only caught by actually invoking a deployed function.
+ * Deferring the import + client construction to the first `send()` call moves
+ * the circular init to well after the bundle has fully loaded, avoiding the
+ * TDZ. Do NOT restore a top-level `import { Expo }` or a `new Expo()` field.
+ */
+let expoModule: typeof import('expo-server-sdk') | null = null;
+let expoClient: Expo | null = null;
+async function loadExpo(): Promise<{ ExpoCtor: typeof import('expo-server-sdk').Expo; expo: Expo }> {
+  if (!expoModule) expoModule = await import('expo-server-sdk');
+  if (!expoClient) expoClient = new expoModule.Expo();
+  return { ExpoCtor: expoModule.Expo, expo: expoClient };
+}
 
 /**
  * Delivers a `NotificationMessage` to every registered device for a
@@ -39,7 +58,6 @@ export class PushChannel implements NotificationChannel {
   readonly name = 'push';
 
   private readonly logger = new Logger(PushChannel.name);
-  private readonly expo = new Expo();
 
   constructor(private readonly prisma: Pick<PrismaClient, 'pushToken'>) {}
 
@@ -48,7 +66,11 @@ export class PushChannel implements NotificationChannel {
       where: { schoolId, email: to },
       select: { token: true },
     });
-    const tokens = rows.map((r) => r.token).filter((t) => Expo.isExpoPushToken(t));
+    if (rows.length === 0) return false;
+
+    // Lazy-loaded (see top-of-file note) — never touches expo-server-sdk at boot.
+    const { ExpoCtor, expo } = await loadExpo();
+    const tokens = rows.map((r) => r.token).filter((t) => ExpoCtor.isExpoPushToken(t));
     if (tokens.length === 0) return false;
 
     const { title, body } = formatNotification(message);
@@ -58,14 +80,14 @@ export class PushChannel implements NotificationChannel {
       title,
       body,
     }));
-    const chunks = this.expo.chunkPushNotifications(messages);
+    const chunks = expo.chunkPushNotifications(messages);
 
     const dead: string[] = [];
     let delivered = false;
     for (const chunk of chunks) {
       let tickets: ExpoPushTicket[];
       try {
-        tickets = await this.expo.sendPushNotificationsAsync(chunk);
+        tickets = await expo.sendPushNotificationsAsync(chunk);
       } catch (e) {
         this.logger.error(`Expo push chunk failed: ${(e as Error).message}`);
         continue;
