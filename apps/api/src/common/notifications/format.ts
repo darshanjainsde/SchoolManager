@@ -10,6 +10,8 @@
  * `Asia/Kolkata` regardless of the server's own OS timezone.
  */
 
+import type { NotificationMessage } from './notification.types';
+
 const TIME_ZONE = 'Asia/Kolkata';
 
 const DATE_TIME_PARTS_FORMATTER = new Intl.DateTimeFormat('en-IN', {
@@ -65,4 +67,54 @@ export function formatDateTimeIST(date: Date): string {
 export function formatDateIST(date: Date): string {
   const p = partsToMap(DATE_PARTS_FORMATTER.formatToParts(date));
   return `${p.weekday}, ${p.day} ${p.month} ${p.year}`;
+}
+
+/** A push notification's rendered text — short enough for a lock-screen banner. */
+export interface NotificationText {
+  title: string;
+  body: string;
+}
+
+/**
+ * Renders a `NotificationMessage` as push-notification title/body text.
+ * Deliberately a condensed cousin of `MailService`'s subject/text pairs (same
+ * facts, no HTML, no boilerplate sign-off) — `PushChannel` is the only
+ * consumer today, but any future non-email channel that just needs
+ * plain-text title/body can reuse this instead of writing its own switch.
+ */
+export function formatNotification(message: NotificationMessage): NotificationText {
+  switch (message.kind) {
+    case 'TEST_SCHEDULED':
+      return {
+        title: `New test scheduled: ${message.payload.examTitle}`,
+        body: `${message.payload.subjectName} — ${message.payload.scheduledAt}`,
+      };
+    case 'TEST_REMINDER': {
+      const { daysUntil } = message.payload;
+      return {
+        title: `Reminder: ${message.payload.examTitle} in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`,
+        body: `${message.payload.subjectName} — ${message.payload.scheduledAt}`,
+      };
+    }
+    case 'RESULTS_PUBLISHED':
+      return {
+        title: `Results published: ${message.payload.examTitle}`,
+        body: `${message.payload.subjectName} results are ready to view.`,
+      };
+    case 'ABSENCE_NOTICE':
+      return {
+        title: `Absence notice: ${message.payload.studentName}`,
+        body: `Marked absent on ${message.payload.date} at ${message.payload.schoolName}.`,
+      };
+    case 'ANNOUNCEMENT':
+      return {
+        title: `📣 ${message.payload.schoolName}`,
+        body: `${message.payload.title} — ${message.payload.body.slice(0, 120)}`,
+      };
+    default: {
+      // Exhaustiveness guard — a new NotificationKind must be handled above.
+      const _exhaustive: never = message;
+      return _exhaustive;
+    }
+  }
 }

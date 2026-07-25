@@ -143,7 +143,7 @@ export class ExamsService {
         };
         await this.notifications.notify(
           'TEST_SCHEDULED',
-          recipients.map((email) => ({ email, payload })),
+          recipients.map((email) => ({ email, schoolId, payload })),
         );
       },
       (e) => this.logger.error(`TEST_SCHEDULED notify failed: ${(e as Error).message}`),
@@ -316,7 +316,7 @@ export class ExamsService {
           const payload = { schoolName, subjectName, examTitle: exam.title };
           await this.notifications.notify(
             'RESULTS_PUBLISHED',
-            recipients.map((email) => ({ email, payload })),
+            recipients.map((email) => ({ email, schoolId, payload })),
           );
         },
         (e) => this.logger.error(`RESULTS_PUBLISHED notify failed: ${(e as Error).message}`),

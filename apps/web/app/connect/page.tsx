@@ -1,11 +1,11 @@
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { fetchPublicSite } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';
 import { isPlatformHost } from '@/lib/hosts';
+import { getRequestHost } from '@/lib/request';
 
 export default async function ConnectPage() {
-  const host = headers().get('host') ?? '';
+  const host = await getRequestHost();
   if (isPlatformHost(host)) notFound();
 
   const data = await fetchPublicSite(host);

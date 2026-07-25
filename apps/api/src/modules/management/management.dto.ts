@@ -468,9 +468,25 @@ export class CreateAnnouncementDto {
   @Length(1, 4000)
   body!: string;
 
+  /**
+   * Legacy single-target field — still accepted so the existing web admin
+   * "post to one class" flow keeps working unchanged. Omitted (together with
+   * `classSectionIds`) = school-wide.
+   */
   @IsOptional()
   @IsUUID()
-  classSectionId?: string; // omitted = school-wide
+  classSectionId?: string;
+
+  /**
+   * Multi-target field (teacher-authored announcements to several classes at
+   * once). Merged with `classSectionId` by the service, not overridden by
+   * it — a caller may send either or both.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @IsUUID('4', { each: true })
+  classSectionIds?: string[];
 }
 
 export class UpdateAnnouncementDto {
@@ -603,4 +619,25 @@ export class CreateLeaveDto {
 export class AssignSubstitutionDto {
   @IsUUID()
   substituteTeacherId!: string;
+}
+
+// ── Holidays ─────────────────────────────────────────────────────────────────
+
+export const HOLIDAY_TYPES = ['PUBLIC', 'FESTIVAL', 'SCHOOL'] as const;
+export type HolidayTypeValue = (typeof HOLIDAY_TYPES)[number];
+
+export class CreateHolidayDto {
+  @IsString()
+  @Length(1, 120)
+  name!: string;
+
+  @IsIn(HOLIDAY_TYPES)
+  type!: HolidayTypeValue;
+
+  @IsDateString()
+  startDate!: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 }

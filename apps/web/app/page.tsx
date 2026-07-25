@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { fetchPublicSite, fetchMarketingConfig } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';
 import MarketingSite from '@/components/marketing/MarketingSite';
 import { isPlatformHost } from '@/lib/hosts';
+import { getRequestHost } from '@/lib/request';
 
 /** Real public profiles only — used for Organization.sameAs entity signals. */
 const SOCIAL_PROFILES: string[] = [
@@ -60,7 +60,7 @@ async function schoolMetadata(host: string): Promise<Metadata> {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const host = headers().get('host') ?? '';
+  const host = await getRequestHost();
   if (!isPlatformHost(host)) return schoolMetadata(host);
   return {
     title: 'Sckools — The Complete Operating System for Schools',
@@ -90,7 +90,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const host = headers().get('host') ?? '';
+  const host = await getRequestHost();
 
   if (!isPlatformHost(host)) {
     const data = await getPublicSite(host);

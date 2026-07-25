@@ -152,7 +152,7 @@ export class ExamRemindersService {
 
     const summary = await this.notifications.notify(
       'TEST_REMINDER',
-      recipients.map((email) => ({ email, payload })),
+      recipients.map((email) => ({ email, schoolId: exam.schoolId, payload })),
     );
     return summary.sent;
   }

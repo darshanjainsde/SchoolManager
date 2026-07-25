@@ -6,12 +6,25 @@ const txMock = {
   subject: { findMany: jest.fn() },
   mediaAsset: { findFirst: jest.fn() },
   announcement: { findMany: jest.fn() },
+  user: { findUnique: jest.fn() },
+  pushToken: { upsert: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
 
+/** The platform (BYPASSRLS) client — only `pushToken.update` is exercised, for the
+ * cross-tenant-token-reassignment path in `registerPushToken`. */
+const platformMock = {
+  pushToken: { update: jest.fn() },
+};
+
+// Keep the real `Prisma` export (prisma-errors.ts's isP2002 relies on
+// `instanceof Prisma.PrismaClientKnownRequestError`); only `withTenant` and
+// `getPlatformPrisma` are stubbed so no real DB connection is ever attempted.
 jest.mock('@skoolos/db', () => ({
+  ...jest.requireActual('@skoolos/db'),
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
+  getPlatformPrisma: () => platformMock,
 }));
 
 /**
@@ -30,6 +43,7 @@ jest.mock('../tenancy', () => ({
 import { PortalService } from './portal.service';
 import type { TenantContextService } from '../tenancy';
 import type { TimetableService } from '../management/timetable.service';
+import type { HolidaysService } from '../management/holidays.service';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const USER = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -46,9 +60,11 @@ const day = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 describe('PortalService', () => {
   const tenant = { requireTenant: jest.fn() };
   const timetable = { listForClass: jest.fn() };
+  const holidaysSvc = { list: jest.fn() };
   const svc = new PortalService(
     tenant as unknown as TenantContextService,
     timetable as unknown as TimetableService,
+    holidaysSvc as unknown as HolidaysService,
   );
 
   beforeEach(() => {
@@ -455,6 +471,128 @@ describe('PortalService', () => {
 
       await expect(svc.results(USER)).rejects.toMatchObject({ status: 404 });
       expect(txMock.result.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── registerPushToken ──────────────────────────────────────────────────
+  // Deliberately does NOT go through `myStudent` — a TEACHER/STAFF/
+  // SCHOOL_ADMIN login must be able to register a device too, and has no
+  // `Student` row at all. None of these tests touch `txMock.student`.
+
+  describe('registerPushToken', () => {
+    beforeEach(() => {
+      txMock.user.findUnique.mockResolvedValue({ email: 'teacher@green.test' });
+      txMock.pushToken.upsert.mockResolvedValue({ id: 'pt-1' });
+    });
+
+    it('resolves the email from the JWT sub via User, not via myStudent', async () => {
+      await svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android');
+
+      expect(txMock.user.findUnique).toHaveBeenCalledWith({
+        where: { id: USER },
+        select: { email: true },
+      });
+      expect(txMock.student.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('upserts by token, scoped to the tenant schoolId', async () => {
+      await svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android');
+
+      expect(txMock.pushToken.upsert).toHaveBeenCalledWith({
+        where: { token: 'ExponentPushToken[a]' },
+        update: {
+          schoolId: SCHOOL,
+          userId: USER,
+          email: 'teacher@green.test',
+          lastSeenAt: expect.any(Date),
+        },
+        create: {
+          schoolId: SCHOOL,
+          userId: USER,
+          email: 'teacher@green.test',
+          token: 'ExponentPushToken[a]',
+          platform: 'android',
+        },
+      });
+    });
+
+    it('404s when the JWT sub has no User row', async () => {
+      txMock.user.findUnique.mockResolvedValue(null);
+
+      await expect(
+        svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android'),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(txMock.pushToken.upsert).not.toHaveBeenCalled();
+    });
+
+    /**
+     * `PushToken.token` is globally unique, but the upsert above runs inside
+     * `withTenant()` (RLS-bound to THIS school). If the same physical device
+     * previously registered under a DIFFERENT school's tenant, that row is
+     * invisible to this transaction's RLS scope, so Postgres's (unfiltered)
+     * unique index still reports a conflict that `ON CONFLICT DO UPDATE`
+     * cannot resolve — Prisma surfaces this as P2002. A device token is a
+     * per-DEVICE identity, not a per-tenant one (see push.channel.ts's
+     * docstring), so the correct behavior on that conflict is to REASSIGN the
+     * row to the new registrant (last-writer-wins) via the platform
+     * (BYPASSRLS) client, not to error and leave the device receiving the
+     * old tenant's notifications.
+     */
+    it('reassigns a token that already exists under a DIFFERENT tenant instead of throwing', async () => {
+      const { Prisma } = jest.requireActual('@skoolos/db');
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the fields: (`token`)',
+        { code: 'P2002', clientVersion: 'test', meta: { target: ['token'] } },
+      );
+      txMock.pushToken.upsert.mockRejectedValue(p2002);
+      platformMock.pushToken.update.mockResolvedValue({
+        id: 'pt-shared',
+        schoolId: SCHOOL,
+        userId: USER,
+      });
+
+      const result = await svc.registerPushToken(USER, 'ExponentPushToken[shared]', 'ios');
+
+      expect(platformMock.pushToken.update).toHaveBeenCalledWith({
+        where: { token: 'ExponentPushToken[shared]' },
+        data: {
+          schoolId: SCHOOL,
+          userId: USER,
+          email: 'teacher@green.test',
+          platform: 'ios',
+          lastSeenAt: expect.any(Date),
+        },
+      });
+      expect(result).toEqual({ id: 'pt-shared', schoolId: SCHOOL, userId: USER });
+    });
+
+    it('does not attempt reassignment for a non-P2002 error — rethrows as-is', async () => {
+      txMock.pushToken.upsert.mockRejectedValue(new Error('connection reset'));
+
+      await expect(
+        svc.registerPushToken(USER, 'ExponentPushToken[a]', 'android'),
+      ).rejects.toThrow('connection reset');
+      expect(platformMock.pushToken.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── holidays ────────────────────────────────────────────────────────────
+  // Deliberately does NOT go through `myStudent` — a TEACHER/STAFF/
+  // SCHOOL_ADMIN login must be able to read the holiday calendar too, and
+  // has no `Student` row at all. None of these tests touch `txMock.student`.
+
+  describe('holidays', () => {
+    it('delegates to HolidaysService.list for the tenant schoolId and returns its result — works for a non-student role', async () => {
+      const upcoming = [
+        { id: 'h-1', name: 'Founders Day', type: 'SCHOOL', startDate: new Date('2026-08-01'), endDate: null },
+      ];
+      holidaysSvc.list.mockResolvedValue(upcoming);
+
+      const result = await svc.holidays();
+
+      expect(holidaysSvc.list).toHaveBeenCalledWith(SCHOOL);
+      expect(result).toBe(upcoming);
+      expect(txMock.student.findFirst).not.toHaveBeenCalled();
     });
   });
 

@@ -26,6 +26,8 @@ const results: ResultsPublishedPayload = {
   examTitle: 'Unit Test 1',
 };
 
+const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
 describe('NotificationService', () => {
   it('fans out to every configured channel for every recipient, tallying sent/failed', async () => {
     const email = fakeChannel('email');
@@ -35,21 +37,60 @@ describe('NotificationService', () => {
 
     const svc = new NotificationService([email, whatsapp]);
     const result = await svc.notify('TEST_SCHEDULED', [
-      { email: 'a@x.com', payload: scheduled },
-      { email: 'b@x.com', payload: scheduled },
+      { email: 'a@x.com', schoolId: SCHOOL, payload: scheduled },
+      { email: 'b@x.com', schoolId: SCHOOL, payload: scheduled },
     ]);
 
     expect(result).toEqual({ sent: 2, failed: 2 });
     expect(email.send).toHaveBeenCalledTimes(2);
-    expect(email.send).toHaveBeenCalledWith('a@x.com', {
-      kind: 'TEST_SCHEDULED',
-      payload: scheduled,
-    });
-    expect(email.send).toHaveBeenCalledWith('b@x.com', {
-      kind: 'TEST_SCHEDULED',
-      payload: scheduled,
-    });
+    expect(email.send).toHaveBeenCalledWith(
+      'a@x.com',
+      {
+        kind: 'TEST_SCHEDULED',
+        payload: scheduled,
+      },
+      SCHOOL,
+    );
+    expect(email.send).toHaveBeenCalledWith(
+      'b@x.com',
+      {
+        kind: 'TEST_SCHEDULED',
+        payload: scheduled,
+      },
+      SCHOOL,
+    );
     expect(whatsapp.send).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * Regression net for N1 (cross-tenant push leak): `NotificationService`
+   * must forward each recipient's OWN `schoolId` to the channel, not drop it
+   * — a channel like `PushChannel` relies on this to avoid a tenant-blind
+   * device lookup.
+   */
+  it('forwards each recipient\'s own schoolId to the channel as a third argument', async () => {
+    const push = fakeChannel('push');
+    (push.send as jest.Mock).mockResolvedValue(true);
+    const SCHOOL_B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+
+    const svc = new NotificationService([push]);
+    await svc.notify('TEST_SCHEDULED', [
+      { email: 'a@school-a.com', schoolId: SCHOOL, payload: scheduled },
+      { email: 'b@school-b.com', schoolId: SCHOOL_B, payload: scheduled },
+    ]);
+
+    expect(push.send).toHaveBeenNthCalledWith(
+      1,
+      'a@school-a.com',
+      { kind: 'TEST_SCHEDULED', payload: scheduled },
+      SCHOOL,
+    );
+    expect(push.send).toHaveBeenNthCalledWith(
+      2,
+      'b@school-b.com',
+      { kind: 'TEST_SCHEDULED', payload: scheduled },
+      SCHOOL_B,
+    );
   });
 
   it('delivers each recipient THEIR OWN payload, so an absence notice names the right child', async () => {
@@ -69,19 +110,29 @@ describe('NotificationService', () => {
 
     const svc = new NotificationService([email]);
     const result = await svc.notify('ABSENCE_NOTICE', [
-      { email: 'aisha.parent@x.com', payload: aisha },
-      { email: 'rohan.parent@x.com', payload: rohan },
+      { email: 'aisha.parent@x.com', schoolId: SCHOOL, payload: aisha },
+      { email: 'rohan.parent@x.com', schoolId: SCHOOL, payload: rohan },
     ]);
 
     expect(result).toEqual({ sent: 2, failed: 0 });
-    expect(email.send).toHaveBeenNthCalledWith(1, 'aisha.parent@x.com', {
-      kind: 'ABSENCE_NOTICE',
-      payload: aisha,
-    });
-    expect(email.send).toHaveBeenNthCalledWith(2, 'rohan.parent@x.com', {
-      kind: 'ABSENCE_NOTICE',
-      payload: rohan,
-    });
+    expect(email.send).toHaveBeenNthCalledWith(
+      1,
+      'aisha.parent@x.com',
+      {
+        kind: 'ABSENCE_NOTICE',
+        payload: aisha,
+      },
+      SCHOOL,
+    );
+    expect(email.send).toHaveBeenNthCalledWith(
+      2,
+      'rohan.parent@x.com',
+      {
+        kind: 'ABSENCE_NOTICE',
+        payload: rohan,
+      },
+      SCHOOL,
+    );
   });
 
   it('does not throw when a channel rejects, and still tallies the other channels correctly', async () => {
@@ -96,6 +147,7 @@ describe('NotificationService', () => {
       svc.notify('ABSENCE_NOTICE', [
         {
           email: 'parent@x.com',
+          schoolId: SCHOOL,
           payload: { schoolName: 'S', studentName: 'A', date: '2026-07-21' },
         },
       ]),
@@ -109,7 +161,7 @@ describe('NotificationService', () => {
     const svc = new NotificationService([email]);
 
     await expect(
-      svc.notify('RESULTS_PUBLISHED', [{ email: 'x@y.com', payload: results }]),
+      svc.notify('RESULTS_PUBLISHED', [{ email: 'x@y.com', schoolId: SCHOOL, payload: results }]),
     ).resolves.toEqual({ sent: 0, failed: 1 });
   });
 
@@ -128,11 +180,15 @@ describe('NotificationService', () => {
     (email.send as jest.Mock).mockResolvedValue(true);
 
     const svc = new NotificationService([email]);
-    await svc.notify('TEST_REMINDER', [{ email: 'p@x.com', payload: reminder }]);
+    await svc.notify('TEST_REMINDER', [{ email: 'p@x.com', schoolId: SCHOOL, payload: reminder }]);
 
-    expect(email.send).toHaveBeenCalledWith('p@x.com', {
-      kind: 'TEST_REMINDER',
-      payload: reminder,
-    });
+    expect(email.send).toHaveBeenCalledWith(
+      'p@x.com',
+      {
+        kind: 'TEST_REMINDER',
+        payload: reminder,
+      },
+      SCHOOL,
+    );
   });
 });

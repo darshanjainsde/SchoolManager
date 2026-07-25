@@ -104,6 +104,7 @@ describe('ExamsService', () => {
       expect(notifications.notify).toHaveBeenCalledWith('TEST_SCHEDULED', [
         {
           email: 'parent@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             subjectName: 'Mathematics',
@@ -431,6 +432,7 @@ describe('ExamsService', () => {
       expect(notifications.notify).toHaveBeenCalledWith('RESULTS_PUBLISHED', [
         {
           email: 'parent@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             subjectName: 'Chemistry',

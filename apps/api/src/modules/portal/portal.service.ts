@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { withTenant, type AttendanceStatus, type TenantTx } from '@skoolos/db';
+import { getPlatformPrisma, withTenant, type AttendanceStatus, type Holiday, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { isP2002 } from '../management/internal/prisma-errors';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from '../management/timetable.service';
+import { HolidaysService } from '../management/holidays.service';
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -68,7 +70,74 @@ export class PortalService {
   constructor(
     private readonly tenant: TenantContextService,
     private readonly timetableSvc: TimetableService,
+    private readonly holidaysSvc: HolidaysService,
   ) {}
+
+  /**
+   * Upcoming school holidays for the CALLING user — any authenticated school
+   * role, not just STUDENT. Deliberately does NOT go through `myStudent`
+   * (same caution as `registerPushToken` above): a TEACHER/STAFF/
+   * SCHOOL_ADMIN login has no `Student` row at all, and the holiday
+   * calendar is school-wide, not per-student. `HolidaysService.list` is the
+   * SAME query `/manage/holidays` (admin CRUD) reads with — one upcoming
+   * list, two callers.
+   */
+  async holidays(): Promise<Holiday[]> {
+    const { schoolId } = this.tenant.requireTenant();
+    return this.holidaysSvc.list(schoolId);
+  }
+
+  /**
+   * Registers (or refreshes) an Expo device token for the CALLING user —
+   * any authenticated school role, not just STUDENT. Deliberately does NOT
+   * go through `myStudent`: a TEACHER/STAFF/SCHOOL_ADMIN login has no
+   * `Student` row at all, and this endpoint must work for every role the
+   * mobile app supports.
+   *
+   * Upserts by `token` (its own unique key — Expo issues one per
+   * app-install) inside this school's tenant scope, so a re-registering
+   * device just refreshes its existing row's owner/timestamp rather than
+   * accumulating duplicates. `PushChannel` later reads these rows by email
+   * with the platform (cross-tenant) client — see push.channel.ts — but
+   * writing them stays tenant-scoped like every other portal mutation.
+   *
+   * CROSS-TENANT REASSIGNMENT: `token` is globally unique, but the upsert
+   * below runs RLS-bound to THIS school. If the same physical device
+   * previously registered under a DIFFERENT school (a shared/demo device, or
+   * someone who is staff at one school and a guardian at another), that row
+   * is invisible to this transaction's tenant scope — yet Postgres's
+   * (RLS-blind) unique index still reports a conflict that `ON CONFLICT DO
+   * UPDATE` cannot resolve, so Prisma throws P2002. A device token is a
+   * per-DEVICE identity, not a per-tenant one, so the correct response is to
+   * REASSIGN the row to the new registrant (last-writer-wins) rather than
+   * error — erroring would leave that device stuck receiving the OLD
+   * tenant's push notifications on every retry. The reassignment itself uses
+   * `getPlatformPrisma()` (BYPASSRLS, the same client `PushChannel` reads
+   * with) since updating a row outside this transaction's tenant scope
+   * requires bypassing RLS by design, not as a workaround.
+   */
+  async registerPushToken(userId: string, token: string, platform: string) {
+    const { schoolId } = this.tenant.requireTenant();
+    let email!: string;
+    try {
+      return await withTenant(schoolId, async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
+        if (!user) throw new NotFoundException('No user record for this login');
+        email = user.email;
+        return tx.pushToken.upsert({
+          where: { token },
+          update: { schoolId, userId, email: user.email, lastSeenAt: new Date() },
+          create: { schoolId, userId, email: user.email, token, platform },
+        });
+      });
+    } catch (e) {
+      if (!isP2002(e)) throw e;
+      return getPlatformPrisma().pushToken.update({
+        where: { token },
+        data: { schoolId, userId, email, platform, lastSeenAt: new Date() },
+      });
+    }
+  }
 
   private async myStudent(schoolId: string, userId: string) {
     return withTenant(schoolId, (tx) =>

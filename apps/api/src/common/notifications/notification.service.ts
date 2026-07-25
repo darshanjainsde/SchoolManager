@@ -49,7 +49,7 @@ export class NotificationService {
 
       for (const channel of this.channels) {
         try {
-          const ok = await channel.send(recipient.email, message);
+          const ok = await channel.send(recipient.email, message, recipient.schoolId);
           if (ok) {
             sent += 1;
           } else {

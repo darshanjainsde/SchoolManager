@@ -15,7 +15,6 @@
     "@skoolos/db": "workspace:*",
     "@skoolos/types": "workspace:*",
     "@aws-sdk/client-s3": "^3.583.0",
-    "@react-pdf/renderer": "^4.0.0",
     "argon2": "^0.40.1",
     "bullmq": "^5.7.6",
     "ioredis": "^5.4.1",
@@ -26,7 +25,6 @@
   "devDependencies": {
     "@types/node": "^20.11.30",
     "@types/nodemailer": "^6.4.15",
-    "@types/react": "^18.3.2",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5"
   }

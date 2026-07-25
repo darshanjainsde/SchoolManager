@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
+import { getRequestHost } from '@/lib/request';
 import { fetchMarketingConfig } from '@/lib/public-api';
 import PricingCards from '@/components/marketing/PricingCards';
 import PricingFaq from '@/components/marketing/PricingFaq';
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PricingPage() {
-  const host = headers().get('host') ?? '';
+  const host = await getRequestHost();
   // Pricing belongs to the platform site only — a school host must 404.
   if (!isPlatformHost(host)) notFound();
 

@@ -2,7 +2,7 @@
  * Notification contracts. THIS FILE IS AUTHORITATIVE: the payload interface
  * for a `NotificationKind` is declared here and consumed unchanged by both
  * ends of the wire — callers (`ExamsService`, `AttendanceService`,
- * `ExamRemindersService`) build it, and `EmailChannel` hands it straight to
+ * `ExamRemindersService`, `AnnouncementsService`) build it, and `EmailChannel` hands it straight to
  * the matching `MailService.send*` composer with no cast in between.
  *
  * Adding an event = add one `{ KIND: PayloadInterface }` entry to
@@ -49,12 +49,28 @@ export interface AbsenceNoticePayload {
   date: string;
 }
 
+/**
+ * Payload for ANNOUNCEMENT — mirrors `MailService.sendAnnouncement` (fired
+ * by `AnnouncementsService.create` for both SCHOOL_ADMIN and TEACHER
+ * callers). `className` is `null` for a whole-school announcement and the
+ * targeted section's display name (e.g. `"5-B"`) otherwise; a multi-class
+ * fan-out sends one payload per targeted section so each recipient sees
+ * their own child's class, not a merged list.
+ */
+export interface AnnouncementPayload {
+  schoolName: string;
+  title: string;
+  body: string;
+  className: string | null;
+}
+
 /** The single source of truth mapping each event to its payload shape. */
 export interface NotificationPayloadMap {
   TEST_SCHEDULED: TestScheduledPayload;
   TEST_REMINDER: TestReminderPayload;
   RESULTS_PUBLISHED: ResultsPublishedPayload;
   ABSENCE_NOTICE: AbsenceNoticePayload;
+  ANNOUNCEMENT: AnnouncementPayload;
 }
 
 /**
@@ -76,9 +92,20 @@ export type NotificationMessage = {
   [K in NotificationKind]: { kind: K; payload: PayloadFor<K> };
 }[NotificationKind];
 
-/** One recipient of a `notify()` fan-out, with the payload meant for them. */
+/**
+ * One recipient of a `notify()` fan-out, with the payload meant for them.
+ *
+ * `schoolId` is REQUIRED, not optional: `User.email` is only unique
+ * `@@unique([schoolId, email])` (packages/db/prisma/schema.prisma), never
+ * globally, so any channel that looks a recipient up by email alone (see
+ * `PushChannel`) risks a cross-tenant delivery unless it is handed the
+ * sending school explicitly. Every resolver in recipients.ts already knows
+ * the `schoolId` it queried within — this just carries that value the rest
+ * of the way to the channel.
+ */
 export interface NotificationRecipient<K extends NotificationKind> {
   email: string;
+  schoolId: string;
   payload: PayloadFor<K>;
 }
 
@@ -92,13 +119,17 @@ export interface NotificationChannel {
   /** Short identifier used in logs, e.g. 'email', 'whatsapp'. */
   name: string;
   /**
-   * Sends one message to one recipient. Must resolve to `true`/`false` and
-   * should not throw for ordinary delivery failures (mirroring
-   * `MailService.send`, which logs-but-never-throws) — `NotificationService`
-   * also tolerates a throwing/rejecting channel defensively, but a
-   * well-behaved channel resolves `false` instead.
+   * Sends one message to one recipient of `schoolId`. Must resolve to
+   * `true`/`false` and should not throw for ordinary delivery failures
+   * (mirroring `MailService.send`, which logs-but-never-throws) —
+   * `NotificationService` also tolerates a throwing/rejecting channel
+   * defensively, but a well-behaved channel resolves `false` instead.
+   *
+   * `schoolId` is passed even to channels (like `EmailChannel`) that don't
+   * need it, so every channel gets it consistently and none can "forget" to
+   * ask for it later.
    */
-  send(to: string, message: NotificationMessage): Promise<boolean>;
+  send(to: string, message: NotificationMessage, schoolId: string): Promise<boolean>;
 }
 
 export interface NotifySummary {

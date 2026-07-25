@@ -17,7 +17,11 @@ export class EmailChannel implements NotificationChannel {
 
   constructor(private readonly mail: MailService) {}
 
-  async send(to: string, message: NotificationMessage): Promise<boolean> {
+  // `schoolId` is part of the `NotificationChannel` contract (see
+  // notification.types.ts — `PushChannel` needs it to avoid a cross-tenant
+  // lookup) but SMTP delivery needs no DB lookup at all, so this channel
+  // ignores it.
+  async send(to: string, message: NotificationMessage, _schoolId: string): Promise<boolean> {
     switch (message.kind) {
       case 'TEST_SCHEDULED':
         return this.mail.sendTestScheduled(to, message.payload);
@@ -27,6 +31,8 @@ export class EmailChannel implements NotificationChannel {
         return this.mail.sendResultsPublished(to, message.payload);
       case 'ABSENCE_NOTICE':
         return this.mail.sendAbsenceNotice(to, message.payload);
+      case 'ANNOUNCEMENT':
+        return this.mail.sendAnnouncement(to, message.payload);
       default: {
         // Exhaustiveness guard — a new NotificationKind must be handled above.
         const _exhaustive: never = message;

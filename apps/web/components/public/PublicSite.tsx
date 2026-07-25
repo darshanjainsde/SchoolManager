@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
@@ -449,7 +450,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
         <>
           {/* ── SUBPAGE BODY (academics / admissions / gallery / events / contact) ── */}
           <section className="max-w-6xl mx-auto px-6 pt-12">
-            <a href="/" className="text-sm text-slate-500 hover:text-slate-800 transition">← Back to home</a>
+            <Link href="/" className="text-sm text-slate-500 hover:text-slate-800 transition">← Back to home</Link>
             {SUBPAGES[view] && (
               <div className="reveal mt-6 max-w-2xl">
                 <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
@@ -668,7 +669,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               {hasHof && <li><a href={`${base}#hall-of-fame`} className="hover:text-slate-900 transition">Hall of Fame</a></li>}
               {hasGallery && <li><a href="/gallery" className="hover:text-slate-900 transition">Gallery</a></li>}
               {hasEvents && <li><a href="/connect" className="hover:text-slate-900 transition">Connect</a></li>}
-              {hasBlog && <li><a href="/blog" className="hover:text-slate-900 transition">Blog</a></li>}
+              {hasBlog && <li><Link href="/blog" className="hover:text-slate-900 transition">Blog</Link></li>}
               <li><a href="/contact" className="hover:text-slate-900 transition">Enquire</a></li>
             </ul>
           </div>
