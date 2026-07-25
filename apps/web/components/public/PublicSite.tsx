@@ -125,10 +125,10 @@ const PS_CSS = `
   /* ── Academics nav dropdown ── */
   .ps-acad { position: relative; }
   .ps-dropdown { position: absolute; top: calc(100% + 10px); left: 0; transform: translateY(6px);
-    width: 400px; max-width: 92vw; background: #fff; border: 1px solid rgba(28,45,36,.10); border-radius: 18px;
+    width: 340px; max-width: 92vw; background: #fff; border: 1px solid rgba(28,45,36,.10); border-radius: 18px;
     box-shadow: 0 16px 40px -20px rgba(28,45,36,.3); padding: 12px; opacity: 0; visibility: hidden;
     transition: opacity .2s, transform .2s, visibility .2s; z-index: 60;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
   /* caret anchoring the menu to the Academics tab so it reads as belonging to it */
   .ps-dropdown::before { content: ""; position: absolute; top: -7px; left: 24px; width: 13px; height: 13px;
     background: #fff; border-left: 1px solid rgba(28,45,36,.10); border-top: 1px solid rgba(28,45,36,.10);

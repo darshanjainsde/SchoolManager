@@ -101,14 +101,14 @@ function NavLinks({
                     {['🧸', '📚', '🔬', '🎓', '🎨', '🏆', '🌟', '💡'][i % 8]}
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-bold truncate" style={{ color: 'var(--ink)' }}>{c.name}</span>
-                    {c.ageRange && <span className="block text-[11px] text-slate-400 truncate">{c.ageRange}</span>}
+                    <span className="block text-[13px] font-bold" style={{ color: 'var(--ink)' }}>{c.name}</span>
+                    {c.ageRange && <span className="block text-[11px] text-slate-400">{c.ageRange}</span>}
                   </span>
                 </a>
               ))}
               <a
                 href="/academics"
-                className="col-span-2 border-t border-black/5 mt-1 pt-2 px-2.5 pb-0.5 text-xs font-semibold"
+                className="border-t border-black/5 mt-1 pt-2 px-2.5 pb-0.5 text-xs font-semibold"
                 style={{ color: 'var(--ps1)' }}
               >
                 View all programmes →
