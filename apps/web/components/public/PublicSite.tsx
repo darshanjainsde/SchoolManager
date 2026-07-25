@@ -124,12 +124,16 @@ const PS_CSS = `
 
   /* ── Academics nav dropdown ── */
   .ps-acad { position: relative; }
-  .ps-dropdown { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(6px);
-    width: 420px; max-width: 90vw; background: #fff; border: 1px solid rgba(28,45,36,.08); border-radius: 20px;
-    box-shadow: 0 26px 56px -22px rgba(28,45,36,.4); padding: 12px; opacity: 0; visibility: hidden;
-    transition: opacity .22s, transform .22s, visibility .22s; z-index: 60;
+  .ps-dropdown { position: absolute; top: calc(100% + 10px); left: 0; transform: translateY(6px);
+    width: 400px; max-width: 92vw; background: #fff; border: 1px solid rgba(28,45,36,.10); border-radius: 18px;
+    box-shadow: 0 16px 40px -20px rgba(28,45,36,.3); padding: 12px; opacity: 0; visibility: hidden;
+    transition: opacity .2s, transform .2s, visibility .2s; z-index: 60;
     display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-  .ps-acad:hover .ps-dropdown, .ps-acad:focus-within .ps-dropdown { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+  /* caret anchoring the menu to the Academics tab so it reads as belonging to it */
+  .ps-dropdown::before { content: ""; position: absolute; top: -7px; left: 24px; width: 13px; height: 13px;
+    background: #fff; border-left: 1px solid rgba(28,45,36,.10); border-top: 1px solid rgba(28,45,36,.10);
+    border-radius: 3px 0 0 0; transform: rotate(45deg); }
+  .ps-acad:hover .ps-dropdown, .ps-acad:focus-within .ps-dropdown { opacity: 1; visibility: visible; transform: translateY(0); }
 
   /* ── Course flip cards ── */
   .ps-flip { perspective: 1200px; height: 340px; cursor: pointer; outline-offset: 4px; }
