@@ -185,7 +185,7 @@ function IllustratedCluster({ heroUrl }: { heroUrl: string | null }) {
         </div>
       </div>
       <div className="ps-sway absolute bottom-4 left-2 text-6xl">🎓</div>
-      <div className="ps-float ps-d1 absolute bottom-24 right-0 ps-card ps-soft rounded-2xl p-4 flex items-center gap-3">
+      <div className="ps-float ps-d1 absolute bottom-6 right-2 ps-card ps-soft rounded-2xl p-4 flex items-center gap-3">
         <span className="h-11 w-11 rounded-xl ps-accentbg grid place-items-center text-2xl">📚</span>
         <div>
           <b className="ps-head text-sm">Reading club</b>
