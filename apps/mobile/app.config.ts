@@ -1,10 +1,8 @@
 import type { ExpoConfig } from 'expo/config';
 
-// TODO(user): after running `eas init` (see docs/SHIP-MOBILE.md), replace
-// this placeholder with the real EAS project ID it prints, in BOTH spots
-// below (updates.url and extra.eas.projectId). `eas init` cannot safely
-// rewrite a TypeScript app.config.ts, so this is a manual one-time edit.
-const EAS_PROJECT_ID = 'REPLACE-WITH-EAS-PROJECT-ID';
+// EAS project (owner: darshanjainsde's Expo account). Used for both EAS Build
+// and EAS Update (OTA). If you ever recreate the EAS project, update this id.
+const EAS_PROJECT_ID = 'ec023260-2258-4e70-a96f-a32bfe2908cf';
 
 const config: ExpoConfig = {
   name: 'Sckools',
