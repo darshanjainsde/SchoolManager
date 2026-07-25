@@ -9,10 +9,15 @@ const txMock = {
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
 
+// Keep the real `Prisma` export (prisma-errors.ts's isP2002 relies on
+// `instanceof Prisma.PrismaClientKnownRequestError`); only `withTenant`
+// itself is stubbed so no real DB connection is ever attempted.
 jest.mock('@skoolos/db', () => ({
+  ...jest.requireActual('@skoolos/db'),
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
 }));
 
+import { ConflictException } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { ApiError } from '../../common/errors/api-error';
 import type { NotificationService } from '../../common/notifications/notification.service';
@@ -127,6 +132,7 @@ describe('AttendanceService', () => {
       expect(notifications.notify).toHaveBeenCalledWith('ABSENCE_NOTICE', [
         {
           email: 'parent@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             studentName: 'Aisha Khan',
@@ -165,6 +171,7 @@ describe('AttendanceService', () => {
       expect(notifications.notify).toHaveBeenCalledWith('ABSENCE_NOTICE', [
         {
           email: 'aisha.parent@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             studentName: 'Aisha Khan',
@@ -173,6 +180,7 @@ describe('AttendanceService', () => {
         },
         {
           email: 'rohan.parent@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             studentName: 'Rohan Mehta',
@@ -387,6 +395,39 @@ describe('AttendanceService', () => {
 
       await expect(svc.save(SCHOOL, 'user-teacher-1', dto)).rejects.toThrow(ApiError);
       expect(txMock.attendance.createMany).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Regression net for N2 (retake race → 500): two teachers retaking the
+     * same class+date can race to the (studentId, date) unique index — the
+     * second writer's `createMany` fails with a Postgres P2002. Before this
+     * fix that fell through to the global error filter's catch-all and
+     * returned a bare 500. Mirrors AnnouncementsService.create's isP2002
+     * handling.
+     */
+    it('surfaces a concurrent-retake unique-constraint violation as ConflictException (409), not a bare 500', async () => {
+      const { Prisma } = jest.requireActual('@skoolos/db');
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 });
+      txMock.attendance.createMany.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`studentId`,`date`)', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [{ studentId: 's-1', status: 'ABSENT' }],
+      };
+
+      await expect(svc.save(SCHOOL, 'user-teacher-1', dto)).rejects.toThrow(ConflictException);
+      await expect(svc.save(SCHOOL, 'user-teacher-1', dto)).rejects.toThrow(
+        'Attendance for this class was just taken by someone else — pull to refresh.',
+      );
     });
 
     it('throws ApiError VALIDATION and writes nothing when a mark.studentId is not on the class section roster (cross-tenant write guard)', async () => {

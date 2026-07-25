@@ -118,6 +118,7 @@ describe('ExamRemindersService', () => {
     expect(notifications.notify).toHaveBeenCalledWith('TEST_REMINDER', [
       {
         email: 'parent@x.com',
+        schoolId: SCHOOL_1,
         payload: {
           schoolName: 'Green Valley School',
           subjectName: 'Mathematics',
@@ -150,6 +151,7 @@ describe('ExamRemindersService', () => {
     expect(notifications.notify).toHaveBeenCalledWith('TEST_REMINDER', [
       {
         email: 'other@x.com',
+        schoolId: SCHOOL_2,
         payload: {
           schoolName: 'Riverside Academy',
           subjectName: 'Physics',

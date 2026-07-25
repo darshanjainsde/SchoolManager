@@ -148,6 +148,7 @@ export class AnnouncementsService {
                 const className = sectionNames.get(id) ?? null;
                 return emails.map((email) => ({
                   email,
+                  schoolId,
                   payload: { schoolName, title: dto.title, body: dto.body, className },
                 }));
               }),
@@ -161,6 +162,7 @@ export class AnnouncementsService {
           return {
             recipients: emails.map((email) => ({
               email,
+              schoolId,
               payload: { schoolName, title: dto.title, body: dto.body, className: null },
             })),
           };

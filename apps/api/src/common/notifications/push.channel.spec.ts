@@ -45,6 +45,9 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
+const SCHOOL_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const SCHOOL_B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+
 describe('PushChannel', () => {
   it('sends to every registered token for the email and reports true', async () => {
     prisma.pushToken.findMany.mockResolvedValue([
@@ -54,11 +57,15 @@ describe('PushChannel', () => {
     send.mockResolvedValue([{ status: 'ok' }, { status: 'ok' }]);
 
     const channel = harness();
-    const ok = await channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE });
+    const ok = await channel.send(
+      'parent@x.com',
+      { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE },
+      SCHOOL_A,
+    );
 
     expect(ok).toBe(true);
     expect(prisma.pushToken.findMany).toHaveBeenCalledWith({
-      where: { email: 'parent@x.com' },
+      where: { schoolId: SCHOOL_A, email: 'parent@x.com' },
       select: { token: true },
     });
     expect(send).toHaveBeenCalledTimes(1);
@@ -71,11 +78,47 @@ describe('PushChannel', () => {
     expect(sentMessages[0].body).not.toContain('undefined');
   });
 
+  /**
+   * Regression net for the cross-tenant push leak (QA finding N1):
+   * `User.email` is only unique per school (`@@unique([schoolId, email])`),
+   * so two different people at two different schools can share an email
+   * string. Before this fix, `PushChannel` looked up devices by `email`
+   * alone via the RLS-bypassing platform client — a School A send would also
+   * reach School B's devices for that address. The lookup must always be
+   * scoped to the CALLING school, never every school an email has ever
+   * registered at.
+   */
+  it('scopes the device lookup to the sending school — does not cross-deliver to another school sharing the same email', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([{ token: 'ExponentPushToken[school-a-device]' }]);
+    send.mockResolvedValue([{ status: 'ok' }]);
+
+    const channel = harness();
+    await channel.send(
+      'shared@x.com',
+      { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE },
+      SCHOOL_A,
+    );
+
+    // The query is scoped to School A only — School B's devices registered
+    // under the same email are never even fetched, let alone messaged.
+    expect(prisma.pushToken.findMany).toHaveBeenCalledWith({
+      where: { schoolId: SCHOOL_A, email: 'shared@x.com' },
+      select: { token: true },
+    });
+    expect(prisma.pushToken.findMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ schoolId: SCHOOL_B }) }),
+    );
+  });
+
   it('returns false (not throws) when no tokens exist for the email', async () => {
     prisma.pushToken.findMany.mockResolvedValue([]);
 
     const channel = harness();
-    const ok = await channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE });
+    const ok = await channel.send(
+      'parent@x.com',
+      { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE },
+      SCHOOL_A,
+    );
 
     expect(ok).toBe(false);
     expect(send).not.toHaveBeenCalled();
@@ -88,7 +131,11 @@ describe('PushChannel', () => {
     ]);
 
     const channel = harness();
-    const ok = await channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE });
+    const ok = await channel.send(
+      'parent@x.com',
+      { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE },
+      SCHOOL_A,
+    );
 
     expect(ok).toBe(false);
     expect(prisma.pushToken.deleteMany).toHaveBeenCalledWith({
@@ -107,7 +154,11 @@ describe('PushChannel', () => {
     ]);
 
     const channel = harness();
-    const ok = await channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE });
+    const ok = await channel.send(
+      'parent@x.com',
+      { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE },
+      SCHOOL_A,
+    );
 
     expect(ok).toBe(true);
     expect(prisma.pushToken.deleteMany).toHaveBeenCalledWith({
@@ -119,7 +170,11 @@ describe('PushChannel', () => {
     prisma.pushToken.findMany.mockResolvedValue([{ token: 'not-an-expo-token' }]);
 
     const channel = harness();
-    const ok = await channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE });
+    const ok = await channel.send(
+      'parent@x.com',
+      { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE },
+      SCHOOL_A,
+    );
 
     expect(ok).toBe(false);
     expect(send).not.toHaveBeenCalled();
@@ -131,7 +186,7 @@ describe('PushChannel', () => {
 
     const channel = harness();
     await expect(
-      channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE }),
+      channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE }, SCHOOL_A),
     ).resolves.toBe(false);
   });
 });

@@ -92,9 +92,20 @@ export type NotificationMessage = {
   [K in NotificationKind]: { kind: K; payload: PayloadFor<K> };
 }[NotificationKind];
 
-/** One recipient of a `notify()` fan-out, with the payload meant for them. */
+/**
+ * One recipient of a `notify()` fan-out, with the payload meant for them.
+ *
+ * `schoolId` is REQUIRED, not optional: `User.email` is only unique
+ * `@@unique([schoolId, email])` (packages/db/prisma/schema.prisma), never
+ * globally, so any channel that looks a recipient up by email alone (see
+ * `PushChannel`) risks a cross-tenant delivery unless it is handed the
+ * sending school explicitly. Every resolver in recipients.ts already knows
+ * the `schoolId` it queried within — this just carries that value the rest
+ * of the way to the channel.
+ */
 export interface NotificationRecipient<K extends NotificationKind> {
   email: string;
+  schoolId: string;
   payload: PayloadFor<K>;
 }
 
@@ -108,13 +119,17 @@ export interface NotificationChannel {
   /** Short identifier used in logs, e.g. 'email', 'whatsapp'. */
   name: string;
   /**
-   * Sends one message to one recipient. Must resolve to `true`/`false` and
-   * should not throw for ordinary delivery failures (mirroring
-   * `MailService.send`, which logs-but-never-throws) — `NotificationService`
-   * also tolerates a throwing/rejecting channel defensively, but a
-   * well-behaved channel resolves `false` instead.
+   * Sends one message to one recipient of `schoolId`. Must resolve to
+   * `true`/`false` and should not throw for ordinary delivery failures
+   * (mirroring `MailService.send`, which logs-but-never-throws) —
+   * `NotificationService` also tolerates a throwing/rejecting channel
+   * defensively, but a well-behaved channel resolves `false` instead.
+   *
+   * `schoolId` is passed even to channels (like `EmailChannel`) that don't
+   * need it, so every channel gets it consistently and none can "forget" to
+   * ask for it later.
    */
-  send(to: string, message: NotificationMessage): Promise<boolean>;
+  send(to: string, message: NotificationMessage, schoolId: string): Promise<boolean>;
 }
 
 export interface NotifySummary {

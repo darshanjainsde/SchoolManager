@@ -68,14 +68,23 @@ const ABSENCE_NOTICE: AbsenceNoticePayload = {
   date: 'Tue, 21 Jul 2026',
 };
 
+/** Arbitrary — `EmailChannel` receives `schoolId` (part of the shared
+ * `NotificationChannel` contract) but ignores it, since SMTP delivery needs
+ * no DB lookup at all. */
+const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
 describe('EmailChannel', () => {
   it('renders TEST_SCHEDULED with the school, subject, title and date — no "undefined"', async () => {
     const { channel, sent } = harness();
 
-    const ok = await channel.send('parent@x.com', {
-      kind: 'TEST_SCHEDULED',
-      payload: TEST_SCHEDULED,
-    });
+    const ok = await channel.send(
+      'parent@x.com',
+      {
+        kind: 'TEST_SCHEDULED',
+        payload: TEST_SCHEDULED,
+      },
+      SCHOOL,
+    );
 
     expect(ok).toBe(true);
     expect(sent).toHaveLength(1);
@@ -98,7 +107,7 @@ describe('EmailChannel', () => {
   it('renders TEST_REMINDER with the days-until countdown — no "undefined"', async () => {
     const { channel, sent } = harness();
 
-    await channel.send('parent@x.com', { kind: 'TEST_REMINDER', payload: TEST_REMINDER });
+    await channel.send('parent@x.com', { kind: 'TEST_REMINDER', payload: TEST_REMINDER }, SCHOOL);
 
     const mail = sent[0];
     expect(mail.subject).toBe('Reminder: Midterm in 2 days');
@@ -115,10 +124,14 @@ describe('EmailChannel', () => {
   it('renders TEST_REMINDER in the singular for a 1-day-out exam', async () => {
     const { channel, sent } = harness();
 
-    await channel.send('parent@x.com', {
-      kind: 'TEST_REMINDER',
-      payload: { ...TEST_REMINDER, daysUntil: 1 },
-    });
+    await channel.send(
+      'parent@x.com',
+      {
+        kind: 'TEST_REMINDER',
+        payload: { ...TEST_REMINDER, daysUntil: 1 },
+      },
+      SCHOOL,
+    );
 
     expect(sent[0].subject).toBe('Reminder: Midterm in 1 day');
     expect(`${sent[0].subject} ${sent[0].html} ${sent[0].text}`).not.toContain('undefined');
@@ -127,10 +140,14 @@ describe('EmailChannel', () => {
   it('renders RESULTS_PUBLISHED with the school, subject and exam title — no "undefined"', async () => {
     const { channel, sent } = harness();
 
-    await channel.send('parent@x.com', {
-      kind: 'RESULTS_PUBLISHED',
-      payload: RESULTS_PUBLISHED,
-    });
+    await channel.send(
+      'parent@x.com',
+      {
+        kind: 'RESULTS_PUBLISHED',
+        payload: RESULTS_PUBLISHED,
+      },
+      SCHOOL,
+    );
 
     const mail = sent[0];
     expect(mail.subject).toBe('Results published: Half Yearly');
@@ -143,7 +160,7 @@ describe('EmailChannel', () => {
   it('renders ABSENCE_NOTICE naming the specific student and date — no "undefined"', async () => {
     const { channel, sent } = harness();
 
-    await channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE });
+    await channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE }, SCHOOL);
 
     const mail = sent[0];
     expect(mail.subject).toBe('Absence notice: Aisha Khan');
@@ -159,14 +176,18 @@ describe('EmailChannel', () => {
   it('escapes school-authored text before it reaches the HTML body', async () => {
     const { channel, sent } = harness();
 
-    await channel.send('parent@x.com', {
-      kind: 'TEST_SCHEDULED',
-      payload: {
-        ...TEST_SCHEDULED,
-        examTitle: '<script>alert(1)</script>',
-        schoolName: 'Green & "Valley" <b>School</b>',
+    await channel.send(
+      'parent@x.com',
+      {
+        kind: 'TEST_SCHEDULED',
+        payload: {
+          ...TEST_SCHEDULED,
+          examTitle: '<script>alert(1)</script>',
+          schoolName: 'Green & "Valley" <b>School</b>',
+        },
       },
-    });
+      SCHOOL,
+    );
 
     const mail = sent[0];
     expect(mail.html).not.toContain('<script>');
@@ -180,7 +201,7 @@ describe('EmailChannel', () => {
     const channel = new EmailChannel(mail);
 
     await expect(
-      channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE }),
+      channel.send('parent@x.com', { kind: 'ABSENCE_NOTICE', payload: ABSENCE_NOTICE }, SCHOOL),
     ).resolves.toBe(false);
   });
 });

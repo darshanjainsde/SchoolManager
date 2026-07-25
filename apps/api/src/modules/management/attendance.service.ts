@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { withTenant, type AttendanceStatus } from '@skoolos/db';
 import { AuditService } from '../../common/audit/audit.service';
 import { ApiError } from '../../common/errors/api-error';
@@ -6,6 +6,7 @@ import { formatDateIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveStudentRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
+import { isP2002 } from './internal/prisma-errors';
 import type { SaveAttendanceDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -314,20 +315,36 @@ export class AttendanceService {
       // upserts (a class of ~40 was 40 round-trips inside the txn). Deleting
       // this day's rows for exactly these students, then re-creating, keeps
       // the (studentId, date) uniqueness and stays idempotent.
+      //
+      // Two teachers retaking the same class+date concurrently can still
+      // race here: both transactions read `before` as stale, both run
+      // `deleteMany` (no-op the second time), and the second `createMany`
+      // can lose to the unique index on (studentId, date) once the first
+      // commits. Mirrors AnnouncementsService.create's isP2002 handling —
+      // surface it as a 409 the client can retry, not a bare 500.
       const studentIds = dto.marks.map((m) => m.studentId);
-      await tx.attendance.deleteMany({
-        where: { date: day, studentId: { in: studentIds } },
-      });
-      await tx.attendance.createMany({
-        data: dto.marks.map((mark) => ({
-          schoolId,
-          studentId: mark.studentId,
-          classSectionId: dto.classSectionId,
-          date: day,
-          status: mark.status,
-          markedById,
-        })),
-      });
+      try {
+        await tx.attendance.deleteMany({
+          where: { date: day, studentId: { in: studentIds } },
+        });
+        await tx.attendance.createMany({
+          data: dto.marks.map((mark) => ({
+            schoolId,
+            studentId: mark.studentId,
+            classSectionId: dto.classSectionId,
+            date: day,
+            status: mark.status,
+            markedById,
+          })),
+        });
+      } catch (e) {
+        if (isP2002(e)) {
+          throw new ConflictException(
+            'Attendance for this class was just taken by someone else — pull to refresh.',
+          );
+        }
+        throw e;
+      }
 
       // A retake: this save overwrote rows that already existed for this
       // class/date. `save`'s delete-then-recreate leaves no other trace of
@@ -385,6 +402,7 @@ export class AttendanceService {
             'ABSENCE_NOTICE',
             recipients.map((r) => ({
               email: r.email,
+              schoolId,
               payload: { schoolName, studentName: r.studentName, date: formatDateIST(day) },
             })),
           );

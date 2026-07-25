@@ -286,6 +286,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
       expect(notifications.notify).toHaveBeenCalledWith('ANNOUNCEMENT', [
         {
           email: 'parent@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             title: 'PTM this Friday',
@@ -364,6 +365,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
       expect(notifications.notify).toHaveBeenCalledWith('ANNOUNCEMENT', [
         {
           email: 'a@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             title: 'School closed Monday',
@@ -373,6 +375,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
         },
         {
           email: 'b@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             title: 'School closed Monday',
