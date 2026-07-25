@@ -718,3 +718,36 @@
   .mkt .pd-ripple.d2, .mkt .pd-ripple.d3 { opacity: 0; }
   .mkt .pro-item.on .pro-tab .bar { transform: scaleX(1); }
 }
+
+/* ---------- LP live-site demo (school-website-builder) ---------- */
+.mkt .lp-demo-head { text-align: center; max-width: 660px; margin: 0 auto 30px; }
+.mkt .lp-demo-head .eyebrow { display: inline-block; margin-bottom: 12px; }
+.mkt .lp-demo {
+  display: block; max-width: 940px; margin: 0 auto;
+  border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+  background: var(--paper); box-shadow: 0 34px 66px -34px rgba(16, 36, 59, 0.4);
+}
+.mkt .lp-demo-bar {
+  display: flex; align-items: center; gap: 7px;
+  padding: 11px 16px; background: var(--paper2); border-bottom: 1px solid var(--line);
+}
+.mkt .lp-demo-bar .d { width: 11px; height: 11px; border-radius: 50%; background: #cfd8e0; }
+.mkt .lp-demo-url {
+  margin-left: 14px; font-size: 12.5px; color: var(--muted);
+  background: var(--paper); border: 1px solid var(--line); border-radius: 7px; padding: 4px 16px;
+}
+.mkt .lp-demo-frame { position: relative; height: 540px; overflow: hidden; background: var(--paper2); }
+.mkt .lp-demo-frame iframe {
+  width: 1280px; height: 900px; border: 0;
+  transform: scale(0.734); transform-origin: top left; pointer-events: none;
+}
+.mkt .lp-demo-overlay { position: absolute; inset: 0; z-index: 2; }
+.mkt .lp-demo-open {
+  display: block; text-align: center; padding: 14px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #14b8a6, #6d4aff);
+}
+.mkt .lp-demo-open:hover { filter: brightness(1.05); }
+@media (max-width: 760px) {
+  .mkt .lp-demo-frame { height: 380px; }
+  .mkt .lp-demo-frame iframe { transform: scale(0.55); }
+}

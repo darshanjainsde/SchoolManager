@@ -98,7 +98,45 @@ export default function SchoolWebsiteBuilderPage() {
         </div>
       </header>
 
-      <section className="lp-sec" aria-label="What is included">
+      <section className="lp-sec" aria-label="Live example">
+        <div className="wrap">
+          <div className="lp-demo-head">
+            <span className="eyebrow">See it live, not described</span>
+            <h2 className="h-lg">A real school, built on Sckools.</h2>
+            <p className="lede">
+              This is an actual live Sckools site — homepage, admissions, gallery, hall of fame — all
+              editable by the school&rsquo;s own staff, no developer. Yours can look completely different.
+            </p>
+          </div>
+          <div className="lp-demo">
+            <div className="lp-demo-bar">
+              <i className="d" /><i className="d" /><i className="d" />
+              <span className="lp-demo-url">beacon.sckools.com</span>
+            </div>
+            <div className="lp-demo-frame">
+              <iframe
+                src="https://beacon.sckools.com/"
+                title="A live Sckools school website"
+                loading="lazy"
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+              <a
+                className="lp-demo-overlay"
+                href="https://beacon.sckools.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open the live beacon.sckools.com site in a new tab"
+              />
+            </div>
+            <a className="lp-demo-open" href="https://beacon.sckools.com" target="_blank" rel="noopener noreferrer">
+              Open the live site →
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="lp-sec alt" aria-label="What is included">
         <div className="wrap">
           <h2 className="h-lg">Everything a school website needs, built in.</h2>
           <div className="lp-grid">
@@ -109,7 +147,7 @@ export default function SchoolWebsiteBuilderPage() {
         </div>
       </section>
 
-      <section className="lp-sec alt" aria-label="How it works">
+      <section className="lp-sec" aria-label="How it works">
         <div className="wrap">
           <h2 className="h-lg">Live in three steps.</h2>
           <div className="lp-grid three">
@@ -120,7 +158,7 @@ export default function SchoolWebsiteBuilderPage() {
         </div>
       </section>
 
-      <section className="lp-sec" aria-label="Agency comparison">
+      <section className="lp-sec alt" aria-label="Agency comparison">
         <div className="wrap" style={{ maxWidth: 820 }}>
           <h2 className="h-lg">Why schools pick Sckools over a web agency</h2>
           <p className="lede" style={{ marginTop: 14 }}>
@@ -132,7 +170,7 @@ export default function SchoolWebsiteBuilderPage() {
         </div>
       </section>
 
-      <section className="lp-sec alt" aria-label="FAQ">
+      <section className="lp-sec" aria-label="FAQ">
         <div className="wrap" style={{ maxWidth: 760 }}>
           <h2 className="h-lg" style={{ textAlign: 'center' }}>Building a school website — FAQ</h2>
           <div className="faq-list">
