@@ -1,0 +1,39 @@
+# Maestro E2E — teacher login (Task 13)
+#
+# Setup (once, local machine or CI runner):
+#   curl -Ls https://get.maestro.mobile.dev | bash
+#
+# Run against a dev/EAS build installed on an emulator or device, with the
+# API seeded for the "raffles" tenant and a teacher test account:
+#
+#   maestro test apps/mobile/.maestro/login-teacher.yaml \
+#     -e TEACHER_EMAIL=teacher@raffles.sckools.com \
+#     -e TEACHER_PASSWORD=password
+#
+# EXECUTION DEFERRED: no emulator, build, or seeded API exists in this
+# environment (Task 13 only authors the flow + verifies testIDs). First
+# real run happens in Task 14, once the first EAS build exists — or via
+# manual QA before that.
+#
+# testID references verified against source (Task 13):
+#   school-code / connect-btn  -> apps/mobile/src/app/(auth)/connect.tsx
+#   login-id / login-pw / login-btn -> apps/mobile/src/app/(auth)/login.tsx
+#   "Today" tab label -> apps/mobile/src/app/(staff)/_layout.tsx (Tabs.Screen name="today", title: 'Today')
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "school-code"
+- inputText: "raffles"
+- tapOn:
+    id: "connect-btn"
+- tapOn:
+    id: "login-id"
+- inputText: "${TEACHER_EMAIL}"
+- tapOn:
+    id: "login-pw"
+- inputText: "${TEACHER_PASSWORD}"
+- tapOn:
+    id: "login-btn"
+- assertVisible: "Today"
