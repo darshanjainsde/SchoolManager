@@ -2,11 +2,12 @@ import type { ExpoConfig } from 'expo/config';
 
 // EAS project (owner: darshanjainsde's Expo account). Used for both EAS Build
 // and EAS Update (OTA). If you ever recreate the EAS project, update this id.
-const EAS_PROJECT_ID = 'ec023260-2258-4e70-a96f-a32bfe2908cf';
+const EAS_PROJECT_ID = 'da9fa7e3-f87c-4d45-91c0-1c546418a52c';
 
 const config: ExpoConfig = {
   name: 'Sckools',
   slug: 'sckools',
+  owner: 'darshanjainsdes-team',
   scheme: 'sckools',
   version: '0.1.0',
   orientation: 'portrait',
