@@ -28,10 +28,12 @@ import { CronSecretGuard } from './cron-secret.guard';
 import { LoginInviteService } from './internal/login-invite.service';
 import { LeaveService } from './leave.service';
 import { LeaveController, SubstitutionController } from './leave.controller';
+import { HolidaysService } from './holidays.service';
+import { HolidaysController } from './holidays.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService, LeaveService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -46,7 +48,8 @@ import { LeaveController, SubstitutionController } from './leave.controller';
     ExamRemindersController,
     LeaveController,
     SubstitutionController,
+    HolidaysController,
   ],
-  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService],
+  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService],
 })
 export class ManagementModule {}

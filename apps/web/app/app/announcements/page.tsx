@@ -150,8 +150,12 @@ export default function AnnouncementsPage() {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const createMutation = useMutation({
+    // The API now creates one Announcement row per targeted class section
+    // (a school-wide post is still a single-element array) — the mutation's
+    // result is unused below, but the generic should describe what the
+    // endpoint actually returns.
     mutationFn: (data: CreateAnnouncementBody) =>
-      api.post<Announcement>('/manage/announcements', data),
+      api.post<Announcement[]>('/manage/announcements', data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['announcements'] });
       setShowAdd(false);

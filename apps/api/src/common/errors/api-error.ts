@@ -21,6 +21,8 @@ export type ErrorCode =
   | 'LEAVE_NOT_CANCELLABLE'
   /** Caller is neither the owning teacher nor a SCHOOL_ADMIN — pair with 403. */
   | 'LEAVE_CANCEL_FORBIDDEN'
+  /** A TEACHER targeted a class section they do not teach — pair with 403. */
+  | 'CLASS_NOT_OWNED'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

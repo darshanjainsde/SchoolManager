@@ -1,0 +1,46 @@
+# Maestro E2E — attendance trust loop (Task 13)
+#
+# Setup (once, local machine or CI runner):
+#   curl -Ls https://get.maestro.mobile.dev | bash
+#
+# Precondition: run immediately after login-teacher.yaml in the same
+# Maestro session, so the teacher is still authenticated (launchApp below
+# uses clearState: false on purpose — it must NOT wipe the session).
+# The tester teacher account must have at least one class assigned whose
+# attendance has NOT been taken yet today in the seeded API.
+#
+#   maestro test \
+#     apps/mobile/.maestro/login-teacher.yaml \
+#     apps/mobile/.maestro/attendance-trust-loop.yaml \
+#     -e TEACHER_EMAIL=teacher@raffles.sckools.com \
+#     -e TEACHER_PASSWORD=password
+#
+# EXECUTION DEFERRED: no emulator, build, or seeded API exists in this
+# environment (Task 13 only authors the flow + verifies testIDs/text).
+# First real run happens in Task 14, once the first EAS build exists — or
+# via manual QA before that.
+#
+# testID / text references verified against source (Task 13):
+#   "Attendance" tab label -> apps/mobile/src/app/(staff)/_layout.tsx (Tabs.Screen name="attendance", title: 'Attendance')
+#   take-<classSectionId>  -> apps/mobile/src/app/(staff)/attendance.tsx (testID={`take-${c.classSectionId}`})
+#   absent-<studentId>     -> apps/mobile/src/app/(staff)/take/[classSectionId].tsx (testID={`${label.toLowerCase()}-${r.studentId}`}, label "Absent")
+#   submit-attendance      -> apps/mobile/src/app/(staff)/take/[classSectionId].tsx
+#   "Attendance · today" section title -> apps/mobile/src/app/(staff)/attendance.tsx (SectionTitle)
+#   "✓ <present>/<total> present" pill -> apps/mobile/src/app/(staff)/attendance.tsx
+#     (`c.taken ? <Pill tone="green">{\`✓ ${c.present}/${c.total} present\`}</Pill> : ...`)
+#   Submitting pops back to the Attendance list via router.back() in
+#   take/[classSectionId].tsx, and attendance.tsx's useFocusEffect refetches
+#   status on regaining focus, so no extra navigation step is needed here.
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: false
+- tapOn: "Attendance"
+- tapOn:
+    id: "^take-.*"
+- tapOn:
+    id: "^absent-.*"
+- tapOn:
+    id: "submit-attendance"
+- assertVisible: "Attendance · today"
+- assertVisible: ".*✓ \\d+/\\d+ present.*"

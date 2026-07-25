@@ -3,6 +3,7 @@ import { createTransport, type Transporter } from 'nodemailer';
 import { loadEnv } from '@skoolos/config';
 import type {
   AbsenceNoticePayload,
+  AnnouncementPayload,
   ResultsPublishedPayload,
   TestReminderPayload,
   TestScheduledPayload,
@@ -17,6 +18,7 @@ export type TestScheduledInfo = TestScheduledPayload;
 export type TestReminderInfo = TestReminderPayload;
 export type ResultsPublishedInfo = ResultsPublishedPayload;
 export type AbsenceNoticeInfo = AbsenceNoticePayload;
+export type AnnouncementInfo = AnnouncementPayload;
 
 /**
  * Escapes a value for interpolation into an HTML email body. School-authored
@@ -184,6 +186,19 @@ export class MailService {
         <h2 style="color:#134e4a;margin:0 0 12px">Absence notice</h2>
         <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b> marked <b>${escapeHtml(info.studentName)}</b> absent on ${escapeHtml(info.date)}.</p>
         <p style="color:#64748b;font-size:13px;margin-top:20px">If this is unexpected, please contact the school office.</p>
+      </div>`;
+    return this.send(to, subject, html, text);
+  }
+
+  async sendAnnouncement(to: string, info: AnnouncementInfo): Promise<boolean> {
+    const subject = info.title;
+    const target = info.className ? ` (${info.className})` : '';
+    const text = `${info.schoolName}${target} posted a new announcement.\n\n${info.title}\n\n${info.body}`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#134e4a;margin:0 0 12px">📣 ${escapeHtml(info.schoolName)}${target ? ` — ${escapeHtml(info.className as string)}` : ''}</h2>
+        <p style="color:#334155;font-weight:bold;margin:0 0 8px">${escapeHtml(info.title)}</p>
+        <p style="color:#334155;line-height:1.6;white-space:pre-wrap">${escapeHtml(info.body)}</p>
       </div>`;
     return this.send(to, subject, html, text);
   }

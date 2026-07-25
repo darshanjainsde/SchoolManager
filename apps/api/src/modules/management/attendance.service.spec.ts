@@ -9,13 +9,19 @@ const txMock = {
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
 
+// Keep the real `Prisma` export (prisma-errors.ts's isP2002 relies on
+// `instanceof Prisma.PrismaClientKnownRequestError`); only `withTenant`
+// itself is stubbed so no real DB connection is ever attempted.
 jest.mock('@skoolos/db', () => ({
+  ...jest.requireActual('@skoolos/db'),
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
 }));
 
+import { ConflictException } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { ApiError } from '../../common/errors/api-error';
 import type { NotificationService } from '../../common/notifications/notification.service';
+import type { AuditService } from '../../common/audit/audit.service';
 import type { SaveAttendanceDto } from './management.dto';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -26,7 +32,11 @@ const flushBackgroundWork = () => new Promise((resolve) => setImmediate(resolve)
 
 describe('AttendanceService', () => {
   const notifications = { notify: jest.fn() };
-  const svc = new AttendanceService(notifications as unknown as NotificationService);
+  const audit = { record: jest.fn().mockResolvedValue(undefined) };
+  const svc = new AttendanceService(
+    notifications as unknown as NotificationService,
+    audit as unknown as AuditService,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -34,6 +44,7 @@ describe('AttendanceService', () => {
       fn(txMock),
     );
     notifications.notify.mockResolvedValue({ sent: 0, failed: 0 });
+    audit.record.mockResolvedValue(undefined);
     txMock.user.findMany.mockResolvedValue([]);
     txMock.school.findFirst.mockResolvedValue({ name: 'Green Valley School' });
     // `save` reads the pre-existing marks for the day to work out who is
@@ -121,6 +132,7 @@ describe('AttendanceService', () => {
       expect(notifications.notify).toHaveBeenCalledWith('ABSENCE_NOTICE', [
         {
           email: 'parent@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             studentName: 'Aisha Khan',
@@ -159,6 +171,7 @@ describe('AttendanceService', () => {
       expect(notifications.notify).toHaveBeenCalledWith('ABSENCE_NOTICE', [
         {
           email: 'aisha.parent@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             studentName: 'Aisha Khan',
@@ -167,6 +180,7 @@ describe('AttendanceService', () => {
         },
         {
           email: 'rohan.parent@x.com',
+          schoolId: SCHOOL,
           payload: {
             schoolName: 'Green Valley School',
             studentName: 'Rohan Mehta',
@@ -383,6 +397,39 @@ describe('AttendanceService', () => {
       expect(txMock.attendance.createMany).not.toHaveBeenCalled();
     });
 
+    /**
+     * Regression net for N2 (retake race → 500): two teachers retaking the
+     * same class+date can race to the (studentId, date) unique index — the
+     * second writer's `createMany` fails with a Postgres P2002. Before this
+     * fix that fell through to the global error filter's catch-all and
+     * returned a bare 500. Mirrors AnnouncementsService.create's isP2002
+     * handling.
+     */
+    it('surfaces a concurrent-retake unique-constraint violation as ConflictException (409), not a bare 500', async () => {
+      const { Prisma } = jest.requireActual('@skoolos/db');
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+      txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      txMock.attendance.deleteMany.mockResolvedValue({ count: 0 });
+      txMock.attendance.createMany.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`studentId`,`date`)', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+      const dto: SaveAttendanceDto = {
+        classSectionId: CLASS_SECTION,
+        date: '2026-07-21',
+        marks: [{ studentId: 's-1', status: 'ABSENT' }],
+      };
+
+      await expect(svc.save(SCHOOL, 'user-teacher-1', dto)).rejects.toThrow(ConflictException);
+      await expect(svc.save(SCHOOL, 'user-teacher-1', dto)).rejects.toThrow(
+        'Attendance for this class was just taken by someone else — pull to refresh.',
+      );
+    });
+
     it('throws ApiError VALIDATION and writes nothing when a mark.studentId is not on the class section roster (cross-tenant write guard)', async () => {
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       // Roster only contains s-1/s-2. Because `Student` has active RLS, a
@@ -486,13 +533,85 @@ describe('AttendanceService', () => {
 
       expect(txMock.attendance.findMany).toHaveBeenCalledWith({
         where: { classSectionId: CLASS_SECTION, date: new Date('2026-07-21') },
-        select: { studentId: true, status: true },
+        select: { studentId: true, status: true, markedById: true },
       });
       // Read before the writes, so the "was already absent" answer is not
       // poisoned by this call's own upserts.
       expect(txMock.attendance.findMany.mock.invocationCallOrder[0]).toBeLessThan(
         txMock.attendance.createMany.mock.invocationCallOrder[0],
       );
+    });
+
+    describe('retake audit trail', () => {
+      it('writes an ATTENDANCE_RETAKE audit entry with prior + new counts and markers when overwriting an existing day', async () => {
+        txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+        txMock.student.findMany.mockResolvedValue([{ id: 's-1' }, { id: 's-2' }]);
+        txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-2' }); // this call's marker
+        txMock.attendance.deleteMany.mockResolvedValue({ count: 0 });
+        txMock.attendance.createMany.mockResolvedValue({ count: 0 });
+        // Prior state for this class/date: one PRESENT, one ABSENT, both
+        // marked by a DIFFERENT teacher (a previous save).
+        txMock.attendance.findMany.mockResolvedValue([
+          { studentId: 's-1', status: 'PRESENT', markedById: 'teacher-1' },
+          { studentId: 's-2', status: 'ABSENT', markedById: 'teacher-1' },
+        ]);
+
+        const dto: SaveAttendanceDto = {
+          classSectionId: CLASS_SECTION,
+          date: '2026-07-21',
+          marks: [
+            { studentId: 's-1', status: 'ABSENT' },
+            { studentId: 's-2', status: 'ABSENT' },
+          ],
+        };
+
+        await svc.save(SCHOOL, 'user-teacher-2', dto);
+
+        expect(audit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            schoolId: SCHOOL,
+            actorUserId: 'user-teacher-2',
+            action: 'ATTENDANCE_RETAKE',
+            entity: 'Attendance',
+            entityId: CLASS_SECTION,
+            meta: expect.objectContaining({
+              classSectionId: CLASS_SECTION,
+              date: '2026-07-21',
+              previous: expect.objectContaining({
+                present: 1,
+                absent: 1,
+                total: 2,
+                markedById: 'teacher-1',
+              }),
+              current: expect.objectContaining({
+                present: 0,
+                absent: 2,
+                total: 2,
+                markedById: 'teacher-2',
+              }),
+            }),
+          }),
+        );
+      });
+
+      it('does not write a retake audit entry when the day had no prior rows (a fresh save)', async () => {
+        txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+        txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
+        txMock.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+        txMock.attendance.deleteMany.mockResolvedValue({ count: 0 });
+        txMock.attendance.createMany.mockResolvedValue({ count: 0 });
+        txMock.attendance.findMany.mockResolvedValue([]); // nothing stored yet for this day
+
+        const dto: SaveAttendanceDto = {
+          classSectionId: CLASS_SECTION,
+          date: '2026-07-21',
+          marks: [{ studentId: 's-1', status: 'PRESENT' }],
+        };
+
+        await svc.save(SCHOOL, 'user-teacher-1', dto);
+
+        expect(audit.record).not.toHaveBeenCalled();
+      });
     });
   });
 });
