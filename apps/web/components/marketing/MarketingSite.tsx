@@ -1,5 +1,6 @@
 'use client';
 import './marketing.css';
+import Link from 'next/link';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { MarketingConfigData } from '@/lib/public-api';
 import CallbackModal from './CallbackModal';
@@ -75,7 +76,7 @@ const TIERS = [
  *  typing, the notification-chip loop, and the fine-pointer hero tilt.
  *  All animation work is transform/opacity only; listeners are passive and
  *  rAF-throttled; everything degrades on reduced-motion. */
-function useMarketingMotion(root: React.RefObject<HTMLDivElement>) {
+function useMarketingMotion(root: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     const el = root.current;
     if (!el) return;
@@ -268,7 +269,7 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
           <a className="lnk" href="#events">Events Network</a>
           <a className="lnk" href="/pricing">Pricing</a>
           <a className="lnk" href="#switch">Why switch</a>
-          <a className="lnk" href="/blog">Blog</a>
+          <Link className="lnk" href="/blog">Blog</Link>
           <button className="btn btn-hot btn-sm" onClick={() => openModal()}>Request a callback</button>
         </div>
       </nav>

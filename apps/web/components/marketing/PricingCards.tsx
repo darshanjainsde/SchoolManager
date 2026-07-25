@@ -1,5 +1,6 @@
 'use client';
 import './marketing.css';
+import Link from 'next/link';
 import { useRef, useState } from 'react';
 import type { MarketingConfigData } from '@/lib/public-api';
 import CallbackModal from './CallbackModal';
@@ -48,11 +49,11 @@ export default function PricingCards({ config }: { config: MarketingConfigData }
     <div className="mkt">
       <nav className="mnav" aria-label="Main">
         <div className="mnav-in">
-          <a href="/" className="logo"><SckoolsLogo size={32} /></a>
-          <a className="lnk" href="/#feats">Features</a>
-          <a className="lnk" href="/#events">Events Network</a>
-          <a className="lnk" href="/#switch">Why switch</a>
-          <a className="lnk" href="/blog">Blog</a>
+          <Link href="/" className="logo"><SckoolsLogo size={32} /></Link>
+          <Link className="lnk" href="/#feats">Features</Link>
+          <Link className="lnk" href="/#events">Events Network</Link>
+          <Link className="lnk" href="/#switch">Why switch</Link>
+          <Link className="lnk" href="/blog">Blog</Link>
           <button className="btn btn-hot btn-sm" onClick={() => setModalInterest(null)}>Request a callback</button>
         </div>
       </nav>

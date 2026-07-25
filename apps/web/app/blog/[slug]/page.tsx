@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isPlatformHost, schoolHref } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
@@ -8,8 +9,7 @@ import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
 import BlogBlocks from '@/components/blog/BlogBlocks';
 import '@/components/blog/blog.css';
 
-// TODO(next15): params type → Promise<{ slug: string }>
-interface Props { params: { slug: string } }
+interface Props { params: Promise<{ slug: string }> }
 
 /** Static assets (hero art) are served as root-relative paths from every host of this deployment. */
 function absoluteUrl(origin: string, url: string | null | undefined): string | undefined {
@@ -183,9 +183,9 @@ export default async function BlogPostPage({ params }: Props) {
     <div className="blog">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <div className="blog-topbar">
-        <a href="/"><b>← Home</b></a>
+        <Link href="/"><b>← Home</b></Link>
         <div className="blog-topbar-spacer" />
-        <a href="/blog">Blog</a>
+        <Link href="/blog">Blog</Link>
       </div>
       <ArticleBody post={post} />
     </div>

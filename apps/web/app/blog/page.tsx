@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
@@ -66,9 +67,9 @@ export default async function BlogIndexPage() {
   return (
     <div className="blog">
       <div className="blog-topbar">
-        <a href="/"><b>← Home</b></a>
+        <Link href="/"><b>← Home</b></Link>
         <div className="blog-topbar-spacer" />
-        <a href="/blog">Blog</a>
+        <Link href="/blog">Blog</Link>
       </div>
       <div className="wrap">
         <header className="blog-head">

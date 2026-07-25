@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { heroIsPhotoLayout } from './HeroSection';
@@ -130,7 +131,7 @@ function NavLinks({
         <a className={linkCls} href="/connect">Connect</a>
       )}
       {flags.hasBlog && (
-        <a className={linkCls} href="/blog">Blog</a>
+        <Link className={linkCls} href="/blog">Blog</Link>
       )}
       {(flags.hasContact || flags.hasEnquiry) && (
         <a className={linkCls} href="/contact">Contact</a>
@@ -205,7 +206,7 @@ function HamburgerButton({
 }: {
   open: boolean;
   onClick: () => void;
-  buttonRef: React.RefObject<HTMLButtonElement>;
+  buttonRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   return (
     <button
@@ -264,7 +265,7 @@ function MobileMenu({
    * itself, not this panel. */
   barCls: string;
   onClose: () => void;
-  panelRef: React.RefObject<HTMLDivElement>;
+  panelRef: React.RefObject<HTMLDivElement | null>;
 }) {
   return (
     <div
@@ -482,7 +483,7 @@ export default function SiteNav({
                 <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/connect">Connect</a>
               )}
               {flags.hasBlog && (
-                <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/blog">Blog</a>
+                <Link className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/blog">Blog</Link>
               )}
               {(flags.hasContact || flags.hasEnquiry) && (
                 <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/contact">Contact</a>

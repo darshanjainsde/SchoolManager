@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
@@ -75,9 +76,9 @@ export default async function SchoolWebsiteBuilderPage() {
       <div className="mkt">
       <nav className="mnav" aria-label="Main">
         <div className="mnav-in">
-          <a href="/" className="logo"><SckoolsLogo size={32} /></a>
+          <Link href="/" className="logo"><SckoolsLogo size={32} /></Link>
           <a className="lnk" href="/pricing">Pricing</a>
-          <a className="lnk" href="/blog">Blog</a>
+          <Link className="lnk" href="/blog">Blog</Link>
           <a className="btn btn-hot btn-sm" href="/pricing">Get started</a>
         </div>
       </nav>
@@ -93,7 +94,7 @@ export default async function SchoolWebsiteBuilderPage() {
           </p>
           <div className="lp-actions">
             <a className="lp-cta" href="/pricing">See plans &amp; pricing</a>
-            <a className="lp-cta ghost" href="/#feats">See what&rsquo;s included</a>
+            <Link className="lp-cta ghost" href="/#feats">See what&rsquo;s included</Link>
           </div>
         </div>
       </header>
@@ -183,7 +184,7 @@ export default async function SchoolWebsiteBuilderPage() {
           </div>
           <p className="lede" style={{ textAlign: 'center', marginTop: 36 }}>
             Ready to see your school on a bigger stage? <a href="/pricing" style={{ fontWeight: 700 }}>Pick a plan</a> or
-            request a callback from the <a href="/" style={{ fontWeight: 700 }}>homepage</a>.
+            request a callback from the <Link href="/" style={{ fontWeight: 700 }}>homepage</Link>.
           </p>
         </div>
       </section>
