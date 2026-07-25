@@ -11,6 +11,7 @@ export default function StaffTabs() {
       <Tabs.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Tabs.Screen name="post" options={{ title: 'Post' }} />
       <Tabs.Screen name="more" options={{ title: 'More' }} />
+      <Tabs.Screen name="holidays" options={{ href: null }} />
     </Tabs>
   );
 }

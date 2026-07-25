@@ -47,6 +47,36 @@ export interface AttendanceSummary {
 }
 
 /**
+ * Mirrors the raw `Holiday` Prisma row returned by `PortalService.holidays()`
+ * (`GET /me/holidays`) — the SAME upcoming-list query `manage/holidays`
+ * (admin CRUD) reads, shared across both the family and staff portals since
+ * the school holiday calendar is school-wide, not per-role.
+ */
+export interface Holiday {
+  id: string;
+  name: string;
+  type: 'PUBLIC' | 'FESTIVAL' | 'SCHOOL';
+  /** ISO timestamp at UTC midnight (`@db.Date`, serialised over JSON) — a plain calendar date. */
+  startDate: string;
+  endDate: string | null;
+}
+
+/**
+ * Day-of-month + short weekday name for a `Holiday.startDate`, read in UTC.
+ * `startDate` is a plain calendar date stored at UTC midnight (mirrors
+ * `AttendanceDay.date` handling in `(family)/attendance.tsx`) — reading it
+ * back in the device's LOCAL timezone could roll the day backward for any
+ * timezone with a negative UTC offset, so both fields are pinned to UTC.
+ */
+export function holidayDateParts(iso: string): { day: string; weekday: string } {
+  const d = new Date(iso);
+  return {
+    day: String(d.getUTCDate()),
+    weekday: d.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' }),
+  };
+}
+
+/**
  * Coarse "time ago" for a notice's `createdAt`. Good enough for a mobile
  * feed — falls back to a short date once it's more than a week old.
  */

@@ -185,7 +185,7 @@ export default function Home() {
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <QuickAction label="Attendance" onPress={() => router.push('/(family)/attendance')} />
             <QuickAction label="Notices" onPress={() => router.push('/(family)/notices')} />
-            <QuickAction label="Holidays" onPress={comingSoon} />
+            <QuickAction label="Holidays" onPress={() => router.push('/(family)/holidays')} />
             <QuickAction label="Timetable" onPress={comingSoon} />
           </View>
         </>

@@ -77,7 +77,7 @@ it('shows a "needs attention" row when marked absent today and the latest notice
   expect(await findByText('Annual Day on Aug 12')).toBeTruthy();
 });
 
-it('navigates via the quick-action grid and shows "coming soon" for Holidays/Timetable', async () => {
+it('navigates via the quick-action grid (Attendance/Notices/Holidays) and shows "coming soon" for Timetable', async () => {
   mockEndpoints([], { month: '2026-07', percent: 0, present: 0, absent: 0, late: 0, days: [] });
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
@@ -90,8 +90,10 @@ it('navigates via the quick-action grid and shows "coming soon" for Holidays/Tim
   expect(mockPush).toHaveBeenCalledWith('/(family)/notices');
 
   fireEvent.press(await findByText('Holidays'));
+  expect(mockPush).toHaveBeenCalledWith('/(family)/holidays');
+
   fireEvent.press(await findByText('Timetable'));
-  await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
   expect(alertSpy.mock.calls[0][0]).toBe('Coming soon');
 
   alertSpy.mockRestore();

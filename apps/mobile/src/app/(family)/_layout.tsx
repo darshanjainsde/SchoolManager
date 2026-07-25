@@ -11,6 +11,7 @@ export default function FamilyTabs() {
       <Tabs.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Tabs.Screen name="notices" options={{ title: 'Notices' }} />
       <Tabs.Screen name="more" options={{ title: 'More' }} />
+      <Tabs.Screen name="holidays" options={{ href: null }} />
     </Tabs>
   );
 }
