@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
+import { getRequestHost } from '@/lib/request';
 import { fetchGlobalBlog, fetchSchoolBlog } from '@/lib/blog-api';
 import { fetchPublicSite } from '@/lib/public-api';
 import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
@@ -9,7 +9,7 @@ import BlogIndexList from '@/components/blog/BlogIndexList';
 import '@/components/blog/blog.css';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const host = headers().get('host') ?? '';
+  const host = await getRequestHost();
 
   if (isPlatformHost(host)) {
     return {
@@ -39,7 +39,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function BlogIndexPage() {
-  const host = headers().get('host') ?? '';
+  const host = await getRequestHost();
 
   if (isPlatformHost(host)) {
     const data = await fetchGlobalBlog();

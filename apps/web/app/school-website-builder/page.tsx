@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
+import { getRequestHost } from '@/lib/request';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { LP_FAQ } from '@/components/marketing/lp-faq-data';
 import '@/components/marketing/marketing.css';
@@ -37,8 +37,8 @@ const INCLUDED = [
   { t: 'School management, when you’re ready', d: 'Students, classes, timetables, attendance, assignments, and teacher & student portals on the Pro plan.' },
 ];
 
-export default function SchoolWebsiteBuilderPage() {
-  const host = headers().get('host') ?? '';
+export default async function SchoolWebsiteBuilderPage() {
+  const host = await getRequestHost();
   if (!isPlatformHost(host)) notFound();
 
   const jsonLd = [

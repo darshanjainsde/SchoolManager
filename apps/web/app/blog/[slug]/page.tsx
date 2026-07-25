@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { isPlatformHost, schoolHref } from '@/lib/hosts';
+import { getRequestHost } from '@/lib/request';
 import { fetchGlobalPost, fetchSchoolPost, type BlogPostFull } from '@/lib/blog-api';
 import { fetchPublicSite } from '@/lib/public-api';
 import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
 import BlogBlocks from '@/components/blog/BlogBlocks';
 import '@/components/blog/blog.css';
 
+// TODO(next15): params type → Promise<{ slug: string }>
 interface Props { params: { slug: string } }
 
 /** Static assets (hero art) are served as root-relative paths from every host of this deployment. */
@@ -22,10 +23,11 @@ function formatDate(iso: string | null): string {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const host = headers().get('host') ?? '';
+  const { slug } = await params;
+  const host = await getRequestHost();
 
   if (isPlatformHost(host)) {
-    const post = await fetchGlobalPost(params.slug);
+    const post = await fetchGlobalPost(slug);
     if (!post) return {};
     const url = `https://sckools.com/blog/${post.slug}`;
     const image = absoluteUrl('https://sckools.com', post.heroImageUrl) ?? 'https://sckools.com/og.png';
@@ -48,7 +50,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   // Tenant host — school-appropriate metadata, never platform strings.
-  const [post, site] = await Promise.all([fetchSchoolPost(host, params.slug), fetchPublicSite(host)]);
+  const [post, site] = await Promise.all([fetchSchoolPost(host, slug), fetchPublicSite(host)]);
   if (!post) return {};
   const name = site?.school.name ?? host;
   const tenantOrigin = schoolHref(host);
@@ -108,10 +110,11 @@ function ArticleBody({ post }: { post: BlogPostFull }) {
 }
 
 export default async function BlogPostPage({ params }: Props) {
-  const host = headers().get('host') ?? '';
+  const { slug } = await params;
+  const host = await getRequestHost();
 
   if (isPlatformHost(host)) {
-    const post = await fetchGlobalPost(params.slug);
+    const post = await fetchGlobalPost(slug);
     if (!post) notFound();
 
     const image = absoluteUrl('https://sckools.com', post.heroImageUrl) ?? 'https://sckools.com/og.png';
@@ -151,7 +154,7 @@ export default async function BlogPostPage({ params }: Props) {
     );
   }
 
-  const [post, site] = await Promise.all([fetchSchoolPost(host, params.slug), fetchPublicSite(host)]);
+  const [post, site] = await Promise.all([fetchSchoolPost(host, slug), fetchPublicSite(host)]);
   if (!post) notFound();
 
   // Own-authored posts come back with author: null (the API only attributes
