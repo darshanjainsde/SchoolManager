@@ -12,6 +12,12 @@ const config: ExpoConfig = {
   version: '0.1.0',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
+  // Opt OUT of the New Architecture (default-on in SDK 53). The app was only
+  // unit-tested, never run on a device, and a native module that isn't
+  // new-arch-ready crashes at launch — the most common cause of an
+  // immediate release crash. The old architecture is stable and fully
+  // supported; revisit enabling Fabric/TurboModules later, on a device.
+  newArchEnabled: false,
   icon: './assets/icon.png',
   splash: {
     image: './assets/splash.png',
