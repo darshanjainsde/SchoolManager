@@ -1,6 +1,18 @@
 import { Stack } from 'expo-router';
 import { ScrollView, Text, View, Pressable } from 'react-native';
 import type { ErrorBoundaryProps } from 'expo-router';
+import Constants from 'expo-constants';
+import * as Sentry from '@sentry/react-native';
+
+// Initialise crash reporting as early as possible so a launch crash is
+// captured. The DSN is a public client key supplied via app config
+// (extra.sentryDsn). Native + JS crashes report to the Sckools Sentry org.
+Sentry.init({
+  dsn: Constants.expoConfig?.extra?.sentryDsn as string | undefined,
+  // While stabilising the first release, capture everything.
+  tracesSampleRate: 1.0,
+  enableNativeCrashHandling: true,
+});
 
 /**
  * Root error boundary. Expo Router renders this instead of the route tree when
@@ -37,6 +49,9 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return <Stack screenOptions={{ headerShown: false }} />;
 }
+
+// Sentry.wrap enables native error boundary + performance tracking on the root.
+export default Sentry.wrap(RootLayout);
