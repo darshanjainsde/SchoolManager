@@ -13,6 +13,16 @@
         "EXPO_PUBLIC_API_URL": "https://api.test.sckools.com"
       }
     },
+    "preview": {
+      "//": "Release-mode APK on the PROD API — same runtime as the 'production' app-bundle, but installable directly (no Play) so a release-only launch crash can be reproduced and read with `adb logcat` BEFORE uploading. This is the gate we were missing.",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.sckools.com"
+      }
+    },
     "production": {
       "distribution": "store",
       "autoIncrement": true,
