@@ -1,0 +1,125 @@
+/* Self-contained styles for the Account Deletion page. Scoped via CSS Module
+   so it never collides with the global `.mkt` marketing styles. Palette
+   mirrors components/marketing/marketing.css and app/privacy. */
+
+.page {
+  --paper: #fcfdff;
+  --card: #ffffff;
+  --ink: #10243b;
+  --muted: #54687d;
+  --dim: #8ca0b3;
+  --line: #e3ecf2;
+  --teal: #0d9488;
+  --teal-hi: #14b8a6;
+  --teal-soft: #d8f3ef;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.bar {
+  border-bottom: 1px solid var(--line);
+  background: rgba(252, 253, 255, 0.85);
+  backdrop-filter: saturate(1.1) blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.barInner {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.brand span { font-size: 1.05rem; }
+.home { color: var(--teal); font-weight: 600; font-size: 0.9rem; }
+.home:hover { text-decoration: underline; }
+
+.wrap {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 56px 24px 96px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--teal);
+  margin: 0 0 12px;
+}
+.title {
+  font-size: clamp(2rem, 5vw, 2.6rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+.updated { color: var(--dim); font-size: 0.85rem; margin: 0 0 8px; }
+.lede {
+  font-size: 1.08rem;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 20px 0 0;
+}
+
+.cta {
+  margin: 28px 0 0;
+  padding: 22px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 2px 6px rgba(16, 36, 59, 0.05), 0 18px 40px -22px rgba(16, 36, 59, 0.16);
+}
+.cta h2 { font-size: 1.1rem; margin: 0 0 6px; }
+.cta p { margin: 0 0 16px; color: var(--muted); font-size: 0.95rem; line-height: 1.55; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--teal);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.98rem;
+  padding: 12px 20px;
+  border-radius: 12px;
+  text-decoration: none;
+}
+.btn:hover { background: var(--teal-hi); }
+
+.section { margin-top: 40px; }
+.section h2 {
+  font-size: 1.24rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.section p, .section li { font-size: 0.98rem; line-height: 1.62; color: #223650; }
+.section p { margin: 0 0 12px; }
+.section ul { margin: 0 0 12px; padding-left: 22px; }
+.section li { margin: 0 0 7px; }
+.section a { color: var(--teal); font-weight: 600; }
+.section a:hover { text-decoration: underline; }
+.section strong { color: var(--ink); }
+
+.foot {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 24px 72px;
+  color: var(--dim);
+  font-size: 0.85rem;
+}
