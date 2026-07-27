@@ -1,0 +1,12 @@
+# QA lens: smoke / crash-regression.
+# The whole reason this suite exists — prove the app LAUNCHES (no useRef/native
+# crash) and reaches the first screen. This is the guard against the release
+# launch crash ever recurring.
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: "school-code"
+- assertVisible:
+    id: "connect-btn"

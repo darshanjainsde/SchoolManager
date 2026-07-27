@@ -1,0 +1,24 @@
+# QA lens: functional happy-path (FAMILY) + role routing.
+# A student logs in and lands on the family portal (not the staff side).
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "school-code"
+- inputText: "raffles"
+- tapOn:
+    id: "connect-btn"
+- tapOn:
+    id: "login-id"
+- inputText: "meera.menon@student.raffles.edu"
+- tapOn:
+    id: "login-pw"
+- inputText: "password"
+- tapOn:
+    id: "login-btn"
+# Family portal tabs prove role routing (STUDENT -> family side).
+- assertVisible: "Home"
+- assertVisible: "Notices"
+# The staff-only "Post" tab must NOT be present for a student.
+- assertNotVisible: "Post"

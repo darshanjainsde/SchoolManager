@@ -1,0 +1,36 @@
+# QA lens: functional data-loading (FAMILY). Every family screen must load real
+# data from the API without error. Holidays is reached via More -> Holidays
+# (it is not a bottom tab; the tab is registered with href:null).
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "school-code"
+- inputText: "raffles"
+- tapOn:
+    id: "connect-btn"
+- tapOn:
+    id: "login-id"
+- inputText: "meera.menon@student.raffles.edu"
+- tapOn:
+    id: "login-pw"
+- inputText: "password"
+- tapOn:
+    id: "login-btn"
+- assertVisible: "Home"
+# Attendance screen renders the computed stats from /me/attendance.
+- tapOn: "Attendance"
+- assertVisible:
+    id: "stat-percent"
+- assertVisible:
+    id: "stat-total"
+# Notices screen loads /me/announcements.
+- tapOn: "Notices"
+# More -> Holidays (loads /me/holidays).
+- tapOn: "More"
+- assertVisible: "Log out"
+- tapOn: "Holidays"
+# Back navigation returns to the app (no crash).
+- back
+- assertVisible: "Home"
