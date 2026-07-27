@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
@@ -40,33 +40,17 @@ export default function EditorTab({
   const editingPost = target && target !== 'new' ? target : null;
   const isPublished = editingPost?.status === 'PUBLISHED';
 
-  const [title, setTitle] = useState('');
-  const [slug, setSlug] = useState('');
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [description, setDescription] = useState('');
-  const [heroImageUrl, setHeroImageUrl] = useState('');
-  const [readMinutes, setReadMinutes] = useState(4);
-  const [sections, setSections] = useState<BlogBlock[]>([]);
-
-  useEffect(() => {
-    if (editingPost) {
-      setTitle(editingPost.title);
-      setSlug(editingPost.slug);
-      setSlugTouched(true);
-      setDescription(editingPost.description);
-      setHeroImageUrl(editingPost.heroImageUrl ?? '');
-      setReadMinutes(editingPost.readMinutes);
-      setSections(editingPost.sections);
-    } else {
-      setTitle('');
-      setSlug('');
-      setSlugTouched(false);
-      setDescription('');
-      setHeroImageUrl('');
-      setReadMinutes(4);
-      setSections([]);
-    }
-  }, [editingPost?.id, target]);
+  // Seeded straight from the target, not synced by an effect. The parent
+  // remounts this component per post (key={…}), so there is no stale-form case:
+  // an effect keyed on the post id could not see a *refetched* post with the
+  // same id, which left saved edits invisible until the tab was switched.
+  const [title, setTitle] = useState(editingPost?.title ?? '');
+  const [slug, setSlug] = useState(editingPost?.slug ?? '');
+  const [slugTouched, setSlugTouched] = useState(!!editingPost);
+  const [description, setDescription] = useState(editingPost?.description ?? '');
+  const [heroImageUrl, setHeroImageUrl] = useState(editingPost?.heroImageUrl ?? '');
+  const [readMinutes, setReadMinutes] = useState(editingPost?.readMinutes ?? 4);
+  const [sections, setSections] = useState<BlogBlock[]>(editingPost?.sections ?? []);
 
   function handleTitleChange(value: string) {
     setTitle(value);
