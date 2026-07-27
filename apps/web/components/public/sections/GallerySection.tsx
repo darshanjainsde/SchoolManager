@@ -80,7 +80,7 @@ export default function GallerySection({
                 src={img.url}
                 alt={img.caption ?? `${schoolName} gallery ${i + 1}`}
                 className="h-48 w-full object-cover transition duration-500 group-hover:scale-105"
-              />
+              loading="lazy" decoding="async" />
               {img.caption && (
                 <>
                   <div className="absolute inset-0 bg-gradient-to-t from-[#14261d]/75 to-transparent opacity-0 group-hover:opacity-100 transition" />

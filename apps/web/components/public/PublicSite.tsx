@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
-import HeroSection from './sections/HeroSection';
+import { fontVars, FONT_STACK } from '@/lib/fonts';
+import HeroSection, { heroImagesOf, heroIsPhotoLayout } from './sections/HeroSection';
 import SiteNav from './sections/SiteNav';
 import CoursesFeatured from './sections/CoursesFeatured';
 import AcademicsSection from './sections/AcademicsSection';
@@ -51,12 +52,6 @@ const SUBPAGES: Record<string, { eyebrow: string; title: string; blurb: string }
   },
 };
 
-const FONT_MAP: Record<string, string> = {
-  INTER: "'Inter', sans-serif",
-  FRAUNCES: "'Fraunces', serif",
-  POPPINS: "'Poppins', sans-serif",
-  NUNITO: "'Nunito', sans-serif",
-};
 const MOTION_MAP: Record<string, number> = { FULL: 1, SUBTLE: 0.5, NONE: 0 };
 
 function parseStatValue(val: string): { numeric: boolean; num: number; suffix: string } {
@@ -298,7 +293,8 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   const ink = mix(brandColor, '#14261d', 0.55); // deep heading tone derived from primary
 
   // Theme controls
-  const fontHead = FONT_MAP[data.profile?.headingFont ?? 'INTER'] ?? FONT_MAP.INTER;
+  const fontHead = FONT_STACK[data.profile?.headingFont ?? 'INTER'] ?? FONT_STACK.INTER;
+  const heroPreloadUrl = heroIsPhotoLayout(data) ? heroImagesOf(data)[0] ?? null : null;
   const motion = MOTION_MAP[data.profile?.animationLevel ?? 'FULL'] ?? 1;
   // Declared layout (before image fallbacks) drives the MINIMAL motion damping,
   // exactly as the legacy heroStyle=MINIMAL did.
@@ -411,7 +407,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
 
   return (
     <div
-      className={`ps-root${motion === 0 ? ' ps-motion-off' : ''}`}
+      className={`ps-root ${fontVars}${motion === 0 ? ' ps-motion-off' : ''}`}
       style={
         {
           '--ps1': brandColor,
@@ -426,12 +422,14 @@ export default function PublicSite({ data, view = 'home' }: Props) {
       {/* Injected theme CSS */}
       <style dangerouslySetInnerHTML={{ __html: PS_CSS }} />
 
-      {/* Google Fonts — all four heading families */}
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link
-        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
-        rel="stylesheet"
-      />
+      {/* The hero photo is the LCP element and is painted from a CSS
+          background, which the browser cannot discover until the stylesheet
+          resolves — preload it so the fetch starts with the HTML. React 19
+          hoists this into <head>. */}
+      {heroPreloadUrl && (
+        // eslint-disable-next-line @next/next/no-page-custom-font
+        <link rel="preload" as="image" href={heroPreloadUrl} fetchPriority="high" />
+      )}
 
       {/* ── NAV (style selected by the school admin) ── */}
       <SiteNav
@@ -535,7 +533,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
                   src={(aboutImageUrl ?? principalPhotoUrl)!}
                   alt={aboutImageUrl ? `About ${schoolName}` : principalName ?? 'Principal'}
                   className="w-full h-full object-cover"
-                />
+                loading="lazy" decoding="async" />
               ) : (
                 <div className="w-full h-full ps-brandgrad grid place-items-center text-6xl text-white">🏫</div>
               )}
@@ -544,7 +542,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               <div className="ps-card ps-soft absolute -bottom-6 -right-4 rounded-2xl p-4 w-56">
                 <div className="flex items-center gap-3">
                   {principalPhotoUrl && (
-                    <img src={principalPhotoUrl} alt={principalName} className="h-11 w-11 rounded-full object-cover flex-shrink-0" />
+                    <img src={principalPhotoUrl} alt={principalName} className="h-11 w-11 rounded-full object-cover flex-shrink-0" loading="lazy" decoding="async" />
                   )}
                   <div>
                     <div className="ps-head text-sm font-bold">{principalName}</div>
@@ -614,7 +612,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
                 <div className="mx-auto h-20 w-20 rounded-full overflow-hidden ps-logo-bg grid place-items-center text-2xl font-semibold text-white">
                   {person.photoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={person.photoUrl} alt={person.name} className="h-full w-full object-cover" />
+                    <img src={person.photoUrl} alt={person.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                   ) : (
                     person.name.charAt(0)
                   )}
@@ -646,7 +644,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
           <div>
             <div className="flex items-center gap-2.5">
               {logoUrl ? (
-                <img src={logoUrl} alt={schoolName} className="h-9 w-auto" />
+                <img src={logoUrl} alt={schoolName} className="h-9 w-auto" loading="lazy" decoding="async" />
               ) : (
                 <>
                   <span className="h-9 w-9 rounded-xl ps-logo-bg grid place-items-center font-bold text-white text-sm ps-head">

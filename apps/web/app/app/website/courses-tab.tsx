@@ -252,7 +252,7 @@ export default function CoursesTab() {
             <div className="space-y-2">
               <Label>Course image (optional)</Label>
               {form.imagePreviewUrl ? (
-                <img src={form.imagePreviewUrl} alt="Course" className="h-24 w-auto rounded border border-slate-200 object-cover" />
+                <img src={form.imagePreviewUrl} alt="Course" className="h-24 w-auto rounded border border-slate-200 object-cover" loading="lazy" decoding="async" />
               ) : form.imageAssetId ? (
                 <p className="text-sm text-slate-500 italic">Image set — upload a new file to replace.</p>
               ) : (
@@ -334,7 +334,7 @@ export default function CoursesTab() {
           <Card key={c.id}>
             <CardContent className="flex items-center gap-4 py-3">
               {imageUrl(c.imageAssetId) ? (
-                <img src={imageUrl(c.imageAssetId)!} alt={c.name} className="h-12 w-16 rounded object-cover border border-slate-200 shrink-0" />
+                <img src={imageUrl(c.imageAssetId)!} alt={c.name} className="h-12 w-16 rounded object-cover border border-slate-200 shrink-0" loading="lazy" decoding="async" />
               ) : (
                 <div className="h-12 w-16 rounded bg-slate-100 grid place-items-center text-slate-400 text-xs shrink-0">No image</div>
               )}

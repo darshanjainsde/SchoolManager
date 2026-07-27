@@ -209,7 +209,7 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
           <Label htmlFor="ev-banner">Banner image (optional)</Label>
           {coverPreview && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={coverPreview} alt="Event banner preview" className="h-32 w-full rounded-lg border border-slate-200 object-cover" />
+            <img src={coverPreview} alt="Event banner preview" className="h-32 w-full rounded-lg border border-slate-200 object-cover" loading="lazy" decoding="async" />
           )}
           <Input
             id="ev-banner"
@@ -360,7 +360,7 @@ export default function EventsPage() {
               <CardContent className="flex items-start justify-between gap-4 pt-4">
                 {event.coverUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={event.coverUrl} alt="" className="h-20 w-32 shrink-0 rounded-lg border border-slate-200 object-cover" />
+                  <img src={event.coverUrl} alt="" className="h-20 w-32 shrink-0 rounded-lg border border-slate-200 object-cover" loading="lazy" decoding="async" />
                 )}
                 <div className="flex-1 min-w-0 space-y-1">
                   <p className="font-semibold text-slate-800 truncate">{event.title}</p>

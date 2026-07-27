@@ -73,7 +73,7 @@ export default function HallOfFame({ courses }: { courses: PublicCourse[] }) {
                 >
                   {entry.photoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={entry.photoUrl} alt={entry.name} className="h-full w-full object-cover" />
+                    <img src={entry.photoUrl} alt={entry.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                   ) : (
                     <span className="text-3xl">🎓</span>
                   )}

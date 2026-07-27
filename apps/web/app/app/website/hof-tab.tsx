@@ -214,7 +214,7 @@ function HofSlot({
       <CardContent className="space-y-3">
         <div className="flex items-center gap-3">
           {preview ? (
-            <img src={preview} alt={slot.name || rankLabel} className="h-14 w-14 rounded-full object-cover border border-slate-200" />
+            <img src={preview} alt={slot.name || rankLabel} className="h-14 w-14 rounded-full object-cover border border-slate-200" loading="lazy" decoding="async" />
           ) : (
             <div className="h-14 w-14 rounded-full bg-slate-100 grid place-items-center text-slate-400 text-lg">🎓</div>
           )}
