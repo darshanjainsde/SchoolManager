@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
+import { useBlockKeys } from '@/lib/use-block-keys';
 import type { BlogBlock } from './types';
 
 const MAX_BLOCKS = 40;
@@ -45,7 +46,12 @@ export default function BlockEditor({
   blocks: BlogBlock[];
   onChange: (blocks: BlogBlock[]) => void;
 }) {
+  // Blocks are plain JSON with no id, so their React keys are tracked here —
+  // see use-block-keys for why index keys break move/remove.
+  const blockKeys = useBlockKeys(blocks.length);
+
   function addBlock(t: BlogBlock['t']) {
+    blockKeys.insert(blocks.length);
     onChange([...blocks, newBlock(t)]);
   }
 
@@ -56,12 +62,14 @@ export default function BlockEditor({
   }
 
   function removeBlock(idx: number) {
+    blockKeys.remove(idx);
     onChange(blocks.filter((_, i) => i !== idx));
   }
 
   function moveBlock(idx: number, dir: -1 | 1) {
     const swap = idx + dir;
     if (swap < 0 || swap >= blocks.length) return;
+    blockKeys.swap(idx, swap);
     const next = [...blocks];
     [next[idx], next[swap]] = [next[swap], next[idx]];
     onChange(next);
@@ -95,7 +103,7 @@ export default function BlockEditor({
 
       <div className="space-y-3">
         {blocks.map((block, idx) => (
-          <div key={idx} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+          <div key={blockKeys.keys[idx]} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wide text-teal-700">
                 {BLOCK_LABELS[block.t]}
