@@ -15,3 +15,12 @@ import { headers } from 'next/headers';
 export async function getRequestHost(): Promise<string> {
   return (await headers()).get('host') ?? '';
 }
+
+/**
+ * The visitor's country (ISO-3166 alpha-2) as geolocated by Vercel's edge, or
+ * null anywhere else (local dev, other hosts). Only ever a default/hint — the
+ * visitor can always override what it selects for them.
+ */
+export async function getRequestCountry(): Promise<string | null> {
+  return (await headers()).get('x-vercel-ip-country');
+}

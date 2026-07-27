@@ -541,14 +541,29 @@
 
 /* ---------- pricing page ---------- */
 .mkt .p-head { text-align: center; padding: 80px 0 34px; }
-.mkt .cur-toggle {
-  display: inline-flex; align-items: center; gap: 12px; margin-top: 26px; cursor: pointer; user-select: none;
-  border: 1.5px solid var(--line2); background: #fff; border-radius: 999px; padding: 9px 20px; font-weight: 800; font-size: 15px; transition: all 0.2s; box-shadow: var(--sh); font-family: inherit; color: var(--ink);
+/* Currency picker — deliberately loud: visitors must spot it without hunting. */
+.mkt .cur-pick { margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.mkt .cur-pick label {
+  font-size: 11.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim);
 }
-.mkt .cur-toggle:hover { border-color: var(--teal-hi); transform: translateY(-2px); }
-.mkt .cur-toggle .cur { font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: var(--teal); }
-.mkt .cur-toggle small { color: var(--dim); font-weight: 700; }
-.mkt .price { font-size: 2.7rem; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; display: inline-block; }
+.mkt .cur-field { position: relative; display: inline-block; }
+.mkt .cur-field select {
+  appearance: none; -webkit-appearance: none; color-scheme: light;
+  font-family: inherit; font-size: 16px; font-weight: 800; color: var(--ink);
+  background: #fff; border: 2px solid var(--teal); border-radius: 999px;
+  padding: 12px 46px 12px 22px; cursor: pointer; box-shadow: var(--sh);
+  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+}
+.mkt .cur-field select:hover { transform: translateY(-2px); box-shadow: var(--sh-lift, var(--sh)); }
+.mkt .cur-field select:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.22); }
+.mkt .cur-caret { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--teal); font-size: 13px; }
+.mkt .cur-note { margin: 0; font-size: 12.5px; color: var(--dim); max-width: 460px; }
+.mkt .price-row { display: flex; align-items: baseline; gap: 5px; flex-wrap: nowrap; }
+.mkt .approx { font-size: 1.4rem; font-weight: 700; color: var(--dim); }
+.mkt .price { font-size: 2.7rem; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; display: inline-block; white-space: nowrap; }
+.mkt .price.p-sm { font-size: 2.15rem; }
+.mkt .price.p-xs { font-size: 1.75rem; }
+.mkt .price.p-xxs { font-size: 1.4rem; }
 .mkt .price.flip { animation: mkPflip 0.45s ease; }
 @keyframes mkPflip { 0% { transform: rotateX(0); } 50% { transform: rotateX(90deg); opacity: 0.2; } 100% { transform: rotateX(0); } }
 .mkt .per { color: var(--dim); font-size: 13.5px; font-weight: 700; }

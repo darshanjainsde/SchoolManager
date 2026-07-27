@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
-import { getRequestHost } from '@/lib/request';
+import { getRequestCountry, getRequestHost } from '@/lib/request';
 import { fetchMarketingConfig } from '@/lib/public-api';
+import { currencyForCountry, fetchUsdRates } from '@/lib/fx';
 import PricingCards from '@/components/marketing/PricingCards';
 import PricingFaq from '@/components/marketing/PricingFaq';
 import { PRICING_FAQ } from '@/components/marketing/pricing-faq-data';
@@ -36,12 +37,35 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image', title: 'Sckools Pricing', images: ['/og.png'] },
 };
 
+/** Annual Offer node — plans are billed once a year, in USD or INR. */
+function annualOffer(name: string, price: number) {
+  return {
+    '@type': 'Offer',
+    name,
+    price,
+    priceCurrency: 'USD',
+    url: 'https://sckools.com/pricing',
+    priceSpecification: {
+      '@type': 'UnitPriceSpecification',
+      price,
+      priceCurrency: 'USD',
+      unitCode: 'ANN',
+      unitText: 'year',
+    },
+  };
+}
+
 export default async function PricingPage() {
   const host = await getRequestHost();
   // Pricing belongs to the platform site only — a school host must 404.
   if (!isPlatformHost(host)) notFound();
 
-  const config = await fetchMarketingConfig();
+  const [config, rates, country] = await Promise.all([
+    fetchMarketingConfig(),
+    fetchUsdRates(),
+    getRequestCountry(),
+  ]);
+  const initialCurrency = currencyForCountry(country);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -50,9 +74,9 @@ export default async function PricingPage() {
     description: 'School websites, admissions engine, management suite and an inter-school events network.',
     brand: { '@type': 'Brand', name: 'Sckools' },
     offers: [
-      { '@type': 'Offer', name: 'Basic', price: config.prices.basic.usd, priceCurrency: 'USD', url: 'https://sckools.com/pricing' },
-      { '@type': 'Offer', name: 'Standard', price: config.prices.standard.usd, priceCurrency: 'USD', url: 'https://sckools.com/pricing' },
-      { '@type': 'Offer', name: 'Pro', price: config.prices.pro.usd, priceCurrency: 'USD', url: 'https://sckools.com/pricing' },
+      annualOffer('Basic', config.prices.basic.usd),
+      annualOffer('Standard', config.prices.standard.usd),
+      annualOffer('Pro', config.prices.pro.usd),
     ],
   };
 
@@ -70,7 +94,7 @@ export default async function PricingPage() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
-      <PricingCards config={config} />
+      <PricingCards config={config} rates={rates} initialCurrency={initialCurrency} />
       <PricingFaq />
     </>
   );

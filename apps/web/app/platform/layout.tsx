@@ -134,7 +134,9 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col sm:flex-row">
+    // The console is a light-only UI — pin the colour scheme so native controls
+    // (inputs, selects, scrollbars) don't render with the OS's dark UA colours.
+    <div className="flex min-h-screen flex-col sm:flex-row [color-scheme:light]">
       {/* Mobile top bar — hidden at sm and above, where the sidebar takes over. */}
       <div className="flex items-center justify-between bg-slate-900 px-4 py-2.5 sm:hidden">
         <div className="flex items-center gap-2">

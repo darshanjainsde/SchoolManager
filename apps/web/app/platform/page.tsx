@@ -278,6 +278,48 @@ export default function PlatformDashboardPage() {
   );
 }
 
+/**
+ * Console fields are light-only. The explicit background/text colours matter:
+ * without them the browser paints native inputs with its dark UA colours when
+ * the OS is in dark mode, which made these boxes render grey on white.
+ */
+const FIELD =
+  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 [color-scheme:light] focus:border-teal-500 focus:outline-none';
+
+/** Number field with a currency symbol pinned inside, so ₹ vs $ is unmistakable. */
+function MoneyInput({
+  id,
+  symbol,
+  value,
+  onChange,
+}: {
+  id: string;
+  symbol: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div className="relative mt-1">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-500">
+        {symbol}
+      </span>
+      <input
+        id={id}
+        type="number"
+        min={0}
+        step={1}
+        inputMode="numeric"
+        value={value}
+        onChange={onChange}
+        className={`${FIELD} pl-7 font-semibold tabular-nums`}
+      />
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-400">
+        / year
+      </span>
+    </div>
+  );
+}
+
 function MarketingSettings({ initial, onSaved }: { initial: MarketingConfigRow; onSaved: () => void }) {
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const [form, setForm] = useState({ ...initial });
@@ -305,28 +347,33 @@ function MarketingSettings({ initial, onSaved }: { initial: MarketingConfigRow; 
   return (
     <div className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
       <h2 className="text-lg font-bold text-slate-900">
-        Marketing site settings <span className="text-xs font-semibold text-slate-400">· pricing &amp; contact shown on sckools.com, live within a minute</span>
+        Marketing site settings <span className="text-xs font-semibold text-slate-500">· pricing &amp; contact shown on sckools.com, live within a minute</span>
       </h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Prices are <b>per year</b>. Schools in India are billed the ₹ INR figure, everyone else the $ USD figure —
+        other countries see the USD price converted live on sckools.com/pricing.
+      </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {([
-          ['BASIC — $ USD / month', 'priceBasicUsd', '₹ INR / month', 'priceBasicInr'],
-          ['STANDARD — $ USD / month', 'priceStdUsd', '₹ INR / month', 'priceStdInr'],
-          ['PRO — $ USD / month', 'priceProUsd', '₹ INR / month', 'priceProInr'],
-        ] as const).map(([usdLabel, usdKey, inrLabel, inrKey]) => (
+          ['Basic', 'priceBasicUsd', 'priceBasicInr'],
+          ['Standard', 'priceStdUsd', 'priceStdInr'],
+          ['Pro', 'priceProUsd', 'priceProInr'],
+        ] as const).map(([tier, usdKey, inrKey]) => (
           <div key={usdKey} className="rounded-xl border border-slate-200 p-3">
-            <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">{usdLabel}</label>
-            <input type="number" min={0} {...num(usdKey)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
-            <label className="mt-2 block text-[11px] font-bold uppercase tracking-wide text-slate-400">{inrLabel}</label>
-            <input type="number" min={0} {...num(inrKey)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{tier} — per year</div>
+            <label htmlFor={inrKey} className="mt-2 block text-[11px] font-semibold text-slate-400">India (₹ INR)</label>
+            <MoneyInput id={inrKey} symbol="₹" {...num(inrKey)} />
+            <label htmlFor={usdKey} className="mt-3 block text-[11px] font-semibold text-slate-400">Rest of world ($ USD)</label>
+            <MoneyInput id={usdKey} symbol="$" {...num(usdKey)} />
           </div>
         ))}
         <div className="rounded-xl border border-slate-200 p-3">
-          <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">Public contact email</label>
-          <input type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+          <label htmlFor="contactEmail" className="block text-[11px] font-bold uppercase tracking-wide text-slate-500">Public contact email</label>
+          <input id="contactEmail" type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} className={`${FIELD} mt-1`} />
         </div>
         <div className="rounded-xl border border-slate-200 p-3">
-          <label className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">Public contact phone</label>
-          <input value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="+91 ..." className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+          <label htmlFor="contactPhone" className="block text-[11px] font-bold uppercase tracking-wide text-slate-500">Public contact phone</label>
+          <input id="contactPhone" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="+91 ..." className={`${FIELD} mt-1`} />
         </div>
         <div className="flex items-end">
           <Button onClick={() => save.mutate()} disabled={save.isPending}>

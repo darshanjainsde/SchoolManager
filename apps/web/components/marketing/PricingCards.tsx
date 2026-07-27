@@ -1,10 +1,30 @@
 'use client';
 import './marketing.css';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MarketingConfigData } from '@/lib/public-api';
+import {
+  BILLED_CURRENCIES,
+  CURRENCIES,
+  convertFromUsd,
+  formatMoney,
+  isSupportedCurrency,
+  type Rates,
+} from '@/lib/fx';
 import CallbackModal from './CallbackModal';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
+
+const STORE_KEY = 'sckools:currency';
+const BILLED = new Set<string>(BILLED_CURRENCIES);
+const CONVERTED = CURRENCIES.filter((c) => !BILLED.has(c.code));
+
+/** Long amounts (₹1,00,000 · Rp 1,600,000) step down so "/year" stays on the line. */
+function sizeClass(amount: string): string {
+  if (amount.length <= 6) return '';
+  if (amount.length <= 9) return 'p-sm';
+  if (amount.length <= 12) return 'p-xs';
+  return 'p-xxs';
+}
 
 const TIER_META = [
   {
@@ -33,16 +53,62 @@ const TIER_META = [
   },
 ];
 
-export default function PricingCards({ config }: { config: MarketingConfigData }) {
-  const [inr, setInr] = useState(false);
+export default function PricingCards({
+  config,
+  rates,
+  initialCurrency = 'USD',
+}: {
+  config: MarketingConfigData;
+  rates: Rates;
+  initialCurrency?: string;
+}) {
+  // `selected` follows the picker instantly; `currency` (what the cards show)
+  // lags by the flip animation, so the number changes mid-flip.
+  const [selected, setSelected] = useState(initialCurrency);
+  const [currency, setCurrency] = useState(initialCurrency);
   const [modalInterest, setModalInterest] = useState<string | null | false>(false);
   const [flipKey, setFlipKey] = useState(0);
   const priceRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function toggle() {
+  const billed = BILLED.has(currency);
+
+  // A visitor's own pick beats the geo guess on every later visit. Applied
+  // after mount so the server and first client paint still agree.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(STORE_KEY);
+      if (saved && isSupportedCurrency(saved)) {
+        setSelected(saved);
+        setCurrency(saved);
+      }
+    } catch {
+      /* private mode — geo default is fine */
+    }
+  }, []);
+
+  useEffect(() => () => { if (swapTimer.current) clearTimeout(swapTimer.current); }, []);
+
+  function pick(code: string) {
+    if (code === selected) return;
+    setSelected(code);
+    try {
+      window.localStorage.setItem(STORE_KEY, code);
+    } catch {
+      /* nothing to do — the choice just won't persist */
+    }
     // Replay the flip animation, swap the number mid-flip (mirrors the mockup).
     setFlipKey((k) => k + 1);
-    setTimeout(() => setInr((v) => !v), 200);
+    if (swapTimer.current) clearTimeout(swapTimer.current);
+    swapTimer.current = setTimeout(() => setCurrency(code), 200);
+  }
+
+  /** Billed currencies come straight from the owner console; the rest are FX. */
+  function priceFor(tier: 'basic' | 'standard' | 'pro') {
+    const p = config.prices[tier];
+    if (currency === 'INR') return formatMoney(p.inr, 'INR');
+    if (currency === 'USD') return formatMoney(p.usd, 'USD');
+    return formatMoney(convertFromUsd(p.usd, currency, rates), currency);
   }
 
   return (
@@ -64,29 +130,53 @@ export default function PricingCards({ config }: { config: MarketingConfigData }
         <p className="lede" style={{ margin: '14px auto 0' }}>
           Every plan is a full school website with its own domain — pick how far you want the stage to reach.
         </p>
-        <button className="cur-toggle" onClick={toggle} title="Click to switch currency">
-          <span className="cur">{inr ? 'INR ₹' : 'USD $'}</span>
-          <small>click to switch to {inr ? '$ USD' : '₹ INR'}</small>
-        </button>
+        <div className="cur-pick">
+          <label htmlFor="cur-select">Show prices in</label>
+          <div className="cur-field">
+            <select
+              id="cur-select"
+              value={selected}
+              onChange={(e) => pick(e.target.value)}
+              aria-describedby="cur-note"
+            >
+              <optgroup label="Billed currencies">
+                <option value="INR">₹ INR — Indian Rupee</option>
+                <option value="USD">$ USD — US Dollar</option>
+              </optgroup>
+              <optgroup label="Approximate, converted from USD">
+                {CONVERTED.map((c) => (
+                  <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+                ))}
+              </optgroup>
+            </select>
+            <span className="cur-caret" aria-hidden="true">▾</span>
+          </div>
+          <p className="cur-note" id="cur-note">
+            {billed
+              ? 'Billed once a year — in ₹ INR for schools in India, $ USD everywhere else.'
+              : `Approximate — converted from USD at today's exchange rate. You are billed in $ USD.`}
+          </p>
+        </div>
       </div>
 
       <div className="wrap">
         <div className="grid ladder" style={{ alignItems: 'stretch', paddingBottom: 40 }}>
           {TIER_META.map((t, i) => {
-            const p = config.prices[t.key];
+            const amount = priceFor(t.key);
             return (
               <div className={`tier ${t.cls}`} key={t.tk}>
                 <span className="tk">{t.tk}</span>
                 <h3>{t.h}</h3>
-                <div>
+                <div className="price-row">
+                  {!billed && <span className="approx" aria-hidden="true">≈</span>}
                   <span
-                    className={`price ${flipKey ? 'flip' : ''}`}
+                    className={`price ${sizeClass(amount)} ${flipKey ? 'flip' : ''}`}
                     key={`${t.key}-${flipKey}`}
                     ref={(el) => { priceRefs.current[i] = el; }}
                   >
-                    {inr ? `₹${p.inr.toLocaleString('en-IN')}` : `$${p.usd}`}
+                    {amount}
                   </span>
-                  <span className="per"> /month</span>
+                  <span className="per">/year</span>
                 </div>
                 {t.inherit && <span className="inherit" style={{ marginTop: 14 }}>↑ {t.inherit}</span>}
                 <div className="tfeats">
