@@ -240,11 +240,59 @@ function useMarketingMotion(root: React.RefObject<HTMLDivElement | null>) {
   }, [root]);
 }
 
+/** Marketing top-nav links — shared by the desktop row and the mobile menu so
+ * the two can never drift out of sync. Route paths render as <Link> (client
+ * nav), in-page hashes as <a>. */
+const MNAV_LINKS: { href: string; label: string }[] = [
+  { href: '#feats', label: 'Features' },
+  { href: '#events', label: 'Events Network' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '#switch', label: 'Why switch' },
+  { href: '/blog', label: 'Blog' },
+];
+
+function MnavLink({ href, label, className }: { href: string; label: string; className: string }) {
+  return href.startsWith('/') ? (
+    <Link className={className} href={href}>{label}</Link>
+  ) : (
+    <a className={className} href={href}>{label}</a>
+  );
+}
+
 export default function MarketingSite({ config }: { config: MarketingConfigData }) {
   const root = useRef<HTMLDivElement>(null);
   const [modalInterest, setModalInterest] = useState<string | null | false>(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const burgerRef = useRef<HTMLButtonElement>(null);
+  const wasMenuOpen = useRef(false);
   useMarketingMotion(root);
   const openModal = (interest: string | null = null) => setModalInterest(interest);
+
+  // Mobile nav menu: lock body scroll, close on Escape, and move focus into the
+  // panel on open / back to the trigger on close. Mirrors the school SiteNav.
+  // NOTE: no open/close class goes on `.mnav` itself — the scroll handler toggles
+  // `.scrolled` on it imperatively, and a React-controlled className would wipe
+  // that on every render.
+  useEffect(() => {
+    if (menuOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') setMenuOpen(false);
+      };
+      document.addEventListener('keydown', onKey);
+      root.current?.querySelector<HTMLElement>('.mnav-menu a, .mnav-menu button')?.focus();
+      wasMenuOpen.current = true;
+      return () => {
+        document.body.style.overflow = prevOverflow;
+        document.removeEventListener('keydown', onKey);
+      };
+    }
+    if (wasMenuOpen.current) {
+      burgerRef.current?.focus();
+      wasMenuOpen.current = false;
+    }
+  }, [menuOpen]);
 
   return (
     <div className="mkt" ref={root}>
@@ -265,14 +313,51 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
       <nav className="mnav" aria-label="Main">
         <div className="mnav-in">
           <span className="logo"><SckoolsLogo size={32} /></span>
-          <a className="lnk" href="#feats">Features</a>
-          <a className="lnk" href="#events">Events Network</a>
-          <a className="lnk" href="/pricing">Pricing</a>
-          <a className="lnk" href="#switch">Why switch</a>
-          <Link className="lnk" href="/blog">Blog</Link>
-          <button className="btn btn-hot btn-sm" onClick={() => openModal()}>Request a callback</button>
+          {MNAV_LINKS.map((l) => (
+            <MnavLink key={l.href} href={l.href} label={l.label} className="lnk" />
+          ))}
+          <button className="btn btn-hot btn-sm mnav-cta" onClick={() => openModal()}>Request a callback</button>
+          <button
+            ref={burgerRef}
+            type="button"
+            className="mnav-burger"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            aria-controls="mnav-mobile"
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
+              {menuOpen ? (
+                <>
+                  <path d="M6 6l12 12" />
+                  <path d="M18 6l-12 12" />
+                </>
+              ) : (
+                <>
+                  <path d="M4 7h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 17h16" />
+                </>
+              )}
+            </svg>
+          </button>
         </div>
+        {menuOpen && (
+          <div
+            id="mnav-mobile"
+            className="mnav-menu"
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest('a, button')) setMenuOpen(false);
+            }}
+          >
+            {MNAV_LINKS.map((l) => (
+              <MnavLink key={l.href} href={l.href} label={l.label} className="mnav-menu-lnk" />
+            ))}
+            <button className="btn btn-hot mnav-menu-cta" onClick={() => openModal()}>Request a callback</button>
+          </div>
+        )}
       </nav>
+      {menuOpen && <div className="mnav-scrim" aria-hidden onClick={() => setMenuOpen(false)} />}
 
       <header className="hero">
         <div className="dots" aria-hidden />
