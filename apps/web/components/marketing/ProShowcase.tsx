@@ -155,19 +155,34 @@ function Scene({ index }: { index: number }) {
   );
 }
 
+/** Deterministic 0..1 generator (mulberry32) — same sequence on server and client. */
+function seeded(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export default function ProShowcase({ onCallback }: { onCallback: () => void }) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const reduced = useRef(false);
 
-  const stars = useMemo(
-    () => Array.from({ length: 26 }, () => ({
-      left: `${(Math.random() * 100).toFixed(1)}%`,
-      top: `${(Math.random() * 100).toFixed(1)}%`,
-      delay: `${(Math.random() * 3.5).toFixed(2)}s`,
-    })),
-    [],
-  );
+  // Seeded, NOT Math.random(): this band is server-rendered, so random values
+  // would differ between the SSR html and the hydration render — React would
+  // treat that as a mismatch and throw the server markup away.
+  const stars = useMemo(() => {
+    const rand = seeded(0x5c0015);
+    return Array.from({ length: 26 }, () => ({
+      left: `${(rand() * 100).toFixed(1)}%`,
+      top: `${(rand() * 100).toFixed(1)}%`,
+      delay: `${(rand() * 3.5).toFixed(2)}s`,
+    }));
+  }, []);
 
   useEffect(() => {
     reduced.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

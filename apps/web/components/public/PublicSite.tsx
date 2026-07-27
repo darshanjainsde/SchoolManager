@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
 import HeroSection from './sections/HeroSection';
@@ -50,8 +50,6 @@ const SUBPAGES: Record<string, { eyebrow: string; title: string; blurb: string }
     blurb: 'Reach the front office directly or leave your details — admissions responds within a working day.',
   },
 };
-
-const CLASS_EMOJIS = ['🎓', '🧸', '📚', '🔬', '🎨', '🏆', '🌟', '💡', '🎯', '🚀'];
 
 const FONT_MAP: Record<string, string> = {
   INTER: "'Inter', sans-serif",

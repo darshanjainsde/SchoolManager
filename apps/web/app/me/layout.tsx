@@ -7,12 +7,14 @@ import { LayoutDashboard, ClipboardCheck, FileText, Receipt, User, LogOut } from
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useApi } from '@/lib/use-api';
+import { useHydrated } from '@/lib/use-hydrated';
 import { useHost } from '@/components/use-host';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
 export default function MeLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const hydrated = useHydrated();
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
@@ -26,9 +28,13 @@ export default function MeLayout({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (!refreshToken || audience !== 'school') router.replace('/login');
-  }, [refreshToken, audience, router]);
+    if (hydrated && (!refreshToken || audience !== 'school')) router.replace('/login');
+  }, [hydrated, refreshToken, audience, router]);
 
+  // The refresh token is read from localStorage, which the server cannot see —
+  // render nothing until hydration so the first client paint matches the SSR
+  // html. Same gate as /app, /portal and /platform.
+  if (!hydrated) return null;
   if (!refreshToken) return null;
 
   const items = [

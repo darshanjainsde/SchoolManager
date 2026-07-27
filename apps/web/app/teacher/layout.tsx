@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useApi } from '@/lib/use-api';
+import { useHydrated } from '@/lib/use-hydrated';
 import { useHost } from '@/components/use-host';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -75,6 +76,7 @@ function TeacherNavLink({
 export default function TeacherLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const hydrated = useHydrated();
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
@@ -90,9 +92,9 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (!refreshToken || audience !== 'school') router.replace('/login');
+    if (hydrated && (!refreshToken || audience !== 'school')) router.replace('/login');
     if (me.data && me.data.role !== 'TEACHER' && me.data.role !== 'SCHOOL_ADMIN') router.replace('/app');
-  }, [refreshToken, audience, me.data, router]);
+  }, [hydrated, refreshToken, audience, me.data, router]);
 
   // Close the mobile drawer whenever navigation happens.
   useEffect(() => {
@@ -124,6 +126,10 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
     if (drawerOpen) drawerPanelRef.current?.focus();
   }, [drawerOpen]);
 
+  // The refresh token is read from localStorage, which the server cannot see —
+  // render nothing until hydration so the first client paint matches the SSR
+  // html. Same gate as /app, /portal and /platform.
+  if (!hydrated) return null;
   if (!refreshToken) return null;
 
   const isActive = (href: string) => pathname === href || (href !== '/teacher' && pathname.startsWith(href));
