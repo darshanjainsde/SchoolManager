@@ -20,23 +20,23 @@ export function AuthScaffold({
   children: ReactNode;
 }) {
   const { width, height } = Dimensions.get('window');
-  const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(28)).current;
   const logoScale = useRef(new Animated.Value(0.82)).current;
   const logoFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Logo fades + springs in (non-interactive, safe to fade). The form block
+    // only SLIDES up (opacity stays 1) so its inputs/button are always visible
+    // and tappable — a fade-from-0 there can stall on slow devices and leave
+    // the primary button briefly untappable.
     Animated.sequence([
       Animated.parallel([
         Animated.timing(logoFade, { toValue: 1, duration: 420, useNativeDriver: true }),
         Animated.spring(logoScale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
       ]),
-      Animated.parallel([
-        Animated.timing(fade, { toValue: 1, duration: 380, useNativeDriver: true }),
-        Animated.spring(slide, { toValue: 0, friction: 9, tension: 70, useNativeDriver: true }),
-      ]),
+      Animated.spring(slide, { toValue: 0, friction: 9, tension: 70, useNativeDriver: true }),
     ]).start();
-  }, [fade, slide, logoScale, logoFade]);
+  }, [slide, logoScale, logoFade]);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#312E81' }}>
@@ -64,7 +64,7 @@ export function AuthScaffold({
           <SckoolsLogo size={54} theme="dark" />
         </Animated.View>
 
-        <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>
+        <Animated.View style={{ transform: [{ translateY: slide }] }}>
           <Text
             style={{
               color: '#FFFFFF',
