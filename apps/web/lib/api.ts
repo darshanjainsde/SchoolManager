@@ -32,6 +32,29 @@ export class ApiError extends Error {
 
 const DEFAULT_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
+/**
+ * Endpoints that *establish* a session. A 401 from one of these means the
+ * credentials were rejected — there is nothing to renew, and attempting a
+ * refresh would replace a precise error ("Invalid credentials") with a
+ * confusing one.
+ */
+const AUTH_ENTRY_PATHS = [
+  '/auth/login',
+  '/auth/refresh',
+  '/auth/impersonate',
+  '/auth/accept-invite',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/owner/auth/login',
+  '/owner/auth/gate',
+  '/owner/auth/refresh',
+];
+
+function isAuthEntryPath(path: string): boolean {
+  const clean = path.split('?')[0];
+  return AUTH_ENTRY_PATHS.some((p) => clean === p || clean.startsWith(`${p}/`));
+}
+
 export class ApiClient {
   private opts: ApiClientOptions;
   private refreshing: Promise<void> | null = null;
@@ -66,8 +89,16 @@ export class ApiClient {
     const url = baseUrl + path;
     const res = await fetch(url, { ...init, headers, credentials: 'include' });
 
-    if (res.status === 401 && this.opts.getRefreshToken && this.opts.setTokens && !path.includes('/refresh')) {
-      await this.refresh();
+    if (res.status === 401 && this.opts.setTokens && !isAuthEntryPath(path)) {
+      try {
+        await this.refresh();
+      } catch {
+        // There was no session to renew. Surface what the original call said
+        // ("Invalid credentials", "Session expired", …) rather than the
+        // internal refresh error — otherwise a mistyped password reports
+        // "Refresh failed", which is both wrong and unactionable.
+        return parse<T>(res);
+      }
       const retryHeaders = new Headers(init.headers);
       if (this.opts.hostHeader) {
         retryHeaders.set('X-Forwarded-Host', this.opts.hostHeader);
