@@ -35,7 +35,13 @@ export default async function globalSetup(): Promise<void> {
   try {
     const out = execSync('pnpm exec prisma migrate deploy', {
       cwd: require('node:path').join(repoRoot, 'packages/db'),
-      env: { ...process.env, DATABASE_URL: dbUrl },
+      // DIRECT_URL as well as DATABASE_URL: schema.prisma declares
+      // `directUrl = env("DIRECT_URL")` for the pooled production setup, and
+      // the Prisma CLI validates every declared env var before it will run —
+      // so omitting it fails the whole suite in globalSetup with P1012, before
+      // a single test executes. Against the local test database there is no
+      // pooler, so the direct URL is the same URL.
+      env: { ...process.env, DATABASE_URL: dbUrl, DIRECT_URL: dbUrl },
       encoding: 'utf8',
     });
     if (process.env.JEST_VERBOSE) console.log(out);
@@ -48,6 +54,7 @@ export default async function globalSetup(): Promise<void> {
 
   // 3) Wire env vars so tests use the test DB across all roles.
   process.env.DATABASE_URL = dbUrl;
+  process.env.DIRECT_URL = dbUrl;
   process.env.DISABLE_THROTTLER = 'true';
   process.env.DATABASE_URL_APP = dbUrl.replace(
     'postgresql://skoolos:skoolos',

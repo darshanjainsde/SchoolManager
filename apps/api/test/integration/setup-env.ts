@@ -4,6 +4,11 @@
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgresql://skoolos:skoolos@localhost:5432/skoolos_test?schema=public';
+// schema.prisma declares `directUrl = env("DIRECT_URL")` for the pooled
+// production setup. There is no pooler in front of the local test database,
+// so the direct URL is the same URL. Set here as well as in globalSetup
+// because workers run in their own processes and inherit nothing from it.
+process.env.DIRECT_URL = process.env.DATABASE_URL;
 process.env.DATABASE_URL_APP =
   process.env.DATABASE_URL.replace(
     'postgresql://skoolos:skoolos',

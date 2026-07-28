@@ -23,4 +23,11 @@ module.exports = {
   globals: { 'ts-jest': { isolatedModules: true } },
   // Run tests serially so they don't race on the shared database.
   maxWorkers: 1,
+  // Suites that boot the full AppModule leave a handle open even after
+  // `app.close()` and `disconnectAll()`, so Jest never exits on its own: the
+  // run hangs until the caller's timeout kills it, which reads as a failure
+  // even though every test passed seconds earlier. Results are already
+  // reported by that point, so forcing the exit loses no signal.
+  // Tech debt: find and close the handle, then drop this.
+  forceExit: true,
 };
