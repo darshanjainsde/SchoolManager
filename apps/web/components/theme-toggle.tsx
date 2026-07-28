@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { THEME_SCRIPT } from '@/lib/theme-script';
 
 type Choice = 'light' | 'dark' | 'system';
 const KEY = 'sk-theme';
@@ -61,6 +62,7 @@ export function ThemeToggle() {
  * white flash. Rendered in the app shell; runs ahead of hydration.
  */
 export function ThemeScript() {
-  const js = `(function(){try{var c=localStorage.getItem('${KEY}');if(c==='dark'||c==='light'){document.documentElement.setAttribute('data-theme',c);}}catch(e){}})();`;
-  return <script dangerouslySetInnerHTML={{ __html: js }} />;
+  // Source lives in lib/theme-script so the CSP hash is derived from the same
+  // string the browser executes — see the warning there before editing it.
+  return <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />;
 }
