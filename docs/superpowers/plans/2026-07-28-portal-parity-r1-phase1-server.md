@@ -29,6 +29,7 @@
 | `apps/api/src/modules/management/classes.controller.ts` | Gains `RolesGuard` + per-handler `@Roles` |
 | `apps/api/src/modules/management/timetable.controller.ts` | Gains `RolesGuard` + per-handler `@Roles`, and the two teacher read endpoints |
 | `apps/api/src/modules/management/attendance.service.ts` | `myClassSections` gains substitution cover; `save` gains ownership + past-day lock enforcement |
+| `apps/api/src/modules/management/internal/class-access.ts` | **New.** The single definition of "may this teacher act on this class on this date", used by attendance, notes and register-change |
 | `apps/api/src/modules/management/teacher-day.service.ts` | **New.** Builds a teacher's day: periods + slots + substitutions + register status in one call |
 | `apps/api/src/modules/management/class-notes.service.ts` | **New.** Notes and to-dos for a class on a date |
 | `apps/api/src/modules/management/class-notes.controller.ts` | **New.** `manage/class-notes`, `manage/class-todos` |
@@ -531,45 +532,136 @@ describe('istTodayISO', () => {
 });
 ```
 
-Add the ownership assertion as a private method on the service:
+Create the shared access rule at `apps/api/src/modules/management/internal/class-access.ts`. Three services need this exact question answered — attendance (Task 2), class notes (Task 5) and register changes (Task 6) — so it is defined once. Three copies of an authorization predicate is precisely the drift item P7 exists to prevent, and the copy that gets forgotten is a security hole rather than a cosmetic difference:
 
 ```ts
-  /**
-   * Throws unless `teacherId` may write this section's register on `date`:
-   * they are its class teacher, they hold a timetable slot in it, or they
-   * are the named substitute for one of its periods that day.
-   */
-  private async assertCanMark(
-    tx: {
-      classSection: { findFirst(args: unknown): Promise<{ id: string } | null> };
-      substitution: { findFirst(args: unknown): Promise<{ id: string } | null> };
-    },
-    teacherId: string,
-    classSectionId: string,
-    date: string,
-  ): Promise<void> {
-    const owned = await tx.classSection.findFirst({
-      where: {
-        id: classSectionId,
-        OR: [{ classTeacherId: teacherId }, { timetableSlots: { some: { teacherId } } }],
-      },
-      select: { id: true },
-    });
-    if (owned) return;
+import { ApiError } from '../../../common/errors/api-error';
 
-    const covering = await tx.substitution.findFirst({
-      where: { classSectionId, date: new Date(date), substituteTeacherId: teacherId },
-      select: { id: true },
-    });
-    if (covering) return;
+/** The slice of a tenant transaction this rule needs. Structural, so callers pass their `tx` unchanged. */
+export interface ClassAccessTx {
+  teacher: { findFirst(args: unknown): Promise<{ id: string } | null> };
+  classSection: { findFirst(args: unknown): Promise<{ id: string } | null> };
+  substitution: { findFirst(args: unknown): Promise<{ id: string } | null> };
+}
 
-    throw new ApiError(
-      'FORBIDDEN',
-      'You can only take attendance for your own classes.',
-      403,
-      'classSectionId',
-    );
+/**
+ * Resolves `userId` to a Teacher and asserts they may act on `classSectionId`
+ * on `date`. "May act" means one of three things, and nothing else:
+ *
+ *   1. they are the section's class teacher,
+ *   2. they hold at least one timetable slot in it, or
+ *   3. they are the named substitute for one of its periods on that date.
+ *
+ * Case 3 is a ONE-DAY grant: a substitution never widens access to any other
+ * date, which is why `date` is part of the question rather than ambient.
+ *
+ * Returns the caller's `Teacher.id` so callers can attribute the write.
+ * Throws `ApiError(..., 403)` otherwise — never returns a boolean, so a
+ * caller cannot forget to branch on it.
+ */
+export async function requireClassAccess(
+  tx: ClassAccessTx,
+  userId: string,
+  classSectionId: string,
+  date: string,
+  action = 'take attendance for',
+): Promise<string> {
+  const teacher = await tx.teacher.findFirst({ where: { userId } });
+  if (!teacher) {
+    throw new ApiError('FORBIDDEN', `Only a teacher can ${action} a class.`, 403);
   }
+
+  const owned = await tx.classSection.findFirst({
+    where: {
+      id: classSectionId,
+      OR: [
+        { classTeacherId: teacher.id },
+        { timetableSlots: { some: { teacherId: teacher.id } } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (owned) return teacher.id;
+
+  const covering = await tx.substitution.findFirst({
+    where: { classSectionId, date: new Date(date), substituteTeacherId: teacher.id },
+    select: { id: true },
+  });
+  if (covering) return teacher.id;
+
+  throw new ApiError(
+    'FORBIDDEN',
+    `You can only ${action} your own classes.`,
+    403,
+    'classSectionId',
+  );
+}
+```
+
+Give it its own spec at `apps/api/src/modules/management/internal/class-access.spec.ts`:
+
+```ts
+import { requireClassAccess } from './class-access';
+
+const tx = () => ({
+  teacher: { findFirst: jest.fn() },
+  classSection: { findFirst: jest.fn() },
+  substitution: { findFirst: jest.fn() },
+});
+
+const DATE = '2026-08-03';
+
+describe('requireClassAccess', () => {
+  it('returns the teacher id when they are the class teacher or hold a slot', async () => {
+    const t = tx();
+    t.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+    t.classSection.findFirst.mockResolvedValue({ id: 'sec-1' });
+
+    await expect(requireClassAccess(t, 'user-1', 'sec-1', DATE)).resolves.toBe('teacher-1');
+    expect(t.substitution.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('returns the teacher id when they are the substitute on that date', async () => {
+    const t = tx();
+    t.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+    t.classSection.findFirst.mockResolvedValue(null);
+    t.substitution.findFirst.mockResolvedValue({ id: 'sub-1' });
+
+    await expect(requireClassAccess(t, 'user-1', 'sec-9', DATE)).resolves.toBe('teacher-1');
+  });
+
+  it('scopes the substitution grant to the exact date asked about', async () => {
+    const t = tx();
+    t.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+    t.classSection.findFirst.mockResolvedValue(null);
+    t.substitution.findFirst.mockResolvedValue(null);
+
+    await expect(requireClassAccess(t, 'user-1', 'sec-9', DATE)).rejects.toMatchObject({ status: 403 });
+    expect(t.substitution.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ date: new Date(DATE), substituteTeacherId: 'teacher-1' }),
+      }),
+    );
+  });
+
+  it('403s a caller with no Teacher row', async () => {
+    const t = tx();
+    t.teacher.findFirst.mockResolvedValue(null);
+
+    await expect(requireClassAccess(t, 'user-admin', 'sec-1', DATE)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('names the action in the message so each caller reads naturally', async () => {
+    const t = tx();
+    t.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+    t.classSection.findFirst.mockResolvedValue(null);
+    t.substitution.findFirst.mockResolvedValue(null);
+
+    await expect(
+      requireClassAccess(t, 'user-1', 'sec-9', DATE, 'add notes to'),
+    ).rejects.toMatchObject({ message: 'You can only add notes to your own classes.' });
+  });
+});
 ```
 
 Change `save`'s signature to accept the caller's role, and call the assertion right after the section lookup:
@@ -592,15 +684,14 @@ and inside the transaction, immediately after the existing `if (!section) { … 
       // server-side twin of the client only showing their own classes —
       // without it, knowing a classSectionId was enough to write its register.
       if (callerRole !== 'SCHOOL_ADMIN') {
-        if (!teacher) {
-          throw new ApiError(
-            'FORBIDDEN',
-            'Only a teacher can take attendance.',
-            403,
-          );
-        }
-        await this.assertCanMark(tx, teacher.id, dto.classSectionId, dto.date);
+        await requireClassAccess(tx, callerUserId, dto.classSectionId, dto.date);
       }
+```
+
+with the import at the top of `attendance.service.ts`:
+
+```ts
+import { requireClassAccess } from './internal/class-access';
 ```
 
 Delete the later `const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });` line (now hoisted above) and keep `const markedById = teacher?.id ?? callerUserId;` where it is.
@@ -1524,6 +1615,7 @@ Create `apps/api/src/modules/management/class-notes.service.ts`:
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { requireClassAccess } from './internal/class-access';
 import type { CreateClassNoteDto, CreateClassTodoDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -1556,44 +1648,9 @@ export class ClassNotesService {
     return new Date(date);
   }
 
-  /**
-   * Resolves the caller to a Teacher and checks they hold this class on this
-   * date — same rule as taking its register, including substitution cover.
-   */
-  private async requireTeacherFor(
-    tx: Tx,
-    userId: string,
-    classSectionId: string,
-    date: string,
-  ): Promise<string> {
-    const teacher = await tx.teacher.findFirst({ where: { userId } });
-    if (!teacher) {
-      throw new ApiError('FORBIDDEN', 'Only a teacher can write class notes.', 403);
-    }
-    const owned = await tx.classSection.findFirst({
-      where: {
-        id: classSectionId,
-        OR: [
-          { classTeacherId: teacher.id },
-          { timetableSlots: { some: { teacherId: teacher.id } } },
-        ],
-      },
-      select: { id: true },
-    });
-    if (owned) return teacher.id;
-
-    const covering = await tx.substitution.findFirst({
-      where: { classSectionId, date: new Date(date), substituteTeacherId: teacher.id },
-      select: { id: true },
-    });
-    if (covering) return teacher.id;
-
-    throw new ApiError(
-      'FORBIDDEN',
-      'You can only add notes to your own classes.',
-      403,
-      'classSectionId',
-    );
+  /** Same rule as taking the register, including substitution cover — see internal/class-access.ts. */
+  private requireTeacherFor(tx: Tx, userId: string, classSectionId: string, date: string) {
+    return requireClassAccess(tx, userId, classSectionId, date, 'add notes to');
   }
 
   async list(
@@ -2088,6 +2145,7 @@ import { withTenant } from '@skoolos/db';
 import type { RegisterChangeRow } from '@skoolos/types';
 import { AuditService } from '../../common/audit/audit.service';
 import { ApiError } from '../../common/errors/api-error';
+import { requireClassAccess } from './internal/class-access';
 import type { CreateRegisterChangeDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -2110,46 +2168,9 @@ function endOfIstDay(now: Date = new Date()): Date {
 export class RegisterChangeService {
   constructor(private readonly audit: AuditService) {}
 
-  /**
-   * Same ownership rule as taking the register: class teacher, timetable slot
-   * holder, or the named substitute for that date. Duplicated from
-   * ClassNotesService rather than shared through a base class — eight lines of
-   * explicit policy read better at each call site than an inherited hook.
-   */
-  private async requireTeacherFor(
-    tx: Tx,
-    userId: string,
-    classSectionId: string,
-    date: string,
-  ): Promise<string> {
-    const teacher = await tx.teacher.findFirst({ where: { userId } });
-    if (!teacher) {
-      throw new ApiError('FORBIDDEN', 'Only a teacher can request a register change.', 403);
-    }
-    const owned = await tx.classSection.findFirst({
-      where: {
-        id: classSectionId,
-        OR: [
-          { classTeacherId: teacher.id },
-          { timetableSlots: { some: { teacherId: teacher.id } } },
-        ],
-      },
-      select: { id: true },
-    });
-    if (owned) return teacher.id;
-
-    const covering = await tx.substitution.findFirst({
-      where: { classSectionId, date: new Date(date), substituteTeacherId: teacher.id },
-      select: { id: true },
-    });
-    if (covering) return teacher.id;
-
-    throw new ApiError(
-      'FORBIDDEN',
-      'You can only request changes to your own classes.',
-      403,
-      'classSectionId',
-    );
+  /** Same rule as taking the register, including substitution cover — see internal/class-access.ts. */
+  private requireTeacherFor(tx: Tx, userId: string, classSectionId: string, date: string) {
+    return requireClassAccess(tx, userId, classSectionId, date, 'request changes to');
   }
 
   private static toRow(r: {
