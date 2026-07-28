@@ -4,6 +4,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
+import { useApi } from '@/lib/use-api';
+import { useSessionProbe } from '@/lib/use-session-probe';
+import { OWNER_HOST } from '@/lib/hosts';
 import { LogOut, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
@@ -77,7 +80,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const hydrated = useHydrated();
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  const status = useAuthStore((s) => s.status);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -85,11 +88,16 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
 
   const isLogin = pathname === '/platform/login';
 
+  // The refresh token is an HttpOnly cookie now, so "signed in?" is answered
+  // by asking the API once — not by reading storage.
+  const probeApi = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
+  useSessionProbe(probeApi, 'platform', !isLogin);
+
   useEffect(() => {
-    if (hydrated && !isLogin && (!refreshToken || audience !== 'platform')) {
+    if (hydrated && !isLogin && (status === 'anon' || (status === 'authed' && audience !== 'platform'))) {
       router.replace('/platform/login');
     }
-  }, [hydrated, isLogin, refreshToken, audience, router]);
+  }, [hydrated, isLogin, status, audience, router]);
 
   // Close the mobile drawer whenever navigation happens.
   useEffect(() => {
@@ -125,7 +133,9 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   if (isLogin) return <>{children}</>;
   // Until hydrated, render nothing so the first client paint matches the server.
   if (!hydrated) return null;
-  if (!refreshToken) return null;
+  // `unknown` = the probe is still in flight; rendering either the console or
+  // a redirect here would flash the wrong thing.
+  if (status !== 'authed') return null;
 
   function handleLogout() {
     // Client-side only logout — no server endpoint exists yet

@@ -36,13 +36,15 @@ const TIER_LABEL: Record<SchoolRow['tier'], string> = {
 };
 
 export default function SchoolsListPage() {
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  // Session state, not the token itself — the refresh token is an HttpOnly
+  // cookie the client cannot read.
+  const signedIn = useAuthStore((s) => s.status) === 'authed';
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['owner-schools'],
     queryFn: () => api.get<SchoolRow[]>('/owner/schools'),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   const rows = data ?? [];

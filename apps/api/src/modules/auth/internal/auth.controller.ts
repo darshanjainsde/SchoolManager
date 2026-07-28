@@ -1,4 +1,6 @@
-import { Body, Controller, ForbiddenException, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { loadEnv } from '@skoolos/config';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -10,10 +12,18 @@ import { Public } from '../../../common/auth/public.decorator';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
+import {
+  SCHOOL_REFRESH_COOKIE,
+  clearRefreshCookie,
+  resolveRefreshToken,
+  setRefreshCookie,
+} from './refresh-cookie';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly env = loadEnv();
+
   constructor(
     private readonly auth: AuthService,
     private readonly passwordReset: PasswordResetService,
@@ -24,16 +34,30 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
-  async login(@Body() dto: LoginDto) {
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const ctx = this.tenantCtx.requireTenant();
-    return this.auth.login(ctx.schoolId, dto.identifier ?? dto.email ?? '', dto.password);
+    const tokens = await this.auth.login(ctx.schoolId, dto.identifier ?? dto.email ?? '', dto.password);
+    setRefreshCookie(res, SCHOOL_REFRESH_COOKIE, tokens.refreshToken, this.env);
+    // refreshToken stays in the body for now: clients released before the
+    // cookie existed still read it from here. Drop it once they are gone.
+    return tokens;
   }
 
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
-  async refresh(@Body() dto: RefreshDto) {
-    return this.auth.refresh(dto.refreshToken);
+  async refresh(
+    @Req() req: Request,
+    @Body() dto: RefreshDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token = resolveRefreshToken(req, SCHOOL_REFRESH_COOKIE, dto?.refreshToken);
+    if (!token) throw new ForbiddenException('No refresh token');
+    const tokens = await this.auth.refresh(token);
+    // Rotation: the new token replaces the cookie. A session that arrived with
+    // a body token leaves with a cookie — that is the migration path.
+    setRefreshCookie(res, SCHOOL_REFRESH_COOKIE, tokens.refreshToken, this.env);
+    return tokens;
   }
 
   @Public()
@@ -60,16 +84,25 @@ export class AuthController {
   @Post('impersonate')
   async impersonate(@Body() dto: ImpersonateDto) {
     const ctx = this.tenantCtx.requireTenant();
+    // Impersonation issues an access token only (no refresh), so there is no
+    // cookie to set — the session ends when the access token expires.
     return this.auth.impersonate(ctx.schoolId, dto.token);
   }
 
   @ApiBearerAuth()
   @UseGuards(SchoolJwtGuard)
   @Post('logout')
-  async logout(@Body() dto: RefreshDto, @CurrentUser() user: SchoolJwtPayload) {
+  async logout(
+    @Req() req: Request,
+    @Body() dto: RefreshDto,
+    @CurrentUser() user: SchoolJwtPayload,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const ctx = this.tenantCtx.requireTenant();
     if (user.schoolId !== ctx.schoolId) throw new ForbiddenException();
-    await this.auth.logout(ctx.schoolId, dto.refreshToken);
+    const token = resolveRefreshToken(req, SCHOOL_REFRESH_COOKIE, dto?.refreshToken);
+    if (token) await this.auth.logout(ctx.schoolId, token);
+    clearRefreshCookie(res, SCHOOL_REFRESH_COOKIE, this.env);
     return { ok: true };
   }
 

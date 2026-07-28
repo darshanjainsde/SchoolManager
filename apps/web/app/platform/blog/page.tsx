@@ -46,7 +46,9 @@ function formatDate(iso: string | null): string {
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function BlogQueuePage() {
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  // Session state, not the token itself — the refresh token is an HttpOnly
+  // cookie the client cannot read.
+  const signedIn = useAuthStore((s) => s.status) === 'authed';
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const qc = useQueryClient();
 
@@ -56,7 +58,7 @@ export default function BlogQueuePage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['owner-blog-pending'],
     queryFn: () => api.get<PendingPost[]>('/owner/blog/pending'),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   const approveMutation = useMutation({

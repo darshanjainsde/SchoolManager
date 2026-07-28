@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from '@/lib/auth-store';
 import { useApi } from '@/lib/use-api';
 import { useHydrated } from '@/lib/use-hydrated';
+import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -77,24 +78,25 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const hydrated = useHydrated();
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  const status = useAuthStore((s) => s.status);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
+  useSessionProbe(api, 'school', !!host);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
 
   const me = useQuery({
     queryKey: ['me'],
-    enabled: !!refreshToken && audience === 'school' && !!host,
+    enabled: status === 'authed' && audience === 'school' && !!host,
     queryFn: () => api.get<{ role: string }>('/auth/me'),
   });
 
   useEffect(() => {
-    if (hydrated && (!refreshToken || audience !== 'school')) router.replace('/login');
+    if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) router.replace('/login');
     if (me.data && me.data.role !== 'TEACHER' && me.data.role !== 'SCHOOL_ADMIN') router.replace('/app');
-  }, [hydrated, refreshToken, audience, me.data, router]);
+  }, [hydrated, status, audience, me.data, router]);
 
   // Close the mobile drawer whenever navigation happens.
   useEffect(() => {
@@ -126,17 +128,17 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
     if (drawerOpen) drawerPanelRef.current?.focus();
   }, [drawerOpen]);
 
-  // The refresh token is read from localStorage, which the server cannot see —
-  // render nothing until hydration so the first client paint matches the SSR
-  // html. Same gate as /app, /portal and /platform.
   if (!hydrated) return null;
-  if (!refreshToken) return null;
+  // `unknown` = the session probe is still in flight.
+  if (status !== 'authed') return null;
 
   const isActive = (href: string) => pathname === href || (href !== '/teacher' && pathname.startsWith(href));
 
   async function handleLogout() {
+    // No token needed: the API revokes whatever the cookie carries and clears
+    // it. The body form is kept for pre-cookie sessions.
     const rt = useAuthStore.getState().refreshToken;
-    if (rt) await api.post('/auth/logout', { refreshToken: rt }).catch(() => undefined);
+    await api.post('/auth/logout', rt ? { refreshToken: rt } : {}).catch(() => undefined);
     clear();
     router.replace('/login');
   }

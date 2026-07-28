@@ -2,14 +2,24 @@
 import { create } from 'zustand';
 
 /**
- * In-memory auth state for the owner portal AND tenant pages. The refresh
- * token is stored in localStorage (HttpOnly cookies would be better but
- * require server-side write — feasible only after the Vercel retarget that
- * the implementation plan calls out). Access token is held in memory only;
- * a refresh on every cold load pulls a fresh access token.
+ * In-memory auth state for the owner portal AND tenant pages.
+ *
+ * The refresh token is NO LONGER persisted here: the API now returns it as an
+ * HttpOnly cookie scoped to `.sckools.com`, which JavaScript cannot read — so
+ * an XSS on any tenant site can no longer lift a long-lived session. The copy
+ * kept in this store lives in memory only, for the tab's lifetime.
+ *
+ * Because the cookie is invisible to JS, "am I signed in?" can no longer be
+ * answered synchronously at boot. `status` carries that: it starts `unknown`,
+ * and the session probe in each console layout resolves it to `authed`/`anon`
+ * by asking the API to refresh. Gate on `status`, never on `refreshToken`
+ * alone — the latter is empty until the probe answers.
  */
 
 export type Audience = 'school' | 'platform';
+
+/** `unknown` until the boot probe answers — see the note above. */
+export type SessionStatus = 'unknown' | 'authed' | 'anon';
 
 interface AuthState {
   accessToken?: string;
@@ -18,6 +28,8 @@ interface AuthState {
   userId?: string;
   schoolId?: string;
   role?: string;
+  status: SessionStatus;
+  setStatus: (s: SessionStatus) => void;
   setTokens: (t: { accessToken: string; refreshToken?: string; audience: Audience }) => void;
   setMe: (m: { userId: string; schoolId?: string; role?: string }) => void;
   clear: () => void;
@@ -26,45 +38,50 @@ interface AuthState {
 const REFRESH_KEY = 'skoolos:refresh';
 const REFRESH_AUD_KEY = 'skoolos:audience';
 
-function loadRefresh(): { token?: string; audience?: Audience } {
-  if (typeof window === 'undefined') return {};
+/**
+ * A refresh token left in localStorage by a build from before the cookie
+ * existed. It is sent once, on the next refresh, so that session survives the
+ * upgrade — then dropped. Nothing ever writes these keys again.
+ */
+export function takeLegacyRefreshToken(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
   try {
-    return {
-      token: window.localStorage.getItem(REFRESH_KEY) ?? undefined,
-      audience: (window.localStorage.getItem(REFRESH_AUD_KEY) as Audience | null) ?? undefined,
-    };
+    return window.localStorage.getItem(REFRESH_KEY) ?? undefined;
   } catch {
-    return {};
+    return undefined;
   }
 }
 
-function persistRefresh(token: string | undefined, audience: Audience | undefined): void {
+export function dropLegacyRefreshToken(): void {
   if (typeof window === 'undefined') return;
   try {
-    if (token && audience) {
-      window.localStorage.setItem(REFRESH_KEY, token);
-      window.localStorage.setItem(REFRESH_AUD_KEY, audience);
-    } else {
-      window.localStorage.removeItem(REFRESH_KEY);
-      window.localStorage.removeItem(REFRESH_AUD_KEY);
-    }
+    window.localStorage.removeItem(REFRESH_KEY);
+    window.localStorage.removeItem(REFRESH_AUD_KEY);
   } catch {
     /* storage might be blocked in private mode */
   }
 }
 
-const initial = loadRefresh();
-
 export const useAuthStore = create<AuthState>((set) => ({
-  refreshToken: initial.token,
-  audience: initial.audience,
+  status: 'unknown',
+  setStatus: (status) => set({ status }),
   setTokens: ({ accessToken, refreshToken, audience }) => {
-    set({ accessToken, audience, refreshToken: refreshToken ?? undefined });
-    if (refreshToken) persistRefresh(refreshToken, audience);
+    // The durable copy of refreshToken is the HttpOnly cookie the API set on
+    // this same response; what we keep here is a per-tab convenience.
+    set({ accessToken, audience, refreshToken: refreshToken ?? undefined, status: 'authed' });
+    dropLegacyRefreshToken();
   },
   setMe: (m) => set(m),
   clear: () => {
-    set({ accessToken: undefined, refreshToken: undefined, audience: undefined, userId: undefined, schoolId: undefined, role: undefined });
-    persistRefresh(undefined, undefined);
+    set({
+      accessToken: undefined,
+      refreshToken: undefined,
+      audience: undefined,
+      userId: undefined,
+      schoolId: undefined,
+      role: undefined,
+      status: 'anon',
+    });
+    dropLegacyRefreshToken();
   },
 }));

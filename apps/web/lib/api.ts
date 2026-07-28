@@ -101,13 +101,16 @@ export class ApiClient {
     return this.request<T>(path, { method: 'DELETE' });
   }
 
+  /**
+   * Renews the access token. The refresh token normally travels as an HttpOnly
+   * cookie (credentials: 'include'), which this code cannot read — so the
+   * absence of an in-memory token is NOT a reason to give up. A token in hand
+   * is either the one this tab received at login or a legacy localStorage copy
+   * being upgraded; either way it is sent in the body as a fallback.
+   */
   private async refresh(): Promise<void> {
     if (this.refreshing) return this.refreshing;
     const refreshToken = this.opts.getRefreshToken?.();
-    if (!refreshToken) {
-      this.opts.onUnauthenticated?.();
-      throw new ApiError(401, 'Unauthenticated', null);
-    }
     const audience = this.opts.audience ?? 'school';
     const path = audience === 'platform' ? '/owner/auth/refresh' : '/auth/refresh';
 
@@ -126,7 +129,7 @@ export class ApiClient {
         const res = await fetch(baseUrl + path, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ refreshToken }),
+          body: JSON.stringify(refreshToken ? { refreshToken } : {}),
           credentials: 'include',
         });
         if (!res.ok) {

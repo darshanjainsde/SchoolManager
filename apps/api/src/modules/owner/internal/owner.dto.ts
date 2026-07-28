@@ -8,7 +8,9 @@ export class OwnerLoginDto {
 }
 
 export class RefreshDto {
-  @IsString() refreshToken!: string;
+  /** Optional: the token normally arrives as an HttpOnly cookie. The body form
+   *  is kept so sessions created before the cookie shipped can still refresh. */
+  @IsOptional() @IsString() refreshToken?: string;
 }
 
 export class GateLoginDto {

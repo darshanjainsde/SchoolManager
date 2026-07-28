@@ -63,12 +63,14 @@ export default function SchoolDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const qc = useQueryClient();
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  // Session state, not the token itself — the refresh token is an HttpOnly
+  // cookie the client cannot read.
+  const signedIn = useAuthStore((s) => s.status) === 'authed';
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['owner-school', id],
     queryFn: () => api.get<SchoolDetail>(`/owner/schools/${id}`),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   // ── Tier mutation ────────────────────────────────────────────────────────

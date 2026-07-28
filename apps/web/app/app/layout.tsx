@@ -7,6 +7,7 @@ import { LayoutDashboard, Globe, Inbox, LogOut, School, Users, GraduationCap, Us
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
+import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
 import { useApi } from '@/lib/use-api';
 import { isSchoolHost, exampleSchoolHost, platformHref } from '@/lib/hosts';
@@ -86,17 +87,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const hydrated = useHydrated();
   const host = useHost();
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  const status = useAuthStore((s) => s.status);
   const accessToken = useAuthStore((s) => s.accessToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
   const api = useApi({ audience: 'school', hostHeader: host });
+  useSessionProbe(api, 'school', !!host);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
 
-  // Impersonation sessions carry an access token only (no refresh token) and
-  // an `imp: true` claim — used for the banner and to keep the session alive.
-  const hasSession = !!refreshToken || !!accessToken;
+  // Impersonation sessions carry an access token only — no refresh token and
+  // no cookie — so they count as a session even though the probe cannot
+  // reproduce them after a reload (that was already true before the cookie).
+  const hasSession = status === 'authed' || !!accessToken;
   const impersonated = (() => {
     if (!accessToken) return false;
     try {
@@ -120,10 +123,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     : NAV_ITEMS;
 
   useEffect(() => {
-    if (hydrated && (!hasSession || audience !== 'school')) {
+    // `unknown` means the probe has not answered yet — don't bounce to /login
+    // before we know.
+    if (hydrated && status !== 'unknown' && (!hasSession || audience !== 'school')) {
       router.replace('/login');
     }
-  }, [hydrated, hasSession, audience, router]);
+  }, [hydrated, status, hasSession, audience, router]);
 
   // Close the mobile drawer whenever navigation happens (Link clicks already
   // do this eagerly; this covers back/forward and any other route change).
@@ -184,6 +189,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  if (status === 'unknown' && !accessToken) return null;
   if (!hasSession || audience !== 'school') return null;
 
   function handleLogout() {
