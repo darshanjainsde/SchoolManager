@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
+import { disconnectAll } from '@skoolos/db';
 import { AppModule } from '../src/app.module';
 import { signSchoolToken, seedMinimalSchool } from './integration/helpers';
 
@@ -83,6 +83,20 @@ describe('management authorization', () => {
       .post('/manage/timetable')
       .set(as(teacherToken))
       .send({})
+      .expect(403);
+  });
+
+  it('a STUDENT cannot unassign a timetable slot', async () => {
+    await request(app.getHttpServer())
+      .delete('/manage/timetable/00000000-0000-0000-0000-000000000001')
+      .set(as(studentToken))
+      .expect(403);
+  });
+
+  it('a TEACHER cannot unassign a timetable slot', async () => {
+    await request(app.getHttpServer())
+      .delete('/manage/timetable/00000000-0000-0000-0000-000000000001')
+      .set(as(teacherToken))
       .expect(403);
   });
 });
