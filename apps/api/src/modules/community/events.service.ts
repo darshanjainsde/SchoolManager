@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
-import { isP2002, isP2025, isP2003 } from '../management/internal/prisma-errors';
+import { isP2002, isP2025, isP2003 } from '../../common/errors/prisma-errors';
 import { CreateEventDto, UpdateEventDto } from './community.dto';
 
 @Injectable()

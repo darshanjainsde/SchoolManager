@@ -7,7 +7,7 @@ import { OwnerAuthService } from './owner-auth.service';
 import { OwnerAuthController } from './owner-auth.controller';
 import { ImpersonationService } from './impersonation.service';
 import { OwnerEventsService } from './owner-events.service';
-import { OwnerHostGuard } from './owner-host.guard';
+import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
 import { OwnerOverviewService } from './owner-overview.service';
 import { OwnerSchoolsService } from './owner-schools.service';
 import { OwnerController } from './owner.controller';

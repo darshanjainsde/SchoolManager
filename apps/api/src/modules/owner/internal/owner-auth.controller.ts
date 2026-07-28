@@ -3,14 +3,14 @@ import type { Request, Response } from 'express';
 import { loadEnv } from '@skoolos/config';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../../common/auth/public.decorator';
-import { OwnerHostGuard } from './owner-host.guard';
+import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
 import { OwnerAuthService } from './owner-auth.service';
 import { GateLoginDto, OwnerLoginDto, RefreshDto } from './owner.dto';
 import {
   OWNER_REFRESH_COOKIE,
   resolveRefreshToken,
   setRefreshCookie,
-} from '../../auth/internal/refresh-cookie';
+} from '../../../common/auth/refresh-cookie';
 
 @Controller('owner/auth')
 @UseGuards(OwnerHostGuard)

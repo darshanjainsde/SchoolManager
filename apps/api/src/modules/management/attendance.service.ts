@@ -6,7 +6,7 @@ import { formatDateIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveStudentRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
-import { isP2002 } from './internal/prisma-errors';
+import { isP2002 } from '../../common/errors/prisma-errors';
 import type { SaveAttendanceDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

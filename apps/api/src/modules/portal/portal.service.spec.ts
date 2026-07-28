@@ -42,8 +42,8 @@ jest.mock('../tenancy', () => ({
 
 import { PortalService } from './portal.service';
 import type { TenantContextService } from '../tenancy';
-import type { TimetableService } from '../management/timetable.service';
-import type { HolidaysService } from '../management/holidays.service';
+import type { TimetableService } from '../management';
+import type { HolidaysService } from '../management';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const USER = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';

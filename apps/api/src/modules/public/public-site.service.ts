@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant, type FeatureKey } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
-import { PublicEventsService } from '../community/public-events.service';
+import { PublicEventsService } from '../community';
 import type { PublicSiteData } from './public.dto';
 
 @Injectable()

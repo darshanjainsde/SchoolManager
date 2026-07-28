@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TenancyModule } from '../../tenancy';
 import { FeaturesModule } from '../../features';
-import { OwnerHostGuard } from '../../owner/internal/owner-host.guard';
+import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
 import { BlogMarketingService } from './blog-marketing.service';
 import { BlogMarketingController } from './blog-marketing.controller';
 import { BlogPublicService } from './blog-public.service';

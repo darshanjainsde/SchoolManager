@@ -8,7 +8,7 @@ import {
 import { withTenant } from '@skoolos/db';
 import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
-import { isP2002, isP2003, isP2025, p2002Target } from './internal/prisma-errors';
+import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
 import type { CreateLoginDto, CreateStudentDto, UpdateStudentDto } from './management.dto';
 

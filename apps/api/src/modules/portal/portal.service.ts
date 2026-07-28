@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, withTenant, type AttendanceStatus, type Holiday, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
-import { isP2002 } from '../management/internal/prisma-errors';
+import { isP2002 } from '../../common/errors/prisma-errors';
 import { TenantContextService } from '../tenancy';
-import { TimetableService } from '../management/timetable.service';
-import { HolidaysService } from '../management/holidays.service';
+import { TimetableService } from '../management';
+import { HolidaysService } from '../management';
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 

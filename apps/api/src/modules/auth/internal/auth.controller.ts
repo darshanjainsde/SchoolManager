@@ -17,7 +17,7 @@ import {
   clearRefreshCookie,
   resolveRefreshToken,
   setRefreshCookie,
-} from './refresh-cookie';
+} from '../../../common/auth/refresh-cookie';
 
 @ApiTags('auth')
 @Controller('auth')

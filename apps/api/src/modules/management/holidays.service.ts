@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant, type Holiday } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
-import { isP2025 } from './internal/prisma-errors';
+import { isP2025 } from '../../common/errors/prisma-errors';
 import { todayIstDateStr } from './internal/leave-dates';
 import { HOLIDAY_TYPES, type CreateHolidayDto } from './management.dto';
 
