@@ -356,7 +356,7 @@ describe('AttendanceService', () => {
         marks: [{ studentId: 's-1', status: 'PRESENT' }],
       };
 
-      await svc.save(SCHOOL, 'admin-user-1', dto);
+      await svc.save(SCHOOL, 'admin-user-1', dto, 'SCHOOL_ADMIN');
 
       expect(txMock.attendance.createMany.mock.calls[0][0].data[0].markedById).toBe('admin-user-1');
     });

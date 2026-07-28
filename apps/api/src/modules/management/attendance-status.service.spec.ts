@@ -3,6 +3,7 @@ const txMock = {
   student: { findMany: jest.fn() },
   attendance: { findMany: jest.fn() },
   teacher: { findFirst: jest.fn(), findMany: jest.fn() },
+  substitution: { findFirst: jest.fn(), findMany: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -33,6 +34,9 @@ describe('AttendanceService', () => {
       fn(txMock),
     );
     audit.record.mockResolvedValue(undefined);
+    // No substitution coverage by default — most of this file's tests are
+    // about ownership/roster/marker resolution, not the substitute path.
+    txMock.substitution.findMany.mockResolvedValue([]);
   });
 
   describe('myClassSections', () => {
@@ -67,8 +71,8 @@ describe('AttendanceService', () => {
         }),
       );
       expect(result).toEqual([
-        { classSectionId: 'section-5b', name: '5-B', studentCount: 28 },
-        { classSectionId: 'section-6a', name: '6-A', studentCount: 30 },
+        { classSectionId: 'section-5b', name: '5-B', studentCount: 28, covering: false },
+        { classSectionId: 'section-6a', name: '6-A', studentCount: 30, covering: false },
       ]);
     });
 
@@ -94,7 +98,9 @@ describe('AttendanceService', () => {
       const result = await svc.myClassSections(SCHOOL, 'admin-user-1', 'SCHOOL_ADMIN');
 
       expect(txMock.teacher.findFirst).not.toHaveBeenCalled();
-      expect(result).toEqual([{ classSectionId: 'section-5b', name: '5-B', studentCount: 28 }]);
+      expect(result).toEqual([
+        { classSectionId: 'section-5b', name: '5-B', studentCount: 28, covering: false },
+      ]);
     });
   });
 

@@ -6,7 +6,9 @@ import { formatDateIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveStudentRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
+import { requireClassAccess } from './internal/class-access';
 import { isP2002 } from './internal/prisma-errors';
+import { istTodayISO } from './internal/timetable-date';
 import type { SaveAttendanceDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -28,6 +30,8 @@ export interface MyClassSection {
   classSectionId: string;
   name: string;
   studentCount: number;
+  /** True when the caller holds this section only as a substitute on the queried date. */
+  covering: boolean;
 }
 
 export interface ClassDayStatus {
@@ -93,30 +97,37 @@ export class AttendanceService {
     _count: { select: { students: true } },
   } as const;
 
-  private static toMyClassSection(c: {
-    id: string;
-    name: string;
-    grade: { name: string };
-    _count: { students: number };
-  }): MyClassSection {
+  private static toMyClassSection(
+    c: { id: string; name: string; grade: { name: string }; _count: { students: number } },
+    covering = false,
+  ): MyClassSection {
     return {
       classSectionId: c.id,
       name: `${c.grade.name}-${c.name}`,
       studentCount: c._count.students,
+      covering,
     };
   }
 
   /**
-   * The sections a caller may take/view attendance for. SCHOOL_ADMIN sees
-   * every section in the school; a TEACHER sees the sections where they are
-   * the class teacher OR hold at least one timetable slot — the Prisma `OR`
-   * naturally dedupes a section that satisfies both.
+   * The sections a caller may take/view attendance for on `date` (default
+   * today, IST). SCHOOL_ADMIN sees every section. A TEACHER sees the sections
+   * where they are the class teacher OR hold a timetable slot, PLUS any
+   * section they are covering as a substitute on that specific date — a
+   * substitution is a one-day grant, so it never widens access on any other
+   * day.
    */
   async myClassSections(
     schoolId: string,
     userId: string,
     role: string,
+    opts: { date?: string } = {},
   ): Promise<MyClassSection[]> {
+    const date = opts.date ?? istTodayISO();
+    if (!DATE_RE.test(date)) {
+      throw new ApiError('VALIDATION', 'date must be formatted as YYYY-MM-DD', 400, 'date');
+    }
+
     return withTenant(schoolId, async (tx) => {
       if (role === 'SCHOOL_ADMIN') {
         const sections = await tx.classSection.findMany({
@@ -129,7 +140,7 @@ export class AttendanceService {
       const teacher = await tx.teacher.findFirst({ where: { userId } });
       if (!teacher) return [];
 
-      const sections = await tx.classSection.findMany({
+      const owned = await tx.classSection.findMany({
         where: {
           OR: [
             { classTeacherId: teacher.id },
@@ -139,7 +150,28 @@ export class AttendanceService {
         select: AttendanceService.CLASS_SELECT,
         orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
       });
-      return sections.map((c) => AttendanceService.toMyClassSection(c));
+      const ownedIds = new Set(owned.map((c) => c.id));
+
+      const subs = await tx.substitution.findMany({
+        where: { date: new Date(date), substituteTeacherId: teacher.id },
+        select: { classSectionId: true },
+      });
+      const coveredIds = [...new Set(subs.map((s) => s.classSectionId))].filter(
+        (id) => !ownedIds.has(id),
+      );
+
+      const covered = coveredIds.length
+        ? await tx.classSection.findMany({
+            where: { id: { in: coveredIds } },
+            select: AttendanceService.CLASS_SELECT,
+            orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
+          })
+        : [];
+
+      return [
+        ...owned.map((c) => AttendanceService.toMyClassSection(c, false)),
+        ...covered.map((c) => AttendanceService.toMyClassSection(c, true)),
+      ];
     });
   }
 
@@ -177,7 +209,9 @@ export class AttendanceService {
     if (!DATE_RE.test(date)) {
       throw new ApiError('VALIDATION', 'date must be formatted as YYYY-MM-DD', 400, 'date');
     }
-    const classes = await this.myClassSections(schoolId, userId, role);
+    // Pass `date` through so a past day's status includes whoever covered a
+    // section as a substitute THAT day, not who is substituting today.
+    const classes = await this.myClassSections(schoolId, userId, role, { date });
     if (classes.length === 0) return [];
     const day = new Date(date);
     const classSectionIds = classes.map((c) => c.classSectionId);
@@ -254,6 +288,7 @@ export class AttendanceService {
     schoolId: string,
     callerUserId: string,
     dto: SaveAttendanceDto,
+    callerRole = 'TEACHER',
   ): Promise<SaveAttendanceResult> {
     const day = new Date(dto.date);
 
@@ -261,6 +296,15 @@ export class AttendanceService {
       const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
+      }
+
+      const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
+
+      // A SCHOOL_ADMIN may mark any section; a TEACHER may not. This is the
+      // server-side twin of the client only showing their own classes —
+      // without it, knowing a classSectionId was enough to write its register.
+      if (callerRole !== 'SCHOOL_ADMIN') {
+        await requireClassAccess(tx, callerUserId, dto.classSectionId, dto.date);
       }
 
       // Every mark must target a student who is actually enrolled in this
@@ -283,7 +327,6 @@ export class AttendanceService {
         }
       }
 
-      const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
       const markedById = teacher?.id ?? callerUserId;
 
       // Read the marks as they stand BEFORE this save, inside the same

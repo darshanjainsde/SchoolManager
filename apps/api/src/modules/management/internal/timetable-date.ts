@@ -49,3 +49,12 @@ export function resolveAsOfDate(dateParam: string | undefined, now: Date): Date 
   }
   return startOfIstDay(now);
 }
+
+/**
+ * Today's calendar date in IST as `YYYY-MM-DD` — the timezone a school day is
+ * judged in. Not `toISOString().slice(0,10)` on a bare `new Date()`, which
+ * reports the UTC day and rolls backwards for any IST evening after 18:30.
+ */
+export function istTodayISO(now: Date = new Date()): string {
+  return istDayString(now);
+}

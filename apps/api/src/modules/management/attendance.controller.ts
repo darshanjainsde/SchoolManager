@@ -47,6 +47,6 @@ export class AttendanceController {
 
   @Put()
   save(@Body() dto: SaveAttendanceDto, @CurrentUser() u: SchoolJwtPayload) {
-    return this.attendance.save(this.sid(), u.sub, dto);
+    return this.attendance.save(this.sid(), u.sub, dto, u.role);
   }
 }

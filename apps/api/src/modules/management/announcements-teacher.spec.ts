@@ -61,8 +61,8 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
   it('creates one announcement row per targeted class section', async () => {
     attendance.myClassSections.mockResolvedValue([
-      { classSectionId: CLASS_A, name: '5-A', studentCount: 2 },
-      { classSectionId: CLASS_B, name: '5-B', studentCount: 3 },
+      { classSectionId: CLASS_A, name: '5-A', studentCount: 2, covering: false },
+      { classSectionId: CLASS_B, name: '5-B', studentCount: 3, covering: false },
     ] satisfies MyClassSection[]);
     txMock.classSection.findMany.mockResolvedValue([
       classSectionRow(CLASS_A, 'A', '5'),
@@ -102,7 +102,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
   it('403s when a teacher targets a class that is not theirs', async () => {
     attendance.myClassSections.mockResolvedValue([
-      { classSectionId: CLASS_A, name: '5-A', studentCount: 2 },
+      { classSectionId: CLASS_A, name: '5-A', studentCount: 2, covering: false },
     ] satisfies MyClassSection[]);
 
     const dto: CreateAnnouncementDto = {
@@ -167,7 +167,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
   it('rejects a classSectionId that does not resolve to a real class section', async () => {
     attendance.myClassSections.mockResolvedValue([
-      { classSectionId: CLASS_A, name: '5-A', studentCount: 2 },
+      { classSectionId: CLASS_A, name: '5-A', studentCount: 2, covering: false },
     ] satisfies MyClassSection[]);
     // classSection lookup comes back short — CLASS_A does not actually exist.
     txMock.classSection.findMany.mockResolvedValue([]);
@@ -183,7 +183,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
   describe('legacy classSectionId + classSectionIds merge (ownership must hold across both)', () => {
     it('accepts an owned class via the legacy singular classSectionId field', async () => {
       attendance.myClassSections.mockResolvedValue([
-        { classSectionId: CLASS_A, name: '5-A', studentCount: 2 },
+        { classSectionId: CLASS_A, name: '5-A', studentCount: 2, covering: false },
       ] satisfies MyClassSection[]);
       txMock.classSection.findMany.mockResolvedValue([classSectionRow(CLASS_A, 'A', '5')]);
 
@@ -206,7 +206,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
     it('403s when a teacher targets a NON-owned class via the legacy singular classSectionId field (no ownership bypass)', async () => {
       attendance.myClassSections.mockResolvedValue([
-        { classSectionId: CLASS_A, name: '5-A', studentCount: 2 },
+        { classSectionId: CLASS_A, name: '5-A', studentCount: 2, covering: false },
       ] satisfies MyClassSection[]);
 
       const dto: CreateAnnouncementDto = { title: 'x', body: 'y', classSectionId: CLASS_FOREIGN };
@@ -219,8 +219,8 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
     it('merges and dedupes classSectionId + classSectionIds into a single target set', async () => {
       attendance.myClassSections.mockResolvedValue([
-        { classSectionId: CLASS_A, name: '5-A', studentCount: 2 },
-        { classSectionId: CLASS_B, name: '5-B', studentCount: 3 },
+        { classSectionId: CLASS_A, name: '5-A', studentCount: 2, covering: false },
+        { classSectionId: CLASS_B, name: '5-B', studentCount: 3, covering: false },
       ] satisfies MyClassSection[]);
       txMock.classSection.findMany.mockResolvedValue([
         classSectionRow(CLASS_A, 'A', '5'),
@@ -268,7 +268,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
   describe('push/email fan-out', () => {
     it('enqueues ANNOUNCEMENT notifications for recipients of targeted classes', async () => {
       attendance.myClassSections.mockResolvedValue([
-        { classSectionId: CLASS_A, name: '5-A', studentCount: 1 },
+        { classSectionId: CLASS_A, name: '5-A', studentCount: 1, covering: false },
       ] satisfies MyClassSection[]);
       txMock.classSection.findMany.mockResolvedValue([classSectionRow(CLASS_A, 'A', '5')]);
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
@@ -299,8 +299,8 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
     it('gives each targeted class its own className in the payload', async () => {
       attendance.myClassSections.mockResolvedValue([
-        { classSectionId: CLASS_A, name: '5-A', studentCount: 1 },
-        { classSectionId: CLASS_B, name: '5-B', studentCount: 1 },
+        { classSectionId: CLASS_A, name: '5-A', studentCount: 1, covering: false },
+        { classSectionId: CLASS_B, name: '5-B', studentCount: 1, covering: false },
       ] satisfies MyClassSection[]);
       txMock.classSection.findMany.mockResolvedValue([
         classSectionRow(CLASS_A, 'A', '5'),
@@ -331,7 +331,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
     it('does not call the notification service when the targeted classes have no linked-user recipients', async () => {
       attendance.myClassSections.mockResolvedValue([
-        { classSectionId: CLASS_A, name: '5-A', studentCount: 1 },
+        { classSectionId: CLASS_A, name: '5-A', studentCount: 1, covering: false },
       ] satisfies MyClassSection[]);
       txMock.classSection.findMany.mockResolvedValue([classSectionRow(CLASS_A, 'A', '5')]);
       txMock.student.findMany.mockResolvedValue([]); // nobody linked to a portal account
@@ -399,7 +399,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
     it('a single-class announcement only notifies that class, never the whole school', async () => {
       attendance.myClassSections.mockResolvedValue([
-        { classSectionId: CLASS_A, name: '5-A', studentCount: 1 },
+        { classSectionId: CLASS_A, name: '5-A', studentCount: 1, covering: false },
       ] satisfies MyClassSection[]);
       txMock.classSection.findMany.mockResolvedValue([classSectionRow(CLASS_A, 'A', '5')]);
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
@@ -423,7 +423,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
     it('resolves recipients in a SEPARATE transaction, after the write has committed', async () => {
       attendance.myClassSections.mockResolvedValue([
-        { classSectionId: CLASS_A, name: '5-A', studentCount: 1 },
+        { classSectionId: CLASS_A, name: '5-A', studentCount: 1, covering: false },
       ] satisfies MyClassSection[]);
       txMock.classSection.findMany.mockResolvedValue([classSectionRow(CLASS_A, 'A', '5')]);
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
@@ -439,7 +439,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
 
     it('still creates the announcement rows when the background notify rejects', async () => {
       attendance.myClassSections.mockResolvedValue([
-        { classSectionId: CLASS_A, name: '5-A', studentCount: 1 },
+        { classSectionId: CLASS_A, name: '5-A', studentCount: 1, covering: false },
       ] satisfies MyClassSection[]);
       txMock.classSection.findMany.mockResolvedValue([classSectionRow(CLASS_A, 'A', '5')]);
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
