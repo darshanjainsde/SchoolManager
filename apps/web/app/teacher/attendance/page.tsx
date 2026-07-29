@@ -3,18 +3,18 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import type { AttendanceStatusValue, ClassDayStatus, RegisterChangeRow } from '@skoolos/types';
+import { ATTENDANCE_STATUSES } from '@skoolos/types';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { RetakeDialog } from '@/components/teacher/RetakeDialog';
+import { LockedDay } from '@/components/teacher/LockedDay';
 
-// The API only accepts these three (AttendanceMarkDto @IsIn). Anything else
-// would be rejected server-side, so the UI never offers it.
-type Status = 'PRESENT' | 'ABSENT' | 'LATE';
-const STATUSES: Status[] = ['PRESENT', 'ABSENT', 'LATE'];
-const STATUS_LABEL: Record<Status, string> = { PRESENT: 'Present', ABSENT: 'Absent', LATE: 'Late' };
+const STATUS_LABEL: Record<AttendanceStatusValue, string> = { PRESENT: 'Present', ABSENT: 'Absent', LATE: 'Late' };
 // Traffic-light tones from the theme: green/red/amber.
-const STATUS_COLOR: Record<Status, string> = {
+const STATUS_COLOR: Record<AttendanceStatusValue, string> = {
   PRESENT: 'var(--sk-good)',
   ABSENT: 'var(--sk-bad)',
   LATE: 'var(--sk-amber)',
@@ -27,6 +27,11 @@ const fieldCls =
 
 function initials(firstName: string, lastName: string): string {
   return `${firstName.slice(0, 1)}${lastName.slice(0, 1)}`.toUpperCase();
+}
+
+/** A sensible fallback for the school-admin/unknown marker case — never "Taken by null". */
+function markedByLabel(status: ClassDayStatus): string {
+  return status.markedBy ? `Taken by ${status.markedBy}` : 'Already taken today';
 }
 
 interface ClassSection {
@@ -45,7 +50,7 @@ interface RosterStudent {
 /** GET /manage/attendance returns marks only — unmarked students default to PRESENT. */
 interface AttendanceMark {
   studentId: string;
-  status: Status;
+  status: AttendanceStatusValue;
 }
 
 interface SaveAttendanceResult {
@@ -80,6 +85,20 @@ function TeacherAttendanceInner() {
   );
   const [date, setDate] = useState(todayIso());
 
+  // Past days close on the server (see AttendanceService.save's REGISTER_LOCKED
+  // 409) — comparing the YYYY-MM-DD strings lexicographically matches
+  // chronological order and mirrors the server's own `dto.date < today` check.
+  const isPastDate = !!date && date < todayIso();
+
+  // Retaking a class the moment a new class/date is chosen would carry over a
+  // stale confirmation from whatever was selected before.
+  const [retakeOpen, setRetakeOpen] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  useEffect(() => {
+    setRetakeOpen(false);
+    setUnlocked(false);
+  }, [classSectionId, date]);
+
   const classes = useQuery({
     queryKey: ['t-attn-classes'],
     enabled: !!host,
@@ -87,9 +106,42 @@ function TeacherAttendanceInner() {
     staleTime: 30_000,
   });
 
+  // The taken/pending source for every one of the caller's classes on `date`
+  // — used both to decide whether to show the roster or the "already taken"
+  // summary, and to fill in who marked it for the retake dialog.
+  const dayStatus = useQuery({
+    queryKey: ['t-attn-status', date],
+    enabled: !!host && !!date,
+    queryFn: () => api.get<ClassDayStatus[]>(`/manage/attendance/status?date=${encodeURIComponent(date)}`),
+  });
+
+  const selectedStatus = useMemo(
+    () => dayStatus.data?.find((s) => s.classSectionId === classSectionId) ?? null,
+    [dayStatus.data, classSectionId],
+  );
+  // Whether the status query has settled — gates showing the roster so a
+  // taken class never flashes as editable before its summary swaps in.
+  const statusKnown = !dayStatus.isLoading && !dayStatus.error;
+  const taken = !!selectedStatus?.taken;
+  const editable = !isPastDate && statusKnown && (!taken || unlocked);
+
+  // Only needed once a past date is on screen — no point asking every time.
+  const myRequests = useQuery({
+    queryKey: ['t-attn-register-changes-mine'],
+    enabled: !!host && isPastDate,
+    queryFn: () => api.get<RegisterChangeRow[]>('/manage/register-changes/mine'),
+  });
+  const openRequest = useMemo(
+    () =>
+      myRequests.data?.find(
+        (r) => r.classSectionId === classSectionId && r.date === date && r.status === 'PENDING',
+      ) ?? null,
+    [myRequests.data, classSectionId, date],
+  );
+
   const roster = useQuery({
     queryKey: ['t-attn-roster', classSectionId],
-    enabled: !!host && !!classSectionId,
+    enabled: !!host && !!classSectionId && editable,
     queryFn: () =>
       api.get<RosterStudent[]>(
         `/manage/students?classSectionId=${encodeURIComponent(classSectionId)}`,
@@ -98,7 +150,7 @@ function TeacherAttendanceInner() {
 
   const existing = useQuery({
     queryKey: ['t-attn-marks', classSectionId, date],
-    enabled: !!host && !!classSectionId && !!date,
+    enabled: !!host && !!classSectionId && !!date && editable,
     queryFn: () =>
       api.get<AttendanceMark[]>(
         `/manage/attendance?classSectionId=${encodeURIComponent(classSectionId)}&date=${encodeURIComponent(date)}`,
@@ -107,7 +159,7 @@ function TeacherAttendanceInner() {
 
   // Server marks are the source of truth whenever the class/date changes; local
   // edits layer on top until the next successful fetch.
-  const [marks, setMarks] = useState<Record<string, Status>>({});
+  const [marks, setMarks] = useState<Record<string, AttendanceStatusValue>>({});
   useEffect(() => {
     if (!existing.data) return;
     setMarks(Object.fromEntries(existing.data.map((m) => [m.studentId, m.status])));
@@ -116,7 +168,7 @@ function TeacherAttendanceInner() {
   const students = useMemo(() => roster.data ?? [], [roster.data]);
 
   const counts = useMemo(() => {
-    const tally: Record<Status, number> = { PRESENT: 0, ABSENT: 0, LATE: 0 };
+    const tally: Record<AttendanceStatusValue, number> = { PRESENT: 0, ABSENT: 0, LATE: 0 };
     for (const s of students) tally[marks[s.id] ?? 'PRESENT'] += 1;
     return tally;
   }, [students, marks]);
@@ -135,13 +187,28 @@ function TeacherAttendanceInner() {
           : `Attendance saved — ${result.saved} students, ${result.absentees} absent. Guardians of absentees are being notified.`,
       );
       void qc.invalidateQueries({ queryKey: ['t-attn-marks', classSectionId, date] });
+      void qc.invalidateQueries({ queryKey: ['t-attn-status', date] });
     },
     // The API returns a { code, message } envelope; surface message verbatim.
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const requestChange = useMutation({
+    mutationFn: (reason: string) => api.post('/manage/register-changes', { classSectionId, date, reason }),
+    onSuccess: () => {
+      toast.success('Request sent — your admin will review it from Requests.');
+      void qc.invalidateQueries({ queryKey: ['t-attn-register-changes-mine'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const listError = (roster.error ?? existing.error) as Error | undefined;
-  const listLoading = roster.isLoading || existing.isLoading;
+  const listLoading = editable && (roster.isLoading || existing.isLoading);
+
+  const selectedClass = classes.data?.find((c) => c.id === classSectionId);
+  const selectedClassLabel = selectedClass
+    ? `${selectedClass.grade.name} · ${selectedClass.name}`
+    : (selectedStatus?.name ?? '');
 
   return (
     <>
@@ -189,27 +256,31 @@ function TeacherAttendanceInner() {
                 onChange={(e) => setDate(e.target.value)}
               />
             </div>
-            <button
-              type="button"
-              className="sk-btn"
-              data-variant="primary"
-              disabled={!classSectionId || !date || students.length === 0 || save.isPending}
-              onClick={() => save.mutate()}
-            >
-              {save.isPending ? 'Saving…' : 'Save attendance'}
-            </button>
+            {editable && (
+              <button
+                type="button"
+                className="sk-btn"
+                data-variant="primary"
+                disabled={!classSectionId || !date || students.length === 0 || save.isPending}
+                onClick={() => save.mutate()}
+              >
+                {save.isPending ? 'Saving…' : 'Save attendance'}
+              </button>
+            )}
           </div>
 
           {classes.error && <p className="sk-state err">{(classes.error as Error).message}</p>}
-          {listError && <p className="sk-state err">{listError.message}</p>}
+          {editable && listError && <p className="sk-state err">{listError.message}</p>}
 
-          {students.length > 0 && (
+          {editable && students.length > 0 && (
             <div>
               <button
                 type="button"
                 className="sk-btn"
                 onClick={() =>
-                  setMarks(Object.fromEntries(students.map((s) => [s.id, 'PRESENT' as Status])))
+                  setMarks(
+                    Object.fromEntries(students.map((s) => [s.id, 'PRESENT' as AttendanceStatusValue])),
+                  )
                 }
               >
                 Mark all present
@@ -219,71 +290,115 @@ function TeacherAttendanceInner() {
         </div>
       </div>
 
-      <div className="sk-card">
-        <div className="sk-card-h">
-          <h3>Roster</h3>
-          <p className="sk-muted" style={{ marginTop: 4 }}>
-            {classSectionId
-              ? `${students.length} students · ${counts.PRESENT} present · ${counts.ABSENT} absent · ${counts.LATE} late`
-              : 'Pick a class and a date to begin.'}
-          </p>
-        </div>
-        <div className="sk-card-b">
-          {classSectionId && listLoading && <p className="sk-state">Loading roster…</p>}
-
-          {classSectionId && !listLoading && !listError && students.length === 0 && (
-            <p className="sk-state">No students in this class yet — your admin needs to enrol them.</p>
-          )}
-
-          {students.length > 0 && (
+      {classSectionId && isPastDate ? (
+        <LockedDay
+          className={selectedClassLabel}
+          date={date}
+          status={selectedStatus}
+          requestPending={!!openRequest}
+          isSubmitting={requestChange.isPending}
+          onRequestChange={(reason) => requestChange.mutate(reason)}
+        />
+      ) : classSectionId && statusKnown && taken && !unlocked && selectedStatus ? (
+        <div className="sk-card">
+          <div className="sk-card-h">
+            <h3>Roster</h3>
+          </div>
+          <div className="sk-card-b">
+            <p className="sk-state">
+              ✓ {selectedStatus.present} of {selectedStatus.total} present
+            </p>
+            <p className="sk-muted">{markedByLabel(selectedStatus)}</p>
             <div>
-              {students.map((s, i) => {
-                const status = marks[s.id] ?? 'PRESENT';
-                return (
-                  <div className="sk-row" key={s.id}>
-                    <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
-                      {initials(s.firstName, s.lastName)}
-                    </span>
-                    <div>
-                      <div className="nm">
-                        {s.firstName} {s.lastName}
-                      </div>
-                      <div className="meta">Roll {s.rollNo ?? '—'}</div>
-                    </div>
-                    <span className="sp" />
-                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                      {STATUSES.map((option) => {
-                        const active = status === option;
-                        return (
-                          <button
-                            key={option}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => setMarks((m) => ({ ...m, [s.id]: option }))}
-                            style={{
-                              borderRadius: 8,
-                              padding: '6px 11px',
-                              fontSize: 11.5,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              border: `1.5px solid ${active ? STATUS_COLOR[option] : 'var(--sk-line-2)'}`,
-                              background: active ? STATUS_COLOR[option] : 'var(--sk-card)',
-                              color: active ? '#fff' : 'var(--sk-ink-2)',
-                              transition: 'background 0.12s ease, border-color 0.12s ease, color 0.12s ease',
-                            }}
-                          >
-                            {STATUS_LABEL[option]}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+              <button type="button" className="sk-btn" onClick={() => setRetakeOpen(true)}>
+                Re-take attendance
+              </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="sk-card">
+          <div className="sk-card-h">
+            <h3>Roster</h3>
+            <p className="sk-muted" style={{ marginTop: 4 }}>
+              {classSectionId
+                ? `${students.length} students · ${counts.PRESENT} present · ${counts.ABSENT} absent · ${counts.LATE} late`
+                : 'Pick a class and a date to begin.'}
+            </p>
+          </div>
+          <div className="sk-card-b">
+            {classSectionId && listLoading && <p className="sk-state">Loading roster…</p>}
+
+            {classSectionId && !listLoading && !listError && students.length === 0 && (
+              <p className="sk-state">No students in this class yet — your admin needs to enrol them.</p>
+            )}
+
+            {students.length > 0 && (
+              <div>
+                {students.map((s, i) => {
+                  const status = marks[s.id] ?? 'PRESENT';
+                  return (
+                    <div className="sk-row" key={s.id}>
+                      <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                        {initials(s.firstName, s.lastName)}
+                      </span>
+                      <div>
+                        <div className="nm">
+                          {s.firstName} {s.lastName}
+                        </div>
+                        <div className="meta">Roll {s.rollNo ?? '—'}</div>
+                      </div>
+                      <span className="sp" />
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                        {ATTENDANCE_STATUSES.map((option) => {
+                          const active = status === option;
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => setMarks((m) => ({ ...m, [s.id]: option }))}
+                              style={{
+                                borderRadius: 8,
+                                padding: '6px 11px',
+                                fontSize: 11.5,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                border: `1.5px solid ${active ? STATUS_COLOR[option] : 'var(--sk-line-2)'}`,
+                                background: active ? STATUS_COLOR[option] : 'var(--sk-card)',
+                                color: active ? '#fff' : 'var(--sk-ink-2)',
+                                transition: 'background 0.12s ease, border-color 0.12s ease, color 0.12s ease',
+                              }}
+                            >
+                              {STATUS_LABEL[option]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {retakeOpen && selectedStatus && (
+        <RetakeDialog
+          className={selectedClassLabel}
+          status={selectedStatus}
+          // Confirm only flips local `unlocked` state — no network call happens
+          // until the teacher edits and presses "Save attendance" below, so
+          // there is no in-flight request for this dialog to guard against.
+          isPending={false}
+          onConfirm={() => {
+            setUnlocked(true);
+            setRetakeOpen(false);
+          }}
+          onCancel={() => setRetakeOpen(false)}
+        />
+      )}
     </>
   );
 }
