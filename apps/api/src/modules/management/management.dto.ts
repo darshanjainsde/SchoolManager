@@ -11,6 +11,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  Matches,
   Max,
   Min,
   ValidateNested,
@@ -640,4 +641,25 @@ export class CreateHolidayDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+}
+
+// ── Class notes & to-dos ─────────────────────────────────────────────────────
+
+export class CreateClassNoteDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be formatted as YYYY-MM-DD' })
+  date!: string;
+
+  @IsString()
+  @Length(1, 1000)
+  body!: string;
+}
+
+export class CreateClassTodoDto extends CreateClassNoteDto {}
+
+export class UpdateClassTodoDto {
+  @IsBoolean()
+  done!: boolean;
 }
