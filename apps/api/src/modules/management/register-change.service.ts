@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type { RegisterChangeRow as SharedRegisterChangeRow } from '@skoolos/types';
 import { AuditService } from '../../common/audit/audit.service';
 import { ApiError } from '../../common/errors/api-error';
 import { requireClassAccess } from './internal/class-access';
@@ -9,19 +10,16 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
 
-export interface RegisterChangeRow {
-  id: string;
-  classSectionId: string;
-  className: string;
-  date: string;
-  reason: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  requestedByTeacherId: string;
-  requestedByName: string | null;
-  reviewedAt: string | null;
-  expiresAt: string | null;
-  createdAt: string;
-  /** Admin-side detail — the reviewer's own User.id. No client screen renders it; kept here rather than widened onto every row consumer. */
+export type { RegisterChangeStatusValue } from '@skoolos/types';
+
+/**
+ * The shared `RegisterChangeRow` plus one admin-only field. `reviewedByUserId`
+ * is the reviewer's own User.id — real data this service returns and the
+ * spec asserts against, but no client screen renders it, so it stays a local
+ * intersection instead of widening the contract every importer of
+ * `@skoolos/types` pulls in.
+ */
+export interface RegisterChangeRow extends SharedRegisterChangeRow {
   reviewedByUserId: string | null;
 }
 

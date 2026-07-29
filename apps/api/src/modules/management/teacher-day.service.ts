@@ -1,34 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
 import { resolveAsOfDate } from './internal/timetable-date';
 import { ApiError } from '../../common/errors/api-error';
 import { AttendanceService } from './attendance.service';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export interface TeacherDayEntry {
-  periodId: string;
-  label: string;
-  startTime: string;
-  endTime: string;
-  kind: 'CLASS' | 'BREAK';
-  /** null for a BREAK period, or a CLASS period the teacher does not teach. */
-  slot: {
-    classSectionId: string;
-    className: string;
-    subjectName: string;
-    covering: boolean;
-    coveringFor: string | null;
-  } | null;
-  /** null when `slot` is null. */
-  register: { taken: boolean; present: number; total: number; markedBy: string | null } | null;
-}
-
-export interface TeacherDay {
-  date: string;
-  dayOfWeek: number;
-  entries: TeacherDayEntry[];
-}
+export type { TeacherDay, TeacherDayEntry };
 
 /**
  * One call that answers "what is my day, and what still needs marking?".

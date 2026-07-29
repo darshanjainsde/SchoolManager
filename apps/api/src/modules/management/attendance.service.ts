@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { withTenant, type AttendanceStatus } from '@skoolos/db';
+import type { ClassDayStatus, MyClassSection } from '@skoolos/types';
 import { AuditService } from '../../common/audit/audit.service';
 import { ApiError } from '../../common/errors/api-error';
 import { formatDateIST } from '../../common/notifications/format';
@@ -26,23 +27,7 @@ export interface SaveAttendanceResult {
   absentees: number;
 }
 
-export interface MyClassSection {
-  classSectionId: string;
-  name: string;
-  studentCount: number;
-  /** True when the caller holds this section only as a substitute on the queried date. */
-  covering: boolean;
-}
-
-export interface ClassDayStatus {
-  classSectionId: string;
-  name: string;
-  total: number;
-  present: number;
-  taken: boolean;
-  markedBy: string | null;
-  markedAt: string | null;
-}
+export type { ClassDayStatus, MyClassSection };
 
 @Injectable()
 export class AttendanceService {

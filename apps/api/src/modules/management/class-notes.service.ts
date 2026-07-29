@@ -1,21 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type { ClassNoteRow, ClassTodoRow } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { requireClassAccess } from './internal/class-access';
 import type { CreateClassNoteDto, CreateClassTodoDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export interface ClassNoteRow {
-  id: string;
-  body: string;
-  createdAt: string;
-  authorTeacherId: string;
-}
-
-export interface ClassTodoRow extends ClassNoteRow {
-  done: boolean;
-}
+export type { ClassNoteRow, ClassTodoRow };
 
 type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
 
