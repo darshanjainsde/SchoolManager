@@ -2,43 +2,24 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, CalendarCheck } from 'lucide-react';
+import type { AttendanceStatusValue, AttendanceSummary } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
-
-interface AttendanceDay {
-  /** `YYYY-MM-DD` */
-  date: string;
-  status: AttendanceStatus;
-}
-
-interface AttendanceSummary {
-  /** `YYYY-MM` */
-  month: string;
-  percent: number;
-  present: number;
-  absent: number;
-  late: number;
-  days: AttendanceDay[];
-}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Monday-first, to match the timetable's day ordering. */
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const STATUS_STYLES: Record<AttendanceStatus, string> = {
+const STATUS_STYLES: Record<AttendanceStatusValue, string> = {
   PRESENT: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   ABSENT: 'bg-rose-100 text-rose-800 border-rose-200',
   LATE: 'bg-amber-100 text-amber-800 border-amber-200',
 };
 
-const STATUS_LABELS: Record<AttendanceStatus, string> = {
+const STATUS_LABELS: Record<AttendanceStatusValue, string> = {
   PRESENT: 'Present',
   ABSENT: 'Absent',
   LATE: 'Late',
@@ -104,7 +85,7 @@ export default function PortalAttendancePage() {
     placeholderData: (prev) => prev,
   });
 
-  const statusByDate = new Map<string, AttendanceStatus>(
+  const statusByDate = new Map<string, AttendanceStatusValue>(
     (data?.days ?? []).map((d) => [d.date, d.status]),
   );
   const marked = data ? data.present + data.absent + data.late : 0;
@@ -247,7 +228,7 @@ export default function PortalAttendancePage() {
 
               {/* Legend */}
               <ul className="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">
-                {(Object.keys(STATUS_LABELS) as AttendanceStatus[]).map((s) => (
+                {(Object.keys(STATUS_LABELS) as AttendanceStatusValue[]).map((s) => (
                   <li key={s} className="flex items-center gap-1.5">
                     <span className={cn('h-3 w-3 rounded border', STATUS_STYLES[s])} />
                     {STATUS_LABELS[s]}

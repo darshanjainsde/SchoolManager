@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type { Subject } from '@skoolos/types';
 import { isP2002, isP2003, isP2025 } from '../../common/errors/prisma-errors';
 import type {
   CreateYearDto,
@@ -90,7 +91,8 @@ export class CatalogService {
 
   // ── Subjects ───────────────────────────────────────────────────────────────
 
-  async listSubjects(schoolId: string) {
+  /** Matches the shared `Subject` contract (`@skoolos/types`) field for field — `GET /manage/subjects`. */
+  async listSubjects(schoolId: string): Promise<Subject[]> {
     return withTenant(schoolId, (tx) =>
       tx.subject.findMany({ where: { schoolId }, orderBy: { name: 'asc' } }),
     );

@@ -1,25 +1,18 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
+import type { TimetableSlot } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { buildGrid, type GridSlot, type GridPeriodRow } from '@/lib/timetable-grid';
 import { minutesOfDay } from '@/lib/teacher-day';
 import { WeekGrid } from '@/components/timetable/WeekGrid';
 
-// ── Wire shape ───────────────────────────────────────────────────────────────
-// What GET /manage/timetable/mine returns — TimetableService.SLOT_INCLUDE,
-// which (as of this task) includes classSection.grade so `className` can be
-// composed the same way TeacherDayService composes it for the Today screen.
+// `TimetableSlot` (`@skoolos/types`) is what GET /manage/timetable/mine
+// returns — TimetableService.SLOT_INCLUDE, the SAME wire contract the
+// student portal's timetable pages read via GET /me/timetable. One include,
+// one shared type, both callers.
 
-interface TimetableSlotWire {
-  id: string;
-  dayOfWeek: number;
-  period: { id: string; label: string; order: number; startTime?: string; endTime?: string };
-  subject: { id: string; name: string; code: string };
-  classSection: { id: string; name: string; grade: { name: string } };
-}
-
-function toGridSlot(s: TimetableSlotWire): GridSlot {
+function toGridSlot(s: TimetableSlot): GridSlot {
   return {
     id: s.id,
     dayOfWeek: s.dayOfWeek,
@@ -77,7 +70,7 @@ export default function TeacherTimetablePage() {
   const week = useQuery({
     queryKey: ['t-my-week'],
     enabled: !!host,
-    queryFn: () => api.get<TimetableSlotWire[]>('/manage/timetable/mine'),
+    queryFn: () => api.get<TimetableSlot[]>('/manage/timetable/mine'),
   });
 
   const slots = (week.data ?? []).map(toGridSlot);

@@ -1,22 +1,10 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import { GraduationCap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import type { PublishedResult } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface PublishedResult {
-  examId: string;
-  title: string;
-  subjectName: string;
-  scheduledAt: string;
-  marks: number;
-  maxMarks: number;
-  /** Mean of every published result for this exam — never an individual mark. */
-  classAverage: number;
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

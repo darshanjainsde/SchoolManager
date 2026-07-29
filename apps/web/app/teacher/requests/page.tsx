@@ -2,34 +2,14 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { RegisterChangeRow } from '@skoolos/types';
+import type { LeaveApplication, LeaveTypeValue, RegisterChangeRow } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { RequestList, type RequestItem } from '@/components/teacher/RequestList';
 import { LeaveForm } from '@/components/teacher/LeaveForm';
 import { ConfirmDialog } from '@/components/teacher/ConfirmDialog';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type LeaveType = 'SICK' | 'CASUAL' | 'EARNED' | 'UNPAID' | 'OTHER';
-type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
-
-/**
- * Dates arrive as ISO strings over the wire even though the API types them as
- * Date. No `@skoolos/types` counterpart exists yet for this shape — promoting
- * it to the shared package is Task 10's sweep, not this one's.
- */
-interface LeaveApplication {
-  id: string;
-  type: LeaveType;
-  startDate: string;
-  endDate: string;
-  reason: string | null;
-  status: LeaveStatus;
-  createdAt: string;
-}
-
-const LEAVE_TYPE_LABEL: Record<LeaveType, string> = {
+const LEAVE_TYPE_LABEL: Record<LeaveTypeValue, string> = {
   SICK: 'Sick leave',
   CASUAL: 'Casual leave',
   EARNED: 'Earned leave',

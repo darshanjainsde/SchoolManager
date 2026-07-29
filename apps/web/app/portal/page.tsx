@@ -2,76 +2,27 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarCheck, GraduationCap, ClipboardList, Percent } from 'lucide-react';
+import type {
+  Announcement,
+  AttendanceStatusValue,
+  AttendanceSummary,
+  Profile,
+  PublishedResult,
+  TimetableSlot,
+  UpcomingExam,
+} from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Profile {
-  firstName: string;
-  lastName: string;
-  admissionNo: string;
-  rollNo: string | null;
-  className: string | null;
-  photoUrl: string | null;
-}
-
-interface TimetableSlot {
-  id: string;
-  dayOfWeek: number;
-  period: { id: string; label: string; order: number; startTime?: string; endTime?: string };
-  subject: { id: string; name: string; code: string };
-  teacher: { id: string; firstName: string; lastName: string };
-  classSection: { id: string; name: string };
-}
-
-interface Announcement {
-  id: string;
-  title: string;
-  body: string;
-  classSectionId: string | null;
-  createdAt: string;
-}
-
-type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE';
-
-interface AttendanceSummary {
-  month: string;
-  percent: number;
-  present: number;
-  absent: number;
-  late: number;
-  days: { date: string; status: AttendanceStatus }[];
-}
-
-interface UpcomingExam {
-  id: string;
-  title: string;
-  subjectName: string;
-  scheduledAt: string;
-  maxMarks: number;
-  syllabus: string | null;
-}
-
-interface PublishedResult {
-  examId: string;
-  title: string;
-  subjectName: string;
-  scheduledAt: string;
-  marks: number;
-  maxMarks: number;
-  classAverage: number;
-}
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const ATTENDANCE_LABELS: Record<AttendanceStatus, string> = {
+const ATTENDANCE_LABELS: Record<AttendanceStatusValue, string> = {
   PRESENT: 'Present',
   ABSENT: 'Absent',
   LATE: 'Late',
 };
 
-const ATTENDANCE_TONES: Record<AttendanceStatus, 'good' | 'warn' | 'bad'> = {
+const ATTENDANCE_TONES: Record<AttendanceStatusValue, 'good' | 'warn' | 'bad'> = {
   PRESENT: 'good',
   ABSENT: 'bad',
   LATE: 'warn',

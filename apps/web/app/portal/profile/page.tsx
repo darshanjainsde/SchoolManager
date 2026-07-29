@@ -1,19 +1,9 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
+import type { Profile } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Profile {
-  firstName: string;
-  lastName: string;
-  admissionNo: string;
-  rollNo: string | null;
-  className: string | null;
-  photoUrl: string | null;
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

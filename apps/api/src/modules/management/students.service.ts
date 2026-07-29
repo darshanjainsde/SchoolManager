@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type { RosterStudent } from '@skoolos/types';
 import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
@@ -42,12 +43,7 @@ export const ROSTER_SELECT = {
   rollNo: true,
 } as const;
 
-export interface RosterStudent {
-  id: string;
-  firstName: string;
-  lastName: string;
-  rollNo: string | null;
-}
+export type { RosterStudent };
 
 interface ListFilters {
   classSectionId?: string;

@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type { TimetableSlot } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, p2002Target } from '../../common/errors/prisma-errors';
 import { isSameIstDay, resolveAsOfDate, startOfIstDay } from './internal/timetable-date';
 import type { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
+
+export type { TimetableSlot };
 
 const SLOT_INCLUDE = {
   period: true,
@@ -23,7 +26,7 @@ export class TimetableService {
    * Reading a past `date` returns whatever version was active back then, even
    * if it has since been superseded — that's what makes past weeks immutable.
    */
-  async listForClass(schoolId: string, classSectionId: string, date?: string) {
+  async listForClass(schoolId: string, classSectionId: string, date?: string): Promise<TimetableSlot[]> {
     const asOf = resolveAsOfDate(date, new Date());
     return withTenant(schoolId, (tx) =>
       tx.timetableSlot.findMany({
@@ -240,7 +243,7 @@ export class TimetableService {
    * (default today). Same effectiveFrom/effectiveTo versioning as
    * `listForClass`, so a past date returns the timetable as it stood then.
    */
-  async listForTeacher(schoolId: string, userId: string, date?: string) {
+  async listForTeacher(schoolId: string, userId: string, date?: string): Promise<TimetableSlot[]> {
     const asOf = resolveAsOfDate(date, new Date());
     return withTenant(schoolId, async (tx) => {
       const teacher = await tx.teacher.findFirst({ where: { userId } });

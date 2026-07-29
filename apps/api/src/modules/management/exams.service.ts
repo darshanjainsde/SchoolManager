@@ -1,5 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type {
+  Exam,
+  ExamList,
+  PublishResultsResponse,
+  SavedResult,
+  SaveResultsResponse,
+} from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { formatDateTimeIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
@@ -21,7 +28,10 @@ interface ExamNotificationContext {
   recipients: string[];
 }
 
-export interface ExamSummary {
+export type { Exam, ExamList, PublishResultsResponse, SavedResult, SaveResultsResponse };
+
+/** Raw `Exam` row shape as Prisma returns it — `scheduledAt`/`createdAt` still `Date`. */
+type ExamRow = {
   id: string;
   classSectionId: string;
   subjectId: string;
@@ -31,33 +41,46 @@ export interface ExamSummary {
   maxMarks: number;
   createdById: string;
   createdAt: Date;
-}
+};
 
-export interface ExamListResult {
-  upcoming: ExamSummary[];
-  past: ExamSummary[];
-}
-
-export interface SaveResultsResult {
-  saved: number;
-}
-
-/** One stored mark for an exam. `publishedAt` is null until publish() runs. */
-export interface ExamResultRow {
-  studentId: string;
-  marks: number;
-  publishedAt: Date | null;
-}
-
-export interface PublishResultsResult {
-  published: number;
-}
+/** Raw `Result` row shape as Prisma returns it — `publishedAt` still `Date | null`. */
+type ResultRow = { studentId: string; marks: number; publishedAt: Date | null };
 
 @Injectable()
 export class ExamsService {
   private readonly logger = new Logger(ExamsService.name);
 
   constructor(private readonly notifications: NotificationService) {}
+
+  /**
+   * Prisma types `scheduledAt`/`createdAt` as `Date`; the shared `Exam`
+   * contract (`@skoolos/types`) types them as ISO strings — the shape every
+   * consumer (web, mobile) actually receives once Nest's JSON serializer
+   * runs `Date.prototype.toJSON`. Converting here makes the service's own
+   * return type match the wire contract instead of leaving the two silently
+   * out of sync (mirrors HolidaysService.toRow).
+   */
+  private static toExam(e: ExamRow): Exam {
+    return {
+      id: e.id,
+      classSectionId: e.classSectionId,
+      subjectId: e.subjectId,
+      title: e.title,
+      scheduledAt: e.scheduledAt.toISOString(),
+      syllabus: e.syllabus,
+      maxMarks: e.maxMarks,
+      createdById: e.createdById,
+      createdAt: e.createdAt.toISOString(),
+    };
+  }
+
+  private static toSavedResult(r: ResultRow): SavedResult {
+    return {
+      studentId: r.studentId,
+      marks: r.marks,
+      publishedAt: r.publishedAt ? r.publishedAt.toISOString() : null,
+    };
+  }
 
   /**
    * Everything the exam notification composers need beyond the exam row
@@ -98,7 +121,7 @@ export class ExamsService {
    * classSectionId simply won't be found rather than leaking a row from
    * another tenant).
    */
-  async create(schoolId: string, callerUserId: string, dto: CreateExamDto): Promise<ExamSummary> {
+  async create(schoolId: string, callerUserId: string, dto: CreateExamDto): Promise<Exam> {
     if (!Number.isInteger(dto.maxMarks) || dto.maxMarks <= 0) {
       throw new ApiError('VALIDATION', 'maxMarks must be a positive integer', 400, 'maxMarks');
     }
@@ -149,7 +172,7 @@ export class ExamsService {
       (e) => this.logger.error(`TEST_SCHEDULED notify failed: ${(e as Error).message}`),
     );
 
-    return exam;
+    return ExamsService.toExam(exam);
   }
 
   /**
@@ -164,7 +187,7 @@ export class ExamsService {
    * because classSectionId itself is scoped by the caller's own tenant
    * (validated via the RLS-protected ClassSection lookup below).
    */
-  async list(schoolId: string, classSectionId: string): Promise<ExamListResult> {
+  async list(schoolId: string, classSectionId: string): Promise<ExamList> {
     return withTenant(schoolId, async (tx) => {
       const section = await tx.classSection.findFirst({ where: { id: classSectionId } });
       if (!section) {
@@ -177,13 +200,14 @@ export class ExamsService {
       });
 
       const now = new Date();
-      const upcoming: ExamSummary[] = [];
-      const past: ExamSummary[] = [];
+      const upcoming: Exam[] = [];
+      const past: Exam[] = [];
       for (const exam of exams) {
+        // Split on the raw Date before converting to the wire's ISO-string shape.
         if (exam.scheduledAt >= now) {
-          upcoming.push(exam);
+          upcoming.push(ExamsService.toExam(exam));
         } else {
-          past.push(exam);
+          past.push(ExamsService.toExam(exam));
         }
       }
 
@@ -201,18 +225,19 @@ export class ExamsService {
    * school's marks. Students with no stored mark are simply absent from the
    * array — the caller pairs it against the roster it already has.
    */
-  async results(schoolId: string, examId: string): Promise<ExamResultRow[]> {
+  async results(schoolId: string, examId: string): Promise<SavedResult[]> {
     return withTenant(schoolId, async (tx) => {
       const exam = await tx.exam.findFirst({ where: { id: examId, schoolId } });
       if (!exam) {
         throw new ApiError('NOT_FOUND', 'exam not found', 404, 'id');
       }
 
-      return tx.result.findMany({
+      const rows = await tx.result.findMany({
         where: { examId },
         select: { studentId: true, marks: true, publishedAt: true },
         orderBy: [{ studentId: 'asc' }],
       });
+      return rows.map(ExamsService.toSavedResult);
     });
   }
 
@@ -237,7 +262,7 @@ export class ExamsService {
     schoolId: string,
     examId: string,
     dto: SaveExamResultsDto,
-  ): Promise<SaveResultsResult> {
+  ): Promise<SaveResultsResponse> {
     return withTenant(schoolId, async (tx) => {
       const exam = await tx.exam.findFirst({ where: { id: examId, schoolId } });
       if (!exam) {
@@ -284,7 +309,7 @@ export class ExamsService {
    * in one tenant transaction. Loading the exam via `{ id, schoolId }` is
    * again load-bearing since `Exam` carries no RLS.
    */
-  async publish(schoolId: string, examId: string): Promise<PublishResultsResult> {
+  async publish(schoolId: string, examId: string): Promise<PublishResultsResponse> {
     const { published, exam } = await withTenant(schoolId, async (tx) => {
       const exam = await tx.exam.findFirst({ where: { id: examId, schoolId } });
       if (!exam) {

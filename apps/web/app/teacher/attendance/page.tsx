@@ -7,7 +7,9 @@ import type {
   AttendanceMark,
   AttendanceStatusValue,
   ClassDayStatus,
+  ClassSectionSummary,
   RegisterChangeRow,
+  RosterStudent,
   SaveAttendanceResponse,
 } from '@skoolos/types';
 import { ATTENDANCE_STATUSES } from '@skoolos/types';
@@ -38,19 +40,6 @@ function initials(firstName: string, lastName: string): string {
 /** A sensible fallback for the school-admin/unknown marker case — never "Taken by null". */
 function markedByLabel(status: ClassDayStatus): string {
   return status.markedBy ? `Taken by ${status.markedBy}` : 'Already taken today';
-}
-
-interface ClassSection {
-  id: string;
-  name: string;
-  grade: { name: string };
-}
-
-interface RosterStudent {
-  id: string;
-  firstName: string;
-  lastName: string;
-  rollNo: string | null;
 }
 
 /** Today in the browser's own timezone — `toISOString()` would give the UTC day. */
@@ -107,7 +96,7 @@ function TeacherAttendanceInner() {
   const classes = useQuery({
     queryKey: ['t-attn-classes'],
     enabled: !!host,
-    queryFn: () => api.get<ClassSection[]>('/manage/classes'),
+    queryFn: () => api.get<ClassSectionSummary[]>('/manage/classes'),
     staleTime: 30_000,
   });
 

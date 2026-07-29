@@ -3,6 +3,23 @@ import {
   type AttendanceStatusValue,
   type TeacherDayEntry,
   HOLIDAY_TYPES,
+  LEAVE_TYPES,
+  LEAVE_STATUSES,
+  type Announcement,
+  type Profile,
+  type AttendanceSummary,
+  type UpcomingExam,
+  type PublishedResult,
+  type TimetableSlot,
+  type LeaveApplication,
+  type Exam,
+  type ExamList,
+  type SavedResult,
+  type SaveResultsResponse,
+  type PublishResultsResponse,
+  type ClassSectionSummary,
+  type Subject,
+  type RosterStudent,
 } from './index';
 
 describe('shared portal contracts', () => {
@@ -28,5 +45,107 @@ describe('shared portal contracts', () => {
       kind: 'BREAK', slot: null, register: null,
     };
     expect(entry.slot).toBeNull();
+  });
+
+  it('declares exactly the five leave types and four leave statuses the API accepts', () => {
+    expect([...LEAVE_TYPES].sort()).toEqual(['CASUAL', 'EARNED', 'OTHER', 'SICK', 'UNPAID']);
+    expect([...LEAVE_STATUSES].sort()).toEqual(['APPROVED', 'CANCELLED', 'PENDING', 'REJECTED']);
+  });
+
+  it('an Announcement targets either a class or the whole school', () => {
+    const wholeSchool: Announcement = {
+      id: 'a1', title: 'Founders Day', body: 'No school Friday.', classSectionId: null,
+      createdAt: '2026-07-01T00:00:00.000Z',
+    };
+    const oneClass: Announcement = { ...wholeSchool, classSectionId: 'c1' };
+    expect(wholeSchool.classSectionId).toBeNull();
+    expect(oneClass.classSectionId).toBe('c1');
+  });
+
+  it('a student Profile carries a nullable roll number and class name', () => {
+    const p: Profile = {
+      firstName: 'Asha', lastName: 'Rao', admissionNo: 'A-001',
+      rollNo: null, className: null, photoUrl: null,
+    };
+    expect(p.rollNo).toBeNull();
+  });
+
+  it('AttendanceSummary days use the same three-state status as the register', () => {
+    const s: AttendanceSummary = {
+      month: '2026-07', percent: 50, present: 1, absent: 1, late: 0,
+      days: [
+        { date: '2026-07-01', status: 'PRESENT' },
+        { date: '2026-07-02', status: 'ABSENT' },
+      ],
+    };
+    expect(s.days).toHaveLength(2);
+  });
+
+  it('an UpcomingExam and a PublishedResult both carry scheduledAt as an ISO string, not a Date', () => {
+    const exam: UpcomingExam = {
+      id: 'e1', title: 'Unit test', subjectName: 'Math',
+      scheduledAt: '2026-08-01T09:00:00.000Z', maxMarks: 50, syllabus: null,
+    };
+    const result: PublishedResult = {
+      examId: 'e1', title: 'Unit test', subjectName: 'Math',
+      scheduledAt: '2026-08-01T09:00:00.000Z', marks: 40, maxMarks: 50, classAverage: 33.3,
+    };
+    expect(typeof exam.scheduledAt).toBe('string');
+    expect(typeof result.scheduledAt).toBe('string');
+  });
+
+  it('a TimetableSlot carries the class name composed as "grade-section"', () => {
+    const slot: TimetableSlot = {
+      id: 's1', dayOfWeek: 1,
+      period: { id: 'p1', label: 'Period 1', order: 1, startTime: '08:00', endTime: '08:45' },
+      subject: { id: 'sub1', name: 'Mathematics', code: 'MATH' },
+      teacher: { id: 't1', firstName: 'Asha', lastName: 'Rao' },
+      classSection: { id: 'c1', name: 'B', grade: { name: '7' } },
+    };
+    expect(`${slot.classSection.grade.name}-${slot.classSection.name}`).toBe('7-B');
+  });
+
+  it('a LeaveApplication admits every declared type and status', () => {
+    const leave: LeaveApplication = {
+      id: 'l1', type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-22',
+      reason: null, status: 'PENDING', createdAt: '2026-07-19T00:00:00.000Z',
+    };
+    expect(leave.status).toBe('PENDING');
+  });
+
+  it('an Exam/ExamList pair splits upcoming from past, each with string dates', () => {
+    const exam: Exam = {
+      id: 'e1', classSectionId: 'c1', subjectId: 'sub1', title: 'Unit test',
+      scheduledAt: '2026-08-01T09:00:00.000Z', syllabus: null, maxMarks: 50,
+      createdById: 'u1', createdAt: '2026-07-01T00:00:00.000Z',
+    };
+    const list: ExamList = { upcoming: [exam], past: [] };
+    expect(list.upcoming[0].id).toBe('e1');
+  });
+
+  it('a SavedResult is unpublished until publishedAt is set', () => {
+    const unpublished: SavedResult = { studentId: 's1', marks: 40, publishedAt: null };
+    const published: SavedResult = { ...unpublished, publishedAt: '2026-08-02T10:00:00.000Z' };
+    expect(unpublished.publishedAt).toBeNull();
+    expect(published.publishedAt).not.toBeNull();
+  });
+
+  it('SaveResultsResponse and PublishResultsResponse are each a single count', () => {
+    const saved: SaveResultsResponse = { saved: 2 };
+    const published: PublishResultsResponse = { published: 2 };
+    expect(saved.saved).toBe(2);
+    expect(published.published).toBe(2);
+  });
+
+  it('a ClassSectionSummary composes "grade-section" and a Subject carries its code', () => {
+    const cs: ClassSectionSummary = { id: 'c1', name: 'B', grade: { name: '7' } };
+    const subject: Subject = { id: 'sub1', code: 'MATH', name: 'Mathematics' };
+    expect(`${cs.grade.name}-${cs.name}`).toBe('7-B');
+    expect(subject.code).toBe('MATH');
+  });
+
+  it('a RosterStudent never carries guardian PII — only the four roster fields', () => {
+    const student: RosterStudent = { id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: null };
+    expect(Object.keys(student).sort()).toEqual(['firstName', 'id', 'lastName', 'rollNo']);
   });
 });

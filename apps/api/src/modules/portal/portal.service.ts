@@ -1,6 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, withTenant, type AttendanceStatus, type TenantTx } from '@skoolos/db';
-import type { Holiday } from '@skoolos/types';
+import type {
+  Announcement,
+  AttendanceDay,
+  AttendanceSummary,
+  Holiday,
+  Profile,
+  PublishedResult,
+  TimetableSlot,
+  UpcomingExam,
+} from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002 } from '../../common/errors/prisma-errors';
 import { TenantContextService } from '../tenancy';
@@ -21,42 +30,7 @@ const IST_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 });
 
-export interface AttendanceDay {
-  /** `YYYY-MM-DD` */
-  date: string;
-  status: AttendanceStatus;
-}
-
-export interface AttendanceSummary {
-  /** `YYYY-MM` — echoes back the month actually queried. */
-  month: string;
-  /** present / (present + absent + late) * 100, rounded. 0 with no records. */
-  percent: number;
-  present: number;
-  absent: number;
-  late: number;
-  days: AttendanceDay[];
-}
-
-export interface UpcomingExam {
-  id: string;
-  title: string;
-  subjectName: string;
-  scheduledAt: Date;
-  maxMarks: number;
-  syllabus: string | null;
-}
-
-export interface PublishedResult {
-  examId: string;
-  title: string;
-  subjectName: string;
-  scheduledAt: Date;
-  marks: number;
-  maxMarks: number;
-  /** Mean of every published Result for this exam, to 1 decimal place. */
-  classAverage: number;
-}
+export type { Announcement, AttendanceDay, AttendanceSummary, Profile, PublishedResult, UpcomingExam };
 
 /** Shown when an Exam's Subject row cannot be read (deleted mid-term, etc.). */
 const FALLBACK_SUBJECT_NAME = 'General';
@@ -149,7 +123,7 @@ export class PortalService {
     );
   }
 
-  async profile(userId: string) {
+  async profile(userId: string): Promise<Profile> {
     const { schoolId } = this.tenant.requireTenant();
     const s = await this.myStudent(schoolId, userId);
     if (!s) throw new NotFoundException('No student record for this login');
@@ -171,7 +145,7 @@ export class PortalService {
     };
   }
 
-  async timetable(userId: string) {
+  async timetable(userId: string): Promise<TimetableSlot[]> {
     const { schoolId } = this.tenant.requireTenant();
     const s = await this.myStudent(schoolId, userId);
     if (!s) throw new NotFoundException('No student record for this login');
@@ -179,11 +153,11 @@ export class PortalService {
     return this.timetableSvc.listForClass(schoolId, s.classSectionId);
   }
 
-  async announcements(userId: string) {
+  async announcements(userId: string): Promise<Announcement[]> {
     const { schoolId } = this.tenant.requireTenant();
     const s = await this.myStudent(schoolId, userId);
     if (!s) throw new NotFoundException('No student record for this login');
-    return withTenant(schoolId, (tx) =>
+    const rows = await withTenant(schoolId, (tx) =>
       tx.announcement.findMany({
         where: {
           schoolId,
@@ -193,6 +167,16 @@ export class PortalService {
         take: 50,
       }),
     );
+    // Prisma types `createdAt` as `Date`; the shared `Announcement` contract
+    // types it as an ISO string — the shape every consumer (web, mobile)
+    // actually receives once Nest's JSON serializer runs `Date.prototype.toJSON`.
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      classSectionId: r.classSectionId,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 
   /**
@@ -293,7 +277,9 @@ export class PortalService {
         id: e.id,
         title: e.title,
         subjectName: subjectNames.get(e.subjectId) ?? FALLBACK_SUBJECT_NAME,
-        scheduledAt: e.scheduledAt,
+        // Prisma types `scheduledAt` as `Date`; the shared `UpcomingExam`
+        // contract types it as an ISO string, matching the wire.
+        scheduledAt: e.scheduledAt.toISOString(),
         maxMarks: e.maxMarks,
         syllabus: e.syllabus,
       }));
@@ -352,24 +338,29 @@ export class PortalService {
         exams.map((e) => e.subjectId),
       );
 
-      const rows: PublishedResult[] = [];
+      // Built with `scheduledAt` still a `Date` so the sort below can compare
+      // by time; converted to the wire's ISO-string shape only afterwards.
+      const rows: { row: PublishedResult; scheduledAt: Date }[] = [];
       for (const r of mine) {
         const exam = examById.get(r.examId);
         if (!exam) continue; // foreign / deleted exam — drop rather than leak
         rows.push({
-          examId: exam.id,
-          title: exam.title,
-          subjectName: subjectNames.get(exam.subjectId) ?? FALLBACK_SUBJECT_NAME,
           scheduledAt: exam.scheduledAt,
-          marks: r.marks,
-          maxMarks: exam.maxMarks,
-          classAverage: Math.round((averageByExam.get(r.examId) ?? 0) * 10) / 10,
+          row: {
+            examId: exam.id,
+            title: exam.title,
+            subjectName: subjectNames.get(exam.subjectId) ?? FALLBACK_SUBJECT_NAME,
+            scheduledAt: exam.scheduledAt.toISOString(),
+            marks: r.marks,
+            maxMarks: exam.maxMarks,
+            classAverage: Math.round((averageByExam.get(r.examId) ?? 0) * 10) / 10,
+          },
         });
       }
 
       // Most recent test first.
       rows.sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
-      return rows;
+      return rows.map((r) => r.row);
     });
   }
 

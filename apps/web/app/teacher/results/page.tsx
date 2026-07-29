@@ -2,50 +2,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import type {
+  ClassSectionSummary,
+  ExamList,
+  PublishResultsResponse,
+  RosterStudent,
+  SavedResult,
+  SaveResultsResponse,
+} from '@skoolos/types';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-
-interface ClassSection {
-  id: string;
-  name: string;
-  grade: { name: string };
-}
-
-interface RosterStudent {
-  id: string;
-  firstName: string;
-  lastName: string;
-  rollNo: string | null;
-}
-
-interface Exam {
-  id: string;
-  title: string;
-  subjectId: string;
-  scheduledAt: string;
-  maxMarks: number;
-}
-
-interface ExamList {
-  upcoming: Exam[];
-  past: Exam[];
-}
-
-interface SavedResult {
-  studentId: string;
-  marks: number;
-  publishedAt: string | null;
-}
-
-interface SaveResultsResult {
-  saved: number;
-}
-
-interface PublishResult {
-  published: number;
-}
 
 const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
 
@@ -115,7 +83,7 @@ export default function TeacherResultsPage() {
   const classes = useQuery({
     queryKey: ['t-results-classes'],
     enabled: !!host,
-    queryFn: () => api.get<ClassSection[]>('/manage/classes'),
+    queryFn: () => api.get<ClassSectionSummary[]>('/manage/classes'),
     staleTime: 30_000,
   });
 
@@ -191,7 +159,7 @@ export default function TeacherResultsPage() {
 
   const save = useMutation({
     mutationFn: () =>
-      api.put<SaveResultsResult>(`/manage/exams/${examId}/results`, { marks: parsed }),
+      api.put<SaveResultsResponse>(`/manage/exams/${examId}/results`, { marks: parsed }),
     onSuccess: (result) => {
       toast.success(`Saved marks for ${result.saved} students.`);
       void saved.refetch();
@@ -201,7 +169,7 @@ export default function TeacherResultsPage() {
   });
 
   const publish = useMutation({
-    mutationFn: () => api.post<PublishResult>(`/manage/exams/${examId}/publish`, {}),
+    mutationFn: () => api.post<PublishResultsResponse>(`/manage/exams/${examId}/publish`, {}),
     onSuccess: (result) => {
       setConfirming(false);
       toast.success(

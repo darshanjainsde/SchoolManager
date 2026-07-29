@@ -1,21 +1,50 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant, type TenantTx, type UserRole } from '@skoolos/db';
+import { LEAVE_STATUSES, type LeaveApplication, type LeaveStatusValue } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { dateRangeInclusive, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 
-const LEAVE_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
-type LeaveStatusValue = (typeof LEAVE_STATUSES)[number];
+export type { LeaveApplication };
+
+/** Raw `LeaveApplication` row shape as Prisma returns it — dates still `Date`. */
+type LeaveApplicationRow = {
+  id: string;
+  type: string;
+  startDate: Date;
+  endDate: Date;
+  reason: string | null;
+  status: string;
+  createdAt: Date;
+};
 
 @Injectable()
 export class LeaveService {
+  /**
+   * Prisma types `startDate`/`endDate`/`createdAt` as `Date`; the shared
+   * `LeaveApplication` contract types them as ISO strings — the shape every
+   * consumer (web, mobile) actually receives once Nest's JSON serializer
+   * runs `Date.prototype.toJSON` (mirrors HolidaysService.toRow).
+   */
+  private static toRow(a: LeaveApplicationRow): LeaveApplication {
+    return {
+      id: a.id,
+      type: a.type as LeaveApplication['type'],
+      startDate: a.startDate.toISOString(),
+      endDate: a.endDate.toISOString(),
+      reason: a.reason,
+      status: a.status as LeaveApplication['status'],
+      createdAt: a.createdAt.toISOString(),
+    };
+  }
+
   /**
    * Creates a PENDING leave application for the CALLER's own Teacher record
    * (resolved from the JWT's `userId` via `Teacher.userId`). A caller with no
    * linked Teacher row — e.g. a SCHOOL_ADMIN who isn't also a teacher — gets
    * `NOT_A_TEACHER` rather than silently creating a bogus application.
    */
-  async apply(schoolId: string, callerUserId: string, dto: CreateLeaveDto) {
+  async apply(schoolId: string, callerUserId: string, dto: CreateLeaveDto): Promise<LeaveApplication> {
     if (dto.endDate < dto.startDate) {
       throw new ApiError('VALIDATION', 'endDate must be on or after startDate', 400, 'endDate');
     }
@@ -26,7 +55,7 @@ export class LeaveService {
         throw new ApiError('NOT_A_TEACHER', 'Only teachers can apply for leave', 403);
       }
 
-      return tx.leaveApplication.create({
+      const created = await tx.leaveApplication.create({
         data: {
           schoolId,
           teacherId: teacher.id,
@@ -36,19 +65,21 @@ export class LeaveService {
           reason: dto.reason,
         },
       });
+      return LeaveService.toRow(created);
     });
   }
 
   /** The caller's own leave applications, most recent first. */
-  async mine(schoolId: string, callerUserId: string) {
+  async mine(schoolId: string, callerUserId: string): Promise<LeaveApplication[]> {
     return withTenant(schoolId, async (tx) => {
       const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
       if (!teacher) return [];
 
-      return tx.leaveApplication.findMany({
+      const rows = await tx.leaveApplication.findMany({
         where: { schoolId, teacherId: teacher.id },
         orderBy: { createdAt: 'desc' },
       });
+      return rows.map(LeaveService.toRow);
     });
   }
 

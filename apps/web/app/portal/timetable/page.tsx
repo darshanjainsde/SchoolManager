@@ -1,19 +1,9 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
+import type { TimetableSlot } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface TimetableSlot {
-  id: string;
-  dayOfWeek: number;
-  period: { id: string; label: string; order: number; startTime?: string; endTime?: string };
-  subject: { id: string; name: string; code: string };
-  teacher: { id: string; firstName: string; lastName: string };
-  classSection: { id: string; name: string };
-}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

@@ -55,11 +55,18 @@ describe('LeaveService', () => {
 
     it('creates a PENDING application for the caller\'s own Teacher record', async () => {
       txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER });
+      // A real `leaveApplication.create()` row has Date columns (startDate,
+      // endDate, createdAt), not the DTO's raw date strings — `apply()` now
+      // maps the row through `toRow()` (Date -> ISO string) before returning it.
       txMock.leaveApplication.create.mockResolvedValue({
         id: LEAVE_ID,
         teacherId: TEACHER,
         status: 'PENDING',
-        ...dto,
+        type: dto.type,
+        startDate: new Date(dto.startDate),
+        endDate: new Date(dto.endDate),
+        reason: null,
+        createdAt: new Date('2026-07-19T00:00:00.000Z'),
       });
 
       const result = await svc.apply(SCHOOL, TEACHER_USER, dto);

@@ -1,19 +1,10 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import { Megaphone } from 'lucide-react';
+import type { Announcement } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Card, CardContent } from '@/components/ui/card';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Announcement {
-  id: string;
-  title: string;
-  body: string;
-  classSectionId: string | null;
-  createdAt: string;
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

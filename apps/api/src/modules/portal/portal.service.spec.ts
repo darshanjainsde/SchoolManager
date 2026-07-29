@@ -245,12 +245,15 @@ describe('PortalService', () => {
 
       const result = await svc.exams(USER);
 
+      // The shared `UpcomingExam` contract types `scheduledAt` as an ISO
+      // string, not `Date` — the shape every consumer actually receives once
+      // Nest serialises the response to JSON.
       expect(result).toEqual([
         {
           id: 'e-2',
           title: 'Unit Test 2',
           subjectName: 'Mathematics',
-          scheduledAt: new Date('2026-07-25T04:00:00.000Z'),
+          scheduledAt: '2026-07-25T04:00:00.000Z',
           maxMarks: 50,
           syllabus: 'Ch. 4-6',
         },
@@ -362,12 +365,15 @@ describe('PortalService', () => {
 
       const result = await svc.results(USER);
 
+      // The shared `PublishedResult` contract types `scheduledAt` as an ISO
+      // string, not `Date` — the shape every consumer actually receives once
+      // Nest serialises the response to JSON.
       expect(result).toEqual([
         {
           examId: 'exam-b',
           title: 'Unit Test 1',
           subjectName: 'Mathematics',
-          scheduledAt: examB.scheduledAt,
+          scheduledAt: examB.scheduledAt.toISOString(),
           marks: 40,
           maxMarks: 50,
           classAverage: 33.3,
@@ -376,7 +382,7 @@ describe('PortalService', () => {
           examId: 'exam-a',
           title: 'Midterm',
           subjectName: 'Mathematics',
-          scheduledAt: examA.scheduledAt,
+          scheduledAt: examA.scheduledAt.toISOString(),
           marks: 80,
           maxMarks: 100,
           classAverage: 71.7,

@@ -2,40 +2,12 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import type { ClassSectionSummary, Exam, ExamList, Subject } from '@skoolos/types';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-
-interface ClassSection {
-  id: string;
-  name: string;
-  grade: { name: string };
-}
-
-interface Subject {
-  id: string;
-  code: string;
-  name: string;
-}
-
-/** Dates arrive as ISO strings over the wire even though the API types them as Date. */
-interface Exam {
-  id: string;
-  classSectionId: string;
-  subjectId: string;
-  title: string;
-  scheduledAt: string;
-  syllabus: string | null;
-  maxMarks: number;
-}
-
-/** GET /manage/exams already splits the list for us. */
-interface ExamList {
-  upcoming: Exam[];
-  past: Exam[];
-}
 
 const EMPTY_FORM = { subjectId: '', title: '', scheduledAt: '', syllabus: '', maxMarks: '100' };
 
@@ -55,7 +27,7 @@ export default function TeacherTestsPage() {
   const classes = useQuery({
     queryKey: ['t-tests-classes'],
     enabled: !!host,
-    queryFn: () => api.get<ClassSection[]>('/manage/classes'),
+    queryFn: () => api.get<ClassSectionSummary[]>('/manage/classes'),
     staleTime: 30_000,
   });
 

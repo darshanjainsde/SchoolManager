@@ -63,6 +63,9 @@ describe('ExamsService', () => {
         ...dto,
         scheduledAt: new Date(dto.scheduledAt),
         createdById: CALLER,
+        // `toExam()` (create()'s Date -> ISO-string mapping) reads every
+        // column, including createdAt — a real `exam.create()` row always has one.
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
       });
 
       const result = await svc.create(SCHOOL, CALLER, dto);
@@ -88,6 +91,9 @@ describe('ExamsService', () => {
         ...dto,
         scheduledAt: new Date(dto.scheduledAt),
         createdById: CALLER,
+        // `toExam()` (create()'s Date -> ISO-string mapping) reads every
+        // column, including createdAt — a real `exam.create()` row always has one.
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
       });
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
       txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
@@ -122,6 +128,9 @@ describe('ExamsService', () => {
         ...dto,
         scheduledAt: new Date(dto.scheduledAt),
         createdById: CALLER,
+        // `toExam()` (create()'s Date -> ISO-string mapping) reads every
+        // column, including createdAt — a real `exam.create()` row always has one.
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
       });
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
       txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
@@ -146,6 +155,9 @@ describe('ExamsService', () => {
         ...dto,
         scheduledAt: new Date(dto.scheduledAt),
         createdById: CALLER,
+        // `toExam()` (create()'s Date -> ISO-string mapping) reads every
+        // column, including createdAt — a real `exam.create()` row always has one.
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
       });
 
       await svc.create(SCHOOL, CALLER, dto);
@@ -166,6 +178,9 @@ describe('ExamsService', () => {
         ...dto,
         scheduledAt: new Date(dto.scheduledAt),
         createdById: CALLER,
+        // `toExam()` (create()'s Date -> ISO-string mapping) reads every
+        // column, including createdAt — a real `exam.create()` row always has one.
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
       });
       // First withTenant (the mutation) succeeds; the notification one fails.
       withTenantMock
@@ -186,6 +201,9 @@ describe('ExamsService', () => {
         ...dto,
         scheduledAt: new Date(dto.scheduledAt),
         createdById: CALLER,
+        // `toExam()` (create()'s Date -> ISO-string mapping) reads every
+        // column, including createdAt — a real `exam.create()` row always has one.
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
       });
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
       txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
@@ -226,10 +244,24 @@ describe('ExamsService', () => {
       const now = new Date('2026-07-21T12:00:00.000Z');
       jest.useFakeTimers().setSystemTime(now);
 
+      // classSectionId/subjectId/title/syllabus/maxMarks/createdById/createdAt
+      // are irrelevant to this test's split-by-date assertions, but `list()`
+      // now maps every row through `toExam()` (which stringifies `createdAt`
+      // via `.toISOString()`), so a real row shape is needed here — a real
+      // `Exam.findMany` result always carries every column.
+      const base = {
+        classSectionId: CLASS_SECTION,
+        subjectId: SUBJECT,
+        title: 'Unit Test',
+        syllabus: null,
+        maxMarks: 100,
+        createdById: CALLER,
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
+      };
       txMock.exam.findMany.mockResolvedValue([
-        { id: 'e1', scheduledAt: new Date('2026-07-20T00:00:00.000Z') },
-        { id: 'e2', scheduledAt: new Date('2026-07-22T00:00:00.000Z') },
-        { id: 'e3', scheduledAt: new Date('2026-07-21T12:00:00.000Z') },
+        { id: 'e1', ...base, scheduledAt: new Date('2026-07-20T00:00:00.000Z') },
+        { id: 'e2', ...base, scheduledAt: new Date('2026-07-22T00:00:00.000Z') },
+        { id: 'e3', ...base, scheduledAt: new Date('2026-07-21T12:00:00.000Z') },
       ]);
 
       const result = await svc.list(SCHOOL, CLASS_SECTION);
@@ -267,8 +299,11 @@ describe('ExamsService', () => {
 
       const rows = await svc.results(SCHOOL, EXAM_ID);
 
+      // The shared `SavedResult` contract types `publishedAt` as an ISO
+      // string, not `Date` — the shape every consumer actually receives once
+      // Nest serialises the response to JSON (mirrors HolidaysService.toRow).
       expect(rows).toEqual([
-        { studentId: 's-1', marks: 41, publishedAt: published },
+        { studentId: 's-1', marks: 41, publishedAt: published.toISOString() },
         { studentId: 's-2', marks: 88, publishedAt: null },
       ]);
       expect(txMock.result.findMany).toHaveBeenCalledWith(

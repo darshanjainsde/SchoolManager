@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type { ClassSectionSummary } from '@skoolos/types';
 import { isP2002, isP2003, isP2025 } from '../../common/errors/prisma-errors';
 import type { CreateClassDto, UpdateClassDto } from './management.dto';
 
@@ -14,9 +15,19 @@ interface RefOptions {
   classTeacherId?: string;
 }
 
+/**
+ * The full `list()` row: `ClassSectionSummary` (`@skoolos/types`) plus the
+ * admin-only fields (`classTeacher`, student `_count`) the SCHOOL_ADMIN
+ * classes screen also reads off this same response.
+ */
+type ClassSectionAdminRow = ClassSectionSummary & {
+  classTeacher: { firstName: string; lastName: string } | null;
+  _count: { students: number };
+};
+
 @Injectable()
 export class ClassesService {
-  async list(schoolId: string) {
+  async list(schoolId: string): Promise<ClassSectionAdminRow[]> {
     return withTenant(schoolId, (tx) =>
       tx.classSection.findMany({
         where: { schoolId },
