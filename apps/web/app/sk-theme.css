@@ -1,31 +1,39 @@
 /* ============================================================================
-   SkoolOS portal theme — "chalk & marigold"
+   Sckools portal theme — indigo & marigold
    The polished visual layer from the product pitch, scoped to .skosx so it
    never leaks into the marketing site or the existing admin styling.
-   Deep scholarly green as the calm brand; marigold amber does double duty as
-   the warm accent AND the "needs attention" signal; traffic-light semantics
-   for attendance/results.
+
+   Indigo #4F46E5 is the Sckools brand — it is what the logo and the Android
+   app already use, so a teacher moving between laptop and phone sees one
+   product rather than two. Marigold amber is the warm accent AND the "needs
+   attention" signal.
+
+   The neutrals are biased slightly toward the accent (a violet-tinted grey
+   rather than a green or pure one) so the chrome reads as chosen rather than
+   inherited. Semantic good / bad / late stay on their own traffic-light hues:
+   they encode attendance and result state, not brand, and must never collapse
+   into the accent or the status stops reading at a glance.
    ========================================================================== */
 .skosx {
-  --sk-paper: #f6f8f6;
-  --sk-ink: #142019;
-  --sk-ink-2: #46564d;
-  --sk-ink-3: #75847a;
+  --sk-paper: #f6f5fb;
+  --sk-ink: #17162f;
+  --sk-ink-2: #55537a;
+  --sk-ink-3: #8a88a7;
   --sk-card: #ffffff;
-  --sk-line: #e4e9e3;
-  --sk-line-2: #d3dbd3;
-  --sk-brand: #134d3b;
-  --sk-brand-2: #1c6c52;
-  --sk-brand-tint: #e4efe9;
-  --sk-amber: #cf7d16;
-  --sk-amber-tint: #fbf0dc;
+  --sk-line: #e5e4f0;
+  --sk-line-2: #d4d2e6;
+  --sk-brand: #4f46e5;
+  --sk-brand-2: #6d66f0;
+  --sk-brand-tint: #eef0ff;
+  --sk-amber: #f59e0b;
+  --sk-amber-tint: #fff6e6;
   --sk-good: #188f60;
   --sk-good-tint: #e2f3ea;
   --sk-bad: #c24a2c;
   --sk-bad-tint: #f9e8e1;
   --sk-late: #9a6b12;
-  --sk-shadow: 0 1px 2px rgba(15, 30, 24, 0.05), 0 10px 30px -14px rgba(15, 30, 24, 0.18);
-  --sk-shadow-sm: 0 1px 2px rgba(15, 30, 24, 0.06);
+  --sk-shadow: 0 1px 2px rgba(20, 19, 43, 0.05), 0 10px 30px -14px rgba(20, 19, 43, 0.2);
+  --sk-shadow-sm: 0 1px 2px rgba(20, 19, 43, 0.06);
   --sk-r: 16px;
   --sk-r-sm: 11px;
 
@@ -34,18 +42,21 @@
 }
 @media (prefers-color-scheme: dark) {
   .skosx {
-    --sk-paper: #0c1310;
-    --sk-ink: #e8eeea;
-    --sk-ink-2: #a6b3ab;
-    --sk-ink-3: #79877f;
-    --sk-card: #131c17;
-    --sk-line: #223028;
-    --sk-line-2: #2e3e35;
-    --sk-brand: #3faf8c;
-    --sk-brand-2: #5cc4a3;
-    --sk-brand-tint: #17251f;
-    --sk-amber: #e5a345;
-    --sk-amber-tint: #291f10;
+    --sk-paper: #0a0917;
+    --sk-ink: #efeefc;
+    --sk-ink-2: #aba9ce;
+    --sk-ink-3: #7a789e;
+    --sk-card: #14132a;
+    --sk-line: #262545;
+    --sk-line-2: #37355e;
+    /* Lifted well off #4f46e5: indigo at full saturation on a near-black
+       ground fails contrast for text and reads as a hole rather than a
+       highlight. */
+    --sk-brand: #8b87ff;
+    --sk-brand-2: #a29eff;
+    --sk-brand-tint: #232050;
+    --sk-amber: #f3b547;
+    --sk-amber-tint: #3b2d11;
     --sk-good: #35b57e;
     --sk-good-tint: #122720;
     --sk-bad: #e0694a;
@@ -262,20 +273,20 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
    they live on .skosx, not :root.
    ========================================================================== */
 html[data-theme='light'] .skosx {
-  --sk-paper: #f6f8f6; --sk-ink: #142019; --sk-ink-2: #46564d; --sk-ink-3: #75847a;
-  --sk-card: #ffffff; --sk-line: #e4e9e3; --sk-line-2: #d3dbd3;
-  --sk-brand: #134d3b; --sk-brand-2: #1c6c52; --sk-brand-tint: #e4efe9;
-  --sk-amber: #cf7d16; --sk-amber-tint: #fbf0dc;
+  --sk-paper: #f6f5fb; --sk-ink: #17162f; --sk-ink-2: #55537a; --sk-ink-3: #8a88a7;
+  --sk-card: #ffffff; --sk-line: #e5e4f0; --sk-line-2: #d4d2e6;
+  --sk-brand: #4f46e5; --sk-brand-2: #6d66f0; --sk-brand-tint: #eef0ff;
+  --sk-amber: #f59e0b; --sk-amber-tint: #fff6e6;
   --sk-good: #188f60; --sk-good-tint: #e2f3ea;
   --sk-bad: #c24a2c; --sk-bad-tint: #f9e8e1; --sk-late: #9a6b12;
-  --sk-shadow: 0 1px 2px rgba(15, 30, 24, 0.05), 0 10px 30px -14px rgba(15, 30, 24, 0.18);
-  --sk-shadow-sm: 0 1px 2px rgba(15, 30, 24, 0.06);
+  --sk-shadow: 0 1px 2px rgba(20, 19, 43, 0.05), 0 10px 30px -14px rgba(20, 19, 43, 0.2);
+  --sk-shadow-sm: 0 1px 2px rgba(20, 19, 43, 0.06);
 }
 html[data-theme='dark'] .skosx {
-  --sk-paper: #0c1310; --sk-ink: #e8eeea; --sk-ink-2: #a6b3ab; --sk-ink-3: #79877f;
-  --sk-card: #131c17; --sk-line: #223028; --sk-line-2: #2e3e35;
-  --sk-brand: #3faf8c; --sk-brand-2: #5cc4a3; --sk-brand-tint: #17251f;
-  --sk-amber: #e5a345; --sk-amber-tint: #291f10;
+  --sk-paper: #0a0917; --sk-ink: #efeefc; --sk-ink-2: #aba9ce; --sk-ink-3: #7a789e;
+  --sk-card: #14132a; --sk-line: #262545; --sk-line-2: #37355e;
+  --sk-brand: #8b87ff; --sk-brand-2: #a29eff; --sk-brand-tint: #232050;
+  --sk-amber: #f3b547; --sk-amber-tint: #3b2d11;
   --sk-good: #35b57e; --sk-good-tint: #122720;
   --sk-bad: #e0694a; --sk-bad-tint: #2a1712; --sk-late: #d9a43a;
   --sk-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -16px rgba(0, 0, 0, 0.6);
