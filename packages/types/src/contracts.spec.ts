@@ -1,4 +1,9 @@
-import { ATTENDANCE_STATUSES, type AttendanceStatusValue, type TeacherDayEntry } from './index';
+import {
+  ATTENDANCE_STATUSES,
+  type AttendanceStatusValue,
+  type TeacherDayEntry,
+  HOLIDAY_TYPES,
+} from './index';
 
 describe('shared portal contracts', () => {
   it('declares exactly the three attendance states the API accepts', () => {
@@ -11,6 +16,10 @@ describe('shared portal contracts', () => {
     // @ts-expect-error HALF_DAY is not an attendance state
     const bad: AttendanceStatusValue = 'HALF_DAY';
     expect(bad).toBe('HALF_DAY');
+  });
+
+  it('declares exactly the three holiday types the API accepts', () => {
+    expect([...HOLIDAY_TYPES].sort()).toEqual(['FESTIVAL', 'PUBLIC', 'SCHOOL']);
   });
 
   it('a break entry carries no slot and no register', () => {

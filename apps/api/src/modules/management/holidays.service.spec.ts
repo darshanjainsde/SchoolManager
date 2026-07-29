@@ -50,16 +50,28 @@ describe('HolidaysService', () => {
         },
       });
       expect(result.id).toBe(HOLIDAY_ID);
+      // The shared `Holiday` contract types these as ISO strings, not Date —
+      // matching what the client actually receives once Nest serialises the
+      // response to JSON.
+      expect(result.startDate).toBe('2026-08-15T00:00:00.000Z');
+      expect(result.endDate).toBeNull();
     });
 
     it('passes endDate through when supplied', async () => {
-      txMock.holiday.create.mockResolvedValue({});
+      txMock.holiday.create.mockResolvedValue({
+        id: HOLIDAY_ID,
+        name: 'Diwali',
+        type: 'FESTIVAL',
+        startDate: new Date('2026-08-15'),
+        endDate: new Date('2026-08-16'),
+      });
 
-      await svc.create(SCHOOL, { ...dto, endDate: '2026-08-16' });
+      const result = await svc.create(SCHOOL, { ...dto, endDate: '2026-08-16' });
 
       expect(txMock.holiday.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ endDate: new Date('2026-08-16') }),
       });
+      expect(result.endDate).toBe('2026-08-16T00:00:00.000Z');
     });
 
     it('rejects a type outside PUBLIC/FESTIVAL/SCHOOL without opening a transaction', async () => {

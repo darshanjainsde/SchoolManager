@@ -17,7 +17,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ATTENDANCE_STATUSES, AttendanceStatusValue } from '@skoolos/types';
+import { ATTENDANCE_STATUSES, AttendanceStatusValue, HOLIDAY_TYPES, HolidayType } from '@skoolos/types';
 
 // ── Academic Year ────────────────────────────────────────────────────────────
 
@@ -625,17 +625,17 @@ export class AssignSubstitutionDto {
 }
 
 // ── Holidays ─────────────────────────────────────────────────────────────────
-
-export const HOLIDAY_TYPES = ['PUBLIC', 'FESTIVAL', 'SCHOOL'] as const;
-export type HolidayTypeValue = (typeof HOLIDAY_TYPES)[number];
+// HOLIDAY_TYPES/HolidayType come from @skoolos/types — the same union the
+// web/mobile Holiday screens render against, so a new type can't be added on
+// one side without the other noticing.
 
 export class CreateHolidayDto {
   @IsString()
   @Length(1, 120)
   name!: string;
 
-  @IsIn(HOLIDAY_TYPES)
-  type!: HolidayTypeValue;
+  @IsIn([...HOLIDAY_TYPES])
+  type!: HolidayType;
 
   @IsDateString()
   startDate!: string;

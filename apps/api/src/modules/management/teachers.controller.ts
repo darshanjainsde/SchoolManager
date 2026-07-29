@@ -13,6 +13,8 @@ import {
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
+import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { TeachersService } from './teachers.service';
@@ -34,6 +36,21 @@ export class TeachersController {
   @Get()
   list() {
     return this.teachers.list(this.sid());
+  }
+
+  /**
+   * Static path — must stay declared above any future `@Get(':id')` on this
+   * controller (there isn't one today), or Nest would match `me` as the
+   * `:id` param the moment one is added. `RolesGuard`/`@Roles` are
+   * method-level (mirroring `createLogin`/`resendInvite` below) because this
+   * is the one GET on this controller that is TEACHER-only, not open to
+   * every MANAGEMENT-feature role.
+   */
+  @Get('me')
+  @UseGuards(RolesGuard)
+  @Roles('TEACHER')
+  me(@CurrentUser() u: SchoolJwtPayload) {
+    return this.teachers.me(this.sid(), u.sub);
   }
 
   @Post()

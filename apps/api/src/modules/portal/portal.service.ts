@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { getPlatformPrisma, withTenant, type AttendanceStatus, type Holiday, type TenantTx } from '@skoolos/db';
+import { getPlatformPrisma, withTenant, type AttendanceStatus, type TenantTx } from '@skoolos/db';
+import type { Holiday } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002 } from '../../common/errors/prisma-errors';
 import { TenantContextService } from '../tenancy';

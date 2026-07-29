@@ -107,3 +107,37 @@ export interface RegisterChangeRow {
   expiresAt: string | null;
   createdAt: string;
 }
+
+// ── Holidays ─────────────────────────────────────────────────────────────────
+
+/**
+ * A school holiday. `startDate`/`endDate` are `@db.Date` columns serialised as
+ * ISO timestamps at UTC midnight — plain calendar dates, so read them in UTC.
+ * Reading them in the browser's local zone rolls the day backwards for any
+ * negative UTC offset.
+ */
+export const HOLIDAY_TYPES = ['PUBLIC', 'FESTIVAL', 'SCHOOL'] as const;
+export type HolidayType = (typeof HOLIDAY_TYPES)[number];
+
+export interface Holiday {
+  id: string;
+  name: string;
+  type: HolidayType;
+  startDate: string;
+  endDate: string | null;
+}
+
+// ── Teacher profile ──────────────────────────────────────────────────────────
+
+/** Mirrors TeachersService.me — the caller's own Teacher row, `GET /manage/teachers/me`. */
+export interface TeacherProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  /** Subject names from TeacherSubject, alphabetical. */
+  subjects: string[];
+  /** Sections where they are the class teacher, as "7-B". */
+  classTeacherOf: string[];
+}

@@ -212,3 +212,97 @@ describe('TeachersService.resendInvite', () => {
     expect(invites.sendInvite).not.toHaveBeenCalled();
   });
 });
+
+describe('TeachersService.me', () => {
+  const passwords = { hash: jest.fn() };
+  const invites = { sendInvite: jest.fn() };
+  const svc = new TeachersService(
+    passwords as unknown as PasswordService,
+    invites as unknown as LoginInviteService,
+  );
+  const USER_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) =>
+      fn(txMock),
+    );
+  });
+
+  it("returns the caller's own Teacher row, resolved from userId (never an id in the URL)", async () => {
+    txMock.teacher.findFirst.mockResolvedValue({
+      id: TEACHER_ID,
+      firstName: 'Priya',
+      lastName: 'Rao',
+      email: 'priya@example.com',
+      phone: '9999999999',
+      teacherSubjects: [{ subject: { name: 'Chemistry' } }],
+      classSections: [{ name: 'A', grade: { name: '9', order: 9 } }],
+    });
+
+    const result = await svc.me(SCHOOL, USER_ID);
+
+    expect(txMock.teacher.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: USER_ID } }),
+    );
+    expect(result).toEqual({
+      id: TEACHER_ID,
+      firstName: 'Priya',
+      lastName: 'Rao',
+      email: 'priya@example.com',
+      phone: '9999999999',
+      subjects: ['Chemistry'],
+      classTeacherOf: ['9-A'],
+    });
+  });
+
+  it('sorts subjects alphabetically and classTeacherOf by grade order, not DB/insertion order', async () => {
+    txMock.teacher.findFirst.mockResolvedValue({
+      id: TEACHER_ID,
+      firstName: 'Priya',
+      lastName: 'Rao',
+      email: 'priya@example.com',
+      phone: null,
+      // DB order: Physics before Chemistry — the assertion below only
+      // passes if the service actually sorts rather than passing this
+      // through.
+      teacherSubjects: [{ subject: { name: 'Physics' } }, { subject: { name: 'Chemistry' } }],
+      // Grade 10 comes back from the DB before grade 9. A lexicographic sort
+      // on "10-B"/"9-A" would (wrongly) keep "10-B" first; sorting by
+      // Grade.order puts "9-A" first, matching how the rest of the school
+      // numbers its grades.
+      classSections: [
+        { name: 'B', grade: { name: '10', order: 10 } },
+        { name: 'A', grade: { name: '9', order: 9 } },
+      ],
+    });
+
+    const result = await svc.me(SCHOOL, USER_ID);
+
+    expect(result.subjects).toEqual(['Chemistry', 'Physics']);
+    expect(result.classTeacherOf).toEqual(['9-A', '10-B']);
+  });
+
+  it('throws a readable 404 when the TEACHER-role caller has no Teacher row', async () => {
+    txMock.teacher.findFirst.mockResolvedValue(null);
+
+    await expect(svc.me(SCHOOL, USER_ID)).rejects.toThrow('No teacher profile found for this login');
+  });
+
+  it('returns empty arrays, not undefined, for a teacher with no subjects and no class-teacher section', async () => {
+    txMock.teacher.findFirst.mockResolvedValue({
+      id: TEACHER_ID,
+      firstName: 'Priya',
+      lastName: 'Rao',
+      email: null,
+      phone: null,
+      teacherSubjects: [],
+      classSections: [],
+    });
+
+    const result = await svc.me(SCHOOL, USER_ID);
+
+    expect(result.subjects).toEqual([]);
+    expect(result.classTeacherOf).toEqual([]);
+  });
+});

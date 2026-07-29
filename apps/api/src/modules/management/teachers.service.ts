@@ -1,12 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type { TeacherProfile } from '@skoolos/types';
 import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
 import type { CreateLoginDto, CreateTeacherDto, UpdateTeacherDto } from './management.dto';
 import type { LoginInviteResult } from './students.service';
+
+export type { TeacherProfile };
 
 @Injectable()
 export class TeachersService {
@@ -25,6 +28,48 @@ export class TeachersService {
         },
       }),
     );
+  }
+
+  /**
+   * The caller's own Teacher row for `GET /manage/teachers/me` — no id in
+   * the URL, so a TEACHER can only ever read their own profile. A 404 here
+   * means the TEACHER-role login has no linked Teacher row (deleted out from
+   * under it); RolesGuard already excludes SCHOOL_ADMIN, who wouldn't have
+   * one either but for a different, unremarkable reason.
+   */
+  async me(schoolId: string, userId: string): Promise<TeacherProfile> {
+    return withTenant(schoolId, async (tx) => {
+      const teacher = await tx.teacher.findFirst({
+        where: { userId },
+        include: {
+          teacherSubjects: { include: { subject: { select: { name: true } } } },
+          classSections: { select: { name: true, grade: { select: { name: true, order: true } } } },
+        },
+      });
+      if (!teacher) {
+        throw new NotFoundException('No teacher profile found for this login');
+      }
+
+      return {
+        id: teacher.id,
+        firstName: teacher.firstName,
+        lastName: teacher.lastName,
+        email: teacher.email,
+        phone: teacher.phone,
+        // Alphabetical, not DB/insertion order — the DTO comment on
+        // TeacherProfile.subjects promises that, and a UI listing them
+        // shouldn't shuffle every time a teacher is re-fetched.
+        subjects: teacher.teacherSubjects.map((ts) => ts.subject.name).sort(),
+        // Grade.order, not a string sort on "7-B" — a lexicographic sort would
+        // put "10-A" ahead of "7-B" (same reason ClassesService/CatalogService
+        // order grades by `order` everywhere else), which reads as wrong for
+        // the one thing this list is for: seeing your classes in the order a
+        // school actually numbers them.
+        classTeacherOf: [...teacher.classSections]
+          .sort((a, b) => a.grade.order - b.grade.order || a.name.localeCompare(b.name))
+          .map((cs) => `${cs.grade.name}-${cs.name}`),
+      };
+    });
   }
 
   async create(schoolId: string, dto: CreateTeacherDto) {
