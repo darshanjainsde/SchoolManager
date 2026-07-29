@@ -1,5 +1,5 @@
 import { IsEmail, IsIn, IsOptional, IsString, Length } from 'class-validator';
-import type { PublicEvent } from '../community/community.dto';
+import type { PublicEvent } from '../community';
 
 export class SubmitEnquiryDto {
   @IsString()

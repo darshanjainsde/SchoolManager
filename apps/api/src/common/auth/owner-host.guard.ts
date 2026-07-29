@@ -1,5 +1,5 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
-import { TenantContextService } from '../../tenancy';
+import { TenantContextService } from '../../modules/tenancy';
 
 @Injectable()
 export class OwnerHostGuard implements CanActivate {

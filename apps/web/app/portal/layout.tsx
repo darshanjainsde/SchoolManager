@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
+import { useApi } from '@/lib/use-api';
+import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
 import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
@@ -33,15 +35,19 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const hydrated = useHydrated();
   const host = useHost();
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  const status = useAuthStore((s) => s.status);
   const audience = useAuthStore((s) => s.audience);
+  const probeApi = useApi({ audience: 'school', hostHeader: host });
+  // Waits for the tenant host: a school refresh without it cannot resolve
+  // which school the session belongs to.
+  useSessionProbe(probeApi, 'school', !!host);
   const clear = useAuthStore((s) => s.clear);
 
   useEffect(() => {
-    if (hydrated && (!refreshToken || audience !== 'school')) {
+    if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) {
       router.replace('/login');
     }
-  }, [hydrated, refreshToken, audience, router]);
+  }, [hydrated, status, audience, router]);
 
   // Until hydrated, render nothing so the first client paint matches the server.
   if (!hydrated) return null;
@@ -63,7 +69,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!refreshToken || audience !== 'school') return null;
+  if (status !== 'authed' || audience !== 'school') return null;
 
   const isActive = (href: string) =>
     href === '/portal' ? pathname === '/portal' : pathname === href || pathname.startsWith(href + '/');

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
-import { isP2002, p2002Target } from './internal/prisma-errors';
+import { isP2002, p2002Target } from '../../common/errors/prisma-errors';
 import { isSameIstDay, resolveAsOfDate, startOfIstDay } from './internal/timetable-date';
 import type { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
 

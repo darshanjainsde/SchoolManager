@@ -44,7 +44,7 @@ function Logo({ data, small }: { data: PublicSiteData; small?: boolean }) {
   return (
     <div className="flex items-center gap-2.5 min-w-0">
       {logoUrl ? (
-        <img src={logoUrl} alt={schoolName} className={small ? 'h-9 w-auto' : 'h-10 w-auto'} />
+        <img src={logoUrl} alt={schoolName} decoding="async" className={small ? 'h-9 w-auto' : 'h-10 w-auto'} />
       ) : (
         <span
           className={`${small ? 'h-9 w-9' : 'h-10 w-10'} rounded-2xl ps-logo-bg grid place-items-center font-bold text-white ps-head`}

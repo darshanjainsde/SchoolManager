@@ -6,7 +6,7 @@ import type { PlatformJwtPayload } from '../../../common/auth/jwt-payload';
 import { MarketingService, SetLeadStatusDto, UpdateMarketingConfigDto } from '../../marketing';
 import { CreateSchoolDto, ModerateEventDto, OwnerCreateEventDto, SetFeatureDto, SetStatusDto, SetTierDto } from './owner.dto';
 import { ImpersonationService } from './impersonation.service';
-import { OwnerHostGuard } from './owner-host.guard';
+import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
 import { OwnerEventsService } from './owner-events.service';
 import { OwnerOverviewService } from './owner-overview.service';
 import { OwnerSchoolsService } from './owner-schools.service';

@@ -50,7 +50,9 @@ function formatDate(iso: string): string {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function ConnectPage() {
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  // Session state, not the token itself — the refresh token is an HttpOnly
+  // cookie the client cannot read.
+  const signedIn = useAuthStore((s) => s.status) === 'authed';
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const qc = useQueryClient();
 
@@ -62,14 +64,14 @@ export default function ConnectPage() {
   } = useQuery({
     queryKey: ['owner-events', 'PENDING'],
     queryFn: () => api.get<NetworkEvent[]>('/owner/events?status=PENDING'),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   // ── Schools query (reuse key from schools page) ────────────────────────────
   const { data: schools } = useQuery({
     queryKey: ['owner-schools'],
     queryFn: () => api.get<SchoolRow[]>('/owner/schools'),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   // ── Approve mutation ───────────────────────────────────────────────────────

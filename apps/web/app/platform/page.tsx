@@ -74,7 +74,9 @@ function formatBytes(n: number): string {
 }
 
 export default function PlatformDashboardPage() {
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  // Session state, not the token itself — the refresh token is an HttpOnly
+  // cookie the client cannot read.
+  const signedIn = useAuthStore((s) => s.status) === 'authed';
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const qc = useQueryClient();
   const [impersonating, setImpersonating] = useState<string | null>(null);
@@ -82,19 +84,19 @@ export default function PlatformDashboardPage() {
   const overview = useQuery({
     queryKey: ['owner-overview'],
     queryFn: () => api.get<OverviewResponse>('/owner/overview'),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   const leads = useQuery({
     queryKey: ['owner-leads'],
     queryFn: () => api.get<Lead[]>('/owner/leads'),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   const config = useQuery({
     queryKey: ['owner-marketing-config'],
     queryFn: () => api.get<MarketingConfigRow>('/owner/marketing-config'),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   const leadStatus = useMutation({

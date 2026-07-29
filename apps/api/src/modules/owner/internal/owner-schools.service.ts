@@ -2,7 +2,7 @@ import { ConflictException, Injectable, Logger, NotFoundException } from '@nestj
 import { getPlatformPrisma, resolveFeatures, Prisma, DEFAULT_COURSES } from '@skoolos/db';
 import { randomBytes } from 'node:crypto';
 import { PasswordService } from '../../auth';
-import { FeatureResolverService } from '../../features/internal/feature-resolver.service';
+import { FeatureResolverService } from '../../features';
 import { StorageService } from '../../../common/storage/storage.service';
 import { CreateSchoolDto } from './owner.dto';
 

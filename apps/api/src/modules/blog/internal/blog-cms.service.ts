@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, Prisma, type BlogPost } from '@skoolos/db';
-import { isP2002 } from '../../management/internal/prisma-errors';
+import { isP2002 } from '../../../common/errors/prisma-errors';
 import type { CreatePostDto, UpdatePostDto, PatchSelectionDto, BlogSettingsDto } from './blog.dto';
 
 /**

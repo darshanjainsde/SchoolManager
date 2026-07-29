@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
-import { isP2002, isP2003, isP2025 } from './internal/prisma-errors';
+import { isP2002, isP2003, isP2025 } from '../../common/errors/prisma-errors';
 import type { CreateClassDto, UpdateClassDto } from './management.dto';
 
 interface RefOptions {

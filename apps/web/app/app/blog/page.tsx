@@ -97,7 +97,18 @@ export default function BlogPage() {
       </div>
 
       {activeTab === 'posts' && <PostsTab postsQuery={postsQuery} onEdit={handleEdit} onNew={handleNew} />}
-      {activeTab === 'editor' && <EditorTab target={editingTarget} onSaved={handleSaved} onStartNew={handleNew} />}
+      {/* key: the editor seeds its fields from `target` at mount instead of
+          syncing them in an effect, so switching post — or getting a fresh row
+          back from a save — must remount it. `updatedAt` is what makes a save
+          remount: the server may normalise the slug or status. */}
+      {activeTab === 'editor' && (
+        <EditorTab
+          key={editingTarget && editingTarget !== 'new' ? `${editingTarget.id}:${editingTarget.updatedAt}` : 'new'}
+          target={editingTarget}
+          onSaved={handleSaved}
+          onStartNew={handleNew}
+        />
+      )}
       {activeTab === 'library' && <LibraryTab libraryQuery={libraryQuery} />}
       {activeTab === 'layout' && <LayoutTab settingsQuery={settingsQuery} selectionsQuery={selectionsQuery} />}
     </div>

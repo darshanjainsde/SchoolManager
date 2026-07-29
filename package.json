@@ -16,10 +16,15 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:generate": "pnpm --filter @skoolos/db generate",
     "db:migrate": "pnpm --filter @skoolos/db migrate:dev",
-    "db:seed": "pnpm --filter @skoolos/db seed"
+    "db:seed": "pnpm --filter @skoolos/db seed",
+    "dash": "node tools/test-dashboard/server.mjs"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["argon2", "prisma", "@prisma/client"],
+    "onlyBuiltDependencies": [
+      "argon2",
+      "prisma",
+      "@prisma/client"
+    ],
     "overrides": {
       "@types/react": "19.2.17",
       "@types/react-dom": "19.2.3"

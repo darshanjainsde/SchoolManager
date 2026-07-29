@@ -4,7 +4,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveSchoolRecipients, resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
-import { isP2002, isP2025 } from './internal/prisma-errors';
+import { isP2002, isP2025 } from '../../common/errors/prisma-errors';
 import { AttendanceService } from './attendance.service';
 import type { CreateAnnouncementDto, UpdateAnnouncementDto } from './management.dto';
 

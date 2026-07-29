@@ -6,7 +6,7 @@
     "dev": "next dev -p ${WEB_PORT:-3000}",
     "build": "next build",
     "start": "next start -p ${WEB_PORT:-3000}",
-    "lint": "next lint --dir app",
+    "lint": "next lint --dir app --dir components --dir lib",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/generate-icons.mjs",
     "blog-art": "node scripts/generate-blog-art.mjs"

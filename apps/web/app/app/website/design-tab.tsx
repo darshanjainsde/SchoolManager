@@ -336,7 +336,7 @@ export default function DesignTab() {
                         <div className="group relative h-24 w-36 overflow-hidden rounded-lg border border-slate-200">
                           {url ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={url} alt={`Hero image ${i + 1}`} className="h-full w-full object-cover" />
+                            <img src={url} alt={`Hero image ${i + 1}`} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                           ) : (
                             <div className="grid h-full w-full place-items-center bg-slate-100 text-xs text-slate-400">
                               image {i + 1}

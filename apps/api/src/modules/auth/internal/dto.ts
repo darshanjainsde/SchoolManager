@@ -51,9 +51,12 @@ export class LoginDto {
 }
 
 export class RefreshDto {
-  @ApiProperty()
+  /** Optional: the token normally arrives as an HttpOnly cookie. The body form
+   *  is kept so sessions created before the cookie shipped can still refresh. */
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  refreshToken!: string;
+  refreshToken?: string;
 }
 
 export class ForgotPasswordDto {

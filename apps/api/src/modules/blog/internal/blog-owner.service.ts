@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, type BlogBlock, type BlogPost } from '@skoolos/db';
-import { isP2002 } from '../../management/internal/prisma-errors';
+import { isP2002 } from '../../../common/errors/prisma-errors';
 
 @Injectable()
 export class BlogOwnerService {

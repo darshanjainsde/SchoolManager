@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import type { BlogPost } from '@skoolos/db';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
-import { OwnerHostGuard } from '../../owner/internal/owner-host.guard';
+import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
 import { BlogOwnerService } from './blog-owner.service';
 import { RejectPostDto } from './blog.dto';
 

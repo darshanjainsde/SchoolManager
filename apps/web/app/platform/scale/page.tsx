@@ -174,6 +174,8 @@ const CHECKPOINTS: Checkpoint[] = [
     build: [
       'Redis caching for tenant lookups',
       'Move images to a CDN',
+      'CDN-cache the public pages — every view is a MISS today',
+      'Per-host data cache + revalidate-on-save for school sites',
       'Monitoring & error tracking',
       'Automated backups',
       'Load testing',
@@ -181,6 +183,8 @@ const CHECKPOINTS: Checkpoint[] = [
     ask: [
       'Cache tenant host lookups in Redis',
       'Serve school images through a CDN',
+      'CDN-cache the public school pages: middleware Cache-Control on public paths first, proven on two staging hosts, then the /s/[host] ISR refactor',
+      'Cache /public/site per host with a tag, and revalidate that tag when a school saves its website',
       'Add error tracking and uptime monitoring',
       'Load-test the API to 500 schools',
     ],
@@ -213,13 +217,15 @@ function currentCheckpointKey(schoolCount: number): string {
 }
 
 export default function PlatformScalePage() {
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  // Session state, not the token itself — the refresh token is an HttpOnly
+  // cookie the client cannot read.
+  const signedIn = useAuthStore((s) => s.status) === 'authed';
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
 
   const overview = useQuery({
     queryKey: ['owner-overview'],
     queryFn: () => api.get<OverviewResponse>('/owner/overview'),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   const schoolCount = overview.data?.totals.schools ?? 0;
