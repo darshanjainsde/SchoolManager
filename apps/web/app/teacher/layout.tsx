@@ -33,7 +33,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[]
   { href: '/teacher/assignments', label: 'Assignments', icon: BookOpen },
   { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/teacher/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/teacher/leave', label: 'Leave', icon: CalendarOff },
+  { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
 ];
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
