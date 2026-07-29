@@ -41,7 +41,23 @@ describe('RegisterChangeService', () => {
   it('creates a pending request for a class the teacher holds', async () => {
     txMock.registerChangeRequest.create.mockResolvedValue(row());
     const out = await svc.request(SCHOOL, USER, { classSectionId: SECTION, date: PAST, reason: 'late slip' });
-    expect(out.status).toBe('PENDING');
+    expect(out.id).toBe('rc-1');
+    // Assert on what was actually sent to `create`, not the hardcoded mock
+    // row — that mock returns `status: 'PENDING'` regardless of what the
+    // service does, so it can't catch `status: 'PENDING'` being dropped
+    // from the write itself.
+    expect(txMock.registerChangeRequest.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          schoolId: SCHOOL,
+          classSectionId: SECTION,
+          date: new Date(PAST),
+          requestedByTeacherId: TID,
+          reason: 'late slip',
+          status: 'PENDING',
+        }),
+      }),
+    );
   });
 
   it('refuses a request for a class the teacher does not hold', async () => {

@@ -43,6 +43,69 @@ describe('requireClassAccess', () => {
     );
   });
 
+  it('does not grant access via a slot closed before the queried date', async () => {
+    const t = tx();
+    t.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+    // Simulates the DB excluding a slot whose effectiveTo <= asOf (closed before DATE).
+    t.classSection.findFirst.mockResolvedValue(null);
+    t.substitution.findFirst.mockResolvedValue(null);
+
+    await expect(requireClassAccess(t, 'user-1', 'sec-9', DATE)).rejects.toMatchObject({
+      status: 403,
+    });
+
+    const asOf = new Date(`${DATE}T00:00:00+05:30`);
+    expect(t.classSection.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'sec-9',
+        OR: [
+          { classTeacherId: 'teacher-1' },
+          {
+            timetableSlots: {
+              some: {
+                teacherId: 'teacher-1',
+                effectiveFrom: { lte: asOf },
+                OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+  });
+
+  it('does not grant access via a slot whose effectiveFrom is still in the future', async () => {
+    const t = tx();
+    t.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+    // Simulates the DB excluding a slot whose effectiveFrom > asOf (not yet active on DATE).
+    t.classSection.findFirst.mockResolvedValue(null);
+    t.substitution.findFirst.mockResolvedValue(null);
+
+    await expect(requireClassAccess(t, 'user-1', 'sec-9', DATE)).rejects.toMatchObject({
+      status: 403,
+    });
+
+    const asOf = new Date(`${DATE}T00:00:00+05:30`);
+    expect(t.classSection.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              timetableSlots: {
+                some: {
+                  teacherId: 'teacher-1',
+                  effectiveFrom: { lte: asOf },
+                  OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
+                },
+              },
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
   it('403s a caller with no Teacher row', async () => {
     const t = tx();
     t.teacher.findFirst.mockResolvedValue(null);

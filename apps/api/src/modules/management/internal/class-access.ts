@@ -1,4 +1,5 @@
 import { ApiError } from '../../../common/errors/api-error';
+import { resolveAsOfDate } from './timetable-date';
 
 /** The slice of a tenant transaction this rule needs. Structural, so callers pass their `tx` unchanged. */
 export interface ClassAccessTx {
@@ -34,12 +35,21 @@ export async function requireClassAccess(
     throw new ApiError('CLASS_NOT_OWNED', `Only a teacher can ${action} a class.`, 403);
   }
 
+  const asOf = resolveAsOfDate(date, new Date());
   const owned = await tx.classSection.findFirst({
     where: {
       id: classSectionId,
       OR: [
         { classTeacherId: teacher.id },
-        { timetableSlots: { some: { teacherId: teacher.id } } },
+        {
+          timetableSlots: {
+            some: {
+              teacherId: teacher.id,
+              effectiveFrom: { lte: asOf },
+              OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
+            },
+          },
+        },
       ],
     },
     select: { id: true },

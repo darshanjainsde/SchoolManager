@@ -117,6 +117,24 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
     expect(txMock.announcement.create).not.toHaveBeenCalled();
   });
 
+  it('403s when a teacher targets a class they only cover as a substitute (covering does not grant broadcast rights)', async () => {
+    attendance.myClassSections.mockResolvedValue([
+      { classSectionId: CLASS_A, name: '5-A', studentCount: 2, covering: false },
+      { classSectionId: CLASS_B, name: '5-B', studentCount: 3, covering: true },
+    ] satisfies MyClassSection[]);
+
+    const dto: CreateAnnouncementDto = {
+      title: 'Covering period',
+      body: 'Should be rejected.',
+      classSectionIds: [CLASS_B],
+    };
+
+    await expect(svc.create(SCHOOL, TEACHER_USER, 'TEACHER', dto)).rejects.toMatchObject({
+      response: { code: 'CLASS_NOT_OWNED' },
+    });
+    expect(txMock.announcement.create).not.toHaveBeenCalled();
+  });
+
   it('403s when a teacher omits classSectionIds (no implicit whole-school for teachers)', async () => {
     const dto: CreateAnnouncementDto = { title: 'Whole school?', body: 'Nope.' };
 

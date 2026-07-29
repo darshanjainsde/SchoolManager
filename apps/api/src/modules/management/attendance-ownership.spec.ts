@@ -14,6 +14,7 @@ jest.mock('@skoolos/db', () => ({
 }));
 
 import { AttendanceService } from './attendance.service';
+import { istTodayISO } from './internal/timetable-date';
 import type { NotificationService } from '../../common/notifications/notification.service';
 import type { AuditService } from '../../common/audit/audit.service';
 
@@ -23,11 +24,7 @@ const TEACHER_ID = 'teacher-1';
 const MINE = 'section-mine';
 const NOT_MINE = 'section-not-mine';
 
-function today(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+const today = () => istTodayISO();
 
 describe('AttendanceService ownership', () => {
   const notifications = { notify: jest.fn() };

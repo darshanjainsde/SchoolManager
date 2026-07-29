@@ -91,7 +91,15 @@ export class AnnouncementsService {
           403,
         );
       }
-      const mine = await this.attendance.myClassSections(schoolId, createdByUserId, role);
+      // `myClassSections` also includes sections the caller is merely covering
+      // as a substitute today (Task 2). Covering one period does not make you
+      // one of the class's teachers, so it must not grant the broadcast
+      // rights this endpoint hands out — drop those rows before checking
+      // ownership. (Attendance/Today legitimately want the covered classes,
+      // so `myClassSections` itself is unchanged.)
+      const mine = (await this.attendance.myClassSections(schoolId, createdByUserId, role)).filter(
+        (c) => !c.covering,
+      );
       const owned = new Set(mine.map((c) => c.classSectionId));
       for (const id of requestedIds) {
         if (!owned.has(id)) {
