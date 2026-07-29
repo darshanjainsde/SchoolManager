@@ -6,11 +6,9 @@ import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   ClipboardCheck,
-  BookOpen,
   FileText,
   GraduationCap,
   Megaphone,
-  Inbox,
   CalendarDays,
   CalendarOff,
   CalendarRange,
@@ -28,15 +26,19 @@ import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
 
-const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[] = [
+// Every entry here must be a working tool, not a placeholder — a nav entry
+// implies the destination does something. `/teacher/assignments` stays a
+// reachable (but unlisted) honest placeholder; `/teacher/inbox` is deleted
+// outright (Part C) since it always rendered "Nothing yet." against an
+// endpoint that doesn't exist. See teacher-nav-honesty.spec for the
+// dead-route regression test.
+export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[] = [
   { href: '/teacher', label: 'My classes', icon: LayoutDashboard },
   { href: '/teacher/timetable', label: 'Timetable', icon: CalendarDays },
   { href: '/teacher/attendance', label: 'Attendance', icon: ClipboardCheck },
   { href: '/teacher/tests', label: 'Tests', icon: FileText },
   { href: '/teacher/results', label: 'Results', icon: GraduationCap },
-  { href: '/teacher/assignments', label: 'Assignments', icon: BookOpen },
   { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
-  { href: '/teacher/inbox', label: 'Inbox', icon: Inbox },
   { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
   { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },
 ];
