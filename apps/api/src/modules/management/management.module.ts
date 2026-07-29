@@ -14,6 +14,7 @@ import { StudentsService } from './students.service';
 import { StudentsController } from './students.controller';
 import { TimetableService } from './timetable.service';
 import { TimetableController } from './timetable.controller';
+import { TeacherDayService } from './teacher-day.service';
 import { AnnouncementsService } from './announcements.service';
 import { AnnouncementsController } from './announcements.controller';
 import { AttendanceService } from './attendance.service';
@@ -33,7 +34,7 @@ import { HolidaysController } from './holidays.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -50,6 +51,6 @@ import { HolidaysController } from './holidays.controller';
     SubstitutionController,
     HolidaysController,
   ],
-  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService],
+  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService],
 })
 export class ManagementModule {}

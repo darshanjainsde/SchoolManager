@@ -13,9 +13,13 @@ import {
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
+import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from './timetable.service';
+import { TeacherDayService } from './teacher-day.service';
+import { istTodayISO } from './internal/timetable-date';
 import { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
 
 @Controller('manage/timetable')
@@ -25,11 +29,29 @@ import { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
 export class TimetableController {
   constructor(
     private readonly timetable: TimetableService,
+    private readonly teacherDay: TeacherDayService,
     private readonly tenant: TenantContextService,
   ) {}
 
   private sid(): string {
     return this.tenant.requireTenant().schoolId;
+  }
+
+  /**
+   * The caller's own day. Declared above `@Get()` so the static path matches
+   * before the class-scoped read.
+   */
+  @Roles('SCHOOL_ADMIN', 'TEACHER')
+  @Get('my-day')
+  myDay(@CurrentUser() u: SchoolJwtPayload, @Query('date') date?: string) {
+    return this.teacherDay.forTeacher(this.sid(), u.sub, u.role, date ?? istTodayISO());
+  }
+
+  /** The caller's own week, for the timetable grid. */
+  @Roles('SCHOOL_ADMIN', 'TEACHER')
+  @Get('mine')
+  myWeek(@CurrentUser() u: SchoolJwtPayload, @Query('date') date?: string) {
+    return this.timetable.listForTeacher(this.sid(), u.sub, date);
   }
 
   @Roles('SCHOOL_ADMIN', 'TEACHER')

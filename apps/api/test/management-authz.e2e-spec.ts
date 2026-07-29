@@ -99,4 +99,29 @@ describe('management authorization', () => {
       .set(as(teacherToken))
       .expect(403);
   });
+
+  it('a TEACHER can read their own day', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/manage/timetable/my-day?date=2026-08-03')
+      .set(as(teacherToken))
+      .expect(200);
+    expect(res.body).toHaveProperty('entries');
+    expect(res.body.dayOfWeek).toBe(1);
+  });
+
+  it('a STUDENT cannot read a teacher day', async () => {
+    await request(app.getHttpServer())
+      .get('/manage/timetable/my-day')
+      .set(as(studentToken))
+      .expect(403);
+  });
+
+  it('my-day is matched before the class-scoped read', async () => {
+    // A bare GET /manage/timetable without classSectionId must still 400,
+    // proving the static route did not swallow it.
+    await request(app.getHttpServer())
+      .get('/manage/timetable')
+      .set(as(teacherToken))
+      .expect(400);
+  });
 });

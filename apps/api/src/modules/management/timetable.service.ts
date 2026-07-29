@@ -232,6 +232,29 @@ export class TimetableService {
     });
   }
 
+  /**
+   * The caller's own active slots for the whole week, as of `date`
+   * (default today). Same effectiveFrom/effectiveTo versioning as
+   * `listForClass`, so a past date returns the timetable as it stood then.
+   */
+  async listForTeacher(schoolId: string, userId: string, date?: string) {
+    const asOf = resolveAsOfDate(date, new Date());
+    return withTenant(schoolId, async (tx) => {
+      const teacher = await tx.teacher.findFirst({ where: { userId } });
+      if (!teacher) return [];
+      return tx.timetableSlot.findMany({
+        where: {
+          schoolId,
+          teacherId: teacher.id,
+          effectiveFrom: { lte: asOf },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
+        },
+        orderBy: [{ dayOfWeek: 'asc' }, { period: { order: 'asc' } }],
+        include: SLOT_INCLUDE,
+      });
+    });
+  }
+
   /** Closes the active version (`effectiveTo = today`) rather than deleting — history is preserved. */
   async unassign(schoolId: string, id: string) {
     const today = startOfIstDay(new Date());
