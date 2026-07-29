@@ -42,6 +42,18 @@ const WEEK: WireSlot[] = [1, 2, 3, 4, 5].flatMap((day) => [
   }),
 ]);
 
+// A week that includes Sunday (dayOfWeek 7) and Monday (dayOfWeek 1) so we can
+// test the getDay() mapping (0 = Sunday) → (7 = Sunday in schema) in both directions.
+const WEEK_WITH_WEEKEND: WireSlot[] = [7, 1, 2, 3, 4, 5].flatMap((day) => [
+  wireSlot({ id: `s${day}-1`, dayOfWeek: day, period: { id: 'p1', label: 'Period 1', order: 1, startTime: '08:00', endTime: '08:45' } }),
+  wireSlot({
+    id: `s${day}-2`,
+    dayOfWeek: day,
+    period: { id: 'p2', label: 'Period 2', order: 2, startTime: '08:50', endTime: '09:35' },
+    subject: { id: 'sub2', name: 'Science', code: 'SCI' },
+  }),
+]);
+
 beforeEach(() => {
   vi.mocked(useHost).mockReturnValue('school.sckools.com');
 });
@@ -119,6 +131,39 @@ describe('TeacherTimetablePage', () => {
     for (const day of [1, 2, 3, 4, 5]) {
       expect(screen.getByTestId(`day-header-${day}`)).toHaveAttribute('data-today', 'false');
     }
+    expect(screen.getByTestId('cell-1-p1').querySelector('.sk-tt-cell')).toHaveAttribute('data-current', 'false');
+  });
+
+  it('mapping: proves getDay() 0 → dayOfWeek 7 (Sunday) is mapped correctly', async () => {
+    // 2026-07-26 is a Sunday (getDay() = 0); must be tinted because the schema
+    // uses dayOfWeek: 7 for Sunday. The mapping js === 0 ? 7 : js is the only
+    // code path that makes this test pass; any other logic (e.g. plain js, or
+    // js === 0 ? 1 : js) will fail.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 6, 26, 10, 0));
+
+    vi.mocked(useApi).mockReturnValue(mockApi({ get: vi.fn().mockResolvedValue(WEEK_WITH_WEEKEND) }) as never);
+    renderWithProviders(<TeacherTimetablePage />);
+
+    await screen.findByTestId('cell-7-p1');
+
+    expect(screen.getByTestId('day-header-7')).toHaveAttribute('data-today', 'true');
+    expect(screen.getByTestId('cell-7-p1').querySelector('.sk-tt-cell')).toHaveAttribute('data-current', 'false');
+  });
+
+  it('mapping: proves getDay() 1 → dayOfWeek 1 (Monday) is mapped correctly', async () => {
+    // 2026-07-27 is a Monday (getDay() = 1); must be tinted because the schema
+    // uses dayOfWeek: 1 for Monday. This tests the else branch and distinguishes
+    // it from the Sunday case to ensure the mapping's both ends are correct.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 6, 27, 10, 0));
+
+    vi.mocked(useApi).mockReturnValue(mockApi({ get: vi.fn().mockResolvedValue(WEEK_WITH_WEEKEND) }) as never);
+    renderWithProviders(<TeacherTimetablePage />);
+
+    await screen.findByTestId('cell-1-p1');
+
+    expect(screen.getByTestId('day-header-1')).toHaveAttribute('data-today', 'true');
     expect(screen.getByTestId('cell-1-p1').querySelector('.sk-tt-cell')).toHaveAttribute('data-current', 'false');
   });
 });
