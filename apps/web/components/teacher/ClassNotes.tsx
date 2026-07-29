@@ -115,6 +115,8 @@ export function ClassNotes({ classSectionId, date }: { classSectionId: string; d
           {todos.length > 0 && <p className="sk-muted" style={{ marginTop: 4 }}>{remaining} remaining</p>}
         </div>
         <div className="sk-card-b">
+          {query.isLoading && <p className="sk-state">Loading…</p>}
+          {error && <p className="sk-state err">{error.message}</p>}
           {!query.isLoading && !error && todos.length === 0 && <p className="sk-state">No to-dos yet.</p>}
           {todos.map((t) => (
             <label className={`sk-todo${t.done ? ' done' : ''}`} key={t.id}>

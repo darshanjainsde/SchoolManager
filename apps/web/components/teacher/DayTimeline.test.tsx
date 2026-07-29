@@ -62,4 +62,12 @@ describe('DayTimeline', () => {
     screen.getByRole('button', { name: 'Not marked' }).click();
     expect(onTake).toHaveBeenCalledWith('sec-p2');
   });
+
+  it('renders a "Not marked" pill instead of nothing when a CLASS row has a null register', () => {
+    // Defensive case: the real API never sends this shape today, but a null
+    // register must not silently render no pill at all.
+    const entryWithoutRegister: TeacherDayEntry = { ...classEntry('p3', 'History', false), register: null };
+    render(<DayTimeline entries={[entryWithoutRegister]} currentIndex={-1} onTakeAttendance={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Not marked' })).toBeInTheDocument();
+  });
 });

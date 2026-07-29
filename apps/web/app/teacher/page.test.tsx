@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { screen } from '@testing-library/react';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { renderWithProviders, type ApiStub } from '@/test/render';
@@ -88,5 +88,48 @@ describe('TeacherHomePage', () => {
     const nowCard = title.closest('.sk-now');
     expect(nowCard).not.toBeNull();
     expect(nowCard).not.toHaveTextContent('Science');
+  });
+
+  describe('todayIso local-vs-UTC correctness', () => {
+    const originalTZ = process.env.TZ;
+
+    beforeAll(() => {
+      // We pin the runner's TZ ourselves rather than deriving the expected
+      // date from the frozen instant's local parts, so this test can only
+      // pass if `todayIso()` genuinely reads the *local* calendar day —
+      // deriving the expectation the same way the implementation does would
+      // let a regression to `toISOString().slice(0, 10)` slip through
+      // unnoticed on a UTC CI runner. Pinning TZ also makes the test's
+      // outcome independent of whatever zone the host machine happens to be
+      // in.
+      process.env.TZ = 'Asia/Kolkata';
+    });
+
+    afterAll(() => {
+      process.env.TZ = originalTZ;
+    });
+
+    it('requests the local calendar date, not the UTC one, when the two disagree', async () => {
+      // IST is UTC+5:30, i.e. local = UTC + 5:30, so converting local -> UTC
+      // subtracts 5:30. That only rolls the UTC day *backward* when the
+      // local clock reads before 05:30 (e.g. 02:00 - 5:30 wraps past
+      // midnight) — not late in the evening, since 23:30 - 5:30 = 18:00
+      // stays on the same day. So the instant that actually exercises the
+      // bug is an early-morning one: 2026-07-29 02:00 local is
+      // 2026-07-28T20:30:00.000Z. A `toISOString().slice(0, 10)`
+      // implementation would request '2026-07-28' here; the correct,
+      // local-date implementation must request '2026-07-29'.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 6, 29, 2, 0));
+
+      const api = mockApi({ get: vi.fn().mockResolvedValue({ date: '2026-07-29', dayOfWeek: 3, entries: [] }) });
+      vi.mocked(useApi).mockReturnValue(api as never);
+
+      renderWithProviders(<TeacherHomePage />);
+
+      await screen.findByText('No timetable has been set up for you yet — ask your school admin.');
+
+      expect(api.get).toHaveBeenCalledWith('/manage/timetable/my-day?date=2026-07-29');
+    });
   });
 });

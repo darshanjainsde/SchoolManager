@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
@@ -108,5 +108,73 @@ describe('ClassNotes', () => {
 
     expect(await screen.findByText('No notes yet.')).toBeInTheDocument();
     expect(screen.getByText('No to-dos yet.')).toBeInTheDocument();
+  });
+
+  it('requests classSectionId and date exactly as given', async () => {
+    const api = mockApi({ get: vi.fn().mockResolvedValue({ notes: [], todos: [] }) });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<ClassNotes classSectionId="sec-42" date="2026-07-29" />);
+    await screen.findByText('No notes yet.');
+
+    expect(api.get).toHaveBeenCalledWith('/manage/class-notes?classSectionId=sec-42&date=2026-07-29');
+  });
+
+  it('the To-dos card shows a loading state while the query is pending, not the empty state', async () => {
+    // Resolve from a deferred we control, rather than mockResolvedValue, so
+    // we can assert on the in-flight state before it ever settles.
+    let resolveGet!: (value: { notes: never[]; todos: never[] }) => void;
+    const pending = new Promise<{ notes: never[]; todos: never[] }>((resolve) => {
+      resolveGet = resolve;
+    });
+    const api = mockApi({ get: vi.fn().mockReturnValue(pending) });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<ClassNotes classSectionId="sec-1" date="2026-07-29" />);
+
+    const todosCard = screen.getByText('To-dos').closest('.sk-card');
+    expect(todosCard).not.toBeNull();
+    expect(within(todosCard as HTMLElement).getByText('Loading…')).toBeInTheDocument();
+    expect(within(todosCard as HTMLElement).queryByText('No to-dos yet.')).not.toBeInTheDocument();
+
+    resolveGet({ notes: [], todos: [] });
+    expect(await within(todosCard as HTMLElement).findByText('No to-dos yet.')).toBeInTheDocument();
+  });
+
+  it('the To-dos card shows the error message when the query rejects, not the empty state', async () => {
+    const api = mockApi({ get: vi.fn().mockRejectedValue(new Error('Could not reach the notes service')) });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<ClassNotes classSectionId="sec-1" date="2026-07-29" />);
+
+    const todosCard = screen.getByText('To-dos').closest('.sk-card');
+    expect(todosCard).not.toBeNull();
+    expect(await within(todosCard as HTMLElement).findByText('Could not reach the notes service')).toBeInTheDocument();
+    expect(within(todosCard as HTMLElement).queryByText('No to-dos yet.')).not.toBeInTheDocument();
+  });
+
+  it('refetches the list after a successful add so the new note appears without a manual reload', async () => {
+    const user = userEvent.setup();
+    const get = vi
+      .fn()
+      .mockResolvedValueOnce({ notes: [], todos: [] })
+      .mockResolvedValueOnce({
+        notes: [
+          { id: 'n3', body: 'New note from refetch', createdAt: '2026-07-29T03:00:00.000Z', authorTeacherId: 't1' },
+        ],
+        todos: [],
+      });
+    const api = mockApi({ get, post: vi.fn().mockResolvedValue({ id: 'n3' }) });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<ClassNotes classSectionId="sec-1" date="2026-07-29" />);
+    await screen.findByText('No notes yet.');
+
+    const input = screen.getByLabelText('Add a note');
+    await user.type(input, 'New note from refetch');
+    await user.click(screen.getAllByRole('button', { name: 'Add' })[0]);
+
+    expect(await screen.findByText('New note from refetch')).toBeInTheDocument();
+    expect(get).toHaveBeenCalledTimes(2);
   });
 });

@@ -30,8 +30,12 @@ function Row({
       <span className="sp" />
       {entry.kind === 'BREAK' && <span className="sk-muted">—</span>}
       {entry.kind === 'CLASS' &&
-        entry.register &&
-        (entry.register.taken ? (
+        // Defensive, like NowCard's `register?.taken` handling: the real API
+        // never pairs a CLASS row with a null register today, but if it ever
+        // did, fall back to the "not marked" pill rather than rendering
+        // nothing — a missing pill reads as "nothing to do here", which is
+        // the wrong message for a class that hasn't had attendance taken.
+        (entry.register?.taken ? (
           <span className="sk-pill" data-tone="good">
             ✓ {entry.register.present}/{entry.register.total}
           </span>
