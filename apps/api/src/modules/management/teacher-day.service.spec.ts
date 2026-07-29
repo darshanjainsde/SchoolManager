@@ -11,6 +11,7 @@ jest.mock('@skoolos/db', () => ({
 }));
 
 import { TeacherDayService } from './teacher-day.service';
+import { resolveAsOfDate } from './internal/timetable-date';
 import type { AttendanceService } from './attendance.service';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -134,7 +135,7 @@ describe('TeacherDayService', () => {
     expect(where.AND).toHaveLength(2);
     expect(where.AND[0].OR).toEqual([
       { effectiveTo: null },
-      { effectiveTo: { gt: new Date(MONDAY) } },
+      { effectiveTo: { gt: resolveAsOfDate(MONDAY, new Date()) } },
     ]);
   });
 

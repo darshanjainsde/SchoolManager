@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import { resolveAsOfDate } from './internal/timetable-date';
 import { ApiError } from '../../common/errors/api-error';
 import { AttendanceService } from './attendance.service';
 
@@ -87,7 +88,10 @@ export class TeacherDayService {
       // `OR` key at the top level would silently REPLACE the version-window
       // `OR` — the same object key twice — and quietly return superseded
       // timetable versions.
-      const asOf = new Date(date);
+      // Anchor to IST midnight like every other timetable consumer (effectiveFrom
+      // is only written via startOfIstDay), so future backfills can't drift this
+      // query out of sync with listForClass and listForTeacher.
+      const asOf = resolveAsOfDate(date, new Date());
       const slots = await tx.timetableSlot.findMany({
         where: {
           dayOfWeek,
