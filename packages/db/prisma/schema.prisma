@@ -181,6 +181,9 @@ model School {
   holidays           Holiday[]
   blogPosts          BlogPost[]
   blogSelections     SchoolBlogSelection[]
+  classNotes             ClassNote[]
+  classTodos             ClassTodo[]
+  registerChangeRequests RegisterChangeRequest[]
 }
 
 model Domain {
@@ -554,6 +557,9 @@ model ClassSection {
   students       Student[]
   timetableSlots TimetableSlot[]
   announcements  Announcement[]
+  classNotes             ClassNote[]
+  classTodos             ClassTodo[]
+  registerChangeRequests RegisterChangeRequest[]
 
   @@unique([schoolId, gradeId, name, academicYearId])
   @@index([schoolId])
@@ -955,4 +961,67 @@ model SchoolBlogSelection {
 
   @@unique([schoolId, postId])
   @@index([schoolId, isHero, sortOrder])
+}
+
+// ── Class notes, to-dos and register change requests ────────────────────
+
+enum RegisterChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A teacher's running notes about one class on one day. Scoped to the class
+/// and the date, not to the teacher, so a co-teacher of the same section sees
+/// the same log — the point is continuity for the class, not a private diary.
+model ClassNote {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  classSectionId String   @db.Uuid
+  date           DateTime @db.Date
+  body           String
+  authorTeacherId String  @db.Uuid
+  createdAt      DateTime @default(now())
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, classSectionId, date])
+}
+
+/// A tickable task a teacher sets for one class on one day.
+model ClassTodo {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  classSectionId String   @db.Uuid
+  date           DateTime @db.Date
+  body           String
+  done           Boolean  @default(false)
+  authorTeacherId String  @db.Uuid
+  createdAt      DateTime @default(now())
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, classSectionId, date])
+}
+
+/// A request to reopen a past day's register. Registers lock at the end of
+/// their own day; an APPROVED request re-opens exactly one (class, date)
+/// until `expiresAt`, after which it locks again without needing revocation.
+model RegisterChangeRequest {
+  id             String               @id @default(uuid()) @db.Uuid
+  schoolId       String               @db.Uuid
+  classSectionId String               @db.Uuid
+  date           DateTime             @db.Date
+  requestedByTeacherId String         @db.Uuid
+  reason         String
+  status         RegisterChangeStatus @default(PENDING)
+  reviewedByUserId String?            @db.Uuid
+  reviewedAt     DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime             @default(now())
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@index([schoolId, classSectionId, date])
 }
