@@ -663,3 +663,17 @@ export class UpdateClassTodoDto {
   @IsBoolean()
   done!: boolean;
 }
+
+// ── Register change requests ─────────────────────────────────────────────────
+
+export class CreateRegisterChangeDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be formatted as YYYY-MM-DD' })
+  date!: string;
+
+  @IsString()
+  @Length(1, 500)
+  reason!: string;
+}

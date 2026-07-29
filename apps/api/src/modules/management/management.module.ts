@@ -33,10 +33,12 @@ import { HolidaysService } from './holidays.service';
 import { HolidaysController } from './holidays.controller';
 import { ClassNotesService } from './class-notes.service';
 import { ClassNotesController } from './class-notes.controller';
+import { RegisterChangeService } from './register-change.service';
+import { RegisterChangeController } from './register-change.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService, ClassNotesService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -53,7 +55,8 @@ import { ClassNotesController } from './class-notes.controller';
     SubstitutionController,
     HolidaysController,
     ClassNotesController,
+    RegisterChangeController,
   ],
-  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService, ClassNotesService],
+  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService],
 })
 export class ManagementModule {}

@@ -23,6 +23,12 @@ export type ErrorCode =
   | 'LEAVE_CANCEL_FORBIDDEN'
   /** A TEACHER targeted a class section they do not teach — pair with 403. */
   | 'CLASS_NOT_OWNED'
+  /** A past day's register is closed and has no APPROVED, unexpired RegisterChangeRequest — pair with 409. */
+  | 'REGISTER_LOCKED'
+  /** A RegisterChangeRequest already exists PENDING for this exact class+date — pair with 409. */
+  | 'REGISTER_CHANGE_OPEN'
+  /** A RegisterChangeRequest is no longer PENDING — already approved/rejected — pair with 409. */
+  | 'REGISTER_CHANGE_DECIDED'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

@@ -5,6 +5,7 @@ const txMock = {
   school: { findFirst: jest.fn() },
   attendance: { findMany: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
   teacher: { findFirst: jest.fn() },
+  registerChangeRequest: { findFirst: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -51,6 +52,18 @@ describe('AttendanceService', () => {
     // NEWLY absent; default to "nothing stored yet" so every test that does
     // not care about re-saves behaves like a first save.
     txMock.attendance.findMany.mockResolvedValue([]);
+    // This suite's `save` tests all target a fixed calendar date
+    // ('2026-07-21') that predates the past-day lock added later (see
+    // attendance-lock.spec.ts for lock-specific coverage) and has since
+    // rolled into the past relative to the real clock. None of these tests
+    // are about the lock, so default to an approved, unexpired unlock being
+    // on file for that (class, date) — the same shape `save` requires in
+    // production — so they keep exercising what they were written for.
+    txMock.registerChangeRequest.findFirst.mockResolvedValue({
+      id: 'unlock-1',
+      status: 'APPROVED',
+      expiresAt: new Date('2999-01-01'),
+    });
   });
 
   describe('list', () => {

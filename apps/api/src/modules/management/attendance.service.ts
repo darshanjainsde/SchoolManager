@@ -307,6 +307,50 @@ export class AttendanceService {
         await requireClassAccess(tx, callerUserId, dto.classSectionId, dto.date);
       }
 
+      // A register belongs to its own day. Past days close so the record can
+      // be trusted; an APPROVED, unexpired RegisterChangeRequest reopens
+      // exactly one (class, date) and nothing else. SCHOOL_ADMIN bypasses
+      // both, because the unlock is theirs to grant in the first place.
+      if (callerRole !== 'SCHOOL_ADMIN') {
+        const today = istTodayISO();
+        if (dto.date > today) {
+          throw new ApiError(
+            'VALIDATION',
+            'You cannot take attendance for a future date.',
+            400,
+            'date',
+          );
+        }
+        if (dto.date < today) {
+          // MUST require status: 'APPROVED' — a RegisterChangeRequest is
+          // created PENDING with expiresAt NULL and there is no DB
+          // constraint tying expiresAt to status. `review()` only ever sets
+          // expiresAt when approving, so an APPROVED row always has one;
+          // requiring `expiresAt: { gt: new Date() }` strictly (no `OR
+          // expiresAt: null` arm) means a merely-filed, never-reviewed
+          // request can never read as "unlocked forever", and a hand-edited
+          // or seeded APPROVED row with a null expiry can never become a
+          // silent, permanent unlock either.
+          const unlock = await tx.registerChangeRequest.findFirst({
+            where: {
+              classSectionId: dto.classSectionId,
+              date: day,
+              status: 'APPROVED',
+              expiresAt: { gt: new Date() },
+            },
+            select: { id: true },
+          });
+          if (!unlock) {
+            throw new ApiError(
+              'REGISTER_LOCKED',
+              'That day is closed. Ask your admin to reopen it from Requests.',
+              409,
+              'date',
+            );
+          }
+        }
+      }
+
       // Every mark must target a student who is actually enrolled in this
       // class section. `Student` has active RLS, so a foreign-school
       // studentId will not appear in this query at all — closing the
