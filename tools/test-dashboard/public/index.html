@@ -118,6 +118,64 @@
   }
   #console .who { color: var(--brand); }
   footer { color: var(--ink-3); font-size: 12.5px; padding: 26px 0 40px; font-family: var(--mono); }
+  .tabs { display: flex; gap: 4px; }
+  .tab {
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-3);
+    background: transparent; border: 1px solid transparent; border-radius: 8px;
+    padding: 6px 13px; cursor: pointer;
+  }
+  .tab[aria-selected="true"] { color: var(--ink); background: var(--surface-2); border-color: var(--line-2); }
+
+  .syncbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px 17px; background: var(--surface);
+  }
+  .syncbar.ok { border-color: #1E4635; }
+  .syncbar.drift { border-color: #5B4A1B; }
+  .syncbar .txt { font-size: 15px; }
+  .syncbar .sha { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); }
+
+  .envs { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 12px; }
+  .env { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 17px; display: flex; flex-direction: column; gap: 11px; }
+  .env.up { border-color: #1E4635; }
+  .env.down { border-color: #5B2A24; }
+  .env h3 { margin: 0; font-size: 16px; font-weight: 680; }
+  .env .host { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+  .checks { display: flex; flex-direction: column; gap: 5px; }
+  .check { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 12px; }
+  .check .lab { flex: 1; color: var(--ink-2); }
+  .check .ms { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .led { width: 7px; height: 7px; border-radius: 50%; }
+  .led.up { background: var(--pass); }
+  .led.down { background: var(--fail); }
+  .deployline { font-family: var(--mono); font-size: 12px; color: var(--ink-3); border-top: 1px solid var(--line); padding-top: 10px; }
+  .deployline b { color: var(--ink); font-weight: 600; }
+
+  .commits { display: flex; flex-direction: column; gap: 6px; }
+  .commit { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+  .commit .sha { font-family: var(--mono); font-size: 11.5px; color: var(--brand); }
+  .commit .msg { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+  .commit .when { font-family: var(--mono); font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+
+  .branchtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .branchtable th { text-align: left; font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+                    text-transform: uppercase; color: var(--ink-3); font-weight: 600; padding: 8px 10px; }
+  .branchtable td { padding: 8px 10px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .branchtable td.name { font-family: var(--mono); font-size: 12px; }
+  .ahead { color: var(--amber); font-family: var(--mono); }
+  .behind { color: var(--ink-3); font-family: var(--mono); }
+
+  .danger { border-color: #5B2A24 !important; }
+  .rollback-row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+  select, input[type="text"] {
+    font: inherit; font-size: 13px; font-family: var(--mono); color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px;
+  }
+  select:focus-visible, input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+  button.warn { background: #7A2A22; border-color: #96382E; color: #FFD9D4; }
+  pre.stat { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); background: var(--surface-2);
+             padding: 10px 12px; border-radius: 8px; overflow-x: auto; margin: 0; white-space: pre; }
+
   .toggle { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px;
             color: var(--ink-2); cursor: pointer; user-select: none; }
   .toggle input { accent-color: var(--brand); width: 15px; height: 15px; cursor: pointer; }
@@ -136,6 +194,10 @@
       </svg>
       Sckools <small>test dashboard</small>
     </span>
+    <span class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="tests">Tests</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="git">Branches &amp; deploys</button>
+    </span>
     <span class="spacer"></span>
     <label class="toggle" title="Coverage instrumentation makes runs several times slower">
       <input type="checkbox" id="cov" /> measure coverage
@@ -144,7 +206,7 @@
   </div>
 </header>
 
-<div class="wrap">
+<div class="wrap" id="tab-tests">
   <div class="verdict">
     <span class="badge unknown" id="overall"><span class="dot"></span>no runs yet</span>
     <h1 id="headline">Press “Run everything” to take a reading</h1>
@@ -182,6 +244,49 @@
 
   <footer>
     127.0.0.1 only · runs repo scripts directly · results cached in tools/test-dashboard/.cache
+  </footer>
+</div>
+
+<div class="wrap" id="tab-git" hidden>
+  <div class="verdict">
+    <span class="badge unknown" id="sync-badge"><span class="dot"></span>checking</span>
+    <h1 id="sync-headline">Reading branch state…</h1>
+    <span class="spacer"></span>
+    <button class="sm" id="git-refresh">Refresh</button>
+  </div>
+
+  <h2>Environments</h2>
+  <div class="envs" id="envs"><p class="empty">Probing…</p></div>
+
+  <h2>Waiting to ship — on staging, not on production</h2>
+  <div class="panel" id="waiting"><p class="empty">Loading…</p></div>
+
+  <h2>Recent commits</h2>
+  <div class="envs">
+    <div class="panel"><h3>main <span class="host" id="main-sha"></span></h3><p class="hint">production</p><div class="commits" id="main-commits"></div></div>
+    <div class="panel"><h3>staging <span class="host" id="staging-sha"></span></h3><p class="hint">test.sckools.com</p><div class="commits" id="staging-commits"></div></div>
+  </div>
+
+  <h2>Other branches</h2>
+  <div class="panel" style="overflow-x:auto"><table class="branchtable" id="others"></table></div>
+
+  <h2>Rollback</h2>
+  <div class="panel danger">
+    <h3>Roll a branch back to a known-good commit</h3>
+    <p class="hint">
+      Creates a revert commit — history is preserved and the rollback can itself be undone.
+      Pushing to <b>main</b> redeploys production, so the target SHA must be typed to confirm.
+    </p>
+    <div class="rollback-row">
+      <select id="rb-branch"><option value="main">main → sckools.com</option><option value="staging">staging → test.sckools.com</option></select>
+      <select id="rb-target"></select>
+      <button class="sm" id="rb-prepare">Prepare rollback</button>
+    </div>
+    <div id="rb-result" style="margin-top:14px"></div>
+  </div>
+
+  <footer>
+    git data is read from this checkout · fetches origin on every refresh
   </footer>
 </div>
 
@@ -351,6 +456,141 @@ let lastState = null;
 fetch('/api/web-gap')
   .then((r) => r.json())
   .then((d) => { webFiles = d.files; if (lastState) render(lastState); });
+
+
+// ── Branches & deploys ──────────────────────────────────────────────────────
+const esc = (t) => String(t == null ? '' : t).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+let gitData = null;
+
+function commitRows(list) {
+  if (!list.length) return '<p class="empty">Nothing here.</p>';
+  return list
+    .map((c) => '<div class="commit"><span class="sha">' + c.sha + '</span><span class="msg">' + esc(c.subject) +
+                '</span><span class="when">' + esc(c.when) + '</span></div>')
+    .join('');
+}
+
+function renderGit(d) {
+  gitData = d;
+  const badge = el('sync-badge');
+  if (d.inSync) {
+    badge.className = 'badge pass';
+    badge.innerHTML = '<span class="dot"></span>in sync';
+    el('sync-headline').textContent = 'main and staging are identical at ' + d.branches.main.sha;
+  } else {
+    badge.className = 'badge running';
+    badge.innerHTML = '<span class="dot"></span>diverged';
+    const bits = [];
+    if (d.stagingAhead) bits.push(d.stagingAhead + ' waiting to ship');
+    if (d.mainAhead) bits.push(d.mainAhead + ' on main only');
+    el('sync-headline').textContent = bits.join(' · ');
+  }
+
+  el('main-sha').textContent = d.branches.main.sha;
+  el('staging-sha').textContent = d.branches.staging.sha;
+  el('main-commits').innerHTML = commitRows(d.branches.main.commits);
+  el('staging-commits').innerHTML = commitRows(d.branches.staging.commits);
+
+  el('waiting').innerHTML = d.waiting.length
+    ? '<div class="commits">' + commitRows(d.waiting) + '</div>'
+    : '<p class="empty">Nothing — production has everything staging has.</p>';
+
+  el('others').innerHTML =
+    '<thead><tr><th>Branch</th><th>Ahead of main</th><th>Behind</th><th>Last commit</th></tr></thead><tbody>' +
+    d.others.map((b) =>
+      '<tr><td class="name">' + esc(b.ref) + '</td>' +
+      '<td class="' + (b.ahead ? 'ahead' : 'behind') + '">' + (b.ahead || '—') + '</td>' +
+      '<td class="behind">' + (b.behind || '—') + '</td>' +
+      '<td class="behind">' + esc(b.last) + '</td></tr>').join('') +
+    '</tbody>';
+
+  const sel = el('rb-target');
+  sel.innerHTML = d.tags.map((t) => '<option value="' + t.sha + '">' + esc(t.name) + ' · ' + t.sha + '</option>').join('');
+
+  if (d.dirtyFiles) {
+    el('sync-headline').textContent += '  ·  ' + d.dirtyFiles + ' uncommitted file(s) in this checkout';
+  }
+}
+
+function renderEnvs(list) {
+  el('envs').innerHTML = list.map((e) => {
+    const checks = e.checks.map((c) =>
+      '<div class="check"><span class="led ' + (c.status >= 200 && c.status < 400 ? 'up' : 'down') + '"></span>' +
+      '<span class="lab">' + c.label + '</span><span class="ms">' + (c.status || 'timeout') + ' · ' + c.ms + 'ms</span></div>').join('');
+
+    let deploy;
+    if (e.deployed && e.deployed.commit) {
+      const drift = e.drift;
+      deploy = 'running <b>' + e.deployed.commit + '</b> · branch head <b>' + e.branchHead + '</b>' +
+               (drift === 0 ? ' · up to date' : drift == null ? '' : ' · <b style="color:var(--amber)">' + drift + ' commit(s) not deployed</b>');
+    } else {
+      deploy = 'branch head <b>' + e.branchHead + '</b> · deployed commit unknown until the version endpoint ships';
+    }
+
+    return '<div class="env ' + (e.healthy ? 'up' : 'down') + '">' +
+      '<div><h3>' + e.id + '</h3><div class="host">' + e.site.replace('https://', '') + ' ← ' + e.branch + '</div></div>' +
+      '<div class="checks">' + checks + '</div>' +
+      '<div class="deployline">' + deploy + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function loadGit() {
+  el('envs').innerHTML = '<p class="empty">Probing…</p>';
+  const [g, e] = await Promise.all([
+    fetch('/api/git').then((r) => r.json()),
+    fetch('/api/envs').then((r) => r.json()),
+  ]);
+  renderGit(g);
+  renderEnvs(e);
+}
+
+el('git-refresh').addEventListener('click', loadGit);
+
+document.querySelectorAll('.tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const which = btn.dataset.tab;
+    document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
+    el('tab-tests').hidden = which !== 'tests';
+    el('tab-git').hidden = which !== 'git';
+    if (which === 'git' && !gitData) loadGit();
+  });
+});
+
+// ── rollback, two steps ─────────────────────────────────────────────────────
+el('rb-prepare').addEventListener('click', async () => {
+  const branch = el('rb-branch').value;
+  const to = el('rb-target').value;
+  const box = el('rb-result');
+  box.innerHTML = '<p class="empty">Preparing…</p>';
+
+  const r = await fetch('/api/rollback/prepare?branch=' + branch + '&to=' + to, { method: 'POST' }).then((x) => x.json());
+  if (r.error) { box.innerHTML = '<p style="color:var(--fail)">' + esc(r.error) + '</p>'; return; }
+
+  box.innerHTML =
+    '<p style="margin:0 0 8px"><b>' + r.undoes.length + ' commit(s)</b> would be undone on <b>' + branch + '</b>, ' +
+    'putting it back to <b>' + to + '</b>:</p>' +
+    '<div class="commits" style="margin-bottom:12px">' + commitRows(r.undoes.slice(0, 8)) + '</div>' +
+    '<pre class="stat">' + esc(r.stat) + '</pre>' +
+    '<p class="hint" style="margin:12px 0 8px">Revert commit <b>' + r.revertSha + '</b> is ready on <code>' + esc(r.workBranch) + '</code>. ' +
+    'Type <b>' + to + '</b> to confirm the push — this redeploys ' + (branch === 'main' ? 'production' : 'staging') + '.</p>' +
+    '<div class="rollback-row">' +
+      '<input type="text" id="rb-confirm" placeholder="' + to + '" autocomplete="off" />' +
+      '<button class="sm warn" id="rb-push">Push rollback to ' + branch + '</button>' +
+    '</div><div id="rb-push-result" style="margin-top:10px"></div>';
+
+  el('rb-push').addEventListener('click', async () => {
+    const confirm = el('rb-confirm').value.trim();
+    const out = el('rb-push-result');
+    out.innerHTML = '<p class="empty">Pushing…</p>';
+    const res = await fetch('/api/rollback/push?branch=' + branch + '&work=' + encodeURIComponent(r.workBranch) +
+                            '&to=' + to + '&confirm=' + encodeURIComponent(confirm), { method: 'POST' }).then((x) => x.json());
+    out.innerHTML = res.error
+      ? '<p style="color:var(--fail)">' + esc(res.error) + '</p>'
+      : '<p style="color:var(--pass)">' + esc(res.pushed) + ' — ' + esc(res.note) + '</p>';
+    if (!res.error) loadGit();
+  });
+});
 
 const es = new EventSource('/api/stream');
 es.addEventListener('state', (e) => render(JSON.parse(e.data)));

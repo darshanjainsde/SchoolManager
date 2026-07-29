@@ -284,12 +284,261 @@ function publicState() {
   return { jobs, now: Date.now() };
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branches & deploys
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Runs a git command with an argv array — never a shell string. */
+function git(args, opts = {}) {
+  return new Promise((res) => {
+    const child = spawn('git', args, { cwd: REPO, ...opts });
+    let out = '', err = '';
+    child.stdout.on('data', (d) => (out += d));
+    child.stderr.on('data', (d) => (err += d));
+    child.on('close', (code) => res({ code, out: out.trim(), err: err.trim() }));
+  });
+}
+
+const ENVIRONMENTS = [
+  { id: 'production', branch: 'main', site: 'https://sckools.com', api: 'https://api.sckools.com', tenant: 'https://raffles.sckools.com' },
+  { id: 'staging', branch: 'staging', site: 'https://test.sckools.com', api: 'https://api.test.sckools.com', tenant: 'https://beacon.test.sckools.com' },
+];
+
+async function countBetween(a, b) {
+  const r = await git(['rev-list', '--count', `${a}..${b}`]);
+  return r.code === 0 ? Number(r.out) : null;
+}
+
+async function logLines(ref, n = 8) {
+  const r = await git(['log', `-${n}`, '--format=%h\u0001%an\u0001%ar\u0001%s', ref]);
+  if (r.code !== 0) return [];
+  return r.out.split('\n').filter(Boolean).map((l) => {
+    const [sha, author, when, subject] = l.split('\u0001');
+    return { sha, author, when, subject };
+  });
+}
+
+async function gitState() {
+  await git(['fetch', '--quiet', 'origin', '--prune']);
+
+  const [mainSha, stagingSha] = await Promise.all([
+    git(['rev-parse', '--short', 'origin/main']),
+    git(['rev-parse', '--short', 'origin/staging']),
+  ]);
+
+  const [stagingAhead, mainAhead] = await Promise.all([
+    countBetween('origin/main', 'origin/staging'),
+    countBetween('origin/staging', 'origin/main'),
+  ]);
+
+  // What is sitting on staging but not yet on production.
+  const waiting = await logLines('origin/main..origin/staging', 20);
+
+  const [current, dirty] = await Promise.all([
+    git(['rev-parse', '--abbrev-ref', 'HEAD']),
+    git(['status', '--porcelain']),
+  ]);
+
+  // Branches with work not on main — candidates to merge or delete.
+  const refs = await git(['for-each-ref', '--format=%(refname:short)', 'refs/remotes/origin']);
+  const others = [];
+  for (const ref of refs.out.split('\n').filter(Boolean)) {
+    if (['origin/HEAD', 'origin/main', 'origin/staging'].includes(ref)) continue;
+    const ahead = await countBetween('origin/main', ref);
+    const behind = await countBetween(ref, 'origin/main');
+    const last = await git(['log', '-1', '--format=%ar', ref]);
+    others.push({ ref: ref.replace('origin/', ''), ahead, behind, last: last.out });
+  }
+  others.sort((a, b) => (b.ahead ?? 0) - (a.ahead ?? 0));
+
+  // Tags that look like rollback anchors, newest first.
+  const tagsRaw = await git(['for-each-ref', '--sort=-creatordate', '--format=%(refname:short)\u0001%(objectname:short)\u0001%(creatordate:short)', 'refs/tags']);
+  const tags = tagsRaw.out.split('\n').filter(Boolean).slice(0, 8).map((l) => {
+    const [name, sha, date] = l.split('\u0001');
+    return { name, sha, date };
+  });
+
+  return {
+    branches: {
+      main: { sha: mainSha.out, commits: await logLines('origin/main', 6) },
+      staging: { sha: stagingSha.out, commits: await logLines('origin/staging', 6) },
+    },
+    inSync: stagingAhead === 0 && mainAhead === 0,
+    stagingAhead,
+    mainAhead,
+    waiting,
+    current: current.out,
+    dirtyFiles: dirty.out ? dirty.out.split('\n').length : 0,
+    others,
+    tags,
+  };
+}
+
+// Staging runs cold in Tokyo and can take >8s on a first hit — a generous
+// timeout here prevents a healthy environment being reported as down.
+async function probe(url, timeoutMs = 15000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const started = Date.now();
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, redirect: 'follow' });
+    return { status: res.status, ms: Date.now() - started, ok: res.ok, body: res };
+  } catch {
+    return { status: 0, ms: Date.now() - started, ok: false, body: null };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function envState() {
+  const out = [];
+  for (const env of ENVIRONMENTS) {
+    const [site, api, tenant, version] = await Promise.all([
+      probe(env.site),
+      probe(`${env.api}/ready`),
+      probe(env.tenant),
+      probe(`${env.site}/api/version`),
+    ]);
+
+    let deployed = null;
+    if (version.ok && version.body) {
+      try {
+        deployed = await version.body.json();
+      } catch {
+        /* endpoint not deployed yet */
+      }
+    }
+
+    const head = await git(['rev-parse', '--short', `origin/${env.branch}`]);
+    let drift = null;
+    if (deployed?.commit) {
+      const r = await git(['rev-list', '--count', `${deployed.commit}..origin/${env.branch}`]);
+      drift = r.code === 0 ? Number(r.out) : null;
+    }
+
+    out.push({
+      ...env,
+      checks: [
+        { label: 'site', status: site.status, ms: site.ms },
+        { label: 'api /ready', status: api.status, ms: api.ms },
+        { label: 'school site', status: tenant.status, ms: tenant.ms },
+      ],
+      healthy: site.ok && api.ok && tenant.ok,
+      branchHead: head.out,
+      deployed,
+      drift,
+    });
+  }
+  return out;
+}
+
+/**
+ * Rollback, in two deliberate steps.
+ *
+ * `prepare` builds a revert commit on a throwaway branch and reports what it
+ * would undo. `push` publishes it — and only when the caller echoes back the
+ * exact target SHA, because publishing to `main` redeploys production.
+ *
+ * A revert, never a force-push: history stays intact and the rollback itself
+ * can be rolled back.
+ */
+async function rollbackPrepare(branch, to) {
+  if (!['main', 'staging'].includes(branch)) return { error: 'branch must be main or staging' };
+  if (!/^[0-9a-f]{7,40}$/.test(to)) return { error: 'target must be a commit sha' };
+
+  await git(['fetch', '--quiet', 'origin']);
+  const undone = await logLines(`${to}..origin/${branch}`, 50);
+  if (undone.length === 0) return { error: `origin/${branch} is already at ${to}` };
+
+  // Build the rollback commit with plumbing: take the tree of the target commit
+  // and record it as a new commit on top of the branch head. The result is a
+  // normal forward commit whose content is exactly the known-good state.
+  //
+  // Deliberately NOT `git checkout` + `git revert`: this dashboard runs inside
+  // your working tree, and switching branches under you would disturb whatever
+  // you have open. Nothing here touches the working tree or the index.
+  const tree = await git(['rev-parse', `${to}^{tree}`]);
+  if (tree.code !== 0) return { error: `unknown commit ${to}` };
+
+  const parent = await git(['rev-parse', `origin/${branch}`]);
+  const message =
+    `revert: roll ${branch} back to ${to}\n\n` +
+    `Restores the tree of ${to}, undoing ${undone.length} commit(s).\n` +
+    `Prepared from the local test dashboard. History is preserved — this is a\n` +
+    `forward commit, so the rollback can itself be rolled back.`;
+
+  const made = await git(['commit-tree', tree.out, '-p', parent.out, '-m', message]);
+  if (made.code !== 0) return { error: made.err };
+  const sha = made.out.trim();
+
+  // Park it on a ref so it survives gc and can be inspected with normal git.
+  const ref = `refs/heads/rollback/${branch}-to-${to}`;
+  await git(['update-ref', ref, sha]);
+
+  const stat = await git(['diff', '--stat', `origin/${branch}`, sha]);
+  const short = await git(['rev-parse', '--short', sha]);
+
+  return {
+    ok: true,
+    workBranch: ref.replace('refs/heads/', ''),
+    revertSha: short.out,
+    undoes: undone,
+    stat: stat.out.split('\n').slice(-14).join('\n') || '(no file differences)',
+  };
+}
+
+async function rollbackPush(branch, workBranch, confirm, to) {
+  if (!['main', 'staging'].includes(branch)) return { error: 'branch must be main or staging' };
+  if (confirm !== to) return { error: 'confirmation did not match the target sha' };
+  if (!/^rollback\//.test(workBranch || '')) return { error: 'refusing to push anything that is not a prepared rollback' };
+
+  const push = await git(['push', 'origin', `${workBranch}:${branch}`]);
+  if (push.code !== 0) return { error: push.err };
+  return {
+    ok: true,
+    pushed: `${workBranch} → ${branch}`,
+    note: 'Vercel redeploys from this branch. Verify the site before walking away.',
+  };
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
   if (url.pathname === '/api/state') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(publicState()));
+    return;
+  }
+
+  if (url.pathname === '/api/git') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(await gitState()));
+    return;
+  }
+
+  if (url.pathname === '/api/envs') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(await envState()));
+    return;
+  }
+
+  if (url.pathname === '/api/rollback/prepare' && req.method === 'POST') {
+    const r = await rollbackPrepare(url.searchParams.get('branch'), url.searchParams.get('to'));
+    res.writeHead(r.error ? 400 : 200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(r));
+    return;
+  }
+
+  if (url.pathname === '/api/rollback/push' && req.method === 'POST') {
+    const r = await rollbackPush(
+      url.searchParams.get('branch'),
+      url.searchParams.get('work'),
+      url.searchParams.get('confirm'),
+      url.searchParams.get('to'),
+    );
+    res.writeHead(r.error ? 400 : 200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(r));
     return;
   }
 

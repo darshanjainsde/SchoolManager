@@ -25,6 +25,25 @@ GitHub hid that. A board where each check reports its own state does not.
   60%, and every currently-failing assertion with the head of its error.
 - **Live output** — streamed from the child process over SSE.
 
+## Branches & deploys tab
+
+- **Sync state** — whether `main` and `staging` have diverged, and by how much.
+- **Environments** — live probes of the site, the API's `/ready`, and a real
+  school site, for production and staging. Plus the commit each is *running*
+  (from `/api/version`), compared against the branch head, so you can see when
+  something is pushed but not deployed.
+- **Waiting to ship** — commits on staging that production does not have.
+- **Other branches** — ahead/behind main, last activity. Useful for spotting
+  work that was never merged and branches that can be deleted.
+- **Rollback** — pick a branch and a tag, and it prepares a commit that restores
+  that known-good tree. Pushing requires typing the target SHA, because pushing
+  to `main` redeploys production.
+
+The rollback is built with `git commit-tree` plumbing: it never checks out a
+branch, so it cannot disturb your working tree, and the result is a normal
+forward commit — history is preserved and the rollback can itself be rolled
+back.
+
 ## Coverage is opt-in
 
 The header has a `measure coverage` toggle, off by default. Instrumentation
