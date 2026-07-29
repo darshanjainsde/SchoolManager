@@ -350,4 +350,41 @@ button.sk-pill { border: 0; cursor: pointer; font: inherit; }
 .sk-todo { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--sk-line); font-size: 13.5px; cursor: pointer; }
 .sk-todo:first-child { border-top: 0; }
 .sk-todo input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--sk-brand); flex: none; }
+
+/* ---- week timetable grid ----
+   Horizontal scroll lives on this wrapper, not the page body, so a
+   phone-width viewport never scrolls sideways to read the rest of the
+   page — only the grid itself scrolls. */
+.sk-tt-wrap { overflow-x: auto; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); box-shadow: var(--sk-shadow); }
+.sk-tt-table { width: 100%; min-width: 640px; border-collapse: collapse; table-layout: fixed; }
+.sk-tt-day-th {
+  padding: 10px 12px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--sk-ink-3); text-align: center; white-space: nowrap; border-bottom: 1px solid var(--sk-line);
+}
+.sk-tt-period-th { text-align: left; width: 116px; }
+/* Today's column: tinted header + cells — the first of the grid's two levels
+   of emphasis. The second (the current-period fill) is scoped to .sk-tt-cell
+   below, so the two never fight for the same visual weight. */
+.sk-tt-day-th[data-today="true"] { background: var(--sk-brand-tint); color: var(--sk-brand-2); }
+.sk-tt-period-cell { padding: 10px 12px; white-space: nowrap; vertical-align: top; text-align: left; font-weight: 400; border-top: 1px solid var(--sk-line); }
+.sk-tt-period-label { font-weight: 650; font-size: 13px; }
+.sk-tt-period-time { font-size: 10.5px; color: var(--sk-ink-3); margin-top: 2px; }
+.sk-tt-td { padding: 6px; vertical-align: top; border-top: 1px solid var(--sk-line); }
+.sk-tt-td[data-today="true"] { background: var(--sk-brand-tint); }
+.sk-tt-cell {
+  border-radius: 9px; padding: 8px 10px; min-height: 50px; display: flex; flex-direction: column; justify-content: center;
+  border: 1px solid var(--sk-line); background: var(--sk-card); transition: background 0.15s, border-color 0.15s;
+}
+.sk-tt-cell .cls { font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-tt-cell .subj { font-size: 10.5px; color: var(--sk-ink-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A free period reads as "deliberately nothing scheduled" via a dashed
+   outline, not as a blank box — a blank cell looks like missing data. */
+.sk-tt-free { border-style: dashed; border-color: var(--sk-line-2); background: transparent; align-items: center; justify-content: center; }
+.sk-tt-free-label { font-size: 11px; color: var(--sk-ink-3); }
+/* The period happening right now: filled solid — the grid's stronger level
+   of emphasis, only ever on one cell (today's column, the current period). */
+.sk-tt-cell[data-current="true"] { background: var(--sk-brand); border-color: var(--sk-brand); }
+.sk-tt-cell[data-current="true"] .cls,
+.sk-tt-cell[data-current="true"] .subj { color: #fff; }
+@media (prefers-reduced-motion: reduce) { .sk-tt-cell { transition: none; } }
 .sk-todo.done span { text-decoration: line-through; color: var(--sk-ink-3); }

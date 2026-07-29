@@ -4,7 +4,7 @@ const txMock = {
   classSection: { findUnique: jest.fn() },
   period: { findUnique: jest.fn() },
   subject: { findUnique: jest.fn() },
-  teacher: { findUnique: jest.fn() },
+  teacher: { findUnique: jest.fn(), findFirst: jest.fn() },
   academicYear: { findUnique: jest.fn(), findFirst: jest.fn() },
   timetableSlot: {
     findFirst: jest.fn(),
@@ -252,6 +252,42 @@ describe('TimetableService — versioned assign/unassign/read', () => {
         }),
       );
       expect(result).toEqual([newVersionRow]);
+    });
+  });
+
+  describe('SLOT_INCLUDE carries grade on classSection', () => {
+    // A section's bare `name` ("B") is ambiguous across grades; the caller
+    // needs `grade.name` to compose "7-B" the same way TeacherDayService
+    // does for the Today screen. Pinning the shape of `include` here means a
+    // future edit that drops `grade` fails this test instead of silently
+    // shipping two different class names on two screens.
+    it('listForClass includes classSection.grade.name', async () => {
+      txMock.timetableSlot.findMany.mockResolvedValue([]);
+
+      await svc.listForClass(SCHOOL, CLASS_SECTION);
+
+      expect(txMock.timetableSlot.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            classSection: { select: { id: true, name: true, grade: { select: { name: true } } } },
+          }),
+        }),
+      );
+    });
+
+    it('listForTeacher includes classSection.grade.name', async () => {
+      txMock.teacher.findFirst = jest.fn().mockResolvedValue({ id: 'teacher-1' });
+      txMock.timetableSlot.findMany.mockResolvedValue([]);
+
+      await svc.listForTeacher(SCHOOL, 'user-1');
+
+      expect(txMock.timetableSlot.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            classSection: { select: { id: true, name: true, grade: { select: { name: true } } } },
+          }),
+        }),
+      );
     });
   });
 

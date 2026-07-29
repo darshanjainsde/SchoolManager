@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Megaphone,
   Inbox,
+  CalendarDays,
   CalendarOff,
   LogOut,
   Menu,
@@ -27,6 +28,7 @@ import '../sk-theme.css';
 
 const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[] = [
   { href: '/teacher', label: 'My classes', icon: LayoutDashboard },
+  { href: '/teacher/timetable', label: 'Timetable', icon: CalendarDays },
   { href: '/teacher/attendance', label: 'Attendance', icon: ClipboardCheck },
   { href: '/teacher/tests', label: 'Tests', icon: FileText },
   { href: '/teacher/results', label: 'Results', icon: GraduationCap },

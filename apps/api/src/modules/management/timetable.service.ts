@@ -9,7 +9,10 @@ const SLOT_INCLUDE = {
   period: true,
   subject: { select: { id: true, name: true, code: true } },
   teacher: { select: { id: true, firstName: true, lastName: true } },
-  classSection: { select: { id: true, name: true } },
+  // `grade` is required so callers can compose "7-B" the way TeacherDayService
+  // does — a section's bare `name` ("B") is ambiguous across grades, and the
+  // web timetable grid must show the same class name the Today screen does.
+  classSection: { select: { id: true, name: true, grade: { select: { name: true } } } },
 } as const;
 
 @Injectable()
