@@ -39,6 +39,25 @@ export function ConfirmDialog({
 }: ConfirmDialogProps): React.JSX.Element {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // `onCancel` is an inline lambda on both call sites (`() =>
+  // setConfirmCancelId(null)` in the requests queue, `() => setRetakeOpen(false)`
+  // in attendance) — a fresh function identity on every render of the parent,
+  // not just when Escape/Cancel actually change behaviour. The trap effect
+  // used to depend on `[onCancel]` directly, so it tore down and re-armed on
+  // every parent re-render while the dialog stayed mounted (e.g. every render
+  // a cancel mutation causes while `isPending` is true). Each re-run
+  // re-captured `previouslyFocused` from *that instant's* `document.activeElement`
+  // instead of the original trigger, so by the time the dialog finally
+  // unmounted, focus restored to a mid-mutation DOM node (often the dialog's
+  // own, about-to-unmount button) rather than the real trigger — landing on
+  // `<body>` once that node was gone. Reading `onCancel` through a ref lets
+  // the trap effect run exactly once per mount, so `previouslyFocused` is
+  // captured exactly once too.
+  const onCancelRef = useRef(onCancel);
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  }, [onCancel]);
+
   useEffect(() => {
     // Captured once, on mount — this is whatever had focus right before the
     // dialog opened (normally the trigger, since a click focuses the element
@@ -52,7 +71,7 @@ export function ConfirmDialog({
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onCancel();
+        onCancelRef.current();
         return;
       }
       if (e.key === 'Tab' && panel) {
@@ -76,9 +95,10 @@ export function ConfirmDialog({
       document.removeEventListener('keydown', onKeyDown, true);
       previouslyFocused?.focus();
     };
-    // Only re-run if `onCancel` identity changes; the rest of the content
-    // never needs to re-arm the trap.
-  }, [onCancel]);
+    // Mount/unmount only. `onCancel` is read through `onCancelRef` above so
+    // its identity changing never re-arms the trap (see comment above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
