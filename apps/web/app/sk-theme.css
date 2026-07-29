@@ -388,3 +388,13 @@ button.sk-pill { border: 0; cursor: pointer; font: inherit; }
 .sk-tt-cell[data-current="true"] .subj { color: #fff; }
 @media (prefers-reduced-motion: reduce) { .sk-tt-cell { transition: none; } }
 .sk-todo.done span { text-decoration: line-through; color: var(--sk-ink-3); }
+
+/* ---- multi-select chips (announcements target picker) ---- */
+.sk-chip {
+  border-radius: 999px; padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  border: 1.5px solid var(--sk-line-2); background: var(--sk-card); color: var(--sk-ink-2);
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.sk-chip[aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); color: var(--sk-brand-2); }
+.sk-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .sk-chip { transition: none; } }
