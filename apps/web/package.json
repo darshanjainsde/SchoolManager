@@ -8,12 +8,15 @@
     "start": "next start -p ${WEB_PORT:-3000}",
     "lint": "next lint --dir app --dir components --dir lib",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "icons": "node scripts/generate-icons.mjs",
     "blog-art": "node scripts/generate-blog-art.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.4.2",
     "@skoolos/db": "workspace:*",
+    "@skoolos/types": "workspace:*",
     "@tanstack/react-query": "^5.40.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.26.0",
@@ -27,15 +30,21 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
     "@types/node": "^20.11.30",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.19",
     "eslint": "^8.57.0",
     "eslint-config-next": "15.5.21",
+    "jsdom": "^25.0.1",
     "postcss": "^8.4.38",
     "sharp": "^0.35.3",
     "tailwindcss": "^3.4.3",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^2.1.8"
   }
 }
