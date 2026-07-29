@@ -114,12 +114,16 @@ export default function TeacherAnnouncementsPage() {
               <label htmlFor="ann-title" className="sk-lab">
                 Title
               </label>
+              {/* maxLength mirrors CreateAnnouncementDto's @Length(1, 160). Without
+                  it a teacher can paste a long title, hit Post, and only then be
+                  told it was too long by a server round-trip. */}
               <Input
                 id="ann-title"
                 className={`${fieldCls} w-full`}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 disabled={post.isPending}
+                maxLength={160}
                 placeholder="e.g. Chapter 4 comprehension"
               />
             </div>
@@ -127,6 +131,7 @@ export default function TeacherAnnouncementsPage() {
               <label htmlFor="ann-body" className="sk-lab">
                 Details
               </label>
+              {/* Mirrors @Length(1, 4000) on the body, same reasoning as the title. */}
               <Textarea
                 id="ann-body"
                 rows={4}
@@ -134,6 +139,7 @@ export default function TeacherAnnouncementsPage() {
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 disabled={post.isPending}
+                maxLength={4000}
                 placeholder="Add instructions, due date…"
               />
             </div>

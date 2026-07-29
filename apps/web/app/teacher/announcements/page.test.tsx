@@ -205,4 +205,19 @@ describe('TeacherAnnouncementsPage', () => {
     expect(getPaths).not.toContain('/classes');
     expect(postPaths).not.toContain('/announcements');
   });
+
+  it('caps title and body at the lengths the server DTO accepts', async () => {
+    // CreateAnnouncementDto declares @Length(1, 160) on title and
+    // @Length(1, 4000) on body. Without maxLength here a teacher can paste a
+    // long notice, press Post, and only learn it was too long from a failed
+    // round-trip — with the typed text still sitting in the box.
+    //
+    // These numbers are duplicated from the DTO rather than imported because
+    // class-validator's constraints are not reachable as values from the web
+    // app. If the DTO ever changes, this test is the thing that should fail.
+    renderWithProviders(<TeacherAnnouncementsPage />);
+
+    expect(await screen.findByLabelText('Title')).toHaveAttribute('maxLength', '160');
+    expect(screen.getByLabelText('Details')).toHaveAttribute('maxLength', '4000');
+  });
 });
