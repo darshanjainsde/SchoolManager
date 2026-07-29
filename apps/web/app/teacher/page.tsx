@@ -1,95 +1,78 @@
 'use client';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
+import type { TeacherDay } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { currentEntry, minutesOfDay } from '@/lib/teacher-day';
+import { NowCard } from '@/components/teacher/NowCard';
+import { DayTimeline } from '@/components/teacher/DayTimeline';
+import { ClassNotes } from '@/components/teacher/ClassNotes';
 
-interface ClassRow {
-  id: string;
-  name: string;
-  grade: { name: string };
-  classTeacher: { firstName: string; lastName: string } | null;
-  _count: { students: number };
+/** Today in the browser's own timezone — `toISOString()` would give the UTC day. */
+function todayIso(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
-
-function initials(grade: string, name: string): string {
-  const g = (grade.match(/\d+/)?.[0] ?? grade.slice(0, 2)).toString();
-  return `${g}${name.slice(0, 1).toUpperCase()}`;
+/** Minutes past midnight on the browser's own clock, for `currentEntry`. */
+function nowMinutes(): number {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
 }
 
 export default function TeacherHomePage() {
   const host = useHost();
+  const router = useRouter();
   const api = useApi({ audience: 'school', hostHeader: host });
-  const classes = useQuery({
-    queryKey: ['t-classes'],
+  const date = todayIso();
+
+  const day = useQuery({
+    queryKey: ['t-my-day', date],
     enabled: !!host,
-    queryFn: () => api.get<ClassRow[]>('/manage/classes'),
+    queryFn: () => api.get<TeacherDay>(`/manage/timetable/my-day?date=${encodeURIComponent(date)}`),
   });
 
-  const total = classes.data?.reduce((n, c) => n + c._count.students, 0) ?? 0;
+  const entries = day.data?.entries ?? [];
+  const now = nowMinutes();
+  const { index, entry, elapsed, total } = currentEntry(entries, now);
+  // The first entry (chronologically) that hasn't started yet — this works
+  // uniformly whether nothing is current (before school / a gap) or a class
+  // or break is current right now (its own start is <= now, so it's skipped).
+  const nextEntry = entries.find((e) => minutesOfDay(e.startTime) > now) ?? null;
+
+  function goToAttendance(classSectionId: string) {
+    router.push(`/teacher/attendance?classSectionId=${encodeURIComponent(classSectionId)}`);
+  }
 
   return (
     <>
       <header className="sk-pagehead">
-        <h1>Your classes</h1>
-        <p>Open a class to mark attendance — or use Tests and Results in the sidebar.</p>
+        <h1>Your day</h1>
+        <p>What&apos;s happening now, and the rest of your timetable today.</p>
       </header>
 
-      {(classes.data?.length ?? 0) > 0 && (
-        <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
-          <div className="sk-kpi">
-            <span className="lab">Classes</span>
-            <span className="n">{classes.data!.length}</span>
-          </div>
-          <div className="sk-kpi">
-            <span className="lab">Students</span>
-            <span className="n">{total}</span>
-          </div>
-          <div className="sk-kpi">
-            <span className="lab">Class teacher of</span>
-            <span className="n">
-              {classes.data!.filter((c) => c.classTeacher).length}
-            </span>
-          </div>
-        </div>
+      {day.isLoading && <p className="sk-state">Loading your day…</p>}
+      {day.error && <p className="sk-state err">{(day.error as Error).message}</p>}
+
+      {!day.isLoading && !day.error && entries.length === 0 && (
+        <p className="sk-state">No timetable has been set up for you yet — ask your school admin.</p>
       )}
 
-      {classes.isLoading && <p className="sk-state">Loading classes…</p>}
-      {classes.error && <p className="sk-state err">Couldn&apos;t load classes: {(classes.error as Error).message}</p>}
-      {!classes.isLoading && !classes.error && !classes.data?.length && (
-        <p className="sk-state">No classes have been set up yet — ask your school admin to add class sections.</p>
-      )}
+      {!day.isLoading && !day.error && entries.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <NowCard
+            entry={entry}
+            elapsed={elapsed}
+            total={total}
+            nextEntry={nextEntry}
+            onTakeAttendance={goToAttendance}
+          />
 
-      {!!classes.data?.length && (
-        <div className="sk-cardgrid">
-          {classes.data.map((c, i) => (
-            <Link
-              key={c.id}
-              href={`/teacher/attendance?classSectionId=${encodeURIComponent(c.id)}`}
-              className="sk-entity"
-            >
-              <span className="av" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
-                {initials(c.grade.name, c.name)}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="nm">
-                  {c.grade.name} · {c.name}
-                </div>
-                <div className="meta">
-                  {c.classTeacher
-                    ? `Class teacher · ${c.classTeacher.firstName} ${c.classTeacher.lastName}`
-                    : 'No class teacher yet'}
-                </div>
-                <div style={{ marginTop: 8 }}>
-                  <span className="sk-pill" data-tone="info">
-                    {c._count.students} {c._count.students === 1 ? 'student' : 'students'}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))}
+          {entry?.kind === 'CLASS' && entry.slot && <ClassNotes classSectionId={entry.slot.classSectionId} date={date} />}
+
+          <DayTimeline entries={entries} currentIndex={index} onTakeAttendance={goToAttendance} />
         </div>
       )}
     </>
