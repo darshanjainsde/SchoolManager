@@ -9,6 +9,15 @@ export interface LockedDayProps {
   status: ClassDayStatus | null;
   /** Set once a request for this class+date is already open. */
   requestPending: boolean;
+  /**
+   * True while the caller is still fetching whether a request is already
+   * open. Until that resolves we don't know if `requestPending` is
+   * meaningful, so the form must not be offered — otherwise a teacher can
+   * submit a duplicate request in that window and get the server's 409 as a
+   * toast instead of being blocked by the UI. Optional/defaulted so existing
+   * callers that already know the answer synchronously are unaffected.
+   */
+  requestsLoading?: boolean;
   isSubmitting: boolean;
   onRequestChange: (reason: string) => void;
 }
@@ -29,6 +38,7 @@ export function LockedDay({
   date,
   status,
   requestPending,
+  requestsLoading = false,
   isSubmitting,
   onRequestChange,
 }: LockedDayProps): React.JSX.Element {
@@ -64,7 +74,9 @@ export function LockedDay({
           <p className="sk-state">No attendance was recorded for that day.</p>
         )}
 
-        {requestPending ? (
+        {requestsLoading ? (
+          <p className="sk-state">Checking for an existing request…</p>
+        ) : requestPending ? (
           <p className="sk-pill" data-tone="info" style={{ alignSelf: 'flex-start' }}>
             Change request sent — waiting on your admin
           </p>

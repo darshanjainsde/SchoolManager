@@ -295,6 +295,63 @@ describe('TeacherAttendancePage', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders the status error and never shows "no students" while the status query is failed', async () => {
+    searchParams = new URLSearchParams('classSectionId=sec-1');
+    const api = mockApi({
+      get: mockGet([
+        ['/manage/attendance/status', () => Promise.reject(new Error('Status service is unavailable'))],
+        ['/manage/attendance?', () => Promise.resolve([])],
+        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/students?', () => Promise.resolve(students)],
+        ['/manage/register-changes/mine', () => Promise.resolve([])],
+      ]),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderPage();
+
+    expect(await screen.findByText('Status service is unavailable')).toBeInTheDocument();
+    expect(
+      screen.queryByText('No students in this class yet — your admin needs to enrol them.'),
+    ).not.toBeInTheDocument();
+    // The roster/marks queries never even fire while the status query is broken.
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringContaining('/manage/students'));
+  });
+
+  it('does not offer a submittable request form while myRequests is still loading', async () => {
+    searchParams = new URLSearchParams('classSectionId=sec-1');
+    let resolveMyRequests!: (v: never[]) => void;
+    const pending = new Promise<never[]>((resolve) => {
+      resolveMyRequests = resolve;
+    });
+    const api = mockApi({
+      get: mockGet([
+        ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
+        ['/manage/attendance?', () => Promise.resolve([])],
+        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/students?', () => Promise.resolve(students)],
+        ['/manage/register-changes/mine', () => pending],
+      ]),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderPage();
+    await screen.findByText('Asha Rao');
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
+
+    expect(await screen.findByText(/is closed/i)).toBeInTheDocument();
+    // While we don't yet know whether a request is already open, the form
+    // must not be offered — otherwise a teacher can submit a duplicate and
+    // discover the server's 409 as a toast instead of being blocked by the UI.
+    expect(screen.queryByLabelText('Reason for reopening')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /request a change/i })).not.toBeInTheDocument();
+
+    resolveMyRequests([]);
+
+    expect(await screen.findByLabelText('Reason for reopening')).toBeInTheDocument();
+  });
+
   it('cancelling the retake dialog closes it, keeps the roster locked, and returns focus to the trigger', async () => {
     const user = userEvent.setup();
     searchParams = new URLSearchParams('classSectionId=sec-1');
@@ -354,5 +411,10 @@ describe('TeacherAttendancePage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(await screen.findByText('Asha Rao')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Present' }).length).toBeGreaterThan(0);
+    // RetakeDialog's own focus-restore targets a detached node once it and its
+    // trigger both unmount in this render, so the page must move focus itself
+    // — otherwise a keyboard/screen-reader user is left on document.body.
+    expect(document.body).not.toHaveFocus();
+    expect(screen.getByRole('heading', { name: 'Roster' })).toHaveFocus();
   });
 });

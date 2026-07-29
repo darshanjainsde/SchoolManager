@@ -90,9 +90,7 @@ describe('RetakeDialog', () => {
         onCancel={vi.fn()}
       />,
     );
-    const body = document.body.textContent ?? '';
-    expect(body).not.toMatch(/Taken by null/i);
-    expect(body.toLowerCase()).not.toContain('null');
+    expect(screen.getByText(/Already taken for this class today/i)).toBeInTheDocument();
   });
 
   it('disables both actions while isPending, so a double-click cannot fire two saves', () => {

@@ -1,9 +1,15 @@
 'use client';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { AttendanceStatusValue, ClassDayStatus, RegisterChangeRow } from '@skoolos/types';
+import type {
+  AttendanceMark,
+  AttendanceStatusValue,
+  ClassDayStatus,
+  RegisterChangeRow,
+  SaveAttendanceResponse,
+} from '@skoolos/types';
 import { ATTENDANCE_STATUSES } from '@skoolos/types';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -47,17 +53,6 @@ interface RosterStudent {
   rollNo: string | null;
 }
 
-/** GET /manage/attendance returns marks only — unmarked students default to PRESENT. */
-interface AttendanceMark {
-  studentId: string;
-  status: AttendanceStatusValue;
-}
-
-interface SaveAttendanceResult {
-  saved: number;
-  absentees: number;
-}
-
 /** Today in the browser's own timezone — `toISOString()` would give the UTC day. */
 const todayIso = () => {
   const d = new Date();
@@ -98,6 +93,16 @@ function TeacherAttendanceInner() {
     setRetakeOpen(false);
     setUnlocked(false);
   }, [classSectionId, date]);
+
+  // Confirming the dialog unmounts it and the roster mounts in the same
+  // render, so RetakeDialog's own focus-restore targets a detached node and
+  // silently no-ops (see RetakeDialog's `previouslyFocused?.focus()`). Move
+  // focus to the newly-rendered roster ourselves so keyboard/screen-reader
+  // users don't lose their place.
+  const rosterHeadingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (unlocked) rosterHeadingRef.current?.focus();
+  }, [unlocked]);
 
   const classes = useQuery({
     queryKey: ['t-attn-classes'],
@@ -175,7 +180,7 @@ function TeacherAttendanceInner() {
 
   const save = useMutation({
     mutationFn: () =>
-      api.put<SaveAttendanceResult>('/manage/attendance', {
+      api.put<SaveAttendanceResponse>('/manage/attendance', {
         classSectionId,
         date,
         marks: students.map((s) => ({ studentId: s.id, status: marks[s.id] ?? 'PRESENT' })),
@@ -296,6 +301,7 @@ function TeacherAttendanceInner() {
           date={date}
           status={selectedStatus}
           requestPending={!!openRequest}
+          requestsLoading={myRequests.isLoading}
           isSubmitting={requestChange.isPending}
           onRequestChange={(reason) => requestChange.mutate(reason)}
         />
@@ -319,7 +325,9 @@ function TeacherAttendanceInner() {
       ) : (
         <div className="sk-card">
           <div className="sk-card-h">
-            <h3>Roster</h3>
+            <h3 ref={rosterHeadingRef} tabIndex={-1}>
+              Roster
+            </h3>
             <p className="sk-muted" style={{ marginTop: 4 }}>
               {classSectionId
                 ? `${students.length} students · ${counts.PRESENT} present · ${counts.ABSENT} absent · ${counts.LATE} late`
@@ -327,9 +335,17 @@ function TeacherAttendanceInner() {
             </p>
           </div>
           <div className="sk-card-b">
+            {classSectionId && dayStatus.error && (
+              <p className="sk-state err">{(dayStatus.error as Error).message}</p>
+            )}
+
+            {classSectionId && !statusKnown && !dayStatus.error && (
+              <p className="sk-state">Loading…</p>
+            )}
+
             {classSectionId && listLoading && <p className="sk-state">Loading roster…</p>}
 
-            {classSectionId && !listLoading && !listError && students.length === 0 && (
+            {classSectionId && statusKnown && !listLoading && !listError && students.length === 0 && (
               <p className="sk-state">No students in this class yet — your admin needs to enrol them.</p>
             )}
 
