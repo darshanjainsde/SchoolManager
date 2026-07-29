@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sckools · test dashboard</title>
+<style>
+  :root {
+    --brand: #4F46E5;
+    --amber: #F59E0B;
+    --ground: #0E0F18;
+    --surface: #171826;
+    --surface-2: #1E1F30;
+    --line: #292A40;
+    --line-2: #3A3B57;
+    --ink: #ECECF5;
+    --ink-2: #AFB0C6;
+    --ink-3: #7B7C95;
+    --pass: #43C98B;
+    --pass-bg: #102E20;
+    --fail: #F0736A;
+    --fail-bg: #34160F;
+    --run: #63A9F5;
+    --run-bg: #10233A;
+    --idle-bg: #23243A;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 22px; }
+
+  header { border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+  header .wrap { display: flex; align-items: center; gap: 16px; padding: 14px 22px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: -0.01em; }
+  .brand small { font-family: var(--mono); font-size: 11px; color: var(--ink-3); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+  .spacer { flex: 1; }
+  button {
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 8px;
+    padding: 7px 13px; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  button:hover:not(:disabled) { border-color: var(--brand); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  button.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  button.sm { font-size: 12px; padding: 5px 10px; }
+
+  .verdict { display: flex; align-items: center; gap: 14px; padding: 26px 0 18px; flex-wrap: wrap; }
+  .verdict h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; font-weight: 700; }
+  .verdict .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
+    padding: 3px 11px; font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge.pass { background: var(--pass-bg); color: var(--pass); }
+  .badge.fail { background: var(--fail-bg); color: var(--fail); }
+  .badge.running { background: var(--run-bg); color: var(--run); }
+  .badge.unknown { background: var(--idle-bg); color: var(--ink-3); }
+  .badge.none { background: var(--idle-bg); color: var(--amber); }
+  .badge.running .dot { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .badge.running .dot { animation: none; } }
+
+  h2 { font-size: 13px; font-family: var(--mono); letter-spacing: .12em; text-transform: uppercase;
+       color: var(--ink-3); margin: 30px 0 12px; font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 17px; display: flex; flex-direction: column; gap: 10px; }
+  .card.is-fail { border-color: #5B2A24; }
+  .card.is-pass { border-color: #1E4635; }
+  .card.is-running { border-color: var(--run); }
+  .card-top { display: flex; align-items: flex-start; gap: 10px; }
+  .card-top h3 { margin: 0; font-size: 16px; font-weight: 680; letter-spacing: -0.01em; }
+  .card-top .detail { font-size: 12.5px; color: var(--ink-3); margin-top: 1px; }
+  .figures { display: flex; gap: 18px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  .fig .n { font-family: var(--mono); font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+  .fig .l { font-size: 11px; color: var(--ink-3); font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+  .fig.bad .n { color: var(--fail); }
+  .fig.good .n { color: var(--pass); }
+
+  .meter { height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .meter span { display: block; height: 100%; background: var(--brand); }
+  .meter.low span { background: var(--amber); }
+  .meter.none span { background: var(--fail); }
+  .cov-line { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+
+  .card-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
+
+  .bleed { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 17px; }
+  .panel h3 { margin: 0 0 3px; font-size: 15px; font-weight: 680; }
+  .panel .hint { font-size: 12.5px; color: var(--ink-3); margin: 0 0 12px; }
+  .rows { display: flex; flex-direction: column; gap: 7px; max-height: 340px; overflow-y: auto; }
+  .row { display: flex; align-items: baseline; gap: 10px; font-family: var(--mono); font-size: 12px; }
+  .row .p { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .row .v { color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .row .v.zero { color: var(--fail); }
+  .empty { font-size: 13px; color: var(--ink-3); font-style: italic; }
+
+  .failure { border-left: 2px solid var(--fail); padding: 8px 0 8px 12px; }
+  .failure .t { font-size: 13.5px; font-weight: 600; }
+  .failure .s { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+  .failure pre { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); margin: 7px 0 0;
+                 white-space: pre-wrap; overflow-x: auto; background: var(--surface-2); padding: 8px 10px; border-radius: 6px; }
+
+  #console {
+    background: #0A0B12; border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 12px; line-height: 1.65; color: var(--ink-2);
+    padding: 14px 16px; height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  #console .who { color: var(--brand); }
+  footer { color: var(--ink-3); font-size: 12.5px; padding: 26px 0 40px; font-family: var(--mono); }
+  .toggle { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px;
+            color: var(--ink-2); cursor: pointer; user-select: none; }
+  .toggle input { accent-color: var(--brand); width: 15px; height: 15px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="brand">
+      <svg width="22" height="22" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M33 13.5c-2.6-2.2-6-3.3-9.4-3.1-4.6.3-7.9 2.9-7.9 6.4 0 3.4 2.7 5.2 8.2 6.6 6.6 1.7 10.4 4 10.4 9.2 0 5.4-4.8 9.2-11.6 9.2-4.2 0-8-1.4-10.7-3.9"
+              fill="none" stroke="#4F46E5" stroke-width="4.6" stroke-linecap="round"/>
+        <path d="M37.5 9v7.5" stroke="#F59E0B" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="37.5" cy="18.6" r="2.6" fill="#F59E0B"/>
+      </svg>
+      Sckools <small>test dashboard</small>
+    </span>
+    <span class="spacer"></span>
+    <label class="toggle" title="Coverage instrumentation makes runs several times slower">
+      <input type="checkbox" id="cov" /> measure coverage
+    </label>
+    <button class="primary" id="run-all">Run everything</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="verdict">
+    <span class="badge unknown" id="overall"><span class="dot"></span>no runs yet</span>
+    <h1 id="headline">Press “Run everything” to take a reading</h1>
+    <span class="spacer"></span>
+    <span class="meta" id="stamp"></span>
+  </div>
+
+  <h2>Test suites</h2>
+  <div class="grid" id="suites"></div>
+
+  <h2>Gates — these run before tests in CI</h2>
+  <div class="grid" id="gates"></div>
+
+  <h2>Where coverage is thin</h2>
+  <div class="bleed">
+    <div class="panel">
+      <h3>Never executed</h3>
+      <p class="hint">Source files with zero coverage — code no test has ever touched.</p>
+      <div class="rows" id="dead"><p class="empty">Run the suites with coverage to populate this.</p></div>
+    </div>
+    <div class="panel">
+      <h3>Under 60%</h3>
+      <p class="hint">Partially covered files, weakest first.</p>
+      <div class="rows" id="weak"><p class="empty">Nothing measured yet.</p></div>
+    </div>
+    <div class="panel">
+      <h3>Failing tests</h3>
+      <p class="hint">Every assertion currently red, with the first lines of its error.</p>
+      <div class="rows" id="failures"><p class="empty">No failures recorded.</p></div>
+    </div>
+  </div>
+
+  <h2>Live output</h2>
+  <div id="console">Waiting for a run…</div>
+
+  <footer>
+    127.0.0.1 only · runs repo scripts directly · results cached in tools/test-dashboard/.cache
+  </footer>
+</div>
+
+<script>
+const SUITE_IDS = ['api', 'mobile', 'db', 'web'];
+const GATE_IDS = ['lint', 'typecheck', 'boundary', 'build'];
+let webFiles = null;
+
+const el = (id) => document.getElementById(id);
+const fmtDur = (ms) => (ms == null ? '' : ms < 1000 ? ms + 'ms' : (ms / 1000).toFixed(1) + 's');
+const ago = (t) => {
+  if (!t) return 'never run';
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  return Math.round(s / 3600) + 'h ago';
+};
+
+function badge(job) {
+  if (job.kind === 'none') return '<span class="badge none"><span class="dot"></span>no tests</span>';
+  const map = { pass: 'pass', fail: 'fail', running: 'running', unknown: 'unknown' };
+  const label = { pass: 'passing', fail: 'failing', running: 'running…', unknown: 'not run' }[job.status];
+  return '<span class="badge ' + map[job.status] + '"><span class="dot"></span>' + label + '</span>';
+}
+
+function suiteCard(job) {
+  const s = job.summary;
+  const c = job.coverage;
+  let figures = '';
+
+  if (job.kind === 'none') {
+    figures =
+      '<div class="figures">' +
+      '<div class="fig bad"><div class="n">0</div><div class="l">tests</div></div>' +
+      '<div class="fig"><div class="n">' + (webFiles ?? '–') + '</div><div class="l">source files</div></div>' +
+      '</div>' +
+      '<p class="hint" style="margin:0;font-size:12.5px;color:var(--ink-3)">' + job.missing + '</p>';
+  } else if (s) {
+    figures =
+      '<div class="figures">' +
+      '<div class="fig ' + (s.tests.failed ? 'bad' : 'good') + '"><div class="n">' + s.tests.passed + '/' + s.tests.total + '</div><div class="l">tests</div></div>' +
+      '<div class="fig ' + (s.suites.failed ? 'bad' : '') + '"><div class="n">' + s.suites.passed + '/' + s.suites.total + '</div><div class="l">suites</div></div>' +
+      (c ? '<div class="fig"><div class="n">' + Math.round(c.lines) + '%</div><div class="l">lines</div></div>' : '') +
+      '</div>';
+    if (c) {
+      const cls = c.lines === 0 ? 'none' : c.lines < 60 ? 'low' : '';
+      figures +=
+        '<div class="meter ' + cls + '"><span style="width:' + Math.max(2, c.lines) + '%"></span></div>' +
+        '<div class="cov-line"><span>' + c.fileCount + ' files measured</span><span>' + c.deadCount + ' never executed</span></div>';
+    }
+  } else {
+    figures = '<p class="empty" style="margin:0">No result cached yet.</p>';
+  }
+
+  return (
+    '<div class="card is-' + job.status + '">' +
+      '<div class="card-top"><div><h3>' + job.label + '</h3><div class="detail">' + job.detail + '</div></div>' +
+      '<span class="spacer"></span>' + badge(job) + '</div>' +
+      figures +
+      '<div class="card-actions">' +
+        (job.kind === 'none'
+          ? '<button class="sm" disabled>Nothing to run</button>'
+          : '<button class="sm" data-run="' + job.id + '"' + (job.status === 'running' ? ' disabled' : '') + '>Run</button>') +
+        '<span class="spacer"></span><span class="l" style="font-family:var(--mono);font-size:11px;color:var(--ink-3)">' +
+        (job.durationMs ? fmtDur(job.durationMs) + ' · ' : '') + ago(job.finishedAt) + '</span>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function gateCard(job) {
+  return (
+    '<div class="card is-' + job.status + '">' +
+      '<div class="card-top"><div><h3>' + job.label + '</h3><div class="detail">' + job.detail + '</div></div>' +
+      '<span class="spacer"></span>' + badge(job) + '</div>' +
+      '<div class="card-actions">' +
+        '<button class="sm" data-run="' + job.id + '"' + (job.status === 'running' ? ' disabled' : '') + '>Run</button>' +
+        '<span class="spacer"></span><span style="font-family:var(--mono);font-size:11px;color:var(--ink-3)">' +
+        (job.durationMs ? fmtDur(job.durationMs) + ' · ' : '') + ago(job.finishedAt) + '</span>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function render(state) {
+  lastState = state;
+  const jobs = state.jobs;
+  el('suites').innerHTML = SUITE_IDS.map((id) => suiteCard(jobs[id])).join('');
+  el('gates').innerHTML = GATE_IDS.map((id) => gateCard(jobs[id])).join('');
+
+  const runnable = [...SUITE_IDS, ...GATE_IDS].map((id) => jobs[id]).filter((j) => j.kind !== 'none');
+  const failing = runnable.filter((j) => j.status === 'fail');
+  const running = runnable.filter((j) => j.status === 'running');
+  const ran = runnable.filter((j) => j.status === 'pass' || j.status === 'fail');
+
+  const badgeEl = el('overall');
+  if (running.length) {
+    badgeEl.className = 'badge running';
+    badgeEl.innerHTML = '<span class="dot"></span>' + running.length + ' running';
+    el('headline').textContent = 'Running ' + running.map((j) => j.label).join(', ') + '…';
+  } else if (failing.length) {
+    badgeEl.className = 'badge fail';
+    badgeEl.innerHTML = '<span class="dot"></span>' + failing.length + ' failing';
+    el('headline').textContent = failing.map((j) => j.label).join(', ') + ' need attention';
+  } else if (ran.length) {
+    badgeEl.className = 'badge pass';
+    badgeEl.innerHTML = '<span class="dot"></span>all green';
+    const tests = SUITE_IDS.map((id) => jobs[id].summary?.tests.passed ?? 0).reduce((a, b) => a + b, 0);
+    el('headline').textContent = tests + ' tests passing across ' + ran.length + ' checks';
+  }
+  el('stamp').textContent = ran.length ? 'last result ' + ago(Math.max(...ran.map((j) => j.finishedAt || 0))) : '';
+
+  // After a page reload the live stream has no history, so seed the console
+  // from the last run's cached tail — otherwise a job that is mid-flight looks
+  // like nothing is happening.
+  const c = el('console');
+  if (c.textContent === 'Waiting for a run…') {
+    const recent = runnable
+      .filter((j) => j.tail && j.tail.length)
+      .sort((a, b) => (b.finishedAt || b.startedAt || 0) - (a.finishedAt || a.startedAt || 0))[0];
+    if (recent) { c.textContent = ''; for (const line of recent.tail) log(recent.id, line); }
+  }
+
+  // bleeding panels, merged across suites
+  const dead = [], weak = [], fails = [];
+  for (const id of SUITE_IDS) {
+    const j = jobs[id];
+    if (j.coverage) {
+      for (const f of j.coverage.dead) dead.push({ ...f, who: j.label });
+      for (const f of j.coverage.weak) weak.push({ ...f, who: j.label });
+    }
+    for (const f of j.summary?.failures ?? []) fails.push({ ...f, who: j.label });
+  }
+
+  el('dead').innerHTML = dead.length
+    ? dead.slice(0, 24).map((f) => '<div class="row"><span class="p">' + f.path + '</span><span class="v zero">' + f.uncovered + ' lines</span></div>').join('')
+    : '<p class="empty">Nothing at zero — or coverage has not been measured yet.</p>';
+
+  el('weak').innerHTML = weak.length
+    ? weak.slice(0, 24).map((f) => '<div class="row"><span class="p">' + f.path + '</span><span class="v">' + Math.round(f.lines) + '%</span></div>').join('')
+    : '<p class="empty">Nothing between 1% and 60%.</p>';
+
+  el('failures').innerHTML = fails.length
+    ? fails.map((f) => '<div class="failure"><div class="t">' + f.title + '</div><div class="s">' + f.who + ' · ' + f.suite + '</div><pre>' + f.message.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])) + '</pre></div>').join('')
+    : '<p class="empty">No failing assertions.</p>';
+}
+
+function log(id, line) {
+  const c = el('console');
+  if (c.textContent === 'Waiting for a run…') c.textContent = '';
+  const row = document.createElement('div');
+  row.innerHTML = '<span class="who">' + id + '</span>  ' + line.replace(/[<>&]/g, (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[ch]));
+  c.appendChild(row);
+  while (c.childElementCount > 500) c.removeChild(c.firstChild);
+  c.scrollTop = c.scrollHeight;
+}
+
+const covFlag = () => (el('cov').checked ? '&coverage=1' : '');
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-run]');
+  if (btn) { fetch('/api/run?id=' + btn.dataset.run + covFlag(), { method: 'POST' }); btn.disabled = true; }
+});
+el('run-all').addEventListener('click', () => fetch('/api/run?id=all' + covFlag(), { method: 'POST' }));
+
+let lastState = null;
+fetch('/api/web-gap')
+  .then((r) => r.json())
+  .then((d) => { webFiles = d.files; if (lastState) render(lastState); });
+
+const es = new EventSource('/api/stream');
+es.addEventListener('state', (e) => render(JSON.parse(e.data)));
+es.addEventListener('log', (e) => { const d = JSON.parse(e.data); log(d.id, d.line); });
+setInterval(() => fetch('/api/state').then((r) => r.json()).then(render), 10000);
+</script>
+</body>
+</html>

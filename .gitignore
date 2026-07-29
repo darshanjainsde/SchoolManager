@@ -16,3 +16,6 @@ coverage
 !.vscode/settings.json
 playwright-report
 test-results
+
+# local test dashboard results
+tools/test-dashboard/.cache/
