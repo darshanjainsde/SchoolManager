@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/owner', '/platform', '/app', '/login', '/portal', '/teacher', '/me', '/account', '/forgot-password', '/reset-password', '/accept-invite'],
+      disallow: ['/owner', '/platform', '/app', '/login', '/portal', '/teacher', '/account', '/forgot-password', '/reset-password', '/accept-invite'],
     },
     sitemap: 'https://sckools.com/sitemap.xml',
   };
