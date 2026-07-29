@@ -106,7 +106,15 @@ describe('TeacherHomePage', () => {
     });
 
     afterAll(() => {
-      process.env.TZ = originalTZ;
+      // `process.env.TZ = undefined` does NOT unset the variable — assigning
+      // to a process.env property coerces the value to a string, leaving the
+      // literal "undefined", which Node/ICU cannot parse and silently treats
+      // as UTC. Vitest reuses a worker across test files and does not reset
+      // process.env between them, so on a host with no TZ set (typical CI)
+      // that would quietly force every later suite in the same worker into
+      // UTC. Delete the key instead.
+      if (originalTZ === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTZ;
     });
 
     it('requests the local calendar date, not the UTC one, when the two disagree', async () => {
