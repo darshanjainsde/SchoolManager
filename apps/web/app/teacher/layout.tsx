@@ -13,6 +13,8 @@ import {
   Inbox,
   CalendarDays,
   CalendarOff,
+  CalendarRange,
+  User,
   LogOut,
   Menu,
   X,
@@ -36,6 +38,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[]
   { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/teacher/inbox', label: 'Inbox', icon: Inbox },
   { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
+  { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },
 ];
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
@@ -213,6 +216,13 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
               ))}
             </nav>
             <div className="sk-side-foot">
+              <TeacherNavLink
+                href="/teacher/profile"
+                label="My profile"
+                icon={User}
+                isActive={isActive('/teacher/profile')}
+                onNavigate={() => setDrawerOpen(false)}
+              />
               <div style={{ padding: '8px 11px' }}><ThemeToggle /></div>
               <button
                 onClick={handleLogout}
@@ -239,6 +249,12 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="sk-side-foot">
+          <TeacherNavLink
+            href="/teacher/profile"
+            label="My profile"
+            icon={User}
+            isActive={isActive('/teacher/profile')}
+          />
           <div style={{ padding: '8px 11px' }}><ThemeToggle /></div>
           <button
             onClick={handleLogout}

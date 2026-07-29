@@ -163,6 +163,9 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 .sk-pill[data-tone="warn"] { background: var(--sk-amber-tint); color: var(--sk-amber); }
 .sk-pill[data-tone="bad"] { background: var(--sk-bad-tint); color: var(--sk-bad); }
 .sk-pill[data-tone="info"] { background: var(--sk-brand-tint); color: var(--sk-brand-2); }
+/* Fallback for a value with no known tone mapping — e.g. Holiday.type has no
+   DB-level enum, so an unexpected string must still render legibly. */
+.sk-pill[data-tone="neutral"] { background: var(--sk-line); color: var(--sk-ink-2); }
 
 .sk-state { font-size: 13px; color: var(--sk-ink-3); padding: 4px 0; }
 .sk-state.err { color: var(--sk-bad); }
