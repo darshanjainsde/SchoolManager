@@ -17,6 +17,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ATTENDANCE_STATUSES, AttendanceStatusValue } from '@skoolos/types';
 
 // ── Academic Year ────────────────────────────────────────────────────────────
 
@@ -512,8 +513,9 @@ export class AttendanceMarkDto {
   @IsUUID()
   studentId!: string;
 
-  @IsIn(['PRESENT', 'ABSENT', 'LATE'])
-  status!: 'PRESENT' | 'ABSENT' | 'LATE';
+  // Status values are defined in @skoolos/types to ensure API, web, and mobile agree.
+  @IsIn([...ATTENDANCE_STATUSES])
+  status!: AttendanceStatusValue;
 }
 
 export class SaveAttendanceDto {
