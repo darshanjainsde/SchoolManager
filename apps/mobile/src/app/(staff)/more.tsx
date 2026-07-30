@@ -64,6 +64,7 @@ export default function More() {
     <Screen>
       <SectionTitle title="More" />
       <Card style={{ padding: 4 }}>
+        <MoreRow label="Tests" icon="📊" onPress={() => router.push('/(staff)/tests')} />
         <MoreRow label="Requests" icon="📝" onPress={() => router.push('/(staff)/requests')} />
         <MoreRow label="Holidays" icon="📅" onPress={() => router.push('/(staff)/holidays')} />
       </Card>

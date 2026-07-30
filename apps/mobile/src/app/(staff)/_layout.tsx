@@ -29,6 +29,8 @@ export default function StaffTabs() {
       <Tabs.Screen name="holidays" options={{ href: null }} />
       <Tabs.Screen name="requests" options={{ href: null }} />
       <Tabs.Screen name="take/[classSectionId]" options={{ href: null }} />
+      <Tabs.Screen name="tests" options={{ href: null }} />
+      <Tabs.Screen name="results/[examId]" options={{ href: null }} />
     </Tabs>
   );
 }

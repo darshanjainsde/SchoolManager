@@ -29,6 +29,14 @@ beforeEach(async () => {
   });
 });
 
+it('navigates to the tests screen', async () => {
+  const { findByText } = render(<More />);
+
+  fireEvent.press(await findByText('Tests'));
+
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/tests');
+});
+
 it('navigates to the holidays screen', async () => {
   const { findByText } = render(<More />);
 
