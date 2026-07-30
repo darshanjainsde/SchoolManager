@@ -22,6 +22,7 @@ import { useApi } from '@/lib/use-api';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
+import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
@@ -102,7 +103,12 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) router.replace('/login');
-    if (me.data && me.data.role !== 'TEACHER' && me.data.role !== 'SCHOOL_ADMIN') router.replace('/app');
+    // Route by the CALLER's actual role rather than always bouncing to
+    // '/app' — that previously sent STAFF (and anyone else) into the admin
+    // console, which has no business accepting them either.
+    if (me.data && me.data.role !== 'TEACHER' && me.data.role !== 'SCHOOL_ADMIN') {
+      router.replace(homeForRole(me.data.role));
+    }
   }, [hydrated, status, audience, me.data, router]);
 
   // Close the mobile drawer whenever navigation happens.
