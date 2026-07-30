@@ -1,13 +1,14 @@
 'use client';
 import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { MyClassSection } from '@skoolos/types';
+import type { AnnouncementMine, MyClassSection } from '@skoolos/types';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ClassMultiSelect } from '@/components/teacher/ClassMultiSelect';
+import { ConfirmDialog } from '@/components/teacher/ConfirmDialog';
 
 const fieldCls =
   'rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-[11px] py-[9px] text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60 disabled:cursor-not-allowed';
@@ -19,9 +20,29 @@ interface CreateAnnouncementPayload {
   classSectionIds: string[];
 }
 
+/** Mirrors `formatDateTime` in `RequestList.tsx` — a real timestamp, read in the browser's local time. */
+function formatPostedAt(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export default function TeacherAnnouncementsPage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
+  const qc = useQueryClient();
+
+  const mineQueryKey = ['t-ann-mine'];
+  const mineQuery = useQuery({
+    queryKey: mineQueryKey,
+    enabled: !!host,
+    queryFn: () => api.get<AnnouncementMine[]>('/manage/announcements/mine'),
+  });
+  const mine = mineQuery.data ?? [];
 
   const classesQuery = useQuery({
     queryKey: ['t-ann-classes'],
@@ -59,6 +80,7 @@ export default function TeacherAnnouncementsPage() {
       setTitle('');
       setBody('');
       setSelected([]);
+      void qc.invalidateQueries({ queryKey: mineQueryKey });
     },
     // The API returns a { code, message } envelope; surface message verbatim
     // — a CLASS_NOT_OWNED 403 must be readable, not swallowed.
@@ -66,6 +88,53 @@ export default function TeacherAnnouncementsPage() {
   });
 
   const classesReady = !classesQuery.isLoading && !classesQuery.error;
+
+  // ── Edit / delete own posts ──────────────────────────────────────────────
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  function startEdit(a: AnnouncementMine) {
+    setEditingId(a.id);
+    setEditTitle(a.title);
+    setEditBody(a.body);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  const trimmedEditTitle = editTitle.trim();
+  const trimmedEditBody = editBody.trim();
+  const canSaveEdit = trimmedEditTitle.length > 0 && trimmedEditBody.length > 0;
+
+  const editMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/manage/announcements/${id}`, { title: trimmedEditTitle, body: trimmedEditBody }),
+    onSuccess: () => {
+      toast.success('Announcement updated');
+      setEditingId(null);
+      void qc.invalidateQueries({ queryKey: mineQueryKey });
+    },
+    // Same { code, message } envelope as the post mutation above.
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.del(`/manage/announcements/${id}`),
+    onSuccess: () => {
+      toast.success('Announcement deleted');
+      setConfirmDeleteId(null);
+      void qc.invalidateQueries({ queryKey: mineQueryKey });
+    },
+    onError: (e: Error) => {
+      toast.error(e.message);
+      setConfirmDeleteId(null);
+    },
+  });
+
+  const deletingId = deleteMutation.isPending ? (deleteMutation.variables ?? null) : null;
+  const deletingTarget = mine.find((a) => a.id === confirmDeleteId) ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -162,15 +231,110 @@ export default function TeacherAnnouncementsPage() {
 
       <div className="sk-card">
         <div className="sk-card-h">
-          <h3>Recent</h3>
+          <h3>Your recent posts</h3>
         </div>
         <div className="sk-card-b">
-          {/* Teachers have no endpoint to list their own past announcements yet
-              (GET /manage/announcements is SCHOOL_ADMIN-only) — say so plainly
-              instead of shipping a panel that always 404s. */}
-          <p className="sk-state">Posted notices aren&apos;t listed here yet.</p>
+          {mineQuery.isLoading && <p className="sk-state">Loading your posts…</p>}
+          {/* { code, message } envelope — surface message verbatim. */}
+          {mineQuery.error && <p className="sk-state err">{(mineQuery.error as Error).message}</p>}
+          {!mineQuery.isLoading && !mineQuery.error && mine.length === 0 && (
+            <p className="sk-state">You haven&apos;t posted anything yet.</p>
+          )}
+          {!mineQuery.isLoading &&
+            !mineQuery.error &&
+            mine.map((a) =>
+              editingId === a.id ? (
+                <div className="sk-row" key={a.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                  <label htmlFor={`edit-title-${a.id}`} className="sk-lab">
+                    Title
+                  </label>
+                  <Input
+                    id={`edit-title-${a.id}`}
+                    className={fieldCls}
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    disabled={editMutation.isPending}
+                    maxLength={160}
+                  />
+                  <label htmlFor={`edit-body-${a.id}`} className="sk-lab">
+                    Details
+                  </label>
+                  <Textarea
+                    id={`edit-body-${a.id}`}
+                    rows={3}
+                    className={fieldCls}
+                    value={editBody}
+                    onChange={(e) => setEditBody(e.target.value)}
+                    disabled={editMutation.isPending}
+                    maxLength={4000}
+                  />
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button type="button" className="sk-btn" onClick={cancelEdit} disabled={editMutation.isPending}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="sk-btn"
+                      data-variant="primary"
+                      disabled={!canSaveEdit || editMutation.isPending}
+                      onClick={() => editMutation.mutate(a.id)}
+                    >
+                      {editMutation.isPending ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="sk-row" key={a.id}>
+                  <span className="sk-pill" data-tone="info">
+                    {a.className ?? 'Whole school'}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="nm">{a.title}</div>
+                    <div className="meta">
+                      {a.body} · {formatPostedAt(a.createdAt)}
+                    </div>
+                  </div>
+                  <span className="sp" />
+                  <button
+                    type="button"
+                    className="sk-btn"
+                    style={{ marginRight: 8 }}
+                    onClick={() => startEdit(a)}
+                    disabled={deletingId === a.id}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="sk-btn"
+                    onClick={() => setConfirmDeleteId(a.id)}
+                    disabled={deletingId === a.id}
+                  >
+                    {deletingId === a.id ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
+              ),
+            )}
         </div>
       </div>
+
+      {confirmDeleteId && (
+        <ConfirmDialog
+          titleId="delete-announcement-title"
+          title="Delete this announcement?"
+          isPending={deleteMutation.isPending}
+          confirmLabel="Yes, delete"
+          pendingLabel="Deleting…"
+          onConfirm={() => deleteMutation.mutate(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+        >
+          <p>
+            {deletingTarget
+              ? `"${deletingTarget.title}" will be removed for everyone it was sent to.`
+              : 'This cannot be undone.'}
+          </p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
