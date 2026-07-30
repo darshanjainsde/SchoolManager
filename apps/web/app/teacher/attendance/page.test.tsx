@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } 
 import { fireEvent, screen, waitForElementToBeRemoved, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toaster } from 'sonner';
+import type { MyClassSection } from '@skoolos/types';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -29,7 +30,11 @@ function mockGet(handlers: Array<[string, () => Promise<unknown>]>) {
   });
 }
 
-const classSections = [{ id: 'sec-1', name: 'A', grade: { name: '8' } }];
+// `/manage/attendance/my-classes` already composes the display name ("8-A"),
+// unlike `/manage/classes`' `{id, name, grade:{name}}` shape.
+const classSections: MyClassSection[] = [
+  { classSectionId: 'sec-1', name: '8-A', studentCount: 2, covering: false },
+];
 
 function statusRow(overrides: Partial<{
   classSectionId: string;
@@ -106,7 +111,7 @@ describe('TeacherAttendancePage', () => {
       get: mockGet([
         ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.resolve(students)],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),
@@ -123,6 +128,35 @@ describe('TeacherAttendancePage', () => {
     expect(screen.queryByRole('button', { name: /re-take attendance/i })).not.toBeInTheDocument();
   });
 
+  it('the class picker is populated from /manage/attendance/my-classes and INCLUDES a covering row, labelled', async () => {
+    // Unlike tests/results, a substitute covering a class for the day may
+    // still take its attendance — AttendanceService.save allows
+    // `covering: true` sections — so the picker must keep the row, just
+    // label it so the teacher understands why an unusual class is listed.
+    const withCovering: MyClassSection[] = [
+      ...classSections,
+      { classSectionId: 'sec-2', name: '9-B', studentCount: 5, covering: true },
+    ];
+    const api = mockApi({
+      get: mockGet([
+        ['/manage/attendance/status', () => Promise.resolve([])],
+        ['/manage/attendance?', () => Promise.resolve([])],
+        ['/manage/attendance/my-classes', () => Promise.resolve(withCovering)],
+        ['/manage/students?', () => Promise.resolve([])],
+        ['/manage/register-changes/mine', () => Promise.resolve([])],
+      ]),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderPage();
+
+    const select = await screen.findByLabelText('Class');
+    expect(await within(select).findByRole('option', { name: '8-A' })).toBeInTheDocument();
+    expect(within(select).getByRole('option', { name: '9-B (covering)' })).toBeInTheDocument();
+    const getPaths = vi.mocked(api.get).mock.calls.map(([path]) => path);
+    expect(getPaths.some((p) => p.startsWith('/manage/classes'))).toBe(false);
+  });
+
   it('a taken class for today renders the summary and NO editable roster', async () => {
     searchParams = new URLSearchParams('classSectionId=sec-1');
     const api = mockApi({
@@ -132,7 +166,7 @@ describe('TeacherAttendancePage', () => {
           () => Promise.resolve([statusRow({ taken: true, present: 1, total: 2, markedBy: 'Anita Rao' })]),
         ],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.resolve(students)],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),
@@ -157,7 +191,7 @@ describe('TeacherAttendancePage', () => {
       get: mockGet([
         ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.resolve(students)],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),
@@ -212,7 +246,7 @@ describe('TeacherAttendancePage', () => {
         get: mockGet([
           ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false, total: 2 })])],
           ['/manage/attendance?', () => Promise.resolve([])],
-          ['/manage/classes', () => Promise.resolve(classSections)],
+          ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
           ['/manage/students?', () => Promise.resolve(students)],
           ['/manage/register-changes/mine', () => Promise.resolve([])],
         ]),
@@ -239,7 +273,7 @@ describe('TeacherAttendancePage', () => {
       get: mockGet([
         ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false, total: 2 })])],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.resolve(students)],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),
@@ -267,7 +301,7 @@ describe('TeacherAttendancePage', () => {
       get: mockGet([
         ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => pending],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),
@@ -287,7 +321,7 @@ describe('TeacherAttendancePage', () => {
       get: mockGet([
         ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.reject(new Error('Roster service is unavailable'))],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),
@@ -305,7 +339,7 @@ describe('TeacherAttendancePage', () => {
       get: mockGet([
         ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false, total: 0 })])],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.resolve([])],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),
@@ -325,7 +359,7 @@ describe('TeacherAttendancePage', () => {
       get: mockGet([
         ['/manage/attendance/status', () => Promise.reject(new Error('Status service is unavailable'))],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.resolve(students)],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),
@@ -352,7 +386,7 @@ describe('TeacherAttendancePage', () => {
       get: mockGet([
         ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.resolve(students)],
         ['/manage/register-changes/mine', () => pending],
       ]),
@@ -385,7 +419,7 @@ describe('TeacherAttendancePage', () => {
         get: mockGet([
           ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false, total: 2 })])],
           ['/manage/attendance?', () => Promise.resolve([])],
-          ['/manage/classes', () => Promise.resolve(classSections)],
+          ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
           ['/manage/students?', () => Promise.resolve(students)],
           [
             '/manage/register-changes/mine',
@@ -420,7 +454,7 @@ describe('TeacherAttendancePage', () => {
         get: mockGet([
           ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
           ['/manage/attendance?', () => Promise.resolve([])],
-          ['/manage/classes', () => Promise.resolve(classSections)],
+          ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
           ['/manage/students?', () => Promise.resolve(students)],
           [
             '/manage/register-changes/mine',
@@ -454,7 +488,7 @@ describe('TeacherAttendancePage', () => {
         get: mockGet([
           ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
           ['/manage/attendance?', () => Promise.resolve([])],
-          ['/manage/classes', () => Promise.resolve(classSections)],
+          ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
           ['/manage/students?', () => Promise.resolve(students)],
           [
             '/manage/register-changes/mine',
@@ -483,7 +517,7 @@ describe('TeacherAttendancePage', () => {
         get: mockGet([
           ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
           ['/manage/attendance?', () => Promise.resolve([])],
-          ['/manage/classes', () => Promise.resolve(classSections)],
+          ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
           ['/manage/students?', () => Promise.resolve(students)],
           ['/manage/register-changes/mine', () => pending],
         ]),
@@ -516,7 +550,7 @@ describe('TeacherAttendancePage', () => {
           () => Promise.resolve([statusRow({ taken: true, present: 1, total: 2, markedBy: 'Anita Rao' })]),
         ],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.resolve(students)],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),
@@ -549,7 +583,7 @@ describe('TeacherAttendancePage', () => {
           () => Promise.resolve([statusRow({ taken: true, present: 1, total: 2, markedBy: 'Anita Rao' })]),
         ],
         ['/manage/attendance?', () => Promise.resolve([])],
-        ['/manage/classes', () => Promise.resolve(classSections)],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
         ['/manage/students?', () => Promise.resolve(students)],
         ['/manage/register-changes/mine', () => Promise.resolve([])],
       ]),

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { ClassSectionSummary, Exam, ExamList, Subject } from '@skoolos/types';
+import type { Exam, ExamList, MyClassSection, Subject } from '@skoolos/types';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,9 +27,16 @@ export default function TeacherTestsPage() {
   const classes = useQuery({
     queryKey: ['t-tests-classes'],
     enabled: !!host,
-    queryFn: () => api.get<ClassSectionSummary[]>('/manage/classes'),
+    queryFn: () => api.get<MyClassSection[]>('/manage/attendance/my-classes'),
     staleTime: 30_000,
   });
+
+  // A TEACHER may only schedule tests for sections they own — ExamsService
+  // rejects `covering: true` sections with a 403 CLASS_NOT_OWNED (a
+  // substitute covering a class for the day doesn't get to schedule tests
+  // for it). Filtering here means the picker never offers a class the
+  // server will refuse.
+  const ownedClasses = (classes.data ?? []).filter((c) => !c.covering);
 
   const subjects = useQuery({
     queryKey: ['t-tests-subjects'],
@@ -103,9 +110,9 @@ export default function TeacherTestsPage() {
             onChange={(e) => setClassSectionId(e.target.value)}
           >
             <option value="">Pick a class…</option>
-            {(classes.data ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.grade.name} · {c.name}
+            {ownedClasses.map((c) => (
+              <option key={c.classSectionId} value={c.classSectionId}>
+                {c.name}
               </option>
             ))}
           </Select>

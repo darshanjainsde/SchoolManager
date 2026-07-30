@@ -3,8 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type {
-  ClassSectionSummary,
   ExamList,
+  MyClassSection,
   PublishResultsResponse,
   RosterStudent,
   SavedResult,
@@ -83,9 +83,15 @@ export default function TeacherResultsPage() {
   const classes = useQuery({
     queryKey: ['t-results-classes'],
     enabled: !!host,
-    queryFn: () => api.get<ClassSectionSummary[]>('/manage/classes'),
+    queryFn: () => api.get<MyClassSection[]>('/manage/attendance/my-classes'),
     staleTime: 30_000,
   });
+
+  // A TEACHER may only enter/publish results for sections they own —
+  // ResultsService rejects `covering: true` sections with a 403
+  // CLASS_NOT_OWNED. Filtering here means the picker never offers a class
+  // the server will refuse.
+  const ownedClasses = (classes.data ?? []).filter((c) => !c.covering);
 
   const exams = useQuery({
     queryKey: ['t-results-exams', classSectionId],
@@ -230,9 +236,9 @@ export default function TeacherResultsPage() {
                 }}
               >
                 <option value="">Pick a class…</option>
-                {(classes.data ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.grade.name} · {c.name}
+                {ownedClasses.map((c) => (
+                  <option key={c.classSectionId} value={c.classSectionId}>
+                    {c.name}
                   </option>
                 ))}
               </Select>

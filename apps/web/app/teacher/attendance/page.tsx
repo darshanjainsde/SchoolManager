@@ -7,7 +7,7 @@ import type {
   AttendanceMark,
   AttendanceStatusValue,
   ClassDayStatus,
-  ClassSectionSummary,
+  MyClassSection,
   RegisterChangeRow,
   RosterStudent,
   SaveAttendanceResponse,
@@ -116,10 +116,14 @@ function TeacherAttendanceInner() {
     if (unlocked) rosterHeadingRef.current?.focus();
   }, [unlocked]);
 
+  // A substitute covering a class for the day may still take its attendance
+  // (AttendanceService.save allows `covering: true` sections) — unlike
+  // tests/results, covering rows are kept here, just labelled so the
+  // teacher understands why an unusual class is in the list.
   const classes = useQuery({
     queryKey: ['t-attn-classes'],
     enabled: !!host,
-    queryFn: () => api.get<ClassSectionSummary[]>('/manage/classes'),
+    queryFn: () => api.get<MyClassSection[]>('/manage/attendance/my-classes'),
     staleTime: 30_000,
   });
 
@@ -241,10 +245,8 @@ function TeacherAttendanceInner() {
   const listError = (roster.error ?? existing.error) as Error | undefined;
   const listLoading = editable && (roster.isLoading || existing.isLoading);
 
-  const selectedClass = classes.data?.find((c) => c.id === classSectionId);
-  const selectedClassLabel = selectedClass
-    ? `${selectedClass.grade.name} · ${selectedClass.name}`
-    : (selectedStatus?.name ?? '');
+  const selectedClass = classes.data?.find((c) => c.classSectionId === classSectionId);
+  const selectedClassLabel = selectedClass ? selectedClass.name : (selectedStatus?.name ?? '');
 
   return (
     <>
@@ -274,8 +276,9 @@ function TeacherAttendanceInner() {
               >
                 <option value="">Pick a class…</option>
                 {(classes.data ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.grade.name} · {c.name}
+                  <option key={c.classSectionId} value={c.classSectionId}>
+                    {c.name}
+                    {c.covering ? ' (covering)' : ''}
                   </option>
                 ))}
               </Select>
