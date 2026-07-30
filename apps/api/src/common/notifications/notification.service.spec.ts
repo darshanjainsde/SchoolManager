@@ -175,6 +175,37 @@ describe('NotificationService', () => {
     expect(email.send).not.toHaveBeenCalled();
   });
 
+  it('restricts delivery to the named channels when onlyChannels is given', async () => {
+    const email = fakeChannel('email');
+    const push = fakeChannel('push');
+    (email.send as jest.Mock).mockResolvedValue(true);
+    (push.send as jest.Mock).mockResolvedValue(true);
+
+    const svc = new NotificationService([email, push]);
+    const result = await svc.notify(
+      'TEST_SCHEDULED',
+      [{ email: 'a@x.com', schoolId: SCHOOL, payload: scheduled }],
+      ['email'],
+    );
+
+    expect(result).toEqual({ sent: 1, failed: 0 });
+    expect(email.send).toHaveBeenCalledTimes(1);
+    expect(push.send).not.toHaveBeenCalled();
+  });
+
+  it('falls back to every configured channel when onlyChannels is omitted (unchanged default)', async () => {
+    const email = fakeChannel('email');
+    const push = fakeChannel('push');
+    (email.send as jest.Mock).mockResolvedValue(true);
+    (push.send as jest.Mock).mockResolvedValue(true);
+
+    const svc = new NotificationService([email, push]);
+    await svc.notify('TEST_SCHEDULED', [{ email: 'a@x.com', schoolId: SCHOOL, payload: scheduled }]);
+
+    expect(email.send).toHaveBeenCalledTimes(1);
+    expect(push.send).toHaveBeenCalledTimes(1);
+  });
+
   it('hands the channel a discriminated message whose kind matches the payload it carries', async () => {
     const email = fakeChannel('email');
     (email.send as jest.Mock).mockResolvedValue(true);

@@ -64,6 +64,33 @@ export interface AnnouncementPayload {
   className: string | null;
 }
 
+/**
+ * Payload STORED in a `NotificationOutbox` row for kind `EXAM_SCHEDULED`
+ * (`@skoolos/types` `NotificationOutboxKind`). Denormalised at write time by
+ * `ExamsService.create()`, inside the same transaction as the `Exam` row, so
+ * `NotificationOutboxService`'s drain never joins back to `Subject`/
+ * `ClassSection` to render a push. A superset of `TestScheduledPayload` (same
+ * fields the push text actually renders) plus `classSectionName`/`maxMarks`
+ * kept for operator visibility (`lastError` debugging) and future richer copy
+ * — `classSectionName` is narrowed from optional to required here since the
+ * write site always has it in hand.
+ */
+export interface ExamScheduledOutboxPayload extends TestScheduledPayload {
+  classSectionName: string;
+  maxMarks: number;
+}
+
+/**
+ * Payload STORED in a `NotificationOutbox` row for kind `RESULT_PUBLISHED`.
+ * See `ExamScheduledOutboxPayload` — same reasoning, denormalised by
+ * `ExamsService.publish()`. A superset of `ResultsPublishedPayload` plus
+ * `classSectionName`/`maxMarks`.
+ */
+export interface ResultPublishedOutboxPayload extends ResultsPublishedPayload {
+  classSectionName: string;
+  maxMarks: number;
+}
+
 /** The single source of truth mapping each event to its payload shape. */
 export interface NotificationPayloadMap {
   TEST_SCHEDULED: TestScheduledPayload;

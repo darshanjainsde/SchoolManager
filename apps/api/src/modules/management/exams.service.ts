@@ -1,19 +1,37 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
-import type {
-  Exam,
-  ExamList,
-  PublishResultsResponse,
-  SavedResult,
-  SaveResultsResponse,
+import { Prisma, withTenant } from '@skoolos/db';
+import {
+  assertNotificationOutboxKind,
+  type Exam,
+  type ExamList,
+  type NotificationOutboxKind,
+  type PublishResultsResponse,
+  type SavedResult,
+  type SaveResultsResponse,
 } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { formatDateTimeIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
+import type {
+  ExamScheduledOutboxPayload,
+  ResultPublishedOutboxPayload,
+} from '../../common/notifications/notification.types';
 import { resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
 import { AttendanceService } from './attendance.service';
 import type { CreateExamDto, SaveExamResultsDto } from './management.dto';
+
+/**
+ * Push for TEST_SCHEDULED/RESULTS_PUBLISHED now flows EXCLUSIVELY through the
+ * transactional `NotificationOutbox` (written inside the same tx below, drained
+ * by `NotificationOutboxService`) — never through this module's own
+ * best-effort, post-commit `notifications.notify()` call. Passing this to
+ * `notify()`'s `onlyChannels` keeps email's existing best-effort behaviour
+ * unchanged while stopping `PushChannel` from ALSO firing immediately, which
+ * would otherwise double-notify a family's phone for the same event (see
+ * `NotificationService.notify`'s docstring).
+ */
+const EMAIL_ONLY = ['email'] as const;
 
 /**
  * Shown when a School/Subject row cannot be read while composing a
@@ -214,7 +232,7 @@ export class ExamsService {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
-      return tx.exam.create({
+      const created = await tx.exam.create({
         data: {
           schoolId,
           classSectionId: dto.classSectionId,
@@ -226,11 +244,46 @@ export class ExamsService {
           createdById: callerUserId,
         },
       });
+
+      // Transactional outbox (S6/S7 wiring, decided in the pitch: "publishing
+      // ... writes one row to a small NotificationOutbox table inside the
+      // same transaction, and a cron worker drains it"). Written IN THIS SAME
+      // `withTenant` transaction as the `Exam` row above — if anything past
+      // this point throws, Prisma rolls the whole transaction back and this
+      // row is never written either, so a scheduled exam is never visible
+      // without its outbox row (see exams.service.spec.ts's rollback test).
+      // Every field is resolved to a display string HERE, not at drain time,
+      // so `NotificationOutboxService` never has to join back to
+      // Subject/ClassSection to render a push (see the payload's own type).
+      const [school, subject] = await Promise.all([
+        tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+        tx.subject.findFirst({ where: { id: dto.subjectId, schoolId }, select: { name: true } }),
+      ]);
+      const kind: NotificationOutboxKind = 'EXAM_SCHEDULED';
+      assertNotificationOutboxKind(kind);
+      const outboxPayload: ExamScheduledOutboxPayload = {
+        schoolName: school?.name ?? FALLBACK_SCHOOL_NAME,
+        subjectName: subject?.name ?? FALLBACK_SUBJECT_NAME,
+        examTitle: created.title,
+        scheduledAt: formatDateTimeIST(new Date(created.scheduledAt)),
+        classSectionName: section.name,
+        maxMarks: created.maxMarks,
+      };
+      await tx.notificationOutbox.create({
+        data: {
+          schoolId,
+          kind,
+          classSectionId: dto.classSectionId,
+          payload: outboxPayload as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      return created;
     });
 
-    // Best-effort, after the write has committed — never blocks or fails exam
-    // creation. All notification reads (recipients, school/subject names) run
-    // here, outside the mutation's transaction.
+    // Best-effort EMAIL only (see EMAIL_ONLY docstring above) — push for this
+    // event is the guaranteed outbox row written above, not this call. Runs
+    // after the write has committed and never blocks or fails exam creation.
     runInBackground(
       async () => {
         const { schoolName, subjectName, recipients } = await this.loadNotificationContext(
@@ -249,6 +302,7 @@ export class ExamsService {
         await this.notifications.notify(
           'TEST_SCHEDULED',
           recipients.map((email) => ({ email, schoolId, payload })),
+          EMAIL_ONLY,
         );
       },
       (e) => this.logger.error(`TEST_SCHEDULED notify failed: ${(e as Error).message}`),
@@ -449,14 +503,49 @@ export class ExamsService {
         data: { publishedAt: new Date() },
       });
 
+      // Transactional outbox (S6/S7 wiring) — see create()'s matching
+      // comment for why this write must live INSIDE this same transaction.
+      // Gated on `count > 0`, mirroring the existing best-effort email gate
+      // below: publishing against an exam with no saved Results yet must not
+      // queue a push telling parents results are out.
+      if (count > 0) {
+        const [school, subject, section] = await Promise.all([
+          tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+          tx.subject.findFirst({ where: { id: exam.subjectId, schoolId }, select: { name: true } }),
+          tx.classSection.findFirst({
+            where: { id: exam.classSectionId, schoolId },
+            select: { name: true },
+          }),
+        ]);
+        const kind: NotificationOutboxKind = 'RESULT_PUBLISHED';
+        assertNotificationOutboxKind(kind);
+        const outboxPayload: ResultPublishedOutboxPayload = {
+          schoolName: school?.name ?? FALLBACK_SCHOOL_NAME,
+          subjectName: subject?.name ?? FALLBACK_SUBJECT_NAME,
+          examTitle: exam.title,
+          classSectionName: section?.name ?? '',
+          maxMarks: exam.maxMarks,
+        };
+        await tx.notificationOutbox.create({
+          data: {
+            schoolId,
+            kind,
+            classSectionId: exam.classSectionId,
+            payload: outboxPayload as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }
+
       return { published: count, exam };
     });
 
     // Nothing was actually published (no Results saved for this exam yet) —
     // telling parents results are out would be a lie.
     if (published > 0) {
-      // Best-effort, after the write has committed — never blocks or fails
-      // publishing, and no notification read happens inside the transaction.
+      // Best-effort EMAIL only (see EMAIL_ONLY docstring above) — push for
+      // this event is the guaranteed outbox row written above, not this
+      // call. Runs after the write has committed and never blocks or fails
+      // publishing.
       runInBackground(
         async () => {
           const { schoolName, subjectName, recipients } = await this.loadNotificationContext(
@@ -470,6 +559,7 @@ export class ExamsService {
           await this.notifications.notify(
             'RESULTS_PUBLISHED',
             recipients.map((email) => ({ email, schoolId, payload })),
+            EMAIL_ONLY,
           );
         },
         (e) => this.logger.error(`RESULTS_PUBLISHED notify failed: ${(e as Error).message}`),

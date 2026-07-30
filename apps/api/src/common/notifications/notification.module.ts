@@ -36,6 +36,11 @@ import { NotificationService } from './notification.service';
     },
     NotificationService,
   ],
-  exports: [NotificationService],
+  // `PushChannel` is also exported (not just `NotificationService`) so
+  // `NotificationOutboxService` (apps/api/src/modules/management) can inject
+  // it directly and send push for a drained outbox row without re-running it
+  // through `NotificationService.notify()`'s all-channels fan-out — the
+  // outbox is push-only by design (see notify()'s onlyChannels docstring).
+  exports: [NotificationService, PushChannel],
 })
 export class NotificationModule {}

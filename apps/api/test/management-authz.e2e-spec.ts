@@ -131,6 +131,41 @@ describe('management authorization', () => {
       .expect(400);
   });
 
+  // ── NotificationOutbox drain cron route (S6/S7 wiring, Task 2) ─────────────
+  // Mirrors `internal/cron/exam-reminders`: no JWT exists for a cron
+  // invocation, so the route is `@Public()` and gated by `CronSecretGuard`
+  // instead. `CRON_SECRET` is unset in this e2e environment (see
+  // test/integration/setup-env.ts), so the guard fails CLOSED — no header
+  // could possibly match an unset secret — which is itself the behaviour
+  // under test: an unconfigured/missing secret must never open this route.
+  // Note: `CronSecretGuard` actually rejects with 401 UNAUTHORIZED (see
+  // cron-secret.guard.ts / cron-secret.guard.spec.ts), not 403 — asserted
+  // here against the guard's real, already-unit-tested behaviour.
+  describe('internal/cron/notification-outbox — CronSecretGuard', () => {
+    it('401s a GET with no cron secret header', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/internal/cron/notification-outbox')
+        .expect(401);
+
+      expect(res.body.code).toBe('UNAUTHORIZED');
+    });
+
+    it('401s a POST with no cron secret header', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/internal/cron/notification-outbox')
+        .expect(401);
+
+      expect(res.body.code).toBe('UNAUTHORIZED');
+    });
+
+    it('401s even with a bogus x-cron-secret header — never opens on a wrong guess', async () => {
+      await request(app.getHttpServer())
+        .post('/internal/cron/notification-outbox')
+        .set('x-cron-secret', 'guessed-secret')
+        .expect(401);
+    });
+  });
+
   // ── Announcements: own-post list/edit/delete (T16) ─────────────────────────
   // These rows are seeded directly via the platform Prisma client (bypasses
   // RLS, same technique seedMinimalSchool already uses for Users) rather
