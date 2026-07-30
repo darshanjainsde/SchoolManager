@@ -8,6 +8,8 @@ const txMock = {
   announcement: { findMany: jest.fn() },
   user: { findUnique: jest.fn() },
   pushToken: { upsert: jest.fn() },
+  assignment: { findMany: jest.fn(), findFirst: jest.fn() },
+  assignmentSeen: { upsert: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -477,6 +479,179 @@ describe('PortalService', () => {
 
       await expect(svc.results(USER)).rejects.toMatchObject({ status: 404 });
       expect(txMock.result.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── assignments ─────────────────────────────────────────────────────────
+
+  describe('assignments', () => {
+    it('splits assignments into upcoming and past by dueDate, with subjectName resolved', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-07-21T12:00:00.000Z'));
+      txMock.assignment.findMany.mockResolvedValue([
+        {
+          id: 'a-past',
+          subjectId: SUBJECT,
+          title: 'Old worksheet',
+          instructions: 'Do it.',
+          dueDate: new Date('2026-07-10T00:00:00.000Z'),
+          attachments: [],
+          createdAt: new Date('2026-07-01T00:00:00.000Z'),
+        },
+        {
+          id: 'a-future',
+          subjectId: SUBJECT,
+          title: 'New worksheet',
+          instructions: 'Do it too.',
+          dueDate: new Date('2026-08-05T00:00:00.000Z'),
+          attachments: [{ url: 'https://x/y.pdf', name: 'y.pdf', kind: 'pdf' }],
+          createdAt: new Date('2026-07-20T00:00:00.000Z'),
+        },
+      ]);
+
+      const result = await svc.assignments(USER);
+
+      expect(result.past).toEqual([
+        {
+          id: 'a-past',
+          subjectId: SUBJECT,
+          subjectName: 'Mathematics',
+          title: 'Old worksheet',
+          instructions: 'Do it.',
+          dueDate: '2026-07-10',
+          attachments: [],
+          createdAt: '2026-07-01T00:00:00.000Z',
+        },
+      ]);
+      expect(result.upcoming).toEqual([
+        {
+          id: 'a-future',
+          subjectId: SUBJECT,
+          subjectName: 'Mathematics',
+          title: 'New worksheet',
+          instructions: 'Do it too.',
+          dueDate: '2026-08-05',
+          attachments: [{ url: 'https://x/y.pdf', name: 'y.pdf', kind: 'pdf' }],
+          createdAt: '2026-07-20T00:00:00.000Z',
+        },
+      ]);
+      expect(txMock.assignment.findMany).toHaveBeenCalledWith({
+        where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION },
+        orderBy: [{ dueDate: 'asc' }],
+      });
+
+      jest.useRealTimers();
+    });
+
+    // Same edge case as AssignmentsService's own test: a NAIVE `dueDate >=
+    // now` (full datetime) comparison would wrongly bucket a same-IST-day
+    // assignment as "past" once the wall clock has moved past its stored
+    // UTC-midnight instant — which is true for most of every IST day.
+    it('an assignment due TODAY (IST) counts as upcoming, even hours after its stored UTC-midnight instant', async () => {
+      const now = new Date('2026-07-22T10:00:00.000Z'); // 2026-07-22 15:30 IST
+      jest.useFakeTimers().setSystemTime(now);
+
+      txMock.assignment.findMany.mockResolvedValue([
+        {
+          id: 'due-today',
+          subjectId: SUBJECT,
+          title: 'Worksheet',
+          instructions: 'Do it.',
+          dueDate: new Date('2026-07-22T00:00:00.000Z'),
+          attachments: [],
+          createdAt: new Date('2026-07-01T00:00:00.000Z'),
+        },
+      ]);
+
+      const result = await svc.assignments(USER);
+
+      expect(result.upcoming.map((a) => a.id)).toEqual(['due-today']);
+      expect(result.past).toEqual([]);
+
+      jest.useRealTimers();
+    });
+
+    it('returns [] / [] without querying assignments when the student has no class section', async () => {
+      txMock.student.findFirst.mockResolvedValue({
+        id: STUDENT,
+        userId: USER,
+        classSectionId: null,
+        classSection: null,
+      });
+
+      await expect(svc.assignments(USER)).resolves.toEqual({ upcoming: [], past: [] });
+      expect(txMock.assignment.findMany).not.toHaveBeenCalled();
+    });
+
+    it('404s when the login has no student record', async () => {
+      txMock.student.findFirst.mockResolvedValue(null);
+
+      await expect(svc.assignments(USER)).rejects.toMatchObject({ status: 404 });
+      expect(txMock.assignment.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── markAssignmentSeen ──────────────────────────────────────────────────
+
+  describe('markAssignmentSeen', () => {
+    const ASSIGNMENT = 'gggggggg-gggg-gggg-gggg-gggggggggggg';
+
+    it('upserts an AssignmentSeen row keyed on the unique (assignmentId, studentId) pair', async () => {
+      txMock.assignment.findFirst.mockResolvedValue({ id: ASSIGNMENT });
+      txMock.assignmentSeen.upsert.mockResolvedValue({});
+
+      const result = await svc.markAssignmentSeen(USER, ASSIGNMENT);
+
+      expect(result).toEqual({ ok: true });
+      expect(txMock.assignment.findFirst).toHaveBeenCalledWith({
+        where: { id: ASSIGNMENT, schoolId: SCHOOL, classSectionId: CLASS_SECTION },
+        select: { id: true },
+      });
+      expect(txMock.assignmentSeen.upsert).toHaveBeenCalledWith({
+        where: { one_seen_per_assignment_student: { assignmentId: ASSIGNMENT, studentId: STUDENT } },
+        create: { assignmentId: ASSIGNMENT, studentId: STUDENT },
+        update: {},
+      });
+    });
+
+    // Idempotency proof: calling twice must still leave exactly one upsert
+    // call per invocation, both hitting the SAME unique key — Prisma's
+    // upsert (not a plain create) is what guarantees only one row ever
+    // exists, not a pre-check in this service.
+    it('is idempotent — marking the same assignment seen twice both times upserts the same key, never errors', async () => {
+      txMock.assignment.findFirst.mockResolvedValue({ id: ASSIGNMENT });
+      txMock.assignmentSeen.upsert.mockResolvedValue({});
+
+      await svc.markAssignmentSeen(USER, ASSIGNMENT);
+      await svc.markAssignmentSeen(USER, ASSIGNMENT);
+
+      expect(txMock.assignmentSeen.upsert).toHaveBeenCalledTimes(2);
+      expect(txMock.assignmentSeen.upsert.mock.calls[0]).toEqual(txMock.assignmentSeen.upsert.mock.calls[1]);
+    });
+
+    it('404s when the assignment does not belong to the caller\'s OWN class section — never marks seen', async () => {
+      txMock.assignment.findFirst.mockResolvedValue(null); // wrong class, or foreign school
+
+      await expect(svc.markAssignmentSeen(USER, ASSIGNMENT)).rejects.toMatchObject({ status: 404 });
+      expect(txMock.assignmentSeen.upsert).not.toHaveBeenCalled();
+    });
+
+    it('404s when the login has no student record', async () => {
+      txMock.student.findFirst.mockResolvedValue(null);
+
+      await expect(svc.markAssignmentSeen(USER, ASSIGNMENT)).rejects.toMatchObject({ status: 404 });
+      expect(txMock.assignment.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('404s when the student has no class section at all', async () => {
+      txMock.student.findFirst.mockResolvedValue({
+        id: STUDENT,
+        userId: USER,
+        classSectionId: null,
+        classSection: null,
+      });
+
+      await expect(svc.markAssignmentSeen(USER, ASSIGNMENT)).rejects.toMatchObject({ status: 404 });
+      expect(txMock.assignment.findFirst).not.toHaveBeenCalled();
     });
   });
 

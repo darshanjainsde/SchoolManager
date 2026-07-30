@@ -72,6 +72,98 @@ describe('RLS on the new management tables', () => {
     expect(mine.length).toBe(1);
     expect(theirs.length).toBe(0);
   });
+
+  // ── Assignments (T21, Phase 4 Task 4) ──────────────────────────────────────
+  describe('Assignment / AssignmentSeen', () => {
+    let acmeAssignment: string;
+    let beaconAssignment: string;
+    let acmeStudent: string;
+
+    beforeAll(async () => {
+      const p = getPlatformPrisma();
+      acmeStudent = await makeStudent(p, acmeId, acmeSection, 'A');
+
+      const created = await p.assignment.create({
+        data: {
+          schoolId: acmeId,
+          classSectionId: acmeSection,
+          subjectId: acmeSubject,
+          title: 'Acme worksheet',
+          instructions: 'Do it.',
+          dueDate: new Date('2026-08-05'),
+          createdByTeacherId: acmeId,
+        },
+      });
+      acmeAssignment = created.id;
+      const createdBeacon = await p.assignment.create({
+        data: {
+          schoolId: beaconId,
+          classSectionId: beaconSection,
+          subjectId: beaconSubject,
+          title: 'Beacon worksheet',
+          instructions: 'Do it.',
+          dueDate: new Date('2026-08-05'),
+          createdByTeacherId: beaconId,
+        },
+      });
+      beaconAssignment = createdBeacon.id;
+    });
+
+    it('a tenant sees only its own assignments', async () => {
+      const mine = await withTenant(acmeId, (tx) => tx.assignment.findMany());
+      expect(mine.length).toBe(1);
+      expect(mine[0].title).toBe('Acme worksheet');
+    });
+
+    it('a tenant cannot forge an assignment owned by another school', async () => {
+      await expect(
+        withTenant(acmeId, (tx) =>
+          tx.assignment.create({
+            data: {
+              schoolId: beaconId,
+              classSectionId: beaconSection,
+              subjectId: beaconSubject,
+              title: 'x',
+              instructions: 'x',
+              dueDate: new Date('2026-08-05'),
+              createdByTeacherId: acmeId,
+            },
+          }),
+        ),
+      ).rejects.toThrow(/row-level security|42501/);
+    });
+
+    // AssignmentSeen has no schoolId column of its own — its RLS policy is
+    // derived via assignmentId -> Assignment.schoolId (the SAME pattern
+    // Result uses for examId -> Exam.schoolId). This proves that derived
+    // policy actually isolates tenants, not just the direct-column ones above.
+    it('a tenant sees only its own AssignmentSeen rows (derived tenancy via assignmentId -> Assignment.schoolId)', async () => {
+      await withTenant(acmeId, (tx) =>
+        tx.assignmentSeen.create({ data: { assignmentId: acmeAssignment, studentId: acmeStudent } }),
+      );
+      const mine = await withTenant(acmeId, (tx) => tx.assignmentSeen.findMany());
+      const theirs = await withTenant(beaconId, (tx) => tx.assignmentSeen.findMany());
+      expect(mine.length).toBe(1);
+      expect(theirs.length).toBe(0);
+    });
+
+    it('a tenant cannot forge an AssignmentSeen row against another school\'s assignment', async () => {
+      // From ACME's tenant context, point assignmentId at BEACON's own
+      // Assignment row. AssignmentSeen's WITH CHECK derives tenancy via
+      // `EXISTS (SELECT 1 FROM Assignment a WHERE a.id = assignmentId AND
+      // a.schoolId = current_tenant)` — beaconAssignment's schoolId is
+      // beaconId, not acmeId, so this EXISTS is false and the insert is
+      // rejected by RLS, never silently attributing a beacon assignment's
+      // seen-mark to an acme student.
+      await expect(
+        withTenant(acmeId, (tx) =>
+          tx.assignmentSeen.create({
+            data: { assignmentId: beaconAssignment, studentId: acmeStudent },
+          }),
+        ),
+      ).rejects.toThrow(/row-level security|42501/);
+    });
+  });
 });
 
 /**
@@ -115,4 +207,24 @@ async function makeSubject(p: PrismaClient, schoolId: string, label: string): Pr
     data: { schoolId, name: `Subject-${label}-${suffix}`, code: `SUB-${label}-${suffix}` },
   });
   return subject.id;
+}
+
+/** Creates a minimal Student in `classSectionId` for `schoolId` and returns its id. */
+async function makeStudent(
+  p: PrismaClient,
+  schoolId: string,
+  classSectionId: string,
+  label: string,
+): Promise<string> {
+  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const student = await p.student.create({
+    data: {
+      schoolId,
+      classSectionId,
+      admissionNo: `ADM-${label}-${suffix}`,
+      firstName: `Student-${label}`,
+      lastName: suffix,
+    },
+  });
+  return student.id;
 }

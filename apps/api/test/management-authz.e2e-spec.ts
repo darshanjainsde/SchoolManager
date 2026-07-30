@@ -16,6 +16,7 @@ describe('management authorization', () => {
   let staffToken: string;
   let teacherUserId: string;
   let teacherUserId2: string;
+  let studentUserId: string;
 
   beforeAll(async () => {
     const seeded = await seedMinimalSchool();
@@ -23,6 +24,7 @@ describe('management authorization', () => {
     host = seeded.host;
     teacherUserId = seeded.teacherUserId;
     teacherUserId2 = seeded.teacherUserId2;
+    studentUserId = seeded.studentUserId;
     studentToken = signSchoolToken({ sub: seeded.studentUserId, schoolId, role: 'STUDENT' });
     teacherToken = signSchoolToken({ sub: seeded.teacherUserId, schoolId, role: 'TEACHER' });
     teacher2Token = signSchoolToken({ sub: seeded.teacherUserId2, schoolId, role: 'TEACHER' });
@@ -352,6 +354,178 @@ describe('management authorization', () => {
         .delete(`/manage/announcements/${row.id}`)
         .set(as(studentToken))
         .expect(403);
+    });
+  });
+
+  // ── Assignments (T21, Phase 4 Task 4) ──────────────────────────────────────
+  describe('assignments — role gates + student self-service', () => {
+    let classSectionId: string;
+    let subjectId: string;
+    let studentId: string;
+    let assignmentId: string;
+
+    beforeAll(async () => {
+      const db = getPlatformPrisma();
+      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const academicYear = await db.academicYear.create({
+        data: {
+          schoolId,
+          name: `AY-${suffix}`,
+          startDate: new Date('2026-06-01'),
+          endDate: new Date('2027-03-31'),
+          isCurrent: true,
+        },
+      });
+      const grade = await db.grade.create({ data: { schoolId, name: `Grade-${suffix}`, order: 1 } });
+      const section = await db.classSection.create({
+        data: { schoolId, gradeId: grade.id, academicYearId: academicYear.id, name: `Sec-${suffix}` },
+      });
+      classSectionId = section.id;
+      const subject = await db.subject.create({
+        data: { schoolId, name: `Subject-${suffix}`, code: `SUB-${suffix}` },
+      });
+      subjectId = subject.id;
+      // Links the seeded STUDENT-role User to a real Student domain row in
+      // this class section — `/me/*` resolves everything from this link.
+      const student = await db.student.create({
+        data: {
+          schoolId,
+          classSectionId,
+          admissionNo: `ADM-${suffix}`,
+          firstName: 'Asha',
+          lastName: 'Rao',
+          userId: studentUserId,
+        },
+      });
+      studentId = student.id;
+      const assignment = await db.assignment.create({
+        data: {
+          schoolId,
+          classSectionId,
+          subjectId,
+          title: 'Worksheet 3',
+          instructions: 'Complete questions 1-10.',
+          dueDate: new Date('2099-01-01'), // far future — always "upcoming"
+          createdByTeacherId: teacherUserId,
+        },
+      });
+      assignmentId = assignment.id;
+    });
+
+    it('a STUDENT cannot create an assignment', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/assignments')
+        .set(as(studentToken))
+        .send({ classSectionId, subjectId, title: 'x', instructions: 'x', dueDate: '2026-08-05' })
+        .expect(403);
+    });
+
+    it('a STAFF login cannot create an assignment (TEACHER/SCHOOL_ADMIN only)', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/assignments')
+        .set(as(staffToken))
+        .send({ classSectionId, subjectId, title: 'x', instructions: 'x', dueDate: '2026-08-05' })
+        .expect(403);
+    });
+
+    it('a STUDENT cannot list assignments', async () => {
+      await request(app.getHttpServer())
+        .get(`/manage/assignments?classSectionId=${classSectionId}`)
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    // Deletion-proof-style distinction: a role-gate 403 (ForbiddenException,
+    // no `code`) is NOT the same failure as an ownership 403 (ApiError,
+    // `code: 'CLASS_NOT_OWNED'`) — this proves teacher2 actually PASSED
+    // RolesGuard and reached AssignmentsService's ownership check, rather
+    // than merely proving "some 403 happened".
+    it('a TEACHER who does not own the class section gets CLASS_NOT_OWNED, not a role-level 403', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/manage/assignments')
+        .set(as(teacher2Token))
+        .send({ classSectionId, subjectId, title: 'x', instructions: 'x', dueDate: '2026-08-05' })
+        .expect(403);
+
+      expect(res.body.code).toBe('CLASS_NOT_OWNED');
+    });
+
+    it('a TEACHER deleting a non-existent assignment gets 404 NOT_FOUND (proves the role gate + route work end-to-end)', async () => {
+      const res = await request(app.getHttpServer())
+        .delete('/manage/assignments/00000000-0000-0000-0000-000000000001')
+        .set(as(teacherToken))
+        .expect(404);
+
+      expect(res.body.code).toBe('NOT_FOUND');
+    });
+
+    // This suite's per-test latency grows test-over-test under `--runInBand`
+    // (each test opens a fresh connection against a distinct
+    // `X-Skoolos-Host` subdomain — a harness/connection-pool characteristic
+    // of THIS FILE, reproducible on tests that touch none of this task's
+    // code) and occasionally spikes well past Jest's default 60s budget
+    // before resetting on the next test. The assertion below is correct on
+    // every run (a bare 403), it just sometimes arrives slowly — a generous
+    // per-test timeout absorbs that without weakening what's being proven.
+    it(
+      'a STUDENT cannot upload an assignment attachment',
+      async () => {
+        await request(app.getHttpServer())
+          .post('/manage/assignments/upload')
+          .set(as(studentToken))
+          .expect(403);
+      },
+      180_000,
+    );
+
+    it('a TEACHER can upload a PDF attachment via the shared storage machinery and gets back {url,name,kind}', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/manage/assignments/upload')
+        .set(as(teacherToken))
+        .attach('file', Buffer.from('%PDF-1.4 fake'), { filename: 'worksheet.pdf', contentType: 'application/pdf' })
+        .expect(201);
+
+      expect(res.body).toMatchObject({ name: 'worksheet.pdf', kind: 'pdf' });
+      expect(typeof res.body.url).toBe('string');
+      expect(res.body.url.length).toBeGreaterThan(0);
+    });
+
+    it('GET /me/assignments returns the student\'s own section\'s assignment in the upcoming bucket', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/me/assignments')
+        .set(as(studentToken))
+        .expect(200);
+
+      expect(res.body.upcoming).toHaveLength(1);
+      expect(res.body.upcoming[0]).toMatchObject({ id: assignmentId, title: 'Worksheet 3' });
+      expect(res.body.past).toEqual([]);
+    });
+
+    it('a TEACHER cannot read /me/assignments (STUDENT-only)', async () => {
+      await request(app.getHttpServer()).get('/me/assignments').set(as(teacherToken)).expect(403);
+    });
+
+    it('POST /me/assignments/:id/seen is idempotent — two calls leave exactly one AssignmentSeen row', async () => {
+      await request(app.getHttpServer())
+        .post(`/me/assignments/${assignmentId}/seen`)
+        .set(as(studentToken))
+        .expect(201);
+      await request(app.getHttpServer())
+        .post(`/me/assignments/${assignmentId}/seen`)
+        .set(as(studentToken))
+        .expect(201);
+
+      const rows = await getPlatformPrisma().assignmentSeen.findMany({
+        where: { assignmentId, studentId },
+      });
+      expect(rows).toHaveLength(1);
+    });
+
+    it('a STUDENT cannot mark seen an assignment from another school (404, never leaks existence)', async () => {
+      await request(app.getHttpServer())
+        .post('/me/assignments/00000000-0000-0000-0000-000000000001/seen')
+        .set(as(studentToken))
+        .expect(404);
     });
   });
 });

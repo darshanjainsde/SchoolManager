@@ -49,6 +49,23 @@ const resultPublishedRow = {
   lastError: null,
 };
 
+const assignmentPostedRow = {
+  id: 'row-3',
+  schoolId: SCHOOL,
+  kind: 'ASSIGNMENT_POSTED',
+  classSectionId: CLASS_SECTION,
+  payload: {
+    schoolName: 'Green Valley School',
+    subjectName: 'Mathematics',
+    assignmentTitle: 'Worksheet 3',
+    dueDate: 'Wed, 5 Aug 2026',
+    classSectionName: '8-C',
+  },
+  sentAt: null,
+  attempts: 0,
+  lastError: null,
+};
+
 describe('NotificationOutboxService', () => {
   const push = { send: jest.fn() };
   const svc = new NotificationOutboxService(push as unknown as PushChannel);
@@ -119,6 +136,28 @@ describe('NotificationOutboxService', () => {
           schoolName: 'Green Valley School',
           subjectName: 'Chemistry',
           examTitle: 'Midterm',
+        },
+      },
+      SCHOOL,
+    );
+  });
+
+  it('maps an ASSIGNMENT_POSTED row onto the EXISTING ANNOUNCEMENT push text — no new template', async () => {
+    dbMock.notificationOutbox.findMany.mockResolvedValue([assignmentPostedRow]);
+    dbMock.student.findMany.mockResolvedValue([{ userId: 'u-3' }]);
+    dbMock.user.findMany.mockResolvedValue([{ id: 'u-3', email: 'family@x.com' }]);
+
+    await svc.drain();
+
+    expect(push.send).toHaveBeenCalledWith(
+      'family@x.com',
+      {
+        kind: 'ANNOUNCEMENT',
+        payload: {
+          schoolName: 'Green Valley School',
+          title: 'Worksheet 3',
+          body: 'Mathematics — due Wed, 5 Aug 2026',
+          className: '8-C',
         },
       },
       SCHOOL,

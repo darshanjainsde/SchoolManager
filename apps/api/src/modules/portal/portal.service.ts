@@ -7,6 +7,8 @@ import type {
   Holiday,
   Profile,
   PublishedResult,
+  StudentAssignment,
+  StudentAssignmentList,
   TimetableSlot,
   UpcomingExam,
 } from '@skoolos/types';
@@ -30,7 +32,16 @@ const IST_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 });
 
-export type { Announcement, AttendanceDay, AttendanceSummary, Profile, PublishedResult, UpcomingExam };
+export type {
+  Announcement,
+  AttendanceDay,
+  AttendanceSummary,
+  Profile,
+  PublishedResult,
+  StudentAssignment,
+  StudentAssignmentList,
+  UpcomingExam,
+};
 
 /** Shown when an Exam's Subject row cannot be read (deleted mid-term, etc.). */
 const FALLBACK_SUBJECT_NAME = 'General';
@@ -361,6 +372,99 @@ export class PortalService {
       // Most recent test first.
       rows.sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
       return rows.map((r) => r.row);
+    });
+  }
+
+  /**
+   * The student's own class section's Assignments, split into `upcoming`
+   * (due today or later) and `past`, each ordered by dueDate ascending —
+   * same split rule `AssignmentsService.list` uses on the teacher side
+   * (today counts as upcoming; a same-day due date has not passed yet).
+   *
+   * A student with no section has no assignments to see — `[]`/`[]`, not an
+   * error. `subjectName` is resolved here (a student has no
+   * `/manage/subjects` access, unlike the teacher-facing `Assignment`
+   * contract which leaves that to the caller).
+   */
+  async assignments(userId: string): Promise<StudentAssignmentList> {
+    const { schoolId } = this.tenant.requireTenant();
+    const s = await this.myStudent(schoolId, userId);
+    if (!s) throw new NotFoundException('No student record for this login');
+    if (!s.classSectionId) return { upcoming: [], past: [] };
+
+    const classSectionId = s.classSectionId;
+    const today = IST_DAY_FORMATTER.format(new Date());
+
+    return withTenant(schoolId, async (tx) => {
+      const rows = await tx.assignment.findMany({
+        where: { schoolId, classSectionId },
+        orderBy: [{ dueDate: 'asc' }],
+      });
+      if (rows.length === 0) return { upcoming: [], past: [] };
+
+      const subjectNames = await this.subjectNames(
+        tx,
+        schoolId,
+        rows.map((r) => r.subjectId),
+      );
+
+      const upcoming: StudentAssignment[] = [];
+      const past: StudentAssignment[] = [];
+      for (const r of rows) {
+        const item: StudentAssignment = {
+          id: r.id,
+          subjectId: r.subjectId,
+          subjectName: subjectNames.get(r.subjectId) ?? FALLBACK_SUBJECT_NAME,
+          title: r.title,
+          instructions: r.instructions,
+          dueDate: toDateKey(r.dueDate),
+          attachments: (r.attachments ?? []) as unknown as StudentAssignment['attachments'],
+          createdAt: r.createdAt.toISOString(),
+        };
+        if (toDateKey(r.dueDate) >= today) {
+          upcoming.push(item);
+        } else {
+          past.push(item);
+        }
+      }
+      return { upcoming, past };
+    });
+  }
+
+  /**
+   * Marks one Assignment as "seen" by the calling student — idempotent by
+   * construction (upserts on `AssignmentSeen`'s unique `(assignmentId,
+   * studentId)` pair, so re-opening the same assignment twice never creates
+   * a second row or errors).
+   *
+   * The assignment must belong to the CALLER'S OWN class section — resolved
+   * from the student's stored `classSectionId`, never trusted from the
+   * client beyond the id itself. Without this check a student could mark an
+   * assignment from a class they don't belong to as "seen", corrupting that
+   * other class's teacher-facing seen-count.
+   */
+  async markAssignmentSeen(userId: string, assignmentId: string): Promise<{ ok: true }> {
+    const { schoolId } = this.tenant.requireTenant();
+    const s = await this.myStudent(schoolId, userId);
+    if (!s) throw new NotFoundException('No student record for this login');
+    if (!s.classSectionId) throw new NotFoundException('Assignment not found');
+
+    const classSectionId = s.classSectionId;
+    const studentId = s.id;
+
+    return withTenant(schoolId, async (tx) => {
+      const assignment = await tx.assignment.findFirst({
+        where: { id: assignmentId, schoolId, classSectionId },
+        select: { id: true },
+      });
+      if (!assignment) throw new NotFoundException('Assignment not found');
+
+      await tx.assignmentSeen.upsert({
+        where: { one_seen_per_assignment_student: { assignmentId, studentId } },
+        create: { assignmentId, studentId },
+        update: {},
+      });
+      return { ok: true };
     });
   }
 

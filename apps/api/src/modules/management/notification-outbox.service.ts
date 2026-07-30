@@ -4,6 +4,7 @@ import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoo
 import { PushChannel } from '../../common/notifications/push.channel';
 import { resolveSectionRecipients } from '../../common/notifications/recipients';
 import type {
+  AssignmentPostedOutboxPayload,
   ExamScheduledOutboxPayload,
   NotificationMessage,
   ResultPublishedOutboxPayload,
@@ -57,13 +58,29 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
       },
     };
   }
-  const p = payload as ResultPublishedOutboxPayload;
+  if (kind === 'RESULT_PUBLISHED') {
+    const p = payload as ResultPublishedOutboxPayload;
+    return {
+      kind: 'RESULTS_PUBLISHED',
+      payload: {
+        schoolName: p.schoolName,
+        subjectName: p.subjectName,
+        examTitle: p.examTitle,
+      },
+    };
+  }
+  // ASSIGNMENT_POSTED has no NotificationKind/template of its own (see
+  // AssignmentPostedOutboxPayload's docstring) — it renders through the
+  // EXISTING 'ANNOUNCEMENT' shape instead, the same "reuse the template"
+  // move as the two branches above.
+  const p = payload as AssignmentPostedOutboxPayload;
   return {
-    kind: 'RESULTS_PUBLISHED',
+    kind: 'ANNOUNCEMENT',
     payload: {
       schoolName: p.schoolName,
-      subjectName: p.subjectName,
-      examTitle: p.examTitle,
+      title: p.assignmentTitle,
+      body: `${p.subjectName} — due ${p.dueDate}`,
+      className: p.classSectionName,
     },
   };
 }

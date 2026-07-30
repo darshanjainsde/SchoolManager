@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -28,6 +28,13 @@ export class PortalController {
 
   @Get('exams') exams(@CurrentUser() u: SchoolJwtPayload) { return this.portal.exams(u.sub); }
   @Get('results') results(@CurrentUser() u: SchoolJwtPayload) { return this.portal.results(u.sub); }
+
+  @Get('assignments') assignments(@CurrentUser() u: SchoolJwtPayload) { return this.portal.assignments(u.sub); }
+
+  @Post('assignments/:id/seen')
+  markAssignmentSeen(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
+    return this.portal.markAssignmentSeen(u.sub, id);
+  }
 
   /**
    * Overrides the class-level `@Roles('STUDENT')` — device registration is

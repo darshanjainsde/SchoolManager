@@ -91,6 +91,33 @@ export interface ResultPublishedOutboxPayload extends ResultsPublishedPayload {
   maxMarks: number;
 }
 
+/**
+ * Payload STORED in a `NotificationOutbox` row for kind `ASSIGNMENT_POSTED`
+ * (`@skoolos/types` `NotificationOutboxKind`). Denormalised at write time by
+ * `AssignmentsService.create()`, inside the same transaction as the
+ * `Assignment` row — see `ExamScheduledOutboxPayload`'s docstring for the
+ * same reasoning (the drain never joins back to `Subject`/`ClassSection`).
+ *
+ * DELIBERATELY NOT a `NotificationKind` of its own (not added to
+ * `NotificationPayloadMap` below) — `AssignmentsService` never calls
+ * `NotificationService.notify()` directly (no best-effort real-time email
+ * for an assignment posting, only the guaranteed outbox push — the spec
+ * only asks for "push on new assignment"). `NotificationOutboxService`'s
+ * drain instead maps this payload onto the EXISTING `'ANNOUNCEMENT'`
+ * `NotificationMessage` shape to render the push text, the same "reuse an
+ * existing template rather than invent a new one" move `toNotificationMessage`
+ * already makes for `EXAM_SCHEDULED`/`RESULT_PUBLISHED` → `TEST_SCHEDULED`/
+ * `RESULTS_PUBLISHED`.
+ */
+export interface AssignmentPostedOutboxPayload {
+  schoolName: string;
+  subjectName: string;
+  assignmentTitle: string;
+  /** Human-facing date string; already formatted by the caller (formatDateIST). */
+  dueDate: string;
+  classSectionName: string;
+}
+
 /** The single source of truth mapping each event to its payload shape. */
 export interface NotificationPayloadMap {
   TEST_SCHEDULED: TestScheduledPayload;
