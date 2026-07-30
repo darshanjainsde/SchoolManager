@@ -13,6 +13,7 @@ describe('management authorization', () => {
   let teacherToken: string;
   let teacher2Token: string;
   let adminToken: string;
+  let staffToken: string;
   let teacherUserId: string;
   let teacherUserId2: string;
 
@@ -26,6 +27,7 @@ describe('management authorization', () => {
     teacherToken = signSchoolToken({ sub: seeded.teacherUserId, schoolId, role: 'TEACHER' });
     teacher2Token = signSchoolToken({ sub: seeded.teacherUserId2, schoolId, role: 'TEACHER' });
     adminToken = signSchoolToken({ sub: seeded.adminUserId, schoolId, role: 'SCHOOL_ADMIN' });
+    staffToken = signSchoolToken({ sub: seeded.staffUserId, schoolId, role: 'STAFF' });
 
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
@@ -129,6 +131,48 @@ describe('management authorization', () => {
       .get('/manage/timetable')
       .set(as(teacherToken))
       .expect(400);
+  });
+
+  // ── STAFF portal: own attendance (Task 3, Phase 4) ─────────────────────────
+  describe('staff-attendance mine — STAFF-only self-service read', () => {
+    it('a STAFF login can read their own attendance summary', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/staff-attendance/mine?month=2026-08')
+        .set(as(staffToken))
+        .expect(200);
+      expect(res.body).toHaveProperty('person');
+      expect(res.body.person).toHaveProperty('firstName', 'Sam');
+      expect(res.body).toHaveProperty('summary');
+      expect(res.body.summary).toHaveProperty('days');
+    });
+
+    it('a STUDENT cannot read the staff-attendance mine route', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/staff-attendance/mine')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('a TEACHER cannot read the staff-attendance mine route (STAFF-only, distinct from the TEACHER-only /manage/leave/mine)', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/staff-attendance/mine')
+        .set(as(teacherToken))
+        .expect(403);
+    });
+
+    it('a SCHOOL_ADMIN cannot read the staff-attendance mine route (still requires an actual linked Staff row, not just management access)', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/staff-attendance/mine')
+        .set(as(adminToken))
+        .expect(403);
+    });
+
+    it('a STAFF login cannot list the full roster (that stays SCHOOL_ADMIN-only)', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/staff-attendance?date=2026-08-03')
+        .set(as(staffToken))
+        .expect(403);
+    });
   });
 
   // ── NotificationOutbox drain cron route (S6/S7 wiring, Task 2) ─────────────

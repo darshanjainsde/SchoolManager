@@ -28,6 +28,17 @@ export class StaffAttendanceController {
     return this.staffAttendance.list(this.sid(), date);
   }
 
+  /**
+   * The CALLER's own record — the STAFF portal's home screen. Overrides the
+   * class-level `@Roles('SCHOOL_ADMIN')`; a literal `mine` segment, so it
+   * never competes with `@Get('person')` below for route matching.
+   */
+  @Get('mine')
+  @Roles('STAFF')
+  mine(@Query('month') month: string | undefined, @CurrentUser() u: SchoolJwtPayload) {
+    return this.staffAttendance.mine(this.sid(), u.sub, month);
+  }
+
   @Put()
   save(@Body() dto: SaveStaffAttendanceDto, @CurrentUser() u: SchoolJwtPayload) {
     return this.staffAttendance.save(this.sid(), u.sub, dto);

@@ -15,6 +15,8 @@ export type ErrorCode =
   | 'TEACHER_CONFLICT'
   /** Caller has no linked Teacher record — e.g. a SCHOOL_ADMIN hitting a teacher-only leave route. */
   | 'NOT_A_TEACHER'
+  /** Caller has no linked Staff record — e.g. a STAFF-role JWT with no matching Staff.userId row. */
+  | 'NOT_STAFF'
   /** The LeaveApplication is no longer PENDING — already approved/rejected. */
   | 'LEAVE_NOT_PENDING'
   /** The LeaveApplication is REJECTED or already CANCELLED — nothing to cancel. */
