@@ -3,7 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": { "@/*": ["src/*"], "@skoolos/types": ["../../packages/types/src"] }
   },
   "include": ["src", "app.config.ts"]
 }

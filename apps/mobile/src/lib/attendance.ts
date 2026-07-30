@@ -1,20 +1,6 @@
-/** Mirrors AttendanceService.ClassDayStatus (apps/api/.../attendance.service.ts). */
-export interface ClassDayStatus {
-  classSectionId: string;
-  name: string;
-  total: number;
-  present: number;
-  taken: boolean;
-  markedBy: string | null;
-  markedAt: string | null;
-}
+import type { AttendanceStatusValue, SaveAttendanceRequest } from '@skoolos/types';
 
-/** Mirrors AttendanceService.MyClassSection. */
-export interface MyClassSection {
-  classSectionId: string;
-  name: string;
-  studentCount: number;
-}
+export type { ClassDayStatus, MyClassSection } from '@skoolos/types';
 
 /**
  * Device-local YYYY-MM-DD — NOT `Date#toISOString()`, which reports the UTC
@@ -27,29 +13,20 @@ export function todayISO(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-export interface RosterToggle {
+export interface RosterMark {
   studentId: string;
-  present: boolean;
+  status: AttendanceStatusValue;
 }
 
-export interface SaveAttendancePayload {
-  classSectionId: string;
-  date: string;
-  marks: Array<{ studentId: string; status: 'PRESENT' | 'ABSENT' }>;
-}
-
-/** Shapes the take-attendance screen's roster toggles into the PUT /manage/attendance contract. */
+/** Shapes the take-attendance screen's roster into the PUT /manage/attendance contract. */
 export function buildMarksPayload(
   classSectionId: string,
   date: string,
-  roster: RosterToggle[],
-): SaveAttendancePayload {
+  roster: RosterMark[],
+): SaveAttendanceRequest {
   return {
     classSectionId,
     date,
-    marks: roster.map((r) => ({
-      studentId: r.studentId,
-      status: r.present ? 'PRESENT' : 'ABSENT',
-    })),
+    marks: roster.map((r) => ({ studentId: r.studentId, status: r.status })),
   };
 }

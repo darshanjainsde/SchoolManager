@@ -76,3 +76,55 @@ it('toggling a student and submitting sends the exact PUT contract', async () =>
   });
   expect(putCall[1].body.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 });
+
+it('loads a LATE student as LATE, not as present', async () => {
+  // The bug: `present: status !== 'ABSENT'` rendered LATE as Present, and the
+  // next save rewrote it to PRESENT — destroying a mark made on the web.
+  (api.request as jest.Mock).mockImplementation((path: string) => {
+    if (path.startsWith('/manage/attendance?')) {
+      return Promise.resolve([{ studentId: 's1', status: 'LATE' }]);
+    }
+    if (path.startsWith('/manage/students?')) {
+      return Promise.resolve([{ id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: '1' }]);
+    }
+    throw new Error(`unexpected path: ${path}`);
+  });
+
+  const { findByTestId } = render(<TakeAttendance />);
+
+  const lateButton = await findByTestId('late-s1');
+  // The selected pill for a LATE student must be Late, not Present.
+  expect(lateButton.props.style).toMatchObject({ backgroundColor: '#F59E0B' });
+  const presentButton = await findByTestId('present-s1');
+  expect(presentButton.props.style).not.toMatchObject({ backgroundColor: '#16B364' });
+});
+
+it('submitting a roster with a LATE student sends LATE', async () => {
+  // Assert on the PUT body, not on the UI.
+  (api.request as jest.Mock).mockImplementation((path: string) => {
+    if (path.startsWith('/manage/attendance?')) {
+      return Promise.resolve([{ studentId: 's1', status: 'LATE' }]);
+    }
+    if (path.startsWith('/manage/students?')) {
+      return Promise.resolve([{ id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: '1' }]);
+    }
+    if (path === '/manage/attendance') return Promise.resolve({ saved: 1, absentees: 0 });
+    throw new Error(`unexpected path: ${path}`);
+  });
+
+  const { findByTestId } = render(<TakeAttendance />);
+
+  // Wait for the roster row to render before pressing submit — until then
+  // the button is disabled (rows.length === 0) and the press is a no-op.
+  await findByTestId('late-s1');
+  const submit = await findByTestId('submit-attendance');
+  fireEvent.press(submit);
+
+  await waitFor(() => expect(mockBack).toHaveBeenCalled());
+
+  const putCall = (api.request as jest.Mock).mock.calls.find(([path]) => path === '/manage/attendance');
+  expect(putCall[1]).toMatchObject({
+    method: 'PUT',
+    body: { classSectionId: 'cs1', marks: [{ studentId: 's1', status: 'LATE' }] },
+  });
+});

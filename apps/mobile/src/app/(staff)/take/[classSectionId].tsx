@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { ATTENDANCE_STATUSES, type AttendanceStatusValue } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { Card, Screen, SectionTitle } from '@/components/ui';
@@ -9,7 +10,7 @@ import { tokens } from '@/theme/tokens';
 interface RosterRow {
   studentId: string;
   name: string;
-  present: boolean;
+  status: AttendanceStatusValue;
 }
 
 // AttendanceService.list() returns only { studentId, status } — no names.
@@ -19,7 +20,7 @@ interface RosterRow {
 // silently misalign names to the wrong student.
 interface MarkRow {
   studentId: string;
-  status: 'PRESENT' | 'ABSENT';
+  status: AttendanceStatusValue;
 }
 interface StudentRosterRow {
   id: string;
@@ -27,6 +28,20 @@ interface StudentRosterRow {
   lastName: string;
   rollNo: string | null;
 }
+
+// One entry per ATTENDANCE_STATUSES value, enforced by the Record type — if
+// the server ever adds a fourth state, this fails to typecheck instead of
+// silently rendering a button with no label or colour.
+const STATUS_LABEL: Record<AttendanceStatusValue, string> = {
+  PRESENT: 'Present',
+  ABSENT: 'Absent',
+  LATE: 'Late',
+};
+const STATUS_COLOR: Record<AttendanceStatusValue, string> = {
+  PRESENT: tokens.color.green,
+  ABSENT: tokens.color.red,
+  LATE: tokens.color.amber,
+};
 
 export default function TakeAttendance() {
   const { classSectionId, name } = useLocalSearchParams<{
@@ -58,7 +73,9 @@ export default function TakeAttendance() {
             students.map((s) => ({
               studentId: s.id,
               name: `${s.firstName} ${s.lastName}`,
-              present: byId.get(s.id) !== 'ABSENT',
+              // An unmarked student defaults to PRESENT — same default the
+              // server applies in AttendanceService.list().
+              status: byId.get(s.id) ?? 'PRESENT',
             })),
           );
         })
@@ -72,10 +89,11 @@ export default function TakeAttendance() {
   );
 
   const rows = roster ?? [];
-  const presentCount = rows.filter((r) => r.present).length;
+  const presentCount = rows.filter((r) => r.status === 'PRESENT').length;
+  const absentCount = rows.filter((r) => r.status === 'ABSENT').length;
 
-  const toggle = (studentId: string, present: boolean) =>
-    setRoster((rs) => (rs ?? []).map((x) => (x.studentId === studentId ? { ...x, present } : x)));
+  const setStatus = (studentId: string, status: AttendanceStatusValue) =>
+    setRoster((rs) => (rs ?? []).map((x) => (x.studentId === studentId ? { ...x, status } : x)));
 
   const submit = async () => {
     if (!classSectionId || rows.length === 0) return;
@@ -110,7 +128,7 @@ export default function TakeAttendance() {
       {roster !== null && (
         <Card>
           <Text style={{ fontWeight: '700', color: tokens.color.ink }}>
-            {presentCount} present · {rows.length - presentCount} absent · {rows.length} total
+            {presentCount} present · {absentCount} absent · {rows.length} total
           </Text>
         </Card>
       )}
@@ -131,18 +149,18 @@ export default function TakeAttendance() {
               <View
                 style={{ flexDirection: 'row', backgroundColor: '#F1F3F7', borderRadius: 10, padding: 3 }}
               >
-                {(['Present', 'Absent'] as const).map((label) => {
-                  const on = label === 'Present' ? r.present : !r.present;
-                  const bg = on ? (label === 'Present' ? tokens.color.green : tokens.color.red) : 'transparent';
+                {ATTENDANCE_STATUSES.map((status) => {
+                  const on = r.status === status;
+                  const bg = on ? STATUS_COLOR[status] : 'transparent';
                   return (
                     <Pressable
-                      key={label}
-                      testID={`${label.toLowerCase()}-${r.studentId}`}
-                      onPress={() => toggle(r.studentId, label === 'Present')}
+                      key={status}
+                      testID={`${status.toLowerCase()}-${r.studentId}`}
+                      onPress={() => setStatus(r.studentId, status)}
                       style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: bg }}
                     >
                       <Text style={{ fontSize: 11.5, fontWeight: '700', color: on ? '#fff' : tokens.color.sub }}>
-                        {label}
+                        {STATUS_LABEL[status]}
                       </Text>
                     </Pressable>
                   );
