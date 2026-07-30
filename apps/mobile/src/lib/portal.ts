@@ -5,6 +5,8 @@ export type {
   Holiday,
   Profile as StudentProfile,
   PublishedResult,
+  StudentAssignment,
+  StudentAssignmentList,
   UpcomingExam,
 } from '@skoolos/types';
 

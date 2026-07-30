@@ -29,6 +29,7 @@ export default function FamilyTabs() {
       <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="timetable" options={{ href: null }} />
       <Tabs.Screen name="results" options={{ href: null }} />
+      <Tabs.Screen name="assignments" options={{ href: null }} />
     </Tabs>
   );
 }
