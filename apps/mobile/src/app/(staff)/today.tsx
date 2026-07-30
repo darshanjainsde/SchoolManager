@@ -1,16 +1,28 @@
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import type { TeacherDay } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
-import { todayISO, type ClassDayStatus } from '@/lib/attendance';
-import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { todayISO } from '@/lib/attendance';
+import { currentEntry, minutesOfDay } from '@/lib/teacher-day';
+import { NowCard } from '@/components/NowCard';
+import { DayTimeline } from '@/components/DayTimeline';
+import { ClassNotesPanel } from '@/components/ClassNotesPanel';
+import { Card, Screen, SectionTitle } from '@/components/ui';
 import { tokens } from '@/theme/tokens';
+
+/** Minutes past midnight on the device's own clock, for `currentEntry`. */
+function nowMinutes(): number {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
 
 export default function Today() {
   const [name, setName] = useState<string | null>(null);
-  const [rows, setRows] = useState<ClassDayStatus[] | null>(null);
+  const [day, setDay] = useState<TeacherDay | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const date = todayISO();
 
   useFocusEffect(
     useCallback(() => {
@@ -20,9 +32,9 @@ export default function Today() {
         if (!cancelled) setName(s?.displayName ?? null);
       });
       api
-        .request<ClassDayStatus[]>(`/manage/attendance/status?date=${todayISO()}`)
+        .request<TeacherDay>(`/manage/timetable/my-day?date=${encodeURIComponent(date)}`)
         .then((data) => {
-          if (!cancelled) setRows(data);
+          if (!cancelled) setDay(data);
         })
         .catch((e: unknown) => {
           if (!cancelled) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
@@ -30,62 +42,73 @@ export default function Today() {
       return () => {
         cancelled = true;
       };
+      // date is always "today" for this screen (no date picker here — see
+      // apps/mobile/src/app/(staff)/attendance.tsx for that), so it is
+      // deliberately not a dependency: the effect still reruns on every
+      // focus, which is what keeps a colleague's mark visible without a
+      // manual reload.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
 
-  const pending = rows?.filter((r) => !r.taken).length ?? 0;
-  const taken = rows?.filter((r) => r.taken).length ?? 0;
+  const entries = day?.entries ?? [];
+  const now = nowMinutes();
+  const { index, entry, elapsed, total } = currentEntry(entries, now);
+  // The first entry (chronologically) that hasn't started yet — this works
+  // uniformly whether nothing is current (before school / a gap) or a class
+  // or break is current right now (its own start is <= now, so it's skipped).
+  const nextEntry = entries.find((e) => minutesOfDay(e.startTime) > now) ?? null;
+
+  const classes = entries.filter((e) => e.kind === 'CLASS');
+  const taken = classes.filter((e) => e.register?.taken).length;
+  const pending = classes.length - taken;
+
+  function goToAttendance(classSectionId: string) {
+    const className = entries.find((e) => e.slot?.classSectionId === classSectionId)?.slot?.className;
+    const nameParam = className ? `?name=${encodeURIComponent(className)}` : '';
+    router.push(`/(staff)/take/${classSectionId}${nameParam}`);
+  }
 
   return (
     <Screen>
       <SectionTitle title={name ? `Good day, ${name}` : 'Today'} />
       <Card>
         <Text style={{ color: tokens.color.sub, fontSize: 12.5 }}>
-          {rows === null
-            ? 'Loading your schedule…'
-            : `${rows.length} class${rows.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
+          {day === null && !error
+            ? 'Loading your day…'
+            : `${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
         </Text>
       </Card>
+
       {error && (
         <Card>
           <Text style={{ color: tokens.color.red }}>{error}</Text>
         </Card>
       )}
-      {rows?.length === 0 && !error && (
+
+      {day !== null && !error && entries.length === 0 && (
         <Card>
-          <Text style={{ color: tokens.color.sub }}>No classes assigned to you yet.</Text>
+          <Text style={{ color: tokens.color.sub }}>
+            No timetable has been set up for you yet — ask your school admin.
+          </Text>
         </Card>
       )}
-      {rows && rows.length > 0 && (
-        <Card style={{ paddingVertical: 2 }}>
-          {rows.map((c) => (
-            <View
-              key={c.classSectionId}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingVertical: 10,
-                borderBottomWidth: 1,
-                borderBottomColor: tokens.color.line,
-              }}
-            >
-              <Text style={{ fontWeight: '600', color: tokens.color.ink }}>{c.name}</Text>
-              {c.taken ? (
-                <Pill tone="green">{`✓ ${c.present}/${c.total} present`}</Pill>
-              ) : (
-                <Pressable
-                  testID={`today-take-${c.classSectionId}`}
-                  onPress={() =>
-                    router.push(`/(staff)/take/${c.classSectionId}?name=${encodeURIComponent(c.name)}`)
-                  }
-                >
-                  <Pill tone="amber">Take attendance</Pill>
-                </Pressable>
-              )}
-            </View>
-          ))}
-        </Card>
+
+      {day !== null && !error && entries.length > 0 && (
+        <>
+          <NowCard entry={entry} elapsed={elapsed} total={total} nextEntry={nextEntry} onTakeAttendance={goToAttendance} />
+
+          {entry?.kind === 'CLASS' && entry.slot && (
+            <ClassNotesPanel
+              classSectionId={entry.slot.classSectionId}
+              date={date}
+              subjectId={entry.slot.subjectId}
+              subjectName={entry.slot.subjectName}
+            />
+          )}
+
+          <DayTimeline entries={entries} currentIndex={index} onTakeAttendance={goToAttendance} />
+        </>
       )}
     </Screen>
   );
