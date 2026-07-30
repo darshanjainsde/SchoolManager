@@ -1,0 +1,37 @@
+# QA lens: functional (STAFF attendance management / trust-loop UI).
+# Self-contained: logs in as a teacher and opens the Attendance management
+# screen, proving /manage/attendance/my-classes + today's status load and
+# render actionable per-class controls (take-<id> for untaken classes or
+# retake-<id> for already-taken ones). Deterministic regardless of whether
+# today's attendance has been taken. The actual take+submit write path is
+# verified directly against the API (mutating + lock behaviour is not driven
+# here to keep the live Raffles tenant clean and the suite repeatable).
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "school-code"
+- inputText: "raffles"
+- tapOn:
+    id: "connect-btn"
+- tapOn:
+    id: "login-id"
+- inputText: "anjali.desai@raffles.edu"
+- tapOn:
+    id: "login-pw"
+- inputText: "password"
+- tapOn:
+    id: "login-btn"
+- extendedWaitUntil:
+    visible: "Today"
+    timeout: 30000
+- tapOn: "Attendance"
+# Staff attendance management screen loaded from the API.
+- extendedWaitUntil:
+    visible: "Attendance · today"
+    timeout: 30000
+# At least one class row rendered with an actionable control (take or retake) —
+# proves my-classes + status resolved and the trust-loop UI is functional.
+- assertVisible:
+    id: "^(take|retake)-.*"

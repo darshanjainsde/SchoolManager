@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput } from 'react-native';
 import { router } from 'expo-router';
-import { SckoolsLogo } from '@/components/SckoolsLogo';
+import { AuthScaffold } from '@/components/AuthScaffold';
 import { session } from '@/lib/session';
 import { tokens } from '@/theme/tokens';
 
 export default function Connect() {
   const [code, setCode] = useState('');
+  const [focused, setFocused] = useState(false);
   const valid = /^[a-z0-9-]{2,40}$/.test(code.trim().toLowerCase());
 
   const next = async () => {
@@ -15,25 +16,47 @@ export default function Connect() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, backgroundColor: tokens.color.appBg, justifyContent: 'center', padding: 24, gap: tokens.gap }}>
-      <View style={{ alignItems: 'center', marginBottom: 8 }}><SckoolsLogo size={44} /></View>
-      <Text style={{ fontSize: 22, fontWeight: '800', color: tokens.color.ink, textAlign: 'center' }}>
-        Connect your school
-      </Text>
-      <Text style={{ color: tokens.color.sub, textAlign: 'center' }}>
-        Enter the school code from your school (e.g. “raffles”).
-      </Text>
+    <AuthScaffold
+      title="Connect your school"
+      subtitle="Enter the school code your school gave you (e.g. “raffles”)."
+    >
       <TextInput
-        value={code} onChangeText={setCode} autoCapitalize="none" autoCorrect={false}
-        placeholder="school code" testID="school-code"
-        style={{ backgroundColor: tokens.color.surface, borderColor: tokens.color.line, borderWidth: 1,
-          borderRadius: 14, padding: 14, fontSize: 16 }}
+        value={code}
+        onChangeText={setCode}
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="school code"
+        placeholderTextColor="#9AA4B2"
+        testID="school-code"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={{
+          backgroundColor: tokens.color.appBg,
+          borderColor: focused ? tokens.color.indigo : tokens.color.line,
+          borderWidth: 1.5,
+          borderRadius: 14,
+          paddingVertical: 15,
+          paddingHorizontal: 16,
+          fontSize: 16,
+          color: tokens.color.ink,
+        }}
       />
-      <Pressable disabled={!valid} onPress={next} testID="connect-btn"
-        style={{ backgroundColor: tokens.color.indigo, opacity: valid ? 1 : 0.5, borderRadius: 14, padding: 15 }}>
-        <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center', fontSize: 15 }}>Continue</Text>
+      <Pressable
+        disabled={!valid}
+        onPress={next}
+        testID="connect-btn"
+        style={({ pressed }) => ({
+          backgroundColor: tokens.color.indigo,
+          opacity: !valid ? 0.45 : pressed ? 0.85 : 1,
+          borderRadius: 14,
+          paddingVertical: 16,
+          transform: [{ scale: pressed && valid ? 0.98 : 1 }],
+        })}
+      >
+        <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center', fontSize: 16 }}>
+          Continue
+        </Text>
       </Pressable>
-    </KeyboardAvoidingView>
+    </AuthScaffold>
   );
 }

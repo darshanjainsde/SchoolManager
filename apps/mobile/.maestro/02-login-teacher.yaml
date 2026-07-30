@@ -1,0 +1,24 @@
+# QA lens: functional happy-path (STAFF) + role routing.
+# Connect to the school, log in as a teacher, land on the staff portal.
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "school-code"
+- inputText: "raffles"
+- tapOn:
+    id: "connect-btn"
+- assertVisible:
+    id: "login-id"
+- tapOn:
+    id: "login-id"
+- inputText: "anjali.desai@raffles.edu"
+- tapOn:
+    id: "login-pw"
+- inputText: "password"
+- tapOn:
+    id: "login-btn"
+# Staff portal tabs prove role routing (TEACHER -> staff side).
+- assertVisible: "Today"
+- assertVisible: "Post"

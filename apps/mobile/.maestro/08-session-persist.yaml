@@ -1,0 +1,28 @@
+# QA lens: non-functional / persistence. After login, killing and relaunching
+# the app must restore the session (SecureStore) and go straight to the portal
+# — no re-login, and no launch crash on the authenticated path.
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "school-code"
+- inputText: "raffles"
+- tapOn:
+    id: "connect-btn"
+- tapOn:
+    id: "login-id"
+- inputText: "meera.menon@student.raffles.edu"
+- tapOn:
+    id: "login-pw"
+- inputText: "password"
+- tapOn:
+    id: "login-btn"
+- assertVisible: "Home"
+# Relaunch WITHOUT clearing state — session must persist.
+- stopApp
+- launchApp:
+    clearState: false
+- assertVisible: "Home"
+- assertNotVisible:
+    id: "login-id"

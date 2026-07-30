@@ -12,6 +12,12 @@ const config: ExpoConfig = {
   version: '0.1.0',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
+  // Opt OUT of the New Architecture (default-on in SDK 53). The app was only
+  // unit-tested, never run on a device, and a native module that isn't
+  // new-arch-ready crashes at launch — the most common cause of an
+  // immediate release crash. The old architecture is stable and fully
+  // supported; revisit enabling Fabric/TurboModules later, on a device.
+  newArchEnabled: false,
   icon: './assets/icon.png',
   splash: {
     image: './assets/splash.png',
@@ -26,7 +32,7 @@ const config: ExpoConfig = {
     },
   },
   ios: { bundleIdentifier: 'com.sckools.app' },
-  plugins: ['expo-router', 'expo-secure-store'],
+  plugins: ['expo-router', 'expo-secure-store', '@sentry/react-native'],
   // EAS Update (OTA JS/asset pushes without a Play Store release) — see
   // docs/SHIP-MOBILE.md "Daily OTA pushes to testers".
   updates: {
@@ -35,6 +41,11 @@ const config: ExpoConfig = {
   runtimeVersion: { policy: 'appVersion' },
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000',
+    // Sentry DSN is a public client key (safe to embed in the app). Env
+    // override lets a build point at a different Sentry project if needed.
+    sentryDsn:
+      process.env.EXPO_PUBLIC_SENTRY_DSN ??
+      'https://f260d44287d94e54008d429edf1d64e7@o4511800880398336.ingest.de.sentry.io/4511800888787024',
     eas: { projectId: EAS_PROJECT_ID },
   },
 };

@@ -1,0 +1,27 @@
+# QA lens: session lifecycle. Logging out clears the session and returns the
+# user to the CONNECT entry (logout() -> session.clear() + router.replace to
+# /(auth)/connect), with no portal access afterwards.
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "school-code"
+- inputText: "raffles"
+- tapOn:
+    id: "connect-btn"
+- tapOn:
+    id: "login-id"
+- inputText: "meera.menon@student.raffles.edu"
+- tapOn:
+    id: "login-pw"
+- inputText: "password"
+- tapOn:
+    id: "login-btn"
+- assertVisible: "Home"
+- tapOn: "More"
+- tapOn: "Log out"
+# Logout lands on the connect screen; the portal is gone.
+- assertVisible:
+    id: "school-code"
+- assertNotVisible: "Home"

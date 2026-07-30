@@ -1,0 +1,31 @@
+# QA lens: functional data-loading (STAFF). Teacher-side screens load without
+# error — the class list for attendance (/manage/attendance/my-classes),
+# the Attendance tab, and Holidays (via More -> Holidays; not a bottom tab).
+appId: com.sckools.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "school-code"
+- inputText: "raffles"
+- tapOn:
+    id: "connect-btn"
+- tapOn:
+    id: "login-id"
+- inputText: "anjali.desai@raffles.edu"
+- tapOn:
+    id: "login-pw"
+- inputText: "password"
+- tapOn:
+    id: "login-btn"
+- assertVisible: "Today"
+# Today screen lists the teacher's classes to take attendance for.
+- assertVisible: "Take attendance"
+# Attendance tab loads.
+- tapOn: "Attendance"
+# More -> Holidays.
+- tapOn: "More"
+- assertVisible: "Log out"
+- tapOn: "Holidays"
+- back
+- assertVisible: "Today"

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
+import { AuthScaffold } from '@/components/AuthScaffold';
 import { session } from '@/lib/session';
 import { portalForRole } from '@/lib/roles';
 import { tokens } from '@/theme/tokens';
@@ -11,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [focus, setFocus] = useState<'id' | 'pw' | null>(null);
 
   const submit = async () => {
     setBusy(true); setError(null);
@@ -35,20 +37,71 @@ export default function Login() {
     }
   };
 
+  const inputStyle = (key: 'id' | 'pw') => ({
+    backgroundColor: tokens.color.appBg,
+    borderColor: focus === key ? tokens.color.indigo : tokens.color.line,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: tokens.color.ink,
+  });
+
+  const canSubmit = !busy && !!identifier && !!password;
+
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, backgroundColor: tokens.color.appBg, justifyContent: 'center', padding: 24, gap: tokens.gap }}>
-      <Text style={{ fontSize: 22, fontWeight: '800', color: tokens.color.ink }}>Log in</Text>
-      <TextInput value={identifier} onChangeText={setIdentifier} placeholder="Email or admission number"
-        autoCapitalize="none" testID="login-id"
-        style={{ backgroundColor: tokens.color.surface, borderColor: tokens.color.line, borderWidth: 1, borderRadius: 14, padding: 14 }} />
-      <TextInput value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry testID="login-pw"
-        style={{ backgroundColor: tokens.color.surface, borderColor: tokens.color.line, borderWidth: 1, borderRadius: 14, padding: 14 }} />
-      {error && <Text style={{ color: tokens.color.red }}>{error}</Text>}
-      <Pressable onPress={submit} disabled={busy || !identifier || !password} testID="login-btn"
-        style={{ backgroundColor: tokens.color.indigo, opacity: busy ? 0.6 : 1, borderRadius: 14, padding: 15 }}>
-        <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>{busy ? 'Logging in…' : 'Log in'}</Text>
+    <AuthScaffold title="Welcome back" subtitle="Log in with the details your school gave you.">
+      <TextInput
+        value={identifier}
+        onChangeText={setIdentifier}
+        placeholder="Email or admission number"
+        placeholderTextColor="#9AA4B2"
+        autoCapitalize="none"
+        testID="login-id"
+        onFocus={() => setFocus('id')}
+        onBlur={() => setFocus(null)}
+        style={inputStyle('id')}
+      />
+      <TextInput
+        value={password}
+        onChangeText={setPassword}
+        placeholder="Password"
+        placeholderTextColor="#9AA4B2"
+        secureTextEntry
+        testID="login-pw"
+        onFocus={() => setFocus('pw')}
+        onBlur={() => setFocus(null)}
+        style={inputStyle('pw')}
+      />
+      {error ? (
+        <View
+          style={{
+            backgroundColor: tokens.color.red50,
+            borderRadius: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+          }}
+        >
+          <Text style={{ color: tokens.color.red, fontSize: 14 }}>{error}</Text>
+        </View>
+      ) : null}
+      <Pressable
+        onPress={submit}
+        disabled={!canSubmit}
+        testID="login-btn"
+        style={({ pressed }) => ({
+          backgroundColor: tokens.color.indigo,
+          opacity: !canSubmit ? 0.45 : pressed ? 0.85 : 1,
+          borderRadius: 14,
+          paddingVertical: 16,
+          transform: [{ scale: pressed && canSubmit ? 0.98 : 1 }],
+        })}
+      >
+        <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center', fontSize: 16 }}>
+          {busy ? 'Logging in…' : 'Log in'}
+        </Text>
       </Pressable>
-    </KeyboardAvoidingView>
+    </AuthScaffold>
   );
 }

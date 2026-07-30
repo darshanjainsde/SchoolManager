@@ -10,7 +10,18 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.test.sckools.com"
+        "EXPO_PUBLIC_API_URL": "https://api.test.sckools.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.sckools.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
@@ -20,7 +31,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.sckools.com"
+        "EXPO_PUBLIC_API_URL": "https://api.sckools.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
   },
