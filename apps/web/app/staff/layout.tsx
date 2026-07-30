@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useApi } from '@/lib/use-api';
@@ -13,14 +13,8 @@ import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
 import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { NAV_ITEMS } from './nav-items';
 import '../sk-theme.css';
-
-// Deliberately one entry: this portal is a first cut ("currently minimal" —
-// see the Phase 4 Task 3 brief) covering only the caller's own attendance.
-// A single-item tab strip still follows the same topbar+tabs shell as
-// /portal and /teacher so a future Leave tab (once the staff-leave data
-// model exists) slots in without a layout rewrite.
-export const NAV_ITEMS = [{ href: '/staff', label: 'Home', icon: LayoutDashboard }];
 
 export default function StaffLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();

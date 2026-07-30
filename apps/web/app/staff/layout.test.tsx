@@ -7,7 +7,8 @@ import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { useAuthStore } from '@/lib/auth-store';
-import StaffLayout, { NAV_ITEMS } from './layout';
+import StaffLayout from './layout';
+import { NAV_ITEMS } from './nav-items';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
