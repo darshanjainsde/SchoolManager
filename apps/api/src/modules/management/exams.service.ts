@@ -12,6 +12,7 @@ import { formatDateTimeIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
+import { AttendanceService } from './attendance.service';
 import type { CreateExamDto, SaveExamResultsDto } from './management.dto';
 
 /**
@@ -50,7 +51,77 @@ type ResultRow = { studentId: string; marks: number; publishedAt: Date | null };
 export class ExamsService {
   private readonly logger = new Logger(ExamsService.name);
 
-  constructor(private readonly notifications: NotificationService) {}
+  constructor(
+    private readonly notifications: NotificationService,
+    private readonly attendance: AttendanceService,
+  ) {}
+
+  /**
+   * A TEACHER caller may only act on a class section they actually teach —
+   * the SAME rule `AnnouncementsService.create` enforces for broadcast
+   * rights, reused here via `AttendanceService.myClassSections` (the SAME
+   * ownership query `attendance.service.ts`/`announcements.service.ts`
+   * already use) rather than a fourth copy of the ownership predicate.
+   *
+   * `covering` rows are dropped before checking: a one-day substitute does
+   * not schedule tests, enter marks, or publish results for a class they
+   * cover once (announcements applies the identical exclusion for the same
+   * reason). SCHOOL_ADMIN (the only other role `RolesGuard` admits to
+   * `ExamsController`) is exempt and always passes.
+   *
+   * Throws `ApiError('CLASS_NOT_OWNED', ..., 403)` — never returns a
+   * boolean, so a caller cannot forget to branch on it.
+   */
+  private async assertClassOwned(
+    schoolId: string,
+    userId: string,
+    role: string,
+    classSectionId: string,
+    action: string,
+  ): Promise<void> {
+    if (role !== 'TEACHER') return;
+    const mine = (await this.attendance.myClassSections(schoolId, userId, role)).filter(
+      (c) => !c.covering,
+    );
+    const owned = new Set(mine.map((c) => c.classSectionId));
+    if (!owned.has(classSectionId)) {
+      throw new ApiError(
+        'CLASS_NOT_OWNED',
+        `You can only ${action} your own classes.`,
+        403,
+        'classSectionId',
+      );
+    }
+  }
+
+  /**
+   * Loads just enough of an Exam row to resolve TEACHER ownership BEFORE the
+   * caller-visible mutation/read below runs its own transaction. `Exam`
+   * carries no RLS, so scoping by `{ id, schoolId }` is load-bearing — a
+   * foreign-school examId 404s here, before ownership is ever checked
+   * against it.
+   *
+   * Deliberately a SEPARATE `withTenant` call rather than reusing the tx the
+   * caller opens next: `AttendanceService.myClassSections` (called from
+   * `assertClassOwned` between this and the caller's own transaction) opens
+   * its OWN `withTenant`, and Prisma's interactive transactions cannot be
+   * nested inside one another without risking a pool-exhaustion deadlock —
+   * the same reason `AnnouncementsService.create` and `TeacherDayService`
+   * call `AttendanceService` methods outside of, never inside, their own
+   * `withTenant` blocks.
+   */
+  private async loadExamForOwnership(
+    schoolId: string,
+    examId: string,
+  ): Promise<{ classSectionId: string }> {
+    const exam = await withTenant(schoolId, (tx) =>
+      tx.exam.findFirst({ where: { id: examId, schoolId } }),
+    );
+    if (!exam) {
+      throw new ApiError('NOT_FOUND', 'exam not found', 404, 'id');
+    }
+    return exam;
+  }
 
   /**
    * Prisma types `scheduledAt`/`createdAt` as `Date`; the shared `Exam`
@@ -120,11 +191,22 @@ export class ExamsService {
    * actually belongs to this school (ClassSection has RLS, so a foreign
    * classSectionId simply won't be found rather than leaking a row from
    * another tenant).
+   *
+   * A TEACHER caller may only target a class section they own (see
+   * `assertClassOwned`) — otherwise any teacher who learns another class's
+   * UUID could schedule an exam for it, which fans out a TEST_SCHEDULED
+   * email to that class's students/guardians.
    */
-  async create(schoolId: string, callerUserId: string, dto: CreateExamDto): Promise<Exam> {
+  async create(
+    schoolId: string,
+    callerUserId: string,
+    role: string,
+    dto: CreateExamDto,
+  ): Promise<Exam> {
     if (!Number.isInteger(dto.maxMarks) || dto.maxMarks <= 0) {
       throw new ApiError('VALIDATION', 'maxMarks must be a positive integer', 400, 'maxMarks');
     }
+    await this.assertClassOwned(schoolId, callerUserId, role, dto.classSectionId, 'schedule an exam for');
 
     const exam = await withTenant(schoolId, async (tx) => {
       const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
@@ -186,8 +268,18 @@ export class ExamsService {
    * scenario across schools sharing no relation) would still be excluded
    * because classSectionId itself is scoped by the caller's own tenant
    * (validated via the RLS-protected ClassSection lookup below).
+   *
+   * A TEACHER caller may only list exams for a class section they own (see
+   * `assertClassOwned`) — otherwise any teacher who learns another class's
+   * UUID could enumerate its scheduled/past exams.
    */
-  async list(schoolId: string, classSectionId: string): Promise<ExamList> {
+  async list(
+    schoolId: string,
+    classSectionId: string,
+    callerUserId: string,
+    role: string,
+  ): Promise<ExamList> {
+    await this.assertClassOwned(schoolId, callerUserId, role, classSectionId, 'view exams for');
     return withTenant(schoolId, async (tx) => {
       const section = await tx.classSection.findFirst({ where: { id: classSectionId } });
       if (!section) {
@@ -224,8 +316,21 @@ export class ExamsService {
    * is load-bearing: a foreign exam id must 404 rather than leak another
    * school's marks. Students with no stored mark are simply absent from the
    * array — the caller pairs it against the roster it already has.
+   *
+   * A TEACHER caller may only view results for an exam whose STORED
+   * `classSectionId` they own (see `assertClassOwned` / `loadExamForOwnership`)
+   * — resolved from the exam row itself, since this endpoint takes no
+   * classSectionId a caller could otherwise try to substitute in.
    */
-  async results(schoolId: string, examId: string): Promise<SavedResult[]> {
+  async results(
+    schoolId: string,
+    examId: string,
+    callerUserId: string,
+    role: string,
+  ): Promise<SavedResult[]> {
+    const owning = await this.loadExamForOwnership(schoolId, examId);
+    await this.assertClassOwned(schoolId, callerUserId, role, owning.classSectionId, 'view results for');
+
     return withTenant(schoolId, async (tx) => {
       const exam = await tx.exam.findFirst({ where: { id: examId, schoolId } });
       if (!exam) {
@@ -257,12 +362,23 @@ export class ExamsService {
    * Each mark must fall within `0..exam.maxMarks` (inclusive) or the whole
    * batch is rejected with VALIDATION — marks are validated up front, not
    * silently coerced, so a bad batch never leaves partial writes behind.
+   *
+   * A TEACHER caller may only enter results for an exam whose STORED
+   * `classSectionId` they own (see `assertClassOwned` / `loadExamForOwnership`)
+   * — resolved from the exam row itself, never from any caller input, so a
+   * teacher cannot bypass ownership by supplying a different
+   * classSectionId (this endpoint doesn't even accept one).
    */
   async saveResults(
     schoolId: string,
     examId: string,
     dto: SaveExamResultsDto,
+    callerUserId: string,
+    role: string,
   ): Promise<SaveResultsResponse> {
+    const owning = await this.loadExamForOwnership(schoolId, examId);
+    await this.assertClassOwned(schoolId, callerUserId, role, owning.classSectionId, 'enter results for');
+
     return withTenant(schoolId, async (tx) => {
       const exam = await tx.exam.findFirst({ where: { id: examId, schoolId } });
       if (!exam) {
@@ -308,8 +424,20 @@ export class ExamsService {
    * Marks every Result for an exam as published (sets `publishedAt = now()`)
    * in one tenant transaction. Loading the exam via `{ id, schoolId }` is
    * again load-bearing since `Exam` carries no RLS.
+   *
+   * A TEACHER caller may only publish results for an exam whose STORED
+   * `classSectionId` they own (see `assertClassOwned` / `loadExamForOwnership`)
+   * — resolved from the exam row itself, never from any caller input.
    */
-  async publish(schoolId: string, examId: string): Promise<PublishResultsResponse> {
+  async publish(
+    schoolId: string,
+    examId: string,
+    callerUserId: string,
+    role: string,
+  ): Promise<PublishResultsResponse> {
+    const owning = await this.loadExamForOwnership(schoolId, examId);
+    await this.assertClassOwned(schoolId, callerUserId, role, owning.classSectionId, 'publish results for');
+
     const { published, exam } = await withTenant(schoolId, async (tx) => {
       const exam = await tx.exam.findFirst({ where: { id: examId, schoolId } });
       if (!exam) {

@@ -23,29 +23,39 @@ export class ExamsController {
     return this.tenant.requireTenant().schoolId;
   }
 
+  // TEACHER may create too — restricted to their own class sections
+  // (ExamsService.create enforces this via AttendanceService.myClassSections,
+  // mirroring AnnouncementsController/AnnouncementsService).
   @Post()
   create(@Body() dto: CreateExamDto, @CurrentUser() u: SchoolJwtPayload) {
-    return this.exams.create(this.sid(), u.sub, dto);
+    return this.exams.create(this.sid(), u.sub, u.role, dto);
   }
 
   @Get()
-  list(@Query('classSectionId', ParseUUIDPipe) classSectionId: string) {
-    return this.exams.list(this.sid(), classSectionId);
+  list(
+    @Query('classSectionId', ParseUUIDPipe) classSectionId: string,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.exams.list(this.sid(), classSectionId, u.sub, u.role);
   }
 
   /** Marks already stored for this exam — lets the entry screen prefill. */
   @Get(':id/results')
-  listResults(@Param('id', ParseUUIDPipe) id: string) {
-    return this.exams.results(this.sid(), id);
+  listResults(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
+    return this.exams.results(this.sid(), id, u.sub, u.role);
   }
 
   @Put(':id/results')
-  saveResults(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SaveExamResultsDto) {
-    return this.exams.saveResults(this.sid(), id, dto);
+  saveResults(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveExamResultsDto,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.exams.saveResults(this.sid(), id, dto, u.sub, u.role);
   }
 
   @Post(':id/publish')
-  publish(@Param('id', ParseUUIDPipe) id: string) {
-    return this.exams.publish(this.sid(), id);
+  publish(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
+    return this.exams.publish(this.sid(), id, u.sub, u.role);
   }
 }

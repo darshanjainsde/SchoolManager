@@ -17,6 +17,7 @@ jest.mock('@skoolos/db', () => ({
 import { ExamsService } from './exams.service';
 import { ApiError } from '../../common/errors/api-error';
 import type { NotificationService } from '../../common/notifications/notification.service';
+import type { AttendanceService } from './attendance.service';
 import type { CreateExamDto, SaveExamResultsDto } from './management.dto';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -24,13 +25,19 @@ const CLASS_SECTION = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 const SUBJECT = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 const CALLER = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 const EXAM_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+/** A class section distinct from `CLASS_SECTION` — never in the caller's `myClassSections`. */
+const OTHER_SECTION = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 
 /** Let the post-response (fire-and-forget) notification work run to completion. */
 const flushBackgroundWork = () => new Promise((resolve) => setImmediate(resolve));
 
 describe('ExamsService', () => {
   const notifications = { notify: jest.fn() };
-  const svc = new ExamsService(notifications as unknown as NotificationService);
+  const attendance = { myClassSections: jest.fn() };
+  const svc = new ExamsService(
+    notifications as unknown as NotificationService,
+    attendance as unknown as AttendanceService,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -45,6 +52,9 @@ describe('ExamsService', () => {
     txMock.user.findMany.mockResolvedValue([]);
     txMock.school.findFirst.mockResolvedValue({ name: 'Green Valley School' });
     txMock.subject.findFirst.mockResolvedValue({ name: 'Mathematics' });
+    // Most existing tests call as SCHOOL_ADMIN (unrestricted); this default
+    // only matters for the TEACHER-ownership tests below, which override it.
+    attendance.myClassSections.mockResolvedValue([]);
   });
 
   describe('create', () => {
@@ -68,7 +78,7 @@ describe('ExamsService', () => {
         createdAt: new Date('2026-07-01T00:00:00.000Z'),
       });
 
-      const result = await svc.create(SCHOOL, CALLER, dto);
+      const result = await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
 
       expect(txMock.classSection.findFirst).toHaveBeenCalledWith({ where: { id: CLASS_SECTION } });
       expect(txMock.exam.create).toHaveBeenCalledWith({
@@ -98,7 +108,7 @@ describe('ExamsService', () => {
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
       txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
 
-      await svc.create(SCHOOL, CALLER, dto);
+      await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
       await flushBackgroundWork();
 
       expect(txMock.student.findMany).toHaveBeenCalledWith({
@@ -135,7 +145,7 @@ describe('ExamsService', () => {
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
       txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
 
-      await svc.create(SCHOOL, CALLER, dto);
+      await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
       await flushBackgroundWork();
 
       expect(txMock.school.findFirst).toHaveBeenCalledWith({
@@ -160,7 +170,7 @@ describe('ExamsService', () => {
         createdAt: new Date('2026-07-01T00:00:00.000Z'),
       });
 
-      await svc.create(SCHOOL, CALLER, dto);
+      await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
       await flushBackgroundWork();
 
       // One transaction for the mutation, a second for the notification reads.
@@ -187,7 +197,7 @@ describe('ExamsService', () => {
         .mockImplementationOnce((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock))
         .mockImplementationOnce(() => Promise.reject(new Error('connection reset')));
 
-      const result = await svc.create(SCHOOL, CALLER, dto);
+      const result = await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
       await flushBackgroundWork();
 
       expect(result).toEqual(expect.objectContaining({ id: EXAM_ID }));
@@ -209,7 +219,7 @@ describe('ExamsService', () => {
       txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
       notifications.notify.mockRejectedValue(new Error('smtp down'));
 
-      const result = await svc.create(SCHOOL, CALLER, dto);
+      const result = await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
       await flushBackgroundWork();
 
       expect(result).toEqual(expect.objectContaining({ id: EXAM_ID }));
@@ -218,7 +228,7 @@ describe('ExamsService', () => {
     it('throws ApiError CLASS_NOT_FOUND for a foreign/invalid classSectionId and never creates the exam', async () => {
       txMock.classSection.findFirst.mockResolvedValue(null);
 
-      await expect(svc.create(SCHOOL, CALLER, dto)).rejects.toMatchObject({
+      await expect(svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto)).rejects.toMatchObject({
         response: { code: 'CLASS_NOT_FOUND' },
       });
       expect(txMock.exam.create).not.toHaveBeenCalled();
@@ -226,14 +236,14 @@ describe('ExamsService', () => {
 
     it('rejects a non-positive maxMarks with VALIDATION before opening a tenant transaction', async () => {
       await expect(
-        svc.create(SCHOOL, CALLER, { ...dto, maxMarks: 0 }),
+        svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', { ...dto, maxMarks: 0 }),
       ).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
       expect(txMock.classSection.findFirst).not.toHaveBeenCalled();
     });
 
     it('rejects a non-integer maxMarks with VALIDATION', async () => {
       await expect(
-        svc.create(SCHOOL, CALLER, { ...dto, maxMarks: 50.5 }),
+        svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', { ...dto, maxMarks: 50.5 }),
       ).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
     });
   });
@@ -264,7 +274,7 @@ describe('ExamsService', () => {
         { id: 'e3', ...base, scheduledAt: new Date('2026-07-21T12:00:00.000Z') },
       ]);
 
-      const result = await svc.list(SCHOOL, CLASS_SECTION);
+      const result = await svc.list(SCHOOL, CLASS_SECTION, CALLER, 'SCHOOL_ADMIN');
 
       expect(result.past.map((e) => e.id)).toEqual(['e1']);
       expect(result.upcoming.map((e) => e.id)).toEqual(['e2', 'e3']);
@@ -281,7 +291,7 @@ describe('ExamsService', () => {
     it('throws ApiError CLASS_NOT_FOUND for a foreign/invalid classSectionId', async () => {
       txMock.classSection.findFirst.mockResolvedValue(null);
 
-      await expect(svc.list(SCHOOL, 'does-not-exist')).rejects.toMatchObject({
+      await expect(svc.list(SCHOOL, 'does-not-exist', CALLER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
         response: { code: 'CLASS_NOT_FOUND' },
       });
       expect(txMock.exam.findMany).not.toHaveBeenCalled();
@@ -297,7 +307,7 @@ describe('ExamsService', () => {
         { studentId: 's-2', marks: 88, publishedAt: null },
       ]);
 
-      const rows = await svc.results(SCHOOL, EXAM_ID);
+      const rows = await svc.results(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN');
 
       // The shared `SavedResult` contract types `publishedAt` as an ISO
       // string, not `Date` — the shape every consumer actually receives once
@@ -317,7 +327,7 @@ describe('ExamsService', () => {
     it('scopes the exam lookup to the caller school and 404s on a foreign exam id', async () => {
       txMock.exam.findFirst.mockResolvedValue(null);
 
-      await expect(svc.results(SCHOOL, EXAM_ID)).rejects.toMatchObject({
+      await expect(svc.results(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
         response: { code: 'NOT_FOUND' },
       });
       expect(txMock.exam.findFirst).toHaveBeenCalledWith({
@@ -330,7 +340,7 @@ describe('ExamsService', () => {
       txMock.exam.findFirst.mockResolvedValue({ id: EXAM_ID, schoolId: SCHOOL });
       txMock.result.findMany.mockResolvedValue([]);
 
-      await expect(svc.results(SCHOOL, EXAM_ID)).resolves.toEqual([]);
+      await expect(svc.results(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN')).resolves.toEqual([]);
     });
   });
 
@@ -352,7 +362,7 @@ describe('ExamsService', () => {
       // Roster only has s-1 — s-2 is foreign to this exam's class section.
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
 
-      await expect(svc.saveResults(SCHOOL, EXAM_ID, dto)).rejects.toMatchObject({
+      await expect(svc.saveResults(SCHOOL, EXAM_ID, dto, CALLER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
         response: { code: 'VALIDATION' },
       });
       expect(txMock.result.upsert).not.toHaveBeenCalled();
@@ -367,7 +377,7 @@ describe('ExamsService', () => {
       });
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }, { id: 's-2' }]);
 
-      await expect(svc.saveResults(SCHOOL, EXAM_ID, dto)).rejects.toMatchObject({
+      await expect(svc.saveResults(SCHOOL, EXAM_ID, dto, CALLER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
         response: { code: 'VALIDATION' },
       });
       expect(txMock.result.upsert).not.toHaveBeenCalled();
@@ -383,7 +393,7 @@ describe('ExamsService', () => {
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }, { id: 's-2' }]);
 
       await expect(
-        svc.saveResults(SCHOOL, EXAM_ID, { marks: [{ studentId: 's-1', marks: -5 }] }),
+        svc.saveResults(SCHOOL, EXAM_ID, { marks: [{ studentId: 's-1', marks: -5 }] }, CALLER, 'SCHOOL_ADMIN'),
       ).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
       expect(txMock.result.upsert).not.toHaveBeenCalled();
     });
@@ -398,7 +408,7 @@ describe('ExamsService', () => {
       txMock.student.findMany.mockResolvedValue([{ id: 's-1' }, { id: 's-2' }]);
       txMock.result.upsert.mockResolvedValue({});
 
-      const result = await svc.saveResults(SCHOOL, EXAM_ID, dto);
+      const result = await svc.saveResults(SCHOOL, EXAM_ID, dto, CALLER, 'SCHOOL_ADMIN');
 
       expect(result).toEqual({ saved: 2 });
       expect(txMock.result.upsert).toHaveBeenCalledTimes(2);
@@ -412,7 +422,7 @@ describe('ExamsService', () => {
     it('throws ApiError NOT_FOUND for a foreign/invalid exam id and never touches results', async () => {
       txMock.exam.findFirst.mockResolvedValue(null);
 
-      await expect(svc.saveResults(SCHOOL, 'does-not-exist', dto)).rejects.toMatchObject({
+      await expect(svc.saveResults(SCHOOL, 'does-not-exist', dto, CALLER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
         response: { code: 'NOT_FOUND' },
       });
       expect(txMock.student.findMany).not.toHaveBeenCalled();
@@ -422,7 +432,7 @@ describe('ExamsService', () => {
     it('scopes the exam lookup to this school so a foreign-school examId is treated as NOT_FOUND', async () => {
       txMock.exam.findFirst.mockResolvedValue(null);
 
-      await svc.saveResults(SCHOOL, EXAM_ID, dto).catch(() => undefined);
+      await svc.saveResults(SCHOOL, EXAM_ID, dto, CALLER, 'SCHOOL_ADMIN').catch(() => undefined);
 
       expect(txMock.exam.findFirst).toHaveBeenCalledWith({ where: { id: EXAM_ID, schoolId: SCHOOL } });
     });
@@ -438,7 +448,7 @@ describe('ExamsService', () => {
       });
       txMock.result.updateMany.mockResolvedValue({ count: 3 });
 
-      const result = await svc.publish(SCHOOL, EXAM_ID);
+      const result = await svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN');
 
       expect(result).toEqual({ published: 3 });
       expect(txMock.result.updateMany).toHaveBeenCalledWith({
@@ -461,7 +471,7 @@ describe('ExamsService', () => {
       txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
       txMock.subject.findFirst.mockResolvedValue({ name: 'Chemistry' });
 
-      await svc.publish(SCHOOL, EXAM_ID);
+      await svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN');
       await flushBackgroundWork();
 
       expect(notifications.notify).toHaveBeenCalledWith('RESULTS_PUBLISHED', [
@@ -490,7 +500,7 @@ describe('ExamsService', () => {
       txMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
       txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
 
-      const result = await svc.publish(SCHOOL, EXAM_ID);
+      const result = await svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN');
       await flushBackgroundWork();
 
       expect(result).toEqual({ published: 0 });
@@ -508,10 +518,15 @@ describe('ExamsService', () => {
       });
       txMock.result.updateMany.mockResolvedValue({ count: 2 });
 
-      await svc.publish(SCHOOL, EXAM_ID);
+      await svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN');
       await flushBackgroundWork();
 
-      expect(withTenantMock).toHaveBeenCalledTimes(2);
+      // Three transactions now: `loadExamForOwnership`'s ownership-resolution
+      // read, the publish mutation itself, and a third for the notification
+      // reads — still strictly sequential, never nested (see
+      // `loadExamForOwnership`'s doc comment on why it can't share a tx with
+      // `AttendanceService.myClassSections`).
+      expect(withTenantMock).toHaveBeenCalledTimes(3);
       expect(txMock.student.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(
         txMock.result.updateMany.mock.invocationCallOrder[0],
       );
@@ -531,7 +546,7 @@ describe('ExamsService', () => {
       txMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
       notifications.notify.mockRejectedValue(new Error('smtp down'));
 
-      const result = await svc.publish(SCHOOL, EXAM_ID);
+      const result = await svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN');
       await flushBackgroundWork();
 
       expect(result).toEqual({ published: 3 });
@@ -540,10 +555,230 @@ describe('ExamsService', () => {
     it('throws ApiError NOT_FOUND for a foreign/invalid exam id and never touches results', async () => {
       txMock.exam.findFirst.mockResolvedValue(null);
 
-      await expect(svc.publish(SCHOOL, 'does-not-exist')).rejects.toMatchObject({
+      await expect(svc.publish(SCHOOL, 'does-not-exist', CALLER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
         response: { code: 'NOT_FOUND' },
       });
       expect(txMock.result.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // Any TEACHER who learned another class's UUID could otherwise schedule a
+  // test for it (which emails that class's students/guardians), list its
+  // exams, and enter/publish its results. Mirrors the ownership rule
+  // `AnnouncementsService.create` already enforces for broadcast rights.
+  describe('TEACHER class ownership', () => {
+    const dto: CreateExamDto = {
+      classSectionId: CLASS_SECTION,
+      subjectId: SUBJECT,
+      title: 'Unit Test',
+      scheduledAt: '2026-08-01T09:00:00.000Z',
+      maxMarks: 100,
+    };
+    const ownedSection = { classSectionId: CLASS_SECTION, name: '8-C', studentCount: 30, covering: false };
+    const coveringOnlySection = {
+      classSectionId: CLASS_SECTION,
+      name: '8-C',
+      studentCount: 30,
+      covering: true,
+    };
+
+    describe('create', () => {
+      it('rejects a TEACHER targeting a class section they do not own — no exam created, no notification fired', async () => {
+        attendance.myClassSections.mockResolvedValue([]); // owns nothing
+
+        await expect(svc.create(SCHOOL, CALLER, 'TEACHER', dto)).rejects.toMatchObject({
+          response: { code: 'CLASS_NOT_OWNED' },
+        });
+        await flushBackgroundWork();
+
+        expect(txMock.exam.create).not.toHaveBeenCalled();
+        expect(notifications.notify).not.toHaveBeenCalled();
+      });
+
+      it('succeeds for a TEACHER targeting a class section they own', async () => {
+        attendance.myClassSections.mockResolvedValue([ownedSection]);
+        txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+        txMock.exam.create.mockResolvedValue({
+          id: EXAM_ID,
+          ...dto,
+          scheduledAt: new Date(dto.scheduledAt),
+          createdById: CALLER,
+          createdAt: new Date('2026-07-01T00:00:00.000Z'),
+        });
+
+        const result = await svc.create(SCHOOL, CALLER, 'TEACHER', dto);
+
+        expect(result).toEqual(expect.objectContaining({ id: EXAM_ID }));
+        expect(txMock.exam.create).toHaveBeenCalled();
+      });
+
+      it('rejects a TEACHER who only COVERS the class as a one-day substitute — covering a class once does not let you schedule tests for it', async () => {
+        attendance.myClassSections.mockResolvedValue([coveringOnlySection]);
+
+        await expect(svc.create(SCHOOL, CALLER, 'TEACHER', dto)).rejects.toMatchObject({
+          response: { code: 'CLASS_NOT_OWNED' },
+        });
+        expect(txMock.exam.create).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('list', () => {
+      it('rejects a TEACHER listing exams for a class section they do not own', async () => {
+        attendance.myClassSections.mockResolvedValue([]);
+
+        await expect(svc.list(SCHOOL, CLASS_SECTION, CALLER, 'TEACHER')).rejects.toMatchObject({
+          response: { code: 'CLASS_NOT_OWNED' },
+        });
+        expect(txMock.exam.findMany).not.toHaveBeenCalled();
+      });
+
+      it('rejects a TEACHER who only COVERS the class', async () => {
+        attendance.myClassSections.mockResolvedValue([coveringOnlySection]);
+
+        await expect(svc.list(SCHOOL, CLASS_SECTION, CALLER, 'TEACHER')).rejects.toMatchObject({
+          response: { code: 'CLASS_NOT_OWNED' },
+        });
+        expect(txMock.exam.findMany).not.toHaveBeenCalled();
+      });
+
+      it('succeeds for a TEACHER listing exams for a class section they own', async () => {
+        attendance.myClassSections.mockResolvedValue([ownedSection]);
+        txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+        txMock.exam.findMany.mockResolvedValue([]);
+
+        await expect(svc.list(SCHOOL, CLASS_SECTION, CALLER, 'TEACHER')).resolves.toEqual({
+          upcoming: [],
+          past: [],
+        });
+      });
+    });
+
+    // `results`/`saveResults`/`publish` take no classSectionId at all — a
+    // caller cannot even attempt to substitute one in. Ownership is resolved
+    // solely from the exam row's OWN, persisted classSectionId, fetched
+    // fresh from the database rather than trusted from anywhere else.
+    describe('results/saveResults/publish resolve ownership from the STORED exam row', () => {
+      const examRow = {
+        id: EXAM_ID,
+        schoolId: SCHOOL,
+        classSectionId: CLASS_SECTION,
+        subjectId: SUBJECT,
+        title: 'Midterm',
+        maxMarks: 100,
+      };
+
+      it('results: rejects a TEACHER who does not own the exam\'s stored class section', async () => {
+        txMock.exam.findFirst.mockResolvedValue(examRow);
+        attendance.myClassSections.mockResolvedValue([]); // does not own CLASS_SECTION
+
+        await expect(svc.results(SCHOOL, EXAM_ID, CALLER, 'TEACHER')).rejects.toMatchObject({
+          response: { code: 'CLASS_NOT_OWNED' },
+        });
+        expect(txMock.result.findMany).not.toHaveBeenCalled();
+      });
+
+      it('results: succeeds for a TEACHER who owns the exam\'s stored class section', async () => {
+        txMock.exam.findFirst.mockResolvedValue(examRow);
+        attendance.myClassSections.mockResolvedValue([ownedSection]);
+        txMock.result.findMany.mockResolvedValue([]);
+
+        await expect(svc.results(SCHOOL, EXAM_ID, CALLER, 'TEACHER')).resolves.toEqual([]);
+      });
+
+      it('saveResults: rejects a TEACHER who does not own the exam\'s stored class section — writes nothing', async () => {
+        txMock.exam.findFirst.mockResolvedValue(examRow);
+        attendance.myClassSections.mockResolvedValue([]); // owns some OTHER class, not this exam's
+
+        await expect(
+          svc.saveResults(
+            SCHOOL,
+            EXAM_ID,
+            { marks: [{ studentId: 's-1', marks: 10 }] },
+            CALLER,
+            'TEACHER',
+          ),
+        ).rejects.toMatchObject({ response: { code: 'CLASS_NOT_OWNED' } });
+        expect(txMock.result.upsert).not.toHaveBeenCalled();
+      });
+
+      it('saveResults: succeeds for a TEACHER who owns the exam\'s stored class section', async () => {
+        txMock.exam.findFirst.mockResolvedValue(examRow);
+        attendance.myClassSections.mockResolvedValue([ownedSection]);
+        txMock.student.findMany.mockResolvedValue([{ id: 's-1' }]);
+        txMock.result.upsert.mockResolvedValue({});
+
+        await expect(
+          svc.saveResults(
+            SCHOOL,
+            EXAM_ID,
+            { marks: [{ studentId: 's-1', marks: 10 }] },
+            CALLER,
+            'TEACHER',
+          ),
+        ).resolves.toEqual({ saved: 1 });
+      });
+
+      it('publish: rejects a TEACHER who does not own the exam\'s stored class section — publishes nothing', async () => {
+        txMock.exam.findFirst.mockResolvedValue(examRow);
+        attendance.myClassSections.mockResolvedValue([]);
+
+        await expect(svc.publish(SCHOOL, EXAM_ID, CALLER, 'TEACHER')).rejects.toMatchObject({
+          response: { code: 'CLASS_NOT_OWNED' },
+        });
+        expect(txMock.result.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('publish: succeeds for a TEACHER who owns the exam\'s stored class section', async () => {
+        txMock.exam.findFirst.mockResolvedValue(examRow);
+        attendance.myClassSections.mockResolvedValue([ownedSection]);
+        txMock.result.updateMany.mockResolvedValue({ count: 2 });
+
+        await expect(svc.publish(SCHOOL, EXAM_ID, CALLER, 'TEACHER')).resolves.toEqual({ published: 2 });
+      });
+
+      it('publish: a covering-only TEACHER cannot publish results for the class they substituted in', async () => {
+        txMock.exam.findFirst.mockResolvedValue(examRow);
+        attendance.myClassSections.mockResolvedValue([coveringOnlySection]);
+
+        await expect(svc.publish(SCHOOL, EXAM_ID, CALLER, 'TEACHER')).rejects.toMatchObject({
+          response: { code: 'CLASS_NOT_OWNED' },
+        });
+        expect(txMock.result.updateMany).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('SCHOOL_ADMIN is unrestricted', () => {
+      it('create: never consults myClassSections for a SCHOOL_ADMIN caller', async () => {
+        txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
+        txMock.exam.create.mockResolvedValue({
+          id: EXAM_ID,
+          ...dto,
+          scheduledAt: new Date(dto.scheduledAt),
+          createdById: CALLER,
+          createdAt: new Date('2026-07-01T00:00:00.000Z'),
+        });
+
+        await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
+
+        expect(attendance.myClassSections).not.toHaveBeenCalled();
+      });
+
+      it('publish: never consults myClassSections for a SCHOOL_ADMIN caller, even on an unowned-looking class', async () => {
+        txMock.exam.findFirst.mockResolvedValue({
+          id: EXAM_ID,
+          schoolId: SCHOOL,
+          classSectionId: OTHER_SECTION,
+          subjectId: SUBJECT,
+          title: 'Midterm',
+          maxMarks: 100,
+        });
+        txMock.result.updateMany.mockResolvedValue({ count: 1 });
+
+        await expect(svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN')).resolves.toEqual({
+          published: 1,
+        });
+        expect(attendance.myClassSections).not.toHaveBeenCalled();
+      });
     });
   });
 });
