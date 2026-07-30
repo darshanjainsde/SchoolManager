@@ -21,6 +21,9 @@ import {
   type ClassSectionSummary,
   type Subject,
   type RosterStudent,
+  NOTIFICATION_OUTBOX_KINDS,
+  type NotificationOutboxKind,
+  assertNotificationOutboxKind,
 } from './index';
 
 describe('shared portal contracts', () => {
@@ -158,5 +161,23 @@ describe('shared portal contracts', () => {
   it('a RosterStudent never carries guardian PII — only the four roster fields', () => {
     const student: RosterStudent = { id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: null };
     expect(Object.keys(student).sort()).toEqual(['firstName', 'id', 'lastName', 'rollNo']);
+  });
+
+  it('declares exactly the two NotificationOutbox kinds the API writes', () => {
+    expect([...NOTIFICATION_OUTBOX_KINDS].sort()).toEqual(['EXAM_SCHEDULED', 'RESULT_PUBLISHED']);
+  });
+
+  it('assertNotificationOutboxKind narrows a valid string and rejects an invalid one', () => {
+    const ok: NotificationOutboxKind[] = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED'];
+    expect(ok).toHaveLength(2);
+
+    const value: string = 'RESULT_PUBLISHED';
+    assertNotificationOutboxKind(value); // does not throw
+    const narrowed: NotificationOutboxKind = value;
+    expect(narrowed).toBe('RESULT_PUBLISHED');
+
+    expect(() => assertNotificationOutboxKind('TEST_SCHEDULED')).toThrow(
+      'Invalid NotificationOutbox kind: "TEST_SCHEDULED"',
+    );
   });
 });

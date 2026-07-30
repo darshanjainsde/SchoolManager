@@ -313,6 +313,34 @@ export interface PublishResultsResponse {
   published: number;
 }
 
+// ── Notification outbox (S6/S7 wiring — push-on-publish) ─────────────────────
+// `NotificationOutbox` (packages/db) is a transactional outbox: ExamsService
+// writes one row per event INSIDE the same `withTenant` transaction as the
+// exam/result write, and a cron drain (NotificationOutboxService) sends push
+// and marks it sent. `kind` is a plain `String` column, not a Prisma enum —
+// this union + guard is the single source of truth for which values are
+// legal, validated at write time (mirrors AttendanceStatusValue/
+// HolidayTypeValue above, both also String columns).
+
+/** The only two events that write a `NotificationOutbox` row today. */
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED'] as const;
+export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
+
+/**
+ * `@IsIn`-style runtime guard for `NotificationOutbox.kind`. There is no DTO
+ * class-validator round-trip here — the row is written directly inside
+ * `ExamsService.create()`/`publish()`'s own transaction — so this assertion
+ * is what actually stops a typo'd kind string from ever reaching the
+ * database, narrowing `string` to `NotificationOutboxKind` for the caller.
+ */
+export function assertNotificationOutboxKind(
+  kind: string,
+): asserts kind is NotificationOutboxKind {
+  if (!(NOTIFICATION_OUTBOX_KINDS as readonly string[]).includes(kind)) {
+    throw new Error(`Invalid NotificationOutbox kind: "${kind}"`);
+  }
+}
+
 // ── Classes, subjects, roster ────────────────────────────────────────────────
 
 /**

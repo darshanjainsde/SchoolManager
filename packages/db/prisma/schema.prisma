@@ -196,6 +196,7 @@ model School {
   classNotes             ClassNote[]
   classTodos             ClassTodo[]
   registerChangeRequests RegisterChangeRequest[]
+  notificationOutbox     NotificationOutbox[]
 }
 
 model Domain {
@@ -572,6 +573,7 @@ model ClassSection {
   classNotes             ClassNote[]
   classTodos             ClassTodo[]
   registerChangeRequests RegisterChangeRequest[]
+  notificationOutbox     NotificationOutbox[]
 
   @@unique([schoolId, gradeId, name, academicYearId])
   @@index([schoolId])
@@ -797,6 +799,42 @@ model Result {
   exam    Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   @@unique([examId, studentId], name: "one_result_per_exam_student")
+}
+
+/// Transactional outbox for "families' phones get told" events (S6/S7 wiring,
+/// Portal Parity R3 Phase 4 Task 2). `ExamsService.create()`/`publish()`
+/// write one row here IN THE SAME `withTenant` transaction as the exam/result
+/// write itself — so a result is never published without its notification
+/// row existing, and a rolled-back transaction leaves no orphan row either.
+/// A cron drain (`NotificationOutboxService`, `internal/cron/notification-outbox`)
+/// reads unsent rows and sends push via the existing `PushChannel`, then sets
+/// `sentAt`. `kind` is a plain String (not a Prisma enum) validated at write
+/// time via `assertNotificationOutboxKind` (`@skoolos/types`) — matches the
+/// String-kind pattern already used for `LeaveApplication.type`/`Holiday.type`
+/// elsewhere in this schema.
+///
+/// `payload` is DENORMALISED at write time (exam title, subject/class name,
+/// maxMarks/date already resolved to display strings) so the drain never
+/// joins back to `Exam`/`Subject`/`ClassSection` — see
+/// `ExamScheduledOutboxPayload`/`ResultPublishedOutboxPayload`
+/// (apps/api/src/common/notifications/notification.types.ts).
+model NotificationOutbox {
+  id             String    @id @default(uuid()) @db.Uuid
+  schoolId       String    @db.Uuid
+  kind           String
+  payload        Json
+  classSectionId String    @db.Uuid
+  createdAt      DateTime  @default(now())
+  sentAt         DateTime?
+  /// Incremented on every failed send attempt; the drain excludes rows at
+  /// or above its MAX_ATTEMPTS cap rather than retrying forever.
+  attempts       Int       @default(0)
+  lastError      String?
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  /// The drain's own query shape: unsent rows, oldest first.
+  @@index([schoolId, sentAt])
 }
 
 // ── Community ────────────────────────────────────────────
