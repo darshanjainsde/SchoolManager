@@ -6,7 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO, type ClassDayStatus } from '@/lib/attendance';
 import { LockedDayCard } from '@/components/LockedDayCard';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 /** True once an APPROVED row's `expiresAt` is still in the future — absolute
  * epoch comparison, so it is correct regardless of the device's timezone.
@@ -18,6 +18,7 @@ function isUnexpired(expiresAt: string | null): boolean {
 }
 
 export default function StaffAttendance() {
+  const tokens = useTokens();
   const [date, setDate] = useState(todayISO());
   const [rows, setRows] = useState<ClassDayStatus[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +177,7 @@ export default function StaffAttendance() {
             testID={`take-${c.classSectionId}`}
             style={{ flex: 1, backgroundColor: tokens.color.indigo, borderRadius: 13, padding: 11 }}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
+            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
               Take attendance now
             </Text>
           </Pressable>

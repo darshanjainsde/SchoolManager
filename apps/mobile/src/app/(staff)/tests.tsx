@@ -6,20 +6,10 @@ import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { DEFAULT_SCHEDULE_TIME, isValidMaxMarks, shiftTime, toScheduledAtISO } from '@/lib/exams';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
+import type { ColorPalette } from '@/theme/tokens';
 
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: tokens.color.line,
-  borderRadius: 11,
-  padding: 11,
-  fontSize: 13.5,
-  color: tokens.color.ink,
-};
-
-const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
-
-function chipStyle(on: boolean) {
+function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
   return {
     borderWidth: 1.5,
     borderColor: on ? tokens.color.indigo : tokens.color.line,
@@ -31,6 +21,16 @@ function chipStyle(on: boolean) {
 }
 
 export default function Tests() {
+  const tokens = useTokens();
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: tokens.color.line,
+    borderRadius: 11,
+    padding: 11,
+    fontSize: 13.5,
+    color: tokens.color.ink,
+  };
+  const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
   const [classes, setClasses] = useState<MyClassSection[] | null>(null);
   const [classesError, setClassesError] = useState<string | null>(null);
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
@@ -217,7 +217,7 @@ export default function Tests() {
                   key={c.classSectionId}
                   testID={`class-${c.classSectionId}`}
                   onPress={() => selectClass(c.classSectionId)}
-                  style={chipStyle(on)}
+                  style={chipStyle(tokens, on)}
                 >
                   <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
                     {on ? `✓ ${c.name}` : c.name}
@@ -245,7 +245,7 @@ export default function Tests() {
               {(subjects ?? []).map((s) => {
                 const on = subjectId === s.id;
                 return (
-                  <Pressable key={s.id} testID={`subject-${s.id}`} onPress={() => setSubjectId(s.id)} style={chipStyle(on)}>
+                  <Pressable key={s.id} testID={`subject-${s.id}`} onPress={() => setSubjectId(s.id)} style={chipStyle(tokens, on)}>
                     <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
                       {on ? `✓ ${s.code}` : s.code}
                     </Text>
@@ -345,7 +345,7 @@ export default function Tests() {
               opacity: canSchedule ? 1 : 0.6,
             }}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
               {scheduling ? 'Scheduling…' : 'Schedule test'}
             </Text>
           </Pressable>

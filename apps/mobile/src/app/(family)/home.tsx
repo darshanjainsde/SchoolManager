@@ -5,9 +5,10 @@ import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 import { relativeTime, type Announcement, type AttendanceSummary, type StudentProfile } from '@/lib/portal';
 import { Card, Screen, SectionTitle } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 function QuickAction({ label, onPress }: { label: string; onPress: () => void }) {
+  const tokens = useTokens();
   return (
     <Pressable
       onPress={onPress}
@@ -36,6 +37,7 @@ function todayStatusLabel(status: 'PRESENT' | 'ABSENT' | 'LATE' | null) {
 }
 
 export default function Home() {
+  const tokens = useTokens();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
   const [attendance, setAttendance] = useState<AttendanceSummary | null>(null);
@@ -89,7 +91,7 @@ export default function Home() {
         <View style={{ backgroundColor: tokens.color.indigo, borderRadius: 20, padding: 16 }}>
           <Text
             style={{
-              color: '#fff',
+              color: tokens.color.onBrand,
               opacity: 0.85,
               fontSize: 11,
               fontWeight: '700',
@@ -99,10 +101,10 @@ export default function Home() {
           >
             Your child
           </Text>
-          <Text style={{ color: '#fff', fontSize: 19, fontWeight: '800', marginTop: 3 }}>
+          <Text style={{ color: tokens.color.onBrand, fontSize: 19, fontWeight: '800', marginTop: 3 }}>
             {profile.firstName} {profile.lastName}
           </Text>
-          <Text style={{ color: '#fff', opacity: 0.9, fontSize: 12.5, marginTop: 2 }}>
+          <Text style={{ color: tokens.color.onBrand, opacity: 0.9, fontSize: 12.5, marginTop: 2 }}>
             {profile.className ?? 'No class assigned'}
             {profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}
           </Text>
@@ -110,13 +112,16 @@ export default function Home() {
             style={{
               marginTop: 13,
               alignSelf: 'flex-start',
-              backgroundColor: '#ffffff26',
+              // 15% translucent `onBrand` — a subtle highlight over the
+              // solid-indigo card in both schemes (white-on-indigo in light,
+              // near-black-on-lavender in dark, matching the text above).
+              backgroundColor: `${tokens.color.onBrand}26`,
               borderRadius: 11,
               paddingVertical: 7,
               paddingHorizontal: 11,
             }}
           >
-            <Text style={{ color: '#fff', fontSize: 12.5, fontWeight: '600' }}>
+            <Text style={{ color: tokens.color.onBrand, fontSize: 12.5, fontWeight: '600' }}>
               {todayStatusLabel(todayStatus)}
             </Text>
           </View>

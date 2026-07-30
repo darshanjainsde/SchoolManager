@@ -1,17 +1,24 @@
 import { Text, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
+import { brand } from '@/theme/tokens';
 
 type Props = {
   size?: number;
   variant?: 'full' | 'symbol';
+  /**
+   * Which background this logo sits on (e.g. "dark" for the indigo hero in
+   * AuthScaffold) — independent of the app's own light/dark colour scheme,
+   * which the caller does not control from here.
+   */
   theme?: 'light' | 'dark';
 };
 
 export function SckoolsLogo({ size = 32, variant = 'full', theme = 'light' }: Props) {
+  const tokens = useTokens();
   const stroke = theme === 'dark' ? tokens.color.indigoDark : tokens.color.indigo;
   const tassel = theme === 'dark' ? tokens.color.amberDark : tokens.color.amber;
-  const text = theme === 'dark' ? '#FFFFFF' : tokens.color.ink;
+  const text = theme === 'dark' ? brand.onHero : tokens.color.ink;
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

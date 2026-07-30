@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { holidayDateParts, type Holiday } from '@/lib/portal';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 const TYPE_TONE = { PUBLIC: 'green', FESTIVAL: 'amber', SCHOOL: 'indigo' } as const;
 
@@ -20,6 +20,7 @@ function typeTone(type: Holiday['type']): 'green' | 'amber' | 'indigo' | 'neutra
 }
 
 export default function Holidays() {
+  const tokens = useTokens();
   const [items, setItems] = useState<Holiday[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 

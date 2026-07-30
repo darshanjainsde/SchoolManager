@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { Card, Pill } from './ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 export interface NowCardProps {
   entry: TeacherDayEntry | null;
@@ -35,6 +35,7 @@ function entryLabel(e: TeacherDayEntry): string {
  * apps/web/components/teacher/NowCard.tsx.
  */
 export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance }: NowCardProps) {
+  const tokens = useTokens();
   if (!entry) {
     return (
       <Card testID="now-card">
@@ -145,7 +146,7 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance }: 
               paddingHorizontal: 16,
             }}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Take attendance</Text>
+            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>Take attendance</Text>
           </Pressable>
         )
       )}

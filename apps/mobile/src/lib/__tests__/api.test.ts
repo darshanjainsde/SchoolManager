@@ -142,3 +142,46 @@ it('login() throws ApiError on invalid credentials without touching /auth/me', a
   await expect(api.login('raffles.sckools.com', 'bad@raffles.sckools.com', 'wrong')).rejects.toBeInstanceOf(ApiError);
   expect(mockFetch).toHaveBeenCalledTimes(1);
 });
+
+// T5: mirrors the web's `handleLogout` (apps/web/app/teacher/layout.tsx) —
+// revoke the refresh token server-side before the caller wipes local state,
+// so a lost/stolen device doesn't stay signed in until the token expires on
+// its own. Unlike the web (cookie-authenticated), POST /auth/logout is
+// behind SchoolJwtGuard on this bearer-token client, so the access token
+// MUST be attached or the server 401s and never revokes anything.
+describe('api.logout()', () => {
+  it('POSTs /auth/logout with the tenant host, bearer token, and the stored refreshToken', async () => {
+    await seed();
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true }) });
+
+    await api.logout();
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toContain('/auth/logout');
+    expect(init.method).toBe('POST');
+    expect(init.headers['X-Skoolos-Host']).toBe('raffles.sckools.com');
+    expect(init.headers['Authorization']).toBe('Bearer at1');
+    expect(JSON.parse(init.body)).toEqual({ refreshToken: 'rt1' });
+  });
+
+  it('makes no request when no session exists — there is nothing to revoke', async () => {
+    // Earlier tests in this file seed a session into the shared mock
+    // SecureStore, which is not reset between tests — clear it explicitly
+    // rather than relying on test order.
+    await session.clear();
+    await api.logout();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  // Prove-by-deletion target: this is the test that must fail if
+  // `.catch(() => undefined)` is removed from api.logout() in api.ts. With
+  // the swallow in place, a rejected POST resolves api.logout() cleanly so
+  // the caller's subsequent `session.clear()` always runs.
+  it('swallows a network failure instead of rejecting, so a caller awaiting it is never blocked', async () => {
+    await seed();
+    mockFetch.mockRejectedValueOnce(new TypeError('Network request failed'));
+
+    await expect(api.logout()).resolves.toBeUndefined();
+  });
+});

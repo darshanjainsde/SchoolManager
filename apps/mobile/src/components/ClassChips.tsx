@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 interface ClassRef {
   classSectionId: string;
@@ -21,6 +21,7 @@ export function ClassChips({
   selected: string[];
   onChange: (ids: string[]) => void;
 }) {
+  const tokens = useTokens();
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
 

@@ -5,9 +5,10 @@ import { api, ApiError } from '@/lib/api';
 import { AuthScaffold } from '@/components/AuthScaffold';
 import { session } from '@/lib/session';
 import { portalForRole } from '@/lib/roles';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 export default function Login() {
+  const tokens = useTokens();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export default function Login() {
         value={identifier}
         onChangeText={setIdentifier}
         placeholder="Email or admission number"
-        placeholderTextColor="#9AA4B2"
+        placeholderTextColor={tokens.color.placeholder}
         autoCapitalize="none"
         testID="login-id"
         onFocus={() => setFocus('id')}
@@ -67,7 +68,7 @@ export default function Login() {
         value={password}
         onChangeText={setPassword}
         placeholder="Password"
-        placeholderTextColor="#9AA4B2"
+        placeholderTextColor={tokens.color.placeholder}
         secureTextEntry
         testID="login-pw"
         onFocus={() => setFocus('pw')}
@@ -98,7 +99,7 @@ export default function Login() {
           transform: [{ scale: pressed && canSubmit ? 0.98 : 1 }],
         })}
       >
-        <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center', fontSize: 16 }}>
+        <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 16 }}>
           {busy ? 'Logging in…' : 'Log in'}
         </Text>
       </Pressable>

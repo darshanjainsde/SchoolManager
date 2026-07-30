@@ -5,6 +5,8 @@ import Constants from 'expo-constants';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
+import { ThemeProvider } from '@/theme/theme-context';
+import { emergency } from '@/theme/tokens';
 
 // Initialise crash reporting as early as possible so a launch crash is
 // captured. The DSN is a public client key supplied via app config
@@ -23,29 +25,34 @@ Sentry.init({
  * It catches React render errors only — native-module / startup crashes are
  * caught by Sentry once EXPO_PUBLIC_SENTRY_DSN is configured.
  */
+// Renders in place of the whole route tree — including <ThemeProvider> below
+// — when a child throws, so it deliberately does NOT read theme context and
+// uses its own small fixed palette (`emergency` in theme/tokens.ts) instead.
+// Always dark, on purpose: max legibility for a crash screen regardless of
+// device theme or whatever state the app was in when it broke.
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return (
-    <View style={{ flex: 1, backgroundColor: '#0b1220', padding: 24, justifyContent: 'center' }}>
-      <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 8 }}>
+    <View style={{ flex: 1, backgroundColor: emergency.bg, padding: 24, justifyContent: 'center' }}>
+      <Text style={{ color: emergency.ink, fontSize: 20, fontWeight: '800', marginBottom: 8 }}>
         Something went wrong
       </Text>
-      <Text style={{ color: '#9fb3c8', marginBottom: 16 }}>
+      <Text style={{ color: emergency.sub, marginBottom: 16 }}>
         The app hit an unexpected error. You can try again, and if it keeps
         happening, please let your school know.
       </Text>
       <ScrollView
-        style={{ maxHeight: 220, backgroundColor: '#111a2b', borderRadius: 10, padding: 12, marginBottom: 20 }}
+        style={{ maxHeight: 220, backgroundColor: emergency.panel, borderRadius: 10, padding: 12, marginBottom: 20 }}
       >
-        <Text selectable style={{ color: '#ff8f8f', fontFamily: 'monospace', fontSize: 12 }}>
+        <Text selectable style={{ color: emergency.danger, fontFamily: 'monospace', fontSize: 12 }}>
           {error?.message}
           {error?.stack ? `\n\n${error.stack}` : ''}
         </Text>
       </ScrollView>
       <Pressable
         onPress={retry}
-        style={{ backgroundColor: '#4F46E5', paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
+        style={{ backgroundColor: emergency.cta, paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
       >
-        <Text style={{ color: '#fff', fontWeight: '700' }}>Try again</Text>
+        <Text style={{ color: emergency.ink, fontWeight: '700' }}>Try again</Text>
       </Pressable>
     </View>
   );
@@ -57,7 +64,11 @@ function RootLayout() {
   // loaded (or if loading errors — never block the app on a font).
   const [fontsLoaded, fontError] = useFonts(Ionicons.font);
   if (!fontsLoaded && !fontError) return null;
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <ThemeProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </ThemeProvider>
+  );
 }
 
 // Sentry.wrap enables native error boundary + performance tracking on the root.

@@ -3,22 +3,12 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import type { ClassNoteRow, ClassTodoRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { Card } from './ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 interface ClassNotesData {
   notes: ClassNoteRow[];
   todos: ClassTodoRow[];
 }
-
-const inputStyle = {
-  flex: 1,
-  borderWidth: 1,
-  borderColor: tokens.color.line,
-  borderRadius: 11,
-  padding: 10,
-  fontSize: 13,
-  color: tokens.color.ink,
-};
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -44,6 +34,16 @@ export interface ClassNotesPanelProps {
  * `SUBJECT_TEACHERS` legible rather than mysterious.
  */
 export function ClassNotesPanel({ classSectionId, date, subjectId, subjectName }: ClassNotesPanelProps) {
+  const tokens = useTokens();
+  const inputStyle = {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: tokens.color.line,
+    borderRadius: 11,
+    padding: 10,
+    fontSize: 13,
+    color: tokens.color.ink,
+  };
   const [notes, setNotes] = useState<ClassNoteRow[] | null>(null);
   const [todos, setTodos] = useState<ClassTodoRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +153,7 @@ export function ClassNotesPanel({ classSectionId, date, subjectId, subjectName }
               disabled={addingNote}
               style={{ backgroundColor: tokens.color.indigo, borderRadius: 11, paddingHorizontal: 14, justifyContent: 'center', opacity: addingNote ? 0.6 : 1 }}
             >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Add</Text>
+              <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>Add</Text>
             </Pressable>
           </View>
         )}
@@ -193,7 +193,7 @@ export function ClassNotesPanel({ classSectionId, date, subjectId, subjectName }
                   justifyContent: 'center',
                 }}
               >
-                {t.done && <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>✓</Text>}
+                {t.done && <Text style={{ color: tokens.color.onBrand, fontSize: 11, fontWeight: '700' }}>✓</Text>}
               </View>
               <Text
                 style={{
@@ -222,7 +222,7 @@ export function ClassNotesPanel({ classSectionId, date, subjectId, subjectName }
               disabled={addingTodo}
               style={{ backgroundColor: tokens.color.indigo, borderRadius: 11, paddingHorizontal: 14, justifyContent: 'center', opacity: addingTodo ? 0.6 : 1 }}
             >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Add</Text>
+              <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>Add</Text>
             </Pressable>
           </View>
         </Card>

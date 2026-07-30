@@ -5,18 +5,18 @@ import { api, ApiError } from '@/lib/api';
 import type { MyClassSection } from '@/lib/attendance';
 import { ClassChips } from '@/components/ClassChips';
 import { Card, Screen, SectionTitle } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
-
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: tokens.color.line,
-  borderRadius: 11,
-  padding: 11,
-  fontSize: 13.5,
-  color: tokens.color.ink,
-};
+import { useTokens } from '@/theme/theme-context';
 
 export default function Post() {
+  const tokens = useTokens();
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: tokens.color.line,
+    borderRadius: 11,
+    padding: 11,
+    fontSize: 13.5,
+    color: tokens.color.ink,
+  };
   const [classes, setClasses] = useState<MyClassSection[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -154,7 +154,7 @@ export default function Post() {
             opacity: canSubmit ? 1 : 0.6,
           }}
         >
-          <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>
+          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
             {busy ? 'Posting…' : `Post to ${n} class${n === 1 ? '' : 'es'}`}
           </Text>
         </Pressable>

@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { Card, Pill } from './ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 export interface DayTimelineProps {
   entries: TeacherDayEntry[];
@@ -19,6 +19,7 @@ function Row({
   dimmed: boolean;
   onTakeAttendance: (classSectionId: string) => void;
 }) {
+  const tokens = useTokens();
   return (
     <View
       testID={`timeline-row-${entry.periodId}`}
@@ -69,6 +70,7 @@ function Row({
  * apps/web/components/teacher/DayTimeline.tsx.
  */
 export function DayTimeline({ entries, currentIndex, onTakeAttendance }: DayTimelineProps) {
+  const tokens = useTokens();
   if (entries.length === 0) {
     return (
       <Card testID="timeline-empty">

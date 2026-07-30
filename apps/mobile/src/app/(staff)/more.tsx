@@ -1,8 +1,10 @@
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Card, Screen, SectionTitle } from '@/components/ui';
+import { AppearanceSetting } from '@/components/AppearanceSetting';
+import { api } from '@/lib/api';
 import { session } from '@/lib/session';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 function MoreRow({
   label,
@@ -16,6 +18,7 @@ function MoreRow({
   /** Red-tinted styling for a destructive action (e.g. logout), no trailing chevron. */
   destructive?: boolean;
 }) {
+  const tokens = useTokens();
   return (
     <Pressable
       onPress={onPress}
@@ -49,12 +52,15 @@ function MoreRow({
 }
 
 /**
- * Clears the persisted session and returns to the school-connect screen —
- * not `/(auth)/login`, since a tester switching roles/schools for the
- * closed test needs to be able to re-pick a school host too, not just
- * re-enter credentials for the same one.
+ * Revokes the refresh token server-side first (best-effort — see
+ * `api.logout`, which swallows network failures so an offline/lost device
+ * still signs out locally), then clears the persisted session and returns to
+ * the school-connect screen — not `/(auth)/login`, since a tester switching
+ * roles/schools for the closed test needs to be able to re-pick a school
+ * host too, not just re-enter credentials for the same one.
  */
 async function logout() {
+  await api.logout();
   await session.clear();
   router.replace('/(auth)/connect');
 }
@@ -67,6 +73,9 @@ export default function More() {
         <MoreRow label="Tests" icon="📊" onPress={() => router.push('/(staff)/tests')} />
         <MoreRow label="Requests" icon="📝" onPress={() => router.push('/(staff)/requests')} />
         <MoreRow label="Holidays" icon="📅" onPress={() => router.push('/(staff)/holidays')} />
+      </Card>
+      <Card style={{ padding: 4 }}>
+        <AppearanceSetting />
       </Card>
       <Card style={{ padding: 4 }}>
         <MoreRow label="Log out" icon="🚪" destructive onPress={logout} />

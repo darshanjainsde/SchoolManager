@@ -4,9 +4,10 @@ import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { relativeTime, type Announcement } from '@/lib/portal';
 import { Card, Screen, SectionTitle } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 export default function Notices() {
+  const tokens = useTokens();
   const [items, setItems] = useState<Announcement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 

@@ -12,19 +12,7 @@ import type {
 import { api, ApiError } from '@/lib/api';
 import { buildResultsPayload, markOutOfRange, marksValid } from '@/lib/exams';
 import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
-
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: tokens.color.line,
-  borderRadius: 11,
-  paddingVertical: 8,
-  paddingHorizontal: 10,
-  fontSize: 13.5,
-  color: tokens.color.ink,
-  width: 64,
-  textAlign: 'right' as const,
-};
+import { useTokens } from '@/theme/theme-context';
 
 /**
  * Exact wording the web's ConfirmPublish dialog uses
@@ -37,6 +25,18 @@ const PUBLISH_WARNING =
   'results are out. Save any pending marks first — only marks already saved get published.';
 
 export default function ExamResults() {
+  const tokens = useTokens();
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: tokens.color.line,
+    borderRadius: 11,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    fontSize: 13.5,
+    color: tokens.color.ink,
+    width: 64,
+    textAlign: 'right' as const,
+  };
   const { examId, classSectionId } = useLocalSearchParams<{
     examId: string;
     classSectionId: string;
@@ -309,7 +309,7 @@ export default function ExamResults() {
               opacity: !valid || saving ? 0.6 : 1,
             }}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
+            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
               {saving ? 'Saving…' : 'Save marks'}
             </Text>
           </Pressable>
@@ -326,7 +326,7 @@ export default function ExamResults() {
                 opacity: publishing ? 0.6 : 1,
               }}
             >
-              <Text style={{ color: '#B45309', fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
+              <Text style={{ color: tokens.color.late, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
                 {publishing ? 'Publishing…' : 'Publish results'}
               </Text>
             </Pressable>

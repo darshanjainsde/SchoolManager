@@ -1,8 +1,10 @@
 import type { PropsWithChildren } from 'react';
 import { Pressable, ScrollView, Text, View, type ViewStyle } from 'react-native';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
+import type { ColorPalette } from '@/theme/tokens';
 
 export function Screen({ children }: PropsWithChildren) {
+  const tokens = useTokens();
   return (
     <ScrollView
       testID="screen-scroll"
@@ -19,6 +21,7 @@ export function Card({
   style,
   testID,
 }: PropsWithChildren<{ style?: ViewStyle; testID?: string }>) {
+  const tokens = useTokens();
   return (
     <View
       testID={testID}
@@ -31,6 +34,7 @@ export function Card({
 
 export function SectionTitle({ title, actionLabel, onAction }:
   { title: string; actionLabel?: string; onAction?: () => void }) {
+  const tokens = useTokens();
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
       marginHorizontal: 4, marginTop: 6, marginBottom: -3 }}>
@@ -44,22 +48,29 @@ export function SectionTitle({ title, actionLabel, onAction }:
   );
 }
 
-const pillTones = {
-  green: { bg: tokens.color.green50, fg: tokens.color.green },
-  red: { bg: tokens.color.red50, fg: tokens.color.red },
-  amber: { bg: tokens.color.amber50, fg: '#B45309' },
-  indigo: { bg: tokens.color.indigo50, fg: tokens.color.indigo },
-  neutral: { bg: '#F1F3F7', fg: tokens.color.sub },
-} as const;
+function pillTones(tokens: { color: ColorPalette }) {
+  return {
+    green: { bg: tokens.color.green50, fg: tokens.color.green },
+    red: { bg: tokens.color.red50, fg: tokens.color.red },
+    // `late` (not `amber`) — a deep gold distinct from the brand accent,
+    // matching the web's `--sk-late`; readable text on the amber tint bg in
+    // both schemes.
+    amber: { bg: tokens.color.amber50, fg: tokens.color.late },
+    indigo: { bg: tokens.color.indigo50, fg: tokens.color.indigo },
+    neutral: { bg: tokens.color.surfaceMuted, fg: tokens.color.sub },
+  } as const;
+}
 
-export function Pill({ tone, children }: PropsWithChildren<{ tone: keyof typeof pillTones }>) {
+export function Pill({ tone, children }: PropsWithChildren<{ tone: keyof ReturnType<typeof pillTones> }>) {
+  const tokens = useTokens();
+  const tones = pillTones(tokens);
   // Defensive fallback: `tone` is typed to a known key, but a caller can
   // still hand this an untrusted/unvalidated string at runtime (e.g.
   // `Holiday.type`, which is a plain DB string with no enum, only
   // `@IsIn`-validated at write time — see holidays.tsx). Falling back to
   // 'neutral' instead of crashing on `t.bg`/`t.fg` keeps one bad value from
   // taking down the whole screen.
-  const t = pillTones[tone] ?? pillTones.neutral;
+  const t = tones[tone] ?? tones.neutral;
   return (
     <View style={{ backgroundColor: t.bg, borderRadius: tokens.radius.chip,
       paddingHorizontal: 9, paddingVertical: 3, alignSelf: 'flex-start' }}>
@@ -68,10 +79,12 @@ export function Pill({ tone, children }: PropsWithChildren<{ tone: keyof typeof 
   );
 }
 
-const toastTones = {
-  success: { bg: tokens.color.green50, fg: tokens.color.green },
-  error: { bg: tokens.color.red50, fg: tokens.color.red },
-} as const;
+function toastTones(tokens: { color: ColorPalette }) {
+  return {
+    success: { bg: tokens.color.green50, fg: tokens.color.green },
+    error: { bg: tokens.color.red50, fg: tokens.color.red },
+  } as const;
+}
 
 // Inline confirmation/error banner — the RN equivalent of the web's `sonner`
 // toast. There is no toast library in this app, and a global overlay host
@@ -88,13 +101,14 @@ export function Toast({
   onAction,
   testID,
 }: {
-  kind: keyof typeof toastTones;
+  kind: keyof ReturnType<typeof toastTones>;
   message: string;
   actionLabel?: string;
   onAction?: () => void;
   testID?: string;
 }) {
-  const tone = toastTones[kind];
+  const tokens = useTokens();
+  const tone = toastTones(tokens)[kind];
   const id = testID ?? `toast-${kind}`;
   return (
     <View

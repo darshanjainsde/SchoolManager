@@ -11,7 +11,8 @@ import { LEAVE_TYPES } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
+import type { ColorPalette } from '@/theme/tokens';
 
 const LEAVE_TYPE_LABEL: Record<LeaveTypeValue, string> = {
   SICK: 'Sick leave',
@@ -136,16 +137,7 @@ function registerStatusDisplay(item: Extract<RequestItem, { kind: 'register' }>)
   return { label: 'Rejected', tone: 'red' };
 }
 
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: tokens.color.line,
-  borderRadius: 11,
-  padding: 11,
-  fontSize: 13.5,
-  color: tokens.color.ink,
-};
-
-function chipStyle(on: boolean) {
+function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
   return {
     borderWidth: 1.5,
     borderColor: on ? tokens.color.indigo : tokens.color.line,
@@ -156,9 +148,17 @@ function chipStyle(on: boolean) {
   };
 }
 
-const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
-
 export default function Requests() {
+  const tokens = useTokens();
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: tokens.color.line,
+    borderRadius: 11,
+    padding: 11,
+    fontSize: 13.5,
+    color: tokens.color.ink,
+  };
+  const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
   // ── Queue: two independent fetches, each with its own settled state — a
   // failure on one side must never blank out data that already loaded on
   // the other (see the partial-failure requirement in the task brief).
@@ -301,7 +301,7 @@ export default function Requests() {
             {LEAVE_TYPES.map((t) => {
               const on = type === t;
               return (
-                <Pressable key={t} testID={`apply-type-${t}`} onPress={() => setType(t)} style={chipStyle(on)}>
+                <Pressable key={t} testID={`apply-type-${t}`} onPress={() => setType(t)} style={chipStyle(tokens, on)}>
                   <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
                     {on ? `✓ ${LEAVE_TYPE_LABEL[t]}` : LEAVE_TYPE_LABEL[t]}
                   </Text>
@@ -379,7 +379,7 @@ export default function Requests() {
             opacity: canApply ? 1 : 0.6,
           }}
         >
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
             {applySubmitting ? 'Submitting…' : 'Submit request'}
           </Text>
         </Pressable>

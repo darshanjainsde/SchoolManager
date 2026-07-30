@@ -10,7 +10,7 @@ import { NowCard } from '@/components/NowCard';
 import { DayTimeline } from '@/components/DayTimeline';
 import { ClassNotesPanel } from '@/components/ClassNotesPanel';
 import { Card, Screen, SectionTitle } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 /** Minutes past midnight on the device's own clock, for `currentEntry`. */
 function nowMinutes(): number {
@@ -19,6 +19,7 @@ function nowMinutes(): number {
 }
 
 export default function Today() {
+  const tokens = useTokens();
   const [name, setName] = useState<string | null>(null);
   const [day, setDay] = useState<TeacherDay | null>(null);
   const [error, setError] = useState<string | null>(null);

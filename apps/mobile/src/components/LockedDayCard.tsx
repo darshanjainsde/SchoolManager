@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import type { ClassDayStatus } from '@skoolos/types';
 import { Card, Pill } from './ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 export interface LockedDayCardProps {
   /**
@@ -33,17 +33,6 @@ export interface LockedDayCardProps {
   onRequestChange: (reason: string) => void;
 }
 
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: tokens.color.line,
-  borderRadius: 11,
-  padding: 11,
-  fontSize: 13.5,
-  color: tokens.color.ink,
-  minHeight: 64,
-  textAlignVertical: 'top' as const,
-};
-
 /**
  * Replaces the normal take/retake row for a class on a past date that has no
  * unexpired APPROVED unlock — the server refuses a write for a closed day
@@ -66,6 +55,17 @@ export function LockedDayCard({
   error = null,
   onRequestChange,
 }: LockedDayCardProps) {
+  const tokens = useTokens();
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: tokens.color.line,
+    borderRadius: 11,
+    padding: 11,
+    fontSize: 13.5,
+    color: tokens.color.ink,
+    minHeight: 64,
+    textAlignVertical: 'top' as const,
+  };
   const [reason, setReason] = useState('');
   const taken = status?.taken ?? false;
   const canSubmit = reason.trim().length > 0 && !isSubmitting;
@@ -141,7 +141,7 @@ export function LockedDayCard({
               opacity: canSubmit ? 1 : 0.6,
             }}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
               {isSubmitting ? 'Requesting…' : 'Request a change'}
             </Text>
           </Pressable>

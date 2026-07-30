@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native';
 import type { GridPeriodRow, GridSlot } from '@/lib/timetable-grid';
 import { Card, Pill } from './ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 export interface TimetableRow {
   period: GridPeriodRow;
@@ -33,6 +33,7 @@ export interface TimetableListProps {
  * applies to a free row, even if its period is the one happening right now.
  */
 export function TimetableList({ rows, currentPeriodId }: TimetableListProps) {
+  const tokens = useTokens();
   if (rows.length === 0) {
     return (
       <Card testID="timetable-list-empty">

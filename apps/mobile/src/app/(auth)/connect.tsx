@@ -3,9 +3,10 @@ import { Pressable, Text, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { AuthScaffold } from '@/components/AuthScaffold';
 import { session } from '@/lib/session';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 export default function Connect() {
+  const tokens = useTokens();
   const [code, setCode] = useState('');
   const [focused, setFocused] = useState(false);
   const valid = /^[a-z0-9-]{2,40}$/.test(code.trim().toLowerCase());
@@ -26,7 +27,7 @@ export default function Connect() {
         autoCapitalize="none"
         autoCorrect={false}
         placeholder="school code"
-        placeholderTextColor="#9AA4B2"
+        placeholderTextColor={tokens.color.placeholder}
         testID="school-code"
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
@@ -53,7 +54,7 @@ export default function Connect() {
           transform: [{ scale: pressed && valid ? 0.98 : 1 }],
         })}
       >
-        <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center', fontSize: 16 }}>
+        <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 16 }}>
           Continue
         </Text>
       </Pressable>

@@ -9,7 +9,8 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
+import type { ColorPalette } from '@/theme/tokens';
 
 interface RosterRow {
   studentId: string;
@@ -55,13 +56,17 @@ const STATUS_LABEL: Record<AttendanceStatusValue, string> = {
   ABSENT: 'Absent',
   LATE: 'Late',
 };
-const STATUS_COLOR: Record<AttendanceStatusValue, string> = {
-  PRESENT: tokens.color.green,
-  ABSENT: tokens.color.red,
-  LATE: tokens.color.amber,
-};
+function statusColor(tokens: { color: ColorPalette }): Record<AttendanceStatusValue, string> {
+  return {
+    PRESENT: tokens.color.green,
+    ABSENT: tokens.color.red,
+    LATE: tokens.color.amber,
+  };
+}
 
 export default function TakeAttendance() {
+  const tokens = useTokens();
+  const STATUS_COLOR = statusColor(tokens);
   const { classSectionId, name, date: dateParam } = useLocalSearchParams<{
     classSectionId: string;
     name?: string;
@@ -225,7 +230,7 @@ export default function TakeAttendance() {
                 </Text>
               </View>
               <View
-                style={{ flexDirection: 'row', backgroundColor: '#F1F3F7', borderRadius: 10, padding: 3 }}
+                style={{ flexDirection: 'row', backgroundColor: tokens.color.surfaceMuted, borderRadius: 10, padding: 3 }}
               >
                 {ATTENDANCE_STATUSES.map((status) => {
                   const on = r.status === status;
@@ -237,7 +242,7 @@ export default function TakeAttendance() {
                       onPress={() => setStatus(r.studentId, status)}
                       style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: bg }}
                     >
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: on ? '#fff' : tokens.color.sub }}>
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: on ? tokens.color.onBrand : tokens.color.sub }}>
                         {STATUS_LABEL[status]}
                       </Text>
                     </Pressable>
@@ -254,7 +259,7 @@ export default function TakeAttendance() {
         testID="submit-attendance"
         style={{ backgroundColor: tokens.color.indigo, borderRadius: 14, padding: 15, opacity: busy || rows.length === 0 ? 0.6 : 1 }}
       >
-        <Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>
+        <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
           {busy ? 'Submitting…' : 'Submit attendance'}
         </Text>
       </Pressable>

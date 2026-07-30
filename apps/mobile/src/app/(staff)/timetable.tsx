@@ -8,7 +8,7 @@ import { buildGrid, cellKey, type GridPeriodRow, type GridSlot } from '@/lib/tim
 import { DaySelector } from '@/components/DaySelector';
 import { TimetableList, type TimetableRow } from '@/components/TimetableList';
 import { Card, Screen, SectionTitle } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 // `TimetableSlot` (`@skoolos/types`) is what GET /manage/timetable/mine
 // returns — TimetableService.SLOT_INCLUDE, the SAME wire contract the web
@@ -68,6 +68,7 @@ function findCurrentPeriodId(periods: GridPeriodRow[], now: number): string | nu
 }
 
 export default function Timetable() {
+  const tokens = useTokens();
   const [slots, setSlots] = useState<TimetableSlot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The teacher's own tap overrides the default day; null means "no

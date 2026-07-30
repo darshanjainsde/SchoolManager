@@ -4,7 +4,8 @@ import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { AttendanceSummary } from '@/lib/portal';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
+import type { ColorPalette } from '@/theme/tokens';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const CELL_WIDTH = `${100 / 7}%` as const;
@@ -33,10 +34,10 @@ function buildGrid(summary: AttendanceSummary): Cell[] {
   return cells;
 }
 
-function cellColors(status: Cell['status']) {
+function cellColors(tokens: { color: ColorPalette }, status: Cell['status']) {
   if (status === 'PRESENT' || status === 'LATE') return { bg: tokens.color.green50, fg: tokens.color.green };
   if (status === 'ABSENT') return { bg: tokens.color.red50, fg: tokens.color.red };
-  return { bg: '#F1F3F7', fg: tokens.color.sub };
+  return { bg: tokens.color.surfaceMuted, fg: tokens.color.sub };
 }
 
 function StatBox({
@@ -50,6 +51,7 @@ function StatBox({
   label: string;
   color: string;
 }) {
+  const tokens = useTokens();
   return (
     <View
       style={{
@@ -71,6 +73,7 @@ function StatBox({
 }
 
 export default function Attendance() {
+  const tokens = useTokens();
   const [summary, setSummary] = useState<AttendanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -141,7 +144,7 @@ export default function Attendance() {
                     </Text>
                   ))}
                   {buildGrid(summary).map((cell, i) => {
-                    const { bg, fg } = cellColors(cell.status);
+                    const { bg, fg } = cellColors(tokens, cell.status);
                     return (
                       <View key={`cell-${i}`} style={{ width: CELL_WIDTH, aspectRatio: 1, padding: 2 }}>
                         {cell.day !== null && (

@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 
 const DAY_LABELS: Record<number, string> = {
   1: 'Mon',
@@ -33,6 +33,7 @@ export interface DaySelectorProps {
  * must still be obvious which chip is actually today.
  */
 export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: DaySelectorProps) {
+  const tokens = useTokens();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
       {days.map((day) => {
@@ -59,7 +60,7 @@ export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: Day
               style={{
                 fontSize: 12.5,
                 fontWeight: '700',
-                color: isSelected ? '#fff' : isToday ? tokens.color.indigo : tokens.color.sub,
+                color: isSelected ? tokens.color.onBrand : isToday ? tokens.color.indigo : tokens.color.sub,
               }}
             >
               {DAY_LABELS[day] ?? `Day ${day}`}
@@ -71,7 +72,7 @@ export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: Day
                   fontSize: 9,
                   fontWeight: '700',
                   marginTop: 1,
-                  color: isSelected ? '#fff' : tokens.color.indigo,
+                  color: isSelected ? tokens.color.onBrand : tokens.color.indigo,
                 }}
               >
                 Today

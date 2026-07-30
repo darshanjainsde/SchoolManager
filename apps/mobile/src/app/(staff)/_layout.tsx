@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { tokens } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
 import { registerForPush } from '@/lib/push';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -11,6 +11,7 @@ const icon =
     <Ionicons name={name} size={size} color={color} />;
 
 export default function StaffTabs() {
+  const tokens = useTokens();
   useEffect(() => { void registerForPush(); }, []);
   return (
     <Tabs

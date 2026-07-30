@@ -141,4 +141,30 @@ export const api = {
     await session.setSchoolHost(host);
     return s;
   },
+
+  // Mirrors the web's `handleLogout` (apps/web/app/teacher/layout.tsx):
+  // revoke the refresh token server-side before wiping local state, so a
+  // lost/stolen device doesn't stay signed in until the token expires on its
+  // own. Unlike the web (which is cookie-authenticated, so the request needs
+  // no Authorization header), this app is bearer-token-authenticated and
+  // POST /auth/logout is behind SchoolJwtGuard — the access token must be
+  // attached or the server 401s and never revokes anything.
+  //
+  // Best-effort: a network failure here must never block the caller from
+  // clearing the local session, so the request is swallowed with
+  // `.catch(() => undefined)`, exactly like the web does. If no session
+  // exists there is nothing to revoke, so no request is made at all.
+  async logout(): Promise<void> {
+    const s = await session.get();
+    if (!s) return;
+    await safeFetch(`${BASE}/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Skoolos-Host': s.schoolHost,
+        Authorization: `Bearer ${s.accessToken}`,
+      },
+      body: JSON.stringify({ refreshToken: s.refreshToken }),
+    }).catch(() => undefined);
+  },
 };
