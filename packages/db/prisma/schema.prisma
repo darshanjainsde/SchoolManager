@@ -904,7 +904,7 @@ model AssignmentSeen {
   assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  @@unique([assignmentId, studentId])
+  @@unique([assignmentId, studentId], name: "one_seen_per_assignment_student")
 }
 
 // ── Community ────────────────────────────────────────────
