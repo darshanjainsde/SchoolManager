@@ -132,6 +132,17 @@ enum PersonAttendanceStatus {
   ON_LEAVE
 }
 
+enum ClassNoteVisibility {
+  /// Any teacher who holds the class section can read its notes. Default —
+  /// this is the behaviour that shipped, and the least surprising for a small
+  /// school where everyone teaches everyone.
+  ALL_TEACHERS
+  /// A note is scoped to its subject. Readable by teachers who teach that
+  /// subject in that section, by a substitute covering it that day, and always
+  /// by the section's class teacher.
+  SUBJECT_TEACHERS
+}
+
 // ── Tenancy & access ─────────────────────────────────────
 model School {
   id        String       @id @default(uuid()) @db.Uuid
@@ -142,6 +153,7 @@ model School {
   timezone  String       @default("Asia/Kolkata")
   locale    String       @default("en-IN")
   workingDays Int[]      @default([1, 2, 3, 4, 5, 6])
+  classNoteVisibility ClassNoteVisibility @default(ALL_TEACHERS)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
@@ -573,6 +585,8 @@ model Subject {
   school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   teacherSubjects TeacherSubject[]
   timetableSlots  TimetableSlot[]
+  classNotes      ClassNote[]
+  classTodos      ClassTodo[]
 
   @@unique([schoolId, code])
   @@index([schoolId])
@@ -978,14 +992,16 @@ model ClassNote {
   id             String   @id @default(uuid()) @db.Uuid
   schoolId       String   @db.Uuid
   classSectionId String   @db.Uuid
+  subjectId      String   @db.Uuid
   date           DateTime @db.Date
   body           String
   authorTeacherId String  @db.Uuid
   createdAt      DateTime @default(now())
   school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-  @@index([schoolId, classSectionId, date])
+  @@index([schoolId, classSectionId, date, subjectId])
 }
 
 /// A tickable task a teacher sets for one class on one day.
@@ -993,6 +1009,7 @@ model ClassTodo {
   id             String   @id @default(uuid()) @db.Uuid
   schoolId       String   @db.Uuid
   classSectionId String   @db.Uuid
+  subjectId      String   @db.Uuid
   date           DateTime @db.Date
   body           String
   done           Boolean  @default(false)
@@ -1000,8 +1017,9 @@ model ClassTodo {
   createdAt      DateTime @default(now())
   school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-  @@index([schoolId, classSectionId, date])
+  @@index([schoolId, classSectionId, date, subjectId])
 }
 
 /// A request to reopen a past day's register. Registers lock at the end of
