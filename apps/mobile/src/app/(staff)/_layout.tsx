@@ -27,6 +27,7 @@ export default function StaffTabs() {
       <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: icon('ellipsis-horizontal') }} />
       {/* Detail/utility routes — reachable via navigation, hidden from the tab bar. */}
       <Tabs.Screen name="holidays" options={{ href: null }} />
+      <Tabs.Screen name="requests" options={{ href: null }} />
       <Tabs.Screen name="take/[classSectionId]" options={{ href: null }} />
     </Tabs>
   );
