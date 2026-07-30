@@ -1,40 +1,20 @@
-import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { AttendanceSummary } from '@/lib/portal';
+import { buildAttendanceGrid, currentMonthKey, monthKeyLabel, shiftMonthKey } from '@/lib/attendance-grid';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 import type { ColorPalette } from '@/theme/tokens';
 
-const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+// Monday-first, matching the web portal's `apps/web/app/portal/attendance/
+// page.tsx` ordering (and the timetable's day axis, both here and on the
+// web) — the app's calendar used to be Sunday-first; this is the parity fix.
+const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const CELL_WIDTH = `${100 / 7}%` as const;
 
-interface Cell {
-  day: number | null;
-  status: 'PRESENT' | 'ABSENT' | 'LATE' | null;
-}
-
-/**
- * Builds a 7-wide (Sun-first) month grid from `summary.days`. Day-of-week
- * for the 1st is computed with `Date.UTC` to match `AttendanceDay.date`,
- * which is a `YYYY-MM-DD` slice of a UTC-midnight `@db.Date` column — using
- * a local-time `Date` here could shift the leading offset by a day.
- */
-function buildGrid(summary: AttendanceSummary): Cell[] {
-  const year = Number(summary.month.slice(0, 4));
-  const monthIndex = Number(summary.month.slice(5, 7)) - 1;
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const leading = new Date(Date.UTC(year, monthIndex, 1)).getUTCDay();
-  const byDay = new Map(summary.days.map((d) => [Number(d.date.slice(8, 10)), d.status]));
-
-  const cells: Cell[] = [];
-  for (let i = 0; i < leading; i++) cells.push({ day: null, status: null });
-  for (let day = 1; day <= daysInMonth; day++) cells.push({ day, status: byDay.get(day) ?? null });
-  return cells;
-}
-
-function cellColors(tokens: { color: ColorPalette }, status: Cell['status']) {
+function cellColors(tokens: { color: ColorPalette }, status: 'PRESENT' | 'ABSENT' | 'LATE' | null) {
   if (status === 'PRESENT' || status === 'LATE') return { bg: tokens.color.green50, fg: tokens.color.green };
   if (status === 'ABSENT') return { bg: tokens.color.red50, fg: tokens.color.red };
   return { bg: tokens.color.surfaceMuted, fg: tokens.color.sub };
@@ -72,30 +52,121 @@ function StatBox({
   );
 }
 
+/**
+ * Month header with prev/next arrows — mirrors the web's month picker
+ * (`apps/web/app/portal/attendance/page.tsx`). "Next" is disabled once the
+ * shown month is the device's current local month; looking further ahead
+ * can only ever show blanks (the server has no attendance data for the
+ * future).
+ */
+function MonthNav({
+  month,
+  onPrev,
+  onNext,
+}: {
+  month: string;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const tokens = useTokens();
+  const atLatestMonth = month >= currentMonthKey();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 4 }}>
+      <Pressable
+        testID="attendance-prev-month"
+        accessibilityRole="button"
+        accessibilityLabel="Previous month"
+        onPress={onPrev}
+        style={{
+          borderWidth: 1,
+          borderColor: tokens.color.line,
+          borderRadius: 10,
+          paddingVertical: 6,
+          paddingHorizontal: 12,
+        }}
+      >
+        <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>‹ Prev</Text>
+      </Pressable>
+      <Text testID="attendance-month-label" style={{ fontSize: 14, fontWeight: '800', color: tokens.color.ink }}>
+        {monthKeyLabel(month)}
+      </Text>
+      <Pressable
+        testID="attendance-next-month"
+        accessibilityRole="button"
+        accessibilityLabel="Next month"
+        accessibilityState={{ disabled: atLatestMonth }}
+        disabled={atLatestMonth}
+        onPress={onNext}
+        style={{
+          borderWidth: 1,
+          borderColor: tokens.color.line,
+          borderRadius: 10,
+          paddingVertical: 6,
+          paddingHorizontal: 12,
+          opacity: atLatestMonth ? 0.4 : 1,
+        }}
+      >
+        <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>Next ›</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function Attendance() {
   const tokens = useTokens();
   const [summary, setSummary] = useState<AttendanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The month currently shown, once known — null until the first response
+  // comes back and echoes it (see `load`). Kept in a ref too so the
+  // focus-effect (which only ever runs its callback once, on mount/focus,
+  // same convention as every other screen here) can read the LATEST picked
+  // month without needing it in its dependency array.
+  const [month, setMonth] = useState<string | null>(null);
+  const monthRef = useRef<string | null>(null);
+  // Guards against an in-flight request from a previous month landing after
+  // a newer one, if the user taps Prev/Next faster than the network answers.
+  const requestIdRef = useRef(0);
 
+  const load = useCallback((m: string | null) => {
+    const id = ++requestIdRef.current;
+    setError(null);
+    api
+      .request<AttendanceSummary>(m ? `/me/attendance?month=${m}` : '/me/attendance')
+      .then((data) => {
+        if (requestIdRef.current !== id) return;
+        setSummary(data);
+        monthRef.current = data.month;
+        setMonth(data.month);
+      })
+      .catch((e: unknown) => {
+        if (requestIdRef.current !== id) return;
+        setError(e instanceof ApiError ? e.message : 'Something went wrong.');
+      });
+  }, []);
+
+  // Refetch on focus, same convention as every other family screen — a
+  // fresh attendance mark should show up without a manual pull-to-refresh.
+  // No `month` query param on the very FIRST load (monthRef.current is
+  // still null then) so the server defaults to the current IST month; once
+  // a month is known (from the server's own echo, or a Prev/Next tap), that
+  // exact month is what gets refetched on subsequent focuses.
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      setError(null);
-      // No `month` query param — the server defaults to the current IST
-      // month, which is the timezone that actually matters for school days.
-      api
-        .request<AttendanceSummary>('/me/attendance')
-        .then((data) => {
-          if (!cancelled) setSummary(data);
-        })
-        .catch((e: unknown) => {
-          if (!cancelled) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
-        });
-      return () => {
-        cancelled = true;
-      };
-    }, []),
+      load(monthRef.current);
+    }, [load]),
   );
+
+  function prevMonth() {
+    const current = monthRef.current;
+    if (!current) return;
+    load(shiftMonthKey(current, -1));
+  }
+
+  function nextMonth() {
+    const current = monthRef.current;
+    if (!current) return;
+    load(shiftMonthKey(current, 1));
+  }
 
   const total = summary ? summary.present + summary.absent + summary.late : 0;
   const recent = summary ? [...summary.days].reverse().slice(0, 5) : [];
@@ -113,8 +184,10 @@ export default function Attendance() {
           <Text style={{ color: tokens.color.sub }}>Loading attendance…</Text>
         </Card>
       )}
-      {summary && (
+      {summary && month && (
         <>
+          <MonthNav month={month} onPrev={prevMonth} onNext={nextMonth} />
+
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <StatBox testID="stat-percent" value={`${summary.percent}%`} label="Present" color={tokens.color.green} />
             <StatBox testID="stat-absent" value={String(summary.absent)} label="Absences" color={tokens.color.red} />
@@ -143,10 +216,14 @@ export default function Attendance() {
                       {d}
                     </Text>
                   ))}
-                  {buildGrid(summary).map((cell, i) => {
+                  {buildAttendanceGrid(summary).map((cell, i) => {
                     const { bg, fg } = cellColors(tokens, cell.status);
                     return (
-                      <View key={`cell-${i}`} style={{ width: CELL_WIDTH, aspectRatio: 1, padding: 2 }}>
+                      <View
+                        key={`cell-${i}`}
+                        testID={`attn-cell-${i}`}
+                        style={{ width: CELL_WIDTH, aspectRatio: 1, padding: 2 }}
+                      >
                         {cell.day !== null && (
                           <View
                             style={{
@@ -157,7 +234,9 @@ export default function Attendance() {
                               justifyContent: 'center',
                             }}
                           >
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: fg }}>{cell.day}</Text>
+                            <Text testID={`attn-day-${cell.day}`} style={{ fontSize: 12, fontWeight: '600', color: fg }}>
+                              {cell.day}
+                            </Text>
                           </View>
                         )}
                       </View>
