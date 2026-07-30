@@ -26,6 +26,9 @@ export default function FamilyTabs() {
       <Tabs.Screen name="notices" options={{ title: 'Notices', tabBarIcon: icon('notifications-outline') }} />
       <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: icon('ellipsis-horizontal') }} />
       <Tabs.Screen name="holidays" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
+      <Tabs.Screen name="timetable" options={{ href: null }} />
+      <Tabs.Screen name="results" options={{ href: null }} />
     </Tabs>
   );
 }

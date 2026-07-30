@@ -10,15 +10,14 @@ import { TimetableList, type TimetableRow } from '@/components/TimetableList';
 import { Card, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 
-// ── Clock ────────────────────────────────────────────────────────────────
-// Ported verbatim from apps/web/app/teacher/timetable/page.tsx so the phone
-// and the browser never disagree about what "today" or "now" means. This
-// screen reads the device's own local clock (getDay/getHours/getMinutes,
-// NOT toISOString/getUTCDay, which would read the wrong calendar day
-// whenever local and UTC disagree — see lib/attendance.ts's todayISO() for
-// the same convention) and passes plain numbers/ids down to the two pure
-// presentational components below; neither DaySelector nor TimetableList
-// ever reads Date itself.
+// The student's own weekly timetable. `GET /me/timetable`
+// (PortalService.timetable -> TimetableService.listForClass) returns the
+// EXACT SAME `TimetableSlot[]` wire shape as `GET /manage/timetable/mine` —
+// see the doc comment on `TimetableSlot` in packages/types/src/index.ts
+// ("One include, one contract, three callers") — so this screen reuses
+// `toGridSlot`/`buildGrid`/`DaySelector`/`TimetableList` from the staff
+// timetable ((staff)/timetable.tsx) verbatim rather than forking them or
+// writing a new mapper; only the endpoint and the empty-state copy differ.
 
 /** ISO weekday matching TimetableSlot.dayOfWeek: 1 = Mon … 7 = Sun. */
 function todayDayOfWeek(): number {
@@ -31,16 +30,7 @@ function nowMinutes(): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-/**
- * The period whose [startTime, endTime) window contains `now`, or null.
- * Mirrors `currentEntry`'s "a period owns its start minute, not its end
- * minute" rule (lib/teacher-day.ts) — reusing `minutesOfDay` for the HH:MM
- * math — but written against `GridPeriodRow` rather than `currentEntry`
- * directly: unlike `TeacherDayEntry`, a period row's start/end time are
- * optional (a period the school never gave clock times still gets a row),
- * so a period with no times can never be "current" rather than crashing on
- * undefined.
- */
+/** The period whose [startTime, endTime) window contains `now`, or null — see (staff)/timetable.tsx for the full rationale. */
 function findCurrentPeriodId(periods: GridPeriodRow[], now: number): string | null {
   const found = periods.find(
     (p) => p.startTime && p.endTime && now >= minutesOfDay(p.startTime) && now < minutesOfDay(p.endTime),
@@ -52,21 +42,15 @@ export default function Timetable() {
   const tokens = useTokens();
   const [slots, setSlots] = useState<TimetableSlot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // The teacher's own tap overrides the default day; null means "no
-  // override yet, use whatever the clock says". A picked day that no longer
-  // exists in this week's shape (a fresh fetch after re-focus dropped it)
-  // also falls back to the default rather than pointing at nothing.
   const [pickedDay, setPickedDay] = useState<number | null>(null);
 
-  // Refetch on focus — an admin editing the timetable while the app is
-  // backgrounded should show up without a manual pull-to-refresh, same as
-  // holidays.tsx.
+  // Refetch on focus, same convention as every other family screen.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       setError(null);
       api
-        .request<TimetableSlot[]>('/manage/timetable/mine')
+        .request<TimetableSlot[]>('/me/timetable')
         .then((data) => {
           if (!cancelled) setSlots(data);
         })
@@ -81,10 +65,8 @@ export default function Timetable() {
 
   const shape = useMemo(() => buildGrid((slots ?? []).map(toGridSlot)), [slots]);
   const todayDow = todayDayOfWeek();
-  // Today preselected whenever this teacher actually has a timetable on
-  // today; otherwise the first day they do have (e.g. opening the app on a
-  // Sunday with no Sunday classes) — never a day with no data in this
-  // shape, and never a crash pointing at a day column that doesn't exist.
+  // Today preselected whenever the student has a class today; otherwise the
+  // first day they do have — never a day with no data in this shape.
   const defaultDay = shape.days.includes(todayDow) ? todayDow : (shape.days[0] ?? null);
   const selectedDay = pickedDay !== null && shape.days.includes(pickedDay) ? pickedDay : defaultDay;
   const isViewingToday = selectedDay !== null && selectedDay === todayDow;
@@ -117,7 +99,7 @@ export default function Timetable() {
       {slots !== null && !error && slots.length === 0 && (
         <Card>
           <Text style={{ color: tokens.color.sub }}>
-            No timetable has been set up for you yet — ask your school admin.
+            No timetable has been set up for your class yet — check back later.
           </Text>
         </Card>
       )}

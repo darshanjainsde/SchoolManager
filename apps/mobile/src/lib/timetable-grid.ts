@@ -14,6 +14,8 @@
  * fixtures.
  */
 
+import type { TimetableSlot } from '@skoolos/types';
+
 export interface GridSlot {
   id: string;
   dayOfWeek: number; // 1 = Mon … 7 = Sun
@@ -46,6 +48,30 @@ export interface GridShape {
 
 export function cellKey(dayOfWeek: number, periodId: string): string {
   return `${dayOfWeek}:${periodId}`;
+}
+
+// `TimetableSlot` (`@skoolos/types`) is what GET /manage/timetable/mine
+// AND GET /me/timetable both return — TimetableService.SLOT_INCLUDE, the
+// SAME wire contract for the teacher grid (apps/web/app/teacher/timetable/
+// page.tsx) and the student portal's timetable page (apps/web/app/portal/
+// timetable/page.tsx), since PortalService.timetable calls the identical
+// TimetableService.listForClass used by GET /manage/timetable?classSectionId=.
+// One include, one shared type, every caller — so this mapper (and
+// `buildGrid`/`DaySelector`/`TimetableList` below it) is shared verbatim by
+// the staff (staff)/timetable.tsx and student (family)/timetable.tsx
+// screens rather than forked.
+export function toGridSlot(s: TimetableSlot): GridSlot {
+  return {
+    id: s.id,
+    dayOfWeek: s.dayOfWeek,
+    periodId: s.period.id,
+    periodLabel: s.period.label,
+    startTime: s.period.startTime,
+    endTime: s.period.endTime,
+    periodOrder: s.period.order,
+    className: `${s.classSection.grade.name}-${s.classSection.name}`,
+    subjectName: s.subject.name,
+  };
 }
 
 /**
