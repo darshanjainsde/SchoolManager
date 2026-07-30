@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTokens } from '@/theme/theme-context';
 import { registerForPush } from '@/lib/push';
+import { VISIBLE_TABS, HIDDEN_ROUTES } from '@/lib/staff-nav';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 const icon =
@@ -21,17 +22,12 @@ export default function StaffTabs() {
         tabBarInactiveTintColor: tokens.color.sub,
       }}
     >
-      <Tabs.Screen name="today" options={{ title: 'Today', tabBarIcon: icon('today-outline') }} />
-      <Tabs.Screen name="attendance" options={{ title: 'Attendance', tabBarIcon: icon('checkbox-outline') }} />
-      <Tabs.Screen name="timetable" options={{ title: 'Timetable', tabBarIcon: icon('calendar-outline') }} />
-      <Tabs.Screen name="post" options={{ title: 'Post', tabBarIcon: icon('megaphone-outline') }} />
-      <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: icon('ellipsis-horizontal') }} />
-      {/* Detail/utility routes — reachable via navigation, hidden from the tab bar. */}
-      <Tabs.Screen name="holidays" options={{ href: null }} />
-      <Tabs.Screen name="requests" options={{ href: null }} />
-      <Tabs.Screen name="take/[classSectionId]" options={{ href: null }} />
-      <Tabs.Screen name="tests" options={{ href: null }} />
-      <Tabs.Screen name="results/[examId]" options={{ href: null }} />
+      {VISIBLE_TABS.map(({ name, title, icon: iconName }) => (
+        <Tabs.Screen key={name} name={name} options={{ title, tabBarIcon: icon(iconName) }} />
+      ))}
+      {HIDDEN_ROUTES.map((name) => (
+        <Tabs.Screen key={name} name={name} options={{ href: null }} />
+      ))}
     </Tabs>
   );
 }

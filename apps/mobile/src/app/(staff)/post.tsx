@@ -73,7 +73,7 @@ export default function Post() {
 
   return (
     <Screen>
-      <SectionTitle title="Post" />
+      <SectionTitle title="Announcements" />
       {loadError && (
         <Card>
           <Text style={{ color: tokens.color.red }}>{loadError}</Text>

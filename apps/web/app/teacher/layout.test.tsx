@@ -38,4 +38,22 @@ describe('teacher nav honesty', () => {
   it('does not list Assignments — an honest placeholder page, not a working tool, stays out of the nav', () => {
     expect(NAV_ITEMS.some((i) => i.href === '/teacher/assignments')).toBe(false);
   });
+
+  /**
+   * T3 menu-parity decision: the app's "Today" and the web's former "My
+   * classes" are the same screen (current day, not a class list) — "Today"
+   * is the honest name, so the web nav entry is renamed to match rather than
+   * the other way round. See task-10-brief.md Part A.
+   */
+  it('names "/teacher" as Today, matching the mobile app\'s tab of the same screen', () => {
+    expect(NAV_ITEMS.find((i) => i.href === '/teacher')?.label).toBe('Today');
+  });
+
+  /**
+   * T3: the app's "Post" tab and this "Announcements" entry are the same
+   * feature — the app was renamed to match this label, not vice versa.
+   */
+  it('names "/teacher/announcements" as Announcements, matching the mobile app\'s renamed tab', () => {
+    expect(NAV_ITEMS.find((i) => i.href === '/teacher/announcements')?.label).toBe('Announcements');
+  });
 });

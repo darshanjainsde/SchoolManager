@@ -4,6 +4,7 @@ import { Card, Screen, SectionTitle } from '@/components/ui';
 import { AppearanceSetting } from '@/components/AppearanceSetting';
 import { api } from '@/lib/api';
 import { session } from '@/lib/session';
+import { MORE_ITEMS } from '@/lib/staff-nav';
 import { useTokens } from '@/theme/theme-context';
 
 function MoreRow({
@@ -70,9 +71,9 @@ export default function More() {
     <Screen>
       <SectionTitle title="More" />
       <Card style={{ padding: 4 }}>
-        <MoreRow label="Tests" icon="📊" onPress={() => router.push('/(staff)/tests')} />
-        <MoreRow label="Requests" icon="📝" onPress={() => router.push('/(staff)/requests')} />
-        <MoreRow label="Holidays" icon="📅" onPress={() => router.push('/(staff)/holidays')} />
+        {MORE_ITEMS.map((item) => (
+          <MoreRow key={item.label} label={item.label} icon={item.icon} onPress={() => router.push(item.route)} />
+        ))}
       </Card>
       <Card style={{ padding: 4 }}>
         <AppearanceSetting />

@@ -33,7 +33,7 @@ import '../sk-theme.css';
 // endpoint that doesn't exist. See teacher-nav-honesty.spec for the
 // dead-route regression test.
 export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[] = [
-  { href: '/teacher', label: 'My classes', icon: LayoutDashboard },
+  { href: '/teacher', label: 'Today', icon: LayoutDashboard },
   { href: '/teacher/timetable', label: 'Timetable', icon: CalendarDays },
   { href: '/teacher/attendance', label: 'Attendance', icon: ClipboardCheck },
   { href: '/teacher/tests', label: 'Tests', icon: FileText },
