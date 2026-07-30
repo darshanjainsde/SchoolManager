@@ -1,5 +1,6 @@
 import { ApiError } from '../../../common/errors/api-error';
 import { resolveAsOfDate } from './timetable-date';
+import { isoWeekdayOf } from './leave-dates';
 
 /** The slice of a tenant transaction this rule needs. Structural, so callers pass their `tx` unchanged. */
 export interface ClassAccessTx {
@@ -179,11 +180,18 @@ export async function canReadClassNotes(
   });
   if (!covering) return false;
 
+  // TimetableSlot's uniqueness key includes dayOfWeek, so one periodId can
+  // legitimately teach different subjects on different weekdays (e.g. Period
+  // 3 is English on Wednesday, Maths on Monday). Without pinning the lookup
+  // to the substitution's actual weekday, a substitute covering Wednesday's
+  // Period 3 could pass a caller-supplied subjectId for Monday's subject and
+  // still match, reading notes for a subject they never covered.
   const coveredSlot = await tx.timetableSlot.findFirst({
     where: {
       classSectionId,
       periodId: covering.periodId,
       subjectId,
+      dayOfWeek: isoWeekdayOf(date),
       effectiveFrom: { lte: asOf },
       OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
     },

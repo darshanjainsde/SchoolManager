@@ -330,6 +330,44 @@ describe('canReadClassNotes', () => {
         canReadClassNotes(t, 'user-1', 'TEACHER', SCHOOL, SECTION, MATHS, DATE),
       ).resolves.toBe(false);
     });
+
+    it('a substitute covering period-3 on a WEDNESDAY cannot read Maths notes that period only teaches on MONDAY — same periodId, different weekday, different subject', async () => {
+      const t = readTx();
+      const WEDNESDAY = '2026-08-05'; // isoWeekdayOf → 3
+      t.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      t.school.findUnique.mockResolvedValue({ classNoteVisibility: 'SUBJECT_TEACHERS' });
+      t.classSection.findFirst.mockResolvedValue(null); // not the class teacher
+      t.substitution.findFirst.mockResolvedValue({ periodId: 'period-3' }); // covering period-3 on WEDNESDAY
+      // period-3 legitimately maps to two different subjects depending on the
+      // day (TimetableSlot's uniqueness key includes dayOfWeek): Maths on
+      // Monday (dayOfWeek 1), English on Wednesday (dayOfWeek 3). Both slots
+      // belong to someone else, so the "own slot" check must also miss.
+      t.timetableSlot.findFirst = fixtureFindFirst([
+        {
+          classSectionId: SECTION,
+          periodId: 'period-3',
+          subjectId: MATHS,
+          teacherId: 'monday-teacher',
+          dayOfWeek: 1,
+        },
+        {
+          classSectionId: SECTION,
+          periodId: 'period-3',
+          subjectId: ENGLISH,
+          teacherId: 'wednesday-teacher',
+          dayOfWeek: 3,
+        },
+      ]);
+
+      // The substitute is covering on a Wednesday, so asking for Maths notes
+      // (Monday's subject in that period) must be refused — without a
+      // dayOfWeek filter on the covered-slot lookup, the Monday Maths slot
+      // still matches on classSectionId+periodId+subjectId alone and wrongly
+      // grants access.
+      await expect(
+        canReadClassNotes(t, 'user-1', 'TEACHER', SCHOOL, SECTION, MATHS, WEDNESDAY),
+      ).resolves.toBe(false);
+    });
   });
 
   it('reads the visibility setting fresh on every call — not cached in module scope', async () => {
