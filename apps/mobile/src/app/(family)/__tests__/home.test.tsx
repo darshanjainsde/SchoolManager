@@ -1,5 +1,4 @@
-import { Alert } from 'react-native';
-import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 import Home from '../home';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
@@ -121,6 +120,27 @@ describe('next-test banner', () => {
     await findByText('Aarav Sharma');
     expect(queryByText(/out of/)).toBeNull();
   });
+
+  // S6/S7: tapping the banner opens the full next-test detail (syllabus,
+  // max marks, date) on the Results screen.
+  it('tapping the banner navigates to the Results screen', async () => {
+    mockEndpoints({
+      '/me/exams': [
+        {
+          id: 'ex1',
+          title: 'Unit Test 2',
+          subjectName: 'Mathematics',
+          scheduledAt: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+          maxMarks: 50,
+          syllabus: 'Chapters 4-6',
+        },
+      ],
+    });
+    const { findByTestId } = render(<Home />);
+
+    fireEvent.press(await findByTestId('next-exam-banner'));
+    expect(mockPush).toHaveBeenCalledWith('/(family)/results');
+  });
 });
 
 describe('KPI row', () => {
@@ -177,9 +197,8 @@ describe('latest announcements', () => {
 });
 
 describe('quick actions', () => {
-  it('navigates via the quick-action row (Attendance/Notices) and shows "coming soon" for Timetable', async () => {
+  it('navigates via the quick-action row (Attendance/Notices/Timetable)', async () => {
     mockEndpoints();
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
     const { findByText } = render(<Home />);
 
@@ -190,9 +209,21 @@ describe('quick actions', () => {
     expect(mockPush).toHaveBeenCalledWith('/(family)/notices');
 
     fireEvent.press(await findByText('Timetable'));
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
-    expect(alertSpy.mock.calls[0][0]).toBe('Coming soon');
+    expect(mockPush).toHaveBeenCalledWith('/(family)/timetable');
+  });
 
+  // Prove-by-deletion target (S5): a real build shipping "Coming soon" here
+  // was the whole complaint. Re-adding the Alert path must fail this test.
+  it('tapping Timetable never shows a "Coming soon" alert', async () => {
+    mockEndpoints();
+    const { Alert } = jest.requireActual('react-native');
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { findByText } = render(<Home />);
+    fireEvent.press(await findByText('Timetable'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(family)/timetable');
+    expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 });

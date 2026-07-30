@@ -42,6 +42,22 @@ it('navigates to the holidays screen', async () => {
   expect(mockPush).toHaveBeenCalledWith('/(family)/holidays');
 });
 
+it('navigates to the profile screen (S2)', async () => {
+  const { findByText } = render(<More />);
+
+  fireEvent.press(await findByText('Profile'));
+
+  expect(mockPush).toHaveBeenCalledWith('/(family)/profile');
+});
+
+it('navigates to the results screen (S6/S7)', async () => {
+  const { findByText } = render(<More />);
+
+  fireEvent.press(await findByText('Results'));
+
+  expect(mockPush).toHaveBeenCalledWith('/(family)/results');
+});
+
 /**
  * Regression net for F2 (no logout affordance): there was previously no
  * user-initiated way to sign out, which blocked closed-test testers from

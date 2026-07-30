@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
@@ -162,7 +162,6 @@ export default function Home() {
   const nextExam = exams?.[0] ?? null;
   const latestResult = results?.[0] ?? null;
   const latestAnnouncements = (announcements ?? []).slice(0, LATEST_ANNOUNCEMENTS_COUNT);
-  const comingSoon = () => Alert.alert('Coming soon', 'This is on the way in a future update.');
 
   return (
     <Screen>
@@ -212,31 +211,36 @@ export default function Home() {
           </View>
 
           {/* Next-test reminder — the thing a student should never miss, same
-              framing as the web portal's `sk-remind` banner. */}
+              framing as the web portal's `sk-remind` banner. Tapping it opens
+              the full next-test detail (syllabus, max marks, date) on the
+              Results screen, which also shows the student's published
+              results underneath. */}
           {nextExam && (
-            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
-              <View
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  backgroundColor: tokens.color.amber50,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text style={{ fontSize: 16 }}>🔔</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>
-                  {nextExam.subjectName} · {nextExam.title} — {daysUntilLabel(nextExam.scheduledAt).toLowerCase()}
-                </Text>
-                <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
-                  {formatDate(nextExam.scheduledAt)}
-                  {nextExam.syllabus ? ` · ${nextExam.syllabus}` : ''} · out of {nextExam.maxMarks}
-                </Text>
-              </View>
-            </Card>
+            <Pressable testID="next-exam-banner" onPress={() => router.push('/(family)/results')}>
+              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    backgroundColor: tokens.color.amber50,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>🔔</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>
+                    {nextExam.subjectName} · {nextExam.title} — {daysUntilLabel(nextExam.scheduledAt).toLowerCase()}
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+                    {formatDate(nextExam.scheduledAt)}
+                    {nextExam.syllabus ? ` · ${nextExam.syllabus}` : ''} · out of {nextExam.maxMarks}
+                  </Text>
+                </View>
+              </Card>
+            </Pressable>
           )}
 
           {/* At-a-glance KPIs. Only two tiles, not the web's four — "today"
@@ -271,8 +275,7 @@ export default function Home() {
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <QuickAction label="Attendance" onPress={() => router.push('/(family)/attendance')} />
             <QuickAction label="Notices" onPress={() => router.push('/(family)/notices')} />
-            {/* Stays "coming soon" until T14 (student weekly timetable) lands. */}
-            <QuickAction label="Timetable" onPress={comingSoon} />
+            <QuickAction label="Timetable" onPress={() => router.push('/(family)/timetable')} />
           </View>
         </>
       )}
