@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import type { RegisterChangeRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO, type ClassDayStatus } from '@/lib/attendance';
+import { flush, pendingSaves, queueKey, type FlushResult } from '@/lib/offline-queue';
 import { LockedDayCard } from '@/components/LockedDayCard';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
@@ -26,6 +27,14 @@ export default function StaffAttendance() {
   const [myRequestsError, setMyRequestsError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
   const [submitErrors, setSubmitErrors] = useState<Record<string, string>>({});
+  // Classes with a save queued on the device (network failed when the
+  // teacher submitted from the take screen) — keyed the same way the queue
+  // itself is, `${classSectionId}:${date}`. Neither taken nor not-taken:
+  // the device believes it's saved, the server doesn't know yet.
+  const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
+  // Server `message`, verbatim, for a queued save the server has refused
+  // (4xx) once flushed — surfaced on the class it belongs to.
+  const [rejectedByKey, setRejectedByKey] = useState<Record<string, string>>({});
 
   const today = todayISO();
   const isPast = date < today;
@@ -37,6 +46,13 @@ export default function StaffAttendance() {
   // `date`, which gives this callback a new identity) — a future date is
   // never fetched at all, since there is nothing on the server to ask for
   // and no attendance can ever be taken there.
+  //
+  // Also attempts to flush the offline attendance queue BEFORE fetching
+  // status, so a save that can now reach the server (connectivity
+  // returned) is reflected in this same fetch rather than showing stale
+  // "not taken" for another screen's worth of latency. This is one of the
+  // two flush triggers the queue relies on (see src/lib/offline-queue.ts);
+  // the other is right before a fresh submit on the take screen.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -47,14 +63,27 @@ export default function StaffAttendance() {
           cancelled = true;
         };
       }
-      api
-        .request<ClassDayStatus[]>(`/manage/attendance/status?date=${date}`)
-        .then((data) => {
+      (async () => {
+        const result = await flush(api).catch(
+          (): FlushResult => ({ synced: [], rejected: [], retained: [] }),
+        );
+        if (cancelled) return;
+        if (result.rejected.length > 0) {
+          setRejectedByKey((prev) => {
+            const next = { ...prev };
+            for (const r of result.rejected) next[r.entry.key] = r.message;
+            return next;
+          });
+        }
+        try {
+          const data = await api.request<ClassDayStatus[]>(`/manage/attendance/status?date=${date}`);
           if (!cancelled) setRows(data);
-        })
-        .catch((e: unknown) => {
+        } catch (e) {
           if (!cancelled) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
-        });
+        }
+        const pending = await pendingSaves().catch(() => []);
+        if (!cancelled) setPendingKeys(new Set(pending.map((p) => p.key)));
+      })();
       return () => {
         cancelled = true;
       };
@@ -141,7 +170,11 @@ export default function StaffAttendance() {
     }
   };
 
-  const renderClassCard = (c: ClassDayStatus) => (
+  const renderClassCard = (c: ClassDayStatus) => {
+    const key = queueKey(c.classSectionId, date);
+    const isPendingSync = pendingKeys.has(key);
+    const rejectedMessage = rejectedByKey[key] ?? null;
+    return (
     <Card key={c.classSectionId}>
       <View
         style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
@@ -154,12 +187,27 @@ export default function StaffAttendance() {
             {c.taken ? `Taken by ${c.markedBy ?? '—'}` : `${c.total} students · not taken yet`}
           </Text>
         </View>
-        {c.taken ? (
+        {isPendingSync ? (
+          // Deliberately not the taken (green) or not-taken (amber) pill —
+          // this class is neither: the device believes it's saved, the
+          // server doesn't know yet.
+          <View testID={`pending-sync-${c.classSectionId}`}>
+            <Pill tone="indigo">Saved on device · syncing</Pill>
+          </View>
+        ) : c.taken ? (
           <Pill tone="green">{`✓ ${c.present}/${c.total} present`}</Pill>
         ) : (
           <Pill tone="amber">Pending</Pill>
         )}
       </View>
+      {rejectedMessage && (
+        <Text
+          testID={`sync-rejected-${c.classSectionId}`}
+          style={{ color: tokens.color.red, fontSize: 11.5, marginTop: 6 }}
+        >
+          {rejectedMessage}
+        </Text>
+      )}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 11 }}>
         {c.taken ? (
           <Pressable
@@ -184,7 +232,8 @@ export default function StaffAttendance() {
         )}
       </View>
     </Card>
-  );
+    );
+  };
 
   const renderRow = (c: ClassDayStatus) => {
     if (!isPast) return renderClassCard(c);

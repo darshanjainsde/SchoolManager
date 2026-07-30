@@ -83,6 +83,11 @@ function toastTones(tokens: { color: ColorPalette }) {
   return {
     success: { bg: tokens.color.green50, fg: tokens.color.green },
     error: { bg: tokens.color.red50, fg: tokens.color.red },
+    // A save that's queued on the device but not yet on the server is
+    // neither success nor error — indigo (the brand accent, not green/red)
+    // keeps it visually distinct from both. Used by the offline attendance
+    // save queue (see src/lib/offline-queue.ts).
+    pending: { bg: tokens.color.indigo50, fg: tokens.color.indigo },
   } as const;
 }
 

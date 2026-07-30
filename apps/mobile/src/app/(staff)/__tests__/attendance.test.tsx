@@ -1,11 +1,38 @@
 import { Alert } from 'react-native';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import type { RegisterChangeRow } from '@skoolos/types';
 import StaffAttendance from '../attendance';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
+import { enqueueSave } from '@/lib/offline-queue';
+
+// The offline queue's default storage goes through expo-secure-store — an
+// in-memory fake so enqueueSave (used below to pre-seed a queued save) and
+// the screen's own flush/pendingSaves calls actually round-trip within a
+// test, matching the convention already used by
+// src/app/(staff)/__tests__/today.test.tsx for the same module.
+jest.mock('expo-secure-store', () => {
+  const store: Record<string, string> = {};
+  return {
+    getItemAsync: jest.fn(async (k: string) => store[k] ?? null),
+    setItemAsync: jest.fn(async (k: string, v: string) => {
+      store[k] = v;
+    }),
+    deleteItemAsync: jest.fn(async (k: string) => {
+      delete store[k];
+    }),
+  };
+});
 
 const mockPush = jest.fn();
+// There are TWO useFocusEffect calls in this screen (status+flush, then "my
+// open requests"), always registered in that order on every render since
+// neither is conditional. Capturing both by position lets a test re-invoke
+// just the status/flush effect (index 0) without changing `date` — the only
+// other thing that gives it a new identity — to simulate connectivity
+// returning between two focuses of the same screen.
+let mockCapturedEffects: Array<() => void> = [];
+let mockHookCallIndex = 0;
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },
   // Test env has no NavigationContainer, so mimic focus-on-mount/refetch:
@@ -16,6 +43,9 @@ jest.mock('expo-router', () => ({
   // [date])`, so this is what lets pressing the date arrows in a test
   // actually trigger a refetch for the newly selected date.
   useFocusEffect: (effect: () => void) => {
+    const idx = mockHookCallIndex % 2;
+    mockHookCallIndex++;
+    mockCapturedEffects[idx] = effect;
     const React = jest.requireActual('react');
     React.useEffect(effect, [effect]);
   },
@@ -129,6 +159,8 @@ function mockApi({
 beforeEach(() => {
   mockPush.mockReset();
   (api.request as jest.Mock).mockReset();
+  mockCapturedEffects = [];
+  mockHookCallIndex = 0;
 });
 
 it('navigates to the take screen when a pending class is tapped', async () => {
@@ -330,5 +362,77 @@ describe('future dates', () => {
 
     expect(await findByText(/cannot take attendance for a future date/i)).toBeTruthy();
     await waitFor(() => expect((api.request as jest.Mock).mock.calls.length).toBe(callsBefore));
+  });
+});
+
+describe('offline save queue', () => {
+  const PENDING_1 = {
+    classSectionId: 'cs-pending',
+    name: '5-B',
+    total: 1,
+    present: 0,
+    taken: false,
+    markedBy: null,
+    markedAt: null,
+  };
+  const TAKEN_1 = { ...PENDING_1, taken: true, present: 1, markedBy: 'You' };
+
+  it('shows a pending-sync marker, distinct from the normal amber Pending pill, for a class with a queued offline save', async () => {
+    await enqueueSave({
+      classSectionId: 'cs-pending',
+      date: TODAY,
+      marks: [{ studentId: 's1', status: 'PRESENT' }],
+    });
+    (api.request as jest.Mock).mockImplementation((path: string, opts?: { method?: string }) => {
+      if (path === '/manage/attendance' && opts?.method === 'PUT') {
+        // Still offline — the flush this screen attempts on focus must not
+        // succeed, so the marker stays.
+        return Promise.reject(new ApiError(0, 'Could not reach the school server.'));
+      }
+      if (path === `/manage/attendance/status?date=${TODAY}`) return Promise.resolve([PENDING_1]);
+      throw new Error(`unexpected path: ${path} ${JSON.stringify(opts)}`);
+    });
+
+    const { findByTestId, findByText, queryByText } = render(<StaffAttendance />);
+
+    await findByTestId('pending-sync-cs-pending');
+    expect(await findByText('Saved on device · syncing')).toBeTruthy();
+    // Never both at once — the normal not-taken-yet pill's own label must
+    // not also be showing.
+    expect(queryByText('Pending')).toBeNull();
+  });
+
+  it('a successful flush clears the pending-sync marker and shows the true server state (proves the refetch)', async () => {
+    await enqueueSave({
+      classSectionId: 'cs-pending',
+      date: TODAY,
+      marks: [{ studentId: 's1', status: 'PRESENT' }],
+    });
+    let online = false;
+    (api.request as jest.Mock).mockImplementation((path: string, opts?: { method?: string }) => {
+      if (path === '/manage/attendance' && opts?.method === 'PUT') {
+        if (!online) return Promise.reject(new ApiError(0, 'Could not reach the school server.'));
+        return Promise.resolve({ saved: 1, absentees: 0 });
+      }
+      if (path === `/manage/attendance/status?date=${TODAY}`) {
+        return Promise.resolve([online ? TAKEN_1 : PENDING_1]);
+      }
+      throw new Error(`unexpected path: ${path} ${JSON.stringify(opts)}`);
+    });
+
+    const { findByTestId, findByText, queryByText } = render(<StaffAttendance />);
+    await findByTestId('pending-sync-cs-pending');
+    expect(await findByText('Saved on device · syncing')).toBeTruthy();
+
+    // Connectivity returns; re-focus the screen (the actual sync trigger —
+    // see the `useFocusEffect` at the top of attendance.tsx).
+    online = true;
+    await act(async () => {
+      mockCapturedEffects[0]?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await waitFor(() => expect(queryByText('Saved on device · syncing')).toBeNull());
+    expect(await findByText('✓ 1/1 present')).toBeTruthy();
   });
 });

@@ -8,6 +8,7 @@ import {
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { buildMarksPayload, todayISO } from '@/lib/attendance';
+import { enqueueSave, flush } from '@/lib/offline-queue';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 import type { ColorPalette } from '@/theme/tokens';
@@ -82,21 +83,35 @@ export default function TakeAttendance() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<SaveAttendanceResponse | null>(null);
+  // True once this exact save has been queued on the device because the PUT
+  // couldn't reach the server (see `submit` below) — distinct from
+  // `confirmation` (server confirmed) and `error` (server or client
+  // rejected it outright).
+  const [pendingOffline, setPendingOffline] = useState(false);
 
   // Refetch on focus: if this is a retake, we want the freshest marks and
-  // roster every time the screen comes back into view.
+  // roster every time the screen comes back into view. Also attempts to
+  // flush any save queued earlier for ANY class+date (not just this one) —
+  // one of the two flush triggers the offline queue relies on; the other is
+  // right before a fresh submit, below.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       setError(null);
       setRoster(null); // don't leak the previous class's rows while the new one loads
-      Promise.all([
-        api.request<MarkRow[]>(
-          `/manage/attendance?classSectionId=${classSectionId}&date=${date}`,
-        ),
-        api.request<StudentRosterRow[]>(`/manage/students?classSectionId=${classSectionId}`),
-      ])
-        .then(([marks, students]) => {
+      (async () => {
+        // Best-effort: a flush failure here (still offline) must not block
+        // the roster fetch below — it just means whatever's queued stays
+        // queued and this GET reads whatever the server currently has.
+        await flush(api).catch(() => undefined);
+        if (cancelled) return;
+        try {
+          const [marks, students] = await Promise.all([
+            api.request<MarkRow[]>(
+              `/manage/attendance?classSectionId=${classSectionId}&date=${date}`,
+            ),
+            api.request<StudentRosterRow[]>(`/manage/students?classSectionId=${classSectionId}`),
+          ]);
           if (cancelled) return;
           const byId = new Map(marks.map((m) => [m.studentId, m.status]));
           setRoster(
@@ -109,10 +124,10 @@ export default function TakeAttendance() {
               status: byId.get(s.id) ?? 'PRESENT',
             })),
           );
-        })
-        .catch((e: unknown) => {
+        } catch (e) {
           if (!cancelled) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
-        });
+        }
+      })();
       return () => {
         cancelled = true;
       };
@@ -123,11 +138,12 @@ export default function TakeAttendance() {
   const presentCount = rows.filter((r) => r.status === 'PRESENT').length;
   const absentCount = rows.filter((r) => r.status === 'ABSENT').length;
 
-  // Editing after a save invalidates the confirmation that's on screen — it
-  // described a roster that no longer matches what's marked now, so it must
-  // not linger next to the new edits.
+  // Editing after a save invalidates the confirmation (or pending-offline
+  // notice) that's on screen — it described a roster that no longer
+  // matches what's marked now, so it must not linger next to the new edits.
   const setStatus = (studentId: string, status: AttendanceStatusValue) => {
     setConfirmation(null);
+    setPendingOffline(false);
     setRoster((rs) => (rs ?? []).map((x) => (x.studentId === studentId ? { ...x, status } : x)));
   };
 
@@ -136,6 +152,7 @@ export default function TakeAttendance() {
   // still the only thing that writes.
   const markAllPresent = () => {
     setConfirmation(null);
+    setPendingOffline(false);
     setRoster((rs) => (rs ?? []).map((x) => ({ ...x, status: 'PRESENT' })));
   };
 
@@ -144,10 +161,16 @@ export default function TakeAttendance() {
     setBusy(true);
     setError(null);
     setConfirmation(null);
+    setPendingOffline(false);
+    const built = buildMarksPayload(classSectionId, date, rows);
     try {
+      // A save queued earlier for this same class+date (or any other) may
+      // now be able to reach the server — clear it first so it can't later
+      // clobber whatever this fresh submit is about to write.
+      await flush(api).catch(() => undefined);
       const result = await api.request<SaveAttendanceResponse>('/manage/attendance', {
         method: 'PUT',
-        body: buildMarksPayload(classSectionId, date, rows),
+        body: built,
       });
       // Show the confirmation here rather than navigating and hoping it
       // survives the transition — a message the teacher never sees is not a
@@ -155,10 +178,19 @@ export default function TakeAttendance() {
       // (e.g. a late arrival) before leaving via the Toast's own "Done".
       setConfirmation(result);
     } catch (e) {
-      // Deliberately do NOT navigate on failure — the marked roster (still
-      // held in `roster` state) must stay exactly as the teacher left it so
-      // a network blip never costs them a re-mark.
-      setError(e instanceof ApiError ? e.message : 'Could not save attendance.');
+      if (e instanceof ApiError && e.status === 0) {
+        // No signal at all (safeFetch's status-0 ApiError) — not a
+        // rejection, so don't show an error. Save it on the device instead;
+        // it'll sync the next time this screen (or another attendance
+        // screen) gets a chance to flush.
+        await enqueueSave(built);
+        setPendingOffline(true);
+      } else {
+        // Deliberately do NOT navigate on failure — the marked roster
+        // (still held in `roster` state) must stay exactly as the teacher
+        // left it so a network blip never costs them a re-mark.
+        setError(e instanceof ApiError ? e.message : 'Could not save attendance.');
+      }
     } finally {
       setBusy(false);
     }
@@ -176,6 +208,13 @@ export default function TakeAttendance() {
           message={saveConfirmationMessage(confirmation)}
           actionLabel="Done"
           onAction={() => router.back()}
+        />
+      )}
+      {pendingOffline && (
+        <Toast
+          kind="pending"
+          testID="offline-pending-toast"
+          message="No signal — attendance saved on this device. It will sync automatically once you're back online."
         />
       )}
       {error && (

@@ -1,6 +1,24 @@
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import TakeAttendance from '../[classSectionId]';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import { pendingSaves } from '@/lib/offline-queue';
+
+// The offline queue's default storage goes through expo-secure-store — an
+// in-memory fake so enqueueSave/pendingSaves in the tests below actually
+// round-trip within a single test, matching the convention already used by
+// src/app/(staff)/__tests__/today.test.tsx for the same module.
+jest.mock('expo-secure-store', () => {
+  const store: Record<string, string> = {};
+  return {
+    getItemAsync: jest.fn(async (k: string) => store[k] ?? null),
+    setItemAsync: jest.fn(async (k: string, v: string) => {
+      store[k] = v;
+    }),
+    deleteItemAsync: jest.fn(async (k: string) => {
+      delete store[k];
+    }),
+  };
+});
 
 // `submit`'s onPress is async but Pressable's onPress type is `() => void`,
 // so fireEvent.press can't be awaited to know the resulting state updates
@@ -332,4 +350,45 @@ it('defaults to today when no date param is given (no regression)', async () => 
     path.startsWith('/manage/attendance?'),
   );
   expect(getCall[0]).toMatch(/date=\d{4}-\d{2}-\d{2}$/);
+});
+
+it('a network-fail save is queued on the device, toasts instead of erroring, and keeps the marked roster on screen', async () => {
+  (api.request as jest.Mock).mockImplementation((path: string, opts?: { method?: string }) => {
+    if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
+    if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    if (path === '/manage/attendance' && opts?.method === 'PUT') {
+      // `safeFetch` in lib/api.ts normalizes an unreachable server to
+      // `ApiError(0, ...)` — this is what "no signal" looks like from the
+      // screen's point of view.
+      return Promise.reject(new ApiError(0, 'Could not reach the school server.'));
+    }
+    throw new Error(`unexpected path: ${path} ${JSON.stringify(opts)}`);
+  });
+
+  const { findByTestId, getByTestId, queryByText, findByText } = render(<TakeAttendance />);
+
+  const markPresent = await findByTestId('present-s2');
+  fireEvent.press(markPresent);
+
+  const submit = await findByTestId('submit-attendance');
+  fireEvent.press(submit);
+
+  await settled(() => expect(getByTestId('offline-pending-toast')).toBeTruthy());
+  expect(await findByText(/saved on this device/i)).toBeTruthy();
+  // No error state — a dead signal is not a rejection.
+  expect(queryByText('Could not reach the school server.')).toBeNull();
+
+  // The marked roster survives — s2's pill is still PRESENT.
+  const presentButton = await findByTestId('present-s2');
+  expect(presentButton.props.style).toMatchObject({ backgroundColor: '#16B364' });
+
+  const pending = await pendingSaves();
+  expect(pending).toHaveLength(1);
+  expect(pending[0].payload).toMatchObject({
+    classSectionId: 'cs1',
+    marks: [
+      { studentId: 's1', status: 'PRESENT' },
+      { studentId: 's2', status: 'PRESENT' },
+    ],
+  });
 });
