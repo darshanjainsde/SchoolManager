@@ -313,6 +313,77 @@ export interface PublishResultsResponse {
   published: number;
 }
 
+// ── Assignments (T21) ─────────────────────────────────────────────────────────
+
+export const ASSIGNMENT_ATTACHMENT_KINDS = ['pdf', 'image'] as const;
+export type AssignmentAttachmentKind = (typeof ASSIGNMENT_ATTACHMENT_KINDS)[number];
+
+/**
+ * One uploaded file on an Assignment — the exact shape
+ * `POST /manage/assignments/upload` returns, and what `Assignment.attachments`
+ * stores an array of. Uploaded via a thin endpoint that delegates to the
+ * shared `StorageService` (S3/MinIO), NOT the CMS media service — see
+ * `AssignmentsController`'s docstring.
+ */
+export interface AssignmentAttachment {
+  url: string;
+  name: string;
+  kind: AssignmentAttachmentKind;
+}
+
+/**
+ * Mirrors AssignmentsService's Assignment row — `GET`/`POST /manage/assignments`
+ * (teacher-facing). `seenCount` is the count of `AssignmentSeen` rows for
+ * this assignment (`_count`, v1's only tracking signal — no submission
+ * uploads) and is always included in the list, never a separate round trip.
+ */
+export interface Assignment {
+  id: string;
+  classSectionId: string;
+  subjectId: string;
+  title: string;
+  instructions: string;
+  /** `YYYY-MM-DD` (`@db.Date`) — a plain calendar date, no time component. */
+  dueDate: string;
+  attachments: AssignmentAttachment[];
+  createdByTeacherId: string;
+  createdAt: string;
+  seenCount: number;
+}
+
+/** `GET /manage/assignments?classSectionId=` already splits the list for the caller, same shape as `ExamList`. */
+export interface AssignmentList {
+  upcoming: Assignment[];
+  past: Assignment[];
+}
+
+/** `POST /manage/assignments/upload`'s response — one uploaded attachment, ready to include in a create payload's `attachments` array. */
+export type AssignmentUploadResponse = AssignmentAttachment;
+
+/**
+ * Mirrors PortalService.assignments — `GET /me/assignments`, the student's
+ * own class section's assignments split upcoming/past by `dueDate` (today
+ * counts as upcoming — a same-day due date has not passed yet). `subjectName`
+ * is resolved server-side (a student has no `/manage/subjects` access, unlike
+ * the teacher-facing `Assignment` above which leaves that to the caller).
+ */
+export interface StudentAssignment {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  title: string;
+  instructions: string;
+  dueDate: string;
+  attachments: AssignmentAttachment[];
+  createdAt: string;
+}
+
+/** `GET /me/assignments`'s response shape. */
+export interface StudentAssignmentList {
+  upcoming: StudentAssignment[];
+  past: StudentAssignment[];
+}
+
 // ── Notification outbox (S6/S7 wiring — push-on-publish) ─────────────────────
 // `NotificationOutbox` (packages/db) is a transactional outbox: ExamsService
 // writes one row per event INSIDE the same `withTenant` transaction as the
@@ -322,8 +393,8 @@ export interface PublishResultsResponse {
 // legal, validated at write time (mirrors AttendanceStatusValue/
 // HolidayTypeValue above, both also String columns).
 
-/** The only two events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED'] as const;
+/** The events that write a `NotificationOutbox` row today. */
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**

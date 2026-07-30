@@ -24,6 +24,12 @@ import {
   NOTIFICATION_OUTBOX_KINDS,
   type NotificationOutboxKind,
   assertNotificationOutboxKind,
+  ASSIGNMENT_ATTACHMENT_KINDS,
+  type AssignmentAttachmentKind,
+  type Assignment,
+  type AssignmentList,
+  type StudentAssignment,
+  type StudentAssignmentList,
 } from './index';
 
 describe('shared portal contracts', () => {
@@ -163,8 +169,12 @@ describe('shared portal contracts', () => {
     expect(Object.keys(student).sort()).toEqual(['firstName', 'id', 'lastName', 'rollNo']);
   });
 
-  it('declares exactly the two NotificationOutbox kinds the API writes', () => {
-    expect([...NOTIFICATION_OUTBOX_KINDS].sort()).toEqual(['EXAM_SCHEDULED', 'RESULT_PUBLISHED']);
+  it('declares exactly the three NotificationOutbox kinds the API writes', () => {
+    expect([...NOTIFICATION_OUTBOX_KINDS].sort()).toEqual([
+      'ASSIGNMENT_POSTED',
+      'EXAM_SCHEDULED',
+      'RESULT_PUBLISHED',
+    ]);
   });
 
   it('assertNotificationOutboxKind narrows a valid string and rejects an invalid one', () => {
@@ -179,5 +189,45 @@ describe('shared portal contracts', () => {
     expect(() => assertNotificationOutboxKind('TEST_SCHEDULED')).toThrow(
       'Invalid NotificationOutbox kind: "TEST_SCHEDULED"',
     );
+  });
+
+  it('declares exactly the two Assignment attachment kinds — pdf and image, no submission uploads', () => {
+    expect([...ASSIGNMENT_ATTACHMENT_KINDS].sort()).toEqual(['image', 'pdf']);
+    const k: AssignmentAttachmentKind = 'pdf';
+    expect(k).toBe('pdf');
+  });
+
+  it('an Assignment carries a seenCount alongside the create fields — the teacher list never needs a second round trip', () => {
+    const a: Assignment = {
+      id: 'a1',
+      classSectionId: 'c1',
+      subjectId: 'sub1',
+      title: 'Worksheet 3',
+      instructions: 'Complete questions 1-10.',
+      dueDate: '2026-08-05',
+      attachments: [{ url: 'https://x/y.pdf', name: 'worksheet.pdf', kind: 'pdf' }],
+      createdByTeacherId: 'u1',
+      createdAt: '2026-07-30T00:00:00.000Z',
+      seenCount: 4,
+    };
+    expect(a.seenCount).toBe(4);
+    const list: AssignmentList = { upcoming: [a], past: [] };
+    expect(list.upcoming).toHaveLength(1);
+  });
+
+  it('a StudentAssignment resolves subjectName server-side and carries no seenCount (that is the teacher-only view)', () => {
+    const sa: StudentAssignment = {
+      id: 'a1',
+      subjectId: 'sub1',
+      subjectName: 'Mathematics',
+      title: 'Worksheet 3',
+      instructions: 'Complete questions 1-10.',
+      dueDate: '2026-08-05',
+      attachments: [],
+      createdAt: '2026-07-30T00:00:00.000Z',
+    };
+    expect(Object.keys(sa)).not.toContain('seenCount');
+    const list: StudentAssignmentList = { upcoming: [sa], past: [] };
+    expect(list.upcoming[0].subjectName).toBe('Mathematics');
   });
 });
