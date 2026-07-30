@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
-import type { Subject } from '@skoolos/types';
+import type { ClassNoteVisibilityValue, Subject } from '@skoolos/types';
 import { isP2002, isP2003, isP2025 } from '../../common/errors/prisma-errors';
 import type {
   CreateYearDto,
@@ -189,6 +189,28 @@ export class CatalogService {
         tx.school.update({ where: { id: schoolId }, data: { workingDays: normalized } }),
       );
       return { workingDays: school.workingDays };
+    } catch (e) {
+      if (isP2025(e)) throw new NotFoundException('School not found');
+      throw e;
+    }
+  }
+
+  // ── Class note visibility ─────────────────────────────────────────────────
+
+  async getClassNoteVisibility(schoolId: string) {
+    const school = await withTenant(schoolId, (tx) =>
+      tx.school.findUnique({ where: { id: schoolId }, select: { classNoteVisibility: true } }),
+    );
+    if (!school) throw new NotFoundException('School not found');
+    return { classNoteVisibility: school.classNoteVisibility };
+  }
+
+  async updateClassNoteVisibility(schoolId: string, classNoteVisibility: ClassNoteVisibilityValue) {
+    try {
+      const school = await withTenant(schoolId, (tx) =>
+        tx.school.update({ where: { id: schoolId }, data: { classNoteVisibility } }),
+      );
+      return { classNoteVisibility: school.classNoteVisibility };
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('School not found');
       throw e;

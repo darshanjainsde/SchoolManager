@@ -37,7 +37,7 @@ describe('TeacherDayService', () => {
         periodId: 'per-1',
         classSectionId: 'sec-8c',
         classSection: { id: 'sec-8c', name: 'C', grade: { name: '8' } },
-        subject: { name: 'Mathematics' },
+        subject: { id: 'subj-maths', name: 'Mathematics' },
         teacherId: TID,
       },
     ]);
@@ -64,6 +64,7 @@ describe('TeacherDayService', () => {
     expect(day.entries[0].slot).toMatchObject({
       classSectionId: 'sec-8c',
       className: '8-C',
+      subjectId: 'subj-maths',
       subjectName: 'Mathematics',
       covering: false,
     });
@@ -82,12 +83,12 @@ describe('TeacherDayService', () => {
       {
         periodId: 'per-1', classSectionId: 'sec-8c',
         classSection: { id: 'sec-8c', name: 'C', grade: { name: '8' } },
-        subject: { name: 'Mathematics' }, teacherId: TID,
+        subject: { id: 'subj-maths', name: 'Mathematics' }, teacherId: TID,
       },
       {
         periodId: 'per-2', classSectionId: 'sec-9a',
         classSection: { id: 'sec-9a', name: 'A', grade: { name: '9' } },
-        subject: { name: 'Mathematics' }, teacherId: 'teacher-9',
+        subject: { id: 'subj-maths', name: 'Mathematics' }, teacherId: 'teacher-9',
       },
     ]);
     txMock.teacher.findMany.mockResolvedValue([

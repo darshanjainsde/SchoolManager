@@ -6,6 +6,8 @@ describe('RLS on the new management tables', () => {
   let beaconId: string;
   let acmeSection: string;
   let beaconSection: string;
+  let acmeSubject: string;
+  let beaconSubject: string;
 
   beforeAll(async () => {
     const p = getPlatformPrisma();
@@ -25,13 +27,16 @@ describe('RLS on the new management tables', () => {
     // the exact academicYear/grade scaffolding this needs and reuse it.
     acmeSection = await makeSection(p, acmeId, 'A');
     beaconSection = await makeSection(p, beaconId, 'B');
+    // ClassNote.subjectId is required — one Subject per school, reused by both notes below.
+    acmeSubject = await makeSubject(p, acmeId, 'A');
+    beaconSubject = await makeSubject(p, beaconId, 'B');
 
     await p.classNote.create({
-      data: { schoolId: acmeId, classSectionId: acmeSection, date: new Date('2026-08-03'),
+      data: { schoolId: acmeId, classSectionId: acmeSection, subjectId: acmeSubject, date: new Date('2026-08-03'),
               body: 'acme note', authorTeacherId: acmeId },
     });
     await p.classNote.create({
-      data: { schoolId: beaconId, classSectionId: beaconSection, date: new Date('2026-08-03'),
+      data: { schoolId: beaconId, classSectionId: beaconSection, subjectId: beaconSubject, date: new Date('2026-08-03'),
               body: 'beacon note', authorTeacherId: beaconId },
     });
   });
@@ -48,7 +53,7 @@ describe('RLS on the new management tables', () => {
     await expect(
       withTenant(acmeId, (tx) =>
         tx.classNote.create({
-          data: { schoolId: beaconId, classSectionId: beaconSection,
+          data: { schoolId: beaconId, classSectionId: beaconSection, subjectId: beaconSubject,
                   date: new Date('2026-08-03'), body: 'x', authorTeacherId: acmeId },
         }),
       ),
@@ -101,4 +106,13 @@ async function makeSection(
     },
   });
   return classSection.id;
+}
+
+/** Creates a minimal Subject for `schoolId` and returns its id. */
+async function makeSubject(p: PrismaClient, schoolId: string, label: string): Promise<string> {
+  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const subject = await p.subject.create({
+    data: { schoolId, name: `Subject-${label}-${suffix}`, code: `SUB-${label}-${suffix}` },
+  });
+  return subject.id;
 }

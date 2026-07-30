@@ -26,6 +26,7 @@ import {
   CreateYearDto,
   UpdateGradeDto,
   UpdatePeriodDto,
+  UpdateClassNoteVisibilityDto,
   UpdateSubjectDto,
   UpdateWorkingDaysDto,
 } from './management.dto';
@@ -152,6 +153,22 @@ export class CatalogController {
   @Roles('SCHOOL_ADMIN')
   updateWorkingDays(@Body() dto: UpdateWorkingDaysDto) {
     return this.catalog.updateWorkingDays(this.sid(), dto.workingDays);
+  }
+
+  // ── School / class note visibility ──────────────────────────────────────────
+
+  @Get('school/class-note-visibility')
+  @UseGuards(RolesGuard)
+  @Roles('SCHOOL_ADMIN')
+  getClassNoteVisibility() {
+    return this.catalog.getClassNoteVisibility(this.sid());
+  }
+
+  @Put('school/class-note-visibility')
+  @UseGuards(RolesGuard)
+  @Roles('SCHOOL_ADMIN')
+  updateClassNoteVisibility(@Body() dto: UpdateClassNoteVisibilityDto) {
+    return this.catalog.updateClassNoteVisibility(this.sid(), dto.classNoteVisibility);
   }
 
   // ── Availability ───────────────────────────────────────────────────────────

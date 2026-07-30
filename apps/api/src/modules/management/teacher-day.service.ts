@@ -94,7 +94,7 @@ export class TeacherDayService {
           periodId: true,
           classSectionId: true,
           teacherId: true,
-          subject: { select: { name: true } },
+          subject: { select: { id: true, name: true } },
           classSection: { select: { id: true, name: true, grade: { select: { name: true } } } },
         },
       });
@@ -145,6 +145,7 @@ export class TeacherDayService {
           slot: {
             classSectionId: s.classSectionId,
             className: `${s.classSection.grade.name}-${s.classSection.name}`,
+            subjectId: s.subject.id,
             subjectName: s.subject.name,
             covering,
             coveringFor: covering && sub ? (originalNames.get(sub.originalTeacherId) ?? null) : null,

@@ -26,7 +26,7 @@ jest.mock('@skoolos/db', () => ({
 }));
 
 import { CatalogService } from './catalog.service';
-import { UpdateWorkingDaysDto } from './management.dto';
+import { UpdateClassNoteVisibilityDto, UpdateWorkingDaysDto } from './management.dto';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const PERIOD = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -140,6 +140,61 @@ describe('CatalogService working days', () => {
       where: { id: SCHOOL },
       data: { workingDays: [6, 7] },
     });
+  });
+});
+
+describe('CatalogService class note visibility', () => {
+  const svc = new CatalogService();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) =>
+      fn(txMock),
+    );
+  });
+
+  it('getClassNoteVisibility returns the school-scoped setting as-is', async () => {
+    txMock.school.findUnique.mockResolvedValue({ classNoteVisibility: 'SUBJECT_TEACHERS' });
+
+    const result = await svc.getClassNoteVisibility(SCHOOL);
+
+    expect(txMock.school.findUnique).toHaveBeenCalledWith({
+      where: { id: SCHOOL },
+      select: { classNoteVisibility: true },
+    });
+    expect(result).toEqual({ classNoteVisibility: 'SUBJECT_TEACHERS' });
+  });
+
+  it('updateClassNoteVisibility persists the new value', async () => {
+    txMock.school.update.mockResolvedValue({ classNoteVisibility: 'SUBJECT_TEACHERS' });
+
+    const result = await svc.updateClassNoteVisibility(SCHOOL, 'SUBJECT_TEACHERS');
+
+    expect(txMock.school.update).toHaveBeenCalledWith({
+      where: { id: SCHOOL },
+      data: { classNoteVisibility: 'SUBJECT_TEACHERS' },
+    });
+    expect(result).toEqual({ classNoteVisibility: 'SUBJECT_TEACHERS' });
+  });
+});
+
+describe('UpdateClassNoteVisibilityDto validation', () => {
+  it('accepts ALL_TEACHERS', async () => {
+    const dto = plainToInstance(UpdateClassNoteVisibilityDto, { classNoteVisibility: 'ALL_TEACHERS' });
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('accepts SUBJECT_TEACHERS', async () => {
+    const dto = plainToInstance(UpdateClassNoteVisibilityDto, { classNoteVisibility: 'SUBJECT_TEACHERS' });
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects any other value', async () => {
+    const dto = plainToInstance(UpdateClassNoteVisibilityDto, { classNoteVisibility: 'SOMETHING_ELSE' });
+    const errors = await validate(dto);
+    expect(errors.some((e) => e.property === 'classNoteVisibility')).toBe(true);
   });
 });
 

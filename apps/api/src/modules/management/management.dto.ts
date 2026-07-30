@@ -17,7 +17,14 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ATTENDANCE_STATUSES, AttendanceStatusValue, HOLIDAY_TYPES, HolidayType } from '@skoolos/types';
+import {
+  ATTENDANCE_STATUSES,
+  AttendanceStatusValue,
+  CLASS_NOTE_VISIBILITIES,
+  ClassNoteVisibilityValue,
+  HOLIDAY_TYPES,
+  HolidayType,
+} from '@skoolos/types';
 
 // ── Academic Year ────────────────────────────────────────────────────────────
 
@@ -651,6 +658,9 @@ export class CreateClassNoteDto {
   @IsUUID()
   classSectionId!: string;
 
+  @IsUUID()
+  subjectId!: string;
+
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be formatted as YYYY-MM-DD' })
   date!: string;
 
@@ -664,6 +674,13 @@ export class CreateClassTodoDto extends CreateClassNoteDto {}
 export class UpdateClassTodoDto {
   @IsBoolean()
   done!: boolean;
+}
+
+// ── Class note visibility (school setting) ───────────────────────────────────
+
+export class UpdateClassNoteVisibilityDto {
+  @IsIn(CLASS_NOTE_VISIBILITIES)
+  classNoteVisibility!: ClassNoteVisibilityValue;
 }
 
 // ── Register change requests ─────────────────────────────────────────────────

@@ -27,24 +27,26 @@ export class ClassNotesController {
   list(
     @Query('classSectionId', ParseUUIDPipe) classSectionId: string,
     @Query('date') date: string,
+    @Query('subjectId', ParseUUIDPipe) subjectId: string,
+    @CurrentUser() u: SchoolJwtPayload,
   ) {
-    return this.svc.list(this.sid(), classSectionId, date);
+    return this.svc.list(this.sid(), classSectionId, date, subjectId, u.sub, u.role);
   }
 
   @Post('class-notes')
   addNote(@Body() dto: CreateClassNoteDto, @CurrentUser() u: SchoolJwtPayload) {
-    return this.svc.addNote(this.sid(), u.sub, dto);
+    return this.svc.addNote(this.sid(), u.sub, u.role, dto);
   }
 
   @Delete('class-notes/:id')
   @HttpCode(204)
   removeNote(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
-    return this.svc.removeNote(this.sid(), u.sub, id);
+    return this.svc.removeNote(this.sid(), u.sub, u.role, id);
   }
 
   @Post('class-todos')
   addTodo(@Body() dto: CreateClassTodoDto, @CurrentUser() u: SchoolJwtPayload) {
-    return this.svc.addTodo(this.sid(), u.sub, dto);
+    return this.svc.addTodo(this.sid(), u.sub, u.role, dto);
   }
 
   @Patch('class-todos/:id')
@@ -53,12 +55,12 @@ export class ClassNotesController {
     @Body() dto: UpdateClassTodoDto,
     @CurrentUser() u: SchoolJwtPayload,
   ) {
-    return this.svc.setTodoDone(this.sid(), u.sub, id, dto.done);
+    return this.svc.setTodoDone(this.sid(), u.sub, u.role, id, dto.done);
   }
 
   @Delete('class-todos/:id')
   @HttpCode(204)
   removeTodo(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
-    return this.svc.removeTodo(this.sid(), u.sub, id);
+    return this.svc.removeTodo(this.sid(), u.sub, u.role, id);
   }
 }

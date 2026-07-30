@@ -66,6 +66,7 @@ export interface TeacherDayEntry {
   slot: {
     classSectionId: string;
     className: string;
+    subjectId: string;
     subjectName: string;
     covering: boolean;
     coveringFor: string | null;
@@ -90,6 +91,15 @@ export interface ClassNoteRow {
 export interface ClassTodoRow extends ClassNoteRow {
   done: boolean;
 }
+
+/**
+ * School-wide policy for who may read a class's notes/to-dos — set by
+ * `SCHOOL_ADMIN` via `GET`/`PUT /manage/school/class-note-visibility`.
+ * `ALL_TEACHERS` is the default: it is today's (Phase 1) behaviour, so no
+ * existing school's access changes on deploy.
+ */
+export const CLASS_NOTE_VISIBILITIES = ['ALL_TEACHERS', 'SUBJECT_TEACHERS'] as const;
+export type ClassNoteVisibilityValue = (typeof CLASS_NOTE_VISIBILITIES)[number];
 
 export const REGISTER_CHANGE_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
 export type RegisterChangeStatusValue = (typeof REGISTER_CHANGE_STATUSES)[number];
