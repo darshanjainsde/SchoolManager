@@ -14,9 +14,15 @@ export function Screen({ children }: PropsWithChildren) {
   );
 }
 
-export function Card({ children, style }: PropsWithChildren<{ style?: ViewStyle }>) {
+export function Card({
+  children,
+  style,
+  testID,
+}: PropsWithChildren<{ style?: ViewStyle; testID?: string }>) {
   return (
-    <View style={[{ backgroundColor: tokens.color.surface, borderColor: tokens.color.line,
+    <View
+      testID={testID}
+      style={[{ backgroundColor: tokens.color.surface, borderColor: tokens.color.line,
       borderWidth: 1, borderRadius: tokens.radius.card, padding: 14 }, style]}>
       {children}
     </View>

@@ -62,10 +62,17 @@ const STATUS_COLOR: Record<AttendanceStatusValue, string> = {
 };
 
 export default function TakeAttendance() {
-  const { classSectionId, name } = useLocalSearchParams<{
+  const { classSectionId, name, date: dateParam } = useLocalSearchParams<{
     classSectionId: string;
     name?: string;
+    /** YYYY-MM-DD. Omitted by today's link (see attendance.tsx's `goTake`); a
+     * past date only arrives here once the attendance list has already
+     * established there's an unexpired APPROVED unlock for this class+date —
+     * this screen just proxies whatever date it's given through to the GET
+     * and PUT below. */
+    date?: string;
   }>();
+  const date = dateParam ?? todayISO();
   const [roster, setRoster] = useState<RosterRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,7 +85,6 @@ export default function TakeAttendance() {
       let cancelled = false;
       setError(null);
       setRoster(null); // don't leak the previous class's rows while the new one loads
-      const date = todayISO();
       Promise.all([
         api.request<MarkRow[]>(
           `/manage/attendance?classSectionId=${classSectionId}&date=${date}`,
@@ -105,7 +111,7 @@ export default function TakeAttendance() {
       return () => {
         cancelled = true;
       };
-    }, [classSectionId]),
+    }, [classSectionId, date]),
   );
 
   const rows = roster ?? [];
@@ -136,7 +142,7 @@ export default function TakeAttendance() {
     try {
       const result = await api.request<SaveAttendanceResponse>('/manage/attendance', {
         method: 'PUT',
-        body: buildMarksPayload(classSectionId, todayISO(), rows),
+        body: buildMarksPayload(classSectionId, date, rows),
       });
       // Show the confirmation here rather than navigating and hoping it
       // survives the transition — a message the teacher never sees is not a
@@ -155,7 +161,9 @@ export default function TakeAttendance() {
 
   return (
     <Screen>
-      <SectionTitle title={`${name ?? 'Class'} · Attendance`} />
+      <SectionTitle
+        title={`${name ?? 'Class'} · Attendance${date === todayISO() ? '' : ` · ${date}`}`}
+      />
       {confirmation && (
         <Toast
           kind="success"
