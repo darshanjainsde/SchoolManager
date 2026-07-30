@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitForElementToBeRemoved, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toaster } from 'sonner';
 import { renderWithProviders, type ApiStub } from '@/test/render';
@@ -56,6 +56,30 @@ const students = [
   { id: 'stu-1', firstName: 'Asha', lastName: 'Rao', rollNo: '1' },
   { id: 'stu-2', firstName: 'Bilal', lastName: 'Khan', rollNo: '2' },
 ];
+
+/** A row from `GET /manage/register-changes/mine`, defaulted to an open PENDING request. */
+function registerChangeRow(overrides: Partial<{
+  id: string;
+  classSectionId: string;
+  date: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  expiresAt: string | null;
+}> = {}) {
+  return {
+    id: 'rc-1',
+    classSectionId: 'sec-1',
+    className: '8-A',
+    date: '2020-01-01',
+    reason: 'Late enrolment correction',
+    status: 'PENDING' as const,
+    requestedByTeacherId: 'teacher-1',
+    requestedByName: 'Anita Rao',
+    reviewedAt: null,
+    expiresAt: null,
+    createdAt: '2019-12-31T10:00:00.000Z',
+    ...overrides,
+  };
+}
 
 function renderPage() {
   return renderWithProviders(
@@ -350,6 +374,136 @@ describe('TeacherAttendancePage', () => {
     resolveMyRequests([]);
 
     expect(await screen.findByLabelText('Reason for reopening')).toBeInTheDocument();
+  });
+
+  describe('admin-approved register unlock', () => {
+    it('an APPROVED request with a future expiresAt renders the editable roster on a past date, and a PUT succeeds', async () => {
+      const user = userEvent.setup();
+      searchParams = new URLSearchParams('classSectionId=sec-1');
+      const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const api = mockApi({
+        get: mockGet([
+          ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false, total: 2 })])],
+          ['/manage/attendance?', () => Promise.resolve([])],
+          ['/manage/classes', () => Promise.resolve(classSections)],
+          ['/manage/students?', () => Promise.resolve(students)],
+          [
+            '/manage/register-changes/mine',
+            () => Promise.resolve([registerChangeRow({ status: 'APPROVED', expiresAt: future })]),
+          ],
+        ]),
+        put: vi.fn().mockResolvedValue({ saved: 2, absentees: 0 }),
+      });
+      vi.mocked(useApi).mockReturnValue(api as never);
+
+      renderPage();
+      await screen.findByText('Asha Rao');
+      fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
+
+      // The unlocked roster, not LockedDay.
+      expect(await screen.findByText('Asha Rao')).toBeInTheDocument();
+      expect(screen.queryByText(/is closed/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/reopened by your admin/i)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /save attendance/i }));
+
+      expect(api.put).toHaveBeenCalledWith(
+        '/manage/attendance',
+        expect.objectContaining({ classSectionId: 'sec-1', date: '2020-01-01' }),
+      );
+    });
+
+    it('an APPROVED request with a past expiresAt renders LockedDay', async () => {
+      searchParams = new URLSearchParams('classSectionId=sec-1');
+      const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const api = mockApi({
+        get: mockGet([
+          ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
+          ['/manage/attendance?', () => Promise.resolve([])],
+          ['/manage/classes', () => Promise.resolve(classSections)],
+          ['/manage/students?', () => Promise.resolve(students)],
+          [
+            '/manage/register-changes/mine',
+            () => Promise.resolve([registerChangeRow({ status: 'APPROVED', expiresAt: past })]),
+          ],
+        ]),
+      });
+      vi.mocked(useApi).mockReturnValue(api as never);
+
+      renderPage();
+      await screen.findByText('Asha Rao');
+      fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
+
+      // `myRequests` briefly renders LockedDay in its own "checking" loading
+      // state before the mocked GET resolves — asserting on that transient
+      // frame instead of the settled one would pass even if the expiry check
+      // were missing entirely, so wait for the loading indicator to clear
+      // (i.e. for `myRequests` to have actually settled) before asserting on
+      // the final, decided state.
+      await screen.findByText(/checking for an existing request/i);
+      await waitForElementToBeRemoved(() => screen.queryByText(/checking for an existing request/i));
+
+      expect(screen.getByText(/is closed/i)).toBeInTheDocument();
+      expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+      expect(api.put).not.toHaveBeenCalled();
+    });
+
+    it('a PENDING request still renders LockedDay with the pending state', async () => {
+      searchParams = new URLSearchParams('classSectionId=sec-1');
+      const api = mockApi({
+        get: mockGet([
+          ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
+          ['/manage/attendance?', () => Promise.resolve([])],
+          ['/manage/classes', () => Promise.resolve(classSections)],
+          ['/manage/students?', () => Promise.resolve(students)],
+          [
+            '/manage/register-changes/mine',
+            () => Promise.resolve([registerChangeRow({ status: 'PENDING', expiresAt: null })]),
+          ],
+        ]),
+      });
+      vi.mocked(useApi).mockReturnValue(api as never);
+
+      renderPage();
+      await screen.findByText('Asha Rao');
+      fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
+
+      expect(await screen.findByText(/is closed/i)).toBeInTheDocument();
+      expect(await screen.findByText(/waiting on your admin/i)).toBeInTheDocument();
+      expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+    });
+
+    it('while `mine` is loading on a past date, neither the roster nor the request form renders', async () => {
+      searchParams = new URLSearchParams('classSectionId=sec-1');
+      let resolveMyRequests!: (v: never[]) => void;
+      const pending = new Promise<never[]>((resolve) => {
+        resolveMyRequests = resolve;
+      });
+      const api = mockApi({
+        get: mockGet([
+          ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
+          ['/manage/attendance?', () => Promise.resolve([])],
+          ['/manage/classes', () => Promise.resolve(classSections)],
+          ['/manage/students?', () => Promise.resolve(students)],
+          ['/manage/register-changes/mine', () => pending],
+        ]),
+      });
+      vi.mocked(useApi).mockReturnValue(api as never);
+
+      renderPage();
+      await screen.findByText('Asha Rao');
+      fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
+
+      // Neither the editable roster nor a submittable form is shown while we
+      // don't yet know if an approved, unexpired unlock exists.
+      expect(await screen.findByText(/checking for an existing request/i)).toBeInTheDocument();
+      expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Reason for reopening')).not.toBeInTheDocument();
+
+      resolveMyRequests([]);
+
+      expect(await screen.findByLabelText('Reason for reopening')).toBeInTheDocument();
+    });
   });
 
   it('cancelling the retake dialog closes it, keeps the roster locked, and returns focus to the trigger', async () => {

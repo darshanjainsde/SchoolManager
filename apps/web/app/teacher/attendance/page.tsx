@@ -49,6 +49,29 @@ const todayIso = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
+/**
+ * True once an APPROVED register-change row's `expiresAt` is still in the
+ * future — absolute epoch comparison, so it is correct regardless of the
+ * browser's timezone (mirrors mobile's `isUnexpired` in
+ * `(staff)/attendance.tsx` and the server's own `expiresAt > now()` unlock
+ * check in AttendanceService.save). `expiresAt` is only ever null for
+ * PENDING/REJECTED rows (see RegisterChangeService.review); guard it anyway
+ * so a stray null can never reach `new Date(null)` and misbehave.
+ */
+function isUnexpired(expiresAt: string | null): boolean {
+  return !!expiresAt && new Date(expiresAt).getTime() > Date.now();
+}
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export default function TeacherAttendancePage() {
   return (
     <Suspense fallback={<p className="sk-state">Loading…</p>}>
@@ -117,7 +140,6 @@ function TeacherAttendanceInner() {
   // taken class never flashes as editable before its summary swaps in.
   const statusKnown = !dayStatus.isLoading && !dayStatus.error;
   const taken = !!selectedStatus?.taken;
-  const editable = !isPastDate && statusKnown && (!taken || unlocked);
 
   // Only needed once a past date is on screen — no point asking every time.
   const myRequests = useQuery({
@@ -132,6 +154,26 @@ function TeacherAttendanceInner() {
       ) ?? null,
     [myRequests.data, classSectionId, date],
   );
+  // An admin can reopen a locked past day (RegisterChangeService.review sets
+  // status APPROVED and expiresAt to end-of-approving-day IST); the server's
+  // own unlock check on PUT /manage/attendance is `APPROVED AND expiresAt >
+  // now()`, so the UI must honour the same row or a teacher who was granted
+  // access can never actually use it. `myRequests.data` is undefined while
+  // still loading, so this — and `unlockedPastDate` below — is correctly
+  // `null`/`false` until the query settles.
+  const unlockRequest = useMemo(
+    () =>
+      myRequests.data?.find(
+        (r) =>
+          r.classSectionId === classSectionId &&
+          r.date === date &&
+          r.status === 'APPROVED' &&
+          isUnexpired(r.expiresAt),
+      ) ?? null,
+    [myRequests.data, classSectionId, date],
+  );
+  const unlockedPastDate = isPastDate && !!unlockRequest;
+  const editable = statusKnown && (!isPastDate || unlockedPastDate) && (!taken || unlocked);
 
   const roster = useQuery({
     queryKey: ['t-attn-roster', classSectionId],
@@ -284,7 +326,7 @@ function TeacherAttendanceInner() {
         </div>
       </div>
 
-      {classSectionId && isPastDate ? (
+      {classSectionId && isPastDate && !unlockedPastDate ? (
         <LockedDay
           className={selectedClassLabel}
           date={date}
@@ -300,6 +342,12 @@ function TeacherAttendanceInner() {
             <h3>Roster</h3>
           </div>
           <div className="sk-card-b">
+            {unlockedPastDate && unlockRequest?.expiresAt && (
+              <p className="sk-pill" data-tone="info" style={{ alignSelf: 'flex-start' }}>
+                This day was reopened by your admin — the unlock expires at{' '}
+                {formatDateTime(unlockRequest.expiresAt)}.
+              </p>
+            )}
             <p className="sk-state">
               ✓ {selectedStatus.present} of {selectedStatus.total} present
             </p>
@@ -324,6 +372,13 @@ function TeacherAttendanceInner() {
             </p>
           </div>
           <div className="sk-card-b">
+            {unlockedPastDate && unlockRequest?.expiresAt && (
+              <p className="sk-pill" data-tone="info" style={{ alignSelf: 'flex-start' }}>
+                This day was reopened by your admin — the unlock expires at{' '}
+                {formatDateTime(unlockRequest.expiresAt)}.
+              </p>
+            )}
+
             {classSectionId && dayStatus.error && (
               <p className="sk-state err">{(dayStatus.error as Error).message}</p>
             )}
