@@ -13,6 +13,7 @@ function classEntry(overrides: Partial<TeacherDayEntry> = {}): TeacherDayEntry {
     slot: {
       classSectionId: 'sec-8a',
       className: '8-A',
+      subjectId: 'subj-maths',
       subjectName: 'Mathematics',
       covering: false,
       coveringFor: null,
@@ -37,7 +38,7 @@ const nextClass: TeacherDayEntry = classEntry({
   label: 'P3',
   startTime: '09:50',
   endTime: '10:35',
-  slot: { classSectionId: 'sec-8b', className: '8-B', subjectName: 'Science', covering: false, coveringFor: null },
+  slot: { classSectionId: 'sec-8b', className: '8-B', subjectId: 'subj-science', subjectName: 'Science', covering: false, coveringFor: null },
 });
 
 describe('NowCard', () => {
@@ -82,6 +83,7 @@ describe('NowCard', () => {
           slot: {
             classSectionId: 'sec-8a',
             className: '8-A',
+            subjectId: 'subj-maths',
             subjectName: 'Mathematics',
             covering: true,
             coveringFor: 'Ravi Kumar',

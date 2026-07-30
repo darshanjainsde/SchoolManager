@@ -9,7 +9,7 @@ const entry = (label: string, startTime: string, endTime: string, kind: 'CLASS' 
   endTime,
   kind,
   slot: kind === 'CLASS'
-    ? { classSectionId: `sec-${label}`, className: `8-${label}`, subjectName: 'Mathematics', covering: false, coveringFor: null }
+    ? { classSectionId: `sec-${label}`, className: `8-${label}`, subjectId: 'subj-maths', subjectName: 'Mathematics', covering: false, coveringFor: null }
     : null,
   register: kind === 'CLASS' ? { taken: false, present: 0, total: 30, markedBy: null } : null,
 });

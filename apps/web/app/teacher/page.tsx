@@ -70,7 +70,14 @@ export default function TeacherHomePage() {
             onTakeAttendance={goToAttendance}
           />
 
-          {entry?.kind === 'CLASS' && entry.slot && <ClassNotes classSectionId={entry.slot.classSectionId} date={date} />}
+          {entry?.kind === 'CLASS' && entry.slot && (
+            <ClassNotes
+              classSectionId={entry.slot.classSectionId}
+              date={date}
+              subjectId={entry.slot.subjectId}
+              subjectName={entry.slot.subjectName}
+            />
+          )}
 
           <DayTimeline entries={entries} currentIndex={index} onTakeAttendance={goToAttendance} />
         </div>

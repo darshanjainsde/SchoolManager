@@ -3,6 +3,7 @@ import { useMemo, useState, type CSSProperties, type FocusEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, X, Pencil, Check, Coffee, Utensils } from 'lucide-react';
+import type { ClassNoteVisibilityValue } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -291,6 +292,77 @@ function WorkingDaysRow({
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── Class note visibility ─────────────────────────────────────────────────────
+
+const CLASS_NOTE_VISIBILITY_OPTIONS: {
+  value: ClassNoteVisibilityValue;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: 'ALL_TEACHERS',
+    label: 'Any teacher of the class',
+    description: 'Whoever teaches the class — any subject — can read and add its notes and to-dos.',
+  },
+  {
+    value: 'SUBJECT_TEACHERS',
+    label: 'Only the subject’s teachers',
+    description:
+      'A note is scoped to its subject — only that subject’s teachers (and any substitute covering it that day) can read it. The class teacher can always see every subject for their own class.',
+  },
+];
+
+function ClassNoteVisibilityCard({
+  value,
+  isLoading,
+  isSaving,
+  error,
+  onChange,
+}: {
+  value: ClassNoteVisibilityValue | undefined;
+  isLoading: boolean;
+  isSaving: boolean;
+  error: string | null;
+  onChange: (v: ClassNoteVisibilityValue) => void;
+}) {
+  return (
+    <div className="sk-card">
+      <div className="sk-card-h">
+        <h3>Class notes visibility</h3>
+      </div>
+      <div className="sk-card-b" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p className="sk-muted">Who can read a class's notes and to-dos — teachers keep these as a handover log.</p>
+        {isLoading && <p className="sk-state">Loading…</p>}
+        {error && <p className="sk-state err">{error}</p>}
+        {!isLoading && !error && (
+          <div role="radiogroup" aria-label="Class notes visibility" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {CLASS_NOTE_VISIBILITY_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: isSaving ? 'default' : 'pointer' }}
+              >
+                <input
+                  type="radio"
+                  name="class-note-visibility"
+                  value={opt.value}
+                  checked={value === opt.value}
+                  disabled={isSaving}
+                  onChange={() => onChange(opt.value)}
+                  style={{ marginTop: 3 }}
+                />
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--sk-ink)' }}>{opt.label}</span>
+                  <span className="sk-muted" style={{ fontSize: 12.5 }}>{opt.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -591,6 +663,14 @@ export default function SettingsPage() {
     enabled: !!host,
   });
 
+  const classNoteVisibilityQuery = useQuery({
+    queryKey: ['mng-class-note-visibility'],
+    queryFn: () => api.get<{ classNoteVisibility: ClassNoteVisibilityValue }>('/manage/school/class-note-visibility'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
+  });
+
   const sortedPeriods = useMemo(
     () =>
       [...(periodsQuery.data ?? [])].sort(
@@ -652,6 +732,18 @@ export default function SettingsPage() {
       toast.success('Working days updated');
     },
     onError: (err: Error) => toast.error(`Failed to update working days: ${err.message}`),
+  });
+
+  const updateClassNoteVisibilityMutation = useMutation({
+    mutationFn: (classNoteVisibility: ClassNoteVisibilityValue) =>
+      api.put<{ classNoteVisibility: ClassNoteVisibilityValue }>('/manage/school/class-note-visibility', {
+        classNoteVisibility,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-class-note-visibility'] });
+      toast.success('Class notes visibility updated');
+    },
+    onError: (err: Error) => toast.error(`Failed to update class notes visibility: ${err.message}`),
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -912,6 +1004,15 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+
+        {/* ── Class notes visibility ────────────────────────────────────── */}
+        <ClassNoteVisibilityCard
+          value={classNoteVisibilityQuery.data?.classNoteVisibility}
+          isLoading={classNoteVisibilityQuery.isLoading}
+          isSaving={updateClassNoteVisibilityMutation.isPending}
+          error={classNoteVisibilityQuery.error ? (classNoteVisibilityQuery.error as Error).message : null}
+          onChange={(v) => updateClassNoteVisibilityMutation.mutate(v)}
+        />
       </div>
     </>
   );

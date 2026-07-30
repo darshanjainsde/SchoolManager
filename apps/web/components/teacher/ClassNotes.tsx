@@ -18,35 +18,51 @@ function formatTime(iso: string): string {
 }
 
 /**
- * Notes and to-dos for one class on one date. Owns its own queries and
- * mutations — the page only decides *when* to mount it (the current
- * period's class), never how it fetches or saves.
+ * Notes and to-dos for one class, one subject, on one date. Owns its own
+ * queries and mutations — the page only decides *when* to mount it (the
+ * current period's class+subject), never how it fetches or saves.
+ *
+ * `subjectId`/`subjectName` come from the caller's current timetable slot.
+ * The heading always names the subject, even when the school's
+ * `classNoteVisibility` setting is `ALL_TEACHERS` — the note is still filed
+ * against one subject either way, and naming it here is what makes a 403
+ * under `SUBJECT_TEACHERS` legible rather than mysterious.
  */
-export function ClassNotes({ classSectionId, date }: { classSectionId: string; date: string }): React.JSX.Element {
+export function ClassNotes({
+  classSectionId,
+  date,
+  subjectId,
+  subjectName,
+}: {
+  classSectionId: string;
+  date: string;
+  subjectId: string;
+  subjectName: string;
+}): React.JSX.Element {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
   const qc = useQueryClient();
   const [noteBody, setNoteBody] = useState('');
   const [todoBody, setTodoBody] = useState('');
 
-  const queryKey = ['class-notes', classSectionId, date];
+  const queryKey = ['class-notes', classSectionId, date, subjectId];
 
   const query = useQuery({
     queryKey,
-    enabled: !!host && !!classSectionId && !!date,
+    enabled: !!host && !!classSectionId && !!date && !!subjectId,
     queryFn: () =>
       api.get<ClassNotesData>(
-        `/manage/class-notes?classSectionId=${encodeURIComponent(classSectionId)}&date=${encodeURIComponent(date)}`,
+        `/manage/class-notes?classSectionId=${encodeURIComponent(classSectionId)}&date=${encodeURIComponent(date)}&subjectId=${encodeURIComponent(subjectId)}`,
       ),
   });
 
   const addNote = useMutation({
-    mutationFn: (body: string) => api.post('/manage/class-notes', { classSectionId, date, body }),
+    mutationFn: (body: string) => api.post('/manage/class-notes', { classSectionId, subjectId, date, body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey }),
   });
 
   const addTodo = useMutation({
-    mutationFn: (body: string) => api.post('/manage/class-todos', { classSectionId, date, body }),
+    mutationFn: (body: string) => api.post('/manage/class-todos', { classSectionId, subjectId, date, body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey }),
   });
 
@@ -80,7 +96,7 @@ export function ClassNotes({ classSectionId, date }: { classSectionId: string; d
     <div className="sk-grid2">
       <div className="sk-card">
         <div className="sk-card-h">
-          <h3>Notes</h3>
+          <h3>Notes · {subjectName}</h3>
         </div>
         <div className="sk-card-b">
           {query.isLoading && <p className="sk-state">Loading…</p>}
@@ -111,7 +127,7 @@ export function ClassNotes({ classSectionId, date }: { classSectionId: string; d
 
       <div className="sk-card">
         <div className="sk-card-h">
-          <h3>To-dos</h3>
+          <h3>To-dos · {subjectName}</h3>
           {todos.length > 0 && <p className="sk-muted" style={{ marginTop: 4 }}>{remaining} remaining</p>}
         </div>
         <div className="sk-card-b">

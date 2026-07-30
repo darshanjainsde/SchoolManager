@@ -10,7 +10,7 @@ function classEntry(id: string, label: string, taken: boolean): TeacherDayEntry 
     startTime: '08:00',
     endTime: '08:45',
     kind: 'CLASS',
-    slot: { classSectionId: `sec-${id}`, className: '8-A', subjectName: label, covering: false, coveringFor: null },
+    slot: { classSectionId: `sec-${id}`, className: '8-A', subjectId: `subj-${id}`, subjectName: label, covering: false, coveringFor: null },
     register: { taken, present: taken ? 27 : 0, total: 28, markedBy: taken ? 'Priya Sharma' : null },
   };
 }

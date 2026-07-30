@@ -21,7 +21,7 @@ function classEntry(id: string, className: string, subjectName: string, startTim
     startTime,
     endTime,
     kind: 'CLASS',
-    slot: { classSectionId: `sec-${id}`, className, subjectName, covering: false, coveringFor: null },
+    slot: { classSectionId: `sec-${id}`, className, subjectId: `subj-${id}`, subjectName, covering: false, coveringFor: null },
     register: { taken: false, present: 0, total: 28, markedBy: null },
   };
 }
