@@ -11,7 +11,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.test.sckools.com",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "NPM_CONFIG_NODE_LINKER": "hoisted"
       }
     },
     "preview": {
@@ -21,7 +22,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.sckools.com",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "NPM_CONFIG_NODE_LINKER": "hoisted"
       }
     },
     "production": {
@@ -32,7 +34,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.sckools.com",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "NPM_CONFIG_NODE_LINKER": "hoisted"
       }
     }
   },
