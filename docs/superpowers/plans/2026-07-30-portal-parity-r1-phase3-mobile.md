@@ -41,7 +41,23 @@ The order is deliberate: the data-loss bug first because it is actively corrupti
 | 9 | Offline save queue | T5, P6 | Your note: a save must survive a dead signal and sync when it returns. |
 | 10 | Menu parity + phase gate | T3 | Agree one section list across both surfaces; run everything. |
 
-**Student-side items (S1–S9) are deliberately excluded.** They are gated on the parent-account decision (P1): there is no `PARENT` role, and the app's family portal signs in as a student while calling itself "Your child". Building the student screens before that is decided means building them twice.
+### Student and family items — unblocked 2026-07-30
+
+The parent-account question is decided: **parents and students share one STUDENT login** until the payments module ships, which is the first feature that genuinely needs them separated. No `PARENT` role is to be added before then, and `/me/*` stays `@Roles('STUDENT')`.
+
+That settles the family portal's shape, so S1–S9 join this phase as tasks 11–15.
+
+**One consequence must be applied everywhere, and it is a correctness point, not a style one:** with a single shared login the app cannot know whether the parent or the student is holding the phone. `apps/mobile/src/app/(family)/home.tsx` currently says **"Your child"**, which is simply wrong when the student is the one logged in. Replace role-assuming copy with the student's own name and class — "Aarav Sharma · 8-C" reads correctly to either reader. Sweep for the same assumption anywhere else in the family portal and in the web student portal.
+
+| # | Task | Items |
+|---|---|---|
+| 11 | Family home redesign + role-neutral copy | S1, S2 |
+| 12 | Notice bodies, and holidays already shipped | S8 |
+| 13 | Attendance calendar unification (Monday-first, month nav, stat boxes on both) | S4 |
+| 14 | Student timetable — the week grid, replacing the "Coming soon" alert | S5 |
+| 15 | Results and next-test, with push on publish | S6, S7 |
+
+Task 15's push-on-publish needs the `NotificationOutbox` table, which is Phase 4 work — build the screens against the existing `GET /me/results` and `/me/exams`, and leave the push wiring to Phase 4 rather than half-building it here.
 
 ---
 
@@ -235,6 +251,7 @@ Each is expanded to step level with real test code immediately before dispatch, 
 
 ## What Phase 3 deliberately does not do
 
-- **The student and family screens (S1–S9).** Blocked on the parent-account decision.
-- **Messaging, assignments, parent accounts, the staff portal, push-on-publish.** Phase 4, each with its own spec.
-- **Any new API surface.** If a task needs one, that is a finding to report.
+- **Messaging (T17), assignments (T21), the staff portal (P4).** Phase 4, each with its own spec.
+- **A `PARENT` role.** Decided against until the payments module — see the shared-login note above.
+- **Push notifications on publish (part of S6/S7).** Needs the `NotificationOutbox` table; Phase 4. The screens ship here, the push wiring does not.
+- **Any new API surface.** If a task needs one, that is a finding to report, not a licence to widen scope.
