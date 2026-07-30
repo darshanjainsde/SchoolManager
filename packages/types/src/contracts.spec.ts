@@ -6,6 +6,7 @@ import {
   LEAVE_TYPES,
   LEAVE_STATUSES,
   type Announcement,
+  type AnnouncementMine,
   type Profile,
   type AttendanceSummary,
   type UpcomingExam,
@@ -60,6 +61,16 @@ describe('shared portal contracts', () => {
     const oneClass: Announcement = { ...wholeSchool, classSectionId: 'c1' };
     expect(wholeSchool.classSectionId).toBeNull();
     expect(oneClass.classSectionId).toBe('c1');
+  });
+
+  it('an AnnouncementMine row is one-per-target — a singular className, not a plural list', () => {
+    const wholeSchool: AnnouncementMine = {
+      id: 'a1', title: 'Founders Day', body: 'No school Friday.',
+      classSectionId: null, className: null, createdAt: '2026-07-01T00:00:00.000Z',
+    };
+    const oneClass: AnnouncementMine = { ...wholeSchool, id: 'a2', classSectionId: 'c1', className: '5-A' };
+    expect(wholeSchool.className).toBeNull();
+    expect(oneClass.className).toBe('5-A');
   });
 
   it('a student Profile carries a nullable roll number and class name', () => {

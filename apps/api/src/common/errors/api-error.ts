@@ -23,6 +23,10 @@ export type ErrorCode =
   | 'LEAVE_CANCEL_FORBIDDEN'
   /** A TEACHER targeted a class section they do not teach — pair with 403. */
   | 'CLASS_NOT_OWNED'
+  /** A TEACHER tried to edit/delete an Announcement authored by someone else — pair with 403. */
+  | 'ANNOUNCEMENT_NOT_OWNED'
+  /** A TEACHER tried to change an Announcement's class targets via PATCH — targets are immutable after posting; pair with 400. */
+  | 'ANNOUNCEMENT_TARGETS_LOCKED'
   /** A past day's register is closed and has no APPROVED, unexpired RegisterChangeRequest — pair with 409. */
   | 'REGISTER_LOCKED'
   /** A RegisterChangeRequest already exists PENDING for this exact class+date — pair with 409. */

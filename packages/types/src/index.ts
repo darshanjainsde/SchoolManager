@@ -163,6 +163,31 @@ export interface Announcement {
   createdAt: string;
 }
 
+/**
+ * One of the CALLER'S OWN posted Announcement rows —
+ * `GET /manage/announcements/mine` (`TEACHER` only), newest first.
+ *
+ * `AnnouncementsService.create` writes one `Announcement` ROW PER TARGETED
+ * CLASS SECTION (or a single row with `classSectionId: null` for a
+ * whole-school post) — there is no grouping table joining multiple targets
+ * back into one logical "announcement". `PATCH`/`DELETE
+ * /manage/announcements/:id` likewise each act on exactly one row by `id`.
+ * So `AnnouncementMine` mirrors that: ONE ENTRY PER ROW with a SINGULAR
+ * `classSectionId`/`className`, not a grouped/plural shape — grouping rows
+ * that share a title+body+createdAt into one list item would break the 1:1
+ * a list row needs with the edit/delete endpoint it calls.
+ */
+export interface AnnouncementMine {
+  id: string;
+  title: string;
+  body: string;
+  /** Null = whole-school post. */
+  classSectionId: string | null;
+  /** "{grade}-{section}", e.g. "5-A" — matches `MyClassSection.name`. Null iff `classSectionId` is null. */
+  className: string | null;
+  createdAt: string;
+}
+
 // ── Student portal: profile, attendance, timetable, exams, results ─────────
 
 /** Mirrors PortalService.profile — the caller's own Student row, `GET /me/profile`. */

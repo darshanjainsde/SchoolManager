@@ -36,6 +36,17 @@ export class AnnouncementsController {
     return this.svc.list(this.sid());
   }
 
+  // Declared ABOVE the `:id` routes below — a literal path segment like
+  // `mine` must be registered before any `:id` route sharing its HTTP
+  // method, or the router would try to parse "mine" as a UUID `:id` instead.
+  // (No `@Get(':id')` exists today, but this keeps the ordering correct if
+  // one is ever added.)
+  @Roles('TEACHER')
+  @Get('mine')
+  mine(@CurrentUser() u: SchoolJwtPayload) {
+    return this.svc.mine(this.sid(), u.sub);
+  }
+
   // TEACHER may create too — restricted to their own class sections
   // (AnnouncementsService.create enforces this via AttendanceService.myClassSections).
   @Roles('SCHOOL_ADMIN', 'TEACHER')
@@ -44,15 +55,22 @@ export class AnnouncementsController {
     return this.svc.create(this.sid(), u.sub, u.role, dto);
   }
 
-  @Roles('SCHOOL_ADMIN')
+  // TEACHER may edit too — AnnouncementsService.update allows it only on rows
+  // the caller authored (resolved from the stored row); SCHOOL_ADMIN is unrestricted.
+  @Roles('SCHOOL_ADMIN', 'TEACHER')
   @Patch(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAnnouncementDto) {
-    return this.svc.update(this.sid(), id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAnnouncementDto,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.svc.update(this.sid(), id, dto, { userId: u.sub, role: u.role });
   }
 
-  @Roles('SCHOOL_ADMIN')
+  // Same authorship rule as update() above.
+  @Roles('SCHOOL_ADMIN', 'TEACHER')
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.svc.remove(this.sid(), id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
+    return this.svc.remove(this.sid(), id, { userId: u.sub, role: u.role });
   }
 }

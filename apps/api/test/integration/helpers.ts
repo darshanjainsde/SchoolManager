@@ -56,6 +56,8 @@ export interface MinimalSchool {
   host: string;
   studentUserId: string;
   teacherUserId: string;
+  /** A SECOND, distinct teacher — for tests that need to prove one teacher cannot act on another's rows (e.g. announcement authorship). */
+  teacherUserId2: string;
   adminUserId: string;
 }
 
@@ -79,12 +81,15 @@ export async function seedMinimalSchool(): Promise<MinimalSchool> {
   // for a genuine login — never actually exercised by this suite.
   const passwordHash = await argon2.hash('not-used-in-this-suite', { type: argon2.argon2id });
 
-  const [student, teacher, admin] = await Promise.all([
+  const [student, teacher, teacher2, admin] = await Promise.all([
     db.user.create({
       data: { schoolId: school.id, email: `student@${slug}.test`, role: 'STUDENT', passwordHash },
     }),
     db.user.create({
       data: { schoolId: school.id, email: `teacher@${slug}.test`, role: 'TEACHER', passwordHash },
+    }),
+    db.user.create({
+      data: { schoolId: school.id, email: `teacher2@${slug}.test`, role: 'TEACHER', passwordHash },
     }),
     db.user.create({
       data: { schoolId: school.id, email: `admin@${slug}.test`, role: 'SCHOOL_ADMIN', passwordHash },
@@ -97,6 +102,7 @@ export async function seedMinimalSchool(): Promise<MinimalSchool> {
     host: `${slug}.${env.PLATFORM_HOST}`,
     studentUserId: student.id,
     teacherUserId: teacher.id,
+    teacherUserId2: teacher2.id,
     adminUserId: admin.id,
   };
 }
