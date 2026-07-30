@@ -4,6 +4,8 @@ export type {
   AttendanceSummary,
   Holiday,
   Profile as StudentProfile,
+  PublishedResult,
+  UpcomingExam,
 } from '@skoolos/types';
 
 /**
@@ -19,6 +21,33 @@ export function holidayDateParts(iso: string): { day: string; weekday: string } 
     day: String(d.getUTCDate()),
     weekday: d.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' }),
   };
+}
+
+/** Medium-length localized date, e.g. "3 Aug 2026" — mirrors the web portal's `formatDate`. */
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
+}
+
+/**
+ * Whole days from today until `iso`, counted on calendar-day boundaries so a
+ * test at 09:00 tomorrow reads "in 1 day", not "in 0 days" — ported verbatim
+ * from the web portal's `daysUntil` (apps/web/app/portal/page.tsx) so both
+ * clients agree on the same next-test countdown.
+ */
+function daysUntil(iso: string): number {
+  const target = new Date(iso);
+  const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((startOfTarget.getTime() - startOfToday.getTime()) / 86_400_000);
+}
+
+/** "Today" / "Tomorrow" / "In N days" for an `UpcomingExam.scheduledAt`. */
+export function daysUntilLabel(iso: string): string {
+  const d = daysUntil(iso);
+  if (d <= 0) return 'Today';
+  if (d === 1) return 'Tomorrow';
+  return `In ${d} days`;
 }
 
 /**
