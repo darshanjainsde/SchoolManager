@@ -31,7 +31,7 @@ function mockGet(handlers: Array<[string, () => Promise<unknown>]>) {
 }
 
 // `/manage/attendance/my-classes` already composes the display name ("8-A"),
-// unlike `/manage/classes`' `{id, name, grade:{name}}` shape.
+// unlike the school-wide unscoped roster's `{id, name, grade:{name}}` shape.
 const classSections: MyClassSection[] = [
   { classSectionId: 'sec-1', name: '8-A', studentCount: 2, covering: false },
 ];
@@ -153,8 +153,17 @@ describe('TeacherAttendancePage', () => {
     const select = await screen.findByLabelText('Class');
     expect(await within(select).findByRole('option', { name: '8-A' })).toBeInTheDocument();
     expect(within(select).getByRole('option', { name: '9-B (covering)' })).toBeInTheDocument();
+    // Whitelist the endpoints actually stubbed above — anything outside this
+    // set (in particular the old unscoped roster endpoint) is a regression.
+    const allowedPrefixes = [
+      '/manage/attendance/status',
+      '/manage/attendance?',
+      '/manage/attendance/my-classes',
+      '/manage/students?',
+      '/manage/register-changes/mine',
+    ];
     const getPaths = vi.mocked(api.get).mock.calls.map(([path]) => path);
-    expect(getPaths.some((p) => p.startsWith('/manage/classes'))).toBe(false);
+    expect(getPaths.every((p) => allowedPrefixes.some((prefix) => p.startsWith(prefix)))).toBe(true);
   });
 
   it('a taken class for today renders the summary and NO editable roster', async () => {

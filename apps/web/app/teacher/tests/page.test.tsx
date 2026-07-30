@@ -46,8 +46,9 @@ beforeEach(() => {
 describe('TeacherTestsPage', () => {
   it('populates the class picker from /manage/attendance/my-classes, using its already-composed names', async () => {
     // `/manage/attendance/my-classes` returns `{ classSectionId, name, ... }`
-    // with `name` already composed ("8-A"), unlike `/manage/classes`'
-    // `{id, name, grade:{name}}` shape — the option list must render it as-is.
+    // with `name` already composed ("8-A"), unlike the school-wide unscoped
+    // roster's `{id, name, grade:{name}}` shape — the option list must
+    // render it as-is.
     const api = mockApi({
       get: mockGet([
         ['/manage/attendance/my-classes', () => Promise.resolve([classSection()])],
@@ -65,8 +66,11 @@ describe('TeacherTestsPage', () => {
     // with findBy*, not getBy*, or this races the fetch and fails flakily.
     expect(await within(select).findByRole('option', { name: '8-A' })).toBeInTheDocument();
 
+    // Whitelist the endpoints actually expected — anything outside this set
+    // (in particular the old unscoped roster endpoint) is a regression.
+    const allowedPrefixes = ['/manage/attendance/my-classes', '/manage/subjects', '/manage/exams'];
     const getPaths = vi.mocked(api.get).mock.calls.map(([path]) => path);
-    expect(getPaths.every((p) => !p.startsWith('/manage/classes'))).toBe(true);
+    expect(getPaths.every((p) => allowedPrefixes.some((prefix) => p.startsWith(prefix)))).toBe(true);
   });
 
   it('excludes a covering:true class — ExamsService rejects a covering-only teacher scheduling a test', async () => {
@@ -89,7 +93,7 @@ describe('TeacherTestsPage', () => {
     renderPage();
 
     const select = await screen.findByLabelText('Class');
-    expect(within(select).getByRole('option', { name: '8-A' })).toBeInTheDocument();
+    expect(await within(select).findByRole('option', { name: '8-A' })).toBeInTheDocument();
     expect(within(select).queryByRole('option', { name: /9-B/ })).not.toBeInTheDocument();
   });
 
@@ -106,6 +110,9 @@ describe('TeacherTestsPage', () => {
 
     renderPage();
     const select = await screen.findByLabelText('Class');
+    // Wait for the my-classes fetch to populate the options before selecting
+    // one — selecting a value that doesn't exist yet throws.
+    await within(select).findByRole('option', { name: '8-A' });
     await user.selectOptions(select, 'sec-1');
 
     expect(await screen.findByText('No tests for this class yet.')).toBeInTheDocument();
