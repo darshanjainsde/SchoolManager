@@ -40,6 +40,23 @@ async function emailsByUserId(
   return byId;
 }
 
+/**
+ * The single linked-user email for one userId, as a 0-or-1-element array so the
+ * drain can treat it uniformly with `resolveSectionRecipients`. Used for
+ * private messages (MESSAGE_RECEIVED), which target one recipient — the message
+ * addressee — not a whole section. Returns `[]` when the user has no email
+ * (e.g. no login yet), in which case there is simply nothing to push.
+ */
+export async function resolveUserRecipients(
+  db: TenantTx,
+  schoolId: string,
+  userId: string,
+): Promise<string[]> {
+  const byId = await emailsByUserId(db, schoolId, [userId]);
+  const email = byId.get(userId);
+  return email ? [email] : [];
+}
+
 /** Every linked-user email for the students currently in a class section. */
 export async function resolveSectionRecipients(
   db: TenantTx,
