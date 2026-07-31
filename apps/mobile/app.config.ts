@@ -32,7 +32,25 @@ const config: ExpoConfig = {
     },
   },
   ios: { bundleIdentifier: 'com.sckools.app' },
-  plugins: ['expo-router', 'expo-secure-store', '@sentry/react-native'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    '@sentry/react-native',
+    // Google Play requires targeting Android 16 (API 36) from 2026-08-31.
+    // Expo SDK 53 defaults to API 35, so bump compile+target here. AGP 8.8.2
+    // (RN 0.79) can build against 36 (emits a "tested up to 35" warning).
+    // Android requires compileSdkVersion >= targetSdkVersion, so both are 36.
+    [
+      'expo-build-properties',
+      {
+        android: {
+          compileSdkVersion: 36,
+          targetSdkVersion: 36,
+          buildToolsVersion: '36.0.0',
+        },
+      },
+    ],
+  ],
   // EAS Update (OTA JS/asset pushes without a Play Store release) — see
   // docs/SHIP-MOBILE.md "Daily OTA pushes to testers".
   updates: {
