@@ -164,6 +164,62 @@ describe('RLS on the new management tables', () => {
       ).rejects.toThrow(/row-level security|42501/);
     });
   });
+
+  // ── Messaging (T17, Phase 4 Task 5) ────────────────────────────────────────
+  describe('MessageThread / Message', () => {
+    let acmeThread: string;
+    let beaconThread: string;
+
+    beforeAll(async () => {
+      const p = getPlatformPrisma();
+      const acmeTeacher = await makeTeacher(p, acmeId, 'A');
+      const beaconTeacher = await makeTeacher(p, beaconId, 'B');
+      const acmeStudent = await makeStudent(p, acmeId, acmeSection, 'MA');
+      const beaconStudent = await makeStudent(p, beaconId, beaconSection, 'MB');
+
+      const at = await p.messageThread.create({
+        data: { schoolId: acmeId, studentId: acmeStudent, teacherId: acmeTeacher, subjectId: acmeSubject, classSectionId: acmeSection },
+      });
+      acmeThread = at.id;
+      const bt = await p.messageThread.create({
+        data: { schoolId: beaconId, studentId: beaconStudent, teacherId: beaconTeacher, subjectId: beaconSubject, classSectionId: beaconSection },
+      });
+      beaconThread = bt.id;
+
+      await p.message.create({ data: { schoolId: acmeId, threadId: acmeThread, senderRole: 'STUDENT', body: 'acme msg' } });
+      await p.message.create({ data: { schoolId: beaconId, threadId: beaconThread, senderRole: 'STUDENT', body: 'beacon msg' } });
+    });
+
+    it('a tenant sees only its own message threads', async () => {
+      const mine = await withTenant(acmeId, (tx) => tx.messageThread.findMany());
+      expect(mine.length).toBe(1);
+      expect(mine[0].id).toBe(acmeThread);
+    });
+
+    it('a tenant cannot forge a thread owned by another school', async () => {
+      await expect(
+        withTenant(acmeId, (tx) =>
+          tx.messageThread.create({
+            data: { schoolId: beaconId, studentId: acmeThread, teacherId: acmeThread, subjectId: beaconSubject, classSectionId: beaconSection },
+          }),
+        ),
+      ).rejects.toThrow(/row-level security|42501/);
+    });
+
+    it('a tenant sees only its own messages', async () => {
+      const mine = await withTenant(acmeId, (tx) => tx.message.findMany());
+      expect(mine.length).toBe(1);
+      expect(mine[0].body).toBe('acme msg');
+    });
+
+    it('a tenant cannot forge a message into another school', async () => {
+      await expect(
+        withTenant(acmeId, (tx) =>
+          tx.message.create({ data: { schoolId: beaconId, threadId: beaconThread, senderRole: 'STUDENT', body: 'x' } }),
+        ),
+      ).rejects.toThrow(/row-level security|42501/);
+    });
+  });
 });
 
 /**
@@ -207,6 +263,16 @@ async function makeSubject(p: PrismaClient, schoolId: string, label: string): Pr
     data: { schoolId, name: `Subject-${label}-${suffix}`, code: `SUB-${label}-${suffix}` },
   });
   return subject.id;
+}
+
+/** Creates a minimal Teacher for `schoolId` and returns its id (a real FK target
+ * for MessageThread.teacherId). No linked userId — RLS isolation is by schoolId. */
+async function makeTeacher(p: PrismaClient, schoolId: string, label: string): Promise<string> {
+  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const teacher = await p.teacher.create({
+    data: { schoolId, firstName: `Teacher-${label}`, lastName: suffix },
+  });
+  return teacher.id;
 }
 
 /** Creates a minimal Student in `classSectionId` for `schoolId` and returns its id. */
