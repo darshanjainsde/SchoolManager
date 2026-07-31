@@ -22,7 +22,7 @@
     },
     {
       "path": "/internal/cron/notification-outbox",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }
