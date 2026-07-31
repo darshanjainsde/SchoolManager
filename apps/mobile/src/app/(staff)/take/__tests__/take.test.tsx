@@ -300,7 +300,14 @@ it('mark-all-present is disabled while a save is in flight', async () => {
   fireEvent.press(submit);
 
   const markAll = await findByTestId('mark-all-present');
-  await waitFor(() => expect(markAll.props.accessibilityState?.disabled).toBe(true));
+  // Use the file's `settled()` helper, not a raw waitFor: submit's onPress is
+  // async, so the `saving`/disabled state update only commits after a macrotask
+  // tick drained inside act(). settled() does that flush first, then polls —
+  // the flush is what makes this reliable under the parallel test-worker
+  // contention of `pnpm test`/CI (a raw waitFor starts polling before the
+  // update lands and can starve under load). The save is held pending by
+  // resolvePut below, so once disabled turns true it stays true.
+  await settled(() => expect(markAll.props.accessibilityState?.disabled).toBe(true));
 
   // Settle the pending PUT and let its state updates land before the test
   // ends — an unawaited resolution here would fire during the next test's

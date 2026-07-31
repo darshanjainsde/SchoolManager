@@ -5,14 +5,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
-  ClipboardCheck,
-  BookOpen,
-  FileText,
-  GraduationCap,
-  Megaphone,
-  CalendarDays,
-  CalendarOff,
-  CalendarRange,
   User,
   LogOut,
   Menu,
@@ -26,26 +18,8 @@ import { useHost } from '@/components/use-host';
 import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { NAV_ITEMS } from './nav-items';
 import '../sk-theme.css';
-
-// Every entry here must be a working tool, not a placeholder — a nav entry
-// implies the destination does something. `/teacher/assignments` is back
-// (Phase 4 Task 4 — real create/list/delete against `/manage/assignments`,
-// no longer the honest placeholder it was in Phase 2); `/teacher/inbox` is
-// deleted outright (Part C) since it always rendered "Nothing yet." against
-// an endpoint that doesn't exist. See teacher-nav-honesty.spec for the
-// dead-route regression test.
-export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[] = [
-  { href: '/teacher', label: 'Today', icon: LayoutDashboard },
-  { href: '/teacher/timetable', label: 'Timetable', icon: CalendarDays },
-  { href: '/teacher/attendance', label: 'Attendance', icon: ClipboardCheck },
-  { href: '/teacher/assignments', label: 'Assignments', icon: BookOpen },
-  { href: '/teacher/tests', label: 'Tests', icon: FileText },
-  { href: '/teacher/results', label: 'Results', icon: GraduationCap },
-  { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
-  { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
-  { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },
-];
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
 function trapFocus(e: React.KeyboardEvent<HTMLDivElement>, container: HTMLDivElement | null) {

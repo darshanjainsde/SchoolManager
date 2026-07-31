@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { NAV_ITEMS } from './layout';
+import { NAV_ITEMS } from './nav-items';
 
 const TEACHER_DIR = dirname(fileURLToPath(import.meta.url));
 

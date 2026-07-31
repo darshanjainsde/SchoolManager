@@ -13,6 +13,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "boundary": "depcruise apps/api/src --config .dependency-cruiser.cjs",
+    "preflight": "bash scripts/preflight.sh",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:generate": "pnpm --filter @skoolos/db generate",
     "db:migrate": "pnpm --filter @skoolos/db migrate:dev",
