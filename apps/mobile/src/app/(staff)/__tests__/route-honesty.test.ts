@@ -43,6 +43,16 @@ describe('staff route honesty', () => {
     expect(labels).toEqual(expect.arrayContaining(['Tests', 'Results', 'Requests', 'Holidays', 'Profile']));
   });
 
+  it('lists a Messages row pointing at the thread-list screen, with its detail route hidden', () => {
+    const messages = MORE_ITEMS.find((i) => i.label === 'Messages');
+    expect(messages?.route).toBe('/(staff)/messages');
+    expect(routeFileExists('messages')).toBe(true);
+    // The thread-detail screen is reachable only by tapping a thread, so it is
+    // hidden from the tab bar — registered via HIDDEN_ROUTES, not a More row.
+    expect(HIDDEN_ROUTES).toContain('messages/[threadId]');
+    expect(routeFileExists('messages/[threadId]')).toBe(true);
+  });
+
   it('names the "Today" tab and the "Announcements" tab to match the web nav', () => {
     expect(VISIBLE_TABS.find((t) => t.name === 'today')?.title).toBe('Today');
     expect(VISIBLE_TABS.find((t) => t.name === 'post')?.title).toBe('Announcements');

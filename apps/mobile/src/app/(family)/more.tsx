@@ -71,6 +71,7 @@ export default function More() {
       <SectionTitle title="More" />
       <Card style={{ padding: 4 }}>
         <MoreRow label="Profile" icon="🎓" onPress={() => router.push('/(family)/profile')} />
+        <MoreRow label="Messages" icon="💬" onPress={() => router.push('/(family)/messages')} />
         <MoreRow label="Results" icon="📊" onPress={() => router.push('/(family)/results')} />
         <MoreRow label="Holidays" icon="📅" onPress={() => router.push('/(family)/holidays')} />
       </Card>
