@@ -837,6 +837,10 @@ model NotificationOutbox {
   kind           String
   payload        Json
   classSectionId String       @db.Uuid
+  /// When set, the drain pushes to THIS single user only (a private message —
+  /// MESSAGE_RECEIVED), instead of resolving the whole classSectionId's
+  /// section recipients. Null for the broadcast kinds (exam/result/assignment).
+  targetUserId   String?      @db.Uuid
   createdAt      DateTime     @default(now())
   sentAt         DateTime?
   /// Incremented on every failed send attempt; the drain excludes rows at

@@ -30,6 +30,9 @@ CREATE TABLE "Message" (
     CONSTRAINT "Message_pkey" PRIMARY KEY ("id")
 );
 
+-- AlterTable: private-message push targets a single user, not a whole section.
+ALTER TABLE "NotificationOutbox" ADD COLUMN "targetUserId" UUID;
+
 -- CreateIndex
 CREATE UNIQUE INDEX "MessageThread_studentId_teacherId_subjectId_key" ON "MessageThread"("studentId", "teacherId", "subjectId");
 
