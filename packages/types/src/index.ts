@@ -384,6 +384,77 @@ export interface StudentAssignmentList {
   past: StudentAssignment[];
 }
 
+// ── Messaging (T17) ───────────────────────────────────────────────────────────
+// A student asks one of the teachers who actually teaches them (a subject, from
+// the timetable) a question; the teacher replies. One thread per
+// (student, teacher, subject). All ids are entity ids: `teacherId` is a
+// Teacher.id (matching TimetableSlot.teacherId), `studentId` a Student.id.
+
+export type MessageSenderRole = 'STUDENT' | 'TEACHER';
+
+/** Max length of a single message body, enforced by the DTO on both send paths. */
+export const MESSAGE_BODY_MAX = 2000;
+
+/**
+ * A teacher a student is allowed to message: one who holds a timetable slot for
+ * the student's section teaching this subject this week. Derived server-side
+ * from the timetable — the student picks from this set, never a free id.
+ */
+export interface MessageableTeacher {
+  teacherId: string;
+  teacherName: string;
+  subjectId: string;
+  subjectName: string;
+}
+
+/** One message within a thread. */
+export interface MessageRow {
+  id: string;
+  senderRole: MessageSenderRole;
+  body: string;
+  /** ISO timestamp. */
+  createdAt: string;
+  /** ISO timestamp the OTHER side read this message, or null if unread. */
+  readAt: string | null;
+}
+
+/**
+ * A thread as it appears in a list, on either side. `unreadCount` counts
+ * messages sent by the OTHER party that the caller has not read yet.
+ * `lastMessagePreview` is a short slice of the newest message body.
+ */
+export interface MessageThreadRow {
+  id: string;
+  studentId: string;
+  studentName: string;
+  teacherId: string;
+  teacherName: string;
+  subjectId: string;
+  subjectName: string;
+  /** ISO — threads sort by this, newest first ("response at the top"). */
+  lastMessageAt: string;
+  lastMessagePreview: string | null;
+  unreadCount: number;
+}
+
+/** A thread opened for reading, with its messages in chronological (ascending) order. */
+export interface MessageThreadDetail {
+  thread: MessageThreadRow;
+  messages: MessageRow[];
+}
+
+/** Student starts or continues a thread — `POST /me/messages`. */
+export interface StudentSendMessageInput {
+  teacherId: string;
+  subjectId: string;
+  body: string;
+}
+
+/** Teacher replies within an existing thread — `POST /manage/messages/:threadId`. */
+export interface TeacherReplyInput {
+  body: string;
+}
+
 // ── Notification outbox (S6/S7 wiring — push-on-publish) ─────────────────────
 // `NotificationOutbox` (packages/db) is a transactional outbox: ExamsService
 // writes one row per event INSIDE the same `withTenant` transaction as the
@@ -394,7 +465,7 @@ export interface StudentAssignmentList {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**

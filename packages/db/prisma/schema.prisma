@@ -198,6 +198,8 @@ model School {
   registerChangeRequests RegisterChangeRequest[]
   notificationOutbox     NotificationOutbox[]
   assignments            Assignment[]
+  messageThreads         MessageThread[]
+  messages               Message[]
 }
 
 model Domain {
@@ -576,6 +578,7 @@ model ClassSection {
   registerChangeRequests RegisterChangeRequest[]
   notificationOutbox     NotificationOutbox[]
   assignments            Assignment[]
+  messageThreads         MessageThread[]
 
   @@unique([schoolId, gradeId, name, academicYearId])
   @@index([schoolId])
@@ -592,6 +595,7 @@ model Subject {
   classNotes      ClassNote[]
   classTodos      ClassTodo[]
   assignments     Assignment[]
+  messageThreads  MessageThread[]
 
   @@unique([schoolId, code])
   @@index([schoolId])
@@ -614,6 +618,7 @@ model Teacher {
   classSections    ClassSection[]   @relation("ClassTeacher")
   timetableSlots   TimetableSlot[]
   featuredIn       FeaturedStaff[]
+  messageThreads   MessageThread[]
 
   @@index([schoolId])
 }
@@ -652,6 +657,7 @@ model Student {
   attendance      Attendance[]
   results         Result[]
   assignmentsSeen AssignmentSeen[]
+  messageThreads  MessageThread[]
 
   @@unique([schoolId, admissionNo])
   @@index([schoolId, classSectionId])
@@ -905,6 +911,48 @@ model AssignmentSeen {
   student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([assignmentId, studentId], name: "one_seen_per_assignment_student")
+}
+
+// Messaging (Phase 4 Task 5 / item T17). A student asks one of the teachers who
+// actually teaches them (a subject, from the timetable) a question; the teacher
+// replies. One thread per (student, teacher, subject). `teacherId` is a
+// Teacher.id (matching TimetableSlot.teacherId), `studentId` a Student.id — the
+// authorization join is against the timetable, never client-supplied ids.
+model MessageThread {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  studentId      String   @db.Uuid
+  teacherId      String   @db.Uuid
+  subjectId      String   @db.Uuid
+  classSectionId String   @db.Uuid
+  lastMessageAt  DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher      Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject      Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  classSection ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@unique([studentId, teacherId, subjectId], name: "one_thread_per_student_teacher_subject")
+  @@index([schoolId, teacherId, lastMessageAt])
+  @@index([schoolId, studentId, lastMessageAt])
+}
+
+model Message {
+  id         String    @id @default(uuid()) @db.Uuid
+  schoolId   String    @db.Uuid
+  threadId   String    @db.Uuid
+  senderRole String
+  body       String
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  school School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
 }
 
 // ── Community ────────────────────────────────────────────
