@@ -38,9 +38,12 @@ describe('staff route honesty', () => {
     }
   });
 
-  it('lists everything the web nav lists — Tests, Results, Requests, Holidays, Profile', () => {
+  it('lists the web nav sections — Tests & Results (one row on mobile), Requests, Holidays, Profile', () => {
     const labels = MORE_ITEMS.map((i) => i.label);
-    expect(labels).toEqual(expect.arrayContaining(['Tests', 'Results', 'Requests', 'Holidays', 'Profile']));
+    expect(labels).toEqual(expect.arrayContaining(['Tests & Results', 'Requests', 'Holidays', 'Profile']));
+    // Tests and Results are a single row here (they'd point at the same screen
+    // otherwise) — the tests screen opens a test's results on tap.
+    expect(labels).not.toContain('Results');
   });
 
   it('lists a Messages row pointing at the thread-list screen, with its detail route hidden', () => {

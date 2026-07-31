@@ -34,10 +34,10 @@ beforeEach(async () => {
   });
 });
 
-it('navigates to the tests screen', async () => {
+it('navigates to the tests screen from the merged Tests & Results row', async () => {
   const { findByText } = render(<More />);
 
-  fireEvent.press(await findByText('Tests'));
+  fireEvent.press(await findByText('Tests & Results'));
 
   expect(mockPush).toHaveBeenCalledWith('/(staff)/tests');
 });

@@ -34,10 +34,13 @@ export const HIDDEN_ROUTES = [
 ];
 
 /**
- * More-screen rows. Results has no screen of its own: like the web (whose
- * /teacher/results page is itself a class/exam picker), the entry point IS
- * the tests screen's scheduled-tests list — tapping a test opens its
- * results (see (staff)/tests.tsx's `openResults`).
+ * More-screen rows. Tests and Results share ONE row ("Tests & Results"): the
+ * tests screen lists scheduled tests, and tapping a test opens its results
+ * entry (results/[examId] via (staff)/tests.tsx's `openResults`). Results has
+ * no screen of its own — so two separate rows pointing at the same screen read
+ * as a bug; one row that names both is the honest label. (Web keeps them as
+ * two pages — /teacher/tests to schedule, /teacher/results to enter marks —
+ * because it has the width for a top-level nav; mobile folds them here.)
  *
  * Assignments (Phase 4 Task 4) matches the web nav's label — see
  * apps/web/app/teacher/layout.tsx's NAV_ITEMS.
@@ -45,8 +48,7 @@ export const HIDDEN_ROUTES = [
 export const MORE_ITEMS = [
   { label: 'Assignments', icon: '📚', route: '/(staff)/assignments' as const },
   { label: 'Messages', icon: '💬', route: '/(staff)/messages' as const },
-  { label: 'Tests', icon: '📊', route: '/(staff)/tests' as const },
-  { label: 'Results', icon: '🏆', route: '/(staff)/tests' as const },
+  { label: 'Tests & Results', icon: '📊', route: '/(staff)/tests' as const },
   { label: 'Requests', icon: '📝', route: '/(staff)/requests' as const },
   { label: 'Holidays', icon: '📅', route: '/(staff)/holidays' as const },
   { label: 'Profile', icon: '👤', route: '/(staff)/profile' as const },
