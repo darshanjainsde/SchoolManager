@@ -2,10 +2,12 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   CalendarDays,
   CalendarCheck,
+  BookOpen,
   GraduationCap,
   Megaphone,
   User,
@@ -17,6 +19,7 @@ import { useApi } from '@/lib/use-api';
 import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
 import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
+import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
@@ -25,6 +28,7 @@ const NAV_ITEMS = [
   { href: '/portal', label: 'Home', icon: LayoutDashboard },
   { href: '/portal/timetable', label: 'Timetable', icon: CalendarDays },
   { href: '/portal/attendance', label: 'Attendance', icon: CalendarCheck },
+  { href: '/portal/assignments', label: 'Assignments', icon: BookOpen },
   { href: '/portal/results', label: 'Results', icon: GraduationCap },
   { href: '/portal/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/portal/profile', label: 'Profile', icon: User },
@@ -43,11 +47,23 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   useSessionProbe(probeApi, 'school', !!host);
   const clear = useAuthStore((s) => s.clear);
 
+  // Same role guard as /teacher and /app: this portal is student-only. The
+  // /me/* endpoints already 403 other roles server-side, but without this a
+  // signed-in teacher landing here saw a wall of errors instead of their home.
+  const me = useQuery({
+    queryKey: ['me'],
+    enabled: status === 'authed' && audience === 'school' && !!host,
+    queryFn: () => probeApi.get<{ role: string }>('/auth/me'),
+  });
+
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) {
       router.replace('/login');
     }
-  }, [hydrated, status, audience, router]);
+    if (me.data && me.data.role !== 'STUDENT') {
+      router.replace(homeForRole(me.data.role));
+    }
+  }, [hydrated, status, audience, me.data, router]);
 
   // Until hydrated, render nothing so the first client paint matches the server.
   if (!hydrated) return null;

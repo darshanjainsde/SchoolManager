@@ -1,11 +1,16 @@
 import type { Role, Session } from './session';
 
-export function portalForRole(role: Role): '/(family)/home' | '/(staff)/today' {
+export function portalForRole(role: Role): '/(family)/home' | '/(staff)/today' | '/(worker)/today' {
   switch (role) {
     case 'STUDENT': return '/(family)/home';
     case 'TEACHER':
-    case 'SCHOOL_ADMIN':
-    case 'STAFF': return '/(staff)/today';
+    case 'SCHOOL_ADMIN': return '/(staff)/today';
+    // Non-teaching staff get their own minimal group — they used to land in
+    // (staff), the TEACHER/SCHOOL_ADMIN group (a misleadingly-named folder:
+    // it's the teacher+admin portal, not a "staff" one), which is exactly
+    // the "wrong portal" gap this exists to close. See web's parallel fix
+    // (apps/web/lib/role-routes.ts) for the same STAFF-portal split.
+    case 'STAFF': return '/(worker)/today';
     case 'OWNER': throw new Error('Owner accounts use the web console.');
   }
 }

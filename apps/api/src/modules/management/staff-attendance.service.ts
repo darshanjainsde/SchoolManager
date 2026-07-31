@@ -1,10 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant, type PersonAttendanceStatus } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import type { StaffRoleValue } from './management.dto';
 import type { SaveStaffAttendanceDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-\d{2}$/;
+
+/**
+ * Mirrors `PortalService`'s `IST_DAY_FORMATTER` (duplicated, not imported —
+ * same convention `leave-dates.ts` already follows for this school): the
+ * default month for a self-service "mine" read is the IST calendar month
+ * containing "now", not the server's local month.
+ */
+const IST_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
 
 export type PersonKind = 'TEACHER' | 'STAFF';
 
@@ -46,6 +60,11 @@ export interface PersonAttendanceSummary {
   days: PersonAttendanceDay[];
 }
 
+export interface MyStaffAttendanceResult {
+  person: { id: string; firstName: string; lastName: string; role: StaffRoleValue };
+  summary: PersonAttendanceSummary;
+}
+
 function assertDate(date: string): Date {
   if (!DATE_RE.test(date)) {
     throw new ApiError('VALIDATION', 'date must be formatted as YYYY-MM-DD', 400, 'date');
@@ -58,6 +77,24 @@ function assertKind(kind: string): PersonKind {
     throw new ApiError('VALIDATION', 'kind must be TEACHER or STAFF', 400, 'kind');
   }
   return kind;
+}
+
+/**
+ * Validates a `YYYY-MM` string and turns it into the half-open UTC date
+ * range `[first of month, first of next month)` used to query
+ * `StaffAttendance` — shared by `person()` and `mine()` (was duplicated
+ * inline in `person()` before `mine()` needed the same math).
+ */
+function parseMonth(month: string): { start: Date; end: Date } {
+  if (!MONTH_RE.test(month)) {
+    throw new ApiError('VALIDATION', 'month must be formatted as YYYY-MM', 400, 'month');
+  }
+  const year = Number(month.slice(0, 4));
+  const monthIndex = Number(month.slice(5, 7)) - 1;
+  if (monthIndex < 0 || monthIndex > 11) {
+    throw new ApiError('VALIDATION', 'month must be between 01 and 12', 400, 'month');
+  }
+  return { start: new Date(Date.UTC(year, monthIndex, 1)), end: new Date(Date.UTC(year, monthIndex + 1, 1)) };
 }
 
 /** `Date` (stored as `@db.Date`, i.e. UTC midnight) → `YYYY-MM-DD`. */
@@ -210,16 +247,7 @@ export class StaffAttendanceService {
     month: string,
   ): Promise<PersonAttendanceSummary> {
     const kind = assertKind(kindRaw);
-    if (!MONTH_RE.test(month)) {
-      throw new ApiError('VALIDATION', 'month must be formatted as YYYY-MM', 400, 'month');
-    }
-    const year = Number(month.slice(0, 4));
-    const monthIndex = Number(month.slice(5, 7)) - 1;
-    if (monthIndex < 0 || monthIndex > 11) {
-      throw new ApiError('VALIDATION', 'month must be between 01 and 12', 400, 'month');
-    }
-    const start = new Date(Date.UTC(year, monthIndex, 1));
-    const end = new Date(Date.UTC(year, monthIndex + 1, 1));
+    const { start, end } = parseMonth(month);
 
     return withTenant(schoolId, async (tx) => {
       // Confirms `id` belongs to THIS school before ever querying
@@ -247,31 +275,79 @@ export class StaffAttendanceService {
         select: { date: true, status: true },
       });
 
-      let present = 0;
-      let absent = 0;
-      let late = 0;
-      let onLeave = 0;
-      for (const row of rows) {
-        if (row.status === 'PRESENT') present += 1;
-        else if (row.status === 'ABSENT') absent += 1;
-        else if (row.status === 'LATE') late += 1;
-        else if (row.status === 'ON_LEAVE') onLeave += 1;
+      return summarizeRows(rows);
+    });
+  }
+
+  /**
+   * The CALLER's own staff-attendance record for `month` (defaulting to the
+   * current IST month) — the STAFF-portal counterpart to `person()`, which
+   * is admin-only and takes an id/kind the caller chooses. Here the Staff
+   * row is resolved from the JWT's `userId` via `Staff.userId`, exactly like
+   * `LeaveService.apply`/`mine` resolve a Teacher row — a caller with no
+   * linked Staff row (shouldn't happen for a STAFF-role login, but the JWT
+   * role claim and the Staff row are two different sources of truth) gets
+   * `NOT_STAFF` rather than a confusing empty summary.
+   *
+   * Bundles the caller's name/role alongside the summary so the STAFF
+   * portal's home screen needs only this one call — there is no separate
+   * `/me/profile` for non-students (`PortalController` is `@Roles('STUDENT')`
+   * only).
+   */
+  async mine(schoolId: string, callerUserId: string, monthRaw?: string): Promise<MyStaffAttendanceResult> {
+    const month = monthRaw?.trim() || IST_DAY_FORMATTER.format(new Date()).slice(0, 7);
+    const { start, end } = parseMonth(month);
+
+    return withTenant(schoolId, async (tx) => {
+      const staff = await tx.staff.findFirst({
+        where: { userId: callerUserId, schoolId },
+        select: { id: true, firstName: true, lastName: true, role: true },
+      });
+      if (!staff) {
+        throw new ApiError('NOT_STAFF', 'Only staff can view their own attendance', 403);
       }
 
-      // `onLeave` is deliberately excluded from the denominator — a day the
-      // person was on approved leave shouldn't drag down their attendance
-      // percentage the way an unexcused absence would.
-      const nonLeaveTotal = present + absent + late;
-      const percent = nonLeaveTotal === 0 ? 0 : Math.round((present / nonLeaveTotal) * 100);
+      const rows = await tx.staffAttendance.findMany({
+        where: { schoolId, staffId: staff.id, date: { gte: start, lt: end } },
+        orderBy: { date: 'asc' },
+        select: { date: true, status: true },
+      });
 
       return {
-        present,
-        absent,
-        late,
-        onLeave,
-        percent,
-        days: rows.map((r) => ({ date: toDateKey(r.date), status: r.status })),
+        person: { id: staff.id, firstName: staff.firstName, lastName: staff.lastName, role: staff.role },
+        summary: summarizeRows(rows),
       };
     });
   }
+}
+
+/**
+ * `onLeave` is deliberately excluded from the `percent` denominator — a day
+ * the person was on approved leave shouldn't drag down their attendance
+ * percentage the way an unexcused absence would. Shared by `person()` and
+ * `mine()`.
+ */
+function summarizeRows(rows: { date: Date; status: PersonAttendanceStatus }[]): PersonAttendanceSummary {
+  let present = 0;
+  let absent = 0;
+  let late = 0;
+  let onLeave = 0;
+  for (const row of rows) {
+    if (row.status === 'PRESENT') present += 1;
+    else if (row.status === 'ABSENT') absent += 1;
+    else if (row.status === 'LATE') late += 1;
+    else if (row.status === 'ON_LEAVE') onLeave += 1;
+  }
+
+  const nonLeaveTotal = present + absent + late;
+  const percent = nonLeaveTotal === 0 ? 0 : Math.round((present / nonLeaveTotal) * 100);
+
+  return {
+    present,
+    absent,
+    late,
+    onLeave,
+    percent,
+    days: rows.map((r) => ({ date: toDateKey(r.date), status: r.status })),
+  };
 }

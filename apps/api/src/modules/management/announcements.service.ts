@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { withTenant, type Announcement, type UserRole } from '@skoolos/db';
+import type { AnnouncementMine } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveSchoolRecipients, resolveSectionRecipients } from '../../common/notifications/recipients';
@@ -35,6 +36,35 @@ export class AnnouncementsService {
         include: { classSection: { select: { name: true } } },
       }),
     );
+  }
+
+  /**
+   * The caller's OWN posted rows, newest first — `GET
+   * /manage/announcements/mine` (`TEACHER` only; `SCHOOL_ADMIN` already has
+   * the unfiltered `list()` above and has no need of this one).
+   *
+   * One `AnnouncementMine` per stored row (see the type's doc comment in
+   * `@skoolos/types` for why this is NOT grouped by title/body/createdAt
+   * into a plural `classSectionIds` shape) — each entry maps 1:1 to the
+   * `PATCH`/`DELETE /manage/announcements/:id` the teacher client calls to
+   * edit/delete it.
+   */
+  async mine(schoolId: string, userId: string): Promise<AnnouncementMine[]> {
+    const rows = await withTenant(schoolId, (tx) =>
+      tx.announcement.findMany({
+        where: { schoolId, createdByUserId: userId },
+        orderBy: { createdAt: 'desc' },
+        include: { classSection: { select: { name: true, grade: { select: { name: true } } } } },
+      }),
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      classSectionId: r.classSectionId,
+      className: r.classSection ? `${r.classSection.grade.name}-${r.classSection.name}` : null,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 
   /**
@@ -185,8 +215,43 @@ export class AnnouncementsService {
     return rows;
   }
 
-  async update(schoolId: string, id: string, dto: UpdateAnnouncementDto) {
+  /**
+   * `caller` is required so a TEACHER's edit can be checked against the row
+   * they actually authored — resolved from the STORED row's
+   * `createdByUserId` below, never from anything the client sends.
+   * `SCHOOL_ADMIN` keeps today's unrestricted access (both to any
+   * announcement AND to retargeting `classSectionId`).
+   *
+   * A TEACHER may edit title/body only — class targets are immutable once
+   * posted (v1 decision: retargeting is a delete-and-repost, not an edit,
+   * so the ownership/CLASS_NOT_OWNED check `create()` runs never has to be
+   * re-run here). A TEACHER supplying `classSectionId` at all — even
+   * unchanged — is rejected, since only `SCHOOL_ADMIN` payloads are
+   * expected to carry that field.
+   */
+  async update(
+    schoolId: string,
+    id: string,
+    dto: UpdateAnnouncementDto,
+    caller: { userId: string; role: UserRole },
+  ) {
     return withTenant(schoolId, async (tx) => {
+      const existing = await tx.announcement.findFirst({ where: { id, schoolId } });
+      if (!existing) throw new NotFoundException('Announcement not found');
+
+      if (caller.role === 'TEACHER') {
+        if (existing.createdByUserId !== caller.userId) {
+          throw new ApiError('ANNOUNCEMENT_NOT_OWNED', 'You can only edit your own announcements', 403);
+        }
+        if (dto.classSectionId !== undefined) {
+          throw new ApiError(
+            'ANNOUNCEMENT_TARGETS_LOCKED',
+            'Class targets cannot be changed after posting — delete and repost instead',
+            400,
+          );
+        }
+      }
+
       if (dto.classSectionId) {
         const cs = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
         if (!cs) throw new BadRequestException('classSectionId not found');
@@ -207,8 +272,16 @@ export class AnnouncementsService {
     });
   }
 
-  async remove(schoolId: string, id: string) {
+  /** Same authorship rule as `update` — resolved from the stored row, never client input. */
+  async remove(schoolId: string, id: string, caller: { userId: string; role: UserRole }) {
     return withTenant(schoolId, async (tx) => {
+      const existing = await tx.announcement.findFirst({ where: { id, schoolId } });
+      if (!existing) throw new NotFoundException('Announcement not found');
+
+      if (caller.role === 'TEACHER' && existing.createdByUserId !== caller.userId) {
+        throw new ApiError('ANNOUNCEMENT_NOT_OWNED', 'You can only delete your own announcements', 403);
+      }
+
       try {
         await tx.announcement.delete({ where: { id } });
         return { ok: true };

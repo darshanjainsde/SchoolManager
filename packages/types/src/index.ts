@@ -163,6 +163,31 @@ export interface Announcement {
   createdAt: string;
 }
 
+/**
+ * One of the CALLER'S OWN posted Announcement rows —
+ * `GET /manage/announcements/mine` (`TEACHER` only), newest first.
+ *
+ * `AnnouncementsService.create` writes one `Announcement` ROW PER TARGETED
+ * CLASS SECTION (or a single row with `classSectionId: null` for a
+ * whole-school post) — there is no grouping table joining multiple targets
+ * back into one logical "announcement". `PATCH`/`DELETE
+ * /manage/announcements/:id` likewise each act on exactly one row by `id`.
+ * So `AnnouncementMine` mirrors that: ONE ENTRY PER ROW with a SINGULAR
+ * `classSectionId`/`className`, not a grouped/plural shape — grouping rows
+ * that share a title+body+createdAt into one list item would break the 1:1
+ * a list row needs with the edit/delete endpoint it calls.
+ */
+export interface AnnouncementMine {
+  id: string;
+  title: string;
+  body: string;
+  /** Null = whole-school post. */
+  classSectionId: string | null;
+  /** "{grade}-{section}", e.g. "5-A" — matches `MyClassSection.name`. Null iff `classSectionId` is null. */
+  className: string | null;
+  createdAt: string;
+}
+
 // ── Student portal: profile, attendance, timetable, exams, results ─────────
 
 /** Mirrors PortalService.profile — the caller's own Student row, `GET /me/profile`. */
@@ -286,6 +311,105 @@ export interface SaveResultsResponse {
 /** `POST /manage/exams/:id/publish` */
 export interface PublishResultsResponse {
   published: number;
+}
+
+// ── Assignments (T21) ─────────────────────────────────────────────────────────
+
+export const ASSIGNMENT_ATTACHMENT_KINDS = ['pdf', 'image'] as const;
+export type AssignmentAttachmentKind = (typeof ASSIGNMENT_ATTACHMENT_KINDS)[number];
+
+/**
+ * One uploaded file on an Assignment — the exact shape
+ * `POST /manage/assignments/upload` returns, and what `Assignment.attachments`
+ * stores an array of. Uploaded via a thin endpoint that delegates to the
+ * shared `StorageService` (S3/MinIO), NOT the CMS media service — see
+ * `AssignmentsController`'s docstring.
+ */
+export interface AssignmentAttachment {
+  url: string;
+  name: string;
+  kind: AssignmentAttachmentKind;
+}
+
+/**
+ * Mirrors AssignmentsService's Assignment row — `GET`/`POST /manage/assignments`
+ * (teacher-facing). `seenCount` is the count of `AssignmentSeen` rows for
+ * this assignment (`_count`, v1's only tracking signal — no submission
+ * uploads) and is always included in the list, never a separate round trip.
+ */
+export interface Assignment {
+  id: string;
+  classSectionId: string;
+  subjectId: string;
+  title: string;
+  instructions: string;
+  /** `YYYY-MM-DD` (`@db.Date`) — a plain calendar date, no time component. */
+  dueDate: string;
+  attachments: AssignmentAttachment[];
+  createdByTeacherId: string;
+  createdAt: string;
+  seenCount: number;
+}
+
+/** `GET /manage/assignments?classSectionId=` already splits the list for the caller, same shape as `ExamList`. */
+export interface AssignmentList {
+  upcoming: Assignment[];
+  past: Assignment[];
+}
+
+/** `POST /manage/assignments/upload`'s response — one uploaded attachment, ready to include in a create payload's `attachments` array. */
+export type AssignmentUploadResponse = AssignmentAttachment;
+
+/**
+ * Mirrors PortalService.assignments — `GET /me/assignments`, the student's
+ * own class section's assignments split upcoming/past by `dueDate` (today
+ * counts as upcoming — a same-day due date has not passed yet). `subjectName`
+ * is resolved server-side (a student has no `/manage/subjects` access, unlike
+ * the teacher-facing `Assignment` above which leaves that to the caller).
+ */
+export interface StudentAssignment {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  title: string;
+  instructions: string;
+  dueDate: string;
+  attachments: AssignmentAttachment[];
+  createdAt: string;
+}
+
+/** `GET /me/assignments`'s response shape. */
+export interface StudentAssignmentList {
+  upcoming: StudentAssignment[];
+  past: StudentAssignment[];
+}
+
+// ── Notification outbox (S6/S7 wiring — push-on-publish) ─────────────────────
+// `NotificationOutbox` (packages/db) is a transactional outbox: ExamsService
+// writes one row per event INSIDE the same `withTenant` transaction as the
+// exam/result write, and a cron drain (NotificationOutboxService) sends push
+// and marks it sent. `kind` is a plain `String` column, not a Prisma enum —
+// this union + guard is the single source of truth for which values are
+// legal, validated at write time (mirrors AttendanceStatusValue/
+// HolidayTypeValue above, both also String columns).
+
+/** The events that write a `NotificationOutbox` row today. */
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED'] as const;
+export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
+
+/**
+ * `@IsIn`-style runtime guard for `NotificationOutbox.kind`. There is no DTO
+ * class-validator round-trip here — the row is written directly inside
+ * `ExamsService.create()`/`publish()`'s own transaction — so this assertion
+ * is what actually stops a typo'd kind string from ever reaching the
+ * database, narrowing `string` to `NotificationOutboxKind` for the caller.
+ */
+export function assertNotificationOutboxKind(
+  kind: string,
+): asserts kind is NotificationOutboxKind {
+  if (!(NOTIFICATION_OUTBOX_KINDS as readonly string[]).includes(kind)) {
+    throw new Error(`Invalid NotificationOutbox kind: "${kind}"`);
+  }
 }
 
 // ── Classes, subjects, roster ────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
 import { useApi } from '@/lib/use-api';
 import { isSchoolHost, exampleSchoolHost, platformHref } from '@/lib/hosts';
+import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
@@ -109,10 +110,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     }
   })();
 
-  // The school's resolved feature set drives which nav items are shown.
+  // The school's resolved feature set drives which nav items are shown, and
+  // `role` gates the console itself — see the redirect effect below.
   const { data: me } = useQuery({
     queryKey: ['me', host],
-    queryFn: () => api.get<{ features?: string[] }>('/auth/me'),
+    queryFn: () => api.get<{ features?: string[]; role?: string }>('/auth/me'),
     enabled: hydrated && isSchoolHost(host) && hasSession && audience === 'school',
     staleTime: 5 * 60_000,
   });
@@ -129,6 +131,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       router.replace('/login');
     }
   }, [hydrated, status, hasSession, audience, router]);
+
+  // The admin console is SCHOOL_ADMIN-only — this was previously the ONE
+  // school-audience layout with no role check at all, so a STAFF (or any
+  // other non-admin) session that landed here directly (e.g. bounced out of
+  // /teacher's own guard) saw the full admin UI. `role` is undefined until
+  // `me` resolves, so this only fires once we actually know it's wrong.
+  useEffect(() => {
+    if (me?.role && me.role !== 'SCHOOL_ADMIN') {
+      router.replace(homeForRole(me.role));
+    }
+  }, [me?.role, router]);
 
   // Close the mobile drawer whenever navigation happens (Link clicks already
   // do this eagerly; this covers back/forward and any other route change).

@@ -5,13 +5,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
-  ClipboardCheck,
-  FileText,
-  GraduationCap,
-  Megaphone,
-  CalendarDays,
-  CalendarOff,
-  CalendarRange,
   User,
   LogOut,
   Menu,
@@ -22,26 +15,11 @@ import { useApi } from '@/lib/use-api';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
+import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { NAV_ITEMS } from './nav-items';
 import '../sk-theme.css';
-
-// Every entry here must be a working tool, not a placeholder — a nav entry
-// implies the destination does something. `/teacher/assignments` stays a
-// reachable (but unlisted) honest placeholder; `/teacher/inbox` is deleted
-// outright (Part C) since it always rendered "Nothing yet." against an
-// endpoint that doesn't exist. See teacher-nav-honesty.spec for the
-// dead-route regression test.
-export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[] = [
-  { href: '/teacher', label: 'Today', icon: LayoutDashboard },
-  { href: '/teacher/timetable', label: 'Timetable', icon: CalendarDays },
-  { href: '/teacher/attendance', label: 'Attendance', icon: ClipboardCheck },
-  { href: '/teacher/tests', label: 'Tests', icon: FileText },
-  { href: '/teacher/results', label: 'Results', icon: GraduationCap },
-  { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
-  { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
-  { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },
-];
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
 function trapFocus(e: React.KeyboardEvent<HTMLDivElement>, container: HTMLDivElement | null) {
@@ -102,7 +80,12 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) router.replace('/login');
-    if (me.data && me.data.role !== 'TEACHER' && me.data.role !== 'SCHOOL_ADMIN') router.replace('/app');
+    // Route by the CALLER's actual role rather than always bouncing to
+    // '/app' — that previously sent STAFF (and anyone else) into the admin
+    // console, which has no business accepting them either.
+    if (me.data && me.data.role !== 'TEACHER' && me.data.role !== 'SCHOOL_ADMIN') {
+      router.replace(homeForRole(me.data.role));
+    }
   }, [hydrated, status, audience, me.data, router]);
 
   // Close the mobile drawer whenever navigation happens.

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { NAV_ITEMS } from './layout';
+import { NAV_ITEMS } from './nav-items';
 
 const TEACHER_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -35,8 +35,14 @@ describe('teacher nav honesty', () => {
     expect(NAV_ITEMS.some((i) => i.href === '/teacher/inbox')).toBe(false);
   });
 
-  it('does not list Assignments — an honest placeholder page, not a working tool, stays out of the nav', () => {
-    expect(NAV_ITEMS.some((i) => i.href === '/teacher/assignments')).toBe(false);
+  /**
+   * Phase 4 Task 4: Assignments graduated from an honest placeholder to a
+   * real tool (create/list/delete against `/manage/assignments`) and is
+   * back in the nav, matching the mobile app's staff More row of the same
+   * name (`@/lib/staff-nav`'s `MORE_ITEMS`).
+   */
+  it('lists Assignments now that it is a working tool, not a placeholder', () => {
+    expect(NAV_ITEMS.find((i) => i.href === '/teacher/assignments')?.label).toBe('Assignments');
   });
 
   /**

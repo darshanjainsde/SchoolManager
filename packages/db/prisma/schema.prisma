@@ -145,57 +145,59 @@ enum ClassNoteVisibility {
 
 // ── Tenancy & access ─────────────────────────────────────
 model School {
-  id        String       @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String       @unique
-  tier      Tier         @default(BASIC)
-  status    SchoolStatus @default(SETUP)
-  timezone  String       @default("Asia/Kolkata")
-  locale    String       @default("en-IN")
-  workingDays Int[]      @default([1, 2, 3, 4, 5, 6])
+  id                  String              @id @default(uuid()) @db.Uuid
+  name                String
+  slug                String              @unique
+  tier                Tier                @default(BASIC)
+  status              SchoolStatus        @default(SETUP)
+  timezone            String              @default("Asia/Kolkata")
+  locale              String              @default("en-IN")
+  workingDays         Int[]               @default([1, 2, 3, 4, 5, 6])
   classNoteVisibility ClassNoteVisibility @default(ALL_TEACHERS)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
-  domains          Domain[]
-  featureOverrides FeatureOverride[]
-  users            User[]
-  auditLogs        AuditLog[]
-  profile          SchoolProfile?
-  homepage         HomepageContent?
-  stats            StatItem[]
-  socialLinks      SocialLink[]
-  menuItems        MenuItem[]
-  media            MediaAsset[]
-  featuredStaff    FeaturedStaff[]
-  academicYears    AcademicYear[]
-  grades           Grade[]
-  classSections    ClassSection[]
-  subjects         Subject[]
-  teachers         Teacher[]
-  students         Student[]
-  periods          Period[]
-  timetableSlots   TimetableSlot[]
-  events           Event[]
-  enquiries        Enquiry[]
-  announcements    Announcement[]
-  courses            Course[]
-  courseFees         CourseFee[]
-  admissionSteps     AdmissionStep[]
-  admissionsSettings AdmissionsSettings?
-  hallOfFameEntries  HallOfFameEntry[]
-  attendance         Attendance[]
-  substitutions      Substitution[]
-  staff              Staff[]
-  staffAttendance    StaffAttendance[]
-  leaveApplications  LeaveApplication[]
-  pushTokens         PushToken[]
-  holidays           Holiday[]
-  blogPosts          BlogPost[]
-  blogSelections     SchoolBlogSelection[]
+  domains                Domain[]
+  featureOverrides       FeatureOverride[]
+  users                  User[]
+  auditLogs              AuditLog[]
+  profile                SchoolProfile?
+  homepage               HomepageContent?
+  stats                  StatItem[]
+  socialLinks            SocialLink[]
+  menuItems              MenuItem[]
+  media                  MediaAsset[]
+  featuredStaff          FeaturedStaff[]
+  academicYears          AcademicYear[]
+  grades                 Grade[]
+  classSections          ClassSection[]
+  subjects               Subject[]
+  teachers               Teacher[]
+  students               Student[]
+  periods                Period[]
+  timetableSlots         TimetableSlot[]
+  events                 Event[]
+  enquiries              Enquiry[]
+  announcements          Announcement[]
+  courses                Course[]
+  courseFees             CourseFee[]
+  admissionSteps         AdmissionStep[]
+  admissionsSettings     AdmissionsSettings?
+  hallOfFameEntries      HallOfFameEntry[]
+  attendance             Attendance[]
+  substitutions          Substitution[]
+  staff                  Staff[]
+  staffAttendance        StaffAttendance[]
+  leaveApplications      LeaveApplication[]
+  pushTokens             PushToken[]
+  holidays               Holiday[]
+  blogPosts              BlogPost[]
+  blogSelections         SchoolBlogSelection[]
   classNotes             ClassNote[]
   classTodos             ClassTodo[]
   registerChangeRequests RegisterChangeRequest[]
+  notificationOutbox     NotificationOutbox[]
+  assignments            Assignment[]
 }
 
 model Domain {
@@ -223,19 +225,19 @@ model FeatureOverride {
 }
 
 model User {
-  id                  String    @id @default(uuid()) @db.Uuid
-  schoolId            String?   @db.Uuid
+  id                  String               @id @default(uuid()) @db.Uuid
+  schoolId            String?              @db.Uuid
   email               String
   username            String?
   passwordHash        String
   role                UserRole
-  isActive            Boolean   @default(true)
+  isActive            Boolean              @default(true)
   mfaSecret           String?
-  failedLoginAttempts Int       @default(0)
+  failedLoginAttempts Int                  @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
-  createdAt           DateTime  @default(now())
-  school              School?   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt           DateTime             @default(now())
+  school              School?              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   impersonationTokens ImpersonationToken[]
@@ -322,70 +324,70 @@ model AuditLog {
 
 // ── Website content (CMS) ────────────────────────────────
 model SchoolProfile {
-  id                String  @id @default(uuid()) @db.Uuid
-  schoolId          String  @unique @db.Uuid
-  logoAssetId       String? @db.Uuid
-  faviconAssetId    String? @db.Uuid
-  brandColorPrimary String  @default("#3ee6b0")
-  brandColorSecondary String @default("#7c6cff")
-  headingFont       String  @default("INTER")
-  heroStyle         String  @default("ILLUSTRATION")
-  animationLevel    String  @default("FULL")
-  themePreset       String?
+  id                  String  @id @default(uuid()) @db.Uuid
+  schoolId            String  @unique @db.Uuid
+  logoAssetId         String? @db.Uuid
+  faviconAssetId      String? @db.Uuid
+  brandColorPrimary   String  @default("#3ee6b0")
+  brandColorSecondary String  @default("#7c6cff")
+  headingFont         String  @default("INTER")
+  heroStyle           String  @default("ILLUSTRATION")
+  animationLevel      String  @default("FULL")
+  themePreset         String?
   // First-screen layout system. heroStyle above is the legacy 3-value field,
   // kept in sync by the CMS service (PHOTO→FULL_BLEED etc.) for old clients.
-  heroLayout         String  @default("ILLUSTRATION")
-  heroTextAlign      String  @default("LEFT")
-  heroOverlayStyle   String  @default("WASH")
-  heroOverlayOpacity Int     @default(65)
-  heroHeight         String  @default("FULL")
-  headlineAccent     String  @default("DRAW")
-  navStyle           String  @default("CLASSIC")
-  navColor           String  @default("PAPER")
-  navTextColor       String  @default("AUTO")
-  navCtaLabel        String  @default("Enquire")
-  navShowCta         Boolean @default(true)
-  navShowLogin       Boolean @default(true)
-  navLoginLabel      String  @default("Login")
-  blogLayout         String  @default("HERO_GRID")
-  blogHeroLimit      Int     @default(1)
-  phone             String?
-  email             String?
-  addressLine1      String?
-  addressLine2      String?
-  city              String?
-  region            String?
-  postalCode        String?
-  country           String?
-  geoLat            Float?
-  geoLng            Float?
-  mapEmbedUrl       String?
-  school            School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  heroLayout          String  @default("ILLUSTRATION")
+  heroTextAlign       String  @default("LEFT")
+  heroOverlayStyle    String  @default("WASH")
+  heroOverlayOpacity  Int     @default(65)
+  heroHeight          String  @default("FULL")
+  headlineAccent      String  @default("DRAW")
+  navStyle            String  @default("CLASSIC")
+  navColor            String  @default("PAPER")
+  navTextColor        String  @default("AUTO")
+  navCtaLabel         String  @default("Enquire")
+  navShowCta          Boolean @default(true)
+  navShowLogin        Boolean @default(true)
+  navLoginLabel       String  @default("Login")
+  blogLayout          String  @default("HERO_GRID")
+  blogHeroLimit       Int     @default(1)
+  phone               String?
+  email               String?
+  addressLine1        String?
+  addressLine2        String?
+  city                String?
+  region              String?
+  postalCode          String?
+  country             String?
+  geoLat              Float?
+  geoLng              Float?
+  mapEmbedUrl         String?
+  school              School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model HomepageContent {
-  id                 String  @id @default(uuid()) @db.Uuid
-  schoolId           String  @unique @db.Uuid
-  heroAssetId        String? @db.Uuid
-  headline           String  @default("Welcome")
-  subheadline        String?
-  aboutText          String?
-  principalName      String?
-  principalMessage   String?
-  principalPhotoAssetId String? @db.Uuid
+  id                    String   @id @default(uuid()) @db.Uuid
+  schoolId              String   @unique @db.Uuid
+  heroAssetId           String?  @db.Uuid
+  headline              String   @default("Welcome")
+  subheadline           String?
+  aboutText             String?
+  principalName         String?
+  principalMessage      String?
+  principalPhotoAssetId String?  @db.Uuid
   // Wide image for the About section's picture card (campus/community photo);
   // falls back to the principal photo, then a placeholder.
-  aboutImageAssetId  String? @db.Uuid
+  aboutImageAssetId     String?  @db.Uuid
   // Ordered hero image slots (MediaAsset kind HERO, max 5) for multi-image
   // layouts; heroAssetId above stays in sync with slot 1 for old clients.
-  heroImageAssetIds  String[] @default([]) @db.Uuid
+  heroImageAssetIds     String[] @default([]) @db.Uuid
   // Which content sections render on the homepage. Full details always live on
   // the dedicated pages (/admissions, /gallery, /connect, /contact).
-  showAdmissions     Boolean @default(true)
-  showGallery        Boolean @default(true)
-  showEvents         Boolean @default(true)
-  showContact        Boolean @default(true)
-  school             School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  showAdmissions        Boolean  @default(true)
+  showGallery           Boolean  @default(true)
+  showEvents            Boolean  @default(true)
+  showContact           Boolean  @default(true)
+  school                School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model StatItem {
@@ -411,16 +413,16 @@ model SocialLink {
 }
 
 model MenuItem {
-  id       String   @id @default(uuid()) @db.Uuid
-  schoolId String   @db.Uuid
+  id       String     @id @default(uuid()) @db.Uuid
+  schoolId String     @db.Uuid
   label    String
   slug     String
-  order    Int      @default(0)
-  kind     MenuKind @default(CUSTOM)
-  parentId String?  @db.Uuid
-  refId    String?  @db.Uuid
-  school   School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  parent   MenuItem? @relation("MenuTree", fields: [parentId], references: [id], onDelete: Cascade)
+  order    Int        @default(0)
+  kind     MenuKind   @default(CUSTOM)
+  parentId String?    @db.Uuid
+  refId    String?    @db.Uuid
+  school   School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  parent   MenuItem?  @relation("MenuTree", fields: [parentId], references: [id], onDelete: Cascade)
   children MenuItem[] @relation("MenuTree")
 
   @@unique([schoolId, slug])
@@ -445,14 +447,14 @@ model MediaAsset {
 }
 
 model FeaturedStaff {
-  id           String  @id @default(uuid()) @db.Uuid
-  schoolId     String  @db.Uuid
-  teacherId    String? @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @db.Uuid
+  teacherId    String?  @db.Uuid
   name         String
   role         String
-  photoAssetId String? @db.Uuid
-  order        Int     @default(0)
-  school       School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  photoAssetId String?  @db.Uuid
+  order        Int      @default(0)
+  school       School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   teacher      Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
 
   @@index([schoolId])
@@ -461,17 +463,17 @@ model FeaturedStaff {
 // Public "courses/classes offered" — CMS content for ALL tiers, fully
 // separate from the Management (Pro) Grade/ClassSection operational models.
 model Course {
-  id           String   @id @default(uuid()) @db.Uuid
-  schoolId     String   @db.Uuid
+  id           String            @id @default(uuid()) @db.Uuid
+  schoolId     String            @db.Uuid
   name         String
   tagline      String?
   description  String?
-  highlights   String[] @default([])
+  highlights   String[]          @default([])
   ageRange     String?
-  imageAssetId String?  @db.Uuid
-  featured     Boolean  @default(false)
-  order        Int      @default(0)
-  school       School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  imageAssetId String?           @db.Uuid
+  featured     Boolean           @default(false)
+  order        Int               @default(0)
+  school       School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   fee          CourseFee?
   hallOfFame   HallOfFameEntry[]
 
@@ -529,13 +531,13 @@ model HallOfFameEntry {
 
 // ── Management (Pro) ─────────────────────────────────────
 model AcademicYear {
-  id        String   @id @default(uuid()) @db.Uuid
-  schoolId  String   @db.Uuid
-  name      String
-  startDate DateTime
-  endDate   DateTime
-  isCurrent Boolean  @default(false)
-  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  id             String          @id @default(uuid()) @db.Uuid
+  schoolId       String          @db.Uuid
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  isCurrent      Boolean         @default(false)
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSections  ClassSection[]
   timetableSlots TimetableSlot[]
 
@@ -544,11 +546,11 @@ model AcademicYear {
 }
 
 model Grade {
-  id       String @id @default(uuid()) @db.Uuid
-  schoolId String @db.Uuid
-  name     String
-  order    Int    @default(0)
-  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  id            String         @id @default(uuid()) @db.Uuid
+  schoolId      String         @db.Uuid
+  name          String
+  order         Int            @default(0)
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSections ClassSection[]
 
   @@unique([schoolId, name])
@@ -556,59 +558,62 @@ model Grade {
 }
 
 model ClassSection {
-  id             String  @id @default(uuid()) @db.Uuid
-  schoolId       String  @db.Uuid
-  gradeId        String  @db.Uuid
-  name           String
-  classTeacherId String? @db.Uuid
-  academicYearId String  @db.Uuid
-  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  grade          Grade        @relation(fields: [gradeId], references: [id], onDelete: Cascade)
-  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  classTeacher   Teacher?     @relation("ClassTeacher", fields: [classTeacherId], references: [id], onDelete: SetNull)
-  students       Student[]
-  timetableSlots TimetableSlot[]
-  announcements  Announcement[]
+  id                     String                  @id @default(uuid()) @db.Uuid
+  schoolId               String                  @db.Uuid
+  gradeId                String                  @db.Uuid
+  name                   String
+  classTeacherId         String?                 @db.Uuid
+  academicYearId         String                  @db.Uuid
+  school                 School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  grade                  Grade                   @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  academicYear           AcademicYear            @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  classTeacher           Teacher?                @relation("ClassTeacher", fields: [classTeacherId], references: [id], onDelete: SetNull)
+  students               Student[]
+  timetableSlots         TimetableSlot[]
+  announcements          Announcement[]
   classNotes             ClassNote[]
   classTodos             ClassTodo[]
   registerChangeRequests RegisterChangeRequest[]
+  notificationOutbox     NotificationOutbox[]
+  assignments            Assignment[]
 
   @@unique([schoolId, gradeId, name, academicYearId])
   @@index([schoolId])
 }
 
 model Subject {
-  id       String @id @default(uuid()) @db.Uuid
-  schoolId String @db.Uuid
-  name     String
-  code     String
-  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  id              String           @id @default(uuid()) @db.Uuid
+  schoolId        String           @db.Uuid
+  name            String
+  code            String
+  school          School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   teacherSubjects TeacherSubject[]
   timetableSlots  TimetableSlot[]
   classNotes      ClassNote[]
   classTodos      ClassTodo[]
+  assignments     Assignment[]
 
   @@unique([schoolId, code])
   @@index([schoolId])
 }
 
 model Teacher {
-  id             String  @id @default(uuid()) @db.Uuid
-  schoolId       String  @db.Uuid
-  userId         String? @db.Uuid
-  firstName      String
-  lastName       String
-  email          String?
-  phone          String?
-  photoAssetId   String? @db.Uuid
-  primarySubjectId String? @db.Uuid
-  bio            String?
-  isActive       Boolean @default(true)
-  school         School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  teacherSubjects TeacherSubject[]
-  classSections  ClassSection[] @relation("ClassTeacher")
-  timetableSlots TimetableSlot[]
-  featuredIn     FeaturedStaff[]
+  id               String           @id @default(uuid()) @db.Uuid
+  schoolId         String           @db.Uuid
+  userId           String?          @db.Uuid
+  firstName        String
+  lastName         String
+  email            String?
+  phone            String?
+  photoAssetId     String?          @db.Uuid
+  primarySubjectId String?          @db.Uuid
+  bio              String?
+  isActive         Boolean          @default(true)
+  school           School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacherSubjects  TeacherSubject[]
+  classSections    ClassSection[]   @relation("ClassTeacher")
+  timetableSlots   TimetableSlot[]
+  featuredIn       FeaturedStaff[]
 
   @@index([schoolId])
 }
@@ -626,40 +631,41 @@ model TeacherSubject {
 }
 
 model Student {
-  id             String   @id @default(uuid()) @db.Uuid
-  schoolId       String   @db.Uuid
-  admissionNo    String
-  firstName      String
-  lastName       String
-  email          String?
-  classSectionId String?  @db.Uuid
-  rollNo         String?
-  dob            DateTime?
-  gender         String?
-  guardianName   String?
-  guardianPhone  String?
-  photoAssetId   String?  @db.Uuid
-  userId         String?  @unique @db.Uuid
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  school         School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
-  attendance     Attendance[]
-  results        Result[]
+  id              String           @id @default(uuid()) @db.Uuid
+  schoolId        String           @db.Uuid
+  admissionNo     String
+  firstName       String
+  lastName        String
+  email           String?
+  classSectionId  String?          @db.Uuid
+  rollNo          String?
+  dob             DateTime?
+  gender          String?
+  guardianName    String?
+  guardianPhone   String?
+  photoAssetId    String?          @db.Uuid
+  userId          String?          @unique @db.Uuid
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  school          School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection    ClassSection?    @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
+  attendance      Attendance[]
+  results         Result[]
+  assignmentsSeen AssignmentSeen[]
 
   @@unique([schoolId, admissionNo])
   @@index([schoolId, classSectionId])
 }
 
 model Period {
-  id        String     @id @default(uuid()) @db.Uuid
-  schoolId  String     @db.Uuid
-  order     Int
-  label     String
-  startTime String
-  endTime   String
-  kind      PeriodKind @default(CLASS)
-  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  id             String          @id @default(uuid()) @db.Uuid
+  schoolId       String          @db.Uuid
+  order          Int
+  label          String
+  startTime      String
+  endTime        String
+  kind           PeriodKind      @default(CLASS)
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   timetableSlots TimetableSlot[]
 
   @@unique([schoolId, order])
@@ -667,15 +673,15 @@ model Period {
 }
 
 model TimetableSlot {
-  id             String @id @default(uuid()) @db.Uuid
-  schoolId       String @db.Uuid
-  classSectionId String @db.Uuid
+  id             String       @id @default(uuid()) @db.Uuid
+  schoolId       String       @db.Uuid
+  classSectionId String       @db.Uuid
   dayOfWeek      Int
-  periodId       String @db.Uuid
-  subjectId      String @db.Uuid
-  teacherId      String @db.Uuid
-  academicYearId String @db.Uuid
-  effectiveFrom  DateTime @default(now())
+  periodId       String       @db.Uuid
+  subjectId      String       @db.Uuid
+  teacherId      String       @db.Uuid
+  academicYearId String       @db.Uuid
+  effectiveFrom  DateTime     @default(now())
   effectiveTo    DateTime?
   school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
@@ -693,16 +699,17 @@ model TimetableSlot {
 
 // ── Academics: attendance, exams, results ────────────────
 model Attendance {
-  id             String  @id @default(uuid()) @db.Uuid
-  schoolId       String  @db.Uuid
-  studentId      String  @db.Uuid
-  classSectionId String  @db.Uuid
-  date           DateTime @db.Date
+  id             String           @id @default(uuid()) @db.Uuid
+  schoolId       String           @db.Uuid
+  studentId      String           @db.Uuid
+  classSectionId String           @db.Uuid
+  date           DateTime         @db.Date
   status         AttendanceStatus
-  markedById     String  @db.Uuid   // Teacher.id
-  createdAt      DateTime @default(now())
-  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  markedById     String           @db.Uuid // Teacher.id
+  createdAt      DateTime         @default(now())
+  school         School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student        Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
   @@unique([studentId, date], name: "one_mark_per_student_day")
   @@index([schoolId, classSectionId, date])
 }
@@ -774,50 +781,151 @@ model LeaveApplication {
 }
 
 model Exam {
-  id             String  @id @default(uuid()) @db.Uuid
-  schoolId       String  @db.Uuid
-  classSectionId String  @db.Uuid
-  subjectId      String  @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  classSectionId String   @db.Uuid
+  subjectId      String   @db.Uuid
   title          String
   scheduledAt    DateTime
   syllabus       String?
   maxMarks       Int
-  createdById    String  @db.Uuid
+  createdById    String   @db.Uuid
   createdAt      DateTime @default(now())
-  results Result[]
+  results        Result[]
+
   @@index([schoolId, classSectionId, scheduledAt])
 }
 
 model Result {
-  id          String  @id @default(uuid()) @db.Uuid
-  examId      String  @db.Uuid
-  studentId   String  @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  examId      String    @db.Uuid
+  studentId   String    @db.Uuid
   marks       Float
   publishedAt DateTime?
-  exam    Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
   @@unique([examId, studentId], name: "one_result_per_exam_student")
+}
+
+/// Transactional outbox for "families' phones get told" events (S6/S7 wiring,
+/// Portal Parity R3 Phase 4 Task 2). `ExamsService.create()`/`publish()`
+/// write one row here IN THE SAME `withTenant` transaction as the exam/result
+/// write itself — so a result is never published without its notification
+/// row existing, and a rolled-back transaction leaves no orphan row either.
+/// A cron drain (`NotificationOutboxService`, `internal/cron/notification-outbox`)
+/// reads unsent rows and sends push via the existing `PushChannel`, then sets
+/// `sentAt`. `kind` is a plain String (not a Prisma enum) validated at write
+/// time via `assertNotificationOutboxKind` (`@skoolos/types`) — matches the
+/// String-kind pattern already used for `LeaveApplication.type`/`Holiday.type`
+/// elsewhere in this schema.
+///
+/// `payload` is DENORMALISED at write time (exam title, subject/class name,
+/// maxMarks/date already resolved to display strings) so the drain never
+/// joins back to `Exam`/`Subject`/`ClassSection` — see
+/// `ExamScheduledOutboxPayload`/`ResultPublishedOutboxPayload`
+/// (apps/api/src/common/notifications/notification.types.ts).
+model NotificationOutbox {
+  id             String       @id @default(uuid()) @db.Uuid
+  schoolId       String       @db.Uuid
+  kind           String
+  payload        Json
+  classSectionId String       @db.Uuid
+  createdAt      DateTime     @default(now())
+  sentAt         DateTime?
+  /// Incremented on every failed send attempt; the drain excludes rows at
+  /// or above its MAX_ATTEMPTS cap rather than retrying forever.
+  attempts       Int          @default(0)
+  lastError      String?
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+
+  /// The drain's own query shape: unsent rows, oldest first.
+  @@index([schoolId, sentAt])
+}
+
+/// A teacher-posted assignment for one class section (T21, Portal Parity R3
+/// Phase 4 Task 4). `attachments` is a denormalised JSON array of
+/// `{ url, name, kind }` (`kind`: `'pdf' | 'image'`), each uploaded via
+/// `POST /manage/assignments/upload` — a THIN endpoint that delegates
+/// straight to `StorageService` (the shared S3/MinIO client also used by
+/// `MediaService`), NOT the CMS media service itself: `MediaService`/
+/// `MediaAsset` are scoped to a fixed site-content `kind` taxonomy
+/// (LOGO/HERO/GALLERY/…), image-only, and carry no `@Roles` guard at all —
+/// wrong shape and wrong ACL for a teacher-facing PDF/image attachment (see
+/// `AssignmentsController`'s docstring for the full reasoning).
+///
+/// v1 has NO submission uploads (a marking workflow, deliberately cut) —
+/// tracking is per-class visibility plus `AssignmentSeen` "opened" marks
+/// only.
+///
+/// `createdByTeacherId` stores the CALLER'S `User.id` — mirrors
+/// `Exam.createdById` exactly, including its reasoning: this field is
+/// ATTRIBUTION ONLY, never the authorization gate. Ownership for
+/// create/list/delete is resolved entirely via `classSectionId` through
+/// `assertClassOwned`/`AttendanceService.myClassSections`, the SAME rule
+/// `ExamsService` uses (covering-only teachers excluded) — never a second,
+/// creator-based check.
+model Assignment {
+  id                 String   @id @default(uuid()) @db.Uuid
+  schoolId           String   @db.Uuid
+  classSectionId     String   @db.Uuid
+  subjectId          String   @db.Uuid
+  title              String
+  instructions       String
+  dueDate            DateTime @db.Date
+  attachments        Json     @default("[]")
+  createdByTeacherId String   @db.Uuid
+  createdAt          DateTime @default(now())
+
+  school       School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection ClassSection     @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subject      Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  seen         AssignmentSeen[]
+
+  @@index([schoolId, classSectionId, dueDate])
+}
+
+/// A student's "seen/opened" mark for an `Assignment` — v1's ONLY tracking
+/// signal (see `Assignment`'s docstring: no submission uploads yet).
+/// `AssignmentsService.markSeen` upserts on the unique pair below, so a
+/// student re-opening the same assignment twice never creates a second row
+/// — idempotent by construction, not by a pre-check.
+///
+/// No `schoolId` column of its own — tenancy is derived via
+/// `assignmentId -> Assignment.schoolId`, the SAME pattern `Result`'s RLS
+/// policy already uses for `examId -> Exam.schoolId` (see the migration).
+model AssignmentSeen {
+  id           String   @id @default(uuid()) @db.Uuid
+  assignmentId String   @db.Uuid
+  studentId    String   @db.Uuid
+  seenAt       DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId], name: "one_seen_per_assignment_student")
 }
 
 // ── Community ────────────────────────────────────────────
 model Event {
-  id              String      @id @default(uuid()) @db.Uuid
-  schoolId        String      @db.Uuid
-  title           String
-  description     String?
-  coverAssetId    String?     @db.Uuid
-  startAt         DateTime
-  endAt           DateTime?
+  id               String      @id @default(uuid()) @db.Uuid
+  schoolId         String      @db.Uuid
+  title            String
+  description      String?
+  coverAssetId     String?     @db.Uuid
+  startAt          DateTime
+  endAt            DateTime?
   venue            String?
   coverUrl         String?
   originSchoolName String?
-  scope           EventScope  @default(SCHOOL)
-  status          EventStatus @default(DRAFT)
-  createdByUserId String?     @db.Uuid
-  approvedByUserId String?    @db.Uuid
-  approvedAt      DateTime?
-  createdAt       DateTime    @default(now())
-  school          School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  scope            EventScope  @default(SCHOOL)
+  status           EventStatus @default(DRAFT)
+  createdByUserId  String?     @db.Uuid
+  approvedByUserId String?     @db.Uuid
+  approvedAt       DateTime?
+  createdAt        DateTime    @default(now())
+  school           School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
   @@index([scope, status])
@@ -838,16 +946,16 @@ model PasswordResetToken {
 }
 
 model Enquiry {
-  id           String        @id @default(uuid()) @db.Uuid
-  schoolId     String        @db.Uuid
-  parentName   String
-  phone        String
-  email        String?
+  id            String        @id @default(uuid()) @db.Uuid
+  schoolId      String        @db.Uuid
+  parentName    String
+  phone         String
+  email         String?
   gradeInterest String?
-  message      String?
-  status       EnquiryStatus @default(NEW)
-  createdAt    DateTime      @default(now())
-  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  message       String?
+  status        EnquiryStatus @default(NEW)
+  createdAt     DateTime      @default(now())
+  school        School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
 }
@@ -939,23 +1047,23 @@ enum BlogGlobalStatus {
 }
 
 model BlogPost {
-  id           String           @id @default(uuid()) @db.Uuid
+  id           String                @id @default(uuid()) @db.Uuid
   scope        BlogScope
-  schoolId     String?          @db.Uuid
+  schoolId     String?               @db.Uuid
   slug         String
   title        String
   description  String
   heroImageUrl String?
-  readMinutes  Int              @default(4)
-  sections     Json             // BlogBlock[] — see Block Schema
-  status       BlogStatus       @default(DRAFT)
-  globalStatus BlogGlobalStatus @default(NONE)
-  globalSlug   String?          @unique   // set on global approval; PLATFORM posts: = slug
+  readMinutes  Int                   @default(4)
+  sections     Json // BlogBlock[] — see Block Schema
+  status       BlogStatus            @default(DRAFT)
+  globalStatus BlogGlobalStatus      @default(NONE)
+  globalSlug   String?               @unique // set on global approval; PLATFORM posts: = slug
   rejectReason String?
   publishedAt  DateTime?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  school       School?          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  school       School?               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   selections   SchoolBlogSelection[]
 
   @@unique([schoolId, slug])
@@ -989,35 +1097,35 @@ enum RegisterChangeStatus {
 /// and the date, not to the teacher, so a co-teacher of the same section sees
 /// the same log — the point is continuity for the class, not a private diary.
 model ClassNote {
-  id             String   @id @default(uuid()) @db.Uuid
-  schoolId       String   @db.Uuid
-  classSectionId String   @db.Uuid
-  subjectId      String   @db.Uuid
-  date           DateTime @db.Date
-  body           String
-  authorTeacherId String  @db.Uuid
-  createdAt      DateTime @default(now())
-  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
-  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  id              String       @id @default(uuid()) @db.Uuid
+  schoolId        String       @db.Uuid
+  classSectionId  String       @db.Uuid
+  subjectId       String       @db.Uuid
+  date            DateTime     @db.Date
+  body            String
+  authorTeacherId String       @db.Uuid
+  createdAt       DateTime     @default(now())
+  school          School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection    ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subject         Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, classSectionId, date, subjectId])
 }
 
 /// A tickable task a teacher sets for one class on one day.
 model ClassTodo {
-  id             String   @id @default(uuid()) @db.Uuid
-  schoolId       String   @db.Uuid
-  classSectionId String   @db.Uuid
-  subjectId      String   @db.Uuid
-  date           DateTime @db.Date
-  body           String
-  done           Boolean  @default(false)
-  authorTeacherId String  @db.Uuid
-  createdAt      DateTime @default(now())
-  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
-  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  id              String       @id @default(uuid()) @db.Uuid
+  schoolId        String       @db.Uuid
+  classSectionId  String       @db.Uuid
+  subjectId       String       @db.Uuid
+  date            DateTime     @db.Date
+  body            String
+  done            Boolean      @default(false)
+  authorTeacherId String       @db.Uuid
+  createdAt       DateTime     @default(now())
+  school          School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection    ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subject         Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, classSectionId, date, subjectId])
 }
@@ -1026,19 +1134,19 @@ model ClassTodo {
 /// their own day; an APPROVED request re-opens exactly one (class, date)
 /// until `expiresAt`, after which it locks again without needing revocation.
 model RegisterChangeRequest {
-  id             String               @id @default(uuid()) @db.Uuid
-  schoolId       String               @db.Uuid
-  classSectionId String               @db.Uuid
-  date           DateTime             @db.Date
-  requestedByTeacherId String         @db.Uuid
-  reason         String
-  status         RegisterChangeStatus @default(PENDING)
-  reviewedByUserId String?            @db.Uuid
-  reviewedAt     DateTime?
-  expiresAt      DateTime?
-  createdAt      DateTime             @default(now())
-  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  id                   String               @id @default(uuid()) @db.Uuid
+  schoolId             String               @db.Uuid
+  classSectionId       String               @db.Uuid
+  date                 DateTime             @db.Date
+  requestedByTeacherId String               @db.Uuid
+  reason               String
+  status               RegisterChangeStatus @default(PENDING)
+  reviewedByUserId     String?              @db.Uuid
+  reviewedAt           DateTime?
+  expiresAt            DateTime?
+  createdAt            DateTime             @default(now())
+  school               School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection         ClassSection         @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, status])
   @@index([schoolId, classSectionId, date])

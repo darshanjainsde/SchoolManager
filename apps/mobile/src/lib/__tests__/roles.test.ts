@@ -5,7 +5,10 @@ it.each([
   ['STUDENT', '/(family)/home'],
   ['TEACHER', '/(staff)/today'],
   ['SCHOOL_ADMIN', '/(staff)/today'],
-  ['STAFF', '/(staff)/today'],
+  // STAFF gets its OWN group now — (staff) is actually the teacher/admin
+  // portal (misleadingly named), which a non-teaching staff login must
+  // never land in. See roles.ts's portalForRole doc.
+  ['STAFF', '/(worker)/today'],
 ] as const)('%s → %s', (role, path) => {
   expect(portalForRole(role)).toBe(path);
 });

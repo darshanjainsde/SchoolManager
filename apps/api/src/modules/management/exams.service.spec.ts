@@ -6,6 +6,7 @@ const txMock = {
   school: { findFirst: jest.fn() },
   subject: { findFirst: jest.fn() },
   result: { upsert: jest.fn(), updateMany: jest.fn(), findMany: jest.fn() },
+  notificationOutbox: { create: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -52,6 +53,7 @@ describe('ExamsService', () => {
     txMock.user.findMany.mockResolvedValue([]);
     txMock.school.findFirst.mockResolvedValue({ name: 'Green Valley School' });
     txMock.subject.findFirst.mockResolvedValue({ name: 'Mathematics' });
+    txMock.notificationOutbox.create.mockResolvedValue({ id: 'outbox-1' });
     // Most existing tests call as SCHOOL_ADMIN (unrestricted); this default
     // only matters for the TEACHER-ownership tests below, which override it.
     attendance.myClassSections.mockResolvedValue([]);
@@ -116,19 +118,26 @@ describe('ExamsService', () => {
         select: { userId: true },
       });
       // The payload must carry exactly what the mail composer reads — the
-      // names, not the ids — or the email renders "undefined".
-      expect(notifications.notify).toHaveBeenCalledWith('TEST_SCHEDULED', [
-        {
-          email: 'parent@x.com',
-          schoolId: SCHOOL,
-          payload: {
-            schoolName: 'Green Valley School',
-            subjectName: 'Mathematics',
-            examTitle: 'Unit Test',
-            scheduledAt: 'Sat, 1 Aug 2026, 2:30 PM',
+      // names, not the ids — or the email renders "undefined". The third
+      // argument restricts this best-effort call to email — push for this
+      // event is the guaranteed NotificationOutbox row instead (see the
+      // 'notification outbox' describe block below).
+      expect(notifications.notify).toHaveBeenCalledWith(
+        'TEST_SCHEDULED',
+        [
+          {
+            email: 'parent@x.com',
+            schoolId: SCHOOL,
+            payload: {
+              schoolName: 'Green Valley School',
+              subjectName: 'Mathematics',
+              examTitle: 'Unit Test',
+              scheduledAt: 'Sat, 1 Aug 2026, 2:30 PM',
+            },
           },
-        },
-      ]);
+        ],
+        ['email'],
+      );
     });
 
     it('loads the school and subject names it needs, scoped to this school', async () => {
@@ -245,6 +254,65 @@ describe('ExamsService', () => {
       await expect(
         svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', { ...dto, maxMarks: 50.5 }),
       ).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
+    });
+  });
+
+  // S6/S7 wiring: `create()` writes a NotificationOutbox row IN THE SAME
+  // `withTenant` transaction as the Exam row, so a scheduled exam is never
+  // visible without its outbox row (and a rolled-back transaction leaves no
+  // orphan row either). Deletion-proof: delete the `tx.notificationOutbox.create`
+  // call from `create()` and the first test below fails.
+  describe('create — NotificationOutbox (S6/S7 wiring)', () => {
+    const dto: CreateExamDto = {
+      classSectionId: CLASS_SECTION,
+      subjectId: SUBJECT,
+      title: 'Unit Test',
+      scheduledAt: '2026-08-01T09:00:00.000Z',
+      maxMarks: 100,
+    };
+
+    beforeEach(() => {
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION, name: '8-C' });
+      txMock.exam.create.mockResolvedValue({
+        id: EXAM_ID,
+        ...dto,
+        scheduledAt: new Date(dto.scheduledAt),
+        createdById: CALLER,
+        createdAt: new Date('2026-07-01T00:00:00.000Z'),
+      });
+    });
+
+    it('writes an EXAM_SCHEDULED outbox row in the SAME transaction as the exam, with a fully denormalised payload', async () => {
+      await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
+
+      expect(txMock.notificationOutbox.create).toHaveBeenCalledWith({
+        data: {
+          schoolId: SCHOOL,
+          kind: 'EXAM_SCHEDULED',
+          classSectionId: CLASS_SECTION,
+          payload: {
+            schoolName: 'Green Valley School',
+            subjectName: 'Mathematics',
+            examTitle: 'Unit Test',
+            scheduledAt: 'Sat, 1 Aug 2026, 2:30 PM',
+            classSectionName: '8-C',
+            maxMarks: 100,
+          },
+        },
+      });
+      // Both writes happened via the SAME `withTenant` call (the mutation
+      // transaction) — the notification-context withTenant call used by the
+      // best-effort email path is a separate, later one.
+      expect(withTenantMock.mock.calls[0][0]).toBe(SCHOOL);
+      expect(txMock.notificationOutbox.create.mock.invocationCallOrder[0]).toBeGreaterThan(
+        txMock.exam.create.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('rolls back the exam write when the outbox write itself fails — same transaction, same fate', async () => {
+      txMock.notificationOutbox.create.mockRejectedValue(new Error('db exploded'));
+
+      await expect(svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto)).rejects.toThrow('db exploded');
     });
   });
 
@@ -474,17 +542,23 @@ describe('ExamsService', () => {
       await svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN');
       await flushBackgroundWork();
 
-      expect(notifications.notify).toHaveBeenCalledWith('RESULTS_PUBLISHED', [
-        {
-          email: 'parent@x.com',
-          schoolId: SCHOOL,
-          payload: {
-            schoolName: 'Green Valley School',
-            subjectName: 'Chemistry',
-            examTitle: 'Midterm',
+      // Third argument restricts this best-effort call to email — see the
+      // matching comment on the TEST_SCHEDULED assertion above.
+      expect(notifications.notify).toHaveBeenCalledWith(
+        'RESULTS_PUBLISHED',
+        [
+          {
+            email: 'parent@x.com',
+            schoolId: SCHOOL,
+            payload: {
+              schoolName: 'Green Valley School',
+              subjectName: 'Chemistry',
+              examTitle: 'Midterm',
+            },
           },
-        },
-      ]);
+        ],
+        ['email'],
+      );
     });
 
     it('does not announce "results published" when nothing was actually published', async () => {
@@ -559,6 +633,67 @@ describe('ExamsService', () => {
         response: { code: 'NOT_FOUND' },
       });
       expect(txMock.result.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // S6/S7 wiring: `publish()` writes a NotificationOutbox row IN THE SAME
+  // `withTenant` transaction as the Result.updateMany write, gated on
+  // `count > 0` exactly like the existing best-effort email path. Deletion-
+  // proof: delete the `tx.notificationOutbox.create` call from `publish()`
+  // and the first test below fails.
+  describe('publish — NotificationOutbox (S6/S7 wiring)', () => {
+    const examRow = {
+      id: EXAM_ID,
+      schoolId: SCHOOL,
+      classSectionId: CLASS_SECTION,
+      subjectId: SUBJECT,
+      title: 'Midterm',
+      maxMarks: 100,
+    };
+
+    beforeEach(() => {
+      txMock.exam.findFirst.mockResolvedValue(examRow);
+      txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION, name: '8-C' });
+      txMock.subject.findFirst.mockResolvedValue({ name: 'Chemistry' });
+    });
+
+    it('writes a RESULT_PUBLISHED outbox row in the SAME transaction as the publish, with a fully denormalised payload', async () => {
+      txMock.result.updateMany.mockResolvedValue({ count: 2 });
+
+      await svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN');
+
+      expect(txMock.notificationOutbox.create).toHaveBeenCalledWith({
+        data: {
+          schoolId: SCHOOL,
+          kind: 'RESULT_PUBLISHED',
+          classSectionId: CLASS_SECTION,
+          payload: {
+            schoolName: 'Green Valley School',
+            subjectName: 'Chemistry',
+            examTitle: 'Midterm',
+            classSectionName: '8-C',
+            maxMarks: 100,
+          },
+        },
+      });
+      expect(txMock.notificationOutbox.create.mock.invocationCallOrder[0]).toBeGreaterThan(
+        txMock.result.updateMany.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('writes NO outbox row when nothing was actually published (count: 0) — telling parents results are out would be a lie', async () => {
+      txMock.result.updateMany.mockResolvedValue({ count: 0 });
+
+      await svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN');
+
+      expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
+    });
+
+    it('rolls back the publish write when the outbox write itself fails — same transaction, same fate', async () => {
+      txMock.result.updateMany.mockResolvedValue({ count: 2 });
+      txMock.notificationOutbox.create.mockRejectedValue(new Error('db exploded'));
+
+      await expect(svc.publish(SCHOOL, EXAM_ID, CALLER, 'SCHOOL_ADMIN')).rejects.toThrow('db exploded');
     });
   });
 

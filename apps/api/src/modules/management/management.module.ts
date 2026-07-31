@@ -25,6 +25,8 @@ import { ExamsService } from './exams.service';
 import { ExamsController } from './exams.controller';
 import { ExamRemindersService } from './exam-reminders.service';
 import { ExamRemindersController } from './exam-reminders.controller';
+import { NotificationOutboxService } from './notification-outbox.service';
+import { NotificationOutboxController } from './notification-outbox.controller';
 import { CronSecretGuard } from './cron-secret.guard';
 import { LoginInviteService } from './internal/login-invite.service';
 import { LeaveService } from './leave.service';
@@ -35,10 +37,12 @@ import { ClassNotesService } from './class-notes.service';
 import { ClassNotesController } from './class-notes.controller';
 import { RegisterChangeService } from './register-change.service';
 import { RegisterChangeController } from './register-change.controller';
+import { AssignmentsService } from './assignments.service';
+import { AssignmentsController } from './assignments.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -51,12 +55,14 @@ import { RegisterChangeController } from './register-change.controller';
     StaffAttendanceController,
     ExamsController,
     ExamRemindersController,
+    NotificationOutboxController,
     LeaveController,
     SubstitutionController,
     HolidaysController,
     ClassNotesController,
     RegisterChangeController,
+    AssignmentsController,
   ],
-  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService],
+  exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService],
 })
 export class ManagementModule {}

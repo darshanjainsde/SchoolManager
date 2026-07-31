@@ -312,4 +312,92 @@ describe('StaffAttendanceService', () => {
       expect(withTenantMock).not.toHaveBeenCalled();
     });
   });
+
+  describe('mine', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("resolves the caller's own Staff row from userId and returns identity + monthly summary", async () => {
+      txMock.staff.findFirst.mockResolvedValue({
+        id: STAFF_1,
+        firstName: 'Cy',
+        lastName: 'Menon',
+        role: 'OFFICE',
+      });
+      txMock.staffAttendance.findMany.mockResolvedValue([
+        { date: new Date('2026-07-01'), status: 'PRESENT' },
+        { date: new Date('2026-07-02'), status: 'ABSENT' },
+      ]);
+
+      const result = await svc.mine(SCHOOL, 'user-1', '2026-07');
+
+      expect(txMock.staff.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'user-1', schoolId: SCHOOL },
+        select: { id: true, firstName: true, lastName: true, role: true },
+      });
+      expect(result).toEqual({
+        person: { id: STAFF_1, firstName: 'Cy', lastName: 'Menon', role: 'OFFICE' },
+        summary: {
+          present: 1,
+          absent: 1,
+          late: 0,
+          onLeave: 0,
+          percent: 50,
+          days: [
+            { date: '2026-07-01', status: 'PRESENT' },
+            { date: '2026-07-02', status: 'ABSENT' },
+          ],
+        },
+      });
+    });
+
+    it('scopes the attendance query to the half-open UTC month range, schoolId, and the resolved staffId', async () => {
+      txMock.staff.findFirst.mockResolvedValue({ id: STAFF_1, firstName: 'Cy', lastName: 'Menon', role: 'OFFICE' });
+      txMock.staffAttendance.findMany.mockResolvedValue([]);
+
+      await svc.mine(SCHOOL, 'user-1', '2026-07');
+
+      expect(txMock.staffAttendance.findMany).toHaveBeenCalledWith({
+        where: {
+          schoolId: SCHOOL,
+          staffId: STAFF_1,
+          date: { gte: new Date(Date.UTC(2026, 6, 1)), lt: new Date(Date.UTC(2026, 7, 1)) },
+        },
+        orderBy: { date: 'asc' },
+        select: { date: true, status: true },
+      });
+    });
+
+    it('defaults to the current IST month when no month is supplied', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-07-21T12:00:00.000Z'));
+      txMock.staff.findFirst.mockResolvedValue({ id: STAFF_1, firstName: 'Cy', lastName: 'Menon', role: 'OFFICE' });
+      txMock.staffAttendance.findMany.mockResolvedValue([]);
+
+      await svc.mine(SCHOOL, 'user-1');
+
+      expect(txMock.staffAttendance.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            date: { gte: new Date(Date.UTC(2026, 6, 1)), lt: new Date(Date.UTC(2026, 7, 1)) },
+          }),
+        }),
+      );
+    });
+
+    it('throws NOT_STAFF (403) when the caller has no linked Staff row, without querying attendance', async () => {
+      txMock.staff.findFirst.mockResolvedValue(null);
+
+      await expect(svc.mine(SCHOOL, 'user-with-no-staff-row', '2026-07')).rejects.toMatchObject({
+        response: { code: 'NOT_STAFF' },
+        status: 403,
+      });
+      expect(txMock.staffAttendance.findMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects a malformed month before opening a tenant transaction', async () => {
+      await expect(svc.mine(SCHOOL, 'user-1', '2026/07')).rejects.toThrow(ApiError);
+      expect(withTenantMock).not.toHaveBeenCalled();
+    });
+  });
 });

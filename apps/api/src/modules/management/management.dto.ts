@@ -9,6 +9,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   Length,
   Matches,
@@ -18,6 +19,8 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
+  ASSIGNMENT_ATTACHMENT_KINDS,
+  AssignmentAttachmentKind,
   ATTENDANCE_STATUSES,
   AttendanceStatusValue,
   CLASS_NOTE_VISIBILITIES,
@@ -695,4 +698,57 @@ export class CreateRegisterChangeDto {
   @IsString()
   @Length(1, 500)
   reason!: string;
+}
+
+// ── Assignments (T21) ────────────────────────────────────────────────────────
+
+/**
+ * One entry of `CreateAssignmentDto.attachments` — the exact shape
+ * `POST /manage/assignments/upload` returns, round-tripped straight back
+ * on create. `url` is `require_tld: false` so a local MinIO dev URL
+ * (`http://localhost:9000/...`) validates the same as a production Supabase
+ * Storage URL — this DTO validates SHAPE, not provenance; the value always
+ * comes from our own upload endpoint's response, never typed by a caller.
+ */
+export class AssignmentAttachmentDto {
+  @IsUrl({ require_tld: false })
+  url!: string;
+
+  @IsString()
+  @Length(1, 255)
+  name!: string;
+
+  @IsIn([...ASSIGNMENT_ATTACHMENT_KINDS])
+  kind!: AssignmentAttachmentKind;
+}
+
+export class CreateAssignmentDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @IsUUID()
+  subjectId!: string;
+
+  @IsString()
+  @Length(1, 160)
+  title!: string;
+
+  @IsString()
+  @Length(1, 4000)
+  instructions!: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dueDate must be formatted as YYYY-MM-DD' })
+  dueDate!: string;
+
+  /**
+   * Optional — an assignment with plain-text instructions and no file is
+   * legitimate. Capped at 5: enough for "the worksheet + an answer key
+   * scan", not an open-ended file dump.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => AssignmentAttachmentDto)
+  attachments?: AssignmentAttachmentDto[];
 }

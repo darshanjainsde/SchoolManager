@@ -32,12 +32,31 @@ export class NotificationService {
     @Inject(NOTIFICATION_CHANNELS) private readonly channels: NotificationChannel[],
   ) {}
 
+  /**
+   * `onlyChannels`, when given, restricts this call to channels whose `.name`
+   * is in the list (default: every configured channel, unchanged behaviour).
+   *
+   * Added for `ExamsService.create()`/`publish()`: TEST_SCHEDULED and
+   * RESULTS_PUBLISHED now ALSO get a push send via the transactional
+   * `NotificationOutbox` drain (`NotificationOutboxService`) — a guarantee
+   * this best-effort, post-commit `notify()` call cannot offer (it simply
+   * never runs if the process dies right after the mutation commits). If
+   * `PushChannel` stayed in the default fan-out here too, a family would get
+   * the SAME push twice: once best-effort immediately, once guaranteed via
+   * the outbox. Those two call sites pass `['email']` so push is sent
+   * exactly once, through the outbox, while email keeps its existing
+   * best-effort immediate delivery unchanged.
+   */
   async notify<K extends NotificationKind>(
     kind: K,
     recipients: ReadonlyArray<NotificationRecipient<K>>,
+    onlyChannels?: readonly string[],
   ): Promise<NotifySummary> {
     let sent = 0;
     let failed = 0;
+    const channels = onlyChannels
+      ? this.channels.filter((c) => onlyChannels.includes(c.name))
+      : this.channels;
 
     for (const recipient of recipients) {
       // `kind` and `recipient.payload` are correlated by the generic K, which
@@ -47,7 +66,7 @@ export class NotificationService {
       // channels get an exhaustively narrowable union below.
       const message = { kind, payload: recipient.payload } as NotificationMessage;
 
-      for (const channel of this.channels) {
+      for (const channel of channels) {
         try {
           const ok = await channel.send(recipient.email, message, recipient.schoolId);
           if (ok) {

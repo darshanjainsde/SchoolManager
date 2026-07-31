@@ -9,6 +9,14 @@ export interface ApiStub {
   put: (path: string, body?: unknown) => Promise<unknown>;
   patch: (path: string, body?: unknown) => Promise<unknown>;
   del: (path: string) => Promise<unknown>;
+  /**
+   * `ApiClient.request` — the raw escape hatch pages reach for when `post`'s
+   * always-JSON body doesn't fit (a `multipart/form-data` file upload; see
+   * `/manage/assignments/upload` in apps/web/app/teacher/assignments/page.tsx).
+   * Optional: most pages never call it, so most `mockApi()` helpers don't
+   * need to stub it.
+   */
+  request?: (path: string, init?: RequestInit) => Promise<unknown>;
 }
 
 /**

@@ -276,6 +276,7 @@ export default function Home() {
             <QuickAction label="Attendance" onPress={() => router.push('/(family)/attendance')} />
             <QuickAction label="Notices" onPress={() => router.push('/(family)/notices')} />
             <QuickAction label="Timetable" onPress={() => router.push('/(family)/timetable')} />
+            <QuickAction label="Assignments" onPress={() => router.push('/(family)/assignments')} />
           </View>
         </>
       )}
