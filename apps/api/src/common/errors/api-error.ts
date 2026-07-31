@@ -25,6 +25,14 @@ export type ErrorCode =
   | 'LEAVE_CANCEL_FORBIDDEN'
   /** A TEACHER targeted a class section they do not teach — pair with 403. */
   | 'CLASS_NOT_OWNED'
+  /** Caller has no linked Student record — e.g. a non-student login hitting /me/messages. Pair with 404. */
+  | 'NOT_A_STUDENT'
+  /** A STUDENT tried to message a teacher who does not teach them that subject (per the timetable) — pair with 403. */
+  | 'NOT_YOUR_TEACHER'
+  /** A TEACHER tried to open/reply to a message thread that is not theirs — pair with 404. */
+  | 'NOT_YOUR_THREAD'
+  /** A STUDENT with no class section tried to start a thread — pair with 409. */
+  | 'NO_CLASS_SECTION'
   /** A TEACHER tried to edit/delete an Announcement authored by someone else — pair with 403. */
   | 'ANNOUNCEMENT_NOT_OWNED'
   /** A TEACHER tried to change an Announcement's class targets via PATCH — targets are immutable after posting; pair with 400. */

@@ -169,10 +169,11 @@ describe('shared portal contracts', () => {
     expect(Object.keys(student).sort()).toEqual(['firstName', 'id', 'lastName', 'rollNo']);
   });
 
-  it('declares exactly the three NotificationOutbox kinds the API writes', () => {
+  it('declares exactly the NotificationOutbox kinds the API writes', () => {
     expect([...NOTIFICATION_OUTBOX_KINDS].sort()).toEqual([
       'ASSIGNMENT_POSTED',
       'EXAM_SCHEDULED',
+      'MESSAGE_RECEIVED',
       'RESULT_PUBLISHED',
     ]);
   });

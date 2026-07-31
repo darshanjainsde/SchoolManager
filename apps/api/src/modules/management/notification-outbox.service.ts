@@ -2,8 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
 import { PushChannel } from '../../common/notifications/push.channel';
-import { resolveSectionRecipients } from '../../common/notifications/recipients';
+import { resolveSectionRecipients, resolveUserRecipients } from '../../common/notifications/recipients';
 import type {
+  MessageReceivedOutboxPayload,
   AssignmentPostedOutboxPayload,
   ExamScheduledOutboxPayload,
   NotificationMessage,
@@ -69,6 +70,22 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
       },
     };
   }
+  if (kind === 'MESSAGE_RECEIVED') {
+    // Also renders through the EXISTING 'ANNOUNCEMENT' shape (no dedicated
+    // template) — see MessageReceivedOutboxPayload. This row targets a single
+    // user via row.targetUserId (handled in drain()), not a class section.
+    const p = payload as MessageReceivedOutboxPayload;
+    return {
+      kind: 'ANNOUNCEMENT',
+      payload: {
+        schoolName: p.schoolName,
+        title: `New message from ${p.senderName}`,
+        body: p.preview,
+        className: p.subjectName,
+      },
+    };
+  }
+
   // ASSIGNMENT_POSTED has no NotificationKind/template of its own (see
   // AssignmentPostedOutboxPayload's docstring) — it renders through the
   // EXISTING 'ANNOUNCEMENT' shape instead, the same "reuse the template"
@@ -144,7 +161,11 @@ export class NotificationOutboxService {
       try {
         assertNotificationOutboxKind(row.kind);
         const message = toNotificationMessage(row.kind, row.payload);
-        const recipients = await resolveSectionRecipients(db, row.schoolId, row.classSectionId);
+        // Private messages (targetUserId set) push to that one recipient;
+        // broadcast kinds resolve the whole class section as before.
+        const recipients = row.targetUserId
+          ? await resolveUserRecipients(db, row.schoolId, row.targetUserId)
+          : await resolveSectionRecipients(db, row.schoolId, row.classSectionId);
 
         for (const email of recipients) {
           await this.push.send(email, message, row.schoolId);

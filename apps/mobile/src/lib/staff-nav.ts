@@ -28,6 +28,8 @@ export const HIDDEN_ROUTES = [
   'tests',
   'results/[examId]',
   'assignments',
+  'messages',
+  'messages/[threadId]',
   'profile',
 ];
 
@@ -42,6 +44,7 @@ export const HIDDEN_ROUTES = [
  */
 export const MORE_ITEMS = [
   { label: 'Assignments', icon: '📚', route: '/(staff)/assignments' as const },
+  { label: 'Messages', icon: '💬', route: '/(staff)/messages' as const },
   { label: 'Tests', icon: '📊', route: '/(staff)/tests' as const },
   { label: 'Results', icon: '🏆', route: '/(staff)/tests' as const },
   { label: 'Requests', icon: '📝', route: '/(staff)/requests' as const },

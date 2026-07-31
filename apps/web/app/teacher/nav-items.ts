@@ -5,6 +5,7 @@ import {
   FileText,
   GraduationCap,
   Megaphone,
+  MessageSquare,
   CalendarDays,
   CalendarOff,
   CalendarRange,
@@ -21,9 +22,11 @@ import {
  * Every entry here must be a working tool, not a placeholder — a nav entry
  * implies the destination does something. `/teacher/assignments` is real
  * (Phase 4 Task 4 — create/list/delete against `/manage/assignments`);
- * `/teacher/inbox` was deleted (Part C) because it always rendered "Nothing
- * yet." against an endpoint that doesn't exist. See teacher-nav-honesty.spec
- * for the dead-route regression test.
+ * `/teacher/inbox` is real again (Phase 4 Task 5 / T17 — the messaging thread
+ * list + reply view against `/manage/messages`). It was deleted in Phase 2
+ * only because it pointed at a `/notifications` endpoint that did not exist;
+ * now it tells the truth. See layout.test.tsx for the dead-route regression
+ * test.
  */
 export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[] = [
   { href: '/teacher', label: 'Today', icon: LayoutDashboard },
@@ -33,6 +36,7 @@ export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashbo
   { href: '/teacher/tests', label: 'Tests', icon: FileText },
   { href: '/teacher/results', label: 'Results', icon: GraduationCap },
   { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
+  { href: '/teacher/inbox', label: 'Inbox', icon: MessageSquare },
   { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
   { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },
 ];

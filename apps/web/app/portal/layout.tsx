@@ -10,6 +10,7 @@ import {
   BookOpen,
   GraduationCap,
   Megaphone,
+  MessageSquare,
   User,
   LogOut,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { href: '/portal/assignments', label: 'Assignments', icon: BookOpen },
   { href: '/portal/results', label: 'Results', icon: GraduationCap },
   { href: '/portal/announcements', label: 'Announcements', icon: Megaphone },
+  { href: '/portal/messages', label: 'Messages', icon: MessageSquare },
   { href: '/portal/profile', label: 'Profile', icon: User },
 ];
 

@@ -9,8 +9,9 @@ const TEACHER_DIR = dirname(fileURLToPath(import.meta.url));
 /**
  * Every route directory that actually exists under apps/web/app/teacher —
  * the source of truth for "is this a real page or a dead link". A nav entry
- * pointing anywhere else 404s (or, before this task, silently rendered
- * "Nothing yet." forever — see the deleted /teacher/inbox).
+ * pointing anywhere else 404s (or, in Phase 2, silently rendered "Nothing
+ * yet." forever — which is why /teacher/inbox was removed then and only
+ * returns now that it backs a real `/manage/messages` thread list).
  */
 function realTeacherRoutes(): Set<string> {
   return new Set(
@@ -31,8 +32,14 @@ describe('teacher nav honesty', () => {
     }
   });
 
-  it('does not list the removed Inbox route (deleted — GET /notifications does not exist)', () => {
-    expect(NAV_ITEMS.some((i) => i.href === '/teacher/inbox')).toBe(false);
+  /**
+   * Phase 4 Task 5 / T17: Inbox returns as a working messaging tool — the
+   * thread list + reply view backed by `/manage/messages`. The href-resolves
+   * test above now also proves `/teacher/inbox/` exists as a real directory,
+   * so it is no longer the dead link Phase 2 rightly deleted.
+   */
+  it('lists Inbox now that /teacher/inbox is a real messaging thread list', () => {
+    expect(NAV_ITEMS.find((i) => i.href === '/teacher/inbox')?.label).toBe('Inbox');
   });
 
   /**

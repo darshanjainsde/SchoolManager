@@ -118,6 +118,24 @@ export interface AssignmentPostedOutboxPayload {
   classSectionName: string;
 }
 
+/**
+ * Payload STORED in a `NotificationOutbox` row for kind `MESSAGE_RECEIVED`
+ * (Phase 4 Task 5 / T17). Unlike the broadcast kinds above, this row also
+ * carries a `targetUserId` (the recipient) so the drain pushes to ONE person,
+ * not the whole class section. Denormalised at send time so the drain never
+ * joins back to Message/MessageThread. Renders through the existing
+ * `ANNOUNCEMENT` push template (no dedicated NotificationKind).
+ */
+export interface MessageReceivedOutboxPayload {
+  schoolName: string;
+  /** Display name of whoever sent the message (the OTHER party to the recipient). */
+  senderName: string;
+  subjectName: string;
+  /** Short slice of the message body. */
+  preview: string;
+  threadId: string;
+}
+
 /** The single source of truth mapping each event to its payload shape. */
 export interface NotificationPayloadMap {
   TEST_SCHEDULED: TestScheduledPayload;
