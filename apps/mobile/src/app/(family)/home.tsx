@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import type { TimetableSlot } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
+import { minutesOfDay } from '@/lib/teacher-day';
 import {
   daysUntilLabel,
   formatDate,
@@ -13,39 +15,27 @@ import {
   type StudentProfile,
   type UpcomingExam,
 } from '@/lib/portal';
-import { Card, Screen, SectionTitle } from '@/components/ui';
+import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { NotificationBell } from '@/components/NotificationBell';
+import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 
 /** How many of the most recent announcements the home screen surfaces (the full list lives on Notices). */
 const LATEST_ANNOUNCEMENTS_COUNT = 3;
 
-function QuickAction({ label, onPress }: { label: string; onPress: () => void }) {
-  const tokens = useTokens();
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        flex: 1,
-        backgroundColor: tokens.color.surface,
-        borderColor: tokens.color.line,
-        borderWidth: 1,
-        borderRadius: 14,
-        paddingVertical: 13,
-        alignItems: 'center',
-      }}
-    >
-      <Text style={{ fontSize: 10.5, fontWeight: '600', color: tokens.color.ink, textAlign: 'center' }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
+/** Minutes past midnight on the device's own clock. */
+function nowMinutes(): number {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
 }
 
-function todayStatusLabel(status: 'PRESENT' | 'ABSENT' | 'LATE' | null) {
-  if (status === 'PRESENT') return '✓ Present today';
-  if (status === 'LATE') return '⏱ Late today';
-  if (status === 'ABSENT') return '✕ Absent today';
-  return 'Attendance not yet marked today';
+/** JS `getDay()` (0=Sun) → ISO weekday (1=Mon … 7=Sun) matching TimetableSlot.dayOfWeek. */
+function isoWeekday(): number {
+  return ((new Date().getDay() + 6) % 7) + 1;
+}
+
+function fullTeacherName(t: { firstName: string; lastName: string }): string {
+  return `${t.firstName} ${t.lastName}`.trim();
 }
 
 /** A compact KPI tile — the mobile equivalent of the web portal's `sk-kpi` stat tiles. */
@@ -54,11 +44,13 @@ function KpiTile({
   value,
   hint,
   tone,
+  onPress,
 }: {
   label: string;
   value: string;
   hint?: string;
   tone?: 'good' | 'warn' | 'bad';
+  onPress?: () => void;
 }) {
   const tokens = useTokens();
   const toneColor: Record<'good' | 'warn' | 'bad', string> = {
@@ -67,7 +59,8 @@ function KpiTile({
     bad: tokens.color.red,
   };
   return (
-    <View
+    <Pressable
+      onPress={onPress}
       style={{
         flex: 1,
         backgroundColor: tokens.color.surface,
@@ -86,7 +79,7 @@ function KpiTile({
           {hint}
         </Text>
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -116,6 +109,54 @@ function AnnouncementRow({ a }: { a: Announcement }) {
   );
 }
 
+/** One row of the "Today's classes" rail. */
+function RailRow({
+  slot,
+  state,
+  first,
+}: {
+  slot: TimetableSlot;
+  state: 'past' | 'now' | 'upcoming';
+  first: boolean;
+}) {
+  const tokens = useTokens();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 11,
+        padding: 12,
+        borderTopWidth: first ? 0 : 1,
+        borderTopColor: tokens.color.line,
+        backgroundColor: state === 'now' ? tokens.color.indigo50 : 'transparent',
+        opacity: state === 'past' ? 0.55 : 1,
+      }}
+    >
+      <Text style={{ fontSize: 10.5, fontWeight: '700', color: tokens.color.sub, width: 42, lineHeight: 14 }}>
+        {slot.period.startTime}
+        {'\n'}
+        {slot.period.endTime}
+      </Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }} numberOfLines={1}>
+          {slot.subject.name}
+        </Text>
+        <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }} numberOfLines={1}>
+          {fullTeacherName(slot.teacher)}
+        </Text>
+      </View>
+      {state === 'now' ? (
+        <Pill tone="indigo">Now</Pill>
+      ) : state === 'past' ? (
+        <Text style={{ fontSize: 11, color: tokens.color.sub }}>done</Text>
+      ) : (
+        <Pill tone="neutral">{slot.period.label}</Pill>
+      )}
+    </View>
+  );
+}
+
 export default function Home() {
   const tokens = useTokens();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -123,11 +164,12 @@ export default function Home() {
   const [attendance, setAttendance] = useState<AttendanceSummary | null>(null);
   const [exams, setExams] = useState<UpcomingExam[] | null>(null);
   const [results, setResults] = useState<PublishedResult[] | null>(null);
+  const [slots, setSlots] = useState<TimetableSlot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Refetch on focus: a new notice, a fresh attendance mark, a newly
-  // scheduled test or a newly published result should all show up the
-  // moment the family tab regains focus, not just on cold start.
+  // Refetch on focus: a new notice, a fresh attendance mark, a newly scheduled
+  // test/result, or simply time passing (a class ending) should all be
+  // reflected the moment the family tab regains focus, not just on cold start.
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -138,14 +180,16 @@ export default function Home() {
         api.request<AttendanceSummary>('/me/attendance'),
         api.request<UpcomingExam[]>('/me/exams'),
         api.request<PublishedResult[]>('/me/results'),
+        api.request<TimetableSlot[]>('/me/timetable'),
       ])
-        .then(([p, a, att, ex, res]) => {
+        .then(([p, a, att, ex, res, tt]) => {
           if (cancelled) return;
           setProfile(p);
           setAnnouncements(a);
           setAttendance(att);
           setExams(ex);
           setResults(res);
+          setSlots(tt);
         })
         .catch((e: unknown) => {
           if (!cancelled) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
@@ -163,9 +207,35 @@ export default function Home() {
   const latestResult = results?.[0] ?? null;
   const latestAnnouncements = (announcements ?? []).slice(0, LATEST_ANNOUNCEMENTS_COUNT);
 
+  // Today's schedule, derived client-side from the weekly timetable (there is
+  // no per-day endpoint — the whole week comes from /me/timetable).
+  const now = nowMinutes();
+  const isoDay = isoWeekday();
+  const todaySlots = (slots ?? [])
+    .filter((s) => s.dayOfWeek === isoDay)
+    .sort((a, b) => a.period.order - b.period.order);
+  const currentSlot =
+    todaySlots.find(
+      (s) => now >= minutesOfDay(s.period.startTime) && now < minutesOfDay(s.period.endTime),
+    ) ?? null;
+  const nextSlot = todaySlots.find((s) => minutesOfDay(s.period.startTime) > now) ?? null;
+  const elapsed = currentSlot ? now - minutesOfDay(currentSlot.period.startTime) : 0;
+  const total = currentSlot
+    ? minutesOfDay(currentSlot.period.endTime) - minutesOfDay(currentSlot.period.startTime)
+    : 0;
+
+  function railState(s: TimetableSlot): 'past' | 'now' | 'upcoming' {
+    if (currentSlot?.id === s.id) return 'now';
+    return minutesOfDay(s.period.endTime) <= now ? 'past' : 'upcoming';
+  }
+
   return (
     <Screen>
-      <SectionTitle title="Home" />
+      <SectionTitle
+        title={profile ? `Hi, ${profile.firstName} 👋` : 'Home'}
+        right={<NotificationBell onPress={() => router.push('/(family)/notifications')} />}
+      />
+
       {error && (
         <Card>
           <Text style={{ color: tokens.color.red }}>{error}</Text>
@@ -179,42 +249,45 @@ export default function Home() {
 
       {profile && (
         <>
-          {/* Identity card — name, class and roll are the student's OWN, not
-              a parent-facing "your child" label. With one shared STUDENT
-              login the app cannot tell whether a parent or the student is
-              holding the phone, so this must read correctly to either. */}
-          <View style={{ backgroundColor: tokens.color.indigo, borderRadius: 20, padding: 16 }}>
-            <Text style={{ color: tokens.color.onBrand, fontSize: 19, fontWeight: '800' }}>
-              {profile.firstName} {profile.lastName}
-            </Text>
-            <Text style={{ color: tokens.color.onBrand, opacity: 0.9, fontSize: 12.5, marginTop: 3 }}>
-              {profile.className ?? 'No class assigned'}
-              {profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}
-            </Text>
-            <View
-              style={{
-                marginTop: 13,
-                alignSelf: 'flex-start',
-                // 15% translucent `onBrand` — a subtle highlight over the
-                // solid-indigo card in both schemes (white-on-indigo in light,
-                // near-black-on-lavender in dark, matching the text above).
-                backgroundColor: `${tokens.color.onBrand}26`,
-                borderRadius: 11,
-                paddingVertical: 7,
-                paddingHorizontal: 11,
-              }}
-            >
-              <Text style={{ color: tokens.color.onBrand, fontSize: 12.5, fontWeight: '600' }}>
-                {todayStatusLabel(todayStatus)}
-              </Text>
-            </View>
-          </View>
+          {/* Class + roll are the student's OWN (not a parent-facing "your
+              child" label) — one shared STUDENT login can't tell who's holding
+              the phone, so this must read to either. */}
+          <Text style={{ marginHorizontal: 4, marginTop: 2, fontSize: 12, color: tokens.color.sub }}>
+            {profile.className ?? 'No class assigned'}
+            {profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}
+          </Text>
 
-          {/* Next-test reminder — the thing a student should never miss, same
-              framing as the web portal's `sk-remind` banner. Tapping it opens
-              the full next-test detail (syllabus, max marks, date) on the
-              Results screen, which also shows the student's published
-              results underneath. */}
+          <StudentHero
+            current={
+              currentSlot
+                ? {
+                    subjectName: currentSlot.subject.name,
+                    teacherName: fullTeacherName(currentSlot.teacher),
+                    periodLabel: currentSlot.period.label,
+                    startTime: currentSlot.period.startTime,
+                    endTime: currentSlot.period.endTime,
+                  }
+                : null
+            }
+            elapsed={elapsed}
+            total={total}
+            next={
+              nextSlot
+                ? {
+                    subjectName: nextSlot.subject.name,
+                    teacherName: fullTeacherName(nextSlot.teacher),
+                    startTime: nextSlot.period.startTime,
+                  }
+                : null
+            }
+            todayStatus={todayStatus}
+            hasSchoolToday={todaySlots.length > 0}
+            classesToday={todaySlots.length}
+            monthPercent={attendanceMarked > 0 ? (attendance?.percent ?? null) : null}
+          />
+
+          {/* Next-test reminder — the thing a student should never miss. Tapping
+              it opens the full detail (syllabus, max marks, date) on Results. */}
           {nextExam && (
             <Pressable testID="next-exam-banner" onPress={() => router.push('/(family)/results')}>
               <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
@@ -243,24 +316,40 @@ export default function Home() {
             </Pressable>
           )}
 
-          {/* At-a-glance KPIs. Only two tiles, not the web's four — "today"
-              is already the identity card's status chip above, and "next
-              test" is already the banner above, so repeating them here would
-              just be noise. */}
+          {/* At-a-glance KPIs. Only two — "today" is already the hero's status
+              chip and "next test" is the banner above, so repeating them would
+              be noise. Both tiles deep-link to their full screen. */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <KpiTile
               label="This month"
               value={attendanceMarked > 0 ? `${attendance?.percent}%` : 'No records'}
               hint={attendanceMarked > 0 ? `${attendance?.present} of ${attendanceMarked} days present` : undefined}
               tone={attendance && attendanceMarked > 0 && attendance.percent < 75 ? 'warn' : undefined}
+              onPress={() => router.push('/(family)/attendance')}
             />
             <KpiTile
               label="Latest result"
               value={latestResult ? `${latestResult.marks}/${latestResult.maxMarks}` : 'None yet'}
               hint={latestResult ? `${latestResult.subjectName} · class avg ${latestResult.classAverage}` : undefined}
               tone={latestResult ? (latestResult.marks < latestResult.classAverage ? 'bad' : 'good') : undefined}
+              onPress={() => router.push('/(family)/results')}
             />
           </View>
+
+          {todaySlots.length > 0 && (
+            <>
+              <SectionTitle
+                title="Today's classes"
+                actionLabel="Full week"
+                onAction={() => router.push('/(family)/timetable')}
+              />
+              <Card style={{ padding: 0, overflow: 'hidden' }}>
+                {todaySlots.map((s, i) => (
+                  <RailRow key={s.id} slot={s} state={railState(s)} first={i === 0} />
+                ))}
+              </Card>
+            </>
+          )}
 
           <SectionTitle title="Latest announcements" />
           {latestAnnouncements.length === 0 ? (
@@ -270,14 +359,6 @@ export default function Home() {
           ) : (
             latestAnnouncements.map((a) => <AnnouncementRow key={a.id} a={a} />)
           )}
-
-          <SectionTitle title="Quick actions" />
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <QuickAction label="Attendance" onPress={() => router.push('/(family)/attendance')} />
-            <QuickAction label="Notices" onPress={() => router.push('/(family)/notices')} />
-            <QuickAction label="Timetable" onPress={() => router.push('/(family)/timetable')} />
-            <QuickAction label="Assignments" onPress={() => router.push('/(family)/assignments')} />
-          </View>
         </>
       )}
     </Screen>

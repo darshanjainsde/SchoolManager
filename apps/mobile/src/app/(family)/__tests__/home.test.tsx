@@ -4,14 +4,17 @@ import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 
 const mockPush = jest.fn();
-// Captures the screen's own `useFocusEffect` callback so a test can re-invoke
-// it directly to simulate a real focus event (no NavigationContainer exists
-// in the test env) — same technique as (staff)/__tests__/today.test.tsx.
-let capturedFocusEffect: (() => void) | undefined;
+// Captures each screen's `useFocusEffect` callback so a test can re-invoke one
+// directly to simulate a focus event (no NavigationContainer in the test env) —
+// same technique as (staff)/__tests__/today.test.tsx. An ARRAY (not a single
+// ref) because the NotificationBell in the header registers a second effect as a
+// child; index 0 is Home's own, which the refetch test re-runs. Named `mock…` so
+// the jest.mock factory is allowed to reference it.
+const mockFocusEffects: Array<() => void> = [];
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },
   useFocusEffect: (effect: () => void) => {
-    capturedFocusEffect = effect;
+    mockFocusEffects.push(effect);
     const React = jest.requireActual('react');
     React.useEffect(effect, []);
   },
@@ -33,9 +36,24 @@ const PROFILE = {
 
 const EMPTY_ATTENDANCE = { month: '2026-07', percent: 0, present: 0, absent: 0, late: 0, days: [] };
 
+/** A timetable slot for TODAY spanning the whole day, so the hero is reliably in
+ *  its "in class now" state at any test run time (deterministic — no clock mock). */
+function allDaySlot() {
+  const isoDay = ((new Date().getDay() + 6) % 7) + 1; // 1=Mon … 7=Sun
+  return {
+    id: 'sl-all',
+    dayOfWeek: isoDay,
+    period: { id: 'p-all', label: 'Period 1', order: 1, startTime: '00:00', endTime: '23:59' },
+    subject: { id: 'su1', name: 'Mathematics', code: 'MATH' },
+    teacher: { id: 'te1', firstName: 'Priya', lastName: 'Sharma' },
+    classSection: { id: 'cs1', name: 'B', grade: { name: '5' } },
+  };
+}
+
 beforeEach(() => {
   mockPush.mockReset();
   (api.request as jest.Mock).mockReset();
+  mockFocusEffects.length = 0;
 });
 
 /**
@@ -49,6 +67,8 @@ function mockEndpoints(overrides: Partial<Record<string, unknown>> = {}) {
     '/me/attendance': EMPTY_ATTENDANCE,
     '/me/exams': [],
     '/me/results': [],
+    '/me/timetable': [],
+    '/me/notifications/unread-count': { count: 0 },
     ...overrides,
   };
   (api.request as jest.Mock).mockImplementation((path: string) => {
@@ -62,7 +82,7 @@ describe('identity card — role-neutral copy', () => {
     mockEndpoints();
     const { findByText } = render(<Home />);
 
-    expect(await findByText('Aarav Sharma')).toBeTruthy();
+    expect(await findByText('Hi, Aarav 👋')).toBeTruthy();
     expect(await findByText(/Grade 5-B/)).toBeTruthy();
     expect(await findByText(/Roll 12/)).toBeTruthy();
   });
@@ -75,11 +95,11 @@ describe('identity card — role-neutral copy', () => {
     mockEndpoints();
     const { findByText, queryByText } = render(<Home />);
 
-    await findByText('Aarav Sharma'); // let the screen settle first
+    await findByText('Hi, Aarav 👋'); // let the screen settle first
     expect(queryByText('Your child')).toBeNull();
   });
 
-  it("shows today's attendance status chip", async () => {
+  it("passes today's attendance status into the hero (its status chip)", async () => {
     mockEndpoints({
       '/me/attendance': {
         month: '2026-07',
@@ -89,6 +109,7 @@ describe('identity card — role-neutral copy', () => {
         late: 0,
         days: [{ date: todayISO(), status: 'PRESENT' }],
       },
+      '/me/timetable': [allDaySlot()],
     });
     const { findByText } = render(<Home />);
     expect(await findByText('✓ Present today')).toBeTruthy();
@@ -117,7 +138,7 @@ describe('next-test banner', () => {
   it('is absent when there are no upcoming exams', async () => {
     mockEndpoints();
     const { findByText, queryByText } = render(<Home />);
-    await findByText('Aarav Sharma');
+    await findByText('Hi, Aarav 👋');
     expect(queryByText(/out of/)).toBeNull();
   });
 
@@ -196,35 +217,32 @@ describe('latest announcements', () => {
   });
 });
 
-describe('quick actions', () => {
-  it('navigates via the quick-action row (Attendance/Notices/Timetable)', async () => {
+describe('navigation', () => {
+  it('KPI tiles deep-link to Attendance and Results', async () => {
     mockEndpoints();
-
     const { findByText } = render(<Home />);
 
-    fireEvent.press(await findByText('Attendance'));
+    fireEvent.press(await findByText('This month'));
     expect(mockPush).toHaveBeenCalledWith('/(family)/attendance');
 
-    fireEvent.press(await findByText('Notices'));
-    expect(mockPush).toHaveBeenCalledWith('/(family)/notices');
+    fireEvent.press(await findByText('Latest result'));
+    expect(mockPush).toHaveBeenCalledWith('/(family)/results');
+  });
 
-    fireEvent.press(await findByText('Timetable'));
+  it("the \"Today's classes\" rail links out to the full week", async () => {
+    mockEndpoints({ '/me/timetable': [allDaySlot()] });
+    const { findByText } = render(<Home />);
+
+    fireEvent.press(await findByText('Full week'));
     expect(mockPush).toHaveBeenCalledWith('/(family)/timetable');
   });
 
-  // Prove-by-deletion target (S5): a real build shipping "Coming soon" here
-  // was the whole complaint. Re-adding the Alert path must fail this test.
-  it('tapping Timetable never shows a "Coming soon" alert', async () => {
+  it('the notification bell opens the notifications screen', async () => {
     mockEndpoints();
-    const { Alert } = jest.requireActual('react-native');
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { findByTestId } = render(<Home />);
 
-    const { findByText } = render(<Home />);
-    fireEvent.press(await findByText('Timetable'));
-
-    expect(mockPush).toHaveBeenCalledWith('/(family)/timetable');
-    expect(alertSpy).not.toHaveBeenCalled();
-    alertSpy.mockRestore();
+    fireEvent.press(await findByTestId('notification-bell'));
+    expect(mockPush).toHaveBeenCalledWith('/(family)/notifications');
   });
 });
 
@@ -258,9 +276,9 @@ describe('fetch states', () => {
         { id: 'a1', title: 'Fresh notice', body: 'x', classSectionId: null, createdAt: new Date().toISOString() },
       ],
     });
-    expect(capturedFocusEffect).toBeDefined();
+    expect(mockFocusEffects[0]).toBeDefined();
     await act(async () => {
-      capturedFocusEffect?.();
+      mockFocusEffects[0]?.();
     });
 
     expect(await findByText('Fresh notice')).toBeTruthy();
