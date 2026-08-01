@@ -42,10 +42,12 @@ import { AssignmentsController } from './assignments.controller';
 import { MessagesService } from './messages.service';
 import { StudentMessagesController } from './student-messages.controller';
 import { TeacherMessagesController } from './teacher-messages.controller';
+import { NotificationsService } from './notifications.service';
+import { NotificationsController } from './notifications.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -67,6 +69,7 @@ import { TeacherMessagesController } from './teacher-messages.controller';
     AssignmentsController,
     StudentMessagesController,
     TeacherMessagesController,
+    NotificationsController,
   ],
   exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService],
 })

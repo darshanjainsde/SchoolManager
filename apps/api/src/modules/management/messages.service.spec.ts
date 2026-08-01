@@ -6,6 +6,7 @@ const txMock = {
   messageThread: { findFirst: jest.fn(), findMany: jest.fn(), upsert: jest.fn(), update: jest.fn() },
   message: { create: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
   notificationOutbox: { create: jest.fn() },
+  notification: { createMany: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));

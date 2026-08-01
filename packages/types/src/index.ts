@@ -523,6 +523,55 @@ export function assertNotificationOutboxKind(
   }
 }
 
+// ── In-app notifications (the bell + unread count) ───────────────────────────
+// The per-user inbox behind the notification bell in BOTH portals. A row is
+// written in the same transaction as the matching NotificationOutbox row (push)
+// via `emitNotifications`, so the persistent inbox and the fire-and-forget push
+// stay consistent. `kind` is a plain String column validated by the guard below
+// (same pattern as NotificationOutboxKind above).
+
+/** The in-app notification kinds surfaced by the bell. */
+export const NOTIFICATION_KINDS = [
+  'MESSAGE',
+  'EXAM',
+  'RESULT',
+  'ASSIGNMENT',
+  'ANNOUNCEMENT',
+  'REQUEST_DECISION',
+] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+/** Runtime guard for `Notification.kind` (mirrors `assertNotificationOutboxKind`). */
+export function assertNotificationKind(kind: string): asserts kind is NotificationKind {
+  if (!(NOTIFICATION_KINDS as readonly string[]).includes(kind)) {
+    throw new Error(`Invalid Notification kind: "${kind}"`);
+  }
+}
+
+/** One row in the notification list (`GET /me/notifications`). */
+export interface NotificationRow {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string | null;
+  /** Optional deep-link the client resolves to a route by role. */
+  linkType: string | null;
+  linkId: string | null;
+  readAt: string | null; // ISO
+  createdAt: string; // ISO
+}
+
+/** `GET /me/notifications` — newest first, plus the unread total for the bell. */
+export interface NotificationListResult {
+  notifications: NotificationRow[];
+  unreadCount: number;
+}
+
+/** `GET /me/notifications/unread-count` and the two badge count endpoints. */
+export interface UnreadCountResult {
+  count: number;
+}
+
 // ── Classes, subjects, roster ────────────────────────────────────────────────
 
 /**

@@ -12,6 +12,7 @@ import {
 import { ApiError } from '../../common/errors/api-error';
 import { formatDateTimeIST } from '../../common/notifications/format';
 import { NotificationService } from '../../common/notifications/notification.service';
+import { emitNotifications, sectionStudentUserIds } from '../../common/notifications/notification-inbox';
 import type {
   ExamScheduledOutboxPayload,
   ResultPublishedOutboxPayload,
@@ -278,6 +279,19 @@ export class ExamsService {
         },
       });
 
+      // In-app inbox rows (the bell) for every student in the section who has a
+      // login — same transaction as the exam + outbox row above.
+      const examRecipients = await sectionStudentUserIds(tx, schoolId, dto.classSectionId);
+      await emitNotifications(tx, {
+        schoolId,
+        userIds: examRecipients,
+        kind: 'EXAM',
+        title: `New test: ${created.title}`,
+        body: `${subject?.name ?? FALLBACK_SUBJECT_NAME} · ${formatDateTimeIST(new Date(created.scheduledAt))}`,
+        linkType: 'exam',
+        linkId: created.id,
+      });
+
       return created;
     });
 
@@ -533,6 +547,19 @@ export class ExamsService {
             classSectionId: exam.classSectionId,
             payload: outboxPayload as unknown as Prisma.InputJsonValue,
           },
+        });
+
+        // In-app inbox rows (the bell) for the section's linked students —
+        // same transaction, gated on count > 0 like the outbox row above.
+        const resultRecipients = await sectionStudentUserIds(tx, schoolId, exam.classSectionId);
+        await emitNotifications(tx, {
+          schoolId,
+          userIds: resultRecipients,
+          kind: 'RESULT',
+          title: `Result published: ${exam.title}`,
+          body: subject?.name ?? FALLBACK_SUBJECT_NAME,
+          linkType: 'result',
+          linkId: examId,
         });
       }
 

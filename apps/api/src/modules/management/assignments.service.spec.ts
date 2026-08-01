@@ -4,6 +4,8 @@ const txMock = {
   school: { findFirst: jest.fn() },
   subject: { findFirst: jest.fn() },
   notificationOutbox: { create: jest.fn() },
+  student: { findMany: jest.fn() },
+  notification: { createMany: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -41,6 +43,8 @@ describe('AssignmentsService', () => {
     txMock.school.findFirst.mockResolvedValue({ name: 'Green Valley School' });
     txMock.subject.findFirst.mockResolvedValue({ name: 'Mathematics' });
     txMock.notificationOutbox.create.mockResolvedValue({ id: 'outbox-1' });
+    txMock.student.findMany.mockResolvedValue([]);
+    txMock.notification.createMany.mockResolvedValue({ count: 0 });
     // Most existing tests call as SCHOOL_ADMIN (unrestricted); this default
     // only matters for the TEACHER-ownership tests below, which override it.
     attendance.myClassSections.mockResolvedValue([]);

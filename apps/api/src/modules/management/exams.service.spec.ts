@@ -7,6 +7,7 @@ const txMock = {
   subject: { findFirst: jest.fn() },
   result: { upsert: jest.fn(), updateMany: jest.fn(), findMany: jest.fn() },
   notificationOutbox: { create: jest.fn() },
+  notification: { createMany: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));

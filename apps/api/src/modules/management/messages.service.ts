@@ -11,6 +11,7 @@ import {
 } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import type { MessageReceivedOutboxPayload } from '../../common/notifications/notification.types';
+import { emitNotifications } from '../../common/notifications/notification-inbox';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from './timetable.service';
 
@@ -352,6 +353,18 @@ export class MessagesService {
         targetUserId: args.targetUserId,
         payload: payload as unknown as Prisma.InputJsonValue,
       },
+    });
+
+    // In-app inbox row (the bell) for the same recipient, in the SAME
+    // transaction as the message + outbox row above — all-or-nothing.
+    await emitNotifications(tx, {
+      schoolId,
+      userIds: [args.targetUserId],
+      kind: 'MESSAGE',
+      title: `New message from ${args.senderName}`,
+      body: args.body.slice(0, PREVIEW_LEN),
+      linkType: 'thread',
+      linkId: thread.id,
     });
   }
 

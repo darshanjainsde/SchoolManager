@@ -193,6 +193,7 @@ model School {
   holidays               Holiday[]
   blogPosts              BlogPost[]
   blogSelections         SchoolBlogSelection[]
+  notifications          Notification[]
   classNotes             ClassNote[]
   classTodos             ClassTodo[]
   registerChangeRequests RegisterChangeRequest[]
@@ -957,6 +958,48 @@ model Message {
   thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
+}
+
+/// In-app notification inbox — the per-user, per-event rows behind the bell in
+/// both portals (unread count + notification list). DISTINCT from
+/// `NotificationOutbox`, which is a fire-and-forget PUSH queue with no per-user
+/// read state: a `Notification` row PERSISTS until its recipient reads it, and
+/// `readAt` is what the bell's unread count decrements against.
+///
+/// Rows are written SYNCHRONOUSLY, inside the SAME `withTenant` transaction as
+/// the domain event (a new message, a scheduled exam, a published result, a
+/// posted assignment) via `emitNotifications`
+/// (apps/api/src/common/notifications/notification-inbox.ts) — right beside the
+/// matching `NotificationOutbox` write. That keeps in-app notifications
+/// IMMEDIATE regardless of the outbox drain's cron cadence, and all-or-nothing
+/// with the event itself.
+///
+/// `userId` is the RECIPIENT's `User.id` (student or teacher login), kept as a
+/// bare scalar with NO Prisma relation / FK — the SAME choice as
+/// `PushToken.userId`: a hard user delete simply orphans harmless unread rows,
+/// and the `schoolId` cascade still clears them when a school is removed. `kind`
+/// is a plain String validated by `assertNotificationKind` (@skoolos/types),
+/// mirroring `NotificationOutbox.kind`. `linkType`/`linkId` are an optional
+/// deep-link the client resolves to a route BY ROLE (e.g. linkType `thread` +
+/// a threadId → the student's or teacher's own thread route).
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @db.Uuid
+  userId    String    @db.Uuid
+  kind      String
+  title     String
+  body      String?
+  linkType  String?
+  linkId    String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  /// unread count + unread list for one user (the bell's hot path)
+  @@index([schoolId, userId, readAt])
+  /// recent list, newest-first (the paginated notification screen)
+  @@index([schoolId, userId, createdAt])
 }
 
 // ── Community ────────────────────────────────────────────

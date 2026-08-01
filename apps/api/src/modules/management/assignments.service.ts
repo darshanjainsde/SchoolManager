@@ -10,6 +10,7 @@ import {
 import { ApiError } from '../../common/errors/api-error';
 import { formatDateIST } from '../../common/notifications/format';
 import type { AssignmentPostedOutboxPayload } from '../../common/notifications/notification.types';
+import { emitNotifications, sectionStudentUserIds } from '../../common/notifications/notification-inbox';
 import { StorageService } from '../../common/storage/storage.service';
 import { AttendanceService } from './attendance.service';
 import type { CreateAssignmentDto } from './management.dto';
@@ -230,6 +231,19 @@ export class AssignmentsService {
           classSectionId: dto.classSectionId,
           payload: outboxPayload as unknown as Prisma.InputJsonValue,
         },
+      });
+
+      // In-app inbox rows (the bell) for every student in the section who has a
+      // login — same transaction as the assignment + outbox row above.
+      const assignmentRecipients = await sectionStudentUserIds(tx, schoolId, dto.classSectionId);
+      await emitNotifications(tx, {
+        schoolId,
+        userIds: assignmentRecipients,
+        kind: 'ASSIGNMENT',
+        title: created.title,
+        body: `${subject?.name ?? FALLBACK_SUBJECT_NAME} — due ${formatDateIST(new Date(created.dueDate))}`,
+        linkType: 'assignment',
+        linkId: created.id,
       });
 
       return created;
