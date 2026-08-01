@@ -3,9 +3,9 @@ const txMock = {
   teacher: { findFirst: jest.fn() },
   substitution: { findFirst: jest.fn() },
   school: { findUnique: jest.fn() },
-  timetableSlot: { findFirst: jest.fn() },
-  classNote: { findMany: jest.fn(), create: jest.fn(), findFirst: jest.fn(), delete: jest.fn() },
-  classTodo: { findMany: jest.fn(), create: jest.fn(), findFirst: jest.fn(), update: jest.fn(), delete: jest.fn() },
+  timetableSlot: { findFirst: jest.fn(), findMany: jest.fn() },
+  classNote: { findMany: jest.fn(), create: jest.fn(), findFirst: jest.fn(), delete: jest.fn(), groupBy: jest.fn() },
+  classTodo: { findMany: jest.fn(), create: jest.fn(), findFirst: jest.fn(), update: jest.fn(), delete: jest.fn(), groupBy: jest.fn() },
 };
 const withTenantMock = jest.fn((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
 jest.mock('@skoolos/db', () => ({
@@ -33,8 +33,11 @@ describe('ClassNotesService', () => {
     txMock.substitution.findFirst.mockResolvedValue(null);
     txMock.school.findUnique.mockResolvedValue({ classNoteVisibility: 'ALL_TEACHERS' });
     txMock.timetableSlot.findFirst.mockResolvedValue(null);
+    txMock.timetableSlot.findMany.mockResolvedValue([]);
     txMock.classNote.findMany.mockResolvedValue([]);
     txMock.classTodo.findMany.mockResolvedValue([]);
+    txMock.classNote.groupBy.mockResolvedValue([]);
+    txMock.classTodo.groupBy.mockResolvedValue([]);
   });
 
   it('reads notes and to-dos for one class and date together', async () => {
@@ -182,5 +185,86 @@ describe('ClassNotesService', () => {
     await expect(
       svc.addNote(SCHOOL, USER, 'TEACHER', { classSectionId: SECTION, subjectId: MATHS, date: DATE, body: '   ' }),
     ).rejects.toMatchObject({ status: 400 });
+  });
+
+  // ── Notes tab: noteClasses ───────────────────────────────────────────────
+  describe('noteClasses', () => {
+    function slot(sectionId: string, sectionName: string, subjectId: string, subjectName: string, classTeacherId: string | null) {
+      return {
+        classSectionId: sectionId,
+        subjectId,
+        classSection: { name: sectionName, classTeacherId },
+        subject: { name: subjectName },
+      };
+    }
+
+    it('returns the distinct (section, subject) pairs the teacher teaches, deduped, with the class-teacher flag', async () => {
+      txMock.timetableSlot.findMany.mockResolvedValue([
+        slot(SECTION, '8-C', MATHS, 'Mathematics', TID), // class teacher of 8-C
+        slot(SECTION, '8-C', MATHS, 'Mathematics', TID), // duplicate slot → one entry
+        slot('sec-7b', '7-B', MATHS, 'Mathematics', 'other-teacher'), // subject teacher only
+      ]);
+
+      const out = await svc.noteClasses(SCHOOL, USER);
+
+      expect(out).toHaveLength(2);
+      expect(out[0]).toMatchObject({ className: '7-B', subjectName: 'Mathematics', isClassTeacher: false });
+      expect(out.find((c) => c.className === '8-C')).toMatchObject({ isClassTeacher: true });
+    });
+
+    it('maps note and open-todo counts from groupBy onto the right class', async () => {
+      txMock.timetableSlot.findMany.mockResolvedValue([slot(SECTION, '8-C', MATHS, 'Mathematics', TID)]);
+      txMock.classNote.groupBy.mockResolvedValue([{ classSectionId: SECTION, subjectId: MATHS, _count: { _all: 4 } }]);
+      txMock.classTodo.groupBy.mockResolvedValue([{ classSectionId: SECTION, subjectId: MATHS, _count: { _all: 1 } }]);
+
+      const [c] = await svc.noteClasses(SCHOOL, USER);
+      expect(c).toMatchObject({ noteCount: 4, openTodoCount: 1 });
+      // open-todo count only — done to-dos are excluded
+      expect(txMock.classTodo.groupBy).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ done: false }) }));
+    });
+
+    it('returns [] for a caller with no Teacher record (e.g. SCHOOL_ADMIN)', async () => {
+      txMock.teacher.findFirst.mockResolvedValue(null);
+      expect(await svc.noteClasses(SCHOOL, USER)).toEqual([]);
+    });
+  });
+
+  // ── Notes tab: log (cross-date history + authz) ──────────────────────────
+  describe('log', () => {
+    it('returns notes and to-dos across dates, newest day first, each carrying its date', async () => {
+      txMock.timetableSlot.findFirst.mockResolvedValue({ id: 'slot-1' }); // teacher teaches the pair
+      txMock.classNote.findMany.mockResolvedValue([
+        { id: 'n1', body: 'quiz Fri', createdAt: new Date('2026-08-03T09:00:00Z'), authorTeacherId: TID, date: new Date('2026-08-03') },
+      ]);
+      txMock.classTodo.findMany.mockResolvedValue([
+        { id: 't1', body: 'collect hw', done: true, createdAt: new Date('2026-08-02T09:00:00Z'), authorTeacherId: TID, date: new Date('2026-08-02') },
+      ]);
+
+      const out = await svc.log(SCHOOL, SECTION, MATHS, USER, 'TEACHER');
+
+      expect(out.notes[0]).toMatchObject({ id: 'n1', date: '2026-08-03' });
+      expect(out.todos[0]).toMatchObject({ id: 't1', done: true, date: '2026-08-02' });
+      expect(txMock.classNote.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: [{ date: 'desc' }, { createdAt: 'asc' }] }),
+      );
+    });
+
+    it('403s a teacher who does NOT teach the (section, subject) — proved by deleting the timetable slot', async () => {
+      txMock.timetableSlot.findFirst.mockResolvedValue(null); // teaches nothing matching
+      await expect(svc.log(SCHOOL, SECTION, MATHS, USER, 'TEACHER')).rejects.toMatchObject({
+        response: { code: 'CLASS_NOT_OWNED' },
+        status: 403,
+      });
+      expect(txMock.classNote.findMany).not.toHaveBeenCalled();
+
+      // and the SAME call succeeds once a matching slot exists
+      txMock.timetableSlot.findFirst.mockResolvedValue({ id: 'slot-1' });
+      await expect(svc.log(SCHOOL, SECTION, MATHS, USER, 'TEACHER')).resolves.toBeDefined();
+    });
+
+    it('lets SCHOOL_ADMIN read without a Teacher record', async () => {
+      txMock.teacher.findFirst.mockResolvedValue(null);
+      await expect(svc.log(SCHOOL, SECTION, MATHS, USER, 'SCHOOL_ADMIN')).resolves.toBeDefined();
+    });
   });
 });

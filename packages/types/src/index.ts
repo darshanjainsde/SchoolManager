@@ -92,6 +92,43 @@ export interface ClassTodoRow extends ClassNoteRow {
   done: boolean;
 }
 
+// ── Notes & To-dos tab (per-class history) ───────────────────────────────────
+// The live "Right now" panel shows one class+subject for TODAY; this tab lets a
+// teacher browse every class they teach and its full notes/to-dos history, and
+// add more any time. One entry per (classSection, subject) the teacher teaches
+// on their own timetable — one-day substitution cover is NOT listed here (it
+// only surfaces the live panel on the covered day).
+
+/** One class the teacher may keep notes for — a (section, subject) pair they teach. */
+export interface NoteClass {
+  classSectionId: string;
+  /** e.g. "8-A". */
+  className: string;
+  subjectId: string;
+  /** e.g. "Mathematics". */
+  subjectName: string;
+  /** True when the caller is the section's class teacher (shown as a label). */
+  isClassTeacher: boolean;
+  /** Total notes kept against this (section, subject), across all dates. */
+  noteCount: number;
+  /** Open (not-done) to-dos against this (section, subject). */
+  openTodoCount: number;
+}
+
+/** A note in the history view — same as ClassNoteRow plus the class-day it belongs to. */
+export interface ClassLogNote extends ClassNoteRow {
+  /** `YYYY-MM-DD` — the class day this entry was filed under. */
+  date: string;
+}
+export interface ClassLogTodo extends ClassLogNote {
+  done: boolean;
+}
+/** `GET /manage/class-log?classSectionId&subjectId` — one class+subject, all dates, newest day first. */
+export interface ClassLog {
+  notes: ClassLogNote[];
+  todos: ClassLogTodo[];
+}
+
 /**
  * School-wide policy for who may read a class's notes/to-dos — set by
  * `SCHOOL_ADMIN` via `GET`/`PUT /manage/school/class-note-visibility`.
