@@ -24,6 +24,14 @@ describe('staff route honesty', () => {
     }
   });
 
+  it('shows exactly the four core tabs — no "More" tab (it became the tools drawer)', () => {
+    // Menu-drawer revision: the fifth "More" tab is gone; its contents moved
+    // into the chevron-FAB bottom sheet (ToolsDrawer), driven by MORE_ITEMS.
+    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['today', 'attendance', 'timetable', 'post']);
+    expect(VISIBLE_TABS.some((t) => t.name === 'more')).toBe(false);
+    expect(routeFileExists('more')).toBe(false);
+  });
+
   it('every hidden (More-reachable) route points at a screen file that exists', () => {
     for (const name of HIDDEN_ROUTES) {
       expect(routeFileExists(name)).toBe(true);
