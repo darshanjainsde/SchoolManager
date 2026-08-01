@@ -62,7 +62,10 @@ export interface TeacherDayEntry {
   /** "HH:MM", the school's local clock. */
   startTime: string;
   endTime: string;
-  kind: 'CLASS' | 'BREAK';
+  /** CLASS = a lesson the teacher holds; BREAK = a school break; FREE = a
+   * teaching period the teacher has no class in (a free period). FREE and BREAK
+   * both carry `slot: null` and `register: null`. */
+  kind: 'CLASS' | 'BREAK' | 'FREE';
   slot: {
     classSectionId: string;
     className: string;
