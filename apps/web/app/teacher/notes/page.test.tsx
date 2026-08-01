@@ -297,9 +297,9 @@ describe('TeacherNotesPage', () => {
     renderPage();
     await user.click(await screen.findByText('8-A · Mathematics'));
 
-    expect(await screen.findByLabelText('New note')).toHaveAttribute('maxLength', '2000');
+    expect(await screen.findByLabelText('New note')).toHaveAttribute('maxLength', '1000');
     await user.click(screen.getByRole('button', { name: '✓ To-do' }));
-    expect(screen.getByLabelText('New to-do')).toHaveAttribute('maxLength', '2000');
+    expect(screen.getByLabelText('New to-do')).toHaveAttribute('maxLength', '1000');
   });
 
   it('a successful add clears the box and refreshes the class log', async () => {
