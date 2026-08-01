@@ -62,6 +62,14 @@ it('shows a dash, not "null", for a missing roll number or class', async () => {
   expect(getAllByText('—').length).toBeGreaterThanOrEqual(2);
 });
 
+it('seats the Appearance (theme) setting on this screen since the drawer replaced More', async () => {
+  (api.request as jest.Mock).mockResolvedValue(FULL_PROFILE);
+  const { findByText, findByTestId } = render(<Profile />);
+
+  expect(await findByText('Appearance')).toBeTruthy();
+  expect(await findByTestId('appearance-system')).toBeTruthy();
+});
+
 describe('fetch states', () => {
   it('shows a loading state before the fetch resolves', () => {
     (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { TeacherProfile } from '@skoolos/types';
 import { renderWithProviders, type ApiStub } from '@/test/render';
@@ -23,6 +23,7 @@ function profile(overrides: Partial<TeacherProfile> = {}): TeacherProfile {
     phone: '9999999999',
     subjects: ['Chemistry', 'Physics'],
     classTeacherOf: ['9-A'],
+    photoUrl: null,
     ...overrides,
   };
 }
@@ -81,6 +82,73 @@ describe('TeacherProfilePage', () => {
     expect(await screen.findByText('No subjects assigned')).toBeInTheDocument();
     expect(screen.getByText('Not a class teacher')).toBeInTheDocument();
     expect(screen.getAllByText('Not on file')).toHaveLength(2);
+  });
+
+  it('renders the photo (not initials) when the profile carries a photoUrl', async () => {
+    const api = mockApi({
+      get: vi.fn().mockResolvedValue(profile({ photoUrl: 'https://cdn.example.com/priya.jpg' })),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<TeacherProfilePage />);
+
+    const img = await screen.findByAltText('Priya Rao');
+    expect(img).toHaveAttribute('src', 'https://cdn.example.com/priya.jpg');
+    expect(screen.queryByText('PR')).not.toBeInTheDocument();
+  });
+
+  it('falls back to an initials avatar when photoUrl is null', async () => {
+    const api = mockApi({ get: vi.fn().mockResolvedValue(profile()) });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<TeacherProfilePage />);
+
+    expect(await screen.findByText('PR')).toBeInTheDocument();
+    expect(screen.queryByAltText('Priya Rao')).not.toBeInTheDocument();
+  });
+
+  it('uploads a chosen photo as multipart POST /me/photo and swaps the avatar to the returned url', async () => {
+    const user = userEvent.setup();
+    const request = vi
+      .fn()
+      .mockResolvedValue({ assetId: 'asset-1', photoUrl: 'https://cdn.example.com/new.jpg' });
+    const api = mockApi({ get: vi.fn().mockResolvedValue(profile()), request });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<TeacherProfilePage />);
+    await screen.findByText('PR');
+
+    const file = new File(['x'], 'me.png', { type: 'image/png' });
+    await user.upload(screen.getByLabelText('Choose profile photo'), file);
+
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    const [path, init] = request.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe('/me/photo');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    // Multipart field name must be `file` — the only name the interceptor reads.
+    expect((init.body as FormData).get('file')).toBe(file);
+
+    // Avatar swaps to the uploaded photo without a refetch.
+    const img = await screen.findByAltText('Priya Rao');
+    expect(img).toHaveAttribute('src', 'https://cdn.example.com/new.jpg');
+    expect(screen.queryByText('PR')).not.toBeInTheDocument();
+  });
+
+  it('blocks an over-2MB file client-side: no request fired, readable error shown', async () => {
+    const user = userEvent.setup();
+    const request = vi.fn();
+    const api = mockApi({ get: vi.fn().mockResolvedValue(profile()), request });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<TeacherProfilePage />);
+    await screen.findByText('PR');
+
+    const big = new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'huge.png', { type: 'image/png' });
+    await user.upload(screen.getByLabelText('Choose profile photo'), big);
+
+    expect(await screen.findByText('Keep photos under 2MB.')).toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('changing password posts { currentPassword, newPassword } and clears the fields on success', async () => {

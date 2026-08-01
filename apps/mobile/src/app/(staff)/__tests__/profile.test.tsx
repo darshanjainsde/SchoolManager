@@ -60,6 +60,63 @@ it('shows "Not on file" for a missing email or phone, and honest empty states fo
   expect(await findByText('Not a class teacher')).toBeTruthy();
 });
 
+it('renders the photo when the profile carries a photoUrl', async () => {
+  (api.request as jest.Mock).mockResolvedValue({
+    id: 't1',
+    firstName: 'Asha',
+    lastName: 'Rao',
+    email: null,
+    phone: null,
+    subjects: [],
+    classTeacherOf: [],
+    photoUrl: 'https://cdn.example.com/photos/asha.jpg',
+  });
+
+  const { findByTestId, queryByTestId } = render(<Profile />);
+
+  const photo = await findByTestId('profile-photo');
+  expect(photo.props.source).toEqual({ uri: 'https://cdn.example.com/photos/asha.jpg' });
+  expect(queryByTestId('profile-initials')).toBeNull();
+});
+
+it('falls back to initials — never the literal string "null" — when photoUrl is absent', async () => {
+  (api.request as jest.Mock).mockResolvedValue({
+    id: 't1',
+    firstName: 'Asha',
+    lastName: 'Rao',
+    email: null,
+    phone: null,
+    subjects: [],
+    classTeacherOf: [],
+    photoUrl: null,
+  });
+
+  const { findByTestId, queryByTestId, queryByText } = render(<Profile />);
+
+  const initials = await findByTestId('profile-initials');
+  expect(initials).toHaveTextContent('AR');
+  expect(queryByTestId('profile-photo')).toBeNull();
+  expect(queryByText(/null/i)).toBeNull();
+});
+
+it('seats the Appearance (theme) setting on this screen since the drawer replaced More', async () => {
+  (api.request as jest.Mock).mockResolvedValue({
+    id: 't1',
+    firstName: 'Asha',
+    lastName: 'Rao',
+    email: null,
+    phone: null,
+    subjects: [],
+    classTeacherOf: [],
+    photoUrl: null,
+  });
+
+  const { findByText, findByTestId } = render(<Profile />);
+
+  expect(await findByText('Appearance')).toBeTruthy();
+  expect(await findByTestId('appearance-system')).toBeTruthy();
+});
+
 it('shows the API error message when the fetch fails', async () => {
   (api.request as jest.Mock).mockRejectedValue(new ApiError(500, 'Could not reach the school server.'));
   const { findByText } = render(<Profile />);

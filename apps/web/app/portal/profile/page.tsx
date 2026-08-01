@@ -1,6 +1,7 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
-import type { Profile } from '@skoolos/types';
+import { useRef, useState, type ChangeEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AvatarUploadResponse, Profile } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -10,11 +11,20 @@ function initials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 }
 
+/** Mirrors MAX_AVATAR_BYTES on POST /me/photo — checked client-side so an
+ *  oversized pick fails instantly instead of after a doomed round-trip. */
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PortalProfilePage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
+  const queryClient = useQueryClient();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const { data: profile, isLoading, error } = useQuery({
     queryKey: ['portal-profile'],
@@ -22,6 +32,40 @@ export default function PortalProfilePage() {
     enabled: !!host,
     staleTime: 60_000,
   });
+
+  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadError(null);
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Profile photos must be images.');
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setUploadError('Keep photos under 2MB.');
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      // api.request, not api.post — post JSON-encodes every body; request
+      // passes FormData through and skips Content-Type so fetch sets the
+      // multipart boundary itself.
+      const res = await api.request<AvatarUploadResponse>('/me/photo', {
+        method: 'POST',
+        body: fd,
+      });
+      queryClient.setQueryData<Profile>(['portal-profile'], (prev) =>
+        prev ? { ...prev, photoUrl: res.photoUrl } : prev,
+      );
+    } catch (err) {
+      setUploadError((err as Error).message);
+    } finally {
+      setIsUploading(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -66,8 +110,26 @@ export default function PortalProfilePage() {
                 {profile.className && (
                   <p className="text-sm text-[var(--sk-ink-3)]">{profile.className}</p>
                 )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  aria-label="Choose profile photo"
+                  onChange={(e) => void handleFileChange(e)}
+                />
+                <button
+                  type="button"
+                  className="sk-btn"
+                  style={{ marginTop: 6 }}
+                  disabled={isUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {isUploading ? 'Uploading…' : profile.photoUrl ? 'Change photo' : 'Add photo'}
+                </button>
               </div>
             </div>
+            {uploadError && <p className="sk-state err">{uploadError}</p>}
           </div>
           <div className="sk-card-b">
             <dl className="flex flex-col gap-3 text-sm">

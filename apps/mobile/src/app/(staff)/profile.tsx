@@ -1,17 +1,23 @@
 import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { TeacherProfile } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
+import { AppearanceSetting } from '@/components/AppearanceSetting';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 
+/** "AR" for Asha Rao — same rule as the family profile / web pages. */
+function initials(firstName: string, lastName: string): string {
+  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+}
+
 /**
  * Minimal read-only mirror of the web's `/teacher/profile`
- * (apps/web/app/teacher/profile/page.tsx): name, email, phone, subjects
- * taught, class-teacher-of. Password change is deliberately NOT built here —
- * mobile v1 sends the teacher to the web portal for that instead of
- * half-building a security-sensitive form.
+ * (apps/web/app/teacher/profile/page.tsx): photo (or an initials fallback),
+ * name, email, phone, subjects taught, class-teacher-of. Password change is
+ * deliberately NOT built here — mobile v1 sends the teacher to the web portal
+ * for that instead of half-building a security-sensitive form.
  */
 export default function Profile() {
   const tokens = useTokens();
@@ -56,59 +62,90 @@ export default function Profile() {
       )}
 
       {profile && (
-        <Card style={{ gap: 12 }}>
-          <View>
-            <Text style={labelStyle}>Name</Text>
-            <Text style={valueStyle}>
+        <>
+          {/* Photo-or-initials header — mirrors the family profile screen. */}
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            {profile.photoUrl ? (
+              <Image
+                testID="profile-photo"
+                source={{ uri: profile.photoUrl }}
+                style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: tokens.color.surfaceMuted }}
+              />
+            ) : (
+              <View
+                testID="profile-initials"
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  backgroundColor: tokens.color.indigo50,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 20, fontWeight: '800', color: tokens.color.indigo }}>
+                  {initials(profile.firstName, profile.lastName)}
+                </Text>
+              </View>
+            )}
+            <Text style={{ fontSize: 17, fontWeight: '800', color: tokens.color.ink }}>
               {profile.firstName} {profile.lastName}
             </Text>
-          </View>
-          <View>
-            <Text style={labelStyle}>Email</Text>
-            {profile.email ? (
-              <Text style={valueStyle}>{profile.email}</Text>
-            ) : (
-              <Text style={mutedStyle}>Not on file</Text>
-            )}
-          </View>
-          <View>
-            <Text style={labelStyle}>Phone</Text>
-            {profile.phone ? (
-              <Text style={valueStyle}>{profile.phone}</Text>
-            ) : (
-              <Text style={mutedStyle}>Not on file</Text>
-            )}
-          </View>
-          <View>
-            <Text style={labelStyle}>Subjects taught</Text>
-            {profile.subjects.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                {profile.subjects.map((s) => (
-                  <Pill key={s} tone="indigo">
-                    {s}
-                  </Pill>
-                ))}
-              </View>
-            ) : (
-              <Text style={mutedStyle}>No subjects assigned</Text>
-            )}
-          </View>
-          <View>
-            <Text style={labelStyle}>Class teacher of</Text>
-            {profile.classTeacherOf.length > 0 ? (
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                {profile.classTeacherOf.map((c) => (
-                  <Pill key={c} tone="green">
-                    {c}
-                  </Pill>
-                ))}
-              </View>
-            ) : (
-              <Text style={mutedStyle}>Not a class teacher</Text>
-            )}
-          </View>
-        </Card>
+          </Card>
+
+          <Card style={{ gap: 12 }}>
+            <View>
+              <Text style={labelStyle}>Email</Text>
+              {profile.email ? (
+                <Text style={valueStyle}>{profile.email}</Text>
+              ) : (
+                <Text style={mutedStyle}>Not on file</Text>
+              )}
+            </View>
+            <View>
+              <Text style={labelStyle}>Phone</Text>
+              {profile.phone ? (
+                <Text style={valueStyle}>{profile.phone}</Text>
+              ) : (
+                <Text style={mutedStyle}>Not on file</Text>
+              )}
+            </View>
+            <View>
+              <Text style={labelStyle}>Subjects taught</Text>
+              {profile.subjects.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                  {profile.subjects.map((s) => (
+                    <Pill key={s} tone="indigo">
+                      {s}
+                    </Pill>
+                  ))}
+                </View>
+              ) : (
+                <Text style={mutedStyle}>No subjects assigned</Text>
+              )}
+            </View>
+            <View>
+              <Text style={labelStyle}>Class teacher of</Text>
+              {profile.classTeacherOf.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                  {profile.classTeacherOf.map((c) => (
+                    <Pill key={c} tone="green">
+                      {c}
+                    </Pill>
+                  ))}
+                </View>
+              ) : (
+                <Text style={mutedStyle}>Not a class teacher</Text>
+              )}
+            </View>
+          </Card>
+        </>
       )}
+
+      {/* Appearance lives here since the drawer replaced the More screen. */}
+      <Card style={{ paddingVertical: 2 }}>
+        <AppearanceSetting />
+      </Card>
 
       <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4 }}>
         Change your password on the web portal.

@@ -17,7 +17,10 @@ import { Type } from 'class-transformer';
 
 export class ListMediaDto {
   @IsOptional()
-  @IsIn(['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT'])
+  // AVATAR is list-only (self-uploaded via POST /me/photo, never through the
+  // site-media upload endpoint — see MediaController's KINDS) so admin tabs
+  // can resolve person photoAssetIds to URLs.
+  @IsIn(['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT', 'AVATAR'])
   kind?: string;
 }
 

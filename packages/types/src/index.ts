@@ -190,6 +190,8 @@ export interface TeacherProfile {
   subjects: string[];
   /** Sections where they are the class teacher, as "7-B". */
   classTeacherOf: string[];
+  /** Resolved from `photoAssetId` → MediaAsset.url — same avatar pipeline as the student `Profile`. */
+  photoUrl: string | null;
 }
 
 // ── Announcements ────────────────────────────────────────────────────────────

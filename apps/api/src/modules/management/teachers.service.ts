@@ -50,6 +50,17 @@ export class TeachersService {
         throw new NotFoundException('No teacher profile found for this login');
       }
 
+      // Resolve photoAssetId → MediaAsset.url, mirroring PortalService.profile()
+      // — self-uploaded avatars (POST /me/photo) land as MediaAsset rows.
+      let photoUrl: string | null = null;
+      if (teacher.photoAssetId) {
+        const asset = await tx.mediaAsset.findFirst({
+          where: { id: teacher.photoAssetId },
+          select: { url: true },
+        });
+        photoUrl = asset?.url ?? null;
+      }
+
       return {
         id: teacher.id,
         firstName: teacher.firstName,
@@ -68,6 +79,7 @@ export class TeachersService {
         classTeacherOf: [...teacher.classSections]
           .sort((a, b) => a.grade.order - b.grade.order || a.name.localeCompare(b.name))
           .map((cs) => `${cs.grade.name}-${cs.name}`),
+        photoUrl,
       };
     });
   }

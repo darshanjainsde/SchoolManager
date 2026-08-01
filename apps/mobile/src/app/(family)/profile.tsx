@@ -3,6 +3,7 @@ import { Image, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentProfile } from '@/lib/portal';
+import { AppearanceSetting } from '@/components/AppearanceSetting';
 import { Card, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 
@@ -113,6 +114,11 @@ export default function Profile() {
           </Card>
         </>
       )}
+
+      {/* Appearance lives here since the drawer replaced the More screen. */}
+      <Card style={{ paddingVertical: 2 }}>
+        <AppearanceSetting />
+      </Card>
     </Screen>
   );
 }

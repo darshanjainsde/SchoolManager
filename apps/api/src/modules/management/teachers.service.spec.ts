@@ -10,6 +10,9 @@ const txMock = {
     create: jest.fn(),
     findUnique: jest.fn(),
   },
+  mediaAsset: {
+    findFirst: jest.fn(),
+  },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -236,6 +239,7 @@ describe('TeachersService.me', () => {
       lastName: 'Rao',
       email: 'priya@example.com',
       phone: '9999999999',
+      photoAssetId: null,
       teacherSubjects: [{ subject: { name: 'Chemistry' } }],
       classSections: [{ name: 'A', grade: { name: '9', order: 9 } }],
     });
@@ -253,7 +257,50 @@ describe('TeachersService.me', () => {
       phone: '9999999999',
       subjects: ['Chemistry'],
       classTeacherOf: ['9-A'],
+      photoUrl: null,
     });
+    // No photoAssetId → no MediaAsset lookup at all.
+    expect(txMock.mediaAsset.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('resolves photoAssetId → MediaAsset.url into photoUrl (self-uploaded avatar, POST /me/photo)', async () => {
+    txMock.teacher.findFirst.mockResolvedValue({
+      id: TEACHER_ID,
+      firstName: 'Priya',
+      lastName: 'Rao',
+      email: 'priya@example.com',
+      phone: null,
+      photoAssetId: 'asset-1',
+      teacherSubjects: [],
+      classSections: [],
+    });
+    txMock.mediaAsset.findFirst.mockResolvedValue({ url: 'https://cdn.example.com/avatar.jpg' });
+
+    const result = await svc.me(SCHOOL, USER_ID);
+
+    expect(txMock.mediaAsset.findFirst).toHaveBeenCalledWith({
+      where: { id: 'asset-1' },
+      select: { url: true },
+    });
+    expect(result.photoUrl).toBe('https://cdn.example.com/avatar.jpg');
+  });
+
+  it('returns photoUrl: null (not a crash) when the referenced MediaAsset row is gone', async () => {
+    txMock.teacher.findFirst.mockResolvedValue({
+      id: TEACHER_ID,
+      firstName: 'Priya',
+      lastName: 'Rao',
+      email: null,
+      phone: null,
+      photoAssetId: 'asset-dangling',
+      teacherSubjects: [],
+      classSections: [],
+    });
+    txMock.mediaAsset.findFirst.mockResolvedValue(null);
+
+    const result = await svc.me(SCHOOL, USER_ID);
+
+    expect(result.photoUrl).toBeNull();
   });
 
   it('sorts subjects alphabetically and classTeacherOf by grade order, not DB/insertion order', async () => {

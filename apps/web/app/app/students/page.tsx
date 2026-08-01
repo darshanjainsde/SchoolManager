@@ -24,8 +24,14 @@ interface Student {
   rollNo: string | null;
   guardianName: string | null;
   guardianPhone: string | null;
+  photoAssetId: string | null;
   classSection: { name: string; grade: { name: string } } | null;
   userId: string | null;
+}
+
+interface MediaAsset {
+  id: string;
+  url: string;
 }
 
 /** Shape returned by both `.../login` and `.../invite/resend`. */
@@ -458,6 +464,52 @@ function classBadgeLabel(student: Student): string | null {
   return `${student.classSection.grade.name} — ${student.classSection.name}`;
 }
 
+function studentInitials(student: Student): string {
+  return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
+}
+
+/** Small photo-or-initials avatar for the roster rows — mirrors the Teachers
+ *  tab's photoUrlMap rendering (photoAssetId resolved via /site/media). */
+function StudentAvatar({ student, photoUrl }: { student: Student; photoUrl: string | null }) {
+  if (photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photoUrl}
+        alt={`${student.firstName} ${student.lastName}`}
+        style={{
+          height: 28,
+          width: 28,
+          borderRadius: '50%',
+          objectFit: 'cover',
+          border: '1px solid var(--sk-line)',
+          flex: 'none',
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        height: 28,
+        width: 28,
+        borderRadius: '50%',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 10.5,
+        fontWeight: 700,
+        background: 'var(--sk-brand-tint)',
+        color: 'var(--sk-brand-2)',
+        flex: 'none',
+      }}
+    >
+      {studentInitials(student)}
+    </span>
+  );
+}
+
 function apiErrorMessage(err: Error): string {
   return err.message;
 }
@@ -514,6 +566,21 @@ export default function StudentsPage() {
     refetchOnWindowFocus: false,
     enabled: !!host,
   });
+
+  // Self-uploaded avatars (POST /me/photo) land as kind=AVATAR MediaAssets —
+  // resolve photoAssetId → url exactly like the Teachers tab's photoUrlMap.
+  const avatarMediaQuery = useQuery({
+    queryKey: ['site-media-avatar'],
+    queryFn: () => api.get<MediaAsset[]>('/site/media?kind=AVATAR'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
+  });
+
+  const photoUrlMap: Record<string, string> = {};
+  for (const asset of avatarMediaQuery.data ?? []) {
+    photoUrlMap[asset.id] = asset.url;
+  }
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const addMutation = useMutation({
@@ -788,7 +855,17 @@ export default function StudentsPage() {
                   <tr key={student.id}>
                     <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }}>{student.rollNo ?? '—'}</td>
                     <td style={{ ...tdStyle, fontWeight: 650 }}>
-                      {student.firstName} {student.lastName}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <StudentAvatar
+                          student={student}
+                          photoUrl={
+                            student.photoAssetId ? (photoUrlMap[student.photoAssetId] ?? null) : null
+                          }
+                        />
+                        <span>
+                          {student.firstName} {student.lastName}
+                        </span>
+                      </div>
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }}>{student.admissionNo}</td>
                     <td style={tdStyle}>

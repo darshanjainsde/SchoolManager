@@ -1,7 +1,7 @@
 'use client';
-import { useState, type FormEvent } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import type { TeacherProfile } from '@skoolos/types';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AvatarUploadResponse, TeacherProfile } from '@skoolos/types';
 import { Input } from '@/components/ui/input';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -12,6 +12,14 @@ const fieldCls =
 /** Mirrors ChangePasswordDto's `@MinLength(8)` on `newPassword`. */
 const NEW_PASSWORD_MIN_LENGTH = 8;
 
+/** Mirrors MAX_AVATAR_BYTES on POST /me/photo — checked client-side so an
+ *  oversized pick fails instantly instead of after a doomed round-trip. */
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+
+function initials(firstName: string, lastName: string): string {
+  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+}
+
 interface ChangePasswordPayload {
   currentPassword: string;
   newPassword: string;
@@ -20,6 +28,11 @@ interface ChangePasswordPayload {
 export default function TeacherProfilePage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
+  const queryClient = useQueryClient();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const profileQuery = useQuery({
     queryKey: ['t-profile'],
@@ -46,6 +59,40 @@ export default function TeacherProfilePage() {
       setSuccessMessage(null);
     },
   });
+
+  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadError(null);
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Profile photos must be images.');
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setUploadError('Keep photos under 2MB.');
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      // api.request, not api.post — post JSON-encodes every body; request
+      // passes FormData through and skips Content-Type so fetch sets the
+      // multipart boundary itself.
+      const res = await api.request<AvatarUploadResponse>('/me/photo', {
+        method: 'POST',
+        body: fd,
+      });
+      queryClient.setQueryData<TeacherProfile>(['t-profile'], (prev) =>
+        prev ? { ...prev, photoUrl: res.photoUrl } : prev,
+      );
+    } catch (err) {
+      setUploadError((err as Error).message);
+    } finally {
+      setIsUploading(false);
+    }
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -80,12 +127,52 @@ export default function TeacherProfilePage() {
           {profileQuery.error && <p className="sk-state err">{(profileQuery.error as Error).message}</p>}
           {profile && (
             <div className="flex flex-col gap-3.5">
-              <div>
-                <div className="sk-lab">Name</div>
-                <div className="nm" style={{ fontSize: 14.5, marginTop: 2 }}>
-                  {profile.firstName} {profile.lastName}
+              {/* Photo-or-initials avatar header — same self-upload flow as
+                  the student portal profile (POST /me/photo). */}
+              <div className="flex items-center gap-4">
+                {profile.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.photoUrl}
+                    alt={`${profile.firstName} ${profile.lastName}`}
+                    className="h-16 w-16 rounded-full object-cover border border-[var(--sk-line)]"
+                  />
+                ) : (
+                  <div
+                    className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold border"
+                    style={{
+                      background: 'var(--sk-brand-tint)',
+                      color: 'var(--sk-brand-2)',
+                      borderColor: 'var(--sk-brand)',
+                    }}
+                  >
+                    {initials(profile.firstName, profile.lastName)}
+                  </div>
+                )}
+                <div>
+                  <div className="nm" style={{ fontSize: 15.5 }}>
+                    {profile.firstName} {profile.lastName}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    aria-label="Choose profile photo"
+                    onChange={(e) => void handleFileChange(e)}
+                  />
+                  <button
+                    type="button"
+                    className="sk-btn"
+                    style={{ marginTop: 6 }}
+                    disabled={isUploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {isUploading ? 'Uploading…' : profile.photoUrl ? 'Change photo' : 'Add photo'}
+                  </button>
                 </div>
               </div>
+              {uploadError && <p className="sk-state err">{uploadError}</p>}
               <div>
                 <div className="sk-lab">Email</div>
                 <div className="meta" style={{ marginTop: 2 }}>
