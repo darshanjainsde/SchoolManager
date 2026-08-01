@@ -60,9 +60,13 @@ export default function Today() {
   // or break is current right now (its own start is <= now, so it's skipped).
   const nextEntry = entries.find((e) => minutesOfDay(e.startTime) > now) ?? null;
 
+  // Only real lessons count as "classes" — a FREE period is a teaching slot
+  // the teacher holds no class in, and a BREAK isn't a class at all, so both
+  // are excluded from the glance stats and the day-complete wrap-up.
   const classes = entries.filter((e) => e.kind === 'CLASS');
   const taken = classes.filter((e) => e.register?.taken).length;
   const pending = classes.length - taken;
+  const studentsMarked = classes.reduce((sum, e) => sum + (e.register?.present ?? 0), 0);
 
   function goToAttendance(classSectionId: string) {
     const className = entries.find((e) => e.slot?.classSectionId === classSectionId)?.slot?.className;
@@ -97,7 +101,14 @@ export default function Today() {
 
       {day !== null && !error && entries.length > 0 && (
         <>
-          <NowCard entry={entry} elapsed={elapsed} total={total} nextEntry={nextEntry} onTakeAttendance={goToAttendance} />
+          <NowCard
+            entry={entry}
+            elapsed={elapsed}
+            total={total}
+            nextEntry={nextEntry}
+            onTakeAttendance={goToAttendance}
+            summary={{ classesTaught: classes.length, studentsMarked }}
+          />
 
           {entry?.kind === 'CLASS' && entry.slot && (
             <ClassNotesPanel

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { render, screen, fireEvent, within } from '@testing-library/react-native';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { NowCard } from '../NowCard';
 
@@ -57,7 +57,7 @@ describe('NowCard', () => {
 
   it('shows a Take attendance button when register.taken === false', () => {
     render(<NowCard entry={classEntry()} elapsed={20} total={45} nextEntry={null} onTakeAttendance={jest.fn()} />);
-    expect(screen.getByText('Take attendance')).toBeTruthy();
+    expect(screen.getByText('Take attendance →')).toBeTruthy();
   });
 
   it('calls onTakeAttendance with the classSectionId when pressed', () => {
@@ -117,9 +117,47 @@ describe('NowCard', () => {
     expect(screen.queryByText("That's it for today")).toBeNull();
   });
 
-  it('with entry === null and nextEntry === null says the day is finished', () => {
-    render(<NowCard entry={null} elapsed={0} total={0} nextEntry={null} onTakeAttendance={jest.fn()} />);
-    expect(screen.getByText("That's it for today")).toBeTruthy();
+  it('with entry === null and nextEntry === null renders the day-complete wrap-up with its summary', () => {
+    render(
+      <NowCard
+        entry={null}
+        elapsed={0}
+        total={0}
+        nextEntry={null}
+        onTakeAttendance={jest.fn()}
+        summary={{ classesTaught: 5, studentsMarked: 148 }}
+      />,
+    );
+    expect(screen.getByText('Day complete')).toBeTruthy();
+    expect(screen.getByText('5 classes taught')).toBeTruthy();
+    // Summary cells: classes taught + students marked (a notes count isn't
+    // available from TeacherDay, so that cell is omitted rather than faked).
+    const summary = screen.getByTestId('now-summary');
+    expect(within(summary).getByText('5')).toBeTruthy();
+    expect(within(summary).getByText('classes taught')).toBeTruthy();
+    expect(within(summary).getByText('148')).toBeTruthy();
+    expect(within(summary).getByText('students marked')).toBeTruthy();
+  });
+
+  it('during a FREE period renders the green free-period hero counting down the remaining minutes', () => {
+    const freeEntry: TeacherDayEntry = {
+      periodId: 'p-free',
+      label: 'Period 4',
+      startTime: '10:25',
+      endTime: '11:05',
+      kind: 'FREE',
+      slot: null,
+      register: null,
+    };
+    render(
+      <NowCard entry={freeEntry} elapsed={0} total={40} nextEntry={nextClass} onTakeAttendance={jest.fn()} />,
+    );
+    expect(screen.getByText('Period 4 · Free period')).toBeTruthy();
+    expect(screen.getByText("You're free — 40 min")).toBeTruthy();
+    // Names the next class, and offers no attendance action.
+    expect(screen.getByText(/Next: 8-B · Science at 09:50/)).toBeTruthy();
+    expect(screen.queryByText('Take attendance →')).toBeNull();
+    expect(screen.getByTestId('now-card')).toBeTruthy();
   });
 
   it('with total === 0 does not render NaN% or crash', () => {

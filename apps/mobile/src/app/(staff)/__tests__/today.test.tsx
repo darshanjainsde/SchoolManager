@@ -223,6 +223,37 @@ it('during a BREAK, names the next class instead of offering to take attendance'
   expect(screen.queryByText(/^Notes ·/)).toBeNull();
 });
 
+const freeEntry: TeacherDayEntry = {
+  periodId: 'p-free',
+  label: 'Period 4',
+  startTime: '09:05',
+  endTime: '09:50',
+  kind: 'FREE',
+  slot: null,
+  register: null,
+};
+
+it('during a FREE period renders the green free-period hero and mounts no notes panel', async () => {
+  setNow(9, 20); // inside the 09:05-09:50 free period
+  mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), breakEntry, freeEntry] });
+  render(<Today />);
+
+  const hero = await screen.findByTestId('now-card');
+  expect(within(hero).getByText('Period 4 · Free period')).toBeTruthy();
+  expect(within(hero).getByText("You're free — 30 min")).toBeTruthy();
+  // A free period has no class, so the subject-scoped notes panel must not mount.
+  expect(screen.queryByText(/^Notes ·/)).toBeNull();
+});
+
+it('excludes FREE periods from the classes/taken/pending glance count', async () => {
+  setNow(7, 0);
+  // One real class + one free period. The glance must count the class only.
+  mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), freeEntry] });
+  render(<Today />);
+
+  expect(await screen.findByText('1 class today · 0 taken · 1 pending')).toBeTruthy();
+});
+
 it('before school starts, says so and names the first class', async () => {
   setNow(7, 0);
   mockDay(DAY);
@@ -232,12 +263,30 @@ it('before school starts, says so and names the first class', async () => {
   expect(screen.getByText(/8-A · Mathematics at 08:00/)).toBeTruthy();
 });
 
-it('after school ends, says the day is finished', async () => {
+it('after school ends, renders the day-complete wrap-up with a summary of the day', async () => {
   setNow(18, 0);
-  mockDay(DAY);
+  mockDay({
+    date: '2026-07-30',
+    dayOfWeek: 4,
+    entries: [
+      classEntry({ register: { taken: true, present: 27, total: 28, markedBy: 'Mr. Rao' } }),
+      breakEntry,
+      classEntry({
+        periodId: 'p-2',
+        startTime: '09:05',
+        endTime: '09:50',
+        register: { taken: true, present: 25, total: 30, markedBy: 'Mr. Rao' },
+      }),
+    ],
+  });
   render(<Today />);
 
-  expect(await screen.findByText("That's it for today")).toBeTruthy();
+  expect(await screen.findByText('Day complete')).toBeTruthy();
+  // 2 CLASS entries taught, 27 + 25 = 52 students marked (the BREAK is excluded).
+  expect(screen.getByText('2 classes taught')).toBeTruthy();
+  const summary = within(screen.getByTestId('now-summary'));
+  expect(summary.getByText('52')).toBeTruthy();
+  expect(summary.getByText('students marked')).toBeTruthy();
 });
 
 it('in a gap between periods, says nothing is on and names the next class', async () => {
@@ -280,7 +329,7 @@ it('refetches on focus so a colleague marking the register elsewhere shows up wi
     entries: [classEntry({ register: { taken: false, present: 0, total: 28, markedBy: null } }), breakEntry, p2],
   });
   render(<Today />);
-  expect(await screen.findByText('Take attendance')).toBeTruthy();
+  expect(await screen.findByText('Take attendance →')).toBeTruthy();
 
   // A colleague takes the register elsewhere; the next focus should show it.
   mockDay({

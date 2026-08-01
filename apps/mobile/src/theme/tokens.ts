@@ -112,6 +112,23 @@ export const brand = {
   authGlowIndigo: '#818CF8',
   authCardShadow: '#1E1B4B',
   onHero: '#FFFFFF',
+  // The teacher-home "Right now" hero is a full-bleed brand moment (white text
+  // on a saturated gradient), like the auth hero — so its gradient stops are
+  // fixed brand hues that do NOT flip with the device colour scheme, matching
+  // the approved design pitch. One accent per home state: indigo = a live
+  // class, green = a free period, done = a slate→indigo wrap-up. `ctaInk` /
+  // `ctaInkGreen` are the on-white CTA label colours for each. The FREE-period
+  // green in the day-rail tiles reuses the theme-aware `green`/`green50` tokens
+  // (which already exist and adapt to dark mode) — only the hero gradient needs
+  // these exact pitch hues.
+  hero: {
+    indigo: ['#4F46E5', '#6D5CF0', '#8B5CF6'] as const,
+    green: ['#10B981', '#0EA5A4', '#22C55E'] as const,
+    done: ['#334155', '#4338CA', '#6D5CF0'] as const,
+    ctaInk: '#4338CA',
+    ctaInkGreen: '#047857',
+    shadow: '#181648',
+  },
 } as const;
 
 /**
