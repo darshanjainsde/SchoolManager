@@ -43,6 +43,14 @@ export type ErrorCode =
   | 'REGISTER_CHANGE_OPEN'
   /** A RegisterChangeRequest is no longer PENDING — already approved/rejected — pair with 409. */
   | 'REGISTER_CHANGE_DECIDED'
+  /** Avatar upload (POST /me/photo): no multipart `file` part — pair with 400. */
+  | 'FILE_REQUIRED'
+  /** Avatar upload: not an image/* mimetype — pair with 415. */
+  | 'UNSUPPORTED_TYPE'
+  /** Avatar upload: over the 2MB cap — pair with 413. */
+  | 'FILE_TOO_LARGE'
+  /** Caller's login has no Student/Teacher/Staff person row to attach a photo to — pair with 404. */
+  | 'NO_PROFILE'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

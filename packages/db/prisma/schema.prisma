@@ -56,6 +56,9 @@ enum MediaKind {
   COURSE
   HOF
   ABOUT
+  /// Self-uploaded profile photo (student/teacher/staff) via POST /me/photo —
+  /// Phase 5·0d. Distinct from STAFF, which is the CMS featured-staff imagery.
+  AVATAR
 }
 
 enum SocialPlatform {
@@ -738,17 +741,20 @@ model Substitution {
 }
 
 model Staff {
-  id        String    @id @default(uuid()) @db.Uuid
-  schoolId  String    @db.Uuid
-  firstName String
-  lastName  String
-  role      StaffRole @default(OTHER)
-  email     String?
-  phone     String?
-  userId    String?   @db.Uuid
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  id           String    @id @default(uuid()) @db.Uuid
+  schoolId     String    @db.Uuid
+  firstName    String
+  lastName     String
+  role         StaffRole @default(OTHER)
+  email        String?
+  phone        String?
+  userId       String?   @db.Uuid
+  /// Self-uploaded avatar (MediaAsset id, kind AVATAR) — bare scalar like
+  /// Student.photoAssetId / Teacher.photoAssetId (Phase 5·0d).
+  photoAssetId String?   @db.Uuid
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  school       School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
 }

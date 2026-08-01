@@ -572,6 +572,14 @@ export interface UnreadCountResult {
   count: number;
 }
 
+/** `POST /me/photo` — self-uploaded avatar (Phase 5·0d). The url is what every
+ *  portal renders wherever this person appears; the asset id is what lands in
+ *  the person row's `photoAssetId`. */
+export interface AvatarUploadResponse {
+  assetId: string;
+  photoUrl: string;
+}
+
 // ── Classes, subjects, roster ────────────────────────────────────────────────
 
 /**

@@ -45,10 +45,12 @@ import { TeacherMessagesController } from './teacher-messages.controller';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { RequestsController } from './requests.controller';
+import { PhotoService } from './photo.service';
+import { PhotoController } from './photo.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -72,6 +74,7 @@ import { RequestsController } from './requests.controller';
     TeacherMessagesController,
     NotificationsController,
     RequestsController,
+    PhotoController,
   ],
   exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService],
 })
