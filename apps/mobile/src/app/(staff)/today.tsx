@@ -10,6 +10,7 @@ import { NowCard } from '@/components/NowCard';
 import { DayTimeline } from '@/components/DayTimeline';
 import { ClassNotesPanel } from '@/components/ClassNotesPanel';
 import { Card, Screen, SectionTitle } from '@/components/ui';
+import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
 
 /** Minutes past midnight on the device's own clock, for `currentEntry`. */
@@ -76,7 +77,10 @@ export default function Today() {
 
   return (
     <Screen>
-      <SectionTitle title={name ? `Good day, ${name}` : 'Today'} />
+      <SectionTitle
+        title={name ? `Good day, ${name}` : 'Today'}
+        right={<NotificationBell onPress={() => router.push('/(staff)/notifications')} />}
+      />
       <Card>
         <Text style={{ color: tokens.color.sub, fontSize: 12.5 }}>
           {day === null && !error

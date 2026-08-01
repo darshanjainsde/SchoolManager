@@ -32,6 +32,7 @@ export default function FamilyTabs() {
       <Tabs.Screen name="assignments" options={{ href: null }} />
       <Tabs.Screen name="messages" options={{ href: null }} />
       <Tabs.Screen name="messages/[threadId]" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View, type ViewStyle } from 'react-native';
 import { useTokens } from '@/theme/theme-context';
 import type { ColorPalette } from '@/theme/tokens';
@@ -32,18 +32,18 @@ export function Card({
   );
 }
 
-export function SectionTitle({ title, actionLabel, onAction }:
-  { title: string; actionLabel?: string; onAction?: () => void }) {
+export function SectionTitle({ title, actionLabel, onAction, right }:
+  { title: string; actionLabel?: string; onAction?: () => void; right?: ReactNode }) {
   const tokens = useTokens();
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
       marginHorizontal: 4, marginTop: 6, marginBottom: -3 }}>
       <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{title}</Text>
-      {actionLabel && (
+      {right ?? (actionLabel && (
         <Pressable onPress={onAction}>
           <Text style={{ fontSize: 12, fontWeight: '600', color: tokens.color.indigo }}>{actionLabel}</Text>
         </Pressable>
-      )}
+      ))}
     </View>
   );
 }

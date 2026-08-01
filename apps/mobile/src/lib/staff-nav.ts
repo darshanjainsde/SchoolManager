@@ -39,6 +39,7 @@ export const HIDDEN_ROUTES = [
   'notes',
   'notes/[classSectionId]',
   'profile',
+  'notifications',
 ];
 
 /**
@@ -69,22 +70,14 @@ export interface MoreItem {
     | '/(staff)/profile';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
-  /**
-   * Optional live count shown as a corner badge on the tile (e.g. unread
-   * messages, pending requests). Static placeholders for now — matching the
-   * approved pitch's "3"/"2" — until the counts are wired to real endpoints;
-   * a 0/undefined badge renders nothing. Kept here so the drawer stays a pure
-   * view over this data.
-   */
-  badge?: number;
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
   { label: 'Assignments', icon: '📚', route: '/(staff)/assignments', tone: 'indigo' },
-  { label: 'Messages', icon: '💬', route: '/(staff)/messages', tone: 'amber', badge: 3 },
+  { label: 'Messages', icon: '💬', route: '/(staff)/messages', tone: 'amber' },
   { label: 'Notes', icon: '📒', route: '/(staff)/notes', tone: 'indigo' },
   { label: 'Tests & Results', icon: '📊', route: '/(staff)/tests', tone: 'indigo' },
-  { label: 'Requests', icon: '📝', route: '/(staff)/requests', tone: 'amber', badge: 2 },
+  { label: 'Requests', icon: '📝', route: '/(staff)/requests', tone: 'amber' },
   { label: 'Holidays', icon: '📅', route: '/(staff)/holidays', tone: 'green' },
   { label: 'Profile', icon: '👤', route: '/(staff)/profile', tone: 'indigo' },
 ];

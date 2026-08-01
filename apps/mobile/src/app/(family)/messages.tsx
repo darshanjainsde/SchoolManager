@@ -135,24 +135,23 @@ export default function Messages() {
         <Card style={{ gap: 10 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={{ fontSize: 11.5, fontWeight: '700', color: tokens.color.sub }}>
-              Pick a teacher and subject
+              {picked ? 'New message' : 'Pick a teacher and subject'}
             </Text>
             <Pressable testID="ask-cancel" onPress={resetAsk}>
               <Text style={{ color: tokens.color.sub, fontWeight: '700', fontSize: 12 }}>Cancel</Text>
             </Pressable>
           </View>
 
-          {teachers === null && (
+          {!picked && teachers === null && (
             <Text style={{ color: tokens.color.sub, fontSize: 12.5 }}>Loading your teachers…</Text>
           )}
-          {teachers?.length === 0 && (
+          {!picked && teachers?.length === 0 && (
             <Text testID="no-teachers" style={{ color: tokens.color.sub, fontSize: 12.5 }}>
               You have no subject teachers assigned this week yet.
             </Text>
           )}
-          {teachers?.map((t) => {
-            const isPicked = picked?.teacherId === t.teacherId && picked?.subjectId === t.subjectId;
-            return (
+          {!picked &&
+            teachers?.map((t) => (
               <Pressable
                 key={`${t.teacherId}-${t.subjectId}`}
                 testID={`teacher-option-${t.teacherId}-${t.subjectId}`}
@@ -162,8 +161,8 @@ export default function Messages() {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   borderWidth: 1,
-                  borderColor: isPicked ? tokens.color.indigo : tokens.color.line,
-                  backgroundColor: isPicked ? tokens.color.indigo50 : tokens.color.surface,
+                  borderColor: tokens.color.line,
+                  backgroundColor: tokens.color.surface,
                   borderRadius: 11,
                   padding: 11,
                 }}
@@ -172,13 +171,38 @@ export default function Messages() {
                   <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{t.teacherName}</Text>
                   <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{t.subjectName}</Text>
                 </View>
-                {isPicked && <Text style={{ color: tokens.color.indigo, fontWeight: '800' }}>✓</Text>}
+                <Text style={{ color: tokens.color.sub, fontSize: 16 }}>›</Text>
               </Pressable>
-            );
-          })}
+            ))}
 
           {picked && (
             <>
+              {/* Chosen teacher — the picker list is collapsed so the composer
+                  sits right here. No scrolling past every other teacher to
+                  reach the box (the reported bug). "Change" reopens the list. */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: tokens.color.indigo50,
+                  borderRadius: 11,
+                  padding: 11,
+                }}
+              >
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>
+                    {picked.teacherName}
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: tokens.color.indigo, marginTop: 2 }}>
+                    {picked.subjectName}
+                  </Text>
+                </View>
+                <Pressable testID="change-teacher" onPress={() => setPicked(null)} hitSlop={8}>
+                  <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 12 }}>Change</Text>
+                </Pressable>
+              </View>
+
               <TextInput
                 testID="compose-body"
                 value={body}
@@ -186,6 +210,7 @@ export default function Messages() {
                 placeholder={`Ask ${picked.teacherName} about ${picked.subjectName}…`}
                 placeholderTextColor={tokens.color.sub}
                 multiline
+                autoFocus
                 maxLength={MESSAGE_BODY_MAX}
                 style={[inputStyle, { minHeight: 84, textAlignVertical: 'top' }]}
               />

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, BackHandler, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import type { UnreadCountResult } from '@skoolos/types';
 import { api } from '@/lib/api';
 import { session } from '@/lib/session';
 import { MORE_ITEMS, type MoreItem, type MoreTone } from '@/lib/staff-nav';
@@ -35,15 +36,15 @@ function toneTile(tokens: ReturnType<typeof useTokens>, tone: MoreTone | undefin
   }
 }
 
-function ToolTile({ item, onPress }: { item: MoreItem; onPress: () => void }) {
+function ToolTile({ item, badge, onPress }: { item: MoreItem; badge?: number; onPress: () => void }) {
   const tokens = useTokens();
   const tile = toneTile(tokens, item.tone);
-  const showBadge = typeof item.badge === 'number' && item.badge > 0;
+  const showBadge = typeof badge === 'number' && badge > 0;
   return (
     <Pressable
       testID={`tool-${item.label}`}
       accessibilityRole="button"
-      accessibilityLabel={showBadge ? `${item.label}, ${item.badge} new` : item.label}
+      accessibilityLabel={showBadge ? `${item.label}, ${badge} new` : item.label}
       onPress={onPress}
       style={({ pressed }) => ({
         width: '30%',
@@ -86,7 +87,7 @@ function ToolTile({ item, onPress }: { item: MoreItem; onPress: () => void }) {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: brand.onHero, fontSize: 10, fontWeight: '800' }}>{item.badge}</Text>
+            <Text style={{ color: brand.onHero, fontSize: 10, fontWeight: '800' }}>{badge}</Text>
           </View>
         )}
       </View>
@@ -120,6 +121,7 @@ export function ToolsDrawer({ open, onClose }: { open: boolean; onClose: () => v
   const tokens = useTokens();
   const [mounted, setMounted] = useState(open);
   const [sheetH, setSheetH] = useState(0);
+  const [counts, setCounts] = useState({ messages: 0, requests: 0 });
   const progress = useRef(new Animated.Value(open ? 1 : 0)).current;
   const reduceMotion = useRef(false);
 
@@ -137,6 +139,23 @@ export function ToolsDrawer({ open, onClose }: { open: boolean; onClose: () => v
       sub.remove();
     };
   }, []);
+
+  // Fetch the live tile counts each time the drawer opens — Messages unread +
+  // Requests pending. Swallowed on failure: a badge must never surface an
+  // error, it just shows nothing.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    Promise.all([
+      api.request<UnreadCountResult>('/manage/messages/unread-count').catch(() => ({ count: 0 })),
+      api.request<UnreadCountResult>('/manage/requests/pending-count').catch(() => ({ count: 0 })),
+    ]).then(([m, r]) => {
+      if (!cancelled) setCounts({ messages: m.count, requests: r.count });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Mount on open; on close, animate out then unmount.
   useEffect(() => {
@@ -184,6 +203,13 @@ export function ToolsDrawer({ open, onClose }: { open: boolean; onClose: () => v
   function openTool(item: MoreItem) {
     router.push(item.route);
     onClose();
+  }
+
+  // Only two tiles carry a live count today; the rest have none.
+  function badgeFor(item: MoreItem): number | undefined {
+    if (item.route === '/(staff)/messages') return counts.messages;
+    if (item.route === '/(staff)/requests') return counts.requests;
+    return undefined;
   }
 
   async function onLogout() {
@@ -248,7 +274,7 @@ export function ToolsDrawer({ open, onClose }: { open: boolean; onClose: () => v
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 }}>
           {MORE_ITEMS.map((item) => (
-            <ToolTile key={item.label} item={item} onPress={() => openTool(item)} />
+            <ToolTile key={item.label} item={item} badge={badgeFor(item)} onPress={() => openTool(item)} />
           ))}
         </View>
 
