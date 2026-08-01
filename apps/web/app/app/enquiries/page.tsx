@@ -7,7 +7,6 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { cn } from '@/lib/cn';
 
 interface Enquiry {
   id: string;
@@ -21,10 +20,10 @@ interface Enquiry {
 }
 
 const STATUSES = ['NEW', 'CONTACTED', 'CLOSED'] as const;
-const STATUS_STYLES: Record<Enquiry['status'], string> = {
-  NEW: 'bg-teal-100 text-teal-700',
-  CONTACTED: 'bg-amber-100 text-amber-700',
-  CLOSED: 'bg-slate-200 text-slate-500',
+const STATUS_TONES: Record<Enquiry['status'], string> = {
+  NEW: 'info',
+  CONTACTED: 'warn',
+  CLOSED: 'neutral',
 };
 
 // Fixed locale/timezone-agnostic-enough format; admin-only page so a slight
@@ -68,10 +67,10 @@ export default function EnquiriesPage() {
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Enquiries</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Enquiries</h1>
+        <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>
           Leads from your website — the enquiry form, and &ldquo;request a call&rdquo; from course cards.
-          {newCount > 0 && <span className="ml-1 font-semibold text-teal-700">{newCount} new.</span>}
+          {newCount > 0 && <span className="ml-1 font-semibold" style={{ color: 'var(--sk-brand-2)' }}>{newCount} new.</span>}
         </p>
       </div>
 
@@ -80,20 +79,25 @@ export default function EnquiriesPage() {
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={cn(
-              'rounded-full border px-3.5 py-1.5 text-xs font-semibold transition',
-              filter === s ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-            )}
+            className="rounded-full border px-3.5 py-1.5 text-xs font-semibold transition"
+            style={
+              filter === s
+                ? { borderColor: 'var(--sk-brand)', background: 'var(--sk-brand-tint)', color: 'var(--sk-brand-2)' }
+                : { borderColor: 'var(--sk-line-2)', background: 'var(--sk-card)', color: 'var(--sk-ink-2)' }
+            }
           >
             {s === 'ALL' ? `All (${enquiries.length})` : `${s.charAt(0)}${s.slice(1).toLowerCase()} (${enquiries.filter((e) => e.status === s).length})`}
           </button>
         ))}
       </div>
 
-      {isLoading && <p className="text-sm text-slate-500">Loading enquiries…</p>}
-      {error && <p className="text-sm text-rose-600">{(error as Error).message}</p>}
+      {isLoading && <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>Loading enquiries…</p>}
+      {error && <p className="text-sm" style={{ color: 'var(--sk-bad)' }}>{(error as Error).message}</p>}
       {!isLoading && filtered.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-slate-200 p-12 text-center text-slate-400">
+        <div
+          className="rounded-2xl border border-dashed p-12 text-center"
+          style={{ borderColor: 'var(--sk-line)', color: 'var(--sk-ink-3)' }}
+        >
           <Inbox className="mx-auto mb-3 h-8 w-8" />
           {enquiries.length === 0
             ? 'No enquiries yet — they appear here as soon as someone submits the form on your website.'
@@ -107,26 +111,26 @@ export default function EnquiriesPage() {
             <CardContent className="flex flex-wrap items-start gap-4 py-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-slate-900">{e.parentName}</span>
-                  <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold', STATUS_STYLES[e.status])}>{e.status}</span>
+                  <span className="font-semibold" style={{ color: 'var(--sk-ink)' }}>{e.parentName}</span>
+                  <span className="sk-pill" data-tone={STATUS_TONES[e.status]}>{e.status}</span>
                   {e.gradeInterest && (
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                    <span className="sk-pill" data-tone="neutral">
                       {e.gradeInterest}
                     </span>
                   )}
-                  <span className="text-xs text-slate-400">{formatDate(e.createdAt)}</span>
+                  <span className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>{formatDate(e.createdAt)}</span>
                 </div>
-                <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600">
-                  <a href={`tel:${e.phone}`} className="inline-flex items-center gap-1.5 hover:text-teal-700">
+                <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-sm" style={{ color: 'var(--sk-ink-2)' }}>
+                  <a href={`tel:${e.phone}`} className="inline-flex items-center gap-1.5">
                     <Phone className="h-3.5 w-3.5" /> {e.phone}
                   </a>
                   {e.email && (
-                    <a href={`mailto:${e.email}`} className="inline-flex items-center gap-1.5 hover:text-teal-700">
+                    <a href={`mailto:${e.email}`} className="inline-flex items-center gap-1.5">
                       <Mail className="h-3.5 w-3.5" /> {e.email}
                     </a>
                   )}
                 </div>
-                {e.message && <p className="mt-2 text-sm text-slate-500">{e.message}</p>}
+                {e.message && <p className="mt-2 text-sm" style={{ color: 'var(--sk-ink-3)' }}>{e.message}</p>}
               </div>
               <div className="flex gap-1.5">
                 {STATUSES.filter((s) => s !== e.status).map((s) => (

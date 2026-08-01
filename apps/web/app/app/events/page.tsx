@@ -62,24 +62,24 @@ function formatDateRange(startAt: string, endAt?: string | null): string {
 function ScopeBadge({ scope }: { scope: EventScope }) {
   if (scope === 'NETWORK') {
     return (
-      <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+      <span className="sk-pill" data-tone="info">
         Network
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+    <span className="sk-pill" data-tone="neutral">
       School
     </span>
   );
 }
 
 function StatusBadge({ status }: { status: EventStatus }) {
-  const styles: Record<EventStatus, string> = {
-    APPROVED: 'bg-green-100 text-green-700',
-    PENDING: 'bg-amber-100 text-amber-700',
-    REJECTED: 'bg-rose-100 text-rose-700',
-    DRAFT: 'bg-slate-100 text-slate-600',
+  const tones: Record<EventStatus, string> = {
+    APPROVED: 'good',
+    PENDING: 'warn',
+    REJECTED: 'bad',
+    DRAFT: 'neutral',
   };
   const labels: Record<EventStatus, string> = {
     APPROVED: 'Approved',
@@ -88,9 +88,7 @@ function StatusBadge({ status }: { status: EventStatus }) {
     DRAFT: 'Draft',
   };
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${styles[status]}`}
-    >
+    <span className="sk-pill" data-tone={tones[status]}>
       {labels[status]}
     </span>
   );
@@ -170,7 +168,8 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="A brief description of the event…"
             rows={3}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none"
+            className="w-full rounded-md px-3 py-2 text-sm shadow-sm focus:outline-none resize-none"
+            style={{ border: '1px solid var(--sk-line-2)', background: 'var(--sk-card)', color: 'var(--sk-ink)' }}
           />
         </div>
 
@@ -209,7 +208,7 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
           <Label htmlFor="ev-banner">Banner image (optional)</Label>
           {coverPreview && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={coverPreview} alt="Event banner preview" className="h-32 w-full rounded-lg border border-slate-200 object-cover" loading="lazy" decoding="async" />
+            <img src={coverPreview} alt="Event banner preview" className="h-32 w-full rounded-lg border object-cover" style={{ borderColor: 'var(--sk-line)' }} loading="lazy" decoding="async" />
           )}
           <Input
             id="ev-banner"
@@ -221,7 +220,7 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
               if (f) void uploadBanner(f);
             }}
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>
             {uploading ? 'Uploading…' : 'Shown on your events page — and across the network for network events. Wide images (16:9) look best.'}
           </p>
         </div>
@@ -232,13 +231,14 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
             id="ev-scope"
             value={scope}
             onChange={(e) => setScope(e.target.value as EventScope)}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            className="w-full rounded-md px-3 py-2 text-sm shadow-sm focus:outline-none"
+            style={{ border: '1px solid var(--sk-line-2)', background: 'var(--sk-card)', color: 'var(--sk-ink)' }}
           >
             <option value="SCHOOL">School — visible to your school only</option>
             <option value="NETWORK">Network — submitted to network owner for approval</option>
           </select>
           {scope === 'NETWORK' && (
-            <p className="text-xs text-amber-600">
+            <p className="text-xs" style={{ color: 'var(--sk-amber)' }}>
               Network events are submitted to the network owner for approval and will show as
               &ldquo;Pending&rdquo; until approved.
             </p>
@@ -304,8 +304,8 @@ export default function EventsPage() {
     <div className="flex flex-col gap-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Events</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Events</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--sk-ink-3)' }}>
             Manage school events and network submissions.
           </p>
         </div>
@@ -336,10 +336,10 @@ export default function EventsPage() {
 
       {/* Loading / error states */}
       {eventsQuery.isLoading && (
-        <p className="text-sm text-slate-500">Loading events…</p>
+        <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>Loading events…</p>
       )}
       {eventsQuery.error && (
-        <p className="text-sm text-rose-600">
+        <p className="text-sm" style={{ color: 'var(--sk-bad)' }}>
           {(eventsQuery.error as Error).message}
         </p>
       )}
@@ -347,8 +347,8 @@ export default function EventsPage() {
       {/* Empty state */}
       {!eventsQuery.isLoading && eventsQuery.data?.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <CalendarHeart className="h-10 w-10 text-slate-300" />
-          <p className="text-sm text-slate-400">No events yet. Create one above.</p>
+          <CalendarHeart className="h-10 w-10" style={{ color: 'var(--sk-ink-3)' }} />
+          <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>No events yet. Create one above.</p>
         </div>
       )}
 
@@ -360,18 +360,18 @@ export default function EventsPage() {
               <CardContent className="flex items-start justify-between gap-4 pt-4">
                 {event.coverUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={event.coverUrl} alt="" className="h-20 w-32 shrink-0 rounded-lg border border-slate-200 object-cover" loading="lazy" decoding="async" />
+                  <img src={event.coverUrl} alt="" className="h-20 w-32 shrink-0 rounded-lg border object-cover" style={{ borderColor: 'var(--sk-line)' }} loading="lazy" decoding="async" />
                 )}
                 <div className="flex-1 min-w-0 space-y-1">
-                  <p className="font-semibold text-slate-800 truncate">{event.title}</p>
-                  <p className="text-sm text-slate-500">
+                  <p className="font-semibold truncate" style={{ color: 'var(--sk-ink)' }}>{event.title}</p>
+                  <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>
                     {formatDateRange(event.startAt, event.endAt)}
                   </p>
                   {event.venue && (
-                    <p className="text-sm text-slate-500 truncate">📍 {event.venue}</p>
+                    <p className="text-sm truncate" style={{ color: 'var(--sk-ink-3)' }}>📍 {event.venue}</p>
                   )}
                   {event.description && (
-                    <p className="text-sm text-slate-400 line-clamp-2">{event.description}</p>
+                    <p className="text-sm line-clamp-2" style={{ color: 'var(--sk-ink-3)' }}>{event.description}</p>
                   )}
                   <div className="flex items-center gap-2 pt-1">
                     <ScopeBadge scope={event.scope} />
@@ -383,7 +383,8 @@ export default function EventsPage() {
                   size="sm"
                   disabled={deleteMutation.isPending}
                   onClick={() => deleteMutation.mutate(event.id)}
-                  className="text-rose-500 hover:bg-rose-50 hover:text-rose-700 shrink-0"
+                  className="shrink-0"
+                  style={{ color: 'var(--sk-bad)' }}
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-1" />
                   Delete

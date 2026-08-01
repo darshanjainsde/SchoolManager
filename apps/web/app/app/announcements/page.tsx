@@ -179,8 +179,8 @@ export default function AnnouncementsPage() {
       {/* Page header */}
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Announcements</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Announcements</h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--sk-ink-3)' }}>
             Post announcements to the whole school or a specific class.
           </p>
         </div>
@@ -209,10 +209,10 @@ export default function AnnouncementsPage() {
 
       {/* Loading / error states */}
       {announcementsQuery.isLoading && (
-        <p className="text-sm text-slate-500">Loading announcements…</p>
+        <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>Loading announcements…</p>
       )}
       {announcementsQuery.error && (
-        <p className="text-sm text-rose-600">
+        <p className="text-sm" style={{ color: 'var(--sk-bad)' }}>
           {(announcementsQuery.error as Error).message}
         </p>
       )}
@@ -220,8 +220,8 @@ export default function AnnouncementsPage() {
       {/* Empty state */}
       {!announcementsQuery.isLoading && (announcementsQuery.data?.length ?? 0) === 0 && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <Megaphone className="h-10 w-10 text-slate-300" />
-          <p className="text-sm text-slate-400">No announcements yet. Post one above.</p>
+          <Megaphone className="h-10 w-10" style={{ color: 'var(--sk-ink-3)' }} />
+          <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>No announcements yet. Post one above.</p>
         </div>
       )}
 
@@ -239,24 +239,24 @@ export default function AnnouncementsPage() {
           <TBody>
             {announcementsQuery.data!.map((ann) => (
               <Tr key={ann.id}>
-                <Td className="font-medium text-slate-900 max-w-xs">
+                <Td className="font-medium max-w-xs" style={{ color: 'var(--sk-ink)' }}>
                   <div className="truncate">{ann.title}</div>
                   {ann.body && (
-                    <div className="text-xs text-slate-400 truncate mt-0.5">{ann.body}</div>
+                    <div className="text-xs truncate mt-0.5" style={{ color: 'var(--sk-ink-3)' }}>{ann.body}</div>
                   )}
                 </Td>
                 <Td>
                   {ann.classSection ? (
-                    <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                    <span className="sk-pill" data-tone="info">
                       {ann.classSection.name}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    <span className="sk-pill" data-tone="neutral">
                       Whole school
                     </span>
                   )}
                 </Td>
-                <Td className="text-slate-500 text-sm whitespace-nowrap">
+                <Td className="text-sm whitespace-nowrap" style={{ color: 'var(--sk-ink-3)' }}>
                   {formatDate(ann.createdAt)}
                 </Td>
                 <Td>
@@ -265,7 +265,7 @@ export default function AnnouncementsPage() {
                     size="sm"
                     disabled={deleteMutation.isPending}
                     onClick={() => deleteMutation.mutate(ann.id)}
-                    className="text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                    style={{ color: 'var(--sk-bad)' }}
                   >
                     <Trash2 className="h-3.5 w-3.5 mr-1" />
                     Delete
