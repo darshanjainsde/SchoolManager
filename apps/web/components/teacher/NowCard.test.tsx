@@ -42,6 +42,21 @@ const nextClass: TeacherDayEntry = classEntry({
 });
 
 describe('NowCard', () => {
+  it('renders "Free period" for a current FREE period, with the next class', () => {
+    const freeEntry: TeacherDayEntry = {
+      periodId: 'p-free',
+      label: 'Period 4',
+      startTime: '10:25',
+      endTime: '11:05',
+      kind: 'FREE',
+      slot: null,
+      register: null,
+    };
+    render(<NowCard entry={freeEntry} elapsed={0} total={0} nextEntry={nextClass} onTakeAttendance={vi.fn()} />);
+    expect(screen.getByText('Free period')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Take attendance' })).not.toBeInTheDocument();
+  });
+
   it('renders the class name, subject and progress for a current CLASS period', () => {
     render(<NowCard entry={classEntry()} elapsed={20} total={45} nextEntry={null} onTakeAttendance={vi.fn()} />);
     expect(screen.getByText('8-A · Mathematics')).toBeInTheDocument();

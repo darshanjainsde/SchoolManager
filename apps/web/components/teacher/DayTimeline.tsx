@@ -24,11 +24,20 @@ function Row({
       </span>
       <div style={{ minWidth: 0 }}>
         <div className="nm">
-          {entry.kind === 'CLASS' && entry.slot ? `${entry.slot.className} · ${entry.slot.subjectName}` : entry.label}
+          {entry.kind === 'CLASS' && entry.slot
+            ? `${entry.slot.className} · ${entry.slot.subjectName}`
+            : entry.kind === 'FREE'
+              ? 'Free period'
+              : entry.label}
         </div>
       </div>
       <span className="sp" />
       {entry.kind === 'BREAK' && <span className="sk-muted">—</span>}
+      {entry.kind === 'FREE' && (
+        <span className="sk-pill" data-tone="good">
+          Free
+        </span>
+      )}
       {entry.kind === 'CLASS' &&
         // Defensive, like NowCard's `register?.taken` handling: the real API
         // never pairs a CLASS row with a null register today, but if it ever
