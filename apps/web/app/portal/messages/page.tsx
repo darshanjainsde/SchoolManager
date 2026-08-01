@@ -12,9 +12,11 @@ import type {
 import { MESSAGE_BODY_MAX } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Card, CardContent } from '@/components/ui/card';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+const fieldCls =
+  'w-full rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-3 py-2 text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60';
 
 function formatSentAt(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -143,10 +145,10 @@ export default function PortalMessagesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex items-start justify-between gap-3">
+      <header className="sk-pagehead flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Messages</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1>Messages</h1>
+          <p>
             Ask one of your teachers a question about a subject they teach you.
           </p>
         </div>
@@ -154,7 +156,8 @@ export default function PortalMessagesPage() {
           <button
             type="button"
             onClick={() => setScreen({ mode: 'pick' })}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700"
+            className="sk-btn shrink-0"
+            data-variant="primary"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             New message
@@ -165,14 +168,14 @@ export default function PortalMessagesPage() {
       {/* ── LIST ──────────────────────────────────────────────────────────── */}
       {screen.mode === 'list' && (
         <>
-          {threadsQuery.isLoading && <p className="text-sm text-slate-400">Loading messages…</p>}
+          {threadsQuery.isLoading && <p className="sk-state">Loading messages…</p>}
           {threadsQuery.error && (
-            <p className="text-sm text-rose-500">{(threadsQuery.error as Error).message}</p>
+            <p className="sk-state err">{(threadsQuery.error as Error).message}</p>
           )}
           {!threadsQuery.isLoading && !threadsQuery.error && threads.length === 0 && (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <MessageSquare className="h-10 w-10 text-slate-300" aria-hidden="true" />
-              <p className="text-sm text-slate-400">
+              <MessageSquare className="h-10 w-10 text-[var(--sk-ink-3)]" aria-hidden="true" />
+              <p className="sk-state">
                 No messages yet. Tap &ldquo;New message&rdquo; to ask a teacher a question.
               </p>
             </div>
@@ -181,27 +184,28 @@ export default function PortalMessagesPage() {
             <ul className="flex flex-col gap-3">
               {threads.map((t) => (
                 <li key={t.id}>
-                  <Card>
-                    <CardContent className="pt-4">
+                  <div className="sk-card">
+                    <div className="sk-card-b">
                       <button
                         type="button"
                         onClick={() => setScreen({ mode: 'thread', threadId: t.id })}
                         className="flex w-full items-start justify-between gap-3 text-left"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-slate-900">{t.teacherName}</p>
-                          <p className="text-sm text-slate-600">{t.subjectName}</p>
+                          <p className="font-semibold text-[var(--sk-ink)]">{t.teacherName}</p>
+                          <p className="text-sm text-[var(--sk-ink-2)]">{t.subjectName}</p>
                           {t.lastMessagePreview && (
-                            <p className="mt-0.5 truncate text-xs text-slate-400">{t.lastMessagePreview}</p>
+                            <p className="mt-0.5 truncate text-xs text-[var(--sk-ink-3)]">{t.lastMessagePreview}</p>
                           )}
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          <span className="whitespace-nowrap text-xs text-slate-400">
+                          <span className="whitespace-nowrap text-xs text-[var(--sk-ink-3)]">
                             {formatSentAt(t.lastMessageAt)}
                           </span>
                           {t.unreadCount > 0 && (
                             <span
-                              className="inline-flex items-center rounded-full bg-teal-600 px-2 py-0.5 text-xs font-medium text-white"
+                              className="sk-pill"
+                              data-tone="info"
                               aria-label={`${t.unreadCount} unread`}
                             >
                               {t.unreadCount}
@@ -209,8 +213,8 @@ export default function PortalMessagesPage() {
                           )}
                         </div>
                       </button>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -224,18 +228,18 @@ export default function PortalMessagesPage() {
           <button
             type="button"
             onClick={resetToList}
-            className="inline-flex items-center gap-1.5 self-start text-sm text-slate-500 hover:text-slate-700"
+            className="sk-btn self-start"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back
           </button>
-          <h2 className="text-sm font-semibold text-slate-700">Choose a teacher and subject</h2>
-          {teachersQuery.isLoading && <p className="text-sm text-slate-400">Loading your teachers…</p>}
+          <h2 className="text-sm font-semibold text-[var(--sk-ink-2)]">Choose a teacher and subject</h2>
+          {teachersQuery.isLoading && <p className="sk-state">Loading your teachers…</p>}
           {teachersQuery.error && (
-            <p className="text-sm text-rose-500">{(teachersQuery.error as Error).message}</p>
+            <p className="sk-state err">{(teachersQuery.error as Error).message}</p>
           )}
           {!teachersQuery.isLoading && !teachersQuery.error && teachers.length === 0 && (
-            <p className="text-sm text-slate-400">
+            <p className="sk-state">
               No teachers to message yet — your timetable has no subject teachers this week.
             </p>
           )}
@@ -244,13 +248,14 @@ export default function PortalMessagesPage() {
               key={`${t.teacherId}-${t.subjectId}`}
               type="button"
               onClick={() => setScreen({ mode: 'compose', target: t })}
-              className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left hover:border-teal-500"
+              className="sk-entity"
+              style={{ justifyContent: 'space-between' }}
             >
               <div className="min-w-0">
-                <p className="font-semibold text-slate-900">{t.teacherName}</p>
-                <p className="text-sm text-slate-600">{t.subjectName}</p>
+                <p className="font-semibold text-[var(--sk-ink)]">{t.teacherName}</p>
+                <p className="text-sm text-[var(--sk-ink-2)]">{t.subjectName}</p>
               </div>
-              <MessageSquare className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+              <MessageSquare className="h-4 w-4 shrink-0 text-[var(--sk-ink-3)]" aria-hidden="true" />
             </button>
           ))}
         </div>
@@ -262,30 +267,30 @@ export default function PortalMessagesPage() {
           <button
             type="button"
             onClick={resetToList}
-            className="inline-flex items-center gap-1.5 self-start text-sm text-slate-500 hover:text-slate-700"
+            className="sk-btn self-start"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back
           </button>
 
           <div>
-            <h2 className="font-semibold text-slate-900">
+            <h2 className="font-semibold text-[var(--sk-ink)]">
               {composeTarget ? composeTarget.teacherName : openThread?.teacherName ?? 'Teacher'}
             </h2>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-[var(--sk-ink-2)]">
               {composeTarget ? composeTarget.subjectName : openThread?.subjectName ?? ''}
             </p>
           </div>
 
           {screen.mode === 'thread' && detailQuery.isLoading && (
-            <p className="text-sm text-slate-400">Loading conversation…</p>
+            <p className="sk-state">Loading conversation…</p>
           )}
           {screen.mode === 'thread' && detailQuery.error && (
-            <p className="text-sm text-rose-500">{(detailQuery.error as Error).message}</p>
+            <p className="sk-state err">{(detailQuery.error as Error).message}</p>
           )}
 
           {screen.mode === 'compose' && (
-            <p className="text-sm text-slate-400">Start the conversation below.</p>
+            <p className="sk-state">Start the conversation below.</p>
           )}
 
           {screen.mode === 'thread' && !detailQuery.isLoading && !detailQuery.error && (
@@ -293,18 +298,15 @@ export default function PortalMessagesPage() {
               {messages.map((m) => (
                 <div
                   key={m.id}
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${
-                    m.senderRole === 'STUDENT'
-                      ? 'self-end bg-teal-600 text-white'
-                      : 'self-start bg-slate-100 text-slate-800'
-                  }`}
+                  className="max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap"
+                  style={{
+                    alignSelf: m.senderRole === 'STUDENT' ? 'flex-end' : 'flex-start',
+                    background: m.senderRole === 'STUDENT' ? 'var(--sk-brand-tint)' : 'var(--sk-line)',
+                    color: 'var(--sk-ink)',
+                  }}
                 >
                   <div>{m.body}</div>
-                  <div
-                    className={`mt-1 text-[11px] ${
-                      m.senderRole === 'STUDENT' ? 'text-teal-100' : 'text-slate-400'
-                    }`}
-                  >
+                  <div className="mt-1 text-[11px] text-[var(--sk-ink-3)]">
                     {formatSentAt(m.createdAt)}
                   </div>
                 </div>
@@ -327,14 +329,15 @@ export default function PortalMessagesPage() {
               disabled={send.isPending}
               maxLength={MESSAGE_BODY_MAX}
               placeholder="Type your question…"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none disabled:opacity-60"
+              className={fieldCls}
             />
             <div>
               <button
                 type="button"
                 onClick={() => send.mutate()}
                 disabled={trimmed.length === 0 || send.isPending}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+                className="sk-btn"
+                data-variant="primary"
               >
                 {send.isPending ? 'Sending…' : 'Send'}
               </button>

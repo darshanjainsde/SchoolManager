@@ -35,6 +35,18 @@ function todayDayOfWeek(): number {
   return new Date().getDay() || 7;
 }
 
+/** Minutes since midnight for a "HH:MM" time string. */
+function minutesOfDay(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/** Minutes since midnight on the device's own clock. */
+function nowMinutes(): number {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
 }
@@ -174,6 +186,29 @@ export default function PortalDashboardPage() {
   const nextExam = examsQuery.data?.[0];
   const latestResult = resultsQuery.data?.[0];
 
+  // ── "Right now" hero state, derived from today's timetable + attendance ──
+  const nowMin = nowMinutes();
+  const currentSlot = todaySlots.find(
+    (s) => nowMin >= minutesOfDay(s.period.startTime) && nowMin < minutesOfDay(s.period.endTime),
+  );
+  const nextSlot = todaySlots.find((s) => minutesOfDay(s.period.startTime) > nowMin);
+  const hasSchoolToday = todaySlots.length > 0;
+  const heroElapsed = currentSlot ? nowMin - minutesOfDay(currentSlot.period.startTime) : 0;
+  const heroTotal = currentSlot
+    ? minutesOfDay(currentSlot.period.endTime) - minutesOfDay(currentSlot.period.startTime)
+    : 0;
+  const heroPct = heroTotal > 0 ? Math.min(100, Math.max(0, Math.round((heroElapsed / heroTotal) * 100))) : 0;
+  const statusChipText =
+    todayStatus === 'PRESENT'
+      ? '✓ Present today'
+      : todayStatus === 'LATE'
+        ? '⏱ Late today'
+        : todayStatus === 'ABSENT'
+          ? '✕ Absent today'
+          : null;
+  const attendanceGlyph =
+    todayStatus === 'PRESENT' ? '✓' : todayStatus === 'LATE' ? '⏱' : todayStatus === 'ABSENT' ? '✕' : '—';
+
   /** Loading/error/empty all collapse to one short string per tile. */
   const tileText = (
     query: { isLoading: boolean; error: unknown },
@@ -199,6 +234,72 @@ export default function PortalDashboardPage() {
         </div>
         {profile?.className && <div className="sk-sub">{profile.className} · Roll {profile.rollNo ?? '—'}</div>}
       </header>
+
+      {/* State-aware "right now" hero — mirrors the mobile StudentHero. Shown
+          once the timetable resolves; the schedule card below surfaces any error. */}
+      {!timetableQuery.error &&
+        (timetableQuery.isLoading ? (
+          <div className="sk-hero">
+            <div className="eyebrow">Today</div>
+            <h2>Loading your day…</h2>
+          </div>
+        ) : !hasSchoolToday ? (
+          <div className="sk-hero" data-variant="holiday">
+            <div className="eyebrow">🌴 No school today</div>
+            <h2>Enjoy the day off</h2>
+            <div className="meta">No classes are scheduled for today.</div>
+          </div>
+        ) : currentSlot ? (
+          <div className="sk-hero">
+            <div className="eyebrow">
+              <span className="live" /> In class now
+            </div>
+            <h2>{currentSlot.subject.name}</h2>
+            <div className="meta">
+              {currentSlot.teacher.firstName} {currentSlot.teacher.lastName} · {currentSlot.period.label} · ends{' '}
+              {currentSlot.period.endTime}
+            </div>
+            <div className="bar">
+              <i style={{ width: `${heroPct}%` }} />
+            </div>
+            <div className="barmeta">
+              <span>Started {currentSlot.period.startTime}</span>
+              <span>{Math.max(0, heroTotal - heroElapsed)} min left</span>
+            </div>
+            {statusChipText && <span className="chip">{statusChipText}</span>}
+          </div>
+        ) : !nextSlot ? (
+          <div className="sk-hero" data-variant="done">
+            <div className="eyebrow">🎒 That&apos;s a wrap</div>
+            <h2>School&apos;s done for today</h2>
+            <div className="meta">
+              {todaySlots.length} {todaySlots.length === 1 ? 'class' : 'classes'} today
+            </div>
+            <div className="cells">
+              <div className="cell">
+                <div className="cn">{todaySlots.length}</div>
+                <div className="cl">classes today</div>
+              </div>
+              <div className="cell">
+                <div className="cn">{attendanceGlyph}</div>
+                <div className="cl">attendance</div>
+              </div>
+              <div className="cell">
+                <div className="cn">{attendanceMarked > 0 ? `${attendance?.percent}%` : '—'}</div>
+                <div className="cl">this month</div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="sk-hero">
+            <div className="eyebrow">Up next</div>
+            <h2>{nextSlot.subject.name}</h2>
+            <div className="meta">
+              {nextSlot.teacher.firstName} {nextSlot.teacher.lastName} · at {nextSlot.period.startTime}
+            </div>
+            {statusChipText && <span className="chip">{statusChipText}</span>}
+          </div>
+        ))}
 
       {/* Upcoming-test reminder — the thing a student should never miss */}
       {nextExam && (

@@ -66,7 +66,7 @@ function MarksTrend({ points }: { points: { label: string; percent: number }[] }
           y2={y(g)}
           stroke="currentColor"
           strokeWidth={1}
-          className="text-slate-100"
+          style={{ color: 'var(--sk-line)' }}
         />
       ))}
       <polyline
@@ -76,10 +76,10 @@ function MarksTrend({ points }: { points: { label: string; percent: number }[] }
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="text-teal-500"
+        style={{ color: 'var(--sk-brand)' }}
       />
       {coords.map((c) => (
-        <circle key={c.label + c.x} cx={c.x} cy={c.y} r={3} className="fill-teal-600" />
+        <circle key={c.label + c.x} cx={c.x} cy={c.y} r={3} style={{ fill: 'var(--sk-brand)' }} />
       ))}
     </svg>
   );
@@ -107,20 +107,20 @@ export default function PortalResultsPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-bold text-slate-900">Results</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Results</h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--sk-ink-3)' }}>
           Your published test results, with how the class did overall.
         </p>
       </header>
 
-      {isLoading && <p className="text-sm text-slate-400">Loading results…</p>}
-      {error && <p className="text-sm text-rose-500">{(error as Error).message}</p>}
+      {isLoading && <p className="sk-state">Loading results…</p>}
+      {error && <p className="sk-state err">{(error as Error).message}</p>}
 
       {!isLoading && !error && results.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <GraduationCap className="h-10 w-10 text-slate-300" />
-          <p className="text-sm text-slate-400">No results published yet.</p>
-          <p className="max-w-sm text-xs text-slate-400">
+          <GraduationCap className="h-10 w-10" style={{ color: 'var(--sk-ink-3)' }} />
+          <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>No results published yet.</p>
+          <p className="max-w-sm text-xs" style={{ color: 'var(--sk-ink-3)' }}>
             Results appear here once your teacher publishes them.
           </p>
         </div>
@@ -135,7 +135,7 @@ export default function PortalResultsPage() {
               </CardHeader>
               <CardContent>
                 <MarksTrend points={trendPoints} />
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs" style={{ color: 'var(--sk-ink-3)' }}>
                   Marks percentage across your last {trendPoints.length} published tests, oldest
                   first.
                 </p>
@@ -156,39 +156,34 @@ export default function PortalResultsPage() {
                     <CardContent className="pt-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-slate-900">{r.subjectName}</p>
-                          <p className="text-sm text-slate-600">{r.title}</p>
-                          <p className="mt-0.5 text-xs text-slate-400">
+                          <p className="font-semibold" style={{ color: 'var(--sk-ink)' }}>{r.subjectName}</p>
+                          <p className="text-sm" style={{ color: 'var(--sk-ink-2)' }}>{r.title}</p>
+                          <p className="mt-0.5 text-xs" style={{ color: 'var(--sk-ink-3)' }}>
                             {formatDate(r.scheduledAt)}
                           </p>
                         </div>
 
                         <div className="shrink-0 text-right">
-                          <p className="text-xl font-bold text-slate-900">
+                          <p className="text-xl font-bold" style={{ color: 'var(--sk-ink)' }}>
                             {r.marks}
-                            <span className="text-sm font-normal text-slate-400">
+                            <span className="text-sm font-normal" style={{ color: 'var(--sk-ink-3)' }}>
                               /{r.maxMarks}
                             </span>
                           </p>
-                          <p className="text-xs text-slate-400">{myPct}%</p>
+                          <p className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>{myPct}%</p>
                         </div>
                       </div>
 
-                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-xs">
-                        <span className="text-slate-500">
-                          Class average: <span className="font-medium text-slate-700">
+                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3 text-xs" style={{ borderColor: 'var(--sk-line)' }}>
+                        <span style={{ color: 'var(--sk-ink-3)' }}>
+                          Class average: <span className="font-medium" style={{ color: 'var(--sk-ink-2)' }}>
                             {r.classAverage}
                           </span>
                           /{r.maxMarks}
                         </span>
                         <span
-                          className={
-                            above
-                              ? 'inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700'
-                              : below
-                                ? 'inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700'
-                                : 'inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600'
-                          }
+                          className="sk-pill inline-flex items-center gap-1"
+                          data-tone={above ? 'good' : below ? 'warn' : 'neutral'}
                         >
                           <Icon className="h-3 w-3" aria-hidden="true" />
                           {above

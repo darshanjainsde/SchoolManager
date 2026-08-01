@@ -49,18 +49,18 @@ export default function PortalTimetablePage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-bold text-slate-900">Timetable</h1>
-        <p className="mt-1 text-sm text-slate-500">Your weekly class schedule.</p>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Timetable</h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--sk-ink-3)' }}>Your weekly class schedule.</p>
       </header>
 
-      {isLoading && <p className="text-sm text-slate-400">Loading timetable…</p>}
+      {isLoading && <p className="sk-state">Loading timetable…</p>}
       {error && (
-        <p className="text-sm text-rose-500">{(error as Error).message}</p>
+        <p className="sk-state err">{(error as Error).message}</p>
       )}
 
       {!isLoading && !error && slots.length === 0 && (
-        <div className="rounded-lg border border-dashed border-slate-200 py-16 text-center">
-          <p className="text-sm text-slate-400">No timetable slots found for your class.</p>
+        <div className="rounded-lg border border-dashed py-16 text-center" style={{ borderColor: 'var(--sk-line-2)' }}>
+          <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>No timetable slots found for your class.</p>
         </div>
       )}
 
@@ -79,21 +79,25 @@ export default function PortalTimetablePage() {
                       {daySlots.map((slot) => (
                         <li
                           key={slot.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+                          style={{ borderColor: 'var(--sk-line)', background: 'var(--sk-paper)' }}
                         >
                           <div className="flex items-center gap-3">
-                            <span className="w-20 shrink-0 rounded bg-teal-50 px-2 py-0.5 text-center text-xs font-medium text-teal-700">
+                            <span
+                              className="w-20 shrink-0 rounded px-2 py-0.5 text-center text-xs font-medium"
+                              style={{ background: 'var(--sk-brand-tint)', color: 'var(--sk-brand-2)' }}
+                            >
                               {slot.period.label}
                             </span>
                             <div>
-                              <p className="font-medium text-slate-800">{slot.subject.name}</p>
-                              <p className="text-xs text-slate-500">
+                              <p className="font-medium" style={{ color: 'var(--sk-ink)' }}>{slot.subject.name}</p>
+                              <p className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>
                                 {slot.teacher.firstName} {slot.teacher.lastName}
                               </p>
                             </div>
                           </div>
                           {(slot.period.startTime || slot.period.endTime) && (
-                            <span className="text-xs text-slate-400">
+                            <span className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>
                               {slot.period.startTime}
                               {slot.period.startTime && slot.period.endTime && ' – '}
                               {slot.period.endTime}
@@ -120,15 +124,19 @@ export default function PortalTimetablePage() {
                       {daySlots.map((slot) => (
                         <li
                           key={slot.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+                          style={{ borderColor: 'var(--sk-line)', background: 'var(--sk-paper)' }}
                         >
                           <div className="flex items-center gap-3">
-                            <span className="w-20 shrink-0 rounded bg-teal-50 px-2 py-0.5 text-center text-xs font-medium text-teal-700">
+                            <span
+                              className="w-20 shrink-0 rounded px-2 py-0.5 text-center text-xs font-medium"
+                              style={{ background: 'var(--sk-brand-tint)', color: 'var(--sk-brand-2)' }}
+                            >
                               {slot.period.label}
                             </span>
                             <div>
-                              <p className="font-medium text-slate-800">{slot.subject.name}</p>
-                              <p className="text-xs text-slate-500">
+                              <p className="font-medium" style={{ color: 'var(--sk-ink)' }}>{slot.subject.name}</p>
+                              <p className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>
                                 {slot.teacher.firstName} {slot.teacher.lastName}
                               </p>
                             </div>

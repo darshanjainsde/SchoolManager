@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, CalendarCheck } from 'lucide-react';
 import type { AttendanceStatusValue, AttendanceSummary } from '@skoolos/types';
@@ -13,10 +13,10 @@ import { cn } from '@/lib/cn';
 /** Monday-first, to match the timetable's day ordering. */
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const STATUS_STYLES: Record<AttendanceStatusValue, string> = {
-  PRESENT: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  ABSENT: 'bg-rose-100 text-rose-800 border-rose-200',
-  LATE: 'bg-amber-100 text-amber-800 border-amber-200',
+const STATUS_STYLES: Record<AttendanceStatusValue, CSSProperties> = {
+  PRESENT: { background: 'var(--sk-good-tint)', color: 'var(--sk-good)', borderColor: 'var(--sk-good)' },
+  ABSENT: { background: 'var(--sk-bad-tint)', color: 'var(--sk-bad)', borderColor: 'var(--sk-bad)' },
+  LATE: { background: 'var(--sk-amber-tint)', color: 'var(--sk-amber)', borderColor: 'var(--sk-amber)' },
 };
 
 const STATUS_LABELS: Record<AttendanceStatusValue, string> = {
@@ -101,8 +101,8 @@ export default function PortalAttendancePage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-bold text-slate-900">Attendance</h1>
-        <p className="mt-1 text-sm text-slate-500">Your day-by-day attendance record.</p>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Attendance</h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--sk-ink-3)' }}>Your day-by-day attendance record.</p>
       </header>
 
       {/* Month picker */}
@@ -111,13 +111,13 @@ export default function PortalAttendancePage() {
           type="button"
           onClick={() => setMonth((m) => shiftMonth(m, -1))}
           aria-label="Previous month"
-          className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          className="sk-btn"
         >
           <ChevronLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Previous</span>
         </button>
 
-        <p className="text-base font-semibold text-slate-900" aria-live="polite">
+        <p className="text-base font-semibold" style={{ color: 'var(--sk-ink)' }} aria-live="polite">
           {monthLabel(month)}
         </p>
 
@@ -126,15 +126,15 @@ export default function PortalAttendancePage() {
           onClick={() => setMonth((m) => shiftMonth(m, 1))}
           disabled={atLatestMonth}
           aria-label="Next month"
-          className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="sk-btn"
         >
           <span className="hidden sm:inline">Next</span>
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
-      {isLoading && <p className="text-sm text-slate-400">Loading attendance…</p>}
-      {error && <p className="text-sm text-rose-500">{(error as Error).message}</p>}
+      {isLoading && <p className="sk-state">Loading attendance…</p>}
+      {error && <p className="sk-state err">{(error as Error).message}</p>}
 
       {!isLoading && !error && data && (
         <div
@@ -149,31 +149,31 @@ export default function PortalAttendancePage() {
             <CardContent>
               {marked === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
-                  <CalendarCheck className="h-10 w-10 text-slate-300" />
-                  <p className="text-sm text-slate-400">
+                  <CalendarCheck className="h-10 w-10" style={{ color: 'var(--sk-ink-3)' }} />
+                  <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>
                     No attendance recorded yet for {monthLabel(month)}.
                   </p>
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-6">
                   <div>
-                    <p className="text-3xl font-bold text-slate-900">{data.percent}%</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-3xl font-bold" style={{ color: 'var(--sk-ink)' }}>{data.percent}%</p>
+                    <p className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>
                       present across {marked} recorded {marked === 1 ? 'day' : 'days'}
                     </p>
                   </div>
                   <dl className="flex flex-wrap gap-3 text-sm">
-                    <div className="rounded-lg bg-emerald-50 px-3 py-2 text-center">
-                      <dt className="text-xs font-medium text-emerald-700">Present</dt>
-                      <dd className="text-lg font-bold text-emerald-800">{data.present}</dd>
+                    <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--sk-good-tint)' }}>
+                      <dt className="text-xs font-medium" style={{ color: 'var(--sk-good)' }}>Present</dt>
+                      <dd className="text-lg font-bold" style={{ color: 'var(--sk-good)' }}>{data.present}</dd>
                     </div>
-                    <div className="rounded-lg bg-rose-50 px-3 py-2 text-center">
-                      <dt className="text-xs font-medium text-rose-700">Absent</dt>
-                      <dd className="text-lg font-bold text-rose-800">{data.absent}</dd>
+                    <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--sk-bad-tint)' }}>
+                      <dt className="text-xs font-medium" style={{ color: 'var(--sk-bad)' }}>Absent</dt>
+                      <dd className="text-lg font-bold" style={{ color: 'var(--sk-bad)' }}>{data.absent}</dd>
                     </div>
-                    <div className="rounded-lg bg-amber-50 px-3 py-2 text-center">
-                      <dt className="text-xs font-medium text-amber-700">Late</dt>
-                      <dd className="text-lg font-bold text-amber-800">{data.late}</dd>
+                    <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--sk-amber-tint)' }}>
+                      <dt className="text-xs font-medium" style={{ color: 'var(--sk-amber)' }}>Late</dt>
+                      <dd className="text-lg font-bold" style={{ color: 'var(--sk-amber)' }}>{data.late}</dd>
                     </div>
                   </dl>
                 </div>
@@ -195,7 +195,8 @@ export default function PortalAttendancePage() {
                   <div
                     key={label}
                     aria-hidden="true"
-                    className="pb-1 text-center text-xs font-medium text-slate-400"
+                    className="pb-1 text-center text-xs font-medium"
+                    style={{ color: 'var(--sk-ink-3)' }}
                   >
                     {label}
                   </div>
@@ -212,13 +213,15 @@ export default function PortalAttendancePage() {
                     <div
                       key={date}
                       aria-label={`${date}: ${status ? STATUS_LABELS[status] : 'no record'}`}
-                      className={cn(
-                        'flex aspect-square items-center justify-center rounded-md border text-xs font-medium',
-                        status
+                      className="flex aspect-square items-center justify-center rounded-md border text-xs font-medium"
+                      style={{
+                        ...(status
                           ? STATUS_STYLES[status]
-                          : 'border-slate-100 bg-slate-50 text-slate-400',
-                        isToday && 'ring-2 ring-teal-500 ring-offset-1',
-                      )}
+                          : { background: 'var(--sk-paper)', color: 'var(--sk-ink-3)', borderColor: 'var(--sk-line)' }),
+                        ...(isToday
+                          ? { boxShadow: '0 0 0 1px var(--sk-card), 0 0 0 3px var(--sk-brand)' }
+                          : {}),
+                      }}
                     >
                       {dayNum}
                     </div>
@@ -227,15 +230,15 @@ export default function PortalAttendancePage() {
               </div>
 
               {/* Legend */}
-              <ul className="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">
+              <ul className="mt-4 flex flex-wrap gap-4 text-xs" style={{ color: 'var(--sk-ink-3)' }}>
                 {(Object.keys(STATUS_LABELS) as AttendanceStatusValue[]).map((s) => (
                   <li key={s} className="flex items-center gap-1.5">
-                    <span className={cn('h-3 w-3 rounded border', STATUS_STYLES[s])} />
+                    <span className="h-3 w-3 rounded border" style={STATUS_STYLES[s]} />
                     {STATUS_LABELS[s]}
                   </li>
                 ))}
                 <li className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded border border-slate-100 bg-slate-50" />
+                  <span className="h-3 w-3 rounded border" style={{ background: 'var(--sk-paper)', borderColor: 'var(--sk-line)' }} />
                   No record
                 </li>
               </ul>

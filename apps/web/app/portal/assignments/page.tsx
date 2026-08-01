@@ -5,7 +5,6 @@ import { BookOpen, ChevronDown, Paperclip } from 'lucide-react';
 import type { StudentAssignment, StudentAssignmentList } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Card, CardContent } from '@/components/ui/card';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,8 +35,8 @@ function AssignmentRow({
   onToggle: () => void;
 }) {
   return (
-    <Card>
-      <CardContent className="pt-4">
+    <div className="sk-card">
+      <div className="sk-card-b">
         <button
           type="button"
           onClick={onToggle}
@@ -45,19 +44,19 @@ function AssignmentRow({
           className="flex w-full items-start justify-between gap-3 text-left"
         >
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-slate-900">{assignment.title}</p>
-            <p className="text-sm text-slate-600">{assignment.subjectName}</p>
-            <p className="mt-0.5 text-xs text-slate-400">Due {formatDueDate(assignment.dueDate)}</p>
+            <p className="font-semibold text-[var(--sk-ink)]">{assignment.title}</p>
+            <p className="text-sm text-[var(--sk-ink-2)]">{assignment.subjectName}</p>
+            <p className="mt-0.5 text-xs text-[var(--sk-ink-3)]">Due {formatDueDate(assignment.dueDate)}</p>
           </div>
           <ChevronDown
-            className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`h-4 w-4 shrink-0 text-[var(--sk-ink-3)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
             aria-hidden="true"
           />
         </button>
 
         {isOpen && (
-          <div className="mt-3 border-t border-slate-100 pt-3">
-            <p className="whitespace-pre-wrap text-sm text-slate-700">{assignment.instructions}</p>
+          <div className="mt-3 border-t border-[var(--sk-line)] pt-3">
+            <p className="whitespace-pre-wrap text-sm text-[var(--sk-ink-2)]">{assignment.instructions}</p>
             {assignment.attachments.length > 0 && (
               <ul className="mt-3 flex flex-col gap-1.5">
                 {assignment.attachments.map((a) => (
@@ -66,7 +65,7 @@ function AssignmentRow({
                       href={a.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-teal-700 underline"
+                      className="inline-flex items-center gap-1.5 text-sm text-[var(--sk-brand-2)] underline"
                     >
                       <Paperclip className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                       {a.name}
@@ -77,8 +76,8 @@ function AssignmentRow({
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -128,24 +127,24 @@ export default function PortalAssignmentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Assignments</h1>
-        <p className="mt-1 text-sm text-slate-500">Homework set for your class, newest due date first.</p>
+      <header className="sk-pagehead">
+        <h1>Assignments</h1>
+        <p>Homework set for your class, newest due date first.</p>
       </header>
 
-      {isLoading && <p className="text-sm text-slate-400">Loading assignments…</p>}
-      {error && <p className="text-sm text-rose-500">{(error as Error).message}</p>}
+      {isLoading && <p className="sk-state">Loading assignments…</p>}
+      {error && <p className="sk-state err">{(error as Error).message}</p>}
 
       {!isLoading && !error && upcoming.length === 0 && past.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <BookOpen className="h-10 w-10 text-slate-300" />
-          <p className="text-sm text-slate-400">No assignments yet.</p>
+          <BookOpen className="h-10 w-10 text-[var(--sk-ink-3)]" />
+          <p className="sk-state">No assignments yet.</p>
         </div>
       )}
 
       {upcoming.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-slate-700">Upcoming</h2>
+          <h2 className="text-sm font-semibold text-[var(--sk-ink-2)]">Upcoming</h2>
           {upcoming.map((a) => (
             <AssignmentRow key={a.id} assignment={a} isOpen={openIds.has(a.id)} onToggle={() => toggle(a.id)} />
           ))}
@@ -154,7 +153,7 @@ export default function PortalAssignmentsPage() {
 
       {past.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-slate-700">Past</h2>
+          <h2 className="text-sm font-semibold text-[var(--sk-ink-2)]">Past</h2>
           {past.map((a) => (
             <AssignmentRow key={a.id} assignment={a} isOpen={openIds.has(a.id)} onToggle={() => toggle(a.id)} />
           ))}

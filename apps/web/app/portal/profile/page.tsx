@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import type { Profile } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -26,19 +25,19 @@ export default function PortalProfilePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">My profile</h1>
-        <p className="mt-1 text-sm text-slate-500">Your student information (read-only).</p>
+      <header className="sk-pagehead">
+        <h1>My profile</h1>
+        <p>Your student information (read-only).</p>
       </header>
 
-      {isLoading && <p className="text-sm text-slate-400">Loading profile…</p>}
+      {isLoading && <p className="sk-state">Loading profile…</p>}
       {error && (
-        <p className="text-sm text-rose-500">{(error as Error).message}</p>
+        <p className="sk-state err">{(error as Error).message}</p>
       )}
 
       {profile && (
-        <Card className="max-w-md">
-          <CardHeader className="pb-3">
+        <div className="sk-card max-w-md">
+          <div className="sk-card-h pb-3">
             <div className="flex items-center gap-4">
               {/* Photo or initials avatar */}
               {profile.photoUrl ? (
@@ -46,44 +45,51 @@ export default function PortalProfilePage() {
                 <img
                   src={profile.photoUrl}
                   alt={`${profile.firstName} ${profile.lastName}`}
-                  className="h-16 w-16 rounded-full object-cover border border-slate-200"
+                  className="h-16 w-16 rounded-full object-cover border border-[var(--sk-line)]"
                 />
               ) : (
-                <div className="h-16 w-16 rounded-full bg-teal-100 flex items-center justify-center text-xl font-bold text-teal-700 border border-teal-200">
+                <div
+                  className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold border"
+                  style={{
+                    background: 'var(--sk-brand-tint)',
+                    color: 'var(--sk-brand-2)',
+                    borderColor: 'var(--sk-brand)',
+                  }}
+                >
                   {initials(profile.firstName, profile.lastName)}
                 </div>
               )}
               <div>
-                <CardTitle className="text-lg">
+                <h3 className="text-lg font-semibold tracking-tight text-[var(--sk-ink)]">
                   {profile.firstName} {profile.lastName}
-                </CardTitle>
+                </h3>
                 {profile.className && (
-                  <p className="text-sm text-slate-500">{profile.className}</p>
+                  <p className="text-sm text-[var(--sk-ink-3)]">{profile.className}</p>
                 )}
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div className="sk-card-b">
             <dl className="flex flex-col gap-3 text-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <dt className="text-slate-500">Admission no.</dt>
-                <dd className="font-medium text-slate-800 font-mono">{profile.admissionNo}</dd>
+              <div className="flex items-center justify-between border-b border-[var(--sk-line)] pb-3">
+                <dt className="text-[var(--sk-ink-3)]">Admission no.</dt>
+                <dd className="font-medium text-[var(--sk-ink)] font-mono">{profile.admissionNo}</dd>
               </div>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <dt className="text-slate-500">Roll no.</dt>
-                <dd className="font-medium text-slate-800">
-                  {profile.rollNo ?? <span className="text-slate-400">—</span>}
+              <div className="flex items-center justify-between border-b border-[var(--sk-line)] pb-3">
+                <dt className="text-[var(--sk-ink-3)]">Roll no.</dt>
+                <dd className="font-medium text-[var(--sk-ink)]">
+                  {profile.rollNo ?? <span className="text-[var(--sk-ink-3)]">—</span>}
                 </dd>
               </div>
               <div className="flex items-center justify-between">
-                <dt className="text-slate-500">Class</dt>
-                <dd className="font-medium text-slate-800">
-                  {profile.className ?? <span className="text-slate-400">—</span>}
+                <dt className="text-[var(--sk-ink-3)]">Class</dt>
+                <dd className="font-medium text-[var(--sk-ink)]">
+                  {profile.className ?? <span className="text-[var(--sk-ink-3)]">—</span>}
                 </dd>
               </div>
             </dl>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );
