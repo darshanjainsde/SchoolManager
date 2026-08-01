@@ -43,7 +43,7 @@ export class TeacherDayService {
 
       const teacher = await tx.teacher.findFirst({ where: { userId } });
       if (!teacher) {
-        return periods.map((p) => ({
+        return periods.map((p): TeacherDayEntry => ({
           periodId: p.id,
           label: p.label,
           startTime: p.startTime,
@@ -120,7 +120,7 @@ export class TeacherDayService {
         }
       }
 
-      return periods.map((p) => {
+      return periods.map((p): TeacherDayEntry => {
         const s = p.kind === 'BREAK' ? undefined : slotByPeriod.get(p.id);
         if (!s) {
           return {
@@ -128,7 +128,8 @@ export class TeacherDayService {
             label: p.label,
             startTime: p.startTime,
             endTime: p.endTime,
-            kind: p.kind as 'CLASS' | 'BREAK',
+            // Non-break period the teacher holds no class in → a FREE period.
+            kind: p.kind === 'BREAK' ? 'BREAK' : 'FREE',
             slot: null,
             register: null,
           };
@@ -141,7 +142,7 @@ export class TeacherDayService {
           label: p.label,
           startTime: p.startTime,
           endTime: p.endTime,
-          kind: p.kind as 'CLASS' | 'BREAK',
+          kind: 'CLASS',
           slot: {
             classSectionId: s.classSectionId,
             className: `${s.classSection.grade.name}-${s.classSection.name}`,

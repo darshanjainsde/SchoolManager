@@ -2,9 +2,16 @@
  * T3 menu-parity decision (2026-07-30): one agreed section list across web
  * and app. "Today" and "Announcements" are named to match the web nav
  * (apps/web/app/teacher/layout.tsx's NAV_ITEMS) — same features, same
- * labels. The tab bar itself stays at 5 entries; everything the web nav
- * additionally lists (Tests, Results, Requests, Holidays) plus the web's
- * sidebar-foot profile link is reachable from More instead.
+ * labels.
+ *
+ * Menu-drawer revision (2026-08-01): the tab bar now shows FOUR core tabs
+ * (Today, Attendance, Timetable, Announcements) with a central chevron FAB
+ * between them that lifts a bottom-sheet tools drawer (see
+ * `src/components/ToolsDrawer.tsx`) over whatever screen you're on. There is
+ * no "More" tab any more — everything the web nav additionally lists (Tests,
+ * Results, Requests, Holidays) plus Assignments, Messages, Notes and the
+ * web's sidebar-foot profile link lives in that drawer instead. `MORE_ITEMS`
+ * stays the single source of truth for those tools.
  *
  * Kept dependency-free (no React/expo-router imports) so route-honesty can
  * be checked by a plain filesystem test without mounting the screens —
@@ -17,7 +24,6 @@ export const VISIBLE_TABS = [
   { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
   { name: 'timetable', title: 'Timetable', icon: 'calendar-outline' as const },
   { name: 'post', title: 'Announcements', icon: 'megaphone-outline' as const },
-  { name: 'more', title: 'More', icon: 'ellipsis-horizontal' as const },
 ];
 
 /** Detail/utility routes — reachable via navigation (More rows, row taps), hidden from the tab bar. */
@@ -30,24 +36,55 @@ export const HIDDEN_ROUTES = [
   'assignments',
   'messages',
   'messages/[threadId]',
+  'notes',
+  'notes/[classSectionId]',
   'profile',
 ];
 
 /**
- * More-screen rows. Results has no screen of its own: like the web (whose
- * /teacher/results page is itself a class/exam picker), the entry point IS
- * the tests screen's scheduled-tests list — tapping a test opens its
- * results (see (staff)/tests.tsx's `openResults`).
+ * More-screen rows. Tests and Results share ONE row ("Tests & Results"): the
+ * tests screen lists scheduled tests, and tapping a test opens its results
+ * entry (results/[examId] via (staff)/tests.tsx's `openResults`). Results has
+ * no screen of its own — so two separate rows pointing at the same screen read
+ * as a bug; one row that names both is the honest label. (Web keeps them as
+ * two pages — /teacher/tests to schedule, /teacher/results to enter marks —
+ * because it has the width for a top-level nav; mobile folds them here.)
  *
  * Assignments (Phase 4 Task 4) matches the web nav's label — see
  * apps/web/app/teacher/layout.tsx's NAV_ITEMS.
  */
-export const MORE_ITEMS = [
-  { label: 'Assignments', icon: '📚', route: '/(staff)/assignments' as const },
-  { label: 'Messages', icon: '💬', route: '/(staff)/messages' as const },
-  { label: 'Tests', icon: '📊', route: '/(staff)/tests' as const },
-  { label: 'Results', icon: '🏆', route: '/(staff)/tests' as const },
-  { label: 'Requests', icon: '📝', route: '/(staff)/requests' as const },
-  { label: 'Holidays', icon: '📅', route: '/(staff)/holidays' as const },
-  { label: 'Profile', icon: '👤', route: '/(staff)/profile' as const },
+/** Icon-tile colour family for a drawer tool — mirrors the pitch's tinted tiles. */
+export type MoreTone = 'indigo' | 'amber' | 'green';
+
+export interface MoreItem {
+  label: string;
+  icon: string;
+  route:
+    | '/(staff)/assignments'
+    | '/(staff)/messages'
+    | '/(staff)/notes'
+    | '/(staff)/tests'
+    | '/(staff)/requests'
+    | '/(staff)/holidays'
+    | '/(staff)/profile';
+  /** Icon-tile tint. Defaults to indigo when omitted. */
+  tone?: MoreTone;
+  /**
+   * Optional live count shown as a corner badge on the tile (e.g. unread
+   * messages, pending requests). Static placeholders for now — matching the
+   * approved pitch's "3"/"2" — until the counts are wired to real endpoints;
+   * a 0/undefined badge renders nothing. Kept here so the drawer stays a pure
+   * view over this data.
+   */
+  badge?: number;
+}
+
+export const MORE_ITEMS: readonly MoreItem[] = [
+  { label: 'Assignments', icon: '📚', route: '/(staff)/assignments', tone: 'indigo' },
+  { label: 'Messages', icon: '💬', route: '/(staff)/messages', tone: 'amber', badge: 3 },
+  { label: 'Notes', icon: '📒', route: '/(staff)/notes', tone: 'indigo' },
+  { label: 'Tests & Results', icon: '📊', route: '/(staff)/tests', tone: 'indigo' },
+  { label: 'Requests', icon: '📝', route: '/(staff)/requests', tone: 'amber', badge: 2 },
+  { label: 'Holidays', icon: '📅', route: '/(staff)/holidays', tone: 'green' },
+  { label: 'Profile', icon: '👤', route: '/(staff)/profile', tone: 'indigo' },
 ];

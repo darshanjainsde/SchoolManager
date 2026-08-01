@@ -24,6 +24,14 @@ describe('staff route honesty', () => {
     }
   });
 
+  it('shows exactly the four core tabs — no "More" tab (it became the tools drawer)', () => {
+    // Menu-drawer revision: the fifth "More" tab is gone; its contents moved
+    // into the chevron-FAB bottom sheet (ToolsDrawer), driven by MORE_ITEMS.
+    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['today', 'attendance', 'timetable', 'post']);
+    expect(VISIBLE_TABS.some((t) => t.name === 'more')).toBe(false);
+    expect(routeFileExists('more')).toBe(false);
+  });
+
   it('every hidden (More-reachable) route points at a screen file that exists', () => {
     for (const name of HIDDEN_ROUTES) {
       expect(routeFileExists(name)).toBe(true);
@@ -38,9 +46,12 @@ describe('staff route honesty', () => {
     }
   });
 
-  it('lists everything the web nav lists — Tests, Results, Requests, Holidays, Profile', () => {
+  it('lists the web nav sections — Tests & Results (one row on mobile), Requests, Holidays, Profile', () => {
     const labels = MORE_ITEMS.map((i) => i.label);
-    expect(labels).toEqual(expect.arrayContaining(['Tests', 'Results', 'Requests', 'Holidays', 'Profile']));
+    expect(labels).toEqual(expect.arrayContaining(['Tests & Results', 'Requests', 'Holidays', 'Profile']));
+    // Tests and Results are a single row here (they'd point at the same screen
+    // otherwise) — the tests screen opens a test's results on tap.
+    expect(labels).not.toContain('Results');
   });
 
   it('lists a Messages row pointing at the thread-list screen, with its detail route hidden', () => {
@@ -51,6 +62,16 @@ describe('staff route honesty', () => {
     // hidden from the tab bar — registered via HIDDEN_ROUTES, not a More row.
     expect(HIDDEN_ROUTES).toContain('messages/[threadId]');
     expect(routeFileExists('messages/[threadId]')).toBe(true);
+  });
+
+  it('lists a Notes row pointing at the class-list screen, with its detail route hidden', () => {
+    const notes = MORE_ITEMS.find((i) => i.label === 'Notes');
+    expect(notes?.route).toBe('/(staff)/notes');
+    expect(routeFileExists('notes')).toBe(true);
+    // The per-class history is reachable only by tapping a class, so it is
+    // hidden from the tab bar — registered via HIDDEN_ROUTES, not a More row.
+    expect(HIDDEN_ROUTES).toContain('notes/[classSectionId]');
+    expect(routeFileExists('notes/[classSectionId]')).toBe(true);
   });
 
   it('names the "Today" tab and the "Announcements" tab to match the web nav', () => {

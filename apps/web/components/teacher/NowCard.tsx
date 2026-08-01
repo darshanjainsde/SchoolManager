@@ -49,12 +49,13 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance }: 
     );
   }
 
-  if (entry.kind === 'BREAK') {
+  if (entry.kind === 'BREAK' || entry.kind === 'FREE') {
+    const isFree = entry.kind === 'FREE';
     return (
-      <div className="sk-card sk-now">
+      <div className="sk-card sk-now" data-free={isFree ? 'true' : undefined}>
         <div className="sk-card-b">
           <p className="sk-eyebrow">Right now</p>
-          <h2 className="sk-now-title">{entry.label}</h2>
+          <h2 className="sk-now-title">{isFree ? 'Free period' : entry.label}</h2>
           {nextEntry ? (
             <p className="sk-now-sub">
               Next up: {entryLabel(nextEntry)} at {nextEntry.startTime}
@@ -67,6 +68,7 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance }: 
     );
   }
 
+  // Past here `entry.kind` is CLASS, so `slot`/`register` are populated.
   const { slot, register } = entry;
   // A zero-length period can never be `currentEntry`'s pick (see
   // teacher-day.ts), but this component takes `total` as a plain prop and

@@ -16,10 +16,22 @@ function classEntry(id: string, label: string, taken: boolean): TeacherDayEntry 
 
 const breakEntry: TeacherDayEntry = {
   periodId: 'p-break',
-  label: 'Break',
+  // Distinct from the neutral "Break" pill the row renders, so the title and
+  // the pill never collide in a getByText lookup.
+  label: 'Lunch break',
   startTime: '08:45',
   endTime: '09:05',
   kind: 'BREAK',
+  slot: null,
+  register: null,
+};
+
+const freeEntry: TeacherDayEntry = {
+  periodId: 'p-free',
+  label: 'Period 4',
+  startTime: '10:25',
+  endTime: '11:05',
+  kind: 'FREE',
   slot: null,
   register: null,
 };
@@ -30,8 +42,17 @@ describe('DayTimeline', () => {
   it('renders one row per entry including breaks', () => {
     render(<DayTimeline entries={DAY} currentIndex={-1} onTakeAttendance={jest.fn()} />);
     expect(screen.getByText('8-A · Maths')).toBeTruthy();
-    expect(screen.getByText('Break')).toBeTruthy();
+    expect(screen.getByText('Lunch break')).toBeTruthy();
     expect(screen.getByText('8-A · Science')).toBeTruthy();
+  });
+
+  it('renders a FREE entry as a distinct green "Free period" tile, not a class or a break', () => {
+    render(<DayTimeline entries={[freeEntry]} currentIndex={-1} onTakeAttendance={jest.fn()} />);
+    expect(screen.getByTestId(`timeline-free-${freeEntry.periodId}`)).toBeTruthy();
+    expect(screen.getByText('Free period')).toBeTruthy();
+    expect(screen.getByText('Free')).toBeTruthy();
+    // A free period is not a class, so it never offers to take attendance.
+    expect(screen.queryByText('Take now')).toBeNull();
   });
 
   it('marks rows before currentIndex as dimmed under "Earlier today"', () => {
@@ -71,6 +92,6 @@ describe('DayTimeline', () => {
     // register must not silently render no pill at all.
     const entryWithoutRegister: TeacherDayEntry = { ...classEntry('p3', 'History', false), register: null };
     render(<DayTimeline entries={[entryWithoutRegister]} currentIndex={-1} onTakeAttendance={jest.fn()} />);
-    expect(screen.getByText('Not marked')).toBeTruthy();
+    expect(screen.getByText('Take now')).toBeTruthy();
   });
 });

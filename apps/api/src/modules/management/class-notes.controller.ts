@@ -33,6 +33,22 @@ export class ClassNotesController {
     return this.svc.list(this.sid(), classSectionId, date, subjectId, u.sub, u.role);
   }
 
+  /** Notes-tab class list — the (section, subject) pairs the caller teaches. */
+  @Get('note-classes')
+  noteClasses(@CurrentUser() u: SchoolJwtPayload) {
+    return this.svc.noteClasses(this.sid(), u.sub);
+  }
+
+  /** One class+subject's full notes/to-dos history (newest day first). */
+  @Get('class-log')
+  log(
+    @Query('classSectionId', ParseUUIDPipe) classSectionId: string,
+    @Query('subjectId', ParseUUIDPipe) subjectId: string,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.svc.log(this.sid(), classSectionId, subjectId, u.sub, u.role);
+  }
+
   @Post('class-notes')
   addNote(@Body() dto: CreateClassNoteDto, @CurrentUser() u: SchoolJwtPayload) {
     return this.svc.addNote(this.sid(), u.sub, u.role, dto);

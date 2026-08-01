@@ -51,6 +51,22 @@ describe('DayTimeline', () => {
     expect(container.querySelectorAll('[data-dim="false"]')).toHaveLength(3);
   });
 
+  it('renders a FREE period as "Free period" with a Free pill, not a class', () => {
+    const freeEntry: TeacherDayEntry = {
+      periodId: 'p-free',
+      label: 'Period 4',
+      startTime: '10:25',
+      endTime: '11:05',
+      kind: 'FREE',
+      slot: null,
+      register: null,
+    };
+    render(<DayTimeline entries={[freeEntry]} currentIndex={-1} onTakeAttendance={vi.fn()} />);
+    expect(screen.getByText('Free period')).toBeInTheDocument();
+    expect(screen.getByText('Free')).toBeInTheDocument();
+    expect(screen.queryByText('Period 4')).not.toBeInTheDocument();
+  });
+
   it('renders an explicit empty state, not a blank card, when entries is empty', () => {
     render(<DayTimeline entries={[]} currentIndex={-1} onTakeAttendance={vi.fn()} />);
     expect(screen.getByText('No periods scheduled today.')).toBeInTheDocument();

@@ -34,7 +34,11 @@ const flush = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
  * can itself flake on a busy machine. */
 async function settled(assertion: () => void) {
   await flush();
-  await waitFor(assertion, { timeout: 8000 });
+  // 15s (well under the 20s testTimeout): these async save-flow assertions poll
+  // for a state update that, under the parallel suite load of `pnpm test`/CI,
+  // can be starved past the old 8s budget. Higher timeout only costs time on a
+  // genuine failure, never on the happy path.
+  await waitFor(assertion, { timeout: 15000 });
 }
 
 const mockBack = jest.fn();

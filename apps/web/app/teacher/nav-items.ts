@@ -9,6 +9,7 @@ import {
   CalendarDays,
   CalendarOff,
   CalendarRange,
+  StickyNote,
 } from 'lucide-react';
 
 /**
@@ -36,6 +37,7 @@ export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashbo
   { href: '/teacher/tests', label: 'Tests', icon: FileText },
   { href: '/teacher/results', label: 'Results', icon: GraduationCap },
   { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
+  { href: '/teacher/notes', label: 'Notes', icon: StickyNote },
   { href: '/teacher/inbox', label: 'Inbox', icon: MessageSquare },
   { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
   { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },

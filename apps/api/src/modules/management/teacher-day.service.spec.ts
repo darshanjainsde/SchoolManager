@@ -53,6 +53,21 @@ describe('TeacherDayService', () => {
     expect(day.entries[1].slot).toBeNull();
   });
 
+  it('marks a teaching period the teacher has no class in as FREE (not a slot-less CLASS)', async () => {
+    // The teacher only holds per-1; per-2 is a CLASS period with no slot for them.
+    const day = await svc.forTeacher(SCHOOL, USER, 'TEACHER', MONDAY);
+    const p2 = day.entries.find((e) => e.label === 'P2')!;
+    expect(p2.kind).toBe('FREE');
+    expect(p2.slot).toBeNull();
+    expect(p2.register).toBeNull();
+    // the period they DO teach stays a CLASS with its slot
+    const p1 = day.entries.find((e) => e.label === 'P1')!;
+    expect(p1.kind).toBe('CLASS');
+    expect(p1.slot?.subjectName).toBe('Mathematics');
+    // and the break is untouched
+    expect(day.entries.find((e) => e.label === 'Break')!.kind).toBe('BREAK');
+  });
+
   it('reports the day of week for the requested date', async () => {
     const day = await svc.forTeacher(SCHOOL, USER, 'TEACHER', MONDAY);
     expect(day.dayOfWeek).toBe(1);

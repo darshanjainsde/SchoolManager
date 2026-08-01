@@ -1,33 +1,42 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useTokens } from '@/theme/theme-context';
 import { registerForPush } from '@/lib/push';
+import { StaffTabBar, type StaffTabBarProps } from '@/components/StaffTabBar';
+import { ToolsDrawer } from '@/components/ToolsDrawer';
 import { VISIBLE_TABS, HIDDEN_ROUTES } from '@/lib/staff-nav';
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-const icon =
-  (name: IoniconName) =>
-  ({ color, size }: { color: string; size: number }) =>
-    <Ionicons name={name} size={size} color={color} />;
-
 export default function StaffTabs() {
-  const tokens = useTokens();
+  const [toolsOpen, setToolsOpen] = useState(false);
   useEffect(() => { void registerForPush(); }, []);
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: tokens.color.indigo,
-        tabBarInactiveTintColor: tokens.color.sub,
-      }}
-    >
-      {VISIBLE_TABS.map(({ name, title, icon: iconName }) => (
-        <Tabs.Screen key={name} name={name} options={{ title, tabBarIcon: icon(iconName) }} />
-      ))}
-      {HIDDEN_ROUTES.map((name) => (
-        <Tabs.Screen key={name} name={name} options={{ href: null }} />
-      ))}
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{ headerShown: false }}
+        tabBar={(props) => (
+          <StaffTabBar
+            state={props.state}
+            // react-navigation types `emit`'s `canPreventDefault` as the
+            // literal `true`; our narrowed local nav type accepts `boolean`.
+            // Runtime shape is identical — cast bridges the variance only.
+            navigation={props.navigation as unknown as StaffTabBarProps['navigation']}
+            insets={props.insets}
+            toolsOpen={toolsOpen}
+            onToolsPress={() => setToolsOpen((o) => !o)}
+          />
+        )}
+      >
+        {VISIBLE_TABS.map(({ name, title }) => (
+          <Tabs.Screen key={name} name={name} options={{ title }} />
+        ))}
+        {HIDDEN_ROUTES.map((name) => (
+          <Tabs.Screen key={name} name={name} options={{ href: null }} />
+        ))}
+      </Tabs>
+
+      {/* Overlay above the tab bar; renders nothing while closed. */}
+      <ToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} />
+    </View>
   );
 }

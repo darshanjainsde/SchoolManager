@@ -69,4 +69,14 @@ describe('teacher nav honesty', () => {
   it('names "/teacher/announcements" as Announcements, matching the mobile app\'s renamed tab', () => {
     expect(NAV_ITEMS.find((i) => i.href === '/teacher/announcements')?.label).toBe('Announcements');
   });
+
+  /**
+   * Notes & to-dos tab: a teacher browses every class they teach and its full
+   * notes/to-dos history (backed by `/manage/note-classes` + `/manage/class-log`)
+   * — the href-resolves test above also proves `/teacher/notes/` is a real
+   * directory, not a dead link.
+   */
+  it('lists Notes now that /teacher/notes is a real notes & to-dos history tab', () => {
+    expect(NAV_ITEMS.find((i) => i.href === '/teacher/notes')?.label).toBe('Notes');
+  });
 });
