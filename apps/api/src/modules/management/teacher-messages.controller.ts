@@ -23,6 +23,12 @@ export class TeacherMessagesController {
     return this.messages.teacherThreads(u.sub);
   }
 
+  // Static path — declared before `:threadId` so it isn't shadowed.
+  @Get('unread-count')
+  unreadCount(@CurrentUser() u: SchoolJwtPayload) {
+    return this.messages.teacherUnreadCount(u.sub);
+  }
+
   @Get(':threadId')
   thread(@Param('threadId', ParseUUIDPipe) threadId: string, @CurrentUser() u: SchoolJwtPayload) {
     return this.messages.teacherThread(u.sub, threadId);

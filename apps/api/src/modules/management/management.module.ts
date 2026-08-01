@@ -44,6 +44,7 @@ import { StudentMessagesController } from './student-messages.controller';
 import { TeacherMessagesController } from './teacher-messages.controller';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
+import { RequestsController } from './requests.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
@@ -70,6 +71,7 @@ import { NotificationsController } from './notifications.controller';
     StudentMessagesController,
     TeacherMessagesController,
     NotificationsController,
+    RequestsController,
   ],
   exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService],
 })

@@ -8,6 +8,7 @@ import {
   type MessageThreadRow,
   type MessageSenderRole,
   type NotificationOutboxKind,
+  type UnreadCountResult,
 } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import type { MessageReceivedOutboxPayload } from '../../common/notifications/notification.types';
@@ -70,6 +71,37 @@ export class MessagesService {
     });
     if (!t) throw new ApiError('NOT_A_TEACHER', 'No teacher record for this login', 404);
     return t;
+  }
+
+  // ── unread totals (the drawer "Messages" badge) ──────────────────────────────
+
+  /**
+   * Total unread TEACHER→student messages across the student's threads — the
+   * one number behind the student "Messages" badge. A single `count` with a
+   * `thread` relation filter (index-backed by `Message.readAt`), never a
+   * per-thread fan-out the client sums.
+   */
+  async studentUnreadCount(userId: string): Promise<UnreadCountResult> {
+    const { schoolId } = this.tenant.requireTenant();
+    return withTenant(schoolId, async (tx) => {
+      const me = await this.myStudent(tx, userId);
+      const count = await tx.message.count({
+        where: { senderRole: 'TEACHER', readAt: null, thread: { studentId: me.id } },
+      });
+      return { count };
+    });
+  }
+
+  /** Total unread STUDENT→teacher messages across the teacher's threads. */
+  async teacherUnreadCount(userId: string): Promise<UnreadCountResult> {
+    const { schoolId } = this.tenant.requireTenant();
+    return withTenant(schoolId, async (tx) => {
+      const me = await this.myTeacher(tx, userId);
+      const count = await tx.message.count({
+        where: { senderRole: 'STUDENT', readAt: null, thread: { teacherId: me.id } },
+      });
+      return { count };
+    });
   }
 
   private static toMessageRow(m: {

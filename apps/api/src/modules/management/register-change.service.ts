@@ -145,6 +145,18 @@ export class RegisterChangeService {
     });
   }
 
+  /** How many of the caller's OWN register-change requests are still PENDING —
+   *  the other half of the teacher "Requests" badge (see `RequestsController`). */
+  async pendingCount(schoolId: string, userId: string): Promise<number> {
+    return withTenant(schoolId, async (tx) => {
+      const teacher = await tx.teacher.findFirst({ where: { userId } });
+      if (!teacher) return 0;
+      return tx.registerChangeRequest.count({
+        where: { requestedByTeacherId: teacher.id, status: 'PENDING' },
+      });
+    });
+  }
+
   async pending(schoolId: string): Promise<RegisterChangeRow[]> {
     return withTenant(schoolId, async (tx) => {
       const rows = await tx.registerChangeRequest.findMany({

@@ -83,6 +83,18 @@ export class LeaveService {
     });
   }
 
+  /** How many of the caller's OWN leave applications are still PENDING — half
+   *  of the teacher "Requests" badge (see `RequestsController`). */
+  async pendingCount(schoolId: string, callerUserId: string): Promise<number> {
+    return withTenant(schoolId, async (tx) => {
+      const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
+      if (!teacher) return 0;
+      return tx.leaveApplication.count({
+        where: { schoolId, teacherId: teacher.id, status: 'PENDING' },
+      });
+    });
+  }
+
   /**
    * All applications for the school, most recent first, defaulting to
    * PENDING only. `Teacher` name is joined in JS — `LeaveApplication` has no
