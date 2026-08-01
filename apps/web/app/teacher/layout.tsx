@@ -18,6 +18,7 @@ import { useHost } from '@/components/use-host';
 import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { NAV_ITEMS } from './nav-items';
 import '../sk-theme.css';
 
@@ -141,16 +142,19 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
           <SckoolsLogo variant="symbol" size={26} />
           <span className="role">Teacher portal</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          aria-label="Open menu"
-          aria-expanded={drawerOpen}
-          aria-controls="teacher-mobile-drawer"
-          className="sk-mobile-menu-btn"
-        >
-          <Menu className="h-6 w-6" aria-hidden="true" />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <NotificationBell portal="teacher" />
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={drawerOpen}
+            aria-controls="teacher-mobile-drawer"
+            className="sk-mobile-menu-btn"
+          >
+            <Menu className="h-6 w-6" aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
       {/* Mobile drawer — mounted only while open, so it's never tab-reachable when closed. */}
@@ -222,10 +226,13 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
       )}
 
       <aside className="sk-side">
-        <div className="sk-side-brand">
-          <SckoolsLogo variant="symbol" size={30} />
-          <div className="role">Teacher portal</div>
-          <div className="sub">{host?.split(':')[0]}</div>
+        <div className="sk-side-brand" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <SckoolsLogo variant="symbol" size={30} />
+            <div className="role">Teacher portal</div>
+            <div className="sub">{host?.split(':')[0]}</div>
+          </div>
+          <NotificationBell portal="teacher" />
         </div>
         <div className="sk-navlabel">Classroom</div>
         <nav className="flex flex-col gap-[3px]">

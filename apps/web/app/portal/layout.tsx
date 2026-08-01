@@ -23,6 +23,7 @@ import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
 import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import '../sk-theme.css';
 
 const NAV_ITEMS = [
@@ -102,6 +103,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
             <div className="s">{host?.split(':')[0] ?? 'Sckools'}</div>
           </div>
           <div style={{ flex: 1 }} />
+          <NotificationBell portal="student" />
           <ThemeToggle />
           <button
             className="sk-signout"
