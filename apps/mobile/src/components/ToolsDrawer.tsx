@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { session } from '@/lib/session';
 import { MORE_ITEMS, type MoreItem, type MoreTone } from '@/lib/staff-nav';
 import { useTokens } from '@/theme/theme-context';
+import { brand } from '@/theme/tokens';
 
 /**
  * Revokes the refresh token server-side first (best-effort — see
@@ -85,7 +86,7 @@ function ToolTile({ item, onPress }: { item: MoreItem; onPress: () => void }) {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>{item.badge}</Text>
+            <Text style={{ color: brand.onHero, fontSize: 10, fontWeight: '800' }}>{item.badge}</Text>
           </View>
         )}
       </View>
@@ -220,7 +221,7 @@ export function ToolsDrawer({ open, onClose }: { open: boolean; onClose: () => v
           paddingTop: 10,
           paddingBottom: 28,
           transform: [{ translateY }],
-          shadowColor: '#0A0A19',
+          shadowColor: brand.hero.shadow,
           shadowOpacity: 0.4,
           shadowRadius: 20,
           shadowOffset: { width: 0, height: -12 },

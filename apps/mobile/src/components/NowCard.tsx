@@ -50,7 +50,7 @@ const hero = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.4,
-    color: '#FFFFFF',
+    color: brand.onHero,
     marginTop: 7,
   },
   meta: {
@@ -136,7 +136,7 @@ function HeroChip({ children }: { children: ReactNode }) {
         alignSelf: 'flex-start',
       }}
     >
-      <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>{children}</Text>
+      <Text style={{ color: brand.onHero, fontSize: 12.5, fontWeight: '700' }}>{children}</Text>
     </View>
   );
 }
@@ -155,7 +155,7 @@ function SummaryCell({ value, label }: { value: string; label: string }) {
         paddingVertical: 9,
       }}
     >
-      <Text style={{ color: '#FFFFFF', fontSize: 19, fontWeight: '800' }}>{value}</Text>
+      <Text style={{ color: brand.onHero, fontSize: 19, fontWeight: '800' }}>{value}</Text>
       <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 10.5, fontWeight: '600', marginTop: 1 }}>
         {label}
       </Text>
@@ -171,8 +171,8 @@ function LiveDot() {
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#FFFFFF',
-        shadowColor: '#FFFFFF',
+        backgroundColor: brand.onHero,
+        shadowColor: brand.onHero,
         shadowOpacity: 0.7,
         shadowRadius: 4,
       }}
@@ -307,7 +307,7 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
           overflow: 'hidden',
         }}
       >
-        <View style={{ width: `${pct}%`, height: '100%', borderRadius: 5, backgroundColor: '#FFFFFF' }} />
+        <View style={{ width: `${pct}%`, height: '100%', borderRadius: 5, backgroundColor: brand.onHero }} />
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 12, flexWrap: 'wrap' }}>
@@ -324,7 +324,7 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
               testID={`now-take-${slot.classSectionId}`}
               onPress={() => onTakeAttendance(slot.classSectionId)}
               style={{
-                backgroundColor: '#FFFFFF',
+                backgroundColor: brand.onHero,
                 borderRadius: 13,
                 paddingVertical: 11,
                 paddingHorizontal: 16,
