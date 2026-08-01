@@ -56,6 +56,16 @@ describe('staff route honesty', () => {
     expect(routeFileExists('messages/[threadId]')).toBe(true);
   });
 
+  it('lists a Notes row pointing at the class-list screen, with its detail route hidden', () => {
+    const notes = MORE_ITEMS.find((i) => i.label === 'Notes');
+    expect(notes?.route).toBe('/(staff)/notes');
+    expect(routeFileExists('notes')).toBe(true);
+    // The per-class history is reachable only by tapping a class, so it is
+    // hidden from the tab bar — registered via HIDDEN_ROUTES, not a More row.
+    expect(HIDDEN_ROUTES).toContain('notes/[classSectionId]');
+    expect(routeFileExists('notes/[classSectionId]')).toBe(true);
+  });
+
   it('names the "Today" tab and the "Announcements" tab to match the web nav', () => {
     expect(VISIBLE_TABS.find((t) => t.name === 'today')?.title).toBe('Today');
     expect(VISIBLE_TABS.find((t) => t.name === 'post')?.title).toBe('Announcements');
