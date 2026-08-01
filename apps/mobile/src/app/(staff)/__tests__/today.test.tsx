@@ -18,15 +18,17 @@ jest.mock('expo-secure-store', () => {
 });
 
 const mockPush = jest.fn();
-// Captures the latest effect passed to useFocusEffect so a test can invoke it
-// a second time to simulate a real re-focus event (react-navigation reruns
-// the callback on every focus regardless of its identity — unlike a plain
-// useEffect, which only reruns when its dependency array changes).
-let capturedFocusEffect: (() => (() => void) | void) | null = null;
+// Captures each effect passed to useFocusEffect so a test can invoke one a
+// second time to simulate a real re-focus event (react-navigation reruns the
+// callback on every focus regardless of its identity). An ARRAY, not a single
+// ref, because the NotificationBell in the header registers a SECOND focus
+// effect as a child; index 0 is Today's own, which the refetch test re-runs.
+// Named `mock…` so the jest.mock factory is allowed to reference it.
+const mockFocusEffects: Array<() => (() => void) | void> = [];
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },
   useFocusEffect: (effect: () => (() => void) | void) => {
-    capturedFocusEffect = effect;
+    mockFocusEffects.push(effect);
     const React = jest.requireActual('react');
     React.useEffect(effect, []);
   },
@@ -98,6 +100,10 @@ function mockDay(day: TeacherDay | Error, notesGet?: unknown) {
     if (path.startsWith('/manage/class-notes?')) {
       return Promise.resolve(notesGet ?? { notes: [], todos: [] });
     }
+    if (path === '/me/notifications/unread-count') {
+      // The header NotificationBell fetches this on focus; keep it quiet.
+      return Promise.resolve({ count: 0 });
+    }
     throw new Error(`unexpected call: ${path} ${JSON.stringify(opts)}`);
   });
 }
@@ -106,7 +112,7 @@ beforeEach(async () => {
   jest.useFakeTimers();
   mockPush.mockReset();
   (api.request as jest.Mock).mockReset();
-  capturedFocusEffect = null;
+  mockFocusEffects.length = 0;
   await session.set({
     accessToken: 'at',
     refreshToken: 'rt',
@@ -338,7 +344,7 @@ it('refetches on focus so a colleague marking the register elsewhere shows up wi
     entries: [classEntry({ register: { taken: true, present: 28, total: 28, markedBy: 'Colleague' } }), breakEntry, p2],
   });
   await act(async () => {
-    capturedFocusEffect?.();
+    mockFocusEffects[0]?.();
   });
 
   expect(await screen.findByText('✓ 28/28 present')).toBeTruthy();
