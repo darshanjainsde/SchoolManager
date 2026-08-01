@@ -11,8 +11,11 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/lib/api', () => {
   const actual = jest.requireActual('@/lib/api');
-  return { ...actual, api: { ...actual.api, request: jest.fn() } };
+  return { ...actual, api: { ...actual.api, request: jest.fn(), upload: jest.fn() } };
 });
+
+// EditableAvatar imports the native picker — mock it (drive-able if needed).
+jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: jest.fn() }));
 
 beforeEach(() => {
   (api.request as jest.Mock).mockReset();

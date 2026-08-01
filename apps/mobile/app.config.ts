@@ -35,6 +35,12 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     'expo-secure-store',
+    // Profile-photo picker (Phase 5·0d). iOS needs the permission string;
+    // Android 13+ uses the system Photo Picker (no permission required).
+    [
+      'expo-image-picker',
+      { photosPermission: 'Sckools uses your photo library so you can set a profile picture.' },
+    ],
     '@sentry/react-native',
     // Google Play requires targeting Android 16 (API 36) from 2026-08-31.
     // Expo SDK 53 defaults to API 35, so bump compile+target here. AGP 8.8.2

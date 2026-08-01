@@ -1,4 +1,4 @@
-import { render, act } from '@testing-library/react-native';
+import { render, act, fireEvent } from '@testing-library/react-native';
 import Profile from '../profile';
 import { api, ApiError } from '@/lib/api';
 
@@ -13,8 +13,12 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/lib/api', () => {
   const actual = jest.requireActual('@/lib/api');
-  return { ...actual, api: { ...actual.api, request: jest.fn() } };
+  return { ...actual, api: { ...actual.api, request: jest.fn(), upload: jest.fn() } };
 });
+
+// EditableAvatar imports the native picker — mock it so tests can drive the
+// pick→upload flow without a device.
+jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: jest.fn() }));
 
 beforeEach(() => {
   (api.request as jest.Mock).mockReset();
@@ -100,5 +104,36 @@ describe('fetch states', () => {
       capturedFocusEffect?.();
     });
     expect(await findByText('Meera Sharma')).toBeTruthy();
+  });
+
+  it('tapping the avatar picks a photo, POSTs it to /me/photo and swaps the image optimistically', async () => {
+    const picker = jest.requireMock('expo-image-picker') as { launchImageLibraryAsync: jest.Mock };
+    picker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///new.jpg', fileName: 'new.jpg', mimeType: 'image/jpeg' }],
+    });
+    (api.request as jest.Mock).mockResolvedValue({ ...FULL_PROFILE, photoUrl: null });
+    (api.upload as jest.Mock).mockResolvedValue({ assetId: 'a1', photoUrl: 'https://cdn/new.jpg' });
+
+    const { findByTestId } = render(<Profile />);
+    fireEvent.press(await findByTestId('avatar-edit'));
+
+    await act(async () => {});
+    expect(api.upload).toHaveBeenCalledWith('/me/photo', expect.any(FormData));
+    const photo = await findByTestId('profile-photo');
+    expect(photo.props.source).toEqual({ uri: 'https://cdn/new.jpg' });
+  });
+
+  it('a cancelled picker uploads nothing', async () => {
+    const picker = jest.requireMock('expo-image-picker') as { launchImageLibraryAsync: jest.Mock };
+    picker.launchImageLibraryAsync.mockResolvedValue({ canceled: true, assets: [] });
+    (api.request as jest.Mock).mockResolvedValue(FULL_PROFILE);
+    (api.upload as jest.Mock).mockClear(); // not covered by the suite's beforeEach
+
+    const { findByTestId } = render(<Profile />);
+    fireEvent.press(await findByTestId('avatar-edit'));
+
+    await act(async () => {});
+    expect(api.upload).not.toHaveBeenCalled();
   });
 });

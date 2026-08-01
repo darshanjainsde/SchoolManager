@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Image, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { TeacherProfile } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { AppearanceSetting } from '@/components/AppearanceSetting';
+import { EditableAvatar } from '@/components/EditableAvatar';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 
@@ -65,29 +66,11 @@ export default function Profile() {
         <>
           {/* Photo-or-initials header — mirrors the family profile screen. */}
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-            {profile.photoUrl ? (
-              <Image
-                testID="profile-photo"
-                source={{ uri: profile.photoUrl }}
-                style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: tokens.color.surfaceMuted }}
-              />
-            ) : (
-              <View
-                testID="profile-initials"
-                style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 32,
-                  backgroundColor: tokens.color.indigo50,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text style={{ fontSize: 20, fontWeight: '800', color: tokens.color.indigo }}>
-                  {initials(profile.firstName, profile.lastName)}
-                </Text>
-              </View>
-            )}
+            <EditableAvatar
+              photoUrl={profile.photoUrl}
+              initials={initials(profile.firstName, profile.lastName)}
+              onUploaded={(url) => setProfile((p) => (p ? { ...p, photoUrl: url } : p))}
+            />
             <Text style={{ fontSize: 17, fontWeight: '800', color: tokens.color.ink }}>
               {profile.firstName} {profile.lastName}
             </Text>
