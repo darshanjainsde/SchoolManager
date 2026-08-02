@@ -46,6 +46,7 @@ import { PortalService } from './portal.service';
 import type { TenantContextService } from '../tenancy';
 import type { TimetableService } from '../management';
 import type { HolidaysService } from '../management';
+import type { DiaryService } from '../management';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const USER = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -63,10 +64,14 @@ describe('PortalService', () => {
   const tenant = { requireTenant: jest.fn() };
   const timetable = { listForClass: jest.fn() };
   const holidaysSvc = { list: jest.fn() };
+  // `/me/diary` and `/me/diary/:id/sign` delegate wholesale to DiaryService
+  // (which owns its own spec) — this stub only has to satisfy the constructor.
+  const diarySvc = { studentDiary: jest.fn(), sign: jest.fn() };
   const svc = new PortalService(
     tenant as unknown as TenantContextService,
     timetable as unknown as TimetableService,
     holidaysSvc as unknown as HolidaysService,
+    diarySvc as unknown as DiaryService,
   );
 
   beforeEach(() => {

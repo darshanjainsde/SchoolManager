@@ -4,6 +4,7 @@ import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
+import { SignDiaryEntryDto } from '../management/management.dto';
 import { PortalService } from './portal.service';
 import { RegisterPushTokenDto } from './portal.dto';
 
@@ -24,6 +25,25 @@ export class PortalController {
    */
   @Get('attendance') attendance(@CurrentUser() u: SchoolJwtPayload, @Query('month') month?: string) {
     return this.portal.attendance(u.sub, month);
+  }
+
+  /**
+   * The child's own diary (Phase 5·3). `date` narrows to one page; without it,
+   * the last month, newest day first. Reading it marks the page seen — that
+   * receipt is what the teacher's "23 of 28 families opened this" counts.
+   */
+  @Get('diary') diary(@CurrentUser() u: SchoolJwtPayload, @Query('date') date?: string) {
+    return this.portal.diary(u.sub, date);
+  }
+
+  /** The signature in the margin of a red-ink remark. */
+  @Post('diary/:id/sign')
+  signDiary(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SignDiaryEntryDto,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.portal.signDiary(u.sub, id, dto.signedName);
   }
 
   @Get('exams') exams(@CurrentUser() u: SchoolJwtPayload) { return this.portal.exams(u.sub); }

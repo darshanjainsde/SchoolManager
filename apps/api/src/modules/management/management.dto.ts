@@ -25,6 +25,10 @@ import {
   AttendanceStatusValue,
   CLASS_NOTE_VISIBILITIES,
   ClassNoteVisibilityValue,
+  DIARY_AUDIENCES,
+  DIARY_ENTRY_KINDS,
+  DiaryAudience,
+  DiaryEntryKind,
   HOLIDAY_TYPES,
   HolidayType,
 } from '@skoolos/types';
@@ -751,4 +755,76 @@ export class CreateAssignmentDto {
   @ValidateNested({ each: true })
   @Type(() => AssignmentAttachmentDto)
   attachments?: AssignmentAttachmentDto[];
+}
+
+// ── The Daily Diary (Phase 5·3) ──────────────────────────────────────────────
+
+export class CreateDiaryEntryDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date must be formatted as YYYY-MM-DD' })
+  date!: string;
+
+  @IsIn(DIARY_ENTRY_KINDS)
+  kind!: DiaryEntryKind;
+
+  /** Ignored for a REMARK, which is always SELECTED — see DiaryService.create. */
+  @IsOptional()
+  @IsIn(DIARY_AUDIENCES)
+  audience?: DiaryAudience;
+
+  @IsString()
+  @Length(1, 2000)
+  body!: string;
+
+  @IsOptional()
+  @IsUUID()
+  subjectId?: string;
+
+  /** The children named by the type-a-name picker. Capped well above any real
+   *  class so a whole section can still be named one by one if a teacher wants. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsUUID(undefined, { each: true })
+  studentIds?: string[];
+}
+
+export class UpdateDiaryEntryDto {
+  @IsString()
+  @Length(1, 2000)
+  body!: string;
+}
+
+export class SignDiaryEntryDto {
+  @IsString()
+  @Length(1, 80)
+  signedName!: string;
+}
+
+// ── The attendance bar (Phase 5·3) ───────────────────────────────────────────
+
+export class NotifyLowAttendanceDto {
+  @IsUUID()
+  classSectionId!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  threshold!: number;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'from must be formatted as YYYY-MM-DD' })
+  from!: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'to must be formatted as YYYY-MM-DD' })
+  to!: string;
+
+  /** The teacher's final say: exactly which families to tell. Omitted means
+   *  every student under the threshold in the window. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsUUID(undefined, { each: true })
+  studentIds?: string[];
 }

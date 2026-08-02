@@ -136,6 +136,38 @@ export interface MessageReceivedOutboxPayload {
   threadId: string;
 }
 
+/**
+ * Payload for DIARY_REMARK — mirrors `MailService.sendDiaryRemark` (Phase 5·3).
+ * The red-ink remark ALWAYS reaches the parent by email, even when the child
+ * signs it in the app, so `remark` carries the teacher's words verbatim: the
+ * email is the record, not a "you have a notification" nudge.
+ */
+export interface DiaryRemarkPayload {
+  schoolName: string;
+  studentName: string;
+  teacherName: string;
+  className: string;
+  /** Human-facing date string; already formatted by the caller. */
+  date: string;
+  /** The remark itself, quoted in full. */
+  remark: string;
+}
+
+/**
+ * Payload for LOW_ATTENDANCE — mirrors `MailService.sendLowAttendance`
+ * (Phase 5·3, the attendance bar's one-tap nudge). Private by construction:
+ * one email per family, naming only their own child, never a class list.
+ */
+export interface LowAttendancePayload {
+  schoolName: string;
+  studentName: string;
+  className: string;
+  percent: number;
+  threshold: number;
+  /** Human-facing window, e.g. `1 Jul 2026 – 2 Aug 2026`. */
+  period: string;
+}
+
 /** The single source of truth mapping each event to its payload shape. */
 export interface NotificationPayloadMap {
   TEST_SCHEDULED: TestScheduledPayload;
@@ -143,6 +175,8 @@ export interface NotificationPayloadMap {
   RESULTS_PUBLISHED: ResultsPublishedPayload;
   ABSENCE_NOTICE: AbsenceNoticePayload;
   ANNOUNCEMENT: AnnouncementPayload;
+  DIARY_REMARK: DiaryRemarkPayload;
+  LOW_ATTENDANCE: LowAttendancePayload;
 }
 
 /**

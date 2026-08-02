@@ -543,6 +543,8 @@ export const NOTIFICATION_KINDS = [
   'ASSIGNMENT',
   'ANNOUNCEMENT',
   'REQUEST_DECISION',
+  'DIARY',
+  'ATTENDANCE',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -616,4 +618,136 @@ export interface RosterStudent {
   firstName: string;
   lastName: string;
   rollNo: string | null;
+}
+
+// ── The Daily Diary (Phase 5·3) ──────────────────────────────────────────────
+// The wire contracts for the diary page a teacher writes and a family reads at
+// home. `DiaryEntryKind`/`DiaryAudience` mirror the Prisma enums of the same
+// names (packages/db/prisma/schema.prisma) — declared here as plain string
+// unions so the mobile app and the web app can share them without depending on
+// the Prisma client.
+
+/** ITEM = the ordinary diary line. REMARK = red ink, always signed for. */
+export const DIARY_ENTRY_KINDS = ['ITEM', 'REMARK'] as const;
+export type DiaryEntryKind = (typeof DIARY_ENTRY_KINDS)[number];
+
+/** ALL = the whole class. SELECTED = the students named in the picker. */
+export const DIARY_AUDIENCES = ['ALL', 'SELECTED'] as const;
+export type DiaryAudience = (typeof DIARY_AUDIENCES)[number];
+
+/** Runtime guard for a `kind` arriving from the wire or the database. */
+export function assertDiaryEntryKind(kind: string): asserts kind is DiaryEntryKind {
+  if (!(DIARY_ENTRY_KINDS as readonly string[]).includes(kind)) {
+    throw new Error(`Invalid DiaryEntry kind: "${kind}"`);
+  }
+}
+
+/** One named child on an entry — the shape the token picker renders. */
+export interface DiaryStudentRef {
+  studentId: string;
+  name: string;
+}
+
+/**
+ * One diary line as the TEACHER sees it (`GET /manage/diary`). `signedCount`
+ * and `seenCount` are the at-a-glance receipts on a REMARK — how many families
+ * have actually opened and signed it.
+ */
+export interface DiaryEntryRow {
+  id: string;
+  date: string; // YYYY-MM-DD
+  kind: DiaryEntryKind;
+  audience: DiaryAudience;
+  body: string;
+  subjectId: string | null;
+  subjectName: string | null;
+  authorTeacherId: string;
+  authorName: string;
+  /** Empty for `audience: ALL` — that entry addresses the whole section. */
+  students: DiaryStudentRef[];
+  seenCount: number;
+  signedCount: number;
+  /** Recipients this entry is waiting on — `students.length` for a SELECTED
+   *  entry, the section roster size for an ALL one. */
+  recipientCount: number;
+  createdAt: string; // ISO
+  /** Same-day entries are still editable; past pages are read-only ink. */
+  editable: boolean;
+}
+
+/** `GET /manage/diary?classSectionId=&date=` — one class's page for one day. */
+export interface DiaryPageResult {
+  date: string;
+  classSectionId: string;
+  className: string;
+  entries: DiaryEntryRow[];
+}
+
+/**
+ * One diary line as the FAMILY sees it (`GET /me/diary`). No receipts for other
+ * children — a family only ever sees their own signature state.
+ */
+export interface StudentDiaryEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  kind: DiaryEntryKind;
+  body: string;
+  subjectName: string | null;
+  teacherName: string;
+  /** True when this line names this child specifically rather than the class. */
+  personal: boolean;
+  signedAt: string | null; // ISO
+  signedName: string | null;
+  createdAt: string; // ISO
+}
+
+/** `GET /me/diary?date=` — the child's page, newest day first when undated. */
+export interface StudentDiaryResult {
+  entries: StudentDiaryEntry[];
+  /** REMARKs still waiting for a parent's signature — the red dot's count. */
+  unsignedCount: number;
+}
+
+/** `POST /me/diary/:id/sign` — the signature a parent types in the margin. */
+export interface DiarySignResult {
+  id: string;
+  signedAt: string;
+  signedName: string;
+  unsignedCount: number;
+}
+
+// ── The attendance bar (Phase 5·3) ───────────────────────────────────────────
+
+/** One child's attendance record over the queried window. */
+export interface AttendanceRateRow {
+  studentId: string;
+  name: string;
+  rollNo: string | null;
+  present: number;
+  total: number;
+  /** Rounded whole percent; 0 when nothing has been marked yet. */
+  percent: number;
+  /** ISO timestamp of the last low-attendance notice sent about this child,
+   *  or null — what greys out the "tell the family" tap during a cooldown. */
+  lastNoticeAt: string | null;
+}
+
+/** `GET /manage/attendance/rates?classSectionId=&from=&to=`. */
+export interface AttendanceRatesResult {
+  classSectionId: string;
+  className: string;
+  from: string;
+  to: string;
+  /** School days that had a register taken in the window. */
+  daysMarked: number;
+  students: AttendanceRateRow[];
+}
+
+/** `POST /manage/attendance/notify-low` — the one-tap private nudge. */
+export interface NotifyLowAttendanceResult {
+  notified: number;
+  /** Students skipped because they were told within the cooldown window. */
+  skippedInCooldown: number;
+  /** Days a family must wait before the same nudge can be sent again. */
+  cooldownDays: number;
 }

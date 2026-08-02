@@ -6,9 +6,11 @@ import type {
   AttendanceSummary,
   Holiday,
   Profile,
+  DiarySignResult,
   PublishedResult,
   StudentAssignment,
   StudentAssignmentList,
+  StudentDiaryResult,
   TimetableSlot,
   UpcomingExam,
 } from '@skoolos/types';
@@ -17,6 +19,7 @@ import { isP2002 } from '../../common/errors/prisma-errors';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from '../management';
 import { HolidaysService } from '../management';
+import { DiaryService } from '../management';
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -37,9 +40,11 @@ export type {
   AttendanceDay,
   AttendanceSummary,
   Profile,
+  DiarySignResult,
   PublishedResult,
   StudentAssignment,
   StudentAssignmentList,
+  StudentDiaryResult,
   UpcomingExam,
 };
 
@@ -57,7 +62,24 @@ export class PortalService {
     private readonly tenant: TenantContextService,
     private readonly timetableSvc: TimetableService,
     private readonly holidaysSvc: HolidaysService,
+    private readonly diarySvc: DiaryService,
   ) {}
+
+  /**
+   * The child's own diary page(s) — see `DiaryService.studentDiary`, which
+   * resolves the Student row from this JWT `sub` exactly like `myStudent`
+   * does and never takes a student id from the caller.
+   */
+  async diary(userId: string, date?: string): Promise<StudentDiaryResult> {
+    const { schoolId } = this.tenant.requireTenant();
+    return this.diarySvc.studentDiary(schoolId, userId, date);
+  }
+
+  /** The parent's signature on a red-ink remark. */
+  async signDiary(userId: string, id: string, signedName: string): Promise<DiarySignResult> {
+    const { schoolId } = this.tenant.requireTenant();
+    return this.diarySvc.sign(schoolId, userId, id, signedName);
+  }
 
   /**
    * Upcoming school holidays for the CALLING user — any authenticated school
