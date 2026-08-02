@@ -139,7 +139,15 @@ describe('TeacherAttendancePage', () => {
     ];
     const api = mockApi({
       get: mockGet([
-        ['/manage/attendance/status', () => Promise.resolve([])],
+        // The rail is built from `status`, so it has to carry both classes.
+        [
+          '/manage/attendance/status',
+          () =>
+            Promise.resolve([
+              statusRow({ classSectionId: 'sec-1', name: '8-A' }),
+              statusRow({ classSectionId: 'sec-2', name: '9-B', total: 5 }),
+            ]),
+        ],
         ['/manage/attendance?', () => Promise.resolve([])],
         ['/manage/attendance/my-classes', () => Promise.resolve(withCovering)],
         ['/manage/students?', () => Promise.resolve([])],
@@ -150,9 +158,14 @@ describe('TeacherAttendancePage', () => {
 
     renderPage();
 
-    const select = await screen.findByLabelText('Class');
-    expect(await within(select).findByRole('option', { name: '8-A' })).toBeInTheDocument();
-    expect(within(select).getByRole('option', { name: '9-B (covering)' })).toBeInTheDocument();
+    // The rail IS the picker now — the duplicate <select> above it was
+    // removed, since it listed the same classes with strictly less
+    // information (no taken/due state) and made the page look like it had two
+    // separate controls.
+    expect(await screen.findByRole('button', { name: /8-A/ })).toBeInTheDocument();
+    // A substitute covering a class may still take its register, so the row
+    // stays — labelled, so an unusual class in the list explains itself.
+    expect(screen.getByRole('button', { name: /9-B · covering/ })).toBeInTheDocument();
     // Whitelist the endpoints actually stubbed above — anything outside this
     // set (in particular the old unscoped roster endpoint) is a regression.
     const allowedPrefixes = [

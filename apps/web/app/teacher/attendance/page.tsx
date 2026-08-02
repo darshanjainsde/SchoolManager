@@ -283,26 +283,7 @@ function TeacherAttendanceInner() {
           <h3>Class &amp; date</h3>
         </div>
         <div className="sk-card-b">
-          <div className="grid gap-3 sm:grid-cols-[1fr_200px_auto] sm:items-end">
-            <div className="space-y-1.5">
-              <label htmlFor="attn-class" className="sk-lab">
-                Class
-              </label>
-              <Select
-                id="attn-class"
-                className={`${fieldCls} w-full`}
-                value={classSectionId}
-                onChange={(e) => setClassSectionId(e.target.value)}
-              >
-                <option value="">Pick a class…</option>
-                {(classes.data ?? []).map((c) => (
-                  <option key={c.classSectionId} value={c.classSectionId}>
-                    {c.name}
-                    {c.covering ? ' (covering)' : ''}
-                  </option>
-                ))}
-              </Select>
-            </div>
+          <div className="grid gap-3 sm:grid-cols-[200px_auto] sm:items-end">
             <div className="space-y-1.5">
               <label htmlFor="attn-date" className="sk-lab">
                 Date
@@ -356,10 +337,29 @@ function TeacherAttendanceInner() {
               it costs no extra request. */}
           {classDayRows.length > 0 && (
             <div>
-              <p className="sk-lab" style={{ marginBottom: 2 }}>
-                Your classes on this date
-              </p>
-              {classDayRows.map((c) => (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 2 }}>
+                <p className="sk-lab" style={{ margin: 0 }}>
+                  {classSectionId ? 'Taking' : 'Pick a class'}
+                </p>
+                {classSectionId && (
+                  // Collapsed to the one class you picked, with the way back
+                  // beside it. Leaving fifteen rows on screen after the choice
+                  // pushes the roster — the thing you came to do — below the
+                  // fold, so the page looks unchanged unless you scroll.
+                  <button
+                    type="button"
+                    className="sk-btn sk-press"
+                    data-testid="change-class"
+                    style={{ padding: '2px 10px', fontSize: 11.5 }}
+                    onClick={() => setClassSectionId('')}
+                  >
+                    Change class
+                  </button>
+                )}
+              </div>
+              {classDayRows
+                .filter((c) => !classSectionId || c.classSectionId === classSectionId)
+                .map((c) => (
                 <button
                   key={c.classSectionId}
                   type="button"

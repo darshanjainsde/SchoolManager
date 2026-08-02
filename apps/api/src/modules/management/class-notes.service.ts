@@ -214,18 +214,28 @@ export class ClassNotesService {
         select: {
           classSectionId: true,
           subjectId: true,
-          classSection: { select: { name: true, classTeacherId: true } },
+          // `grade` is part of the class's NAME, not extra detail: a school has
+          // one section "A" per grade, so "A · Art & Craft" is the same label
+          // for Nursery, LKG and UKG. Every other service that surfaces a class
+          // composes `${grade}-${section}` (see AttendanceService, teacher-day,
+          // announcements); this one didn't, and a teacher who holds three
+          // "A" sections saw three identical, unpickable rows.
+          classSection: {
+            select: { name: true, classTeacherId: true, grade: { select: { name: true, order: true } } },
+          },
           subject: { select: { name: true } },
         },
       });
 
       const byPair = new Map<string, NoteClass>();
+      const gradeOrder = new Map<string, number>();
       for (const s of slots) {
         const key = `${s.classSectionId}:${s.subjectId}`;
+        gradeOrder.set(s.classSectionId, s.classSection.grade.order);
         if (!byPair.has(key)) {
           byPair.set(key, {
             classSectionId: s.classSectionId,
-            className: s.classSection.name,
+            className: `${s.classSection.grade.name}-${s.classSection.name}`,
             subjectId: s.subjectId,
             subjectName: s.subject.name,
             isClassTeacher: s.classSection.classTeacherId === teacher.id,
@@ -261,9 +271,17 @@ export class ClassNotesService {
         if (c) c.openTodoCount = t._count._all;
       }
 
-      return [...byPair.values()].sort(
-        (a, b) => a.className.localeCompare(b.className) || a.subjectName.localeCompare(b.subjectName),
-      );
+      // Ordered by the grade's own `order`, not the label: alphabetically
+      // "Class 10" sorts before "Class 2", and Nursery/LKG/UKG land in the
+      // middle of the numbers. `gradeOrder` is carried on the map value purely
+      // for this sort and is not part of the wire contract.
+      return [...byPair.values()]
+        .sort(
+          (a, b) =>
+            (gradeOrder.get(a.classSectionId) ?? 0) - (gradeOrder.get(b.classSectionId) ?? 0) ||
+            a.className.localeCompare(b.className) ||
+            a.subjectName.localeCompare(b.subjectName),
+        );
     });
   }
 

@@ -333,17 +333,25 @@ export default function TeacherResultsPage() {
                     (!Number.isFinite(num) || num < 0 || num > exam.maxMarks);
                   const filled = raw.trim() !== '' && !bad;
                   return (
-                    <div className="sk-mkrow" key={s.id}>
-                      <span
-                        className="badge"
-                        style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length], width: 32, height: 32, borderRadius: 10, fontSize: 11 }}
-                      >
+                    // The row layout is the ORIGINAL `.sk-row`: avatar, then
+                    // name over roll, then a spacer pushing the input right.
+                    // A previous pass flattened this into a grid with the roll
+                    // as its own column and inline sizes on `.badge` — the
+                    // overrides fought the badge's own CSS (initials drifted
+                    // into the corner) and the roll column left the names
+                    // ragged. The stable version is stable; only the filled
+                    // hint on the input below was worth keeping.
+                    <div className="sk-row" key={s.id}>
+                      <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
                         {initials(s.firstName, s.lastName)}
                       </span>
-                      <span className="rl">{s.rollNo ?? '—'}</span>
-                      <span className="nm">
-                        {s.firstName} {s.lastName}
-                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="nm">
+                          {s.firstName} {s.lastName}
+                        </div>
+                        <div className="meta">Roll {s.rollNo ?? '—'}</div>
+                      </div>
+                      <span className="sp" />
                       {/* A filled box goes green. The point is that the
                           teacher never has to re-read the sheet to find where
                           they stopped — the page holds their place for them.
