@@ -1,0 +1,111 @@
+name: db-migrate
+
+# Applies the repo's Prisma migrations to a chosen database.
+#
+# WHY THIS EXISTS: until now, standing up or updating a database meant pasting
+# SQL into the Supabase editor by hand, in the right order, and hoping. That is
+# how staging ended up four migrations behind main without anyone noticing, and
+# why "create a new staging DB" felt like a project rather than a button.
+#
+# The migrations in packages/db/prisma/migrations ARE the schema — this
+# workflow just makes the repo able to apply them to any target, so a fresh
+# Supabase project is bootstrapped in one run and no credential ever passes
+# through a chat window or a person's clipboard.
+#
+# `prisma migrate deploy` is the production-safe command: it applies only
+# migrations not yet in the target's _prisma_migrations table, never generates
+# new ones, never resets, and is a no-op when the target is already current. So
+# re-running this is always safe.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which database to migrate
+        required: true
+        type: choice
+        options: [staging, production]
+      seed:
+        description: >-
+          Also seed demo data (schools, test logins). Only for a BRAND-NEW
+          database — it is refused against production below.
+        required: false
+        type: boolean
+        default: false
+
+  # Auto-apply to staging whenever a migration lands on the staging branch, so
+  # code and schema can never drift apart there again. Production stays manual
+  # and deliberate.
+  push:
+    branches: [staging]
+    paths:
+      - 'packages/db/prisma/migrations/**'
+
+concurrency:
+  # Never let two migration runs touch the same database at once.
+  group: db-migrate-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    # GitHub Environments hold the secrets AND can require a human approval
+    # before a production run — see the setup notes in docs/DATABASE.md.
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Refuse to seed production
+        if: ${{ github.event.inputs.seed == 'true' && github.event.inputs.environment == 'production' }}
+        run: |
+          echo "::error::Seeding writes demo schools and known-password logins. Never production."
+          exit 1
+
+      - name: Show what will be applied
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          # `migrate status` is read-only. Running it first means the log says
+          # what WOULD change before anything does — the record you want when a
+          # deploy goes wrong at 11pm.
+          pnpm --filter @skoolos/db exec prisma migrate status || true
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: pnpm --filter @skoolos/db exec prisma migrate deploy
+
+      - name: Seed demo data
+        if: ${{ github.event.inputs.seed == 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          # seed.ts calls loadEnv(), which reads a root .env and OVERRIDES the
+          # environment — on a developer's machine that silently redirects the
+          # seed at their local docker database while printing success. CI has
+          # no root .env, so writing one here is what makes the seed land on
+          # the intended target.
+          printf 'DATABASE_URL="%s"\nDIRECT_URL="%s"\n' "$DATABASE_URL" "$DIRECT_URL" > .env
+          pnpm --filter @skoolos/db exec tsx prisma/seed.ts
+
+      - name: Confirm the target is current
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: pnpm --filter @skoolos/db exec prisma migrate status
