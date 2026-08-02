@@ -79,7 +79,7 @@ describe('motion safety — an entrance gesture can never hide content', () => {
         // ternary inside (`sk-notice${up ? ' sk-pinin sk-in' : ''}`), and a
         // naive split leaves quotes stuck to the token — which made this very
         // guard report a correct usage as a violation the first time it ran.
-        const classes = attr.match(/[A-Za-z0-9_-]+/g) ?? [];
+        const classes: string[] = attr.match(/[A-Za-z0-9_-]+/g) ?? [];
         if (classes.includes(cls) && !classes.includes('sk-in')) {
           offenders.push(`${path.relative(WEB_ROOT, file)} → className="${attr}"`);
         }
