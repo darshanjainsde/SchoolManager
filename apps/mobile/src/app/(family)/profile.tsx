@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { Pressable, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentProfile } from '@/lib/portal';
 import { AppearanceSetting } from '@/components/AppearanceSetting';
@@ -97,6 +97,22 @@ export default function Profile() {
           </Card>
         </>
       )}
+
+      {/* The family shelf (Phase 5·2): switch children or add another. */}
+      <Card style={{ paddingVertical: 2 }}>
+        <Pressable
+          testID="switch-diary"
+          accessibilityRole="button"
+          onPress={() => router.push('/(family)/shelf')}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 12 }}
+        >
+          <Text style={{ fontSize: 15 }}>📚</Text>
+          <Text style={{ flex: 1, fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>
+            Switch diary / add a child
+          </Text>
+          <Text style={{ color: tokens.color.sub }}>›</Text>
+        </Pressable>
+      </Card>
 
       {/* Appearance lives here since the drawer replaced the More screen. */}
       <Card style={{ paddingVertical: 2 }}>

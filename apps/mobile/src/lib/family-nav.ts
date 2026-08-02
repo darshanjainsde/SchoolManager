@@ -32,6 +32,7 @@ export const HIDDEN_ROUTES = [
   'notices',
   'holidays',
   'notifications',
+  'shelf',
 ];
 
 /** Icon-tile colour family for a drawer tool — mirrors staff-nav's `MoreTone`. */

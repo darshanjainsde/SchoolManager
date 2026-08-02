@@ -3,6 +3,7 @@ import { AccessibilityInfo, Animated, BackHandler, Pressable, Text, View } from 
 import { router } from 'expo-router';
 import type { UnreadCountResult } from '@skoolos/types';
 import { api } from '@/lib/api';
+import { family } from '@/lib/family-store';
 import { session } from '@/lib/session';
 import type { MoreTone } from '@/lib/staff-nav';
 import { useTokens } from '@/theme/theme-context';
@@ -33,6 +34,9 @@ export interface DrawerItem {
 async function logout() {
   await api.logout();
   await session.clear();
+  // Full sign-out forgets the whole family shelf too (Phase 5·2) — harmless
+  // no-op for the staff portal, which never populates it.
+  await family.clearAll();
   router.replace('/(auth)/connect');
 }
 

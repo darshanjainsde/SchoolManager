@@ -3,6 +3,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { AuthScaffold } from '@/components/AuthScaffold';
+import { family } from '@/lib/family-store';
 import { session } from '@/lib/session';
 import { portalForRole } from '@/lib/roles';
 import { useTokens } from '@/theme/theme-context';
@@ -20,6 +21,9 @@ export default function Login() {
     try {
       const host = (await session.getSchoolHost())!;
       const s = await api.login(host, identifier.trim(), password);
+      // A STUDENT sign-in lands on the family shelf (Phase 5·2): upsert by
+      // host+name, so adding the same child twice just refreshes tokens.
+      if (s.role === 'STUDENT') await family.add(s);
       // api.login() already persisted `s` before returning. If the role can't
       // be routed on mobile (OWNER — web-only), that persisted session must
       // not survive: leaving it behind would brick the next app launch (see
