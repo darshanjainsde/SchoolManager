@@ -200,7 +200,11 @@ export default function Attendance() {
           ) : (
             <>
               <Card>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {/* justifyContent:'center' distributes the 100/7% device-pixel
+                    rounding remainder evenly — without it the leftover lands on
+                    the right edge and the grid reads left-shifted (the S23
+                    report, Phase 5·0b). */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
                   {DOW.map((d, i) => (
                     <Text
                       key={`dow-${i}`}

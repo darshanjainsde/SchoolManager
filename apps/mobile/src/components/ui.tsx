@@ -1,15 +1,27 @@
 import type { PropsWithChildren, ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View, type ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTokens } from '@/theme/theme-context';
 import type { ColorPalette } from '@/theme/tokens';
 
 export function Screen({ children }: PropsWithChildren) {
   const tokens = useTokens();
+  // Top safe-area inset (Phase 5·0b): with headerShown:false the tab
+  // navigator renders from the very top of the display, so without this the
+  // first line of every screen ("Hi, {name}") sits under the status bar on
+  // real devices. One fix here covers every screen; the tab bar's bottom
+  // inset is handled by the navigator's own `insets` prop.
+  const insets = useSafeAreaInsets();
   return (
     <ScrollView
       testID="screen-scroll"
       style={{ flex: 1, backgroundColor: tokens.color.appBg }}
-      contentContainerStyle={{ padding: 14, gap: tokens.gap, paddingBottom: 28 }}
+      contentContainerStyle={{
+        paddingTop: insets.top + 10,
+        paddingHorizontal: 14,
+        gap: tokens.gap,
+        paddingBottom: 28,
+      }}
     >
       {children}
     </ScrollView>
