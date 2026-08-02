@@ -13,6 +13,7 @@ import {
   MessageSquare,
   User,
   LogOut,
+  NotebookPen,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { href: '/portal', label: 'Home', icon: LayoutDashboard },
   { href: '/portal/timetable', label: 'Timetable', icon: CalendarDays },
   { href: '/portal/attendance', label: 'Attendance', icon: CalendarCheck },
+  { href: '/portal/diary', label: 'Diary', icon: NotebookPen },
   { href: '/portal/assignments', label: 'Assignments', icon: BookOpen },
   { href: '/portal/results', label: 'Results', icon: GraduationCap },
   { href: '/portal/announcements', label: 'Announcements', icon: Megaphone },

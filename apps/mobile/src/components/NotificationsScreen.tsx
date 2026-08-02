@@ -17,6 +17,8 @@ const KIND_ICON: Record<string, string> = {
   ASSIGNMENT: '📚',
   ANNOUNCEMENT: '📣',
   REQUEST_DECISION: '✅',
+  DIARY: '📔',
+  ATTENDANCE: '📉',
 };
 
 /**
@@ -38,12 +40,17 @@ function routeFor(group: Group, n: NotificationRow): Href | null {
         return '/(family)/home';
       case 'ANNOUNCEMENT':
         return '/(family)/notices';
+      case 'DIARY':
+        return '/(family)/diary';
+      case 'ATTENDANCE':
+        return '/(family)/attendance';
       default:
         return null;
     }
   }
   // staff
   if (n.kind === 'REQUEST_DECISION') return '/(staff)/requests';
+  if (n.kind === 'DIARY') return '/(staff)/diary';
   return null;
 }
 

@@ -7,6 +7,8 @@ import {
   GraduationCap,
   Megaphone,
   MessageSquare,
+  NotebookPen,
+  TrendingDown,
   type LucideIcon,
 } from 'lucide-react';
 import type { NotificationKind } from '@skoolos/types';
@@ -22,6 +24,8 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   ASSIGNMENT: BookOpen,
   ANNOUNCEMENT: Megaphone,
   REQUEST_DECISION: CalendarCheck,
+  DIARY: NotebookPen,
+  ATTENDANCE: TrendingDown,
 };
 
 /** Fallback for a kind the client doesn't know yet (server added one later). */
@@ -56,6 +60,10 @@ export function routeForNotification(
         return '/teacher/announcements';
       case 'REQUEST_DECISION':
         return '/teacher/requests';
+      case 'DIARY':
+        return '/teacher/diary';
+      case 'ATTENDANCE':
+        return '/teacher/attendance-bar';
       default:
         return null;
     }
@@ -72,6 +80,11 @@ export function routeForNotification(
       return '/portal/assignments';
     case 'ANNOUNCEMENT':
       return '/portal/announcements';
+    case 'DIARY':
+      return '/portal/diary';
+    // The child's own attendance record — the same page the notice is about.
+    case 'ATTENDANCE':
+      return '/portal/attendance';
     // A student has no requests screen — the decision is a teacher-side route.
     case 'REQUEST_DECISION':
       return null;
