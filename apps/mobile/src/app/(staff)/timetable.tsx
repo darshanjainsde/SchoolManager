@@ -17,8 +17,14 @@ import { useTokens } from '@/theme/theme-context';
 // NOT toISOString/getUTCDay, which would read the wrong calendar day
 // whenever local and UTC disagree — see lib/attendance.ts's todayISO() for
 // the same convention) and passes plain numbers/ids down to the two pure
-// presentational components below; neither DaySelector nor TimetableList
-// ever reads Date itself.
+// presentational components below; TimetableList never reads Date itself.
+//
+// The repaint: the day axis is the pitch's `.dstrip` (a strip of torn-off date
+// cells) and the periods are `RailRow`s on a `Page` — the shared `.rowln` with
+// its red margin rule, the same object the teacher's own day rail and the
+// family timetable are drawn from. Both live in the shared DaySelector /
+// TimetableList, so the teacher's week and the student's week are one design
+// with one set of rules, not two that drift.
 
 /** ISO weekday matching TimetableSlot.dayOfWeek: 1 = Mon … 7 = Sun. */
 function todayDayOfWeek(): number {
@@ -88,7 +94,8 @@ export default function Timetable() {
   const defaultDay = shape.days.includes(todayDow) ? todayDow : (shape.days[0] ?? null);
   const selectedDay = pickedDay !== null && shape.days.includes(pickedDay) ? pickedDay : defaultDay;
   const isViewingToday = selectedDay !== null && selectedDay === todayDow;
-  const currentPeriodId = isViewingToday ? findCurrentPeriodId(shape.periods, nowMinutes()) : null;
+  const now = nowMinutes();
+  const currentPeriodId = isViewingToday ? findCurrentPeriodId(shape.periods, now) : null;
 
   const rows: TimetableRow[] = shape.periods.map((period) => ({
     period,
@@ -130,7 +137,14 @@ export default function Timetable() {
             todayDayOfWeek={shape.days.includes(todayDow) ? todayDow : null}
             onSelect={setPickedDay}
           />
-          <TimetableList rows={rows} currentPeriodId={currentPeriodId} />
+          {/* `nowMinutes` only while the day on screen is actually today —
+              that is what lets a finished period drop to .55 without claiming
+              that Friday's periods are over when read on a Monday. */}
+          <TimetableList
+            rows={rows}
+            currentPeriodId={currentPeriodId}
+            nowMinutes={isViewingToday ? now : null}
+          />
         </>
       )}
     </Screen>

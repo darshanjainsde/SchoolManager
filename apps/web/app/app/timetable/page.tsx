@@ -197,7 +197,7 @@ function AssignModal({
           <h3>
             Assign period — {dayLabel}, {periodLabel}
           </h3>
-          <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
+          <button onClick={onClose} className="sk-btn sk-press" aria-label="Close" style={{ padding: 7 }}>
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -248,14 +248,14 @@ function AssignModal({
 
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <button
-              className="sk-btn"
+              className="sk-btn sk-press"
               data-variant="primary"
               onClick={() => onAssign(subjectId, teacherId)}
               disabled={isAssigning || !subjectId || !teacherId}
             >
               {isAssigning ? 'Assigning…' : 'Assign'}
             </button>
-            <button className="sk-btn" onClick={onClose}>
+            <button className="sk-btn sk-press" onClick={onClose}>
               Cancel
             </button>
           </div>
@@ -484,7 +484,7 @@ export default function TimetablePage() {
             }}
           >
             <button
-              className="sk-btn"
+              className="sk-btn sk-press"
               onClick={() => setWeekOffset((w) => w - 1)}
               aria-label="Previous week"
               style={{ padding: '7px 10px' }}
@@ -505,7 +505,7 @@ export default function TimetablePage() {
               )}
             </div>
             <button
-              className="sk-btn"
+              className="sk-btn sk-press"
               onClick={() => setWeekOffset((w) => w + 1)}
               aria-label="Next week"
               style={{ padding: '7px 10px' }}
@@ -513,7 +513,7 @@ export default function TimetablePage() {
               <ChevronRight className="h-4 w-4" />
             </button>
             <button
-              className="sk-btn"
+              className="sk-btn sk-press"
               onClick={() => setWeekOffset(0)}
               disabled={isCurrentWeek}
               style={{ marginLeft: 'auto' }}
@@ -592,7 +592,7 @@ export default function TimetablePage() {
                           }}
                         >
                           <span style={{ fontWeight: 700, color: 'var(--sk-amber)' }}>{period.label}</span>{' '}
-                          <span style={{ color: 'var(--sk-ink-3)' }}>
+                          <span className="sk-num" style={{ color: 'var(--sk-ink-3)' }}>
                             · {period.startTime} – {period.endTime}
                           </span>
                         </td>
@@ -612,7 +612,10 @@ export default function TimetablePage() {
                         }}
                       >
                         <div style={{ fontWeight: 650, fontSize: 13 }}>{period.label}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)' }}>
+                        {/* Bell times run down the left edge of the grid and are
+                            read as a column — the register's monospace face is
+                            what keeps them aligned. */}
+                        <div className="sk-num" style={{ fontSize: 10.5, color: 'var(--sk-ink-3)' }}>
                           {period.startTime} – {period.endTime}
                         </div>
                       </td>
@@ -649,7 +652,7 @@ export default function TimetablePage() {
                                     onClick={() => confirmDeleteSlot(slot, day.label)}
                                     disabled={deleteMutation.isPending}
                                     aria-label={`Remove ${slot.subject.name} from ${day.label} ${period.label}`}
-                                    className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+                                    className="sk-press opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
                                     style={{
                                       position: 'absolute',
                                       top: 4,
@@ -713,6 +716,9 @@ export default function TimetablePage() {
                                 })
                               }
                               aria-label={`Assign ${day.label} ${period.label}`}
+                              // Every empty cell is a control; `sk-press` is the
+                              // pitch's cheapest "yes, that was a tap".
+                              className="sk-press"
                               style={{
                                 display: 'flex',
                                 width: '100%',

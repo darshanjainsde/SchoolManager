@@ -237,7 +237,7 @@ function AttendanceCardModal({
           <h3 id="staff-attn-card-h">{person.name}</h3>
           {person.role && <p className="sk-muted" style={{ marginTop: 2 }}>{person.role}</p>}
         </div>
-        <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
+        <button onClick={onClose} className="sk-btn sk-press" aria-label="Close" style={{ padding: 7 }}>
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -249,7 +249,7 @@ function AttendanceCardModal({
             type="button"
             onClick={() => setMonth((m) => shiftMonth(m, -1))}
             aria-label="Previous month"
-            className="sk-btn"
+            className="sk-btn sk-press"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -261,7 +261,7 @@ function AttendanceCardModal({
             onClick={() => setMonth((m) => shiftMonth(m, 1))}
             disabled={atLatestMonth}
             aria-label="Next month"
-            className="sk-btn"
+            className="sk-btn sk-press"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -489,7 +489,7 @@ export default function StaffAttendancePage() {
                       type="button"
                       aria-pressed={active}
                       onClick={() => setFilter(value)}
-                      className="sk-btn"
+                      className="sk-btn sk-press"
                       data-variant={active ? 'primary' : undefined}
                     >
                       {label}
@@ -501,7 +501,7 @@ export default function StaffAttendancePage() {
 
             <button
               type="button"
-              className="sk-btn"
+              className="sk-btn sk-press"
               data-variant="primary"
               disabled={!date || people.length === 0 || save.isPending}
               onClick={() => save.mutate()}
@@ -516,7 +516,7 @@ export default function StaffAttendancePage() {
             <div>
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 onClick={() =>
                   setMarks(Object.fromEntries(people.map((p) => [markKey(p.kind, p.id), 'PRESENT' as Status])))
                 }

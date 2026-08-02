@@ -21,12 +21,6 @@ import { RetakeDialog } from '@/components/teacher/RetakeDialog';
 import { LockedDay } from '@/components/teacher/LockedDay';
 
 const STATUS_LABEL: Record<AttendanceStatusValue, string> = { PRESENT: 'Present', ABSENT: 'Absent', LATE: 'Late' };
-// Traffic-light tones from the theme: green/red/amber.
-const STATUS_COLOR: Record<AttendanceStatusValue, string> = {
-  PRESENT: 'var(--sk-good)',
-  ABSENT: 'var(--sk-bad)',
-  LATE: 'var(--sk-amber)',
-};
 
 const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
 
@@ -140,6 +134,20 @@ function TeacherAttendanceInner() {
     () => dayStatus.data?.find((s) => s.classSectionId === classSectionId) ?? null,
     [dayStatus.data, classSectionId],
   );
+
+  /**
+   * The class rail's rows: the day's status per class, annotated with whether
+   * this teacher merely covers it. Both halves are already on the page for
+   * other reasons — this only joins them, so the rail adds no request.
+   */
+  const classDayRows = useMemo(
+    () =>
+      (dayStatus.data ?? []).map((s) => ({
+        ...s,
+        covering: classes.data?.find((c) => c.classSectionId === s.classSectionId)?.covering ?? false,
+      })),
+    [dayStatus.data, classes.data],
+  );
   // Whether the status query has settled — gates showing the roster so a
   // taken class never flashes as editable before its summary swaps in.
   const statusKnown = !dayStatus.isLoading && !dayStatus.error;
@@ -213,6 +221,17 @@ function TeacherAttendanceInner() {
     return tally;
   }, [students, marks]);
 
+  /**
+   * Which register the stamp on screen belongs to, as `classSectionId|date`,
+   * plus a counter so a second save of the SAME register still re-mounts the
+   * stamp and lands it again. Stored rather than read off the mutation because
+   * a mutation stays `isSuccess` after the teacher has moved to another class
+   * — a stamp left over from the last register would claim work that has not
+   * been done here.
+   */
+  const [stamped, setStamped] = useState<{ key: string; n: number } | null>(null);
+  const stampKey = `${classSectionId}|${date}`;
+
   const save = useMutation({
     mutationFn: () =>
       api.put<SaveAttendanceResponse>('/manage/attendance', {
@@ -221,6 +240,7 @@ function TeacherAttendanceInner() {
         marks: students.map((s) => ({ studentId: s.id, status: marks[s.id] ?? 'PRESENT' })),
       }),
     onSuccess: (result) => {
+      setStamped((prev) => ({ key: stampKey, n: prev && prev.key === stampKey ? prev.n + 1 : 0 }));
       toast.success(
         result.absentees === 0
           ? `Attendance saved — ${result.saved} students, nobody absent.`
@@ -298,7 +318,7 @@ function TeacherAttendanceInner() {
             {editable && (
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 data-variant="primary"
                 disabled={!classSectionId || !date || students.length === 0 || save.isPending}
                 onClick={() => save.mutate()}
@@ -315,7 +335,7 @@ function TeacherAttendanceInner() {
             <div>
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 onClick={() =>
                   setMarks(
                     Object.fromEntries(students.map((s) => [s.id, 'PRESENT' as AttendanceStatusValue])),
@@ -324,6 +344,55 @@ function TeacherAttendanceInner() {
               >
                 Mark all present
               </button>
+            </div>
+          )}
+
+          {/* THE CLASS RAIL. The select above is the control (and the thing a
+              screen reader and the keyboard drive); this is the pitch's
+              `.clsrow` list — the same classes, but showing at a glance which
+              registers this date is still waiting on, which is the question a
+              teacher actually opens this page with. Built entirely from the
+              `status` payload the page already fetches for its own gating, so
+              it costs no extra request. */}
+          {classDayRows.length > 0 && (
+            <div>
+              <p className="sk-lab" style={{ marginBottom: 2 }}>
+                Your classes on this date
+              </p>
+              {classDayRows.map((c) => (
+                <button
+                  key={c.classSectionId}
+                  type="button"
+                  className="sk-clsrow sk-press"
+                  aria-current={c.classSectionId === classSectionId ? 'true' : undefined}
+                  onClick={() => setClassSectionId(c.classSectionId)}
+                >
+                  {/* The class's own name, set in the serif — it is a name,
+                      not a code. Truncated to the grade+section so a long
+                      label can never blow the tile out of its circle. */}
+                  <span className="ic" aria-hidden="true">
+                    {c.name.slice(0, 3)}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="nm" style={{ display: 'block' }}>
+                      {c.name}
+                      {c.covering ? ' · covering' : ''}
+                    </span>
+                    {/* The pitch's `.clsrow .mt` sizes the job; the pill beside
+                        it carries the verdict. Deliberately NOT the count or
+                        the marker's name — the roster panel to the right
+                        already states both for the selected class, and the
+                        same fact printed twice on one screen makes neither of
+                        them the thing you look at. */}
+                    <span className="mt" style={{ display: 'block' }}>
+                      {c.total} students{c.taken ? '' : ' · not taken yet'}
+                    </span>
+                  </span>
+                  <span className="sk-pill" data-tone={c.taken ? 'good' : 'warn'}>
+                    {c.taken ? `✓ ${c.present}/${c.total}` : 'due'}
+                  </span>
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -375,6 +444,43 @@ function TeacherAttendanceInner() {
             </p>
           </div>
           <div className="sk-card-b">
+            {/* THE TALLY, in mono. The same three numbers as the sentence
+                above, but as figures on a shared grid: while marking, a
+                teacher is comparing a count against a class size, and a
+                sentence has to be re-parsed on every change where a figure
+                can simply be re-read. The sentence stays because it is what a
+                screen reader announces well. */}
+            {students.length > 0 && (
+              <div className="sk-regstats" aria-hidden="true">
+                <div className="sk-regstat" data-tone="good">
+                  <div className="n">{counts.PRESENT}</div>
+                  <div className="l">present</div>
+                </div>
+                <div className="sk-regstat" data-tone="bad">
+                  <div className="n">{counts.ABSENT}</div>
+                  <div className="l">absent</div>
+                </div>
+                <div className="sk-regstat" data-tone="warn">
+                  <div className="n">{counts.LATE}</div>
+                  <div className="l">late</div>
+                </div>
+              </div>
+            )}
+
+            {/* THE STAMP. A saved register is finished work, and the pitch's
+                argument is that finished work should be STAMPED rather than
+                announced — the toast is gone in four seconds, the stamp stays
+                on the page you saved. Keyed on the save's own timestamp so a
+                second save re-mounts it and it lands again; a stamp that only
+                ever animated once would silently stop confirming. */}
+            {stamped?.key === stampKey && (
+              <div key={stamped.n} style={{ alignSelf: 'flex-start' }}>
+                <span className="sk-bigstamp sk-stampin sk-in" data-testid="register-saved-stamp">
+                  Register saved ✓
+                </span>
+              </div>
+            )}
+
             {unlockedPastDate && unlockRequest?.expiresAt && (
               <p className="sk-pill" data-tone="info" style={{ alignSelf: 'flex-start' }}>
                 This day was reopened by your admin — the unlock expires at{' '}
@@ -413,30 +519,25 @@ function TeacherAttendanceInner() {
                       </div>
                       <span className="sp" />
                       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        {ATTENDANCE_STATUSES.map((option) => {
-                          const active = status === option;
-                          return (
-                            <button
-                              key={option}
-                              type="button"
-                              aria-pressed={active}
-                              onClick={() => setMarks((m) => ({ ...m, [s.id]: option }))}
-                              style={{
-                                borderRadius: 8,
-                                padding: '6px 11px',
-                                fontSize: 11.5,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                border: `1.5px solid ${active ? STATUS_COLOR[option] : 'var(--sk-line-2)'}`,
-                                background: active ? STATUS_COLOR[option] : 'var(--sk-card)',
-                                color: active ? '#fff' : 'var(--sk-ink-2)',
-                                transition: 'background 0.12s ease, border-color 0.12s ease, color 0.12s ease',
-                              }}
-                            >
-                              {STATUS_LABEL[option]}
-                            </button>
-                          );
-                        })}
+                        {/* The pitch's register cells, worn by the buttons the
+                            web register already has. Present is the quiet
+                            default (good tint); ABSENT goes red AND grows —
+                            the exception is the only mark that costs a
+                            deliberate tap, so it is the only one that moves —
+                            and late is amber. The growth is scale, not size,
+                            so nothing around it reflows. */}
+                        {ATTENDANCE_STATUSES.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className="sk-mark"
+                            data-status={option}
+                            aria-pressed={status === option}
+                            onClick={() => setMarks((m) => ({ ...m, [s.id]: option }))}
+                          >
+                            {STATUS_LABEL[option]}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   );

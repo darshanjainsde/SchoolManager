@@ -56,6 +56,10 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance }: 
         <div className="sk-card-b">
           <p className="sk-eyebrow">Right now</p>
           <h2 className="sk-now-title">{isFree ? 'Free period' : entry.label}</h2>
+          {/* No gradient and no live dot on a break or a free period: the
+              hero paint means "you are teaching this right now", and a free
+              slot is precisely the absence of that. Painting both the same
+              way would cost the hero the only thing it says. */}
           {nextEntry ? (
             <p className="sk-now-sub">
               Next up: {entryLabel(nextEntry)} at {nextEntry.startTime}
@@ -76,21 +80,39 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance }: 
   const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
 
   return (
-    <div className="sk-card sk-now">
+    // The pitch's `.nowcard`: the live period is the only thing on the page
+    // that is happening, so it stops being a card among cards and becomes the
+    // saturated brand hero. `sk-card sk-now` are kept underneath it — the
+    // layout and the page's own assertions hang off those; `sk-nowcard` only
+    // repaints.
+    <div className="sk-card sk-now sk-nowcard">
       <div className="sk-card-b">
-        <p className="sk-eyebrow">Right now</p>
+        <p className="sk-eyebrow">
+          {/* THE PULSE. A live period is a fact that changes while you look at
+              it, and a static "Right now" label cannot say that. The dot is
+              decoration in the strict sense — the words next to it carry the
+              meaning — so it is `aria-hidden` and it stops moving entirely
+              under prefers-reduced-motion (see `.sk-hero-dot`). */}
+          <span className="sk-hero-dot" aria-hidden="true" />
+          Right now
+        </p>
         <h2 className="sk-now-title">{slot ? `${slot.className} · ${slot.subjectName}` : entry.label}</h2>
         {slot?.covering && <p className="sk-now-covering">Covering for {slot.coveringFor}</p>}
 
+        {/* THE INK LINE. How far through the period you are, drawn rather than
+            stated. `sk-inkline` grows it 0 → pct on mount; the real value is
+            the inline width, so a reduced-motion user (or a failed animation)
+            still sees the truth. The progressbar role carries the number for
+            anyone who cannot see either. */}
         <div
-          className="sk-progress"
+          className="sk-nowprog"
           role="progressbar"
           aria-valuenow={pct}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label="Period progress"
         >
-          <div className="sk-progress-fill" style={{ width: `${pct}%` }} />
+          <i className="sk-inkline" style={{ width: `${pct}%` }} />
         </div>
 
         {register?.taken ? (
@@ -104,8 +126,9 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance }: 
           slot && (
             <button
               type="button"
-              className="sk-btn"
+              className="sk-btn sk-press"
               data-variant="primary"
+              style={{ marginTop: 13 }}
               onClick={() => onTakeAttendance(slot.classSectionId)}
             >
               Take attendance

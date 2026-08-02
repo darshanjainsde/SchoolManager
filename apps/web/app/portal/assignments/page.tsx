@@ -25,14 +25,53 @@ function formatDueDate(dueDate: string): string {
 
 // ── Row ───────────────────────────────────────────────────────────────────────
 
+/**
+ * THE TICK — a real stroke, drawn on, rather than a green icon that was always
+ * there. `sk-tick`/`sk-in` come from sk-theme.css, which also collapses it to
+ * the finished stroke under `prefers-reduced-motion: reduce`.
+ */
+function DrawnTick(): React.JSX.Element {
+  return (
+    <svg
+      className="sk-tick sk-in"
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M4 12.5 L10 18 L20 6" />
+    </svg>
+  );
+}
+
 function AssignmentRow({
   assignment,
   isOpen,
   onToggle,
+  duePassed,
 }: {
   assignment: StudentAssignment;
   isOpen: boolean;
   onToggle: () => void;
+  /**
+   * WHAT THE TICK IS ALLOWED TO MEAN.
+   *
+   * `StudentAssignment` carries no submission field — the API has never been
+   * asked whether this student handed anything in, and `/me/assignments`
+   * splits `upcoming`/`past` purely on the due date. So the tick here means
+   * exactly one thing: THE DUE DATE HAS PASSED. It must never be read as
+   * "handed in", "done" or "accepted", because the portal has no idea.
+   *
+   * That is why the row says "Due date passed" in words next to the tick
+   * rather than letting a green stroke imply completion on its own, and why
+   * nothing on this page is styled as struck-through: a family reading a tick
+   * as "submitted" when the work is still on the kitchen table is the one
+   * misunderstanding this page could cause that would actually cost someone
+   * something. If a submission field ever lands, this prop is the only thing
+   * that needs to change.
+   */
+  duePassed: boolean;
 }) {
   return (
     <div className="sk-card">
@@ -41,15 +80,21 @@ function AssignmentRow({
           type="button"
           onClick={onToggle}
           aria-expanded={isOpen}
-          className="flex w-full items-start justify-between gap-3 text-left"
+          className="flex w-full items-start gap-3 text-left"
         >
+          <span className="sk-tickbox mt-0.5" data-done={duePassed} aria-hidden="true">
+            {duePassed && <DrawnTick />}
+          </span>
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-[var(--sk-ink)]">{assignment.title}</p>
             <p className="text-sm text-[var(--sk-ink-2)]">{assignment.subjectName}</p>
-            <p className="mt-0.5 text-xs text-[var(--sk-ink-3)]">Due {formatDueDate(assignment.dueDate)}</p>
+            <p className="mt-0.5 text-xs text-[var(--sk-ink-3)]">
+              Due {formatDueDate(assignment.dueDate)}
+              {duePassed && ' · due date passed'}
+            </p>
           </div>
           <ChevronDown
-            className={`h-4 w-4 shrink-0 text-[var(--sk-ink-3)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            className={`mt-1 h-4 w-4 shrink-0 text-[var(--sk-ink-3)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
             aria-hidden="true"
           />
         </button>
@@ -144,18 +189,36 @@ export default function PortalAssignmentsPage() {
 
       {upcoming.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-[var(--sk-ink-2)]">Upcoming</h2>
+          <h2 className="sk-lab">Upcoming</h2>
           {upcoming.map((a) => (
-            <AssignmentRow key={a.id} assignment={a} isOpen={openIds.has(a.id)} onToggle={() => toggle(a.id)} />
+            <AssignmentRow
+              key={a.id}
+              assignment={a}
+              isOpen={openIds.has(a.id)}
+              onToggle={() => toggle(a.id)}
+              duePassed={false}
+            />
           ))}
         </section>
       )}
 
       {past.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-[var(--sk-ink-2)]">Past</h2>
+          <h2 className="sk-lab">Past</h2>
+          {/* Spelled out once, above the ticked rows, so the tick can never be
+              read as a claim about what was handed in — see the `duePassed`
+              note on AssignmentRow. */}
+          <p className="sk-state" style={{ padding: 0 }}>
+            The tick means the due date has gone by — not that anything was handed in.
+          </p>
           {past.map((a) => (
-            <AssignmentRow key={a.id} assignment={a} isOpen={openIds.has(a.id)} onToggle={() => toggle(a.id)} />
+            <AssignmentRow
+              key={a.id}
+              assignment={a}
+              isOpen={openIds.has(a.id)}
+              onToggle={() => toggle(a.id)}
+              duePassed
+            />
           ))}
         </section>
       )}

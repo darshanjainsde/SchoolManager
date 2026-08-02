@@ -1,6 +1,7 @@
 'use client';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { GraduationCap, Hash, ListOrdered } from 'lucide-react';
 import type { AvatarUploadResponse, Profile } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -25,6 +26,9 @@ export default function PortalProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // True only for a photo chosen in THIS session — see `sk-pinin` on the
+  // avatar below. A photo already on file must not re-drop on every visit.
+  const [justPasted, setJustPasted] = useState(false);
 
   const { data: profile, isLoading, error } = useQuery({
     queryKey: ['portal-profile'],
@@ -60,6 +64,7 @@ export default function PortalProfilePage() {
       queryClient.setQueryData<Profile>(['portal-profile'], (prev) =>
         prev ? { ...prev, photoUrl: res.photoUrl } : prev,
       );
+      setJustPasted(true);
     } catch (err) {
       setUploadError((err as Error).message);
     } finally {
@@ -71,85 +76,106 @@ export default function PortalProfilePage() {
     <div className="flex flex-col gap-6">
       <header className="sk-pagehead">
         <h1>My profile</h1>
-        <p>Your student information (read-only).</p>
+        <p>Your school record, and the photo that goes with it everywhere.</p>
       </header>
 
       {isLoading && <p className="sk-state">Loading profile…</p>}
-      {error && (
-        <p className="sk-state err">{(error as Error).message}</p>
-      )}
+      {error && <p className="sk-state err">{(error as Error).message}</p>}
 
       {profile && (
         <div className="sk-card max-w-md">
-          <div className="sk-card-h pb-3">
-            <div className="flex items-center gap-4">
-              {/* Photo or initials avatar */}
-              {profile.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={profile.photoUrl}
-                  alt={`${profile.firstName} ${profile.lastName}`}
-                  className="h-16 w-16 rounded-full object-cover border border-[var(--sk-line)]"
-                />
-              ) : (
-                <div
-                  className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold border"
-                  style={{
-                    background: 'var(--sk-brand-tint)',
-                    color: 'var(--sk-brand-2)',
-                    borderColor: 'var(--sk-brand)',
-                  }}
-                >
-                  {initials(profile.firstName, profile.lastName)}
+          <div className="sk-card-b">
+            {/* ── The head ──────────────────────────────────────────────────
+                Centred, with the photo the largest thing on it: on this page
+                the photo IS the content — it is what appears on the class
+                roster, in the register and on every message thread, so it is
+                shown at the size it deserves rather than as a list bullet. */}
+            <div className="sk-pfhead">
+              <div
+                // sk-pinin: a photo chosen just now DROPS onto the page and
+                // settles square, the way something is pasted into an album.
+                // The gesture says "that one landed" — a silently swapped
+                // image looks identical to one that never uploaded.
+                className={justPasted ? 'sk-bigav sk-pinin sk-in' : 'sk-bigav'}
+              >
+                {profile.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.photoUrl} alt={`${profile.firstName} ${profile.lastName}`} />
+                ) : (
+                  <span aria-hidden="true">{initials(profile.firstName, profile.lastName)}</span>
+                )}
+              </div>
+
+              <div className="sk-pfname">
+                {profile.firstName} {profile.lastName}
+              </div>
+              {/* No class line here on purpose: the ruled record below states
+                  it once, as a field. Saying it twice on one small card makes
+                  the second one read as a different fact. */}
+
+              {/* The student code is the one string on this page that gets
+                  said out loud — at the office, on the phone, at the login
+                  box. Mono and letter-spaced so a 0 is never read back as an
+                  O, and set as a chip so it is findable without reading. */}
+              {profile.code && (
+                <div className="sk-pfcode">
+                  <span className="sr-only">Student code </span>
+                  {profile.code}
                 </div>
               )}
-              <div>
-                <h3 className="text-lg font-semibold tracking-tight text-[var(--sk-ink)]">
-                  {profile.firstName} {profile.lastName}
-                </h3>
-                {profile.className && (
-                  <p className="text-sm text-[var(--sk-ink-3)]">{profile.className}</p>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  aria-label="Choose profile photo"
-                  onChange={(e) => void handleFileChange(e)}
-                />
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                aria-label="Choose profile photo"
+                onChange={(e) => void handleFileChange(e)}
+              />
+              <div style={{ marginTop: 12 }}>
                 <button
                   type="button"
-                  className="sk-btn"
-                  style={{ marginTop: 6 }}
+                  className="sk-btn sk-press"
                   disabled={isUploading}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   {isUploading ? 'Uploading…' : profile.photoUrl ? 'Change photo' : 'Add photo'}
                 </button>
               </div>
+              {uploadError && <p className="sk-state err">{uploadError}</p>}
             </div>
-            {uploadError && <p className="sk-state err">{uploadError}</p>}
-          </div>
-          <div className="sk-card-b">
-            <dl className="flex flex-col gap-3 text-sm">
-              <div className="flex items-center justify-between border-b border-[var(--sk-line)] pb-3">
-                <dt className="text-[var(--sk-ink-3)]">Admission no.</dt>
-                <dd className="font-medium text-[var(--sk-ink)] font-mono">{profile.admissionNo}</dd>
+
+            {/* ── The ruled rows ────────────────────────────────────────────
+                A form filled in on paper: an icon tile, the label, the value,
+                a rule between each. The figures take the register's face
+                because they are numbers that get copied out. */}
+            <div style={{ marginTop: 14 }}>
+              <div className="sk-pfrow">
+                <span className="ic" aria-hidden="true">
+                  <Hash className="h-4 w-4" />
+                </span>
+                <span className="sk-lab">Admission no.</span>
+                <span className="v mono">{profile.admissionNo}</span>
               </div>
-              <div className="flex items-center justify-between border-b border-[var(--sk-line)] pb-3">
-                <dt className="text-[var(--sk-ink-3)]">Roll no.</dt>
-                <dd className="font-medium text-[var(--sk-ink)]">
-                  {profile.rollNo ?? <span className="text-[var(--sk-ink-3)]">—</span>}
-                </dd>
+              <div className="sk-pfrow">
+                <span className="ic" aria-hidden="true">
+                  <ListOrdered className="h-4 w-4" />
+                </span>
+                <span className="sk-lab">Roll no.</span>
+                <span className="v mono">
+                  {profile.rollNo ?? <span className="sk-muted">Not on file</span>}
+                </span>
               </div>
-              <div className="flex items-center justify-between">
-                <dt className="text-[var(--sk-ink-3)]">Class</dt>
-                <dd className="font-medium text-[var(--sk-ink)]">
-                  {profile.className ?? <span className="text-[var(--sk-ink-3)]">—</span>}
-                </dd>
+              <div className="sk-pfrow">
+                <span className="ic" aria-hidden="true">
+                  <GraduationCap className="h-4 w-4" />
+                </span>
+                <span className="sk-lab">Class</span>
+                <span className="v">
+                  {profile.className ?? <span className="sk-muted">Not on file</span>}
+                </span>
               </div>
-            </dl>
+            </div>
           </div>
         </div>
       )}

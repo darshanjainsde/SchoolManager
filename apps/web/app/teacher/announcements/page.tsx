@@ -240,9 +240,16 @@ export default function TeacherAnnouncementsPage() {
           {!mineQuery.isLoading && !mineQuery.error && mine.length === 0 && (
             <p className="sk-state">You haven&apos;t posted anything yet.</p>
           )}
+          {/* The pitch's `.postit` list: a notice you wrote and stuck up, not
+              a table row. Each one arrives with `sk-pinin` — dropped in
+              slightly rotated and settling square — which is what makes a
+              post you just made distinguishable from the ones that were
+              already there, without a "NEW" badge that then has to be
+              cleared. The animation is keyed to the announcement id, so React
+              only mounts (and only animates) rows that are genuinely new. */}
           {!mineQuery.isLoading &&
             !mineQuery.error &&
-            mine.map((a) =>
+            mine.map((a, i) =>
               editingId === a.id ? (
                 <div className="sk-row" key={a.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
                   <label htmlFor={`edit-title-${a.id}`} className="sk-lab">
@@ -284,34 +291,56 @@ export default function TeacherAnnouncementsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="sk-row" key={a.id}>
-                  <span className="sk-pill" data-tone="info">
-                    {a.className ?? 'Whole school'}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="nm">{a.title}</div>
-                    <div className="meta">
-                      {a.body} · {formatPostedAt(a.createdAt)}
-                    </div>
+                <div
+                  className="sk-postit sk-pinin sk-in"
+                  key={a.id}
+                  // Staggered so a list of posts lands as a sequence rather
+                  // than a single flash, capped at 8 because past that the
+                  // stagger stops reading as sequence and starts reading as
+                  // lag.
+                  style={{ animationDelay: `${Math.min(i, 8) * 0.05}s` }}
+                >
+                  <div className="pt">{a.title}</div>
+                  {/* The audience is its own element, not run together with
+                      the timestamp: "who did this go to" is the first thing a
+                      teacher scans a post for, and it is also the one part of
+                      this line that has to stay independently readable to
+                      assistive tech (and to the test that pins it). */}
+                  <div className="pd">
+                    <span className="aud">{a.className ?? 'Whole school'}</span>
+                    {' · '}
+                    {formatPostedAt(a.createdAt)}
                   </div>
-                  <span className="sp" />
-                  <button
-                    type="button"
-                    className="sk-btn"
-                    style={{ marginRight: 8 }}
-                    onClick={() => startEdit(a)}
-                    disabled={deletingId === a.id}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="sk-btn"
-                    onClick={() => setConfirmDeleteId(a.id)}
-                    disabled={deletingId === a.id}
-                  >
-                    {deletingId === a.id ? 'Deleting…' : 'Delete'}
-                  </button>
+                  <div className="pd" style={{ marginTop: 4 }}>
+                    {a.body}
+                  </div>
+                  <div className="acts">
+                    <button
+                      type="button"
+                      className="sk-btn sk-press"
+                      onClick={() => startEdit(a)}
+                      disabled={deletingId === a.id}
+                    >
+                      {/* The glyph is aria-hidden so the button's accessible
+                          name stays the plain verb — decoration must never
+                          end up in what a screen reader announces. */}
+                      <span aria-hidden="true">✎</span>Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="sk-btn sk-press"
+                      onClick={() => setConfirmDeleteId(a.id)}
+                      disabled={deletingId === a.id}
+                    >
+                      {deletingId === a.id ? (
+                        'Deleting…'
+                      ) : (
+                        <>
+                          <span aria-hidden="true">🗑</span>Delete
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               ),
             )}

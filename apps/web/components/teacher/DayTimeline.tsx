@@ -8,20 +8,43 @@ export interface DayTimelineProps {
   onTakeAttendance: (classSectionId: string) => void;
 }
 
+/**
+ * How a row READS, in the pitch's rail vocabulary: `now` wears the amber
+ * "attention" wash, `free` the green one, and everything else stays on the
+ * page. Deliberately separate from `dimmed` (which says "already gone") —
+ * those are two different facts about a row and a row can carry both.
+ */
+function railTone(entry: TeacherDayEntry, isNow: boolean): 'now' | 'free' | undefined {
+  if (isNow) return 'now';
+  return entry.kind === 'FREE' ? 'free' : undefined;
+}
+
 function Row({
   entry,
   dimmed,
+  isNow,
   onTakeAttendance,
 }: {
   entry: TeacherDayEntry;
   dimmed: boolean;
+  /** True for the single period happening right now — carries the amber wash. */
+  isNow: boolean;
   onTakeAttendance: (classSectionId: string) => void;
 }) {
   return (
-    <div className="sk-row sk-timeline-row" data-dim={dimmed ? 'true' : 'false'}>
+    <div
+      className="sk-row sk-timeline-row"
+      data-dim={dimmed ? 'true' : 'false'}
+      data-tone={railTone(entry, isNow)}
+    >
       <span className="sk-timeline-time">
         {entry.startTime}–{entry.endTime}
       </span>
+      {/* THE MARGIN RULE. The red line ruled down the side of a school
+          exercise book, between the time column and the entry — it is what
+          turns a list of periods into a page. Purely typographic, hence
+          aria-hidden. */}
+      <span className="sk-rail-ml" aria-hidden="true" />
       <div style={{ minWidth: 0 }}>
         <div className="nm">
           {entry.kind === 'CLASS' && entry.slot
@@ -98,12 +121,22 @@ export function DayTimeline({ entries, currentIndex, onTakeAttendance }: DayTime
           <>
             <p className="sk-lab">Earlier today</p>
             {earlier.map((e) => (
-              <Row key={e.periodId} entry={e} dimmed onTakeAttendance={onTakeAttendance} />
+              <Row key={e.periodId} entry={e} dimmed isNow={false} onTakeAttendance={onTakeAttendance} />
             ))}
           </>
         )}
-        {rest.map((e) => (
-          <Row key={e.periodId} entry={e} dimmed={false} onTakeAttendance={onTakeAttendance} />
+        {/* `splitAt` is where the current entry starts, so the live period is
+            always the first row of `rest` — but only when there IS one
+            (currentIndex === -1 means nothing is on, and highlighting the
+            next period as "now" would be a lie). */}
+        {rest.map((e, i) => (
+          <Row
+            key={e.periodId}
+            entry={e}
+            dimmed={false}
+            isNow={currentIndex >= 0 && i === 0}
+            onTakeAttendance={onTakeAttendance}
+          />
         ))}
       </div>
     </div>

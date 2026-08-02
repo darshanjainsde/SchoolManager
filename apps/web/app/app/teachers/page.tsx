@@ -154,7 +154,7 @@ function InviteSentModal({
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
         >
           <h3 id="t-invite-h">Invite sent</h3>
-          <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
+          <button onClick={onClose} className="sk-btn sk-press" aria-label="Close" style={{ padding: 7 }}>
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -185,12 +185,12 @@ function InviteSentModal({
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             {!result.emailSent && (
-              <button className="sk-btn" data-variant="primary" disabled={resending} onClick={onResend}>
+              <button className="sk-btn sk-press" data-variant="primary" disabled={resending} onClick={onResend}>
                 <Send className="h-3.5 w-3.5" />
                 {resending ? 'Resending…' : 'Resend invite'}
               </button>
             )}
-            <button className="sk-btn" onClick={onClose}>
+            <button className="sk-btn sk-press" onClick={onClose}>
               Close
             </button>
           </div>
@@ -298,7 +298,7 @@ function TeacherForm({
           />
           <button
             type="button"
-            className="sk-btn"
+            className="sk-btn sk-press"
             style={{ alignSelf: 'flex-start' }}
             disabled={isUploadingPhoto}
             onClick={() => photoInputRef.current?.click()}
@@ -310,7 +310,7 @@ function TeacherForm({
 
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
-            className="sk-btn"
+            className="sk-btn sk-press"
             data-variant="primary"
             onClick={() =>
               onSave({
@@ -324,7 +324,7 @@ function TeacherForm({
           >
             {isSaving ? 'Saving…' : 'Save'}
           </button>
-          <button className="sk-btn" onClick={onCancel}>
+          <button className="sk-btn sk-press" onClick={onCancel}>
             Cancel
           </button>
         </div>
@@ -342,6 +342,9 @@ export default function TeachersPage() {
 
   // ── Local state ──────────────────────────────────────────────────────────
   const [showAdd, setShowAdd] = useState(false);
+  // Id of the teacher added in this session, so their card can be seen
+  // arriving in the grid rather than simply existing on the next render.
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [inviteResult, setInviteResult] = useState<(LoginInviteResult & { teacherId: string }) | null>(
     null,
@@ -388,7 +391,9 @@ export default function TeachersPage() {
       email?: string;
       photoAssetId?: string | null;
     }) => api.post<Teacher>('/manage/teachers', body),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      // Which card is the new one — see `sk-pinin` on the grid below.
+      setJustAddedId(created?.id ?? null);
       void queryClient.invalidateQueries({ queryKey: ['mng-teachers'] });
       setShowAdd(false);
       resetAddForm();
@@ -507,7 +512,7 @@ export default function TeachersPage() {
           <p>Manage your school&apos;s teaching staff.</p>
         </div>
         <button
-          className="sk-btn"
+          className="sk-btn sk-press"
           data-variant="primary"
           onClick={() => {
             setShowAdd((v) => !v);
@@ -528,13 +533,15 @@ export default function TeachersPage() {
 
       {teachers.length > 0 && (
         <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(2, minmax(0,1fr))' }}>
+          {/* Head-counts compared against each other — monospace + tabular
+              so the digits sit on one grid instead of shifting as they load. */}
           <div className="sk-kpi">
             <span className="lab">Total teachers</span>
-            <span className="n">{teachers.length}</span>
+            <span className="n sk-num">{teachers.length}</span>
           </div>
           <div className="sk-kpi" data-tone="good">
             <span className="lab">Active</span>
-            <span className="n">{activeCount}</span>
+            <span className="n sk-num">{activeCount}</span>
           </div>
         </div>
       )}
@@ -606,7 +613,16 @@ export default function TeachersPage() {
                 uploadedPhotoUrl={editPhotoUrl}
               />
             ) : (
-              <div key={teacher.id} className="sk-entity" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+              // `sk-pinin` on the one card just created: it drops in slightly
+              // rotated and settles square, like a slip pinned to a board.
+              // The grid is server-sorted, so a new entry can appear anywhere
+              // in it — the gesture says WHERE, which the toast cannot.
+              // Reduced motion collapses it to the settled card.
+              <div
+                key={teacher.id}
+                className={teacher.id === justAddedId ? 'sk-entity sk-pinin sk-in' : 'sk-entity'}
+                style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   {teacher.photoAssetId && photoUrlMap[teacher.photoAssetId] ? (
                     <img
@@ -652,7 +668,7 @@ export default function TeachersPage() {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {teacher.userId ? (
                     <button
-                      className="sk-btn"
+                      className="sk-btn sk-press"
                       disabled={resendInviteMutation.isPending}
                       onClick={() => resendInviteMutation.mutate(teacher.id)}
                     >
@@ -661,7 +677,7 @@ export default function TeachersPage() {
                     </button>
                   ) : (
                     <button
-                      className="sk-btn"
+                      className="sk-btn sk-press"
                       data-variant="primary"
                       disabled={createLoginMutation.isPending}
                       onClick={() => createLoginMutation.mutate(teacher.id)}
@@ -672,7 +688,7 @@ export default function TeachersPage() {
                     </button>
                   )}
                   <button
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     onClick={() => {
                       setShowAdd(false);
                       setEditId(teacher.id);
@@ -683,7 +699,7 @@ export default function TeachersPage() {
                     Edit
                   </button>
                   <button
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     disabled={deleteMutation.isPending}
                     onClick={() => confirmDeleteTeacher(teacher)}
                     style={{ color: 'var(--sk-bad)' }}

@@ -66,20 +66,21 @@ export default function EnquiriesPage() {
 
   return (
     <div className="max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Enquiries</h1>
-        <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>
+      {/* `sk-pagehead` supplies the portal's serif heading — see /app/events. */}
+      <header className="sk-pagehead" style={{ marginBottom: 0 }}>
+        <h1>Enquiries</h1>
+        <p>
           Leads from your website — the enquiry form, and &ldquo;request a call&rdquo; from course cards.
           {newCount > 0 && <span className="ml-1 font-semibold" style={{ color: 'var(--sk-brand-2)' }}>{newCount} new.</span>}
         </p>
-      </div>
+      </header>
 
       <div className="flex gap-2">
         {(['ALL', ...STATUSES] as const).map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className="rounded-full border px-3.5 py-1.5 text-xs font-semibold transition"
+            className="sk-press rounded-full border px-3.5 py-1.5 text-xs font-semibold transition"
             style={
               filter === s
                 ? { borderColor: 'var(--sk-brand)', background: 'var(--sk-brand-tint)', color: 'var(--sk-brand-2)' }
@@ -121,8 +122,10 @@ export default function EnquiriesPage() {
                   <span className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>{formatDate(e.createdAt)}</span>
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-sm" style={{ color: 'var(--sk-ink-2)' }}>
-                  <a href={`tel:${e.phone}`} className="inline-flex items-center gap-1.5">
-                    <Phone className="h-3.5 w-3.5" /> {e.phone}
+                  {/* A phone number is a figure to be read digit by digit and
+                      dialled, not prose — the register's monospace face. */}
+                  <a href={`tel:${e.phone}`} className="sk-press inline-flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5" /> <span className="sk-num">{e.phone}</span>
                   </a>
                   {e.email && (
                     <a href={`mailto:${e.email}`} className="inline-flex items-center gap-1.5">
@@ -136,6 +139,7 @@ export default function EnquiriesPage() {
                 {STATUSES.filter((s) => s !== e.status).map((s) => (
                   <Button
                     key={s}
+                    className="sk-press"
                     variant="outline"
                     size="sm"
                     disabled={statusMutation.isPending}

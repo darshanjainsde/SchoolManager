@@ -107,6 +107,7 @@ export default function AvailabilityPage() {
           </label>
           <select
             id="day"
+            className="sk-press"
             style={fieldStyle}
             onFocus={ringFocus}
             onBlur={ringBlur}
@@ -126,7 +127,12 @@ export default function AvailabilityPage() {
         <div className="sk-card-h">
           <h3>{dayLabel}</h3>
         </div>
-        <div className="sk-card-b">
+        {/* Keyed on the day so switching days REPLACES this panel rather than
+            mutating it — which is what makes `sk-wfade` (the pitch's
+            `.wview.on`) fire. Without the key React would reuse the node, the
+            rows would swap silently, and a mis-tapped day would look
+            identical to a day with the same shape of timetable. */}
+        <div className="sk-card-b sk-wfade" key={day}>
           {isLoading && <p className="sk-state">Loading…</p>}
           {!!error && <p className="sk-state err">{(error as Error).message}</p>}
 
@@ -174,7 +180,16 @@ export default function AvailabilityPage() {
                     </div>
 
                     <span className="sp" />
-                    <span className="sk-pill" data-tone={allFree ? 'good' : allBusy ? 'bad' : 'warn'}>
+                    {/* THE STAMP, and only here: "free all day" / "fully
+                        booked" is a VERDICT on the row above it, the one thing
+                        on this page a head of department is actually hunting
+                        for. The per-period pills stay still — stamping twenty
+                        of them would make the verdict impossible to find. */}
+                    <span
+                      className="sk-pill sk-stampin sk-in"
+                      data-tone={allFree ? 'good' : allBusy ? 'bad' : 'warn'}
+                      style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
+                    >
                       {allFree ? 'Free all day' : allBusy ? 'Fully booked' : 'Partially free'}
                     </span>
                   </div>

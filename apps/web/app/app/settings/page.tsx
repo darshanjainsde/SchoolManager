@@ -150,7 +150,7 @@ function AddYearForm({ isSaving, onSave }: { isSaving: boolean; onSave: (data: {
         Set as current academic year
       </label>
       <div>
-        <button className="sk-btn" data-variant="primary" disabled={isSaving || !canSave} onClick={submit}>
+        <button className="sk-btn sk-press" data-variant="primary" disabled={isSaving || !canSave} onClick={submit}>
           <Plus className="h-4 w-4" />
           {isSaving ? 'Adding…' : 'Add academic year'}
         </button>
@@ -249,7 +249,7 @@ function AddPeriodForm({
         </div>
       </div>
       <div>
-        <button className="sk-btn" data-variant="primary" disabled={isSaving || !canSave} onClick={submit}>
+        <button className="sk-btn sk-press" data-variant="primary" disabled={isSaving || !canSave} onClick={submit}>
           <Plus className="h-4 w-4" />
           {isSaving ? 'Adding…' : 'Add period'}
         </button>
@@ -284,7 +284,7 @@ function WorkingDaysRow({
               disabled={isLoading || isSaving}
               aria-pressed={active}
               onClick={() => onToggle(d.value)}
-              className="sk-btn"
+              className="sk-btn sk-press"
               data-variant={active ? 'primary' : undefined}
               style={{ padding: '7px 12px', borderRadius: 999 }}
             >
@@ -467,7 +467,7 @@ function QuickSetupForm({
         </div>
       </div>
       <div>
-        <button className="sk-btn" data-variant="primary" disabled={isGenerating} onClick={submit}>
+        <button className="sk-btn sk-press" data-variant="primary" disabled={isGenerating} onClick={submit}>
           {isGenerating ? 'Generating…' : 'Generate day'}
         </button>
       </div>
@@ -479,12 +479,15 @@ function QuickSetupForm({
 
 function PeriodRow({
   period,
+  justAdded = false,
   isUpdating,
   isDeleting,
   onSave,
   onDelete,
 }: {
   period: Period;
+  /** True for the one period created in this session; drops it in (`sk-pinin`). */
+  justAdded?: boolean;
   isUpdating: boolean;
   isDeleting: boolean;
   onSave: (id: string, data: { label: string; startTime: string; endTime: string; kind: PeriodKind }) => void;
@@ -561,7 +564,7 @@ function PeriodRow({
             <div style={{ display: 'flex', gap: 6 }}>
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 data-variant={kind === 'CLASS' ? 'primary' : undefined}
                 style={{ padding: '9px 12px' }}
                 onClick={() => setKind('CLASS')}
@@ -570,7 +573,7 @@ function PeriodRow({
               </button>
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 data-variant={kind === 'BREAK' ? 'primary' : undefined}
                 style={{ padding: '9px 12px' }}
                 onClick={() => setKind('BREAK')}
@@ -582,7 +585,7 @@ function PeriodRow({
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
-            className="sk-btn"
+            className="sk-btn sk-press"
             data-variant="primary"
             disabled={isUpdating || !label.trim() || !startTime || !endTime}
             onClick={save}
@@ -590,7 +593,7 @@ function PeriodRow({
             <Check className="h-3.5 w-3.5" />
             Save
           </button>
-          <button className="sk-btn" onClick={() => setEditing(false)}>
+          <button className="sk-btn sk-press" onClick={() => setEditing(false)}>
             <X className="h-3.5 w-3.5" />
             Cancel
           </button>
@@ -600,10 +603,16 @@ function PeriodRow({
   }
 
   return (
-    <div className="sk-row">
+    // `sk-pinin` on the period just added: the bell-time list is order-sorted,
+    // so a new period slots in among the existing ones rather than at the end.
+    // The drop is what says which one is new. Reduced motion collapses it to
+    // the settled row — the list itself is unchanged either way.
+    <div className={justAdded ? 'sk-row sk-pinin sk-in' : 'sk-row'}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="nm">{period.label}</div>
-        <div className="meta">
+        {/* Bell times are compared down the column ("does period 3 end before
+            lunch?"), so they take the register's monospace face. */}
+        <div className="meta sk-num">
           {period.startTime} – {period.endTime}
         </div>
       </div>
@@ -613,7 +622,7 @@ function PeriodRow({
       <button
         onClick={startEdit}
         aria-label={`Edit period ${period.label}`}
-        className="sk-btn"
+        className="sk-btn sk-press"
         style={{ padding: '6px 9px' }}
       >
         <Pencil className="h-4 w-4" />
@@ -622,7 +631,7 @@ function PeriodRow({
         onClick={() => onDelete(period)}
         disabled={isDeleting}
         aria-label={`Remove period ${period.label}`}
-        className="sk-btn"
+        className="sk-btn sk-press"
         style={{ color: 'var(--sk-bad)', padding: '6px 9px' }}
       >
         <X className="h-4 w-4" />
@@ -637,6 +646,12 @@ export default function SettingsPage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
   const queryClient = useQueryClient();
+
+  // Ids of the academic year / period created in this session, so each can be
+  // seen landing in its (order-sorted) list instead of appearing between
+  // renders. Presentational only — see `sk-pinin` on the rows below.
+  const [justAddedYearId, setJustAddedYearId] = useState<string | null>(null);
+  const [justAddedPeriodId, setJustAddedPeriodId] = useState<string | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const yearsQuery = useQuery({
@@ -683,7 +698,8 @@ export default function SettingsPage() {
   const addYearMutation = useMutation({
     mutationFn: (body: { name: string; startDate: string; endDate: string; isCurrent: boolean }) =>
       api.post<AcademicYear>('/manage/years', body),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      setJustAddedYearId(created?.id ?? null);
       void queryClient.invalidateQueries({ queryKey: ['mng-years'] });
       toast.success('Academic year added');
     },
@@ -693,7 +709,8 @@ export default function SettingsPage() {
   const addPeriodMutation = useMutation({
     mutationFn: (body: { label: string; order: number; startTime: string; endTime: string; kind?: PeriodKind }) =>
       api.post<Period>('/manage/periods', body),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      setJustAddedPeriodId(created?.id ?? null);
       void queryClient.invalidateQueries({ queryKey: ['mng-periods'] });
       toast.success('Period added');
     },
@@ -883,14 +900,14 @@ export default function SettingsPage() {
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
                 <button
-                  className="sk-btn"
+                  className="sk-btn sk-press"
                   data-variant="primary"
                   disabled={addPeriodMutation.isPending}
                   onClick={saveBreakDraft}
                 >
                   {addPeriodMutation.isPending ? 'Adding…' : `Add ${breakDraft.label.toLowerCase()}`}
                 </button>
-                <button className="sk-btn" onClick={() => setBreakDraft(null)}>
+                <button className="sk-btn sk-press" onClick={() => setBreakDraft(null)}>
                   Cancel
                 </button>
               </div>
@@ -925,10 +942,12 @@ export default function SettingsPage() {
             {years.length > 0 && (
               <div>
                 {years.map((y) => (
-                  <div key={y.id} className="sk-row">
+                  // `sk-pinin` on the academic year just added — same gesture,
+                  // same reason, as the period list beside it.
+                  <div key={y.id} className={y.id === justAddedYearId ? 'sk-row sk-pinin sk-in' : 'sk-row'}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="nm">{y.name}</div>
-                      <div className="meta">
+                      <div className="meta sk-num">
                         {fmtDate(y.startDate)} – {fmtDate(y.endDate)}
                       </div>
                     </div>
@@ -973,11 +992,11 @@ export default function SettingsPage() {
             />
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="sk-btn" onClick={() => addBreakLike('Break')} disabled={addPeriodMutation.isPending}>
+              <button className="sk-btn sk-press" onClick={() => addBreakLike('Break')} disabled={addPeriodMutation.isPending}>
                 <Coffee className="h-4 w-4" />
                 Add break
               </button>
-              <button className="sk-btn" onClick={() => addBreakLike('Lunch')} disabled={addPeriodMutation.isPending}>
+              <button className="sk-btn sk-press" onClick={() => addBreakLike('Lunch')} disabled={addPeriodMutation.isPending}>
                 <Utensils className="h-4 w-4" />
                 Add lunch
               </button>
@@ -998,6 +1017,7 @@ export default function SettingsPage() {
                     isDeleting={deletePeriodMutation.isPending}
                     onSave={(id, data) => updatePeriodMutation.mutate({ id, data })}
                     onDelete={confirmDeletePeriod}
+                    justAdded={p.id === justAddedPeriodId}
                   />
                 ))}
               </div>

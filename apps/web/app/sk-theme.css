@@ -79,6 +79,11 @@
      set in it, which is what makes the portal read as a diary. The stack is
      all system faces so it costs no webfont request. */
   --sk-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  /* The register's face. Anything meant to be COMPARED down a column or read
+     as a figure rather than as prose — a period time, a percentage, a student
+     code, a calendar day number — is set in it, which is what makes those
+     columns line up. Theme-independent for the same reason as --sk-serif. */
+  --sk-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sk-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   color: var(--sk-ink);
@@ -880,3 +885,679 @@ input[type="range"].sk-bar:focus-visible { outline: 2px solid var(--sk-brand); o
   margin-left: auto; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 10.5px; color: var(--sk-ink-3);
 }
+
+/* ============================================================================
+   THE REQUESTS DESK — a request card and the stamp that closes it
+   ============================================================================
+   The admin's Requests page and the pending half of Leave are the one place in
+   this product where a person's decision is the product. The pitch draws them
+   not as table rows but as slips on a desk: a bordered card per request, the
+   person's name set in the serif (it is a name, not a field label), and a
+   rubber stamp on the right.
+
+   Everything below is layout + the stamp's PRINT. The stamp's MOVEMENT is the
+   shared `.sk-stampin` gesture defined in the motion block above — a stamp
+   means the same thing here as it does on the teacher's marks sheet, so it
+   must not get a second, private animation.
+   ========================================================================== */
+
+/* Layered onto `.sk-row`, not a replacement for it: the row's flex behaviour
+   (badge, body, spacer, actions, wrapping) is exactly right, only the framing
+   changes. `.sk-row` draws a rule between siblings; a card draws its own
+   border, so the rule is cancelled here. */
+.sk-row.sk-reqcard {
+  border: 1px solid var(--sk-line);
+  border-radius: 13px;
+  background: var(--sk-bg-2);
+  padding: 12px 14px;
+  margin-top: 9px;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.sk-row.sk-reqcard:first-child { margin-top: 0; }
+/* The requester's name, in the pitch's serif — the card is about a person
+   asking for something, and the serif is how this product says "written by a
+   human" rather than "emitted by a system". */
+.sk-row.sk-reqcard .nm {
+  font-family: var(--sk-serif);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+/* A card whose decision has just been taken steps back while the desk
+   reloads: the stamp is down, so the slip is no longer yours to act on. */
+.sk-row.sk-reqcard[data-decided="true"] { opacity: 0.6; }
+
+/* The stamp itself. Sits at the end of the card's first line (in flow, not
+   absolutely) so it can never land on top of the request's own text, and so
+   the wrapped action row below it stays clickable. `sk-stampin` scales it up
+   past its box on the way in; transforms do not reflow, so the oversized
+   landing costs nothing in layout. */
+.sk-reqstamp {
+  flex: none;
+  display: inline-block;
+  font-family: var(--sk-serif);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  /* Shouted in CSS, not in the string — see RequestList's comment: a stamp
+     LOOKS upper-case, but the DOM keeps the readable label. */
+  text-transform: uppercase;
+  border-radius: 8px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+/* Three inks, matching the three outcomes a request can have. They are the
+   same semantic tokens the pills use, so "green = allowed / red = refused"
+   reads identically whether it arrives as a pill or as a stamp. */
+.sk-reqstamp[data-state="approved"] { color: var(--sk-good); border: 2px solid var(--sk-good); }
+.sk-reqstamp[data-state="pending"] { color: var(--sk-amber-ink); border: 2px solid var(--sk-amber); }
+.sk-reqstamp[data-state="rejected"] { color: var(--sk-bad); border: 2px solid var(--sk-bad); }
+
+/* ---- figures ----
+   Any number meant to be COMPARED down a column or read as a quantity gets the
+   monospace face, the same way the register's roll numbers do. Tabular figures
+   keep the digits on a shared grid so 1,024 and 999 line up on the comma
+   instead of shimmering as the data refetches. */
+.sk-num {
+  font-family: var(--sk-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ============================================================================
+   TEACHER PORTAL ANATOMY — the pitch's page furniture
+   ============================================================================
+   Everything below is layout + ink for the teacher's own pages. The MOVEMENT
+   is never redefined here: a stamp uses `.sk-stampin`, a pinned slip uses
+   `.sk-pinin`, a tick uses `.sk-tick`, a replaced view uses `.sk-wfade`. The
+   one genuinely new gesture is `.sk-inkline` (below), because "a rule that
+   grows" had no shared definition yet and three different pages need it to
+   mean the same thing.
+
+   None of these classes declare a colour of their own — every value resolves
+   through a `--sk-*` token, so they follow the theme (and the toggle) without
+   a second declaration.
+   ========================================================================== */
+
+/* ---- THE INK LINE ----
+   A rule that draws itself from nothing to its real length. Progress that
+   arrives already full reads as a static label; a rule seen GROWING reads as
+   "this is how far through you are" — which is the whole point of putting a
+   bar on a period, a register or a mark sheet.
+
+   The end width is deliberately NOT in the keyframes: it comes from the
+   element's own inline width, so the animation interpolates 0 → whatever the
+   data actually says. That is why this is safe to put on a data-driven bar. */
+@keyframes sk-inkline { from { width: 0; } }
+.sk-inkline { animation: sk-inkline 1.05s var(--sk-ease) both; }
+@media (prefers-reduced-motion: reduce) {
+  /* End state, not "off": the width is already correct on the element, so
+     killing the animation leaves the true value rather than a zero-width bar. */
+  .sk-inkline { animation: none; }
+}
+
+/* ---- the NowCard hero (teacher Today) ----
+   The pitch's `.nowcard`: the live period is not a card among cards, it is the
+   one thing on the page that is happening, so it is painted in the saturated
+   brand gradient and everything on it is white. Applied ON TOP of `.sk-card
+   .sk-now` (which the page's own tests and the layout both rely on) rather
+   than replacing them — only the paint changes. */
+.sk-nowcard {
+  background: linear-gradient(135deg, var(--sk-hero-1) 0%, var(--sk-hero-2) 100%);
+  border-color: transparent;
+  color: #fff;
+  overflow: hidden;
+}
+/* On-hero text is fixed white in BOTH themes because the ground is a saturated
+   fill in both — the same convention as `.sk-hero`. */
+.sk-nowcard .sk-eyebrow,
+.sk-nowcard .sk-now-title,
+.sk-nowcard .sk-now-sub,
+.sk-nowcard .sk-now-marker { color: #fff; }
+.sk-nowcard .sk-eyebrow { display: flex; align-items: center; gap: 8px; opacity: 0.92; }
+.sk-nowcard .sk-now-sub,
+.sk-nowcard .sk-now-marker { opacity: 0.92; }
+/* The covering warning keeps its amber meaning but has to survive on indigo,
+   so it takes the light amber, not the readable-on-tint amber-ink. */
+.sk-nowcard .sk-now-covering { color: var(--sk-amber-tint); }
+/* A white button on a coloured hero — the pitch's `.nowbtn`. Inverting it is
+   what makes the single action on the card unmissable. */
+.sk-nowcard .sk-btn[data-variant="primary"] {
+  background: #fff; color: var(--sk-brand-2); border-color: transparent;
+}
+/* Pills on the hero cannot use their own tints (a pale green on indigo reads
+   as a hole) — they become a frosted overlay instead. */
+.sk-nowcard .sk-pill { background: rgba(255, 255, 255, 0.2); color: #fff; }
+
+/* The hero's progress rule. Separate from `.sk-progress` because the track has
+   to be a white overlay rather than a page rule. */
+.sk-nowprog {
+  height: 6px; border-radius: 999px; margin-top: 13px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.25);
+}
+.sk-nowprog > i { display: block; height: 100%; border-radius: 999px; background: #fff; }
+
+/* ---- the day rail ----
+   `.sk-timeline-row` already exists; these add the pitch's three READINGS of a
+   row. The wash fades out across the row rather than filling it, so the row's
+   own text keeps full contrast — the tint says "this one", it does not carry
+   the information itself (the `now`/`free` label still does). */
+.sk-timeline-row { position: relative; border-radius: 9px; }
+.sk-timeline-row[data-tone="now"] {
+  background: linear-gradient(90deg, var(--sk-amber-tint), transparent 85%);
+}
+.sk-timeline-row[data-tone="free"] {
+  background: linear-gradient(90deg, var(--sk-good-tint), transparent 85%);
+}
+/* The margin rule: the red line ruled down the left of a school exercise book,
+   between the time column and the entry. It is what makes a list of periods
+   read as a page rather than as a table. Softer than --sk-bad on purpose (see
+   the --sk-margin-red comment) — it frames, it does not warn. */
+.sk-rail-ml {
+  width: 1.5px; align-self: stretch; flex: none; min-height: 26px;
+  background: var(--sk-margin-red); opacity: 0.5;
+}
+
+/* ---- "needs your ink" rows ----
+   The pitch's `.needrow`: the queue of things only this teacher can close.
+   Amber icon tile because every row here is by definition outstanding. */
+.sk-needrow {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 11px 0; border-top: 1px solid var(--sk-line);
+  background: none; border-left: 0; border-right: 0; border-bottom: 0;
+  text-align: left; cursor: pointer; color: inherit; font: inherit;
+}
+.sk-needrow:first-child { border-top: 0; }
+.sk-needrow:hover .nt { color: var(--sk-brand-2); }
+.sk-needrow .ni {
+  width: 32px; height: 32px; border-radius: 10px; flex: none;
+  display: grid; place-items: center; font-size: 15px;
+  background: var(--sk-amber-tint); color: var(--sk-amber-ink);
+}
+.sk-needrow .nt { font-size: 13.5px; font-weight: 650; }
+.sk-needrow .nn { font-size: 11.5px; color: var(--sk-ink-3); margin-top: 1px; }
+
+/* ---- class rows (Attendance) ----
+   The pitch's `.clsrow`. The initial tile is set in the serif because it is a
+   class's NAME, not a code — the same reason headings are serif here. */
+.sk-clsrow {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 11px 0; border-top: 1px solid var(--sk-line);
+  background: none; border-left: 0; border-right: 0; border-bottom: 0;
+  text-align: left; cursor: pointer; color: inherit; font: inherit;
+}
+.sk-clsrow:first-child { border-top: 0; }
+.sk-clsrow .ic {
+  width: 36px; height: 36px; border-radius: 11px; flex: none;
+  display: grid; place-items: center; color: #fff;
+  font-family: var(--sk-serif); font-weight: 700; font-size: 12.5px;
+  background: var(--sk-brand);
+}
+/* The class currently being registered gets the brand rule, so the roster
+   below is visibly tied to a row above it. */
+.sk-clsrow[aria-current="true"] { background: var(--sk-brand-tint); }
+.sk-clsrow .nm { font-size: 13.5px; font-weight: 650; }
+.sk-clsrow .mt { font-size: 11.5px; color: var(--sk-ink-3); margin-top: 1px; }
+
+/* ---- the register summary ----
+   Three mono figures, because they are a tally to be read at a glance and
+   compared as the teacher marks — prose ("2 present · 1 absent") makes you
+   parse a sentence to learn a number. */
+.sk-regstats { display: flex; gap: 8px; flex-wrap: wrap; }
+.sk-regstat {
+  flex: 1; min-width: 84px; text-align: center;
+  border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm);
+  background: var(--sk-card); padding: 8px 10px;
+}
+.sk-regstat .n {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 19px; font-weight: 700; line-height: 1.1;
+}
+.sk-regstat .l {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sk-ink-3); margin-top: 2px;
+}
+.sk-regstat[data-tone="good"] .n { color: var(--sk-good); }
+.sk-regstat[data-tone="bad"] .n { color: var(--sk-bad); }
+.sk-regstat[data-tone="warn"] .n { color: var(--sk-amber-ink); }
+
+/* ---- a register cell ----
+   The pitch's `.rcell` semantics, worn by the per-student status buttons the
+   web register already has: present is the quiet default (good tint), absent
+   is red AND slightly LARGER — the exception is the only thing that costs a
+   tap, so it is the only thing that grows — and late is amber. */
+.sk-mark {
+  border-radius: 9px; padding: 6px 11px; font-size: 11.5px; font-weight: 700;
+  cursor: pointer; border: 1.5px solid var(--sk-line-2);
+  background: var(--sk-card); color: var(--sk-ink-2);
+  transition: background 0.14s var(--sk-ease), border-color 0.14s var(--sk-ease),
+    color 0.14s var(--sk-ease), transform 0.14s var(--sk-ease);
+}
+.sk-mark:hover { border-color: var(--sk-brand); }
+.sk-mark[aria-pressed="true"][data-status="PRESENT"] {
+  background: var(--sk-good-tint); border-color: var(--sk-good); color: var(--sk-good);
+}
+.sk-mark[aria-pressed="true"][data-status="ABSENT"] {
+  background: var(--sk-bad-tint); border-color: var(--sk-bad); color: var(--sk-bad);
+  transform: scale(1.06);
+}
+.sk-mark[aria-pressed="true"][data-status="LATE"] {
+  background: var(--sk-amber-tint); border-color: var(--sk-amber); color: var(--sk-amber-ink);
+}
+@media (prefers-reduced-motion: reduce) { .sk-mark { transition: none; } }
+
+/* ---- the big stamp ----
+   The terminal state of a sheet of work: a register saved, a mark sheet
+   complete. Print only — the LANDING is `.sk-stampin`, shared with every other
+   stamp in the product. */
+.sk-bigstamp {
+  display: inline-block;
+  font-family: var(--sk-serif); font-weight: 700; font-size: 15px;
+  color: var(--sk-good); border: 2.5px solid var(--sk-good);
+  border-radius: 10px; padding: 6px 16px; letter-spacing: 0.02em;
+}
+
+/* ---- marks rows (Results) ----
+   The pitch's `.mkrow`. Roll number in mono on the right edge of its column so
+   the numbers line up as a column; the mark box in mono because it is a
+   figure being compared down the sheet. */
+.sk-mkrow { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--sk-line); }
+.sk-mkrow:first-child { border-top: 0; }
+.sk-mkrow .rl {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px; color: var(--sk-ink-3); width: 26px; text-align: right; flex: none;
+}
+.sk-mkrow .nm { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; }
+/* A filled box turns green: the sheet tells you what is done without you
+   having to re-read every line. */
+.sk-markin { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-weight: 700; }
+.sk-markin[data-filled="true"] {
+  border-color: var(--sk-good) !important;
+  background: var(--sk-good-tint) !important;
+  color: var(--sk-good) !important;
+}
+
+/* The mark sheet's own ink line — a page rule, not a hero overlay. */
+.sk-mprog { height: 6px; border-radius: 999px; background: var(--sk-line); overflow: hidden; }
+.sk-mprog > i { display: block; height: 100%; border-radius: 999px; background: var(--sk-brand); }
+
+/* ---- post-its (Announcements, Assignments) ----
+   The pitch's `.postit`: a thing you wrote and stuck up, not a table row.
+   Movement is `.sk-pinin`. */
+.sk-postit { padding: 11px 0; border-top: 1px solid var(--sk-line); }
+.sk-postit:first-child { border-top: 0; }
+.sk-postit .pt { font-size: 13.5px; font-weight: 700; }
+.sk-postit .pd { font-size: 11.5px; color: var(--sk-ink-3); margin-top: 2px; }
+.sk-postit .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+
+/* The seen bar: "opened by 31 of 40" as a filling rule. It answers the single
+   commonest question about a posted thing without the teacher asking anyone. */
+.sk-seenbar { height: 5px; border-radius: 999px; background: var(--sk-line); overflow: hidden; margin-top: 7px; }
+.sk-seenbar > i { display: block; height: 100%; border-radius: 999px; background: var(--sk-good); }
+
+/* ---- pinned notices (Holidays, scheduled Tests) ----
+   The pitch's `.notice`: an amber slip with a red pin bead through the top of
+   it. A term calendar is a noticeboard, not a data table — the pin is what
+   says so. Movement is `.sk-pinin`. */
+.sk-notice {
+  position: relative; border-radius: var(--sk-r-sm);
+  background: var(--sk-amber-tint); padding: 11px 13px; margin-top: 10px;
+}
+.sk-notice:first-child { margin-top: 4px; }
+.sk-notice::before {
+  content: ""; position: absolute; top: -5px; left: 22px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--sk-margin-red); box-shadow: var(--sk-shadow-sm);
+}
+.sk-notice .nt { font-size: 13px; font-weight: 700; color: var(--sk-amber-ink); }
+.sk-notice .nd { font-size: 11.5px; color: var(--sk-amber-ink); opacity: 0.8; margin-top: 2px; }
+
+/* ---- message rows + chat bubbles (Inbox) ---- */
+.sk-mrow {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 11px 0; border-top: 1px solid var(--sk-line);
+  background: none; border-left: 0; border-right: 0; border-bottom: 0;
+  text-align: left; cursor: pointer; color: inherit; font: inherit;
+}
+.sk-mrow:first-child { border-top: 0; }
+.sk-mrow:hover .nm { color: var(--sk-brand-2); }
+.sk-mrow .av {
+  width: 36px; height: 36px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; font-weight: 800; font-size: 12.5px;
+  background: var(--sk-brand-tint); color: var(--sk-brand-2);
+}
+.sk-mrow .nm { font-size: 13.5px; font-weight: 650; }
+.sk-mrow .pv { font-size: 11.5px; color: var(--sk-ink-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; }
+
+/* A bubble, not a row: a conversation is the one place in this product where
+   who-said-what has to be readable without reading a label, and side + shape
+   is how chat has said that for twenty years. The tail corner is squared off
+   on the sender's side. */
+.sk-bub {
+  max-width: 85%; padding: 9px 12px; border-radius: 13px;
+  font-size: 13.5px; line-height: 1.45;
+}
+.sk-bub[data-mine="false"] {
+  align-self: flex-start; background: var(--sk-bg-2);
+  border: 1px solid var(--sk-line); border-bottom-left-radius: 5px;
+}
+.sk-bub[data-mine="true"] {
+  align-self: flex-end; background: var(--sk-brand-tint);
+  border: 1px solid var(--sk-brand); border-bottom-right-radius: 5px;
+}
+.sk-bub .when { font-size: 10.5px; color: var(--sk-ink-3); margin-top: 3px; }
+
+/* ---- the day strip (Timetable) ----
+   The pitch's `.dstrip`: days as tappable chips rather than a dropdown, so the
+   whole week stays visible while you read one day of it. */
+.sk-dstrip { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 6px; }
+.sk-day {
+  flex: none; min-width: 52px; text-align: center; cursor: pointer;
+  border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm);
+  background: var(--sk-card); color: inherit; font: inherit;
+  padding: 6px 8px 7px;
+  transition: background 0.15s var(--sk-ease), border-color 0.15s var(--sk-ease);
+}
+.sk-day .dw { font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--sk-ink-3); text-transform: uppercase; }
+.sk-day .dn { font-family: var(--sk-serif); font-size: 14px; font-weight: 650; margin-top: 1px; }
+/* Today is amber (the "attention" hue); the SELECTED day is brand-filled.
+   They are different facts and must not collapse into one another — you can
+   be looking at Thursday while today is Tuesday. */
+.sk-day[data-today="true"]:not([aria-pressed="true"]) {
+  border-color: var(--sk-amber); background: var(--sk-amber-tint);
+}
+.sk-day[data-today="true"]:not([aria-pressed="true"]) .dw { color: var(--sk-amber-ink); }
+.sk-day[aria-pressed="true"] { background: var(--sk-brand); border-color: var(--sk-brand); }
+.sk-day[aria-pressed="true"] .dw,
+.sk-day[aria-pressed="true"] .dn { color: #fff; }
+@media (prefers-reduced-motion: reduce) { .sk-day { transition: none; } }
+
+/* ---- profile head ----
+   The pitch's `.pfhead`: the photo centred and big, because on this page the
+   photo IS the content — it is the thing that syncs to every roster and
+   message thread in the school. */
+.sk-pfhead { text-align: center; padding: 6px 0 2px; }
+.sk-bigav {
+  width: 84px; height: 84px; border-radius: 50%; margin: 0 auto;
+  display: grid; place-items: center; overflow: hidden;
+  font-family: var(--sk-serif); font-size: 30px; font-weight: 700;
+  background: var(--sk-brand-tint); color: var(--sk-brand-2);
+  box-shadow: 0 0 0 3px var(--sk-card), 0 0 0 5px var(--sk-brand);
+}
+.sk-bigav img { width: 100%; height: 100%; object-fit: cover; }
+.sk-pfname { font-family: var(--sk-serif); font-size: 19px; font-weight: 650; margin-top: 12px; }
+.sk-pfmeta { font-size: 12px; color: var(--sk-ink-3); margin-top: 2px; }
+/* Ruled rows, like a form filled in on paper: label left, value right, a rule
+   between each. */
+.sk-pfrow {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 11px 0; border-top: 1px solid var(--sk-line);
+}
+.sk-pfrow:first-child { border-top: 0; }
+.sk-pfrow > .sk-lab { flex: none; width: 148px; }
+.sk-pfrow > .v { flex: 1; min-width: 160px; font-size: 13.5px; }
+
+/* Dark scheme: --sk-brand lifts to a light indigo on a near-black page, so the
+   class tile's white initial disappears into it. Flip to ink — the same
+   convention (and the same three selector blocks) as `.sk-nav[data-active]`
+   and the theme toggle. */
+@media (prefers-color-scheme: dark) { .sk-clsrow .ic { color: #211d45; } }
+html[data-theme='dark'] .sk-clsrow .ic { color: #211d45; }
+html[data-theme='light'] .sk-clsrow .ic { color: #fff; }
+
+/* ============================================================================
+   FAMILY PORTAL ANATOMY — the pitch's page furniture, student side
+   ============================================================================
+   The STUDENT/FAMILY portal shares this stylesheet's vocabulary with the
+   teacher's, and where the two pages show the same object they use the same
+   class: `.sk-notice` is one notice board, `.sk-mrow`/`.sk-bub` are one
+   conversation, `.sk-dstrip`/`.sk-day` is one week strip, `.sk-inkline` is one
+   ink line, `.sk-rail-ml` is one margin rule. Nothing above is redefined here.
+
+   What IS below is the furniture only the family sees: the dateline that opens
+   the day, the ruled class rail, the attendance month, the results stamp
+   sheet, the tick box, the composer, the student-code chip.
+
+   As above: no colour is declared here. Every value resolves through a --sk-*
+   token so all four theme states follow from one set of rules.
+   ========================================================================== */
+
+/* ---- the dateline (Home) ----
+   The pitch opens the day with a written date rather than a page title,
+   because the family portal is a diary and a diary page starts with its date.
+   Serif italic is this stylesheet's margin-note voice; the amber TODAY tag is
+   the only thing on the line that is a status rather than prose, which is why
+   it is the only thing that is not italic. */
+.sk-dateline { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.sk-dateline .dow { font-family: var(--sk-serif); font-style: italic; font-size: 13.5px; color: var(--sk-ink-3); }
+.sk-todaytag {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em;
+  color: var(--sk-amber-ink); background: var(--sk-amber-tint);
+  border-radius: 5px; padding: 2px 7px;
+}
+
+/* ---- the ruled rail (Home "today's classes", Timetable day) ----
+   A school exercise book has a red rule down the left margin and the day's
+   entries written to the right of it. That is literally this component: the
+   time in the margin column, `.sk-rail-ml` as the rule, then the entry. It is
+   the strongest single signal that this is a diary and not a dashboard, so
+   both pages that list periods use it. */
+.sk-rowln { display: flex; align-items: stretch; min-height: 46px; border-top: 1px solid var(--sk-line); position: relative; }
+.sk-rowln:first-child { border-top: 0; }
+/* Times are figures read DOWN a column — mono and centred, so 09:55 and 11:30
+   sit on one grid instead of drifting against each other. */
+.sk-rowln .time {
+  width: 56px; flex: none; align-self: center; text-align: center;
+  font-family: var(--sk-mono); font-variant-numeric: tabular-nums;
+  font-size: 10px; color: var(--sk-ink-3); line-height: 1.4;
+}
+.sk-rowln .bd { flex: 1; min-width: 0; align-self: center; padding: 9px 12px; }
+.sk-rowln .sub { font-size: 13.5px; font-weight: 650; }
+.sk-rowln .tch { font-size: 11px; color: var(--sk-ink-3); margin-top: 1px; }
+.sk-rowln .st {
+  margin-left: auto; align-self: center; padding-right: 13px;
+  font-size: 10.5px; font-weight: 700; color: var(--sk-ink-3); white-space: nowrap;
+}
+/* The period happening right now carries the highlighter — an amber wash that
+   fades out across the row, marking it without boxing it in. The wash carries
+   no information on its own; the "now" label does. */
+.sk-rowln[data-state="now"] { background: linear-gradient(90deg, var(--sk-amber-tint), transparent 85%); }
+.sk-rowln[data-state="now"] .st { color: var(--sk-amber-ink); }
+/* Finished periods recede rather than disappear: the day so far is still part
+   of the page you are reading. */
+.sk-rowln[data-state="past"] { opacity: 0.55; }
+.sk-rowln[data-state="past"] .st { color: var(--sk-good); }
+/* THE INK LINE under the live period: how far through the class it is. Offset
+   to clear the time column and the margin rule, so it starts where the writing
+   starts rather than under the margin. Movement is `.sk-inkline`. */
+.sk-liveink {
+  position: absolute; left: 57.5px; bottom: -1px; height: 2px;
+  background: var(--sk-brand); border-radius: 2px;
+}
+
+/* ---- the notice slip, plain state ----
+   `.sk-notice` above is the pinned amber slip. A slip that has stopped being
+   news drops to paper and a hairline, and loses the pin — it is still on the
+   board, it is just no longer the thing being pointed at. */
+.sk-notice .nb { font-size: 13px; color: var(--sk-amber-ink); margin-top: 7px; white-space: pre-wrap; }
+.sk-notice[data-fresh="false"] { background: var(--sk-card); border: 1px solid var(--sk-line); }
+.sk-notice[data-fresh="false"]::before { display: none; }
+.sk-notice[data-fresh="false"] .nt,
+.sk-notice[data-fresh="false"] .nd { color: var(--sk-ink-3); }
+/* The body keeps ink-2, not ink-3: an older notice is quieter, not less
+   readable — people go back to look these up. */
+.sk-notice[data-fresh="false"] .nb { color: var(--sk-ink-2); }
+
+/* ---- attendance ----
+   One big figure and a quiet label, because the only question this page is
+   ever really asked is "what is the percentage". Mono, because it is a figure
+   and it changes month to month. */
+.sk-attkpi { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.sk-attkpi .n {
+  font-family: var(--sk-mono); font-variant-numeric: tabular-nums;
+  font-size: 34px; font-weight: 700; letter-spacing: -0.03em; color: var(--sk-brand-2);
+}
+.sk-attkpi .l { font-size: 12.5px; color: var(--sk-ink-3); }
+/* The same ink line, filling to the month's real percentage. */
+.sk-attink { height: 8px; border-radius: 999px; background: var(--sk-line); overflow: hidden; margin: 11px 0 2px; }
+.sk-attink > i { display: block; height: 100%; border-radius: 999px; background: var(--sk-brand); }
+
+/* The month grid. Tinted cells rather than icons: the SHAPE of a month's
+   attendance is meant to be legible as a pattern at a glance, and a wall of
+   ticks is not a pattern. */
+.sk-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.sk-cal .wd { font-size: 10px; font-weight: 800; color: var(--sk-ink-3); text-align: center; padding-bottom: 3px; }
+.sk-cell {
+  aspect-ratio: 1; display: grid; place-items: center; border-radius: 10px;
+  font-family: var(--sk-mono); font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--sk-ink-3); border: 1px solid transparent;
+}
+.sk-cell[data-att="PRESENT"] { background: var(--sk-good-tint); color: var(--sk-good); }
+.sk-cell[data-att="ABSENT"] { background: var(--sk-bad-tint); color: var(--sk-bad); font-weight: 800; }
+.sk-cell[data-att="LATE"] { background: var(--sk-amber-tint); color: var(--sk-amber-ink); font-weight: 800; }
+/* A day with no record is an OUTLINE, never a fill: "not marked" must not be
+   mistakable for "present" — that is the one misreading this grid could cause
+   that would actually matter. */
+.sk-cell[data-att="none"] { border-color: var(--sk-line); }
+.sk-cell[data-today="true"] { box-shadow: 0 0 0 1px var(--sk-card), 0 0 0 3px var(--sk-brand); }
+.sk-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 15px; font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-legend b { width: 11px; height: 11px; border-radius: 4px; display: inline-block; vertical-align: -1px; margin-right: 6px; }
+
+/* ---- results ----
+   A published mark is a closed thing: the teacher decided it and it is not
+   going to change. That is what THE STAMP says, and why the mark is set in the
+   serif inside a drawn border rather than as a number in a cell. The LANDING
+   is `.sk-stampin`, shared with every other stamp in the product; this is only
+   the print. */
+.sk-res { border-top: 1px solid var(--sk-line); }
+.sk-res:first-child { border-top: 0; }
+.sk-res > .top {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 13px 16px; background: transparent; border: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.sk-res > .top:hover { background: var(--sk-bg-2); }
+.sk-res .sub { font-size: 14px; font-weight: 650; }
+.sk-res .ttl { font-size: 11.5px; color: var(--sk-ink-3); margin-top: 1px; }
+.sk-stamp {
+  flex: none; white-space: nowrap;
+  font-family: var(--sk-serif); font-weight: 700; font-size: 13.5px;
+  color: var(--sk-brand-2); border: 2px solid var(--sk-brand-2);
+  border-radius: 9px; padding: 3px 10px;
+}
+/* The detail drawer opens by max-height rather than by mounting, so the row
+   REVEALS instead of jumping — and so the bars stay in the DOM for the reveal
+   to animate against. */
+.sk-res .det { max-height: 0; overflow: hidden; transition: max-height 0.3s var(--sk-ease); }
+.sk-res[data-open="true"] .det { max-height: 300px; }
+/* Padding lives on an inner box: padding on the clipped element would show
+   through while it is closed. */
+.sk-res .detin { padding: 0 16px 14px; }
+.sk-bar .lbl { display: flex; justify-content: space-between; gap: 10px; font-size: 10.5px; color: var(--sk-ink-3); margin: 9px 0 4px; }
+.sk-bar .tr { height: 7px; border-radius: 999px; background: var(--sk-line); overflow: hidden; }
+.sk-bar .tr > i { display: block; height: 100%; border-radius: 999px; }
+/* The score bars draw themselves only while the row is open. Scoping the
+   animation to the open state is what makes it replay each time the row is
+   opened, and what stops a closed row animating where nobody can see it. */
+.sk-res[data-open="true"] .sk-bar .tr > i { animation: sk-inkline 0.8s var(--sk-ease) both; }
+@media (prefers-reduced-motion: reduce) {
+  .sk-res .det { transition: none; }
+  .sk-res[data-open="true"] .sk-bar .tr > i { animation: none; }
+}
+
+/* ---- the tick box (Assignments) ----
+   Drawn empty; the tick STROKES ITSELF ON via `.sk-tick` + `.sk-in`. What the
+   tick is allowed to MEAN is decided on the page, not here — see the comment
+   in app/portal/assignments/page.tsx. */
+.sk-tickbox {
+  width: 22px; height: 22px; border-radius: 7px; flex: none;
+  border: 1.5px solid var(--sk-line-2); background: var(--sk-paper);
+  display: grid; place-items: center;
+}
+.sk-tickbox[data-done="true"] { background: var(--sk-good-tint); border-color: var(--sk-good); }
+
+/* ---- the conversation (Messages) ----
+   `.sk-bub` and `.sk-mrow` are defined once, above, and shared with the
+   teacher's inbox. These add the family view's two extras: a subject line on
+   the thread row, and the arrival. */
+.sk-mrow .sj { font-size: 12px; color: var(--sk-ink-2); }
+.sk-chat { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+/* Bubbles fade and RISE in rather than appearing, which is what makes a reply
+   read as having arrived rather than as having always been there. Scoped to
+   `.sk-chat` so the teacher's inbox keeps its own (static) rendering. */
+@keyframes sk-bubin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.sk-chat > .sk-bub { animation: sk-bubin 0.3s var(--sk-ease) both; }
+@media (prefers-reduced-motion: reduce) { .sk-chat > .sk-bub { animation: none; } }
+
+/* A pill composer, so writing to a teacher looks like writing a message and
+   not like filling in a form field. */
+.sk-composer {
+  display: flex; align-items: flex-end; gap: 8px;
+  background: var(--sk-card); border: 1px solid var(--sk-line);
+  border-radius: 22px; padding: 5px 5px 5px 16px; box-shadow: var(--sk-shadow);
+}
+.sk-composer:focus-within { border-color: var(--sk-brand); }
+.sk-composer textarea {
+  flex: 1; min-width: 0; border: 0; outline: none; background: transparent; resize: none;
+  font: inherit; font-size: 13.5px; color: var(--sk-ink); padding: 8px 0; max-height: 140px;
+}
+.sk-composer textarea::placeholder { color: var(--sk-ink-3); }
+.sk-composer button {
+  width: 36px; height: 36px; flex: none; border: 0; border-radius: 50%;
+  background: var(--sk-brand); color: #fff; cursor: pointer; display: grid; place-items: center;
+}
+.sk-composer button:disabled { opacity: 0.45; cursor: not-allowed; }
+.sk-composer button:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+
+/* ---- profile extras ----
+   `.sk-pfhead`/`.sk-bigav`/`.sk-pfname`/`.sk-pfmeta`/`.sk-pfrow` are shared
+   with the teacher's profile. The family page adds the icon tile on a row and
+   the student-code chip. */
+.sk-pfrow > .ic {
+  width: 32px; height: 32px; border-radius: 10px; flex: none; align-self: center;
+  background: var(--sk-bg-2); color: var(--sk-ink-2); display: grid; place-items: center;
+}
+/* An admission number is a figure to be read out and typed, so it takes the
+   register's face like every other such figure here. */
+.sk-pfrow > .v.mono { font-family: var(--sk-mono); font-variant-numeric: tabular-nums; }
+/* The student code identifies this child at the office, on the welcome email
+   and at the login box. Mono AND letter-spaced so a 0 can never be read back
+   as an O — this is the one string on the page people say out loud. */
+.sk-pfcode {
+  display: inline-block; margin-top: 11px;
+  font-family: var(--sk-mono); font-size: 13px; font-weight: 700; letter-spacing: 0.12em;
+  background: var(--sk-brand-tint); color: var(--sk-brand-2);
+  border-radius: 9px; padding: 5px 12px;
+}
+
+/* ---- notification rows, the pitch's `.ntitem` reading ----
+   A read row does not vanish; it fades to .55 so the inbox still shows what
+   happened, only quieter. */
+.sk-notif-row[data-unread="false"] { opacity: 0.55; }
+/* A diary notification is the one that can carry a REMARK — the only thing in
+   this portal a family is expected to act on. Its tile takes the same red the
+   remark itself wears in the diary, so the notice and the entry read as one
+   event rather than two. */
+.sk-notif-row[data-kind="DIARY"] .sk-notif-ic { background: var(--sk-bad-tint); color: var(--sk-bad); }
+.sk-notif-row[data-unread="true"][data-kind="DIARY"] .sk-notif-ic { background: var(--sk-bad); color: #fff; }
+
+/* Dark scheme: --sk-brand lifts to a light indigo on a near-black page, so
+   anything painting #fff ON the brand has to flip to ink or it disappears.
+   Same convention — and the same three selector blocks — as
+   `.sk-nav[data-active]` and the theme toggle above. */
+@media (prefers-color-scheme: dark) {
+  .sk-composer button,
+  .sk-day[aria-pressed="true"] .dw,
+  .sk-day[aria-pressed="true"] .dn,
+  .sk-notif-row[data-unread="true"][data-kind="DIARY"] .sk-notif-ic { color: #211d45; }
+}
+html[data-theme='dark'] .sk-composer button,
+html[data-theme='dark'] .sk-day[aria-pressed="true"] .dw,
+html[data-theme='dark'] .sk-day[aria-pressed="true"] .dn,
+html[data-theme='dark'] .sk-notif-row[data-unread="true"][data-kind="DIARY"] .sk-notif-ic { color: #211d45; }
+html[data-theme='light'] .sk-composer button,
+html[data-theme='light'] .sk-day[aria-pressed="true"] .dw,
+html[data-theme='light'] .sk-day[aria-pressed="true"] .dn,
+html[data-theme='light'] .sk-notif-row[data-unread="true"][data-kind="DIARY"] .sk-notif-ic { color: #fff; }

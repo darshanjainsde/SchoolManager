@@ -213,7 +213,7 @@ function AddClassForm({ grades, years, teachers, onSave, isSaving, onCancel }: A
 
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
-            className="sk-btn"
+            className="sk-btn sk-press"
             data-variant="primary"
             onClick={() =>
               onSave({
@@ -227,7 +227,7 @@ function AddClassForm({ grades, years, teachers, onSave, isSaving, onCancel }: A
           >
             {isSaving ? 'Adding…' : 'Add class'}
           </button>
-          <button className="sk-btn" onClick={onCancel}>
+          <button className="sk-btn sk-press" onClick={onCancel}>
             Cancel
           </button>
         </div>
@@ -244,6 +244,8 @@ export default function ClassesPage() {
   const queryClient = useQueryClient();
 
   const [showAdd, setShowAdd] = useState(false);
+  // Id of the class created in this session — see `sk-pinin` on the grid.
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
@@ -288,7 +290,9 @@ export default function ClassesPage() {
       academicYearId: string;
       classTeacherId?: string | null;
     }) => api.post<SchoolClass>('/manage/classes', body),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      // Which card is the new one — see `sk-pinin` on the grid below.
+      setJustAddedId(created?.id ?? null);
       void queryClient.invalidateQueries({ queryKey: ['mng-classes'] });
       setShowAdd(false);
       toast.success('Class added');
@@ -337,12 +341,12 @@ export default function ClassesPage() {
           <p>Manage your school&apos;s classes by grade and section.</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Link href="/app/classes/structure" className="sk-btn">
+          <Link href="/app/classes/structure" className="sk-btn sk-press">
             <Layers className="h-4 w-4" />
             Manage grades &amp; subjects
           </Link>
           <button
-            className="sk-btn"
+            className="sk-btn sk-press"
             data-variant="primary"
             onClick={() => {
               setShowAdd((v) => !v);
@@ -404,7 +408,7 @@ export default function ClassesPage() {
                 </Field>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     data-variant="primary"
                     disabled={updateClassMutation.isPending || !editName.trim()}
                     onClick={() => updateClassMutation.mutate({ id: cls.id, name: editName.trim() })}
@@ -412,14 +416,21 @@ export default function ClassesPage() {
                     <Check className="h-3.5 w-3.5" />
                     Save
                   </button>
-                  <button className="sk-btn" onClick={() => setEditId(null)}>
+                  <button className="sk-btn sk-press" onClick={() => setEditId(null)}>
                     <X className="h-3.5 w-3.5" />
                     Cancel
                   </button>
                 </div>
               </div>
             ) : (
-              <div key={cls.id} className="sk-entity" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+              // `sk-pinin` on the class just created: the grid is sorted by
+              // grade, so a new section lands in the middle of it. The drop
+              // points at it; reduced motion just shows it settled.
+              <div
+                key={cls.id}
+                className={cls.id === justAddedId ? 'sk-entity sk-pinin sk-in' : 'sk-entity'}
+                style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span className="av" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
                     {classAvatarLabel(cls)}
@@ -430,14 +441,16 @@ export default function ClassesPage() {
                     </div>
                     <div className="meta">{classTeacherLabel(cls)}</div>
                   </div>
+                  {/* A roll count, compared card to card down the grid —
+                      the register's monospace face, like every other figure. */}
                   <span className="sk-pill" data-tone="info" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     <Users className="h-3 w-3" />
-                    {cls._count.students}
+                    <span className="sk-num">{cls._count.students}</span>
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     onClick={() => {
                       setShowAdd(false);
                       setEditId(cls.id);
@@ -448,7 +461,7 @@ export default function ClassesPage() {
                     Rename
                   </button>
                   <button
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     disabled={deleteClassMutation.isPending}
                     onClick={() => confirmDeleteClass(cls)}
                     style={{ color: 'var(--sk-bad)' }}

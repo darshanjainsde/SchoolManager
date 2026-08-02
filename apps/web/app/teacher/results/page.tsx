@@ -157,6 +157,11 @@ export default function TeacherResultsPage() {
     [parsed, exam],
   );
 
+  /** How much of the sheet is filled in, 0–100 — the ink line's real width. */
+  const enteredPct = students.length > 0 ? Math.round((parsed.length / students.length) * 100) : 0;
+  /** Every student on the roster has a usable mark: the sheet is closed. */
+  const sheetComplete = students.length > 0 && parsed.length === students.length && valid;
+
   const average = useMemo(() => {
     const usable = parsed.filter((m) => Number.isFinite(m.marks));
     if (usable.length === 0) return null;
@@ -315,24 +320,35 @@ export default function TeacherResultsPage() {
           {exam && students.length > 0 && (
             <>
               <div>
+                {/* The pitch's `.mkrow`: roll number, name, one mono box. A
+                    mark sheet is a column of figures being entered fast, so
+                    the row is stripped to what the eye needs to track its
+                    place — the avatar tile the other lists use would just be
+                    something to read past on every line. */}
                 {students.map((s, i) => {
                   const raw = entries[s.id] ?? '';
                   const num = Number(raw);
                   const bad =
                     raw.trim() !== '' &&
                     (!Number.isFinite(num) || num < 0 || num > exam.maxMarks);
+                  const filled = raw.trim() !== '' && !bad;
                   return (
-                    <div className="sk-row" key={s.id}>
-                      <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                    <div className="sk-mkrow" key={s.id}>
+                      <span
+                        className="badge"
+                        style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length], width: 32, height: 32, borderRadius: 10, fontSize: 11 }}
+                      >
                         {initials(s.firstName, s.lastName)}
                       </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="nm">
-                          {s.firstName} {s.lastName}
-                        </div>
-                        <div className="meta">Roll {s.rollNo ?? '—'}</div>
-                      </div>
-                      <span className="sp" />
+                      <span className="rl">{s.rollNo ?? '—'}</span>
+                      <span className="nm">
+                        {s.firstName} {s.lastName}
+                      </span>
+                      {/* A filled box goes green. The point is that the
+                          teacher never has to re-read the sheet to find where
+                          they stopped — the page holds their place for them.
+                          `data-filled` (not a class) so the invalid state can
+                          still override the border underneath it. */}
                       <Input
                         type="number"
                         inputMode="decimal"
@@ -341,7 +357,8 @@ export default function TeacherResultsPage() {
                         step="any"
                         aria-invalid={bad}
                         aria-label={`Marks for ${s.firstName} ${s.lastName}`}
-                        className={`${fieldCls} w-24 text-right ${bad ? 'border-[var(--sk-bad)]' : ''}`}
+                        data-filled={filled ? 'true' : 'false'}
+                        className={`${fieldCls} sk-markin w-24 text-right ${bad ? 'border-[var(--sk-bad)]' : ''}`}
                         value={raw}
                         onChange={(ev) =>
                           setEntries((m) => ({ ...m, [s.id]: ev.target.value }))
@@ -352,10 +369,45 @@ export default function TeacherResultsPage() {
                 })}
               </div>
 
+              {/* THE INK LINE. How much of the sheet is done, drawn across the
+                  bottom of it. The width is the real ratio, so it stays honest
+                  with animation off; `sk-inkline` only supplies the growth on
+                  first paint. It is keyed on the exam so switching test
+                  re-draws rather than sliding from the previous sheet's
+                  position, which would read as progress that wasn't made. */}
+              <div style={{ marginTop: 12 }}>
+                <div
+                  className="sk-mprog"
+                  role="progressbar"
+                  aria-valuenow={enteredPct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Marks entered"
+                >
+                  <i key={exam.id} className="sk-inkline" style={{ width: `${enteredPct}%` }} />
+                </div>
+                <p className="sk-muted" style={{ marginTop: 5 }}>
+                  {parsed.length} of {students.length} entered
+                </p>
+              </div>
+
+              {/* THE STAMP. A full sheet is finished work — the page says so
+                  itself rather than making the teacher count the boxes. It
+                  lands once, when the last mark goes in, because it is keyed
+                  on the exam: typing on in an already-complete sheet must not
+                  re-fire it. */}
+              {sheetComplete && (
+                <div style={{ marginTop: 12 }}>
+                  <span key={exam.id} className="sk-bigstamp sk-stampin sk-in" data-testid="marks-complete-stamp">
+                    All {students.length} in ✓
+                  </span>
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 12 }}>
                 <button
                   type="button"
-                  className="sk-btn"
+                  className="sk-btn sk-press"
                   data-variant="primary"
                   disabled={!valid || save.isPending}
                   onClick={() => save.mutate()}
@@ -364,7 +416,7 @@ export default function TeacherResultsPage() {
                 </button>
                 <button
                   type="button"
-                  className="sk-btn"
+                  className="sk-btn sk-press"
                   disabled={publish.isPending}
                   onClick={() => setConfirming(true)}
                 >

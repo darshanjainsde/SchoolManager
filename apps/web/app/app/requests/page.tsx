@@ -93,6 +93,16 @@ export default function AdminRequestsPage() {
   // `${kind}-${id}` of the row whose Reject is awaiting confirmation.
   const [confirmRejectKey, setConfirmRejectKey] = useState<string | null>(null);
 
+  // `${kind}-${id}` → the outcome the admin just chose, for the cards still on
+  // screen while the desk refetches. Purely presentational: it exists so the
+  // stamp has something to land on at the moment of the decision, and it is
+  // discarded the instant the refetch drops the card. The toast and the
+  // refreshed list remain the actual record of what happened, so a
+  // reduced-motion user (who sees the stamp printed, not landing) and a user
+  // whose refetch returns instantly (who may not see it at all) both lose
+  // nothing.
+  const [decided, setDecided] = useState<Record<string, 'approved' | 'rejected'>>({});
+
   // Same key + endpoint as /app/leave's pending card, so the two pages share
   // one cache entry and either page's mutations keep the other fresh.
   const leaveQuery = useQuery({
@@ -126,6 +136,7 @@ export default function AdminRequestsPage() {
           : `/manage/register-changes/${item.id}/approve`,
       ),
     onSuccess: (result, item) => {
+      setDecided((d) => ({ ...d, [`${item.kind}-${item.id}`]: 'approved' }));
       if (item.kind === 'leave') {
         const gaps = (result as { gaps?: number }).gaps ?? 0;
         toast.success(
@@ -149,6 +160,7 @@ export default function AdminRequestsPage() {
           : `/manage/register-changes/${item.id}/reject`,
       ),
     onSuccess: (_result, item) => {
+      setDecided((d) => ({ ...d, [`${item.kind}-${item.id}`]: 'rejected' }));
       toast.success('Request rejected.');
       setConfirmRejectKey(null);
       invalidateFor(item.kind);
@@ -206,8 +218,14 @@ export default function AdminRequestsPage() {
             items.map((item) => {
               const key = `${item.kind}-${item.id}`;
               const confirming = confirmRejectKey === key;
+              const outcome = decided[key];
               return (
-                <div className="sk-row" key={key} style={{ alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 8 }}>
+                <div
+                  className="sk-row sk-reqcard"
+                  key={key}
+                  data-decided={outcome ? 'true' : undefined}
+                  style={{ alignItems: 'flex-start' }}
+                >
                   <span className="sk-pill" data-tone={item.kind === 'leave' ? 'info' : 'warn'}>
                     {item.kind === 'leave' ? 'Leave' : 'Register change'}
                   </span>
@@ -220,12 +238,45 @@ export default function AdminRequestsPage() {
                     <div className="meta">Requested {formatDate(item.createdAt)}</div>
                   </div>
                   <span className="sp" />
+
+                  {/* THE STAMP.
+                      Undecided: an amber PENDING, printed flat. It is a state
+                      the slip arrived in — nobody at this desk did it — so it
+                      gets no gesture; stamping every row on page load would be
+                      theatre, and the shared vocabulary reserves a landing
+                      stamp for a terminal state.
+                      Decided: green APPROVED / red REJECTED, landing with
+                      `sk-stampin` at the instant the admin's own decision is
+                      accepted by the API. That downstroke IS the gesture of
+                      approving — it is the one moment on this page where a
+                      person committed to something, and it reads as closed in
+                      a way a toast that slides away does not. The card then
+                      leaves the desk on the next refetch. */}
+                  <span
+                    className={outcome ? 'sk-reqstamp sk-stampin sk-in' : 'sk-reqstamp'}
+                    data-state={outcome ?? 'pending'}
+                    aria-hidden="true"
+                  >
+                    {outcome === 'approved' ? 'APPROVED' : outcome === 'rejected' ? 'REJECTED' : 'PENDING'}
+                  </span>
+
+                  {/* The actions take a line of their own (flex-basis 100%),
+                      below the request, so the stamp above can never land on
+                      top of a control. */}
                   {confirming ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div
+                      style={{
+                        flexBasis: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: 6,
+                      }}
+                    >
                       <span className="meta">Reject this request?</span>
                       <button
                         type="button"
-                        className="sk-btn"
+                        className="sk-btn sk-press"
                         disabled={reject.isPending}
                         onClick={() => reject.mutate(item)}
                       >
@@ -233,7 +284,7 @@ export default function AdminRequestsPage() {
                       </button>
                       <button
                         type="button"
-                        className="sk-btn"
+                        className="sk-btn sk-press"
                         disabled={reject.isPending}
                         onClick={() => setConfirmRejectKey(null)}
                       >
@@ -241,10 +292,10 @@ export default function AdminRequestsPage() {
                       </button>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
                       <button
                         type="button"
-                        className="sk-btn"
+                        className="sk-btn sk-press"
                         data-variant="primary"
                         disabled={busy}
                         onClick={() => approve.mutate(item)}
@@ -253,7 +304,7 @@ export default function AdminRequestsPage() {
                       </button>
                       <button
                         type="button"
-                        className="sk-btn"
+                        className="sk-btn sk-press"
                         disabled={busy}
                         onClick={() => setConfirmRejectKey(key)}
                       >

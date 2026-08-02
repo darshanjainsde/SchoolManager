@@ -134,6 +134,12 @@ export default function AdminLeavePage() {
 
   const [range, setRange] = useState({ from: todayIso(), to: addDaysIso(todayIso(), 30) });
 
+  // Leave application id → the outcome just chosen, so the stamp has something
+  // to land on while the list refetches. Presentational only; the toast and
+  // the reloaded lists are the record. See /app/requests for the full note —
+  // the two desks share the gesture because they share the decision.
+  const [decided, setDecided] = useState<Record<string, 'approved' | 'rejected'>>({});
+
   const pending = useQuery({
     queryKey: ['a-leave-pending'],
     enabled: !!host,
@@ -179,6 +185,7 @@ export default function AdminLeavePage() {
   const approve = useMutation({
     mutationFn: (app: LeaveApplication) => api.post<{ gaps: number }>(`/manage/leave/${app.id}/approve`),
     onSuccess: (result, app) => {
+      setDecided((d) => ({ ...d, [app.id]: 'approved' }));
       toast.success(
         result.gaps > 0
           ? `Approved — ${result.gaps} coverage ${result.gaps === 1 ? 'gap needs' : 'gaps need'} a substitute.`
@@ -194,7 +201,8 @@ export default function AdminLeavePage() {
 
   const reject = useMutation({
     mutationFn: (id: string) => api.post(`/manage/leave/${id}/reject`),
-    onSuccess: () => {
+    onSuccess: (_result, id) => {
+      setDecided((d) => ({ ...d, [id]: 'rejected' }));
       toast.success('Application rejected.');
       void qc.invalidateQueries({ queryKey: ['a-leave-pending'] });
     },
@@ -261,40 +269,59 @@ export default function AdminLeavePage() {
           {!pending.isLoading && !pending.error && pendingApps.length === 0 && (
             <p className="sk-state">No pending leave applications.</p>
           )}
-          {pendingApps.map((a, i) => (
-            <div className="sk-row" key={a.id} style={{ alignItems: 'flex-start' }}>
-              <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
-                {initials(a.teacherName)}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="nm">{a.teacherName}</div>
-                <div className="meta">
-                  {LEAVE_TYPE_LABEL[a.type]} · {formatDate(a.startDate)} – {formatDate(a.endDate)}
-                  {a.reason ? ` · ${a.reason}` : ''}
+          {pendingApps.map((a, i) => {
+            const outcome = decided[a.id];
+            return (
+              <div
+                className="sk-row sk-reqcard"
+                key={a.id}
+                data-decided={outcome ? 'true' : undefined}
+                style={{ alignItems: 'flex-start' }}
+              >
+                <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
+                  {initials(a.teacherName)}
+                </span>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <div className="nm">{a.teacherName}</div>
+                  <div className="meta">
+                    {LEAVE_TYPE_LABEL[a.type]} · {formatDate(a.startDate)} – {formatDate(a.endDate)}
+                    {a.reason ? ` · ${a.reason}` : ''}
+                  </div>
+                </div>
+                <span className="sp" />
+                {/* Same stamp, same meaning as the Requests desk — an admin
+                    who approves leave from either page performs one gesture,
+                    not two. Flat amber while it waits; the green/red stamp
+                    LANDS only on the decision this admin just took. */}
+                <span
+                  className={outcome ? 'sk-reqstamp sk-stampin sk-in' : 'sk-reqstamp'}
+                  data-state={outcome ?? 'pending'}
+                  aria-hidden="true"
+                >
+                  {outcome === 'approved' ? 'APPROVED' : outcome === 'rejected' ? 'REJECTED' : 'PENDING'}
+                </span>
+                <div style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="sk-btn sk-press"
+                    data-variant="primary"
+                    disabled={approve.isPending}
+                    onClick={() => approve.mutate(a)}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="sk-btn sk-press"
+                    disabled={reject.isPending}
+                    onClick={() => reject.mutate(a.id)}
+                  >
+                    Reject
+                  </button>
                 </div>
               </div>
-              <span className="sp" />
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button
-                  type="button"
-                  className="sk-btn"
-                  data-variant="primary"
-                  disabled={approve.isPending}
-                  onClick={() => approve.mutate(a)}
-                >
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  className="sk-btn"
-                  disabled={reject.isPending}
-                  onClick={() => reject.mutate(a.id)}
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -313,11 +340,11 @@ export default function AdminLeavePage() {
             <p className="sk-state">No approved leaves.</p>
           )}
           {approvedApps.map((a, i) => (
-            <div className="sk-row" key={a.id} style={{ alignItems: 'flex-start' }}>
+            <div className="sk-row sk-reqcard" key={a.id} style={{ alignItems: 'flex-start' }}>
               <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
                 {initials(a.teacherName)}
               </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ flex: 1, minWidth: 180 }}>
                 <div className="nm">{a.teacherName}</div>
                 <div className="meta">
                   {LEAVE_TYPE_LABEL[a.type]} · {formatDate(a.startDate)} – {formatDate(a.endDate)}
@@ -325,14 +352,23 @@ export default function AdminLeavePage() {
                 </div>
               </div>
               <span className="sp" />
-              <button
-                type="button"
-                className="sk-btn"
-                disabled={cancel.isPending}
-                onClick={() => onCancel(a)}
-              >
-                Cancel
-              </button>
+              {/* Printed, never landing: these were approved on some earlier
+                  day. A stamp coming down here on every page load would claim
+                  a decision was just made, which is exactly the lie the
+                  gesture must not tell. */}
+              <span className="sk-reqstamp" data-state="approved" aria-hidden="true">
+                APPROVED
+              </span>
+              <div style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="sk-btn sk-press"
+                  disabled={cancel.isPending}
+                  onClick={() => onCancel(a)}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -448,7 +484,7 @@ export default function AdminLeavePage() {
                   </select>
                 </div>
 
-                <Link href={`/app/timetable?classSectionId=${gap.classSectionId}`} className="sk-btn">
+                <Link href={`/app/timetable?classSectionId=${gap.classSectionId}`} className="sk-btn sk-press">
                   Open class timetable
                 </Link>
 
@@ -461,7 +497,7 @@ export default function AdminLeavePage() {
                   {covered && (
                     <button
                       type="button"
-                      className="sk-btn"
+                      className="sk-btn sk-press"
                       disabled={clear.isPending}
                       onClick={() => clear.mutate(gap.id)}
                     >

@@ -88,7 +88,7 @@ function InlineAdd({ placeholder, buttonLabel, isSaving, onSave, extraField }: I
         />
       )}
       <button
-        className="sk-btn"
+        className="sk-btn sk-press"
         data-variant="primary"
         disabled={isSaving || !value.trim()}
         onClick={() => {
@@ -110,20 +110,27 @@ function EntryRow({
   onDelete,
   isDeleting,
   deleteLabel,
+  justAdded = false,
 }: {
   label: ReactNode;
   onDelete: () => void;
   isDeleting: boolean;
   deleteLabel: string;
+  /** True for the one entry created in this session; drops it in (`sk-pinin`). */
+  justAdded?: boolean;
 }) {
   return (
-    <div className="sk-row">
+    // Grades and subjects are appended to an ordered list the admin is
+    // actively typing into, so a new one arrives below the fold of their
+    // attention. `sk-pinin` drops it into place; reduced motion shows it
+    // already settled, and the list is identical either way.
+    <div className={justAdded ? 'sk-row sk-pinin sk-in' : 'sk-row'}>
       <span style={{ flex: 1, fontSize: 13.5, color: 'var(--sk-ink)' }}>{label}</span>
       <button
         onClick={onDelete}
         disabled={isDeleting}
         aria-label={deleteLabel}
-        className="sk-btn"
+        className="sk-btn sk-press"
         style={{ color: 'var(--sk-bad)', padding: '6px 9px' }}
       >
         <X className="h-4 w-4" />
@@ -140,6 +147,10 @@ export default function ClassesStructurePage() {
   const queryClient = useQueryClient();
 
   const [newSubjectCode, setNewSubjectCode] = useState('');
+  // Ids of the grade / subject created in this session, so each can be seen
+  // landing in its list rather than appearing between renders.
+  const [justAddedGradeId, setJustAddedGradeId] = useState<string | null>(null);
+  const [justAddedSubjectId, setJustAddedSubjectId] = useState<string | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const gradesQuery = useQuery({
@@ -165,7 +176,8 @@ export default function ClassesStructurePage() {
         name,
         order: (gradesQuery.data?.length ?? 0) + 1,
       }),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      setJustAddedGradeId(created?.id ?? null);
       void queryClient.invalidateQueries({ queryKey: ['mng-grades'] });
       toast.success('Grade added');
     },
@@ -175,7 +187,8 @@ export default function ClassesStructurePage() {
   const addSubjectMutation = useMutation({
     mutationFn: ({ name, code }: { name: string; code?: string }) =>
       api.post<Subject>('/manage/subjects', { name, code: code || undefined }),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      setJustAddedSubjectId(created?.id ?? null);
       void queryClient.invalidateQueries({ queryKey: ['mng-subjects'] });
       setNewSubjectCode('');
       toast.success('Subject added');
@@ -268,6 +281,7 @@ export default function ClassesStructurePage() {
                     onDelete={() => confirmDeleteGrade(g)}
                     isDeleting={deleteGradeMutation.isPending}
                     deleteLabel={`Remove grade ${g.name}`}
+                    justAdded={g.id === justAddedGradeId}
                   />
                 ))}
               </div>
@@ -306,12 +320,15 @@ export default function ClassesStructurePage() {
                     label={
                       <>
                         {s.name}
-                        {s.code && <span className="sk-muted" style={{ marginLeft: 8 }}>({s.code})</span>}
+                        {/* A subject code is an identifier read down the
+                            column, not prose — the register's face. */}
+                        {s.code && <span className="sk-muted sk-num" style={{ marginLeft: 8 }}>({s.code})</span>}
                       </>
                     }
                     onDelete={() => confirmDeleteSubject(s)}
                     isDeleting={deleteSubjectMutation.isPending}
                     deleteLabel={`Remove subject ${s.name}`}
+                    justAdded={s.id === justAddedSubjectId}
                   />
                 ))}
               </div>

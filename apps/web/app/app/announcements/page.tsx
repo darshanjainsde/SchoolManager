@@ -177,14 +177,13 @@ export default function AnnouncementsPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Page header */}
-      <header className="flex items-center justify-between">
+      {/* `sk-pagehead` supplies the portal's serif heading — see /app/events. */}
+      <header className="sk-pagehead flex items-center justify-between" style={{ marginBottom: 0 }}>
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Announcements</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--sk-ink-3)' }}>
-            Post announcements to the whole school or a specific class.
-          </p>
+          <h1>Announcements</h1>
+          <p>Post announcements to the whole school or a specific class.</p>
         </div>
-        <Button onClick={() => setShowAdd((v) => !v)} variant="outline">
+        <Button className="sk-press" onClick={() => setShowAdd((v) => !v)} variant="outline">
           {showAdd ? (
             <>
               <X className="h-4 w-4 mr-1" /> Cancel
@@ -261,6 +260,7 @@ export default function AnnouncementsPage() {
                 </Td>
                 <Td>
                   <Button
+                    className="sk-press"
                     variant="ghost"
                     size="sm"
                     disabled={deleteMutation.isPending}

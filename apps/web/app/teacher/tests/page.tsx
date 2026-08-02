@@ -201,7 +201,7 @@ export default function TeacherTestsPage() {
             <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 data-variant="primary"
                 disabled={!canCreate || create.isPending}
                 onClick={() => create.mutate()}
@@ -246,36 +246,70 @@ export default function TeacherTestsPage() {
               <div key={group.label} style={{ marginBottom: 16 }}>
                 <span className="sk-lab">{group.label}</span>
                 <div style={{ marginTop: 8 }}>
-                  {group.rows.map((exam, i) => (
-                    <div className="sk-row" key={exam.id}>
-                      <span
-                        className="badge"
-                        style={{ background: SUBJECT_COLORS[i % SUBJECT_COLORS.length] }}
+                  {group.rows.map((exam, i) => {
+                    const isUpcoming = group.label === 'Upcoming';
+                    return (
+                      // A scheduled test is a NOTICE — it went up on the class
+                      // board and into forty diaries the moment it was saved.
+                      // So an upcoming one is the pinned amber slip
+                      // (`.sk-notice`, pin bead and all) and a test already sat
+                      // drops to plain paper and loses its pin
+                      // (`data-fresh="false"`): still on the board, no longer
+                      // the thing being pointed at. `.sk-row` stays underneath
+                      // for the flex behaviour — badge, body, spacer, pill.
+                      //
+                      // Only the fresh ones get THE PIN: a slip that dropped in
+                      // months ago should not re-enact its own arrival every
+                      // time the page loads.
+                      <div
+                        className={`sk-row sk-notice${isUpcoming ? ' sk-pinin sk-in' : ''}`}
+                        key={exam.id}
+                        data-fresh={isUpcoming ? 'true' : 'false'}
+                        // A fresh slip draws no border of its own, so the rule
+                        // `.sk-row` puts between siblings has to go or it reads
+                        // as a hairline across the top of the amber. A past one
+                        // DOES draw its own four-sided border (the stylesheet's
+                        // `data-fresh="false"` state) — cancelling just its top
+                        // edge here would leave three sides of a box.
+                        style={{
+                          borderTop: isUpcoming ? 0 : undefined,
+                          animationDelay: `${i * 0.06}s`,
+                        }}
                       >
-                        {(subjects.data ?? []).find((s) => s.id === exam.subjectId)?.code.slice(0, 2).toUpperCase() ??
-                          '—'}
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="nm">{exam.title}</div>
-                        <div className="meta">
-                          {subjectLabel(exam.subjectId)} · {new Date(exam.scheduledAt).toLocaleString()} · out of{' '}
-                          {exam.maxMarks}
-                        </div>
-                        {exam.syllabus && (
-                          <div
-                            className="meta"
-                            style={{ marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-                          >
-                            {exam.syllabus}
+                        <span
+                          className="badge"
+                          style={{ background: SUBJECT_COLORS[i % SUBJECT_COLORS.length] }}
+                        >
+                          {(subjects.data ?? []).find((s) => s.id === exam.subjectId)?.code.slice(0, 2).toUpperCase() ??
+                            '—'}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {/* A test's title is its NAME — the serif is how
+                              this product says "written by a person", the same
+                              reason a request card sets the requester in it. */}
+                          <div className="nt" style={{ fontFamily: 'var(--sk-serif)', fontSize: 14.5 }}>
+                            {exam.title}
                           </div>
-                        )}
+                          <div className="nd">
+                            {subjectLabel(exam.subjectId)} · {new Date(exam.scheduledAt).toLocaleString()} · out of{' '}
+                            {exam.maxMarks}
+                          </div>
+                          {exam.syllabus && (
+                            <div
+                              className="nd"
+                              style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            >
+                              {exam.syllabus}
+                            </div>
+                          )}
+                        </div>
+                        <span className="sp" />
+                        <span className="sk-pill" data-tone={group.tone}>
+                          {group.label}
+                        </span>
                       </div>
-                      <span className="sp" />
-                      <span className="sk-pill" data-tone={group.tone}>
-                        {group.label}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

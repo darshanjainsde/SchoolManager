@@ -1,8 +1,17 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
-import { AuthScaffold } from '@/components/AuthScaffold';
+import {
+  AuthButton,
+  AuthLink,
+  AuthNote,
+  AuthScaffold,
+  AuthSlip,
+  Field,
+  fieldInputStyle,
+} from '@/components/AuthScaffold';
+import { Toast } from '@/components/ui';
 import { session } from '@/lib/session';
 import { useTokens } from '@/theme/theme-context';
 
@@ -22,6 +31,7 @@ export default function ResetByCode() {
   const tokens = useTokens();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null | undefined>(undefined);
 
@@ -47,27 +57,21 @@ export default function ResetByCode() {
   if (sentTo !== undefined) {
     return (
       <AuthScaffold title="Check the inbox" subtitle={`Student code ${normalised}`}>
-        <Text testID="reset-result" style={{ color: tokens.color.ink, fontSize: 14.5, lineHeight: 21 }}>
+        {/* `.resetok`, in the two tones the pitch actually uses it in: green
+            when a link is genuinely on its way, amber when the code was fine
+            but there is no inbox to send it to. Dressing that second answer in
+            green would be a false success — the family would sit waiting for a
+            mail that was never sent. */}
+        <AuthSlip tone={sentTo ? 'good' : 'warn'} testID="reset-result">
           {sentTo
             ? `We've emailed a link to ${sentTo}. It works once, and expires in 30 minutes.`
             : 'That code has no email on file, so there is nowhere to send a link. Ring the school office and they can set the password for you.'}
-        </Text>
-        <Pressable
+        </AuthSlip>
+        <AuthButton
           testID="reset-back"
           onPress={() => router.replace('/(auth)/login')}
-          style={({ pressed }) => ({
-            backgroundColor: tokens.color.indigo,
-            opacity: pressed ? 0.85 : 1,
-            borderRadius: 14,
-            paddingVertical: 16,
-          })}
-        >
-          <Text
-            style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 16 }}
-          >
-            Back to log in
-          </Text>
-        </Pressable>
+          label="Back to log in"
+        />
       </AuthScaffold>
     );
   }
@@ -77,58 +81,34 @@ export default function ResetByCode() {
       title="Forgot the password?"
       subtitle="Type the student code from your school letter and we’ll send a reset link to the email on file."
     >
-      <TextInput
-        value={code}
-        onChangeText={setCode}
-        placeholder="RAF-00042"
-        placeholderTextColor={tokens.color.placeholder}
-        autoCapitalize="characters"
-        autoCorrect={false}
-        testID="reset-code"
-        style={{
-          backgroundColor: tokens.color.appBg,
-          borderColor: tokens.color.line,
-          borderWidth: 1.5,
-          borderRadius: 14,
-          paddingVertical: 15,
-          paddingHorizontal: 16,
-          fontSize: 16,
-          letterSpacing: 1,
-          color: tokens.color.ink,
-        }}
-      />
-      {error ? (
-        <View
-          style={{
-            backgroundColor: tokens.color.red50,
-            borderRadius: 12,
-            paddingVertical: 10,
-            paddingHorizontal: 14,
-          }}
-        >
-          <Text style={{ color: tokens.color.red, fontSize: 14 }}>{error}</Text>
-        </View>
-      ) : null}
-      <Pressable
+      {/* THE one field that has to be typed exactly, so it is the one field
+          set in MONO with wide tracking: RAF-00042 is copied character by
+          character off a printed letter, and fixed-width figures with air
+          between them are what make an 0/O or a 1/l mismatch visible before
+          the tap rather than after it. */}
+      <Field label="Student code">
+        <TextInput
+          value={code}
+          onChangeText={setCode}
+          placeholder="RAF-00042"
+          placeholderTextColor={tokens.color.placeholder}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          testID="reset-code"
+          style={fieldInputStyle(tokens, { focused: focused, mono: true })}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+      </Field>
+      <AuthNote>Three letters, a dash, then the digits — exactly as printed on the school letter.</AuthNote>
+      {error ? <Toast kind="error" message={error} /> : null}
+      <AuthButton
         testID="reset-send"
         onPress={submit}
         disabled={!canSubmit}
-        style={({ pressed }) => ({
-          backgroundColor: tokens.color.indigo,
-          opacity: !canSubmit ? 0.45 : pressed ? 0.85 : 1,
-          borderRadius: 14,
-          paddingVertical: 16,
-        })}
-      >
-        <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 16 }}>
-          {busy ? 'Sending…' : 'Send the reset link'}
-        </Text>
-      </Pressable>
-      <Pressable testID="reset-cancel" onPress={() => router.back()}>
-        <Text style={{ color: tokens.color.sub, fontWeight: '600', textAlign: 'center', fontSize: 13.5 }}>
-          Back
-        </Text>
-      </Pressable>
+        label={busy ? 'Sending…' : 'Send the reset link'}
+      />
+      <AuthLink testID="reset-cancel" tone="muted" label="Back" onPress={() => router.back()} />
     </AuthScaffold>
   );
 }

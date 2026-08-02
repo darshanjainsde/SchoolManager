@@ -12,6 +12,18 @@ import { useHost } from '@/components/use-host';
 const fieldCls =
   'rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-[11px] py-[9px] text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60 disabled:cursor-not-allowed';
 
+/**
+ * First letter of the first and last word of a display name. Deliberately
+ * tolerant: a single-word name yields one letter rather than throwing, and an
+ * empty name yields an empty tile rather than "undefined".
+ */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  const last = parts.length > 1 ? parts[parts.length - 1] : '';
+  return `${parts[0][0] ?? ''}${last[0] ?? ''}`.toUpperCase();
+}
+
 /** A real timestamp read in the browser's local time — mirrors announcements' formatPostedAt. */
 function formatSentAt(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -119,23 +131,30 @@ export default function TeacherInboxPage() {
             )}
             {!threadsQuery.isLoading &&
               !threadsQuery.error &&
+              // The pitch's `.mrow`: a thread is a person, so the row leads
+              // with their initials in a round avatar rather than with a
+              // subject label. Same anatomy the family portal's inbox uses —
+              // one conversation, one rendering.
               threads.map((t) => (
                 <button
                   key={t.id}
                   type="button"
-                  className="sk-row"
-                  style={{ width: '100%', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', borderTop: '1px solid var(--sk-line)' }}
+                  className="sk-mrow sk-press"
                   onClick={() => setSelectedId(t.id)}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="nm">{t.studentName}</div>
-                    <div className="meta">
+                  <span className="av" aria-hidden="true">
+                    {initials(t.studentName)}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="nm" style={{ display: 'block' }}>
+                      {t.studentName}
+                    </span>
+                    <span className="pv" style={{ display: 'block' }}>
                       {t.subjectName}
                       {t.lastMessagePreview ? ` · ${t.lastMessagePreview}` : ''}
-                    </div>
-                  </div>
-                  <span className="sp" />
-                  <span className="meta" style={{ whiteSpace: 'nowrap' }}>{formatSentAt(t.lastMessageAt)}</span>
+                    </span>
+                  </span>
+                  <span className="pv" style={{ whiteSpace: 'nowrap' }}>{formatSentAt(t.lastMessageAt)}</span>
                   {t.unreadCount > 0 && (
                     <span className="sk-pill" data-tone="info" aria-label={`${t.unreadCount} unread`}>
                       {t.unreadCount}
@@ -165,19 +184,25 @@ export default function TeacherInboxPage() {
             {detailQuery.error && <p className="sk-state err">{(detailQuery.error as Error).message}</p>}
             {!detailQuery.isLoading && !detailQuery.error && (
               <div className="flex flex-col gap-2" style={{ maxHeight: 420, overflowY: 'auto' }}>
-                {messages.map((m) => (
+                {/* THE BUBBLES. Each one fades and rises in (`sk-wfade` — the
+                    same "this content is new on the page" gesture the rest of
+                    the portal uses), staggered down the thread so opening a
+                    conversation reads as it arriving rather than as it being
+                    already there. The rise is what makes a reply you just
+                    sent visibly the newest thing without a "sent" label.
+
+                    Keyed on the message id, so React only mounts — and so
+                    only animates — a message that is genuinely new; a refetch
+                    of the same thread does not replay the whole conversation. */}
+                {messages.map((m, i) => (
                   <div
                     key={m.id}
-                    className="rounded-[12px] px-3 py-2 text-[13.5px]"
-                    style={{
-                      alignSelf: m.senderRole === 'TEACHER' ? 'flex-end' : 'flex-start',
-                      maxWidth: '85%',
-                      background: m.senderRole === 'TEACHER' ? 'var(--sk-brand-tint)' : 'var(--sk-line)',
-                      color: 'var(--sk-ink)',
-                    }}
+                    className="sk-bub sk-wfade"
+                    data-mine={m.senderRole === 'TEACHER' ? 'true' : 'false'}
+                    style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}
                   >
                     <div className="whitespace-pre-wrap">{m.body}</div>
-                    <div className="meta" style={{ marginTop: 2 }}>{formatSentAt(m.createdAt)}</div>
+                    <div className="when">{formatSentAt(m.createdAt)}</div>
                   </div>
                 ))}
                 <div ref={bottomRef} />

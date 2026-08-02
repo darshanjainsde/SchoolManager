@@ -39,6 +39,20 @@ const LEAVE_STATUS_TONE: Record<'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED
   CANCELLED: 'info',
 };
 
+/**
+ * Which ink the stamp is cut in. The three outcomes map onto the same three
+ * semantic tones the pills use, so "green = allowed / amber = waiting / red =
+ * refused" reads identically whether it arrives as a pill or as a stamp.
+ * `info` (a cancelled leave) gets no stamp at all — nobody decided it, the
+ * teacher withdrew it, and stamping a withdrawal would misattribute the act.
+ */
+function stampState(tone: Tone): 'approved' | 'pending' | 'rejected' | null {
+  if (tone === 'good') return 'approved';
+  if (tone === 'warn') return 'pending';
+  if (tone === 'bad') return 'rejected';
+  return null;
+}
+
 function titleCase(s: string): string {
   return s.charAt(0) + s.slice(1).toLowerCase();
 }
@@ -96,8 +110,13 @@ export function RequestList({ items, onCancelLeave, cancellingId }: RequestListP
           item.kind === 'register' && item.status === 'APPROVED' && !!item.expiresAt && !isExpired(item.expiresAt);
         const cancelling = item.kind === 'leave' && cancellingId === item.id;
 
+        const stamp = stampState(pill.tone);
+
         return (
-          <div className="sk-row" key={`${item.kind}-${item.id}`}>
+          // The pitch's `.reqcard`: a slip on the office desk, not a table
+          // row. `sk-row` stays underneath it (the flex behaviour is right,
+          // and the page's own tests count these) — `sk-reqcard` reframes it.
+          <div className="sk-row sk-reqcard" key={`${item.kind}-${item.id}`}>
             <span className="sk-pill" data-tone="info">
               {item.kind === 'leave' ? 'Leave' : 'Register change'}
             </span>
@@ -115,7 +134,7 @@ export function RequestList({ items, onCancelLeave, cancellingId }: RequestListP
             {item.kind === 'leave' && item.cancellable && (
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 disabled={cancelling}
                 onClick={() => onCancelLeave(item.id)}
                 style={{ marginRight: 8 }}
@@ -123,9 +142,24 @@ export function RequestList({ items, onCancelLeave, cancellingId }: RequestListP
                 {cancelling ? 'Cancelling…' : 'Cancel'}
               </button>
             )}
-            <span className="sk-pill" data-tone={pill.tone}>
-              {pill.label}
-            </span>
+            {/* THE STAMP. A decision made about you arrives as a stamp
+                landing, because that is what it is — somebody in the office
+                pressed something down on your slip. It replaces the status
+                pill rather than sitting next to it: two renderings of one
+                fact would read as two facts. A withdrawn request keeps the
+                pill (see `stampState`), since nothing was stamped. */}
+            {stamp ? (
+              // The word is upper-cased in CSS, not in the string: a stamp
+              // LOOKS shouted, but the readable label is what belongs in the
+              // DOM for anyone reading it as text.
+              <span className="sk-reqstamp sk-stampin sk-in" data-state={stamp}>
+                {pill.label}
+              </span>
+            ) : (
+              <span className="sk-pill" data-tone={pill.tone}>
+                {pill.label}
+              </span>
+            )}
           </div>
         );
       })}

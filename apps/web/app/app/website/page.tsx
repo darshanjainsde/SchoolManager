@@ -54,11 +54,10 @@ export default function WebsitePage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Page header */}
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Website content</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Edit what visitors see on your public site.
-        </p>
+      {/* `sk-pagehead` supplies the portal's serif heading — see /app/events. */}
+      <header className="sk-pagehead" style={{ marginBottom: 0 }}>
+        <h1>Website content</h1>
+        <p>Edit what visitors see on your public site.</p>
       </header>
 
       {form.isLoading && <p className="text-sm text-slate-500">Loading…</p>}
@@ -73,7 +72,7 @@ export default function WebsitePage() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={[
-              'px-4 py-2 border-b-2 whitespace-nowrap transition-colors',
+              'sk-press px-4 py-2 border-b-2 whitespace-nowrap transition-colors',
               activeTab === tab.id
                 ? 'border-teal-600 text-teal-600 font-semibold'
                 : 'border-transparent text-slate-500 hover:text-slate-700',
@@ -84,6 +83,13 @@ export default function WebsitePage() {
         ))}
       </div>
 
+      {/* THE TAB BODY, WRAPPED AND KEYED ON THE TAB.
+          Eleven tabs of a website editor are eleven near-identical stacks of
+          labelled fields; switching between two of them can look like nothing
+          happened. `sk-wfade` marks the replacement — the pitch's one gesture
+          for "this view changed". The bodies already mount per tab, so the key
+          changes no lifecycle. Reduced motion simply shows the new tab. */}
+      <div className="sk-wfade" key={activeTab}>
       {activeTab === 'branding' && <BrandingTab form={form} />}
       {activeTab === 'theme' && <ThemeTab form={form} onGoToDesign={() => setActiveTab('design')} />}
       {activeTab === 'homepage' && <HomepageTab form={form} onGoToDesign={() => setActiveTab('design')} />}
@@ -95,6 +101,7 @@ export default function WebsitePage() {
       {activeTab === 'hof' && <HallOfFameTab />}
       {activeTab === 'gallery' && <GalleryTab />}
       {activeTab === 'staff' && <StaffTab />}
+      </div>
     </div>
   );
 }

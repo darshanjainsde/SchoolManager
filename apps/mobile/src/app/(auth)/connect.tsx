@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput } from 'react-native';
+import { TextInput } from 'react-native';
 import { router } from 'expo-router';
-import { AuthScaffold } from '@/components/AuthScaffold';
+import { AuthButton, AuthNote, AuthScaffold, Field, fieldInputStyle } from '@/components/AuthScaffold';
 import { session } from '@/lib/session';
 import { useTokens } from '@/theme/theme-context';
 
@@ -21,43 +21,29 @@ export default function Connect() {
       title="Connect your school"
       subtitle="Enter the school code your school gave you (e.g. “raffles”)."
     >
-      <TextInput
-        value={code}
-        onChangeText={setCode}
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholder="school code"
-        placeholderTextColor={tokens.color.placeholder}
-        testID="school-code"
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        style={{
-          backgroundColor: tokens.color.appBg,
-          borderColor: focused ? tokens.color.indigo : tokens.color.line,
-          borderWidth: 1.5,
-          borderRadius: 14,
-          paddingVertical: 15,
-          paddingHorizontal: 16,
-          fontSize: 16,
-          color: tokens.color.ink,
-        }}
-      />
-      <Pressable
-        disabled={!valid}
-        onPress={next}
-        testID="connect-btn"
-        style={({ pressed }) => ({
-          backgroundColor: tokens.color.indigo,
-          opacity: !valid ? 0.45 : pressed ? 0.85 : 1,
-          borderRadius: 14,
-          paddingVertical: 16,
-          transform: [{ scale: pressed && valid ? 0.98 : 1 }],
-        })}
-      >
-        <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 16 }}>
-          Continue
-        </Text>
-      </Pressable>
+      {/* No `.door` cards here, deliberately: the pitch's doors are for a
+          screen that offers a CHOICE (which role, which school), and this one
+          asks for a single typed value. A door with one door in it is just a
+          field wearing a bigger box. */}
+      <Field label="School code">
+        <TextInput
+          value={code}
+          onChangeText={setCode}
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder="raffles"
+          placeholderTextColor={tokens.color.placeholder}
+          testID="school-code"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          // A school code is a WORD ("raffles"), not a serial, so it stays in
+          // the UI sans — the mono/tracked treatment is reserved for the
+          // student code, which is read character by character.
+          style={fieldInputStyle(tokens, { focused })}
+        />
+      </Field>
+      <AuthNote>It&rsquo;s the first part of your school&rsquo;s Sckools web address.</AuthNote>
+      <AuthButton testID="connect-btn" onPress={next} disabled={!valid} label="Continue" />
     </AuthScaffold>
   );
 }

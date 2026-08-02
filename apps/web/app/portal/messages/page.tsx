@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, MessageSquare, Plus } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Plus, SendHorizontal } from 'lucide-react';
 import type {
   MessageThreadRow,
   MessageThreadDetail,
@@ -15,9 +15,6 @@ import { useHost } from '@/components/use-host';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const fieldCls =
-  'w-full rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-3 py-2 text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60';
-
 function formatSentAt(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     day: 'numeric',
@@ -25,6 +22,21 @@ function formatSentAt(iso: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+/**
+ * Up to two initials for the round avatar on a thread row. A person you are
+ * talking to gets a circle, not the squared badge the rest of the product uses
+ * for records — it is the cheapest way to say "this is a human, not a row".
+ */
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 }
 
 /**
@@ -180,44 +192,48 @@ export default function PortalMessagesPage() {
               </p>
             </div>
           )}
+          {/* Threads are ruled rows inside ONE card, not a card each: this is
+              a list of people, and a stack of separate cards makes four
+              conversations look like four unrelated documents. */}
           {threads.length > 0 && (
-            <ul className="flex flex-col gap-3">
-              {threads.map((t) => (
-                <li key={t.id}>
-                  <div className="sk-card">
-                    <div className="sk-card-b">
-                      <button
-                        type="button"
-                        onClick={() => setScreen({ mode: 'thread', threadId: t.id })}
-                        className="flex w-full items-start justify-between gap-3 text-left"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-[var(--sk-ink)]">{t.teacherName}</p>
-                          <p className="text-sm text-[var(--sk-ink-2)]">{t.subjectName}</p>
-                          {t.lastMessagePreview && (
-                            <p className="mt-0.5 truncate text-xs text-[var(--sk-ink-3)]">{t.lastMessagePreview}</p>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          <span className="whitespace-nowrap text-xs text-[var(--sk-ink-3)]">
-                            {formatSentAt(t.lastMessageAt)}
+            <div className="sk-card">
+              <ul>
+                {threads.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      onClick={() => setScreen({ mode: 'thread', threadId: t.id })}
+                      className="sk-mrow sk-press"
+                    >
+                      <span className="av" aria-hidden="true">
+                        {initialsOf(t.teacherName)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="nm block">{t.teacherName}</span>
+                        <span className="sj block">{t.subjectName}</span>
+                        {t.lastMessagePreview && (
+                          <span className="pv block">{t.lastMessagePreview}</span>
+                        )}
+                      </span>
+                      <span className="flex shrink-0 flex-col items-end gap-1.5">
+                        <span className="whitespace-nowrap text-xs text-[var(--sk-ink-3)]">
+                          {formatSentAt(t.lastMessageAt)}
+                        </span>
+                        {t.unreadCount > 0 && (
+                          <span
+                            className="sk-pill"
+                            data-tone="info"
+                            aria-label={`${t.unreadCount} unread`}
+                          >
+                            {t.unreadCount}
                           </span>
-                          {t.unreadCount > 0 && (
-                            <span
-                              className="sk-pill"
-                              data-tone="info"
-                              aria-label={`${t.unreadCount} unread`}
-                            >
-                              {t.unreadCount}
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </>
       )}
@@ -293,53 +309,57 @@ export default function PortalMessagesPage() {
             <p className="sk-state">Start the conversation below.</p>
           )}
 
+          {/* The conversation. Bubbles fade and RISE in, which is what makes a
+              reply read as having arrived rather than as having always been
+              on the page — the one gesture a static list cannot make. Side and
+              tail shape carry who-said-what, so the thread is still readable
+              with the animation off and with colour ignored entirely. */}
           {screen.mode === 'thread' && !detailQuery.isLoading && !detailQuery.error && (
-            <div className="flex max-h-[420px] flex-col gap-2 overflow-y-auto">
-              {messages.map((m) => (
+            <div className="sk-chat max-h-[420px] overflow-y-auto">
+              {messages.map((m, i) => (
                 <div
                   key={m.id}
-                  className="max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap"
-                  style={{
-                    alignSelf: m.senderRole === 'STUDENT' ? 'flex-end' : 'flex-start',
-                    background: m.senderRole === 'STUDENT' ? 'var(--sk-brand-tint)' : 'var(--sk-line)',
-                    color: 'var(--sk-ink)',
-                  }}
+                  className="sk-bub"
+                  data-mine={m.senderRole === 'STUDENT'}
+                  style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}
                 >
                   <div>{m.body}</div>
-                  <div className="mt-1 text-[11px] text-[var(--sk-ink-3)]">
-                    {formatSentAt(m.createdAt)}
-                  </div>
+                  <div className="when">{formatSentAt(m.createdAt)}</div>
                 </div>
               ))}
               <div ref={bottomRef} />
             </div>
           )}
 
-          {/* Composer — maxLength mirrors MESSAGE_BODY_MAX so an over-long
-              message is stopped here, not by a failed server round-trip. */}
-          <div className="flex flex-col gap-2">
+          {/* Composer — a pill, so writing to a teacher looks like writing a
+              message rather than filling in a form. maxLength still mirrors
+              MESSAGE_BODY_MAX so an over-long message is stopped here, not by
+              a failed server round-trip. */}
+          <div>
             <label htmlFor="message-body" className="sr-only">
               Your message
             </label>
-            <textarea
-              id="message-body"
-              rows={3}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              disabled={send.isPending}
-              maxLength={MESSAGE_BODY_MAX}
-              placeholder="Type your question…"
-              className={fieldCls}
-            />
-            <div>
+            <div className="sk-composer">
+              <textarea
+                id="message-body"
+                rows={2}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                disabled={send.isPending}
+                maxLength={MESSAGE_BODY_MAX}
+                placeholder="Type your question…"
+              />
+              {/* Icon-only, so the accessible name has to come from aria-label
+                  — and it stays the button's real state ("Sending…") while the
+                  request is in flight. */}
               <button
                 type="button"
                 onClick={() => send.mutate()}
                 disabled={trimmed.length === 0 || send.isPending}
-                className="sk-btn"
-                data-variant="primary"
+                className="sk-press"
+                aria-label={send.isPending ? 'Sending…' : 'Send'}
               >
-                {send.isPending ? 'Sending…' : 'Send'}
+                <SendHorizontal className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </div>
