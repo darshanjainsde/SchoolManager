@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { withTenant, type TenantTx } from '@skoolos/db';
 import type { RosterStudent } from '@skoolos/types';
 import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
@@ -20,6 +20,9 @@ export interface LoginInviteResult {
   invited: true;
   emailSent: boolean;
 }
+
+/** RAF-00042 — 3 letters + a zero-padded counter (5 digits, growing past 99999). */
+export const STUDENT_CODE_REGEX = /^[A-Za-z]{3}-\d{5,}$/;
 
 /**
  * How much of a Student row the caller is allowed to see.
@@ -158,7 +161,7 @@ export class StudentsService {
     }
     const username = dto.username?.trim() || null;
 
-    const { userId, admissionNo } = await withTenant(schoolId, async (tx) => {
+    const { userId, code } = await withTenant(schoolId, async (tx) => {
       const student = await tx.student.findFirst({ where: { id: studentId } });
       if (!student) throw new NotFoundException('Student not found');
       if (student.userId) throw new ConflictException('Student already has a login');
@@ -179,12 +182,47 @@ export class StudentsService {
         throw e;
       }
 
-      await tx.student.update({ where: { id: studentId }, data: { userId: user.id, email } });
-      return { userId: user.id, admissionNo: student.admissionNo };
+      // Allocate the human-friendly code alongside the login (Phase 5·1) —
+      // it becomes the login identifier and the add-a-child key, printed in
+      // the welcome email. Idempotent for students that somehow already have
+      // one.
+      const code = student.code ?? (await this.allocateCode(tx, schoolId));
+      await tx.student.update({ where: { id: studentId }, data: { userId: user.id, email, code } });
+      return { userId: user.id, code };
     });
 
-    const emailSent = await this.invites.sendInvite(userId, admissionNo);
-    return { email, username, loginName: admissionNo, invited: true, emailSent };
+    const emailSent = await this.invites.sendInvite(userId, code);
+    return { email, username, loginName: code, invited: true, emailSent };
+  }
+
+  /**
+   * Next `{PREFIX}-NNNNN` for the school. The prefix is derived from the
+   * school's name on first use (first three A–Z letters, padded with X) and
+   * persisted on `School.codePrefix` so codes stay stable if the school is
+   * renamed. Concurrency: the partial unique index on (schoolId, code) makes
+   * a racing duplicate fail the caller's insert with P2002 rather than ever
+   * storing two students under one code. Lexicographic max works while codes
+   * share a width; widths only grow (padStart never truncates), and a new
+   * width only starts past 99,999 students per school.
+   */
+  private async allocateCode(tx: TenantTx, schoolId: string): Promise<string> {
+    const school = await tx.school.findUnique({
+      where: { id: schoolId },
+      select: { name: true, codePrefix: true },
+    });
+    let prefix = school?.codePrefix ?? null;
+    if (!prefix) {
+      const letters = (school?.name ?? '').toUpperCase().replace(/[^A-Z]/g, '');
+      prefix = `${letters}XXX`.slice(0, 3);
+      await tx.school.update({ where: { id: schoolId }, data: { codePrefix: prefix } });
+    }
+    const last = await tx.student.findFirst({
+      where: { schoolId, code: { startsWith: `${prefix}-` } },
+      orderBy: { code: 'desc' },
+      select: { code: true },
+    });
+    const next = last?.code ? parseInt(last.code.split('-')[1], 10) + 1 : 1;
+    return `${prefix}-${String(next).padStart(5, '0')}`;
   }
 
   /**
@@ -193,7 +231,7 @@ export class StudentsService {
    * token every time — old ones are simply left to expire/never get burned.
    */
   async resendInvite(schoolId: string, studentId: string): Promise<LoginInviteResult> {
-    const { userId, email, username, admissionNo } = await withTenant(schoolId, async (tx) => {
+    const { userId, email, username, code } = await withTenant(schoolId, async (tx) => {
       const student = await tx.student.findFirst({ where: { id: studentId } });
       if (!student) throw new NotFoundException('Student not found');
       if (!student.userId) throw new NotFoundException('Student has no login to resend an invite for');
@@ -201,11 +239,17 @@ export class StudentsService {
       const user = await tx.user.findUnique({ where: { id: student.userId } });
       if (!user) throw new NotFoundException('Student has no login to resend an invite for');
 
-      return { userId: student.userId, email: user.email, username: user.username, admissionNo: student.admissionNo };
+      // Backfill for logins created before Phase 5·1 — resending the invite
+      // is exactly when the student needs a code in hand.
+      const code = student.code ?? (await this.allocateCode(tx, schoolId));
+      if (!student.code) {
+        await tx.student.update({ where: { id: studentId }, data: { code } });
+      }
+      return { userId: student.userId, email: user.email, username: user.username, code };
     });
 
-    const emailSent = await this.invites.sendInvite(userId, admissionNo);
-    return { email, username, loginName: admissionNo, invited: true, emailSent };
+    const emailSent = await this.invites.sendInvite(userId, code);
+    return { email, username, loginName: code, invited: true, emailSent };
   }
 
   private conflictFor(e: unknown): ApiError {

@@ -150,6 +150,7 @@ export class PortalService {
       firstName: s.firstName,
       lastName: s.lastName,
       admissionNo: s.admissionNo,
+      code: s.code ?? null,
       rollNo: s.rollNo,
       className: s.classSection?.name ?? null,
       photoUrl,

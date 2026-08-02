@@ -51,6 +51,8 @@ export type ErrorCode =
   | 'FILE_TOO_LARGE'
   /** Caller's login has no Student/Teacher/Staff person row to attach a photo to — pair with 404. */
   | 'NO_PROFILE'
+  /** Teacher onboarding: this identity is an ACTIVE teacher at another school — release them there first. Pair with 409. */
+  | 'ALREADY_AT_SCHOOL'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

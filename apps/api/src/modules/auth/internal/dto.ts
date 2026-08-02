@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, Length, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Length, Matches, MinLength } from 'class-validator';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
@@ -82,4 +82,12 @@ export class ImpersonateDto {
   @IsString()
   @Length(24, 64)
   token!: string;
+}
+
+/** Phase 5·1 — password reset with only the RAF-00042 student code. */
+export class ResetByCodeDto {
+  @ApiProperty({ example: 'RAF-00042' })
+  @IsString()
+  @Matches(/^[A-Za-z]{3}-\d{5,}$/, { message: 'The code looks like AAA-00001 — three letters, then digits' })
+  code!: string;
 }

@@ -151,6 +151,9 @@ model School {
   id                  String              @id @default(uuid()) @db.Uuid
   name                String
   slug                String              @unique
+  /// 3-letter prefix for student codes (RAF-00042). Derived from the school
+  /// name on first allocation and persisted so codes stay stable (Phase 5·1).
+  codePrefix          String?
   tier                Tier                @default(BASIC)
   status              SchoolStatus        @default(SETUP)
   timezone            String              @default("Asia/Kolkata")
@@ -643,6 +646,10 @@ model Student {
   id              String           @id @default(uuid()) @db.Uuid
   schoolId        String           @db.Uuid
   admissionNo     String
+  /// The human-friendly student code, e.g. RAF-00042 ({School.codePrefix} +
+  /// zero-padded per-school counter). Allocated when the login is created
+  /// (Phase 5·1); doubles as the login identifier and the add-a-child key.
+  code            String?
   firstName       String
   lastName        String
   email           String?
@@ -664,6 +671,7 @@ model Student {
   messageThreads  MessageThread[]
 
   @@unique([schoolId, admissionNo])
+  @@unique([schoolId, code])
   @@index([schoolId, classSectionId])
 }
 

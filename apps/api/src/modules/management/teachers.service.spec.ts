@@ -17,8 +17,17 @@ const txMock = {
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
 
+// Cross-tenant surface used by the one-school guard + release (Phase 5·1).
+const platformMock = {
+  teacher: { findFirst: jest.fn() },
+  user: { update: jest.fn() },
+  refreshToken: { updateMany: jest.fn() },
+  $transaction: jest.fn((ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
+};
+
 jest.mock('@skoolos/db', () => ({
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
+  getPlatformPrisma: () => platformMock,
   // TeachersService transitively imports the tenancy barrel (via '../auth'),
   // whose users.controller reads these enum members at decoration time.
   UserRole: {
@@ -56,6 +65,8 @@ describe('TeachersService.createLogin', () => {
     );
     passwords.hash.mockResolvedValue('argon2-placeholder-hash');
     invites.sendInvite.mockResolvedValue(true);
+    // One-school guard default: this identity teaches nowhere else.
+    platformMock.teacher.findFirst.mockResolvedValue(null);
     txMock.teacher.findFirst.mockResolvedValue({
       id: TEACHER_ID,
       email: null,
@@ -351,5 +362,76 @@ describe('TeachersService.me', () => {
 
     expect(result.subjects).toEqual([]);
     expect(result.classTeacherOf).toEqual([]);
+  });
+});
+
+describe('TeachersService one-school guard + release (Phase 5·1)', () => {
+  const passwords = { hash: jest.fn() };
+  const invites = { sendInvite: jest.fn() };
+  const svc = new TeachersService(
+    passwords as unknown as PasswordService,
+    invites as unknown as LoginInviteService,
+  );
+  const TEACHER_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    passwords.hash.mockResolvedValue('argon2-placeholder-hash');
+    invites.sendInvite.mockResolvedValue(true);
+    txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID, email: 'p.iyer@x.com', userId: null });
+    txMock.teacher.update.mockResolvedValue({});
+    txMock.user.create.mockResolvedValue({ id: 'user-9' });
+    platformMock.teacher.findFirst.mockResolvedValue(null);
+    platformMock.user.update.mockResolvedValue({});
+    platformMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('blocks onboarding when the identity is ACTIVE with a login at another school', async () => {
+    platformMock.teacher.findFirst.mockResolvedValue({ school: { name: 'Green Valley School' } });
+
+    await expect(
+      svc.createLogin(SCHOOL, TEACHER_ID, { email: 'p.iyer@x.com' }),
+    ).rejects.toMatchObject({ status: 409, response: { code: 'ALREADY_AT_SCHOOL' } });
+    expect(txMock.user.create).not.toHaveBeenCalled();
+    // The guard exempts this school, released rows, and rows never linked to a login.
+    expect(platformMock.teacher.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          isActive: true,
+          userId: { not: null },
+          schoolId: { not: SCHOOL },
+        }),
+      }),
+    );
+  });
+
+  it('release deactivates the teacher, disables the login and revokes every session', async () => {
+    txMock.teacher.findFirst.mockResolvedValue({ userId: 'user-9' });
+
+    const out = await svc.release(SCHOOL, TEACHER_ID);
+
+    expect(out).toEqual({ released: true });
+    expect(txMock.teacher.update).toHaveBeenCalledWith({
+      where: { id: TEACHER_ID },
+      data: { isActive: false },
+    });
+    expect(platformMock.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-9' },
+      data: { isActive: false },
+    });
+    expect(platformMock.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'user-9', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
+  it('release of a login-less teacher touches no auth state', async () => {
+    txMock.teacher.findFirst.mockResolvedValue({ userId: null });
+
+    await svc.release(SCHOOL, TEACHER_ID);
+
+    expect(platformMock.user.update).not.toHaveBeenCalled();
+    expect(platformMock.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 });

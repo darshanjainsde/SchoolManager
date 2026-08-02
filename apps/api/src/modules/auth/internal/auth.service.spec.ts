@@ -111,6 +111,34 @@ describe('AuthService.login', () => {
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
   });
 
+  it('logs a student in with the RAF-00042 student code (Phase 5·1) — code path first, case-insensitive', async () => {
+    prismaMock.student.findFirst.mockResolvedValue(studentRow());
+    prismaMock.user.findUnique.mockResolvedValue(userRow());
+    passwords.verify.mockResolvedValue(true);
+
+    const res = await svc.login(SCHOOL, 'sun-00042', 'correct-password');
+
+    expect(res.accessToken).toBeTruthy();
+    expect(prismaMock.student.findFirst).toHaveBeenCalledWith({
+      where: { schoolId: SCHOOL, code: { equals: 'sun-00042', mode: 'insensitive' } },
+    });
+    // Resolved by code — the username path was never consulted.
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('a code-shaped identifier that matches no code still falls through to username/admission-no', async () => {
+    prismaMock.student.findFirst
+      .mockResolvedValueOnce(null) // the code lookup misses…
+      .mockResolvedValueOnce(studentRow()); // …the admission-no lookup hits
+    prismaMock.user.findFirst.mockResolvedValue(null); // username misses too
+    prismaMock.user.findUnique.mockResolvedValue(userRow());
+    passwords.verify.mockResolvedValue(true);
+
+    const res = await svc.login(SCHOOL, 'SUN-22310', 'correct-password');
+
+    expect(res.accessToken).toBeTruthy();
+  });
+
   it('logs in by username without ever touching the admission-number path', async () => {
     prismaMock.user.findFirst.mockResolvedValue(userRow({ id: 'user-2', username: 'jane.doe' }));
     prismaMock.user.findUnique.mockResolvedValue(userRow({ id: 'user-2', username: 'jane.doe' }));

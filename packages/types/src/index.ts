@@ -237,6 +237,9 @@ export interface Profile {
   firstName: string;
   lastName: string;
   admissionNo: string;
+  /** RAF-00042-style student code — the login identifier and the add-a-child
+   *  key (Phase 5·1). Null until a login has been created. */
+  code: string | null;
   rollNo: string | null;
   className: string | null;
   photoUrl: string | null;
