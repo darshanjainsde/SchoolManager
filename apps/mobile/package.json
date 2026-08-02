@@ -49,6 +49,6 @@
       "^@skoolos/types$": "<rootDir>/../../packages/types/src",
       "^react-native-safe-area-context$": "<rootDir>/src/test-utils/safe-area-mock.tsx"
     },
-    "testTimeout": 20000
+    "testTimeout": 45000
   }
 }

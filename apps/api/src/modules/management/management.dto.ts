@@ -797,12 +797,6 @@ export class UpdateDiaryEntryDto {
   body!: string;
 }
 
-export class SignDiaryEntryDto {
-  @IsString()
-  @Length(1, 80)
-  signedName!: string;
-}
-
 // ── The attendance bar (Phase 5·3) ───────────────────────────────────────────
 
 export class NotifyLowAttendanceDto {

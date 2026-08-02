@@ -34,11 +34,14 @@ const flush = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
  * can itself flake on a busy machine. */
 async function settled(assertion: () => void) {
   await flush();
-  // 15s (well under the 20s testTimeout): these async save-flow assertions poll
-  // for a state update that, under the parallel suite load of `pnpm test`/CI,
-  // can be starved past the old 8s budget. Higher timeout only costs time on a
-  // genuine failure, never on the happy path.
-  await waitFor(assertion, { timeout: 15000 });
+  // 30s (well under the 45s testTimeout): these async save-flow assertions poll
+  // for a state update that gets starved on a busy machine. `pnpm preflight`
+  // runs this suite CONCURRENTLY with the api and web suites under turbo, which
+  // oversubscribes the CPU far harder than `pnpm test` in this package alone —
+  // 15s was enough for the latter and not the former, so the gate flaked while
+  // the same file passed in isolation every time. Higher timeout only costs
+  // time on a genuine failure, never on the happy path.
+  await waitFor(assertion, { timeout: 30000 });
 }
 
 const mockBack = jest.fn();

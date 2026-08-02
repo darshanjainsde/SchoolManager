@@ -4,9 +4,8 @@ import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
-import { SignDiaryEntryDto } from '../management/management.dto';
 import { PortalService } from './portal.service';
-import { RegisterPushTokenDto } from './portal.dto';
+import { RegisterPushTokenDto, SignDiaryEntryDto } from './portal.dto';
 
 @UseGuards(SchoolJwtGuard, RolesGuard)
 @Roles('STUDENT')
