@@ -8,8 +8,9 @@ import {
   type MessageableTeacher,
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Card, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, Page, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
 
 /** A real timestamp, read in the device's own local time — mirrors `(family)/notices.tsx`. */
 function formatWhen(iso: string): string {
@@ -21,6 +22,17 @@ function formatWhen(iso: string): string {
   });
 }
 
+/** "MR" for Ms Rao — the letters on the `.mrow` avatar disc. */
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 /**
  * Messages — the student side of T17. A student picks one of the teachers who
  * actually teaches them a subject this week (server-derived from the
@@ -28,15 +40,22 @@ function formatWhen(iso: string): string {
  * question; the teacher's reply shows at the top of the thread list ("response
  * at the top" — threads are ordered newest-first by `lastMessageAt`).
  *
+ * Repainted to the pitch's `.mrow`: a 34px initials disc, the teacher's name,
+ * the subject and a one-line preview, ruled off from the next row on a single
+ * `Page`. No motion on this screen by design — a thread list is a standing
+ * index, not something that ARRIVES, and the six gestures are reserved for
+ * things that actually happen to the page.
+ *
  * Role-neutral throughout: parents and students share one STUDENT login, so
  * copy says "your teacher", never "your child's teacher".
  */
 export default function Messages() {
   const tokens = useTokens();
   const inputStyle = {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: tokens.color.line,
-    borderRadius: 11,
+    backgroundColor: tokens.color.surface,
+    borderRadius: 12,
     padding: 11,
     fontSize: 13.5,
     color: tokens.color.ink,
@@ -118,14 +137,18 @@ export default function Messages() {
   return (
     <Screen>
       <SectionTitle title="Messages" />
+      <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
+        Only the teachers who actually teach this class.
+      </Text>
 
       {!asking && (
         <Pressable
           testID="ask-teacher"
+          accessibilityRole="button"
           onPress={() => setAsking(true)}
-          style={{ backgroundColor: tokens.color.indigo, borderRadius: 14, padding: 15 }}
+          style={{ backgroundColor: tokens.color.indigo, borderRadius: 12, padding: 14 }}
         >
-          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
+          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
             Ask a teacher
           </Text>
         </Pressable>
@@ -134,10 +157,10 @@ export default function Messages() {
       {asking && (
         <Card style={{ gap: 10 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontSize: 11.5, fontWeight: '700', color: tokens.color.sub }}>
+            <Text style={{ fontFamily: font.serif, fontSize: 13, color: tokens.color.ink }}>
               {picked ? 'New message' : 'Pick a teacher and subject'}
             </Text>
-            <Pressable testID="ask-cancel" onPress={resetAsk}>
+            <Pressable testID="ask-cancel" onPress={resetAsk} hitSlop={6}>
               <Text style={{ color: tokens.color.sub, fontWeight: '700', fontSize: 12 }}>Cancel</Text>
             </Pressable>
           </View>
@@ -155,21 +178,23 @@ export default function Messages() {
               <Pressable
                 key={`${t.teacherId}-${t.subjectId}`}
                 testID={`teacher-option-${t.teacherId}-${t.subjectId}`}
+                accessibilityRole="button"
                 onPress={() => setPicked(t)}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
+                  gap: 10,
                   borderWidth: 1,
                   borderColor: tokens.color.line,
                   backgroundColor: tokens.color.surface,
                   borderRadius: 11,
-                  padding: 11,
+                  padding: 10,
                 }}
               >
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{t.teacherName}</Text>
-                  <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{t.subjectName}</Text>
+                <Avatar name={t.teacherName} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: tokens.color.ink }}>{t.teacherName}</Text>
+                  <Text style={{ fontSize: 10.5, color: tokens.color.sub, marginTop: 1 }}>{t.subjectName}</Text>
                 </View>
                 <Text style={{ color: tokens.color.sub, fontSize: 16 }}>›</Text>
               </Pressable>
@@ -184,17 +209,16 @@ export default function Messages() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
                   backgroundColor: tokens.color.indigo50,
                   borderRadius: 11,
                   padding: 11,
                 }}
               >
                 <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: tokens.color.ink }}>
                     {picked.teacherName}
                   </Text>
-                  <Text style={{ fontSize: 11.5, color: tokens.color.indigo, marginTop: 2 }}>
+                  <Text style={{ fontSize: 10.5, color: tokens.color.indigo, marginTop: 1 }}>
                     {picked.subjectName}
                   </Text>
                 </View>
@@ -208,7 +232,7 @@ export default function Messages() {
                 value={body}
                 onChangeText={setBody}
                 placeholder={`Ask ${picked.teacherName} about ${picked.subjectName}…`}
-                placeholderTextColor={tokens.color.sub}
+                placeholderTextColor={tokens.color.placeholder}
                 multiline
                 autoFocus
                 maxLength={MESSAGE_BODY_MAX}
@@ -221,16 +245,17 @@ export default function Messages() {
               )}
               <Pressable
                 testID="compose-send"
+                accessibilityRole="button"
                 onPress={() => void send()}
                 disabled={!canSend}
                 style={{
                   backgroundColor: tokens.color.indigo,
-                  borderRadius: 14,
-                  padding: 14,
+                  borderRadius: 12,
+                  padding: 13,
                   opacity: canSend ? 1 : 0.6,
                 }}
               >
-                <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
+                <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
                   {sending ? 'Sending…' : 'Send'}
                 </Text>
               </Pressable>
@@ -254,50 +279,84 @@ export default function Messages() {
         </Card>
       )}
       {threads?.length === 0 && !threadsError && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>
-            No messages yet. Tap “Ask a teacher” to start a conversation.
-          </Text>
-        </Card>
+        <Page>
+          <Empty>No messages yet. Tap “Ask a teacher” to start a conversation.</Empty>
+        </Page>
       )}
-      {sorted.map((t) => (
-        <Pressable
-          key={t.id}
-          testID={`thread-${t.id}`}
-          onPress={() => router.push(`/(family)/messages/${t.id}`)}
-        >
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{t.teacherName}</Text>
-                <Text style={{ fontSize: 11, color: tokens.color.sub }}>{formatWhen(t.lastMessageAt)}</Text>
+      {sorted.length > 0 && (
+        <Page>
+          {sorted.map((t, i) => (
+            <Pressable
+              key={t.id}
+              testID={`thread-${t.id}`}
+              accessibilityRole="button"
+              onPress={() => router.push(`/(family)/messages/${t.id}`)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                paddingVertical: 11,
+                paddingHorizontal: 13,
+                borderTopWidth: i === 0 ? 0 : 1,
+                borderTopColor: tokens.color.line,
+              }}
+            >
+              <Avatar name={t.teacherName} />
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: tokens.color.ink }}>{t.teacherName}</Text>
+                  <Text style={{ fontFamily: font.mono, fontSize: 9.5, color: tokens.color.sub }}>
+                    {formatWhen(t.lastMessageAt)}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 10.5, color: tokens.color.indigo, marginTop: 1 }}>{t.subjectName}</Text>
+                {t.lastMessagePreview && (
+                  <Text style={{ fontSize: 10.5, color: tokens.color.sub, marginTop: 2 }} numberOfLines={1}>
+                    {t.lastMessagePreview}
+                  </Text>
+                )}
               </View>
-              <Text style={{ fontSize: 11.5, color: tokens.color.indigo, marginTop: 1 }}>{t.subjectName}</Text>
-              {t.lastMessagePreview && (
-                <Text style={{ fontSize: 12, color: tokens.color.sub, marginTop: 3 }} numberOfLines={1}>
-                  {t.lastMessagePreview}
-                </Text>
+              {t.unreadCount > 0 && (
+                <View
+                  testID={`thread-unread-${t.id}`}
+                  style={{
+                    minWidth: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    paddingHorizontal: 6,
+                    backgroundColor: tokens.color.marginRed,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: tokens.color.onBrand, fontSize: 10.5, fontWeight: '800' }}>
+                    {t.unreadCount}
+                  </Text>
+                </View>
               )}
-            </View>
-            {t.unreadCount > 0 && (
-              <View
-                testID={`thread-unread-${t.id}`}
-                style={{
-                  minWidth: 22,
-                  height: 22,
-                  borderRadius: 11,
-                  paddingHorizontal: 6,
-                  backgroundColor: tokens.color.indigo,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text style={{ color: tokens.color.onBrand, fontSize: 11, fontWeight: '800' }}>{t.unreadCount}</Text>
-              </View>
-            )}
-          </Card>
-        </Pressable>
-      ))}
+            </Pressable>
+          ))}
+        </Page>
+      )}
     </Screen>
+  );
+}
+
+/** The `.mrow .av` disc: initials on an indigo tint, 34px. */
+function Avatar({ name }: { name: string }) {
+  const tokens = useTokens();
+  return (
+    <View
+      style={{
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: tokens.color.indigo50,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={{ fontSize: 12, fontWeight: '800', color: tokens.color.indigo }}>{initialsOf(name)}</Text>
+    </View>
   );
 }

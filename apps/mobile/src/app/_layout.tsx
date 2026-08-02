@@ -66,7 +66,13 @@ function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
   return (
     <ThemeProvider>
-      <Stack screenOptions={{ headerShown: false }} />
+      {/* The pitch moves between screens the way a diary turns a page: the
+          incoming screen slides in from the right as the outgoing one leaves
+          (`.scr` → `translateX(26px)` + fade). expo-router's native stack
+          animation is the platform-correct expression of that — it is
+          gesture-driven and interruptible, which a hand-rolled transform is
+          not, and it already respects the OS reduce-motion setting. */}
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
     </ThemeProvider>
   );
 }

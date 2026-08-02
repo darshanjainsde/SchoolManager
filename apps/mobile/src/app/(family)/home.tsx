@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useCallback, useState, type ReactNode } from 'react';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { StudentDiaryResult, TimetableSlot } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -15,10 +15,12 @@ import {
   type StudentProfile,
   type UpcomingExam,
 } from '@/lib/portal';
-import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, Page, PageHeader, RailRow, RailStatus, Screen, Tick } from '@/components/ui';
 import { NotificationBell } from '@/components/NotificationBell';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
+import { DUR, pinStyle, useGesture } from '@/theme/motion';
 
 /** How many of the most recent announcements the home screen surfaces (the full list lives on Notices). */
 const LATEST_ANNOUNCEMENTS_COUNT = 3;
@@ -36,6 +38,120 @@ function isoWeekday(): number {
 
 function fullTeacherName(t: { firstName: string; lastName: string }): string {
   return `${t.firstName} ${t.lastName}`.trim();
+}
+
+/**
+ * `.dateline` — the date written at the top of a diary page, in the serif
+ * italic a person writes a date in, with the amber TODAY tab so a reader can
+ * tell at a glance that this page is the current one and not one they have
+ * scrolled back to.
+ */
+function Dateline() {
+  const tokens = useTokens();
+  const today = new Date().toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginHorizontal: 2 }}>
+      <Text
+        style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 12.5, color: tokens.color.sub }}
+      >
+        {today}
+      </Text>
+      <Text
+        style={{
+          fontSize: 9.5,
+          fontWeight: '800',
+          letterSpacing: 0.95,
+          color: tokens.color.late,
+          backgroundColor: tokens.color.amber50,
+          borderRadius: 5,
+          paddingHorizontal: 7,
+          paddingVertical: 2,
+          overflow: 'hidden',
+        }}
+      >
+        TODAY
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * `.notice` — a slip pinned to the page: amber paper, a red pin head poking
+ * over its top-left corner, and it lands with THE PIN (it arrives from above,
+ * slightly askew, and settles). Everything on this screen that ARRIVED —
+ * a scheduled test, a circular from the office — wears this, because the
+ * gesture is the difference between "this is here" and "this just came in".
+ */
+function Notice({
+  title,
+  detail,
+  onPress,
+  testID,
+}: {
+  title: string;
+  detail: string;
+  onPress?: () => void;
+  testID?: string;
+}) {
+  const tokens = useTokens();
+  const pin = useGesture(true, DUR.pin, { native: true });
+  return (
+    <Animated.View style={pinStyle(pin)}>
+      <Pressable
+        testID={testID}
+        onPress={onPress}
+        style={{
+          backgroundColor: tokens.color.amber50,
+          borderRadius: 11,
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          marginHorizontal: 2,
+        }}
+      >
+        <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.late }}>{title}</Text>
+        <Text style={{ fontSize: 10, color: tokens.color.late, opacity: 0.75, marginTop: 2 }}>{detail}</Text>
+        {/* The pin head itself — the one red mark on an amber slip. */}
+        <View
+          style={{
+            position: 'absolute',
+            top: -5,
+            left: 24,
+            width: 9,
+            height: 9,
+            borderRadius: 4.5,
+            backgroundColor: tokens.color.marginRed,
+          }}
+        />
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+/** `.chip.good` — a small green receipt with THE TICK stroking itself on. */
+function TickChip({ children }: { children: ReactNode }) {
+  const tokens = useTokens();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        alignSelf: 'flex-start',
+        backgroundColor: tokens.color.green50,
+        borderRadius: 999,
+        paddingVertical: 5,
+        paddingHorizontal: 11,
+        marginHorizontal: 2,
+      }}
+    >
+      <Tick size={12} />
+      <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.green }}>{children}</Text>
+    </View>
+  );
 }
 
 /** A compact KPI tile — the mobile equivalent of the web portal's `sk-kpi` stat tiles. */
@@ -71,7 +187,17 @@ function KpiTile({
       }}
     >
       <Text style={{ fontSize: 10.5, fontWeight: '600', color: tokens.color.sub }}>{label}</Text>
-      <Text style={{ fontSize: 17, fontWeight: '800', color: tone ? toneColor[tone] : tokens.color.ink, marginTop: 2 }}>
+      {/* `.attkpi .n` — figures are set in the mono face so a percentage and a
+          mark out of fifty line up as numbers, not as words. */}
+      <Text
+        style={{
+          fontFamily: font.mono,
+          fontSize: 17,
+          fontWeight: '700',
+          color: tone ? toneColor[tone] : tokens.color.ink,
+          marginTop: 2,
+        }}
+      >
         {value}
       </Text>
       {hint && (
@@ -83,78 +209,17 @@ function KpiTile({
   );
 }
 
-function AnnouncementRow({ a }: { a: Announcement }) {
-  const tokens = useTokens();
-  return (
-    <Card key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
-      <View
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: 10,
-          backgroundColor: tokens.color.indigo50,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ fontSize: 16 }}>📣</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 13, fontWeight: '600', color: tokens.color.ink }}>{a.title}</Text>
-        <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
-          {a.classSectionId ? 'Your class' : 'Whole school'} · {relativeTime(a.createdAt)}
-        </Text>
-      </View>
-    </Card>
-  );
+/** The word in a period row's right-hand `.st` slot. */
+function railStatusFor(state: 'past' | 'now' | 'upcoming', periodLabel: string): ReactNode {
+  if (state === 'now') return <RailStatus tone="now">now</RailStatus>;
+  if (state === 'past') return <RailStatus tone="good">✓</RailStatus>;
+  return <RailStatus tone="muted">{periodLabel}</RailStatus>;
 }
 
-/** One row of the "Today's classes" rail. */
-function RailRow({
-  slot,
-  state,
-  first,
-}: {
-  slot: TimetableSlot;
-  state: 'past' | 'now' | 'upcoming';
-  first: boolean;
-}) {
-  const tokens = useTokens();
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 11,
-        padding: 12,
-        borderTopWidth: first ? 0 : 1,
-        borderTopColor: tokens.color.line,
-        backgroundColor: state === 'now' ? tokens.color.indigo50 : 'transparent',
-        opacity: state === 'past' ? 0.55 : 1,
-      }}
-    >
-      <Text style={{ fontSize: 10.5, fontWeight: '700', color: tokens.color.sub, width: 42, lineHeight: 14 }}>
-        {slot.period.startTime}
-        {'\n'}
-        {slot.period.endTime}
-      </Text>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }} numberOfLines={1}>
-          {slot.subject.name}
-        </Text>
-        <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }} numberOfLines={1}>
-          {fullTeacherName(slot.teacher)}
-        </Text>
-      </View>
-      {state === 'now' ? (
-        <Pill tone="indigo">Now</Pill>
-      ) : state === 'past' ? (
-        <Text style={{ fontSize: 11, color: tokens.color.sub }}>done</Text>
-      ) : (
-        <Pill tone="neutral">{slot.period.label}</Pill>
-      )}
-    </View>
-  );
+function statusWord(status: 'PRESENT' | 'ABSENT' | 'LATE'): string {
+  if (status === 'PRESENT') return 'Present · marked today';
+  if (status === 'LATE') return 'Late · marked today';
+  return 'Absent · marked today';
 }
 
 export default function Home() {
@@ -228,6 +293,9 @@ export default function Home() {
   const total = currentSlot
     ? minutesOfDay(currentSlot.period.endTime) - minutesOfDay(currentSlot.period.startTime)
     : 0;
+  // How far through the live period we are — the length of THE INK LINE under
+  // the current row. Only the live row gets one.
+  const livePercent = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
 
   function railState(s: TimetableSlot): 'past' | 'now' | 'upcoming' {
     if (currentSlot?.id === s.id) return 'now';
@@ -236,10 +304,32 @@ export default function Home() {
 
   return (
     <Screen>
-      <SectionTitle
-        title={profile ? `Hi, ${profile.firstName} 👋` : 'Home'}
-        right={<NotificationBell onPress={() => router.push('/(family)/notifications')} />}
-      />
+      <Dateline />
+
+      {/* `.greet` + `.kidchip` — the greeting in the diary serif, with the
+          bell and the student's initial pushed to the right margin. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 2 }}>
+        <Text style={{ fontFamily: font.serif, fontSize: 20, color: tokens.color.ink, flex: 1 }}>
+          {profile ? `Hi, ${profile.firstName} 👋` : 'Home'}
+        </Text>
+        <NotificationBell group="(family)" />
+        {profile && (
+          <View
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 15,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: tokens.color.indigo,
+            }}
+          >
+            <Text style={{ fontFamily: font.serif, fontSize: 13, fontWeight: '700', color: tokens.color.onBrand }}>
+              {profile.firstName.slice(0, 1)}
+            </Text>
+          </View>
+        )}
+      </View>
 
       {error && (
         <Card>
@@ -257,7 +347,7 @@ export default function Home() {
           {/* Class + roll are the student's OWN (not a parent-facing "your
               child" label) — one shared STUDENT login can't tell who's holding
               the phone, so this must read to either. */}
-          <Text style={{ marginHorizontal: 4, marginTop: 2, fontSize: 12, color: tokens.color.sub }}>
+          <Text style={{ marginHorizontal: 4, marginTop: -4, fontSize: 12, color: tokens.color.sub }}>
             {profile.className ?? 'No class assigned'}
             {profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}
           </Text>
@@ -293,69 +383,40 @@ export default function Home() {
 
           {/* An unsigned remark outranks everything else here: it is the one
               thing on this screen someone at home has to DO, and it came with
-              an email that has already landed. */}
+              an email that has already landed. It takes the RED wash because
+              red ink is this product's one voice for a remark. */}
           {diary && diary.unsignedCount > 0 && (
             <Pressable testID="diary-banner" onPress={() => router.push('/(family)/diary')}>
-              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
-                <View
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 10,
-                    backgroundColor: tokens.color.red50,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 17 }}>📔</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>
-                    {diary.unsignedCount === 1
+              <Page style={{ backgroundColor: tokens.color.red50 }}>
+                <PageHeader
+                  icon="📔"
+                  title={
+                    diary.unsignedCount === 1
                       ? 'A diary remark to sign'
-                      : `${diary.unsignedCount} diary remarks to sign`}
-                  </Text>
-                  <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
-                    Open the diary to read and sign.
-                  </Text>
-                </View>
-                <Pill tone="red">Sign</Pill>
-              </Card>
+                      : `${diary.unsignedCount} diary remarks to sign`
+                  }
+                  actionLabel="Sign ›"
+                  onAction={() => router.push('/(family)/diary')}
+                />
+              </Page>
             </Pressable>
           )}
 
-          {/* Next-test reminder — the thing a student should never miss. Tapping
-              it opens the full detail (syllabus, max marks, date) on Results. */}
+          {/* Next-test reminder — the thing a student should never miss.
+              A test that has been SCHEDULED is something that arrived, so it
+              is a pinned notice, not a static card. Tapping it opens the full
+              detail (syllabus, max marks, date) on Results. */}
           {nextExam && (
-            <Pressable testID="next-exam-banner" onPress={() => router.push('/(family)/results')}>
-              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
-                <View
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 10,
-                    backgroundColor: tokens.color.amber50,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 16 }}>🔔</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>
-                    {nextExam.subjectName} · {nextExam.title} — {daysUntilLabel(nextExam.scheduledAt).toLowerCase()}
-                  </Text>
-                  <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
-                    {formatDate(nextExam.scheduledAt)}
-                    {nextExam.syllabus ? ` · ${nextExam.syllabus}` : ''} · out of {nextExam.maxMarks}
-                  </Text>
-                </View>
-              </Card>
-            </Pressable>
+            <Notice
+              testID="next-exam-banner"
+              title={`${nextExam.subjectName} · ${nextExam.title} — ${daysUntilLabel(nextExam.scheduledAt).toLowerCase()}`}
+              detail={`${formatDate(nextExam.scheduledAt)}${nextExam.syllabus ? ` · ${nextExam.syllabus}` : ''} · out of ${nextExam.maxMarks}`}
+              onPress={() => router.push('/(family)/results')}
+            />
           )}
 
           {/* At-a-glance KPIs. Only two — "today" is already the hero's status
-              chip and "next test" is the banner above, so repeating them would
+              chip and "next test" is the notice above, so repeating them would
               be noise. Both tiles deep-link to their full screen. */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <KpiTile
@@ -376,27 +437,54 @@ export default function Home() {
 
           {todaySlots.length > 0 && (
             <>
-              <SectionTitle
-                title="Today's classes"
-                actionLabel="Full week"
-                onAction={() => router.push('/(family)/timetable')}
-              />
-              <Card style={{ padding: 0, overflow: 'hidden' }}>
-                {todaySlots.map((s, i) => (
-                  <RailRow key={s.id} slot={s} state={railState(s)} first={i === 0} />
-                ))}
-              </Card>
+              <Page>
+                <PageHeader
+                  title="Today's classes"
+                  actionLabel="Full week"
+                  onAction={() => router.push('/(family)/timetable')}
+                />
+                {todaySlots.map((s, i) => {
+                  const state = railState(s);
+                  return (
+                    <RailRow
+                      key={s.id}
+                      startTime={s.period.startTime}
+                      endTime={s.period.endTime}
+                      title={s.subject.name}
+                      subtitle={fullTeacherName(s.teacher)}
+                      state={state === 'past' ? 'done' : state === 'now' ? 'now' : 'upcoming'}
+                      first={i === 0}
+                      right={railStatusFor(state, s.period.label)}
+                      inkPercent={state === 'now' ? livePercent : undefined}
+                    />
+                  );
+                })}
+              </Page>
+
+              {/* The attendance receipt. It carries THE TICK because being
+                  marked present is something a person DID to this page today —
+                  the stroke is the mark being made, not a status icon. */}
+              {todayStatus && <TickChip>{statusWord(todayStatus)}</TickChip>}
             </>
           )}
 
-          <SectionTitle title="Latest announcements" />
-          {latestAnnouncements.length === 0 ? (
-            <Card>
-              <Text style={{ color: tokens.color.sub }}>No announcements yet.</Text>
-            </Card>
-          ) : (
-            latestAnnouncements.map((a) => <AnnouncementRow key={a.id} a={a} />)
-          )}
+          <Page>
+            <PageHeader title="Latest announcements" />
+            {latestAnnouncements.length === 0 ? (
+              <Empty>No announcements yet.</Empty>
+            ) : (
+              <View style={{ paddingBottom: 10, gap: 8 }}>
+                {latestAnnouncements.map((a) => (
+                  <Notice
+                    key={a.id}
+                    title={a.title}
+                    detail={`${a.classSectionId ? 'Your class' : 'Whole school'} · ${relativeTime(a.createdAt)}`}
+                    onPress={() => router.push('/(family)/notices')}
+                  />
+                ))}
+              </View>
+            )}
+          </Page>
         </>
       )}
     </Screen>

@@ -78,16 +78,23 @@ export function StudentPicker({
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1.5" data-testid="picker-tokens">
           {selected.map((id) => (
+            // `sk-tokin` pops the chip in as it is created. Keyed on the
+            // student id, so React mounts a fresh node per pick and the
+            // animation runs for the NEW token only — re-rendering the list
+            // (e.g. after typing another letter) must not re-pop the ones
+            // already there.
             <button
               key={id}
               type="button"
               data-testid={`token-${id}`}
               onClick={() => onChange(selected.filter((x) => x !== id))}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--sk-brand-tint)] px-[11px] py-[5px] text-[12.5px] font-bold text-[var(--sk-brand)]"
+              className="sk-tok sk-tokin sk-press"
               aria-label={`Remove ${byId.get(id)?.name ?? 'student'}`}
             >
               {byId.get(id)?.name ?? 'Student'}
-              <span aria-hidden="true">×</span>
+              <span className="x" aria-hidden="true">
+                ×
+              </span>
             </button>
           ))}
         </div>
@@ -108,24 +115,25 @@ export function StudentPicker({
           onKeyDown={onKeyDown}
         />
         {matches.length > 0 && (
-          <ul
-            data-testid="picker-matches"
-            className="absolute z-20 mt-1 w-full overflow-hidden rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] shadow-lg"
-          >
+          <ul data-testid="picker-matches" className="sk-drop">
             {matches.map((s, i) => (
               <li key={s.id}>
+                {/* `data-cursor` rather than an inline background so the
+                    keyboard cursor and the mouse hover are painted by the same
+                    rule — they drifted apart when one lived in CSS and the
+                    other in a style prop. */}
                 <button
                   type="button"
                   data-testid={`match-${s.id}`}
+                  data-cursor={i === cursor ? 'true' : undefined}
                   onMouseEnter={() => setCursor(i)}
                   onClick={() => add(s.id)}
-                  className="w-full px-[11px] py-[9px] text-left text-[13.5px] text-[var(--sk-ink)]"
-                  style={{ background: i === cursor ? 'var(--sk-bg-2)' : 'transparent' }}
+                  className="sk-dropit"
                 >
-                  {s.name}
-                  {s.rollNo ? (
-                    <span className="text-[var(--sk-ink-3)]">{`  ·  Roll ${s.rollNo}`}</span>
-                  ) : null}
+                  <span>{s.name}</span>
+                  {/* Roll numbers right-aligned in mono: a column of digits you
+                      scan down, matching the register's treatment. */}
+                  {s.rollNo ? <span className="rl">{`Roll ${s.rollNo}`}</span> : null}
                 </button>
               </li>
             ))}

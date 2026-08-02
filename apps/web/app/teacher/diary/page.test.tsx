@@ -145,6 +145,47 @@ describe('TeacherDiaryPage', () => {
     );
   });
 
+  it('after a remark, the teacher is shown the email the family got', async () => {
+    // The receipt exists so "what exactly did they receive?" is answerable
+    // without leaving the page — and it must quote the stored body, not the
+    // local draft, or it would show text the server never sent.
+    const post = vi.fn().mockResolvedValue(
+      entry({
+        id: 'new',
+        kind: 'REMARK',
+        body: 'Disrupted the lesson twice.',
+        students: [{ studentId: 'stu-diya', name: 'Diya Rao' }],
+      }),
+    );
+    vi.mocked(useApi).mockReturnValue(stub({ post }) as never);
+    renderPage();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByTestId('diary-kind-REMARK'));
+    await user.type(screen.getByTestId('diary-body'), 'Disrupted the lesson twice.');
+    await user.type(screen.getByTestId('picker-input'), 'diya');
+    await user.click(await screen.findByTestId('match-stu-diya'));
+    await user.click(screen.getByTestId('diary-send'));
+
+    const card = await screen.findByTestId('diary-email-preview');
+    expect(card).toHaveTextContent('EMAIL SENT');
+    expect(card).toHaveTextContent('Disrupted the lesson twice.');
+    expect(card).toHaveTextContent('Diya');
+  });
+
+  it('an ordinary entry produces no email receipt', async () => {
+    const post = vi.fn().mockResolvedValue(entry({ id: 'new' }));
+    vi.mocked(useApi).mockReturnValue(stub({ post }) as never);
+    renderPage();
+
+    const user = userEvent.setup();
+    await user.type(await screen.findByTestId('diary-body'), 'Bring your art file.');
+    await user.click(screen.getByTestId('diary-send'));
+
+    await screen.findByText(/Added to today/);
+    expect(screen.queryByTestId('diary-email-preview')).not.toBeInTheDocument();
+  });
+
   it('a past page swaps the composer for the reason it is closed', async () => {
     vi.mocked(useApi).mockReturnValue(stub() as never);
     renderPage();

@@ -1,39 +1,69 @@
 /* ============================================================================
-   Sckools portal theme — indigo & marigold
-   The polished visual layer from the product pitch, scoped to .skosx so it
-   never leaks into the marketing site or the existing admin styling.
+   Sckools portal theme — paper & ink (indigo & marigold on a warm page)
+   The polished visual layer from the approved Phase 5·3 pitch, scoped to
+   .skosx so it never leaks into the marketing site or the existing admin
+   styling.
+
+   WHY PAPER, NOT GREY: the product this replaces is a paper diary. The pitch
+   moves the neutrals off the cold violet-grey they used to sit on and onto a
+   warm, slightly cream page (#FBF9F4 with a #E7E3D6 rule) so the portals read
+   as a written record rather than a dashboard. Ink is a deep indigo-black
+   (#211D45) — the same family as the brand, which is why headings set in a
+   serif look drawn on the page instead of pasted onto it.
 
    Indigo #4F46E5 is the Sckools brand — it is what the logo and the Android
    app already use, so a teacher moving between laptop and phone sees one
    product rather than two. Marigold amber is the warm accent AND the "needs
    attention" signal.
 
-   The neutrals are biased slightly toward the accent (a violet-tinted grey
-   rather than a green or pure one) so the chrome reads as chosen rather than
-   inherited. Semantic good / bad / late stay on their own traffic-light hues:
-   they encode attendance and result state, not brand, and must never collapse
-   into the accent or the status stops reading at a glance.
+   Semantic good / bad / late stay on their own traffic-light hues: they encode
+   attendance and result state, not brand, and must never collapse into the
+   accent or the status stops reading at a glance.
+
+   MAINTENANCE RULE: every colour token below exists in FOUR places — this
+   block, the OS dark-scheme media block, and the two `html[data-theme='…']`
+   toggle blocks near the bottom. A token changed in one and forgotten in
+   another is the recurring bug here (the portal looks right until someone
+   hits the theme toggle); app/sk-theme.test.ts guards it. Note that the guard
+   slices this file on the literal media-query text, so do not spell that
+   query out in prose above the token block.
+   Non-colour tokens (--sk-serif, --sk-ease, radii) are declared ONCE, here,
+   because they never vary by theme.
    ========================================================================== */
 .skosx {
-  --sk-paper: #f6f5fb;
-  --sk-ink: #17162f;
-  --sk-ink-2: #55537a;
-  --sk-ink-3: #8a88a7;
+  --sk-paper: #fbf9f4;
+  --sk-ink: #211d45;
+  --sk-ink-2: #4b4768;
+  --sk-ink-3: #8a87a0;
   --sk-card: #ffffff;
-  --sk-line: #e5e4f0;
-  --sk-line-2: #d4d2e6;
+  /* The dimmed page: hover fills, inert chips, the shade behind a raised card.
+     Components already referenced --sk-bg-2 before it existed anywhere, which
+     resolved to nothing (a transparent hover row); it is a real token now. */
+  --sk-bg-2: #f3f0e7;
+  --sk-line: #e7e3d6;
+  --sk-line-2: #d9d4c4;
   --sk-brand: #4f46e5;
-  --sk-brand-2: #6d66f0;
+  /* brand-2 is the *text* indigo — it is what a link, an active tab and an
+     info pill are painted in. On a light page that has to be DEEPER than the
+     fill colour to clear contrast on a tinted ground; in dark mode the same
+     role demands a lighter value. Hence deep here, light below. */
+  --sk-brand-2: #3730a3;
   --sk-brand-tint: #eef0ff;
   --sk-amber: #f59e0b;
-  --sk-amber-tint: #fff6e6;
-  --sk-good: #188f60;
-  --sk-good-tint: #e2f3ea;
-  --sk-bad: #c24a2c;
-  --sk-bad-tint: #f9e8e1;
-  --sk-late: #9a6b12;
-  --sk-shadow: 0 1px 2px rgba(20, 19, 43, 0.05), 0 10px 30px -14px rgba(20, 19, 43, 0.2);
-  --sk-shadow-sm: 0 1px 2px rgba(20, 19, 43, 0.06);
+  --sk-amber-tint: #fde9c8;
+  /* Amber is a fill, never legible as text on its own tint — amber-ink is the
+     readable partner for anything written on --sk-amber-tint. */
+  --sk-amber-ink: #7a4e06;
+  --sk-good: #178a5b;
+  --sk-good-tint: #e3f4ec;
+  --sk-bad: #c4453f;
+  --sk-bad-tint: #fbe9e8;
+  /* The margin rule down the side of a remark — a softer red than --sk-bad so
+     the rule frames the entry instead of competing with the words in it. */
+  --sk-margin-red: #e86a6a;
+  --sk-late: #7a4e06;
+  --sk-shadow: 0 1px 2px rgba(33, 29, 69, 0.05), 0 14px 34px -22px rgba(33, 29, 69, 0.35);
+  --sk-shadow-sm: 0 1px 2px rgba(33, 29, 69, 0.06);
   --sk-r: 16px;
   --sk-r-sm: 11px;
   /* Student "right now" hero gradient. A saturated indigo fill that carries
@@ -42,34 +72,44 @@
      themes keep it dark enough for #fff; the dark values sit a touch lower in
      luminance to hold the same on-hero legibility on a near-black paper. */
   --sk-hero-1: #4f46e5;
-  --sk-hero-2: #7d76f5;
+  --sk-hero-2: #6d5cf0;
+
+  /* Theme-independent: a face and an easing curve do not have a dark variant.
+     The serif is the pitch's voice — every heading and every empty state is
+     set in it, which is what makes the portal read as a diary. The stack is
+     all system faces so it costs no webfont request. */
+  --sk-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sk-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   color: var(--sk-ink);
   font-variant-numeric: tabular-nums;
 }
 @media (prefers-color-scheme: dark) {
   .skosx {
-    --sk-paper: #0a0917;
-    --sk-ink: #efeefc;
-    --sk-ink-2: #aba9ce;
-    --sk-ink-3: #7a789e;
-    --sk-card: #14132a;
-    --sk-line: #262545;
-    --sk-line-2: #37355e;
+    --sk-paper: #141224;
+    --sk-ink: #edebfa;
+    --sk-ink-2: #b9b6d0;
+    --sk-ink-3: #807da0;
+    --sk-card: #1b1830;
+    --sk-bg-2: #100e1e;
+    --sk-line: #2b2847;
+    --sk-line-2: #37335a;
     /* Lifted well off #4f46e5: indigo at full saturation on a near-black
        ground fails contrast for text and reads as a hole rather than a
        highlight. */
     --sk-brand: #8b87ff;
-    --sk-brand-2: #a29eff;
-    --sk-brand-tint: #232050;
-    --sk-amber: #f3b547;
-    --sk-amber-tint: #3b2d11;
-    --sk-good: #35b57e;
-    --sk-good-tint: #122720;
-    --sk-bad: #e0694a;
-    --sk-bad-tint: #2a1712;
-    --sk-late: #d9a43a;
-    --sk-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -16px rgba(0, 0, 0, 0.6);
+    --sk-brand-2: #a5a1ff;
+    --sk-brand-tint: #232052;
+    --sk-amber: #f5b23c;
+    --sk-amber-tint: #3d2e14;
+    --sk-amber-ink: #f5ce8a;
+    --sk-good: #4cc08e;
+    --sk-good-tint: #173327;
+    --sk-bad: #e0656f;
+    --sk-bad-tint: #3a1b1e;
+    --sk-margin-red: #e0656f;
+    --sk-late: #f5ce8a;
+    --sk-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -24px rgba(0, 0, 0, 0.8);
     --sk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --sk-hero-1: #5b54d6;
     --sk-hero-2: #7b74e8;
@@ -110,8 +150,10 @@
 
 .sk-main { max-width: 68rem; margin: 0 auto; padding: 22px 20px 56px; display: flex; flex-direction: column; gap: 18px; }
 
-/* ---- greeting ---- */
-.sk-greet { font-size: clamp(22px, 3vw, 27px); font-weight: 800; letter-spacing: -0.025em; }
+/* ---- greeting ----
+   Serif, like every other heading: the greeting is the page's title, and the
+   pitch's whole conceit is that a portal heading is written, not rendered. */
+.sk-greet { font-family: var(--sk-serif); font-size: clamp(22px, 3vw, 27px); font-weight: 650; letter-spacing: -0.01em; }
 .sk-greet .wave { display: inline-block; }
 .sk-sub { color: var(--sk-ink-3); font-size: 13.5px; margin-top: 3px; }
 .sk-eyebrow {
@@ -144,7 +186,7 @@
   font-size: 11px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase;
   color: rgba(255, 255, 255, 0.94);
 }
-.sk-hero-title { font-size: clamp(20px, 3vw, 24px); font-weight: 800; letter-spacing: -0.02em; margin-top: 7px; }
+.sk-hero-title { font-family: var(--sk-serif); font-size: clamp(21px, 3vw, 25px); font-weight: 650; letter-spacing: -0.01em; margin-top: 7px; }
 .sk-hero-meta { font-size: 13px; color: rgba(255, 255, 255, 0.93); margin-top: 3px; }
 .sk-hero-dot {
   width: 8px; height: 8px; border-radius: 999px; background: #fff; flex: none;
@@ -213,7 +255,10 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 @media (min-width: 720px) { .sk-grid2 { grid-template-columns: 1fr 1fr; } }
 .sk-card { background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r); box-shadow: var(--sk-shadow); }
 .sk-card-h { padding: 14px 16px 0; }
-.sk-card-h h3 { font-size: 15px; font-weight: 730; letter-spacing: -0.01em; }
+/* Card titles carry the serif too. Weight drops from 730 to 650 because a
+   Palatino-class face at 730 renders as a synthetic bold on most machines —
+   the serif already supplies the contrast the sans needed weight for. */
+.sk-card-h h3 { font-family: var(--sk-serif); font-size: 15.5px; font-weight: 650; letter-spacing: -0.005em; }
 .sk-card-b { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
 .sk-lab { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sk-ink-3); }
 .sk-muted { color: var(--sk-ink-3); font-size: 13px; }
@@ -232,14 +277,24 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 /* ---- status pill ---- */
 .sk-pill { font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .sk-pill[data-tone="good"] { background: var(--sk-good-tint); color: var(--sk-good); }
-.sk-pill[data-tone="warn"] { background: var(--sk-amber-tint); color: var(--sk-amber); }
+/* amber-ink, not amber: #f59e0b text on its own #fde9c8 tint is ~1.8:1 and
+   unreadable at pill size. The fill still says "amber"; the ink is what makes
+   the word legible. */
+.sk-pill[data-tone="warn"] { background: var(--sk-amber-tint); color: var(--sk-amber-ink); }
 .sk-pill[data-tone="bad"] { background: var(--sk-bad-tint); color: var(--sk-bad); }
 .sk-pill[data-tone="info"] { background: var(--sk-brand-tint); color: var(--sk-brand-2); }
 /* Fallback for a value with no known tone mapping — e.g. Holiday.type has no
    DB-level enum, so an unexpected string must still render legibly. */
 .sk-pill[data-tone="neutral"] { background: var(--sk-line); color: var(--sk-ink-2); }
 
-.sk-state { font-size: 13px; color: var(--sk-ink-3); padding: 4px 0; }
+/* Empty / loading / explanatory states, in the pitch's `.empty` voice: serif
+   italic, the register of a margin note. It reads as the page speaking rather
+   than as a UI string, which is what stops "Nothing written yet today" from
+   looking like an error. */
+.sk-state {
+  font-family: var(--sk-serif); font-style: italic;
+  font-size: 13.5px; color: var(--sk-ink-3); padding: 4px 0;
+}
 .sk-state.err { color: var(--sk-bad); }
 
 /* ---- entrance ---- */
@@ -257,7 +312,7 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
   background: var(--sk-card); border-right: 1px solid var(--sk-line); padding: 16px 12px;
 }
 .sk-side-brand { padding: 4px 8px 14px; }
-.sk-side-brand .role { font-weight: 730; font-size: 14px; letter-spacing: -0.01em; margin-top: 10px; }
+.sk-side-brand .role { font-family: var(--sk-serif); font-weight: 650; font-size: 14.5px; letter-spacing: -0.005em; margin-top: 10px; }
 .sk-side-brand .sub { font-size: 11px; color: var(--sk-ink-3); margin-top: 2px; }
 .sk-navlabel { font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--sk-ink-3); padding: 12px 10px 5px; }
 .sk-nav {
@@ -266,7 +321,7 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 }
 .sk-nav:hover { background: var(--sk-brand-tint); color: var(--sk-ink); }
 .sk-nav[data-active="true"] { background: var(--sk-brand); color: #fff; font-weight: 660; box-shadow: var(--sk-shadow-sm); }
-@media (prefers-color-scheme: dark) { .sk-nav[data-active="true"] { color: #07130e; } }
+@media (prefers-color-scheme: dark) { .sk-nav[data-active="true"] { color: #211d45; } }
 .sk-nav .ic { width: 18px; height: 18px; flex: none; }
 .sk-side-foot { margin-top: auto; }
 .sk-content { flex: 1; min-width: 0; padding: 26px 30px 56px; max-width: 1120px; overflow-x: hidden; }
@@ -299,7 +354,7 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 .sk-drawer-close:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
 
 .sk-drawer-scrim {
-  position: fixed; inset: 0; z-index: 50; background: rgba(10, 16, 13, 0.5); border: 0; cursor: pointer;
+  position: fixed; inset: 0; z-index: 50; background: rgba(23, 20, 50, 0.45); border: 0; cursor: pointer;
 }
 .sk-drawer-panel {
   position: fixed; top: 0; bottom: 0; left: 0; z-index: 51; width: 260px; max-width: 80vw;
@@ -315,7 +370,7 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 
 /* ---- page header ---- */
 .sk-pagehead { margin-bottom: 20px; }
-.sk-pagehead h1 { font-size: clamp(21px, 2.6vw, 26px); font-weight: 800; letter-spacing: -0.025em; }
+.sk-pagehead h1 { font-family: var(--sk-serif); font-size: clamp(22px, 2.8vw, 28px); font-weight: 650; letter-spacing: -0.01em; }
 .sk-pagehead p { color: var(--sk-ink-3); font-size: 13.5px; margin-top: 4px; }
 
 /* ---- class / entity cards ---- */
@@ -338,7 +393,7 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
 }
 .sk-btn:hover { border-color: var(--sk-brand); }
 .sk-btn[data-variant="primary"] { background: var(--sk-brand); color: #fff; border-color: transparent; }
-@media (prefers-color-scheme: dark) { .sk-btn[data-variant="primary"] { color: #07130e; } }
+@media (prefers-color-scheme: dark) { .sk-btn[data-variant="primary"] { color: #211d45; } }
 .sk-btn[data-variant="primary"]:hover { filter: brightness(1.06); }
 .sk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -348,24 +403,24 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
    they live on .skosx, not :root.
    ========================================================================== */
 html[data-theme='light'] .skosx {
-  --sk-paper: #f6f5fb; --sk-ink: #17162f; --sk-ink-2: #55537a; --sk-ink-3: #8a88a7;
-  --sk-card: #ffffff; --sk-line: #e5e4f0; --sk-line-2: #d4d2e6;
-  --sk-brand: #4f46e5; --sk-brand-2: #6d66f0; --sk-brand-tint: #eef0ff;
-  --sk-amber: #f59e0b; --sk-amber-tint: #fff6e6;
-  --sk-good: #188f60; --sk-good-tint: #e2f3ea;
-  --sk-bad: #c24a2c; --sk-bad-tint: #f9e8e1; --sk-late: #9a6b12;
-  --sk-shadow: 0 1px 2px rgba(20, 19, 43, 0.05), 0 10px 30px -14px rgba(20, 19, 43, 0.2);
-  --sk-shadow-sm: 0 1px 2px rgba(20, 19, 43, 0.06);
-  --sk-hero-1: #4f46e5; --sk-hero-2: #7d76f5;
+  --sk-paper: #fbf9f4; --sk-ink: #211d45; --sk-ink-2: #4b4768; --sk-ink-3: #8a87a0;
+  --sk-card: #ffffff; --sk-bg-2: #f3f0e7; --sk-line: #e7e3d6; --sk-line-2: #d9d4c4;
+  --sk-brand: #4f46e5; --sk-brand-2: #3730a3; --sk-brand-tint: #eef0ff;
+  --sk-amber: #f59e0b; --sk-amber-tint: #fde9c8; --sk-amber-ink: #7a4e06;
+  --sk-good: #178a5b; --sk-good-tint: #e3f4ec;
+  --sk-bad: #c4453f; --sk-bad-tint: #fbe9e8; --sk-margin-red: #e86a6a; --sk-late: #7a4e06;
+  --sk-shadow: 0 1px 2px rgba(33, 29, 69, 0.05), 0 14px 34px -22px rgba(33, 29, 69, 0.35);
+  --sk-shadow-sm: 0 1px 2px rgba(33, 29, 69, 0.06);
+  --sk-hero-1: #4f46e5; --sk-hero-2: #6d5cf0;
 }
 html[data-theme='dark'] .skosx {
-  --sk-paper: #0a0917; --sk-ink: #efeefc; --sk-ink-2: #aba9ce; --sk-ink-3: #7a789e;
-  --sk-card: #14132a; --sk-line: #262545; --sk-line-2: #37355e;
-  --sk-brand: #8b87ff; --sk-brand-2: #a29eff; --sk-brand-tint: #232050;
-  --sk-amber: #f3b547; --sk-amber-tint: #3b2d11;
-  --sk-good: #35b57e; --sk-good-tint: #122720;
-  --sk-bad: #e0694a; --sk-bad-tint: #2a1712; --sk-late: #d9a43a;
-  --sk-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -16px rgba(0, 0, 0, 0.6);
+  --sk-paper: #141224; --sk-ink: #edebfa; --sk-ink-2: #b9b6d0; --sk-ink-3: #807da0;
+  --sk-card: #1b1830; --sk-bg-2: #100e1e; --sk-line: #2b2847; --sk-line-2: #37335a;
+  --sk-brand: #8b87ff; --sk-brand-2: #a5a1ff; --sk-brand-tint: #232052;
+  --sk-amber: #f5b23c; --sk-amber-tint: #3d2e14; --sk-amber-ink: #f5ce8a;
+  --sk-good: #4cc08e; --sk-good-tint: #173327;
+  --sk-bad: #e0656f; --sk-bad-tint: #3a1b1e; --sk-margin-red: #e0656f; --sk-late: #f5ce8a;
+  --sk-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -24px rgba(0, 0, 0, 0.8);
   --sk-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sk-hero-1: #5b54d6; --sk-hero-2: #7b74e8;
 }
@@ -400,10 +455,10 @@ html[data-theme='dark'] .skosx {
 }
 .sk-themetoggle button:hover { color: var(--sk-ink); }
 .sk-themetoggle button[aria-pressed='true'] { background: var(--sk-brand); color: #fff; }
-html[data-theme='dark'] .sk-themetoggle button[aria-pressed='true'] { color: #07130e; }
+html[data-theme='dark'] .sk-themetoggle button[aria-pressed='true'] { color: #211d45; }
 
 /* ---- teacher "now" card ---- */
-.sk-now-title { font-size: 19px; font-weight: 780; letter-spacing: -0.015em; margin-top: 3px; }
+.sk-now-title { font-family: var(--sk-serif); font-size: 20px; font-weight: 650; letter-spacing: -0.01em; margin-top: 3px; }
 .sk-now-sub { font-size: 12.5px; color: var(--sk-ink-2); margin-top: 4px; }
 .sk-now-covering { font-size: 12px; font-weight: 650; color: var(--sk-amber); margin-top: 4px; }
 .sk-now-done { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
@@ -477,7 +532,7 @@ button.sk-pill { border: 0; cursor: pointer; font: inherit; }
 .sk-bell:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
 .sk-bell-badge {
   position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px;
-  display: grid; place-items: center; border-radius: 999px; background: var(--sk-bad); color: #fff;
+  display: grid; place-items: center; border-radius: 999px; background: var(--sk-margin-red); color: #fff;
   font-size: 10px; font-weight: 750; line-height: 1; box-shadow: 0 0 0 2px var(--sk-paper);
 }
 
@@ -529,7 +584,7 @@ button.sk-pill { border: 0; cursor: pointer; font: inherit; }
   display: inline-flex; align-items: center; gap: 7px;
   font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.92;
 }
-.sk-hero h2 { margin: 9px 0 2px; font-size: clamp(21px, 3vw, 26px); font-weight: 800; letter-spacing: -0.02em; }
+.sk-hero h2 { font-family: var(--sk-serif); margin: 9px 0 2px; font-size: clamp(22px, 3vw, 27px); font-weight: 650; letter-spacing: -0.01em; }
 .sk-hero .meta { font-size: 13px; opacity: 0.93; }
 .sk-hero .live {
   width: 8px; height: 8px; border-radius: 50%; background: #fff;
@@ -553,3 +608,275 @@ button.sk-pill { border: 0; cursor: pointer; font: inherit; }
 .sk-hero .cell { flex: 1; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 12px; padding: 9px 11px; }
 .sk-hero .cell .cn { font-size: 18px; font-weight: 800; }
 .sk-hero .cell .cl { font-size: 10.5px; font-weight: 600; opacity: 0.9; margin-top: 1px; }
+
+/* ============================================================================
+   PITCH MOTION — the six gestures, as reusable classes
+   ============================================================================
+   The pitch's argument for animation is not decoration: each of these encodes
+   a fact the user would otherwise have to be told in words. An entry that
+   DROPS onto the page reads as "this was just added"; a stamp that LANDS reads
+   as "this is now closed"; a signature that WRITES ITSELF reads as "you signed
+   it", which a green tick does not. So they belong in the shared stylesheet,
+   not in one component — the same gesture must mean the same thing on every
+   page that uses it.
+
+   All six honour `prefers-reduced-motion: reduce` at the bottom of this block
+   by collapsing to their end state rather than by being switched off: an item
+   animating from `opacity: 0` would otherwise stay invisible, which is the
+   classic reduced-motion regression.
+   ========================================================================== */
+
+/* pinin — an item drops in slightly rotated and settles square, like a slip
+   pinned to a board. Used for a diary entry, and for the email receipt card. */
+@keyframes sk-pinin {
+  60% { opacity: 1; transform: translateY(2px) rotate(0.8deg); }
+  100% { opacity: 1; transform: none; }
+}
+.sk-pinin { opacity: 0; transform: translateY(-10px) rotate(-2deg); }
+.sk-pinin.sk-in { animation: sk-pinin 0.42s var(--sk-ease) both; }
+
+/* stampin — lands oversized and rotated, then settles at rest still slightly
+   off-square, because a rubber stamp never lands straight. Terminal states
+   only ("sent", "signed", "published"). */
+@keyframes sk-stampin {
+  60% { opacity: 1; transform: scale(0.95) rotate(-2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-2deg); }
+}
+.sk-stampin { opacity: 0; transform: scale(1.6) rotate(-7deg); }
+.sk-stampin.sk-in { animation: sk-stampin 0.45s var(--sk-ease) both; }
+
+/* drawt — a tick strokes itself on. The dash offset is what animates, so the
+   element must be an SVG <path> with a matching stroke-dasharray. */
+@keyframes sk-drawt { to { stroke-dashoffset: 0; } }
+.sk-tick { overflow: visible; }
+.sk-tick path {
+  stroke: var(--sk-good); stroke-width: 3; fill: none;
+  stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 26; stroke-dashoffset: 26;
+}
+.sk-tick.sk-in path { animation: sk-drawt 0.45s var(--sk-ease) forwards; }
+
+/* sigdraw — the signature writes itself. Slower than the tick (0.8s) on
+   purpose: signing is the one action on the family portal that carries a
+   consequence, and the pen has to be seen moving for it to feel like one. */
+@keyframes sk-sigdraw { to { stroke-dashoffset: 0; } }
+.sk-sig { overflow: visible; }
+.sk-sig path {
+  stroke: var(--sk-ink); stroke-width: 1.8; fill: none; stroke-linecap: round;
+  stroke-dasharray: 70; stroke-dashoffset: 70;
+}
+.sk-sig.sk-in path { animation: sk-sigdraw 0.8s var(--sk-ease) forwards; }
+
+/* tokin — a token pops into existence at the moment a typed name becomes a
+   chip. Short and scale-only: it confirms the keystroke landed. */
+@keyframes sk-tokin {
+  from { transform: scale(0.7); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.sk-tokin { animation: sk-tokin 0.25s var(--sk-ease); }
+
+/* wfade — a view fades and rises when the thing it shows changes (a new day,
+   a new class). It marks "this content was replaced", which is otherwise
+   indistinguishable from "nothing happened" when the two views look alike. */
+@keyframes sk-wfade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.sk-wfade { animation: sk-wfade 0.35s var(--sk-ease); }
+
+/* press — the pitch's `.press`. Every tappable thing shrinks under the
+   finger/cursor; it is the cheapest possible "yes, that was a control". */
+.sk-press { transition: transform 0.12s var(--sk-ease); }
+.sk-press:active { transform: scale(0.965); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Collapse to the END state, never to "no animation" — these classes start
+     from opacity:0 / dashoffset, so switching the animation off would leave
+     the content permanently invisible. */
+  .sk-pinin, .sk-pinin.sk-in,
+  .sk-stampin, .sk-stampin.sk-in { animation: none; opacity: 1; transform: none; }
+  .sk-tick path, .sk-sig path,
+  .sk-tick.sk-in path, .sk-sig.sk-in path { animation: none; stroke-dashoffset: 0; }
+  .sk-tokin, .sk-wfade { animation: none; }
+  .sk-press { transition: none; }
+  .sk-press:active { transform: none; }
+}
+
+/* ============================================================================
+   THE DIARY — shared by the teacher's page and the family's page
+   ============================================================================
+   Both portals render the same object, so both use these classes: a family
+   must recognise the remark they were emailed about as the same thing the
+   teacher wrote. The two differences are that only the teacher composes, and
+   only the family signs.
+   ========================================================================== */
+.sk-diary-item {
+  display: flex; gap: 10px;
+  /* flex-start, not the default stretch: the row's trailing control ("Strike
+     out") must sit level with the first line of the entry, not be pulled to
+     the full height of a three-line remark. */
+  align-items: flex-start;
+  padding: 11px 13px;
+  border-top: 1px solid var(--sk-line);
+}
+.sk-diary-item:first-child { border-top: 0; }
+/* The remark: red margin rule + a wash that fades out across the entry, the
+   way ink bleeds from the margin on paper. The wash carries no information on
+   its own (the REMARK tag and the red rule do) so it stays faint enough for
+   the body text to keep full contrast. */
+.sk-diary-item[data-kind="REMARK"] {
+  border-left: 3px solid var(--sk-bad);
+  background: linear-gradient(90deg, var(--sk-bad-tint), transparent 92%);
+}
+.sk-diary-item .sdot {
+  width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none;
+  background: var(--sk-brand);
+}
+.sk-diary-item[data-kind="REMARK"] .sdot { background: var(--sk-bad); }
+.sk-diary-item .di-body { flex: 1; min-width: 0; }
+.sk-diary-item .di-sub {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--sk-brand-2);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
+}
+.sk-diary-item[data-kind="REMARK"] .di-sub { color: var(--sk-bad); }
+.sk-diary-item .di-txt { font-size: 13.5px; margin-top: 2px; color: var(--sk-ink); }
+/* A remark is the teacher's own words, quoted verbatim to the family — set in
+   serif italic so it reads as quoted speech rather than as an app string. */
+.sk-diary-item[data-kind="REMARK"] .di-txt {
+  font-family: var(--sk-serif); font-style: italic; font-size: 14.5px;
+}
+.sk-diary-item .di-by { font-size: 11px; color: var(--sk-ink-3); margin-top: 3px; }
+.sk-rem-tag {
+  display: inline-block;
+  font-size: 8.5px; font-weight: 800; letter-spacing: 0.08em;
+  color: #fff; background: var(--sk-bad);
+  border-radius: 4px; padding: 2px 6px; margin-left: 6px;
+}
+/* The self-drawing signature, shown once a remark has been signed. */
+.sk-signed {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  font-size: 11.5px; font-weight: 700; color: var(--sk-good);
+}
+
+/* ---- segmented control (ITEM | REMARK) ----
+   Two mutually exclusive modes, shown side by side at equal weight so the
+   teacher can see both choices at once. The REMARK half turns red when armed:
+   the control itself warns that the next thing typed emails a family. */
+.sk-seg { display: flex; gap: 6px; }
+.sk-seg > button {
+  flex: 1; text-align: center; cursor: pointer;
+  border: 1.5px solid var(--sk-line); border-radius: 10px;
+  padding: 8px 0; font: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--sk-ink-3); background: var(--sk-card);
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.sk-seg > button[aria-pressed="true"] {
+  border-color: var(--sk-brand); color: var(--sk-brand-2); background: var(--sk-brand-tint);
+}
+.sk-seg > button[data-tone="bad"][aria-pressed="true"] {
+  border-color: var(--sk-bad); color: var(--sk-bad); background: var(--sk-bad-tint);
+}
+@media (prefers-reduced-motion: reduce) { .sk-seg > button { transition: none; } }
+
+/* Composer textarea in remark mode — red border and a red-to-page wash, so
+   the teacher can see they are writing in red ink before they look at the
+   button they are about to press. */
+.sk-compose-remark {
+  border-color: var(--sk-bad) !important;
+  background: linear-gradient(180deg, var(--sk-bad-tint), var(--sk-card)) !important;
+}
+
+/* ---- the email receipt card ----
+   Shown after a remark is written. It is not a confirmation toast: it is a
+   copy of what the family actually received, because the single most common
+   support question about remarks is "did they get it, and what did it say?".
+   The excerpt is marked in amber so the teacher can check their own wording
+   as the family will read it. */
+.sk-emailcard {
+  border: 1.5px solid var(--sk-line); border-radius: 12px;
+  background: var(--sk-card); padding: 12px 13px; box-shadow: var(--sk-shadow);
+}
+.sk-emailcard .eh {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.05em; color: var(--sk-good);
+}
+.sk-emailcard .esub { font-size: 12px; font-weight: 700; margin-top: 6px; color: var(--sk-ink); }
+.sk-emailcard .ebody { font-size: 11.5px; color: var(--sk-ink-2); margin-top: 4px; line-height: 1.5; }
+.sk-emailcard .ebody mark {
+  background: var(--sk-amber-tint); color: var(--sk-amber-ink);
+  border-radius: 3px; padding: 0 3px; font-weight: 700;
+}
+.sk-emailcard .enote { font-size: 10px; color: var(--sk-ink-3); margin-top: 6px; }
+
+/* ============================================================================
+   THE ATTENDANCE BAR — slider over a distribution
+   ============================================================================
+   The point of the pitch's design is that the benchmark is a THING YOU MOVE
+   over a picture of the class, not a number you pick from a list. Sliding it
+   shows the class re-splitting under the line, which is the only way a teacher
+   can judge whether 75% is the right place to draw it for THIS class.
+   ========================================================================== */
+input[type="range"].sk-bar {
+  width: 100%;
+  accent-color: var(--sk-brand);
+  cursor: pointer;
+}
+input[type="range"].sk-bar:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 3px; }
+
+/* One bar per student, sorted lowest-first; below-threshold bars go red. */
+.sk-dist {
+  display: flex; align-items: flex-end; gap: 2px;
+  height: 76px; padding: 10px 12px 0; position: relative;
+}
+.sk-dist > span {
+  flex: 1; min-width: 2px; border-radius: 2px 2px 0 0;
+  background: var(--sk-good-tint);
+  transition: height 0.25s var(--sk-ease), background 0.25s;
+}
+.sk-dist > span[data-low="true"] { background: var(--sk-bad); opacity: 0.75; }
+/* The benchmark itself: a dashed amber rule that slides with the input. Amber
+   because it is the "needs attention" hue and must not be mistaken for either
+   side of the split it draws. */
+.sk-barline {
+  position: absolute; left: 8px; right: 8px;
+  border-top: 2px dashed var(--sk-amber);
+  transition: bottom 0.25s var(--sk-ease);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-dist > span, .sk-barline { transition: none; }
+}
+
+/* ============================================================================
+   STUDENT PICKER — token + dropdown
+   ========================================================================== */
+.sk-tok {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--sk-brand-tint); border: 1.5px solid var(--sk-brand); color: var(--sk-brand-2);
+  border-radius: 999px; padding: 4px 8px 4px 11px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.sk-tok .x {
+  width: 16px; height: 16px; border-radius: 50%; flex: none;
+  background: var(--sk-brand); color: #fff;
+  display: grid; place-items: center; font-size: 10px; line-height: 1;
+}
+.sk-drop {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20;
+  background: var(--sk-card); border: 1px solid var(--sk-line);
+  border-radius: 11px; box-shadow: var(--sk-shadow); overflow: hidden;
+}
+.sk-dropit {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 12px; font-size: 12.5px; text-align: left; color: var(--sk-ink);
+  background: transparent; border: 0; cursor: pointer;
+}
+.sk-dropit + .sk-dropit { border-top: 1px solid var(--sk-line); }
+.sk-dropit:hover, .sk-dropit[data-cursor="true"] { background: var(--sk-brand-tint); }
+/* Roll numbers are digits meant to be compared down a column, so they get the
+   monospace face and the right edge — the same treatment the register uses. */
+.sk-dropit .rl {
+  margin-left: auto; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 10.5px; color: var(--sk-ink-3);
+}

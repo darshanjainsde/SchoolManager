@@ -59,8 +59,10 @@ describe('DayTimeline', () => {
     render(<DayTimeline entries={DAY} currentIndex={2} onTakeAttendance={jest.fn()} />);
     expect(screen.getByText('Earlier today')).toBeTruthy();
 
+    // .55, not .5 — the pitch's `.rail.done`: a finished period stays
+    // readable (it is the record of the day) but stops competing.
     const dimmedRow = screen.getByTestId(`timeline-row-${DAY[0].periodId}`);
-    expect(dimmedRow.props.style).toEqual(expect.objectContaining({ opacity: 0.5 }));
+    expect(dimmedRow.props.style).toEqual(expect.objectContaining({ opacity: 0.55 }));
     const brightRow = screen.getByTestId(`timeline-row-${DAY[2].periodId}`);
     expect(brightRow.props.style).toEqual(expect.objectContaining({ opacity: 1 }));
   });

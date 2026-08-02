@@ -24,9 +24,39 @@ function dayLabel(iso: string): string {
 }
 
 /**
+ * A signature that writes itself.
+ *
+ * A green tick would say "the request succeeded". This says "you signed it",
+ * which is what the action actually was — the nib travelling across the line
+ * is the whole point, so it is an SVG stroke rather than an icon. The path is
+ * a fixed squiggle, not a rendering of the typed name: it stands for a
+ * signature, and pretending to reproduce someone's hand would be a lie about
+ * what was captured.
+ *
+ * `sk-sig`/`sk-in` come from sk-theme.css, which also collapses this to the
+ * finished stroke under `prefers-reduced-motion: reduce`.
+ */
+function DrawnSignature(): React.JSX.Element {
+  return (
+    <svg
+      className="sk-sig sk-in"
+      width="46"
+      height="16"
+      viewBox="0 0 46 16"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M2 12 C8 2 11 14 16 7 S24 12 30 6 S40 12 44 5" />
+    </svg>
+  );
+}
+
+/**
  * The diary at home, on the web (Phase 5·3) — the same pages the app shows,
  * grouped by day with the red margin rule on a remark and a signature line
- * under it.
+ * under it. It reuses the teacher page's `.sk-diary-item` treatment on
+ * purpose: a family opening the entry they were emailed about must recognise
+ * it as the same object the teacher wrote, not as a second rendering of it.
  *
  * Copy is role-neutral for the same reason the app's is: one STUDENT login
  * serves both the student and whoever at home uses it, so nothing here
@@ -93,43 +123,39 @@ export default function PortalDiaryPage(): React.JSX.Element {
             <h3>{dayLabel(day.date)}</h3>
           </div>
           <div className="sk-card-b">
-            {day.entries.map((e) => {
+            {/* Same `pinin` drop as the teacher's page — the day's entries
+                pin themselves onto the page as it opens, staggered so they
+                read as separate slips rather than one block appearing. */}
+            {day.entries.map((e, i) => {
               const red = e.kind === 'REMARK';
               return (
                 <div
                   key={e.id}
                   data-testid={`diary-${e.id}`}
-                  className="sk-row"
-                  style={{
-                    alignItems: 'flex-start',
-                    borderLeft: `3px solid ${red ? 'var(--sk-bad)' : 'var(--sk-brand-tint)'}`,
-                    paddingLeft: 12,
-                  }}
+                  className="sk-diary-item sk-pinin sk-in"
+                  data-kind={e.kind}
+                  style={{ animationDelay: `${Math.min(i, 8) * 0.07}s` }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      className="nm"
-                      style={red ? { color: 'var(--sk-bad)', fontStyle: 'italic' } : undefined}
-                    >
-                      {e.body}
+                  <span className="sdot" aria-hidden="true" />
+                  <div className="di-body">
+                    <div className="di-sub">
+                      {e.subjectName ?? 'Diary'}
+                      {red && <span className="sk-rem-tag">REMARK</span>}
                     </div>
-                    <div className="meta">
+                    <div className="di-txt">{e.body}</div>
+                    <div className="di-by">
                       {e.teacherName}
-                      {e.subjectName ? ` · ${e.subjectName}` : ''}
-                      {e.personal ? ' · for you' : ''}
+                      {e.personal ? ' · written for you' : ' · for the whole class'}
                     </div>
 
                     {red &&
                       (e.signedAt ? (
-                        <div
-                          className="meta"
-                          data-testid={`signed-${e.id}`}
-                          style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}
-                        >
-                          <span className="sk-pill" data-tone="good">
-                            Signed
-                          </span>
-                          by {e.signedName}
+                        // Signed: the drawn signature replaces the form. The
+                        // name is shown beside it because the stroke says
+                        // "signed" and only the text says "by whom".
+                        <div className="sk-signed" data-testid={`signed-${e.id}`}>
+                          <DrawnSignature />
+                          <span>Signed by {e.signedName}</span>
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2" style={{ marginTop: 10, maxWidth: 380 }}>
@@ -147,7 +173,7 @@ export default function PortalDiaryPage(): React.JSX.Element {
                           />
                           <button
                             type="button"
-                            className="sk-btn"
+                            className="sk-btn sk-press"
                             data-variant="primary"
                             data-testid={`sign-${e.id}`}
                             disabled={!(drafts[e.id] ?? '').trim() || sign.isPending}
@@ -155,7 +181,7 @@ export default function PortalDiaryPage(): React.JSX.Element {
                               sign.mutate({ id: e.id, name: (drafts[e.id] ?? '').trim() })
                             }
                           >
-                            {sign.isPending ? 'Signing…' : 'Sign this remark'}
+                            {sign.isPending ? 'Signing…' : '✍️ Sign this remark'}
                           </button>
                         </div>
                       ))}

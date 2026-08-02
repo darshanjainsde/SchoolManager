@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import type { TeacherDayEntry } from '@skoolos/types';
-import { Card, Pill } from './ui';
+import { Card, Page, PageHeader, Pill, RailRow, RailStatus, type RailState } from './ui';
 import { useTokens } from '@/theme/theme-context';
 
 export interface DayTimelineProps {
@@ -10,128 +10,99 @@ export interface DayTimelineProps {
   onTakeAttendance: (classSectionId: string) => void;
 }
 
+/** What this period is doing to the day, in the rail's own vocabulary. */
+function stateOf(entry: TeacherDayEntry, dimmed: boolean, current: boolean): RailState {
+  if (dimmed) return 'done';
+  if (current) return 'now';
+  if (entry.kind === 'FREE') return 'free';
+  return 'upcoming';
+}
+
 /**
- * One entry of the day, rendered as a self-contained rail tile:
- *   • CLASS → indigo lead bar, a stacked start/end time, and the attendance
- *     pill (✓ present/total, or a tappable amber "Take now").
- *   • FREE  → a distinct GREEN tile ("Free period", green "Free" pill) so a
- *     free teaching period never looks like a break.
- *   • BREAK → a neutral/grey tile with a ghost "Break" pill.
- * Rows before the current one render dimmed.
+ * One entry of the day as a rail row — a line ruled on the day's page rather
+ * than a tile floating on it (the pitch's `.rail`). Every row keeps its
+ * stacked start/end times in the margin, whatever kind it is: a free period
+ * that hides its hours stops being a slot you can plan into, which is the
+ * whole reason a teacher reads this list.
+ *
+ *   • CLASS → the attendance status on the right (✓ present/total, or a
+ *     tappable amber "Take now").
+ *   • FREE  → the green wash, so a free teaching period never looks like a
+ *     break.
+ *   • the LIVE row → the amber highlighter wash; earlier rows → .55 opacity.
  */
 function Row({
   entry,
   dimmed,
   current,
+  first,
   onTakeAttendance,
 }: {
   entry: TeacherDayEntry;
   dimmed: boolean;
   current: boolean;
+  first: boolean;
   onTakeAttendance: (classSectionId: string) => void;
 }) {
-  const tokens = useTokens();
   const isClass = entry.kind === 'CLASS';
   const isFree = entry.kind === 'FREE';
-  const isBreak = entry.kind === 'BREAK';
 
-  const leadColor = isFree ? tokens.color.green : isBreak ? tokens.color.sub : tokens.color.indigo;
-  const borderColor = current
-    ? tokens.color.indigo
-    : isFree
-      ? tokens.color.green
-      : tokens.color.line;
+  const right = isClass ? (
+    // Defensive, like NowCard's `register?.taken` handling: the real API
+    // never pairs a CLASS row with a null register today, but if it ever
+    // did, fall back to the "Take now" pill rather than rendering nothing.
+    entry.register?.taken ? (
+      <Pill tone="green">{`✓ ${entry.register.present}/${entry.register.total}`}</Pill>
+    ) : entry.slot ? (
+      <Pressable
+        testID={`timeline-take-${entry.slot.classSectionId}`}
+        onPress={() => onTakeAttendance(entry.slot!.classSectionId)}
+      >
+        <Pill tone="amber">Take now</Pill>
+      </Pressable>
+    ) : (
+      <Pill tone="amber">Take now</Pill>
+    )
+  ) : isFree ? (
+    <View testID={`timeline-free-${entry.periodId}`}>
+      <RailStatus tone="good">Free</RailStatus>
+    </View>
+  ) : (
+    <Pill tone="neutral">Break</Pill>
+  );
 
   return (
-    <View
+    <RailRow
       testID={`timeline-row-${entry.periodId}`}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 11,
-        backgroundColor: isFree ? tokens.color.green50 : tokens.color.surface,
-        borderWidth: 1,
-        borderColor,
-        borderRadius: 15,
-        padding: 11,
-        opacity: dimmed ? 0.5 : 1,
-      }}
-    >
-      <View style={{ width: 4, alignSelf: 'stretch', borderRadius: 4, backgroundColor: leadColor }} />
-
-      {isClass ? (
-        <View style={{ width: 44 }}>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub }}>{entry.startTime}</Text>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub }}>{entry.endTime}</Text>
-        </View>
-      ) : (
-        <View
-          testID={isFree ? `timeline-free-${entry.periodId}` : undefined}
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 9,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: isFree ? tokens.color.green50 : tokens.color.surfaceMuted,
-          }}
-        >
-          <Text style={{ fontSize: 14 }}>{isFree ? '☕' : '🍽️'}</Text>
-        </View>
-      )}
-
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text
-          numberOfLines={1}
-          style={{
-            fontSize: 13.5,
-            fontWeight: '700',
-            color: isFree ? tokens.color.green : tokens.color.ink,
-          }}
-        >
-          {isClass && entry.slot
-            ? `${entry.slot.className} · ${entry.slot.subjectName}`
-            : isFree
-              ? 'Free period'
-              : entry.label}
-        </Text>
-        <Text numberOfLines={1} style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }}>
-          {isClass
-            ? current
-              ? `${entry.label} · in progress`
-              : entry.label
-            : isFree
-              ? `${entry.label} · prep or catch up`
-              : `${entry.startTime}–${entry.endTime}`}
-        </Text>
-      </View>
-
-      {isClass &&
-        // Defensive, like NowCard's `register?.taken` handling: the real API
-        // never pairs a CLASS row with a null register today, but if it ever
-        // did, fall back to the "Take now" pill rather than rendering nothing.
-        (entry.register?.taken ? (
-          <Pill tone="green">{`✓ ${entry.register.present}/${entry.register.total}`}</Pill>
-        ) : entry.slot ? (
-          <Pressable
-            testID={`timeline-take-${entry.slot.classSectionId}`}
-            onPress={() => onTakeAttendance(entry.slot!.classSectionId)}
-          >
-            <Pill tone="amber">Take now</Pill>
-          </Pressable>
-        ) : (
-          <Pill tone="amber">Take now</Pill>
-        ))}
-      {isFree && <Pill tone="green">Free</Pill>}
-      {isBreak && <Pill tone="neutral">Break</Pill>}
-    </View>
+      startTime={entry.startTime}
+      endTime={entry.endTime}
+      state={stateOf(entry, dimmed, current)}
+      first={first}
+      title={
+        isClass && entry.slot
+          ? `${entry.slot.className} · ${entry.slot.subjectName}`
+          : isFree
+            ? 'Free period'
+            : entry.label
+      }
+      subtitle={
+        isClass
+          ? current
+            ? `${entry.label} · in progress`
+            : entry.label
+          : isFree
+            ? `${entry.label} · prep or catch up`
+            : `${entry.startTime}–${entry.endTime}`
+      }
+      right={right}
+    />
   );
 }
 
 /**
- * The whole day, one tile per timetable entry (classes, free periods and
- * breaks alike). Entries before `currentIndex` are grouped under "Earlier
- * today" and rendered dimmed; everything from the current entry onward reads
+ * The whole day on one page, one ruled row per timetable entry (classes, free
+ * periods and breaks alike). Entries before `currentIndex` are grouped under
+ * "Earlier today" and dimmed; everything from the current entry onward reads
  * as upcoming. No hooks beyond theming, no fetching — the screen owns
  * `currentIndex` so this component is fully testable from props. Mirrors
  * apps/web/components/teacher/DayTimeline.tsx.
@@ -151,38 +122,52 @@ export function DayTimeline({ entries, currentIndex, onTakeAttendance }: DayTime
   const rest = entries.slice(splitAt);
 
   return (
-    <View testID="timeline">
-      <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink, marginBottom: 2 }}>
-        Today&apos;s timetable
-      </Text>
+    <Page testID="timeline">
+      <PageHeader title="Today's timetable" />
 
       {earlier.length > 0 && (
         <>
+          {/* A paper tab, not a heading: the pitch's rail runs unbroken down
+              the page, so what separates what's done from what's left is a
+              small label in the margin, never a gap in the rule. */}
           <Text
             testID="timeline-earlier-label"
-            style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub, marginTop: 8 }}
+            style={{
+              fontSize: 9,
+              fontWeight: '800',
+              letterSpacing: 0.9,
+              textTransform: 'uppercase',
+              color: tokens.color.sub,
+              paddingTop: 4,
+              paddingHorizontal: 12,
+              paddingBottom: 2,
+            }}
           >
             Earlier today
           </Text>
-          <View style={{ gap: 9, marginTop: 8 }}>
-            {earlier.map((e) => (
-              <Row key={e.periodId} entry={e} dimmed current={false} onTakeAttendance={onTakeAttendance} />
-            ))}
-          </View>
+          {earlier.map((e, i) => (
+            <Row
+              key={e.periodId}
+              entry={e}
+              dimmed
+              current={false}
+              first={i === 0}
+              onTakeAttendance={onTakeAttendance}
+            />
+          ))}
         </>
       )}
 
-      <View style={{ gap: 9, marginTop: 8 }}>
-        {rest.map((e, ri) => (
-          <Row
-            key={e.periodId}
-            entry={e}
-            dimmed={false}
-            current={splitAt + ri === currentIndex}
-            onTakeAttendance={onTakeAttendance}
-          />
-        ))}
-      </View>
-    </View>
+      {rest.map((e, ri) => (
+        <Row
+          key={e.periodId}
+          entry={e}
+          dimmed={false}
+          current={splitAt + ri === currentIndex}
+          first={earlier.length === 0 && ri === 0}
+          onTakeAttendance={onTakeAttendance}
+        />
+      ))}
+    </Page>
   );
 }

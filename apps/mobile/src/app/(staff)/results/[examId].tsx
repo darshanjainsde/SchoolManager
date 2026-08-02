@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Pressable, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type {
   Exam,
@@ -13,6 +13,78 @@ import { api, ApiError } from '@/lib/api';
 import { buildResultsPayload, markOutOfRange, marksValid } from '@/lib/exams';
 import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
+import { DUR, inkWidth, play, stampStyle, useGesture, useReduceMotion } from '@/theme/motion';
+
+/**
+ * THE INK LINE (`.mprog`) — a rule drawing itself along as the sheet fills.
+ * Entering marks is the one long, repetitive job on this app, and the only
+ * thing that makes a long job bearable is seeing the line move. It re-aims at
+ * the new fraction on every keystroke rather than restarting from zero, so
+ * the line only ever grows the way a pen only ever moves forward.
+ */
+function InkProgress({ done, total }: { done: number; total: number }) {
+  const tokens = useTokens();
+  const fraction = total > 0 ? Math.min(1, done / total) : 0;
+  const line = useRef(new Animated.Value(0)).current;
+  const reduced = useReduceMotion();
+  useEffect(() => {
+    play(line, DUR.ink, { reduced: reduced.current, native: false, toValue: fraction });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fraction]);
+  return (
+    <View
+      style={{
+        height: 6,
+        borderRadius: 999,
+        backgroundColor: tokens.color.line,
+        overflow: 'hidden',
+      }}
+    >
+      <Animated.View
+        style={{
+          height: '100%',
+          borderRadius: 999,
+          backgroundColor: tokens.color.indigo,
+          // The value itself carries the fraction, so `inkWidth` maps the full
+          // 0→1 range onto 0→100% of the rule.
+          width: inkWidth(line, 100),
+        }}
+      />
+    </View>
+  );
+}
+
+/**
+ * THE STAMP (`.bigstamp`) — the sheet stamps itself the moment the last mark
+ * lands. This is the only signal in the flow that says "you are done here",
+ * and it arrives before any button is pressed precisely because a teacher
+ * scanning back for the one blank row is the thing it replaces.
+ */
+function CompleteStamp({ label }: { label: string }) {
+  const tokens = useTokens();
+  const land = useGesture(true, DUR.stamp);
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Animated.View
+        style={[
+          {
+            borderWidth: 2.5,
+            borderColor: tokens.color.green,
+            borderRadius: 10,
+            paddingVertical: 6,
+            paddingHorizontal: 16,
+          },
+          stampStyle(land),
+        ]}
+      >
+        <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 15, color: tokens.color.green }}>
+          {label}
+        </Text>
+      </Animated.View>
+    </View>
+  );
+}
 
 /**
  * Exact wording the web's ConfirmPublish dialog uses
@@ -26,16 +98,29 @@ const PUBLISH_WARNING =
 
 export default function ExamResults() {
   const tokens = useTokens();
+  // `.mkrow input` — a small mono box, because a column of marks is a column
+  // of figures and figures only line up in a mono face.
   const inputStyle = {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: tokens.color.line,
-    borderRadius: 11,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    fontSize: 13.5,
+    borderRadius: 9,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    fontFamily: font.mono,
+    fontSize: 13,
+    fontWeight: '700' as const,
     color: tokens.color.ink,
-    width: 64,
-    textAlign: 'right' as const,
+    backgroundColor: tokens.color.appBg,
+    width: 56,
+    textAlign: 'center' as const,
+  };
+  // `.mkrow input.doneIn` — a filled, in-range box turns green-tinted. Not a
+  // reward: it is how a teacher's eye finds the ONE row still blank without
+  // re-reading forty names.
+  const doneInputStyle = {
+    borderColor: tokens.color.green,
+    backgroundColor: tokens.color.green50,
+    color: tokens.color.green,
   };
   const { examId, classSectionId } = useLocalSearchParams<{
     examId: string;
@@ -216,8 +301,10 @@ export default function ExamResults() {
       {exam && (
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontWeight: '700', color: tokens.color.ink }}>
-              Out of {exam.maxMarks} · {parsed.length} of {students.length} entered
+            {/* The running count now lives under the ink line (below), where
+                it is next to the thing that moves — so it is stated once. */}
+            <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 15, color: tokens.color.ink }}>
+              Out of {exam.maxMarks}
             </Text>
             {alreadyPublished && <Pill tone="green">Published</Pill>}
           </View>
@@ -243,39 +330,67 @@ export default function ExamResults() {
 
       {exam && students.length > 0 && (
         <Card style={{ paddingVertical: 2 }}>
+          {/* `.mkrow` — roll, name, box. The roll leads the row (as it does on
+              a paper mark sheet) so the teacher can read down a dictated list
+              of numbers without hunting for names. */}
           {students.map((s) => {
             const raw = entries[s.id] ?? '';
             const bad = markOutOfRange(raw, exam.maxMarks);
+            const filled = raw.trim().length > 0 && !bad;
             return (
               <View
                 key={s.id}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  paddingVertical: 9,
+                  gap: 9,
+                  paddingVertical: 7,
                   borderBottomWidth: 1,
                   borderBottomColor: tokens.color.line,
                 }}
               >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '600', color: tokens.color.ink }}>
-                    {s.firstName} {s.lastName}
-                  </Text>
-                  <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 1 }}>
-                    Roll {s.rollNo ?? '—'}
-                  </Text>
-                </View>
+                <Text
+                  style={{
+                    fontFamily: font.mono,
+                    fontSize: 10.5,
+                    color: tokens.color.sub,
+                    width: 24,
+                    textAlign: 'right',
+                  }}
+                >
+                  {s.rollNo ?? '—'}
+                </Text>
+                <Text style={{ fontWeight: '600', fontSize: 13, color: tokens.color.ink, flex: 1 }}>
+                  {s.firstName} {s.lastName}
+                </Text>
                 <TextInput
                   testID={`mark-${s.id}`}
                   value={raw}
                   onChangeText={(v) => setEntries((m) => ({ ...m, [s.id]: v }))}
                   keyboardType="numeric"
-                  style={[inputStyle, bad ? { borderColor: tokens.color.red } : null]}
+                  placeholder="—"
+                  placeholderTextColor={tokens.color.placeholder}
+                  style={[
+                    inputStyle,
+                    filled ? doneInputStyle : null,
+                    bad ? { borderColor: tokens.color.red, color: tokens.color.red } : null,
+                  ]}
                 />
               </View>
             );
           })}
+          {/* THE INK LINE plus its count — the pitch's `.mprog` + `#mkcount`. */}
+          <View style={{ paddingTop: 10, paddingBottom: 12, gap: 4 }}>
+            <InkProgress done={parsed.length} total={students.length} />
+            <Text style={{ fontSize: 10, color: tokens.color.sub }}>
+              {parsed.length} of {students.length} entered
+            </Text>
+          </View>
         </Card>
+      )}
+
+      {exam && students.length > 0 && valid && parsed.length === students.length && (
+        <CompleteStamp label={`All ${students.length} in ✓`} />
       )}
 
       {exam && parsed.length > 0 && !valid && (

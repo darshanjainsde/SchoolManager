@@ -186,7 +186,7 @@ it('loads a LATE student as LATE, not as present', async () => {
   // The selected pill for a LATE student must be Late, not Present.
   expect(lateButton.props.style).toMatchObject({ backgroundColor: '#F59E0B' });
   const presentButton = await findByTestId('present-s1');
-  expect(presentButton.props.style).not.toMatchObject({ backgroundColor: '#16B364' });
+  expect(presentButton.props.style).not.toMatchObject({ backgroundColor: '#178A5B' });
 });
 
 it('submitting a roster with a LATE student sends LATE', async () => {
@@ -259,7 +259,7 @@ it('a failed save shows the server message verbatim, keeps the marked roster, an
 
   // The marked roster survives the failed save — s2's pill is still PRESENT.
   const presentButton = await findByTestId('present-s2');
-  expect(presentButton.props.style).toMatchObject({ backgroundColor: '#16B364' });
+  expect(presentButton.props.style).toMatchObject({ backgroundColor: '#178A5B' });
 });
 
 it('mark-all-present sets every row to PRESENT, including rows that were ABSENT and LATE, without saving', async () => {
@@ -282,8 +282,8 @@ it('mark-all-present sets every row to PRESENT, including rows that were ABSENT 
 
   const present1 = await findByTestId('present-s1');
   const present2 = await findByTestId('present-s2');
-  expect(present1.props.style).toMatchObject({ backgroundColor: '#16B364' });
-  expect(present2.props.style).toMatchObject({ backgroundColor: '#16B364' });
+  expect(present1.props.style).toMatchObject({ backgroundColor: '#178A5B' });
+  expect(present2.props.style).toMatchObject({ backgroundColor: '#178A5B' });
 
   // Edge: it must not have called the API at all.
   expect(api.request as jest.Mock).not.toHaveBeenCalledWith(
@@ -394,7 +394,7 @@ it('a network-fail save is queued on the device, toasts instead of erroring, and
 
   // The marked roster survives — s2's pill is still PRESENT.
   const presentButton = await findByTestId('present-s2');
-  expect(presentButton.props.style).toMatchObject({ backgroundColor: '#16B364' });
+  expect(presentButton.props.style).toMatchObject({ backgroundColor: '#178A5B' });
 
   const pending = await pendingSaves();
   expect(pending).toHaveLength(1);

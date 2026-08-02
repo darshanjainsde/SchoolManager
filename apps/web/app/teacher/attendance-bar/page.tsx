@@ -11,8 +11,30 @@ import type {
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
-/** Round benchmarks only — a teacher should never have to defend "72%". */
-const STEPS = [50, 60, 65, 70, 75, 80, 85, 90] as const;
+/**
+ * The benchmark is a slider, but a stepped one: it moves in fives between 50%
+ * and 100%. A continuous slider would let a teacher land on "72%", and a
+ * benchmark you cannot say out loud is a benchmark you cannot defend to a
+ * parent. Fives keep every stop a number a school already uses.
+ */
+const BAR_MIN = 50;
+const BAR_MAX = 100;
+const BAR_STEP = 5;
+
+/** Drawing height of the distribution's tallest bar, in px. */
+const DIST_H = 54;
+/** Floor so a 0%-attendance child is still a visible stub, not nothing. */
+const DIST_FLOOR = 6;
+
+/**
+ * Percent → bar height. The scale starts at BAR_MIN rather than 0 because the
+ * interesting range for attendance is 50–100%; a 0-based axis would squash
+ * every real difference into the top third of the chart.
+ */
+function barHeight(percent: number): number {
+  const t = Math.min(Math.max((percent - BAR_MIN) / (BAR_MAX - BAR_MIN), 0), 1);
+  return Math.round(t * DIST_H) + DIST_FLOOR;
+}
 
 /** Matches the server's `NOTICE_COOLDOWN_DAYS`. */
 const COOLDOWN_DAYS = 7;
@@ -29,6 +51,11 @@ function daysSince(iso: string): number {
  * so "below 75%" is a line you can see rather than a filter you have to trust.
  * Everything below it is pre-selected and individually droppable; families
  * inside the cooldown are greyed with the reason spelled out.
+ *
+ * The benchmark is DRAGGED, not chosen from a list of buttons, because the
+ * question a teacher actually has is "is 75 the right place to draw it for
+ * this class?" — and the only thing that answers it is watching the class
+ * re-split under the line as it moves.
  */
 export default function AttendanceBarPage(): React.JSX.Element {
   const host = useHost();
@@ -61,6 +88,17 @@ export default function AttendanceBarPage(): React.JSX.Element {
   const below = useMemo(
     () => (data?.students ?? []).filter((s) => s.percent < threshold && s.total > 0),
     [data, threshold],
+  );
+
+  /**
+   * The distribution, lowest first. Sorting is what makes the chart readable:
+   * an unsorted class is noise, a sorted one shows the tail the benchmark is
+   * meant to catch. Children with no register taken are left out entirely —
+   * a 0% that only means "never marked" would invent a tail that isn't there.
+   */
+  const distribution = useMemo(
+    () => (data?.students ?? []).filter((s) => s.total > 0).sort((a, b) => a.percent - b.percent),
+    [data],
   );
   const inCooldown = (s: AttendanceRateRow) =>
     s.lastNoticeAt !== null && daysSince(s.lastNoticeAt) < COOLDOWN_DAYS;
@@ -114,7 +152,7 @@ export default function AttendanceBarPage(): React.JSX.Element {
             <button
               key={c.classSectionId}
               type="button"
-              className="sk-btn"
+              className="sk-btn sk-press"
               data-testid={`bar-class-${c.classSectionId}`}
               data-variant={c.classSectionId === activeId ? 'primary' : undefined}
               onClick={() => {
@@ -138,20 +176,57 @@ export default function AttendanceBarPage(): React.JSX.Element {
               ? `${below.length} of ${data.students.length} in ${data.className}, over ${data.daysMarked} marked days.`
               : 'Reading the register…'}
           </p>
-          <div className="flex flex-wrap gap-2">
-            {STEPS.map((step) => (
-              <button
-                key={step}
-                type="button"
-                className="sk-btn"
-                data-testid={`bar-step-${step}`}
-                data-variant={step === threshold ? 'primary' : undefined}
-                onClick={() => setThreshold(step)}
-              >
-                {step}%
-              </button>
-            ))}
+
+          {/* The class, one bar per child, sorted lowest first. Bars below the
+              benchmark go red, so dragging the slider repaints the tail live —
+              that repaint is the entire argument for the control. Decorative:
+              every number in it is also stated in the rows below, so screen
+              readers are told nothing twice. */}
+          {distribution.length > 0 && (
+            <div className="sk-dist" data-testid="bar-dist" aria-hidden="true">
+              <div className="sk-barline" style={{ bottom: barHeight(threshold) }} />
+              {distribution.map((s) => (
+                <span
+                  key={s.studentId}
+                  data-low={s.percent < threshold ? 'true' : undefined}
+                  style={{ height: barHeight(s.percent) }}
+                  title={`${s.name} · ${s.percent}%`}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              className="sk-bar"
+              data-testid="bar-threshold"
+              min={BAR_MIN}
+              max={BAR_MAX}
+              step={BAR_STEP}
+              value={threshold}
+              aria-label="Attendance benchmark"
+              aria-valuetext={`${threshold} percent`}
+              onChange={(e) => setThreshold(Number(e.target.value))}
+            />
+            <span
+              className="text-[16px] font-bold"
+              style={{ color: 'var(--sk-amber-ink)', minWidth: 48 }}
+            >
+              {threshold}%
+            </span>
           </div>
+
+          {data && (
+            <div className="flex flex-wrap gap-2">
+              <span className="sk-pill" data-tone="good">
+                {distribution.length - below.length} above
+              </span>
+              <span className="sk-pill" data-tone="bad">
+                {below.length} below
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -165,7 +240,7 @@ export default function AttendanceBarPage(): React.JSX.Element {
             <span className="sp" />
             <button
               type="button"
-              className="sk-btn"
+              className="sk-btn sk-press"
               data-variant="primary"
               data-testid="bar-notify"
               disabled={willNotify.length === 0 || notify.isPending}
@@ -200,43 +275,17 @@ export default function AttendanceBarPage(): React.JSX.Element {
                     opacity: under && off ? 0.55 : 1,
                   }}
                 >
+                  {/* The per-row mini-bar the histogram above now does better
+                      is gone: two charts of the same numbers on one screen
+                      made the benchmark line ambiguous. The row carries the
+                      facts a name needs — days present, and when they last
+                      heard from you. */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="nm">{s.name}</div>
                     <div className="meta">
                       {s.present} of {s.total} days
                       {cool ? ` · told ${daysSince(s.lastNoticeAt as string)}d ago` : ''}
-                    </div>
-                    {/* The bar itself: the class read at a glance, with the
-                        benchmark as a line rather than a number to trust. */}
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        position: 'relative',
-                        height: 6,
-                        borderRadius: 3,
-                        background: 'var(--sk-bg-2)',
-                        marginTop: 6,
-                        maxWidth: 340,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${s.percent}%`,
-                          height: '100%',
-                          borderRadius: 3,
-                          background: under ? 'var(--sk-bad)' : 'var(--sk-good)',
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: -2,
-                          bottom: -2,
-                          left: `${threshold}%`,
-                          width: 2,
-                          background: 'var(--sk-ink-3)',
-                        }}
-                      />
+                      {under && !cool && off ? ' · dropped from this round' : ''}
                     </div>
                   </div>
                   <span className="sp" />

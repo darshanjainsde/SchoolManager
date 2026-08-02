@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ATTENDANCE_STATUSES,
@@ -11,7 +11,8 @@ import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { enqueueSave, flush } from '@/lib/offline-queue';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
-import type { ColorPalette } from '@/theme/tokens';
+import { font, type ColorPalette } from '@/theme/tokens';
+import { DUR, stampStyle, useGesture } from '@/theme/motion';
 
 interface RosterRow {
   studentId: string;
@@ -63,6 +64,48 @@ function statusColor(tokens: { color: ColorPalette }): Record<AttendanceStatusVa
     ABSENT: tokens.color.red,
     LATE: tokens.color.amber,
   };
+}
+
+/**
+ * THE STAMP (`.bigstamp`) — the register is the one page a teacher must
+ * *close*, and a rubber stamp is what closing a page looks like on paper: it
+ * arrives oversized and crooked, thumps past its resting size and settles a
+ * few degrees off square. It exists so "saved" is felt, not merely read;
+ * the Toast beside it carries the actual numbers. Mounted only once the
+ * SERVER has confirmed, so the stamp can never claim a save that didn't
+ * happen — a queued/offline save deliberately gets no stamp, only the
+ * pending Toast.
+ */
+function SavedStamp() {
+  const tokens = useTokens();
+  const land = useGesture(true, DUR.stamp);
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Animated.View
+        style={[
+          {
+            borderWidth: 2.5,
+            borderColor: tokens.color.green,
+            borderRadius: 10,
+            paddingVertical: 6,
+            paddingHorizontal: 16,
+          },
+          stampStyle(land),
+        ]}
+      >
+        <Text
+          style={{
+            fontFamily: font.serif,
+            fontWeight: '700',
+            fontSize: 15,
+            color: tokens.color.green,
+          }}
+        >
+          Register saved
+        </Text>
+      </Animated.View>
+    </View>
+  );
 }
 
 export default function TakeAttendance() {
@@ -196,11 +239,23 @@ export default function TakeAttendance() {
     }
   };
 
+  // `.regstat .n` — the pitch sets every countable figure in the mono face so
+  // the three numerals line up as a column of figures would in a paper
+  // register. Only the NUMBERS are mono; the words stay in the UI sans, per
+  // the type rule in theme/tokens.ts.
+  const statNumber = (color: string) => ({
+    fontFamily: font.mono,
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color,
+  });
+
   return (
     <Screen>
       <SectionTitle
         title={`${name ?? 'Class'} · Attendance${date === todayISO() ? '' : ` · ${date}`}`}
       />
+      {confirmation && <SavedStamp />}
       {confirmation && (
         <Toast
           kind="success"
@@ -227,10 +282,23 @@ export default function TakeAttendance() {
           <Text style={{ color: tokens.color.sub }}>Loading roster…</Text>
         </Card>
       )}
+      {/* `.regstats` — the running count, mono numerals on paper. Kept as ONE
+          text run (rather than the pitch's three separate tiles) because that
+          exact sentence is this screen's published summary; the mono/colour
+          treatment per figure is what carries the tile idea across. */}
       {roster !== null && (
-        <Card>
-          <Text style={{ fontWeight: '700', color: tokens.color.ink }}>
-            {presentCount} present · {absentCount} absent · {rows.length} total
+        <Card style={{ paddingVertical: 9, alignItems: 'center' }}>
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: '700',
+              color: tokens.color.sub,
+              textAlign: 'center',
+            }}
+          >
+            <Text style={statNumber(tokens.color.green)}>{presentCount}</Text> present ·{' '}
+            <Text style={statNumber(tokens.color.red)}>{absentCount}</Text> absent ·{' '}
+            <Text style={statNumber(tokens.color.ink)}>{rows.length}</Text> total
           </Text>
         </Card>
       )}
@@ -240,7 +308,7 @@ export default function TakeAttendance() {
         testID="mark-all-present"
         style={{
           backgroundColor: tokens.color.indigo50,
-          borderRadius: 13,
+          borderRadius: 11,
           padding: 11,
           opacity: busy || rows.length === 0 ? 0.6 : 1,
         }}
@@ -264,12 +332,33 @@ export default function TakeAttendance() {
             >
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: '600', color: tokens.color.ink }}>{r.name}</Text>
-                <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 1 }}>
+                {/* The roll number is a figure that must line up down the
+                    column — the pitch's `.mkrow .rl`/`.rcell` mono. */}
+                <Text
+                  style={{
+                    fontFamily: font.mono,
+                    fontSize: 11,
+                    color: tokens.color.sub,
+                    marginTop: 2,
+                  }}
+                >
                   Roll {r.rollNo ?? '—'}
                 </Text>
               </View>
+              {/* `.rgrid`/`.rcell` — a recessed tray of equal, square-ish tap
+                  targets. The pitch's register is a single cycling cell per
+                  student; this screen keeps its three-way control (its testIDs
+                  and direct-selection behaviour are a published contract), so
+                  the cell vocabulary lands on the three targets instead: the
+                  SELECTED one carries the state at full ink. */}
               <View
-                style={{ flexDirection: 'row', backgroundColor: tokens.color.surfaceMuted, borderRadius: 10, padding: 3 }}
+                style={{
+                  flexDirection: 'row',
+                  gap: 4,
+                  backgroundColor: tokens.color.surfaceMuted,
+                  borderRadius: 11,
+                  padding: 3,
+                }}
               >
                 {ATTENDANCE_STATUSES.map((status) => {
                   const on = r.status === status;
@@ -279,7 +368,17 @@ export default function TakeAttendance() {
                       key={status}
                       testID={`${status.toLowerCase()}-${r.studentId}`}
                       onPress={() => setStatus(r.studentId, status)}
-                      style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: bg }}
+                      style={{
+                        paddingVertical: 6,
+                        paddingHorizontal: 11,
+                        borderRadius: 9,
+                        backgroundColor: bg,
+                        // `.rcell.A{transform:scale(1.06)}` — an absence is the
+                        // exception the whole page exists to record, so the cell
+                        // that holds it sits a touch proud of its neighbours and
+                        // can be found without reading a single word.
+                        transform: on && status === 'ABSENT' ? [{ scale: 1.06 }] : [],
+                      }}
                     >
                       <Text style={{ fontSize: 11.5, fontWeight: '700', color: on ? tokens.color.onBrand : tokens.color.sub }}>
                         {STATUS_LABEL[status]}
@@ -292,11 +391,25 @@ export default function TakeAttendance() {
           ))}
         </Card>
       )}
+      {/* `.reghint` — the quiet line under the grid that answers the one
+          question a blank-looking register raises. */}
+      {rows.length > 0 && (
+        <Text
+          style={{
+            fontSize: 10.5,
+            color: tokens.color.sub,
+            textAlign: 'center',
+            marginTop: -4,
+          }}
+        >
+          Everyone starts present — only the exceptions cost a tap.
+        </Text>
+      )}
       <Pressable
         onPress={submit}
         disabled={busy || rows.length === 0}
         testID="submit-attendance"
-        style={{ backgroundColor: tokens.color.indigo, borderRadius: 14, padding: 15, opacity: busy || rows.length === 0 ? 0.6 : 1 }}
+        style={{ backgroundColor: tokens.color.indigo, borderRadius: 11, padding: 14, opacity: busy || rows.length === 0 ? 0.6 : 1 }}
       >
         <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
           {busy ? 'Submitting…' : 'Submit attendance'}

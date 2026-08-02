@@ -8,6 +8,22 @@ import { flush, pendingSaves, queueKey, type FlushResult } from '@/lib/offline-q
 import { LockedDayCard } from '@/components/LockedDayCard';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
+
+/**
+ * The `.day` tile's two lines: the weekday initialism above, the date numeral
+ * below. Parsed from the `YYYY-MM-DD` string with an explicit local
+ * construction (never `new Date(iso)`, which reads a bare date as UTC and can
+ * show yesterday's tile to a device west of Greenwich).
+ */
+function dayParts(iso: string): { weekday: string; day: string } {
+  const [y, m, d] = iso.split('-').map(Number);
+  const when = new Date(y, (m ?? 1) - 1, d ?? 1);
+  return {
+    weekday: when.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase(),
+    day: String(d ?? ''),
+  };
+}
 
 /** True once an APPROVED row's `expiresAt` is still in the future — absolute
  * epoch comparison, so it is correct regardless of the device's timezone.
@@ -177,9 +193,33 @@ export default function StaffAttendance() {
     return (
     <Card key={c.classSectionId}>
       <View
-        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 11 }}
       >
-        <View>
+        {/* `.clsrow .ic` — the 34px serif-initial tile. A class is a *place*
+            in a teacher's day, and a labelled tile is how a paper timetable
+            names one: the initial reads at a glance down a column of rows. */}
+        <View
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 10,
+            backgroundColor: tokens.color.indigo,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: font.serif,
+              fontWeight: '700',
+              fontSize: 14,
+              color: tokens.color.onBrand,
+            }}
+          >
+            {c.name.trim().charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
           <Text style={{ fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>
             {c.name}
           </Text>
@@ -262,20 +302,85 @@ export default function StaffAttendance() {
     );
   };
 
+  // `.day` — a bordered paper tile on the surface, the unit the strip is made
+  // of. Shared by the two chevrons and the selected date so all three read as
+  // one control rather than two links around a label.
+  const dayTile = {
+    width: 40,
+    borderWidth: 1,
+    borderColor: tokens.color.line,
+    backgroundColor: tokens.color.surface,
+    borderRadius: 11,
+    paddingVertical: 6,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  };
+
   return (
     <Screen>
       <SectionTitle title={`Attendance · ${date === today ? 'today' : date}`} />
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 4 }}>
-        <Pressable testID="date-prev" onPress={() => setDate((d) => shiftISO(d, -1))}>
-          <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>‹ Prev day</Text>
+      {/* The `.dstrip`/`.day` vocabulary, applied to the date control this
+          screen already publishes. A literal strip of absolute day tiles was
+          rejected: `date-prev`/`date-next` are *relative* shifts with no
+          window limit (a teacher can walk back a whole term), and rebinding
+          those testIDs onto fixed "yesterday"/"tomorrow" tiles would silently
+          turn a repeatable press into a one-shot jump. So the paged control
+          stays and wears the strip's clothes instead — chevron tiles either
+          side of the selected `.day`, which carries the pitch's amber
+          `today` treatment or its indigo `sel` fill. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+        <Pressable testID="date-prev" onPress={() => setDate((d) => shiftISO(d, -1))} style={dayTile}>
+          <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 15 }}>‹</Text>
         </Pressable>
-        {date !== today && (
-          <Pressable testID="date-today" onPress={() => setDate(today)}>
-            <Text style={{ color: tokens.color.sub, fontWeight: '600', fontSize: 12 }}>Jump to today</Text>
-          </Pressable>
-        )}
-        <Pressable testID="date-next" onPress={() => setDate((d) => shiftISO(d, 1))}>
-          <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>Next day ›</Text>
+        {(() => {
+          const { weekday, day } = dayParts(date);
+          const isToday = date === today;
+          const tile = (
+            <View
+              style={[
+                dayTile,
+                {
+                  width: 60,
+                  backgroundColor: isToday ? tokens.color.amber50 : tokens.color.indigo,
+                  borderColor: isToday ? tokens.color.amber : tokens.color.indigo,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  fontSize: 8.5,
+                  fontWeight: '800',
+                  letterSpacing: 0.5,
+                  color: isToday ? tokens.color.late : tokens.color.onBrand,
+                }}
+              >
+                {weekday}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: font.serif,
+                  fontSize: 15,
+                  fontWeight: '700',
+                  marginTop: 1,
+                  color: isToday ? tokens.color.late : tokens.color.onBrand,
+                }}
+              >
+                {day}
+              </Text>
+            </View>
+          );
+          // "Jump to today" keeps its own testID and stays absent on today —
+          // exactly as before; only its shape changed.
+          return isToday ? (
+            tile
+          ) : (
+            <Pressable testID="date-today" onPress={() => setDate(today)}>
+              {tile}
+            </Pressable>
+          );
+        })()}
+        <Pressable testID="date-next" onPress={() => setDate((d) => shiftISO(d, 1))} style={dayTile}>
+          <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 15 }}>›</Text>
         </Pressable>
       </View>
       <Text style={{ color: tokens.color.sub, fontSize: 11.5, marginHorizontal: 4 }}>

@@ -43,6 +43,49 @@ const RATES = {
   ],
 };
 
+// ── Driving the benchmark slider ────────────────────────────────────────────
+// The benchmark is a continuous slider (PanResponder + Animated), not a row of
+// chips, so these tests move it the way a thumb does: give the track a width
+// via its layout event, then dispatch a real responder grant at the pixel that
+// corresponds to the percentage we want. `touchHistory` is the shape
+// PanResponder's own gesture maths expects from the responder system — without
+// it the handlers it wraps around ours would have nothing to read.
+type El = Parameters<typeof fireEvent>[0];
+const TRACK_W = 200; // 50 → 100 across 200px, so 1% = 4px
+
+const touchHistory = (x: number, t: number) => ({
+  touchBank: [
+    {
+      touchActive: true,
+      startPageX: x,
+      startPageY: 0,
+      startTimeStamp: 0,
+      currentPageX: x,
+      currentPageY: 0,
+      currentTimeStamp: t,
+      previousPageX: x,
+      previousPageY: 0,
+      previousTimeStamp: 0,
+    },
+  ],
+  numberActiveTouches: 1,
+  indexOfSingleActiveTouch: 0,
+  mostRecentTimeStamp: t,
+});
+
+function slideTo(slider: El, percent: number) {
+  fireEvent(slider, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: TRACK_W, height: 28 } } });
+  const x = ((percent - 50) / 50) * TRACK_W;
+  fireEvent(slider, 'responderGrant', {
+    nativeEvent: { locationX: x, locationY: 14 },
+    touchHistory: touchHistory(x, 1),
+  });
+  fireEvent(slider, 'responderRelease', {
+    nativeEvent: { locationX: x, locationY: 14 },
+    touchHistory: touchHistory(x, 2),
+  });
+}
+
 let notifyBody: Record<string, unknown> | null = null;
 
 function mockApi(rates = RATES) {
@@ -79,12 +122,28 @@ it('moving the benchmark re-filters instantly, before anything is sent', async (
   const { getByTestId, getByText } = render(<AttendanceBar />);
   await settled(() => expect(getByTestId('bar-row-s1')).toBeTruthy());
 
-  fireEvent.press(getByTestId('bar-step-90'));
+  slideTo(getByTestId('bar-threshold'), 90);
 
   await settled(() => expect(getByText('Below 90%')).toBeTruthy());
   // Only Nia (100%) is now above the line — the count says so before a tap.
   expect(getByText(/3 of 4 in Grade 8-C/)).toBeTruthy();
   expect(notifyBody).toBeNull();
+});
+
+it('the benchmark can be moved without a drag, from assistive technology', async () => {
+  mockApi();
+  const { getByTestId, getByText } = render(<AttendanceBar />);
+  await settled(() => expect(getByTestId('bar-row-s1')).toBeTruthy());
+
+  const slider = getByTestId('bar-threshold');
+  expect(slider.props.accessibilityRole).toBe('adjustable');
+  expect(slider.props.accessibilityValue).toMatchObject({ min: 50, max: 100, now: 75 });
+
+  for (let i = 0; i < 3; i++) {
+    fireEvent(slider, 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
+  }
+
+  await settled(() => expect(getByText('Below 72%')).toBeTruthy());
 });
 
 it('a family told this week is skipped, and the button counts only who is left', async () => {

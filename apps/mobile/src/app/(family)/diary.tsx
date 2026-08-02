@@ -1,10 +1,15 @@
-import { useCallback, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { useCallback, useState, type ReactNode } from 'react';
+import { Animated, Pressable, Text, TextInput, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useFocusEffect } from 'expo-router';
 import type { DiarySignResult, StudentDiaryEntry, StudentDiaryResult } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Empty, Page, Pill, RowWash, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
+import { DASH, DUR, pinStyle, strokeDashoffset, useGesture } from '@/theme/motion';
+
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 /** `2026-08-03` → `Mon, 3 Aug` — the header on a diary page. */
 function dayLabel(iso: string, today: string): string {
@@ -15,6 +20,152 @@ function dayLabel(iso: string, today: string): string {
 
 function todayISO(): string {
   return new Date().toLocaleDateString('en-CA');
+}
+
+/**
+ * THE SIGNATURE — the sixth gesture, and the only one that draws a human
+ * mark rather than a machine one.
+ *
+ * The pitch's `.sig`: a 46×16 flourish whose stroke-dash offset runs from 70
+ * to 0 over 800ms (`sigdraw`), so the line appears to be WRITTEN rather than
+ * to appear. It matters that this one is slow and hand-shaped: acknowledging
+ * a remark is the single act in this app that carries weight at home, and a
+ * checkmark popping into place would make it feel like dismissing a
+ * notification. A drawn signature says a person did this.
+ *
+ * `native: false` because `strokeDashoffset` is an SVG attribute, not a
+ * transform, so it cannot be driven off the UI thread. Under reduce-motion
+ * `useGesture` snaps the offset to 0 and the mark is simply there.
+ */
+function SignatureMark() {
+  const tokens = useTokens();
+  const draw = useGesture(true, DUR.signature, { native: false });
+  return (
+    <Svg width={46} height={16} viewBox="0 0 46 16">
+      <AnimatedPath
+        d="M2 12 C8 2 11 14 16 7 S24 12 30 6 S40 12 44 5"
+        fill="none"
+        stroke={tokens.color.ink}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeDasharray={DASH.signature}
+        strokeDashoffset={strokeDashoffset(draw, DASH.signature) as unknown as number}
+      />
+    </Svg>
+  );
+}
+
+/**
+ * One line of the page the child brings home — the pitch's `.diary-item`.
+ *
+ * THE PIN (`pinin`, 400ms, staggered by index): every entry drops onto the
+ * page from above, slightly askew, and settles. Entries are not a feed that
+ * scrolls past; they are slips of paper going up, and the gesture is what
+ * keeps the diary reading as an object rather than as a timeline.
+ *
+ * A REMARK gets the red margin rule, the red wash bleeding in from it, and a
+ * body set in SERIF ITALIC — the teacher's own hand, visibly not the app's.
+ */
+function DiaryItem({
+  entry,
+  index,
+  first,
+  children,
+}: {
+  entry: StudentDiaryEntry;
+  index: number;
+  first: boolean;
+  children?: ReactNode;
+}) {
+  const tokens = useTokens();
+  const pin = useGesture(true, DUR.pin, { delay: index * 90 });
+  const red = entry.kind === 'REMARK';
+
+  return (
+    <Animated.View
+      testID={`diary-${entry.id}`}
+      style={[
+        {
+          flexDirection: 'row',
+          gap: 9,
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          borderTopWidth: first ? 0 : 1,
+          borderTopColor: tokens.color.line,
+          borderLeftWidth: red ? 3 : 0,
+          borderLeftColor: tokens.color.red,
+          overflow: 'hidden',
+        },
+        pinStyle(pin),
+      ]}
+    >
+      {red && <RowWash color={tokens.color.red50} endStop={0.92} />}
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          marginTop: 5,
+          backgroundColor: red ? tokens.color.red : tokens.color.indigo,
+        }}
+      />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text
+            style={{
+              fontSize: 10.5,
+              fontWeight: '800',
+              letterSpacing: 0.5,
+              color: red ? tokens.color.red : tokens.color.indigo,
+            }}
+          >
+            {(entry.subjectName ?? 'Diary').toUpperCase()}
+          </Text>
+          {red && (
+            <View
+              style={{
+                backgroundColor: tokens.color.red,
+                borderRadius: 4,
+                paddingVertical: 1.5,
+                paddingHorizontal: 6,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 9,
+                  fontWeight: '800',
+                  letterSpacing: 0.8,
+                  color: tokens.color.onBrand,
+                }}
+              >
+                REMARK
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <Text
+          style={{
+            color: tokens.color.ink,
+            fontSize: 14.5,
+            lineHeight: 21,
+            marginTop: 1,
+            ...(red ? { fontFamily: font.serif, fontStyle: 'italic' as const } : null),
+          }}
+        >
+          {entry.body}
+        </Text>
+
+        <Text style={{ color: tokens.color.sub, fontSize: 11, marginTop: 2 }}>
+          {entry.teacherName}
+          {entry.personal ? ' · for you' : ' · whole class'}
+          {red ? ' · ✉️ emailed home' : ''}
+        </Text>
+
+        {children}
+      </View>
+    </Animated.View>
+  );
 }
 
 /**
@@ -108,25 +259,24 @@ export default function FamilyDiary() {
       {error && <Toast kind="error" message={error} />}
 
       {data === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Opening the diary…</Text>
-        </Card>
+        <Page>
+          <Empty>Opening the diary…</Empty>
+        </Page>
       )}
 
       {data?.entries.length === 0 && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>
-            Nothing in the diary this month. Anything a teacher writes turns up here.
-          </Text>
-        </Card>
+        <Page>
+          <Empty>Nothing in the diary this month. Anything a teacher writes turns up here.</Empty>
+        </Page>
       )}
 
       {days.map((day) => (
         <View key={day.date} style={{ gap: 9 }}>
           <Text
             style={{
-              fontSize: 12,
-              fontWeight: '700',
+              fontSize: 13,
+              fontFamily: font.serif,
+              fontStyle: 'italic',
               color: tokens.color.sub,
               marginLeft: 4,
               marginTop: 4,
@@ -135,49 +285,36 @@ export default function FamilyDiary() {
             {dayLabel(day.date, today)}
           </Text>
 
-          {day.entries.map((e) => {
-            const red = e.kind === 'REMARK';
-            return (
-              <Card key={e.id} testID={`diary-${e.id}`}>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  {/* The margin rule of a paper diary — red for a remark. */}
-                  <View
-                    style={{
-                      width: 3,
-                      borderRadius: 2,
-                      backgroundColor: red ? tokens.color.red : tokens.color.indigo50,
-                    }}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: red ? tokens.color.red : tokens.color.ink,
-                        fontSize: 14.5,
-                        lineHeight: 21,
-                        fontStyle: red ? 'italic' : 'normal',
-                      }}
-                    >
-                      {e.body}
-                    </Text>
-                    <Text style={{ color: tokens.color.sub, fontSize: 11.5, marginTop: 8 }}>
-                      {e.teacherName}
-                      {e.subjectName ? ` · ${e.subjectName}` : ''}
-                      {e.personal ? ' · for you' : ''}
-                    </Text>
-                  </View>
-                </View>
-
-                {red && (
-                  <View style={{ marginTop: 12 }}>
-                    {e.signedAt ? (
-                      <View testID={`signed-${e.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Pill tone="green">Signed</Pill>
+          <Page>
+            {day.entries.map((e, i) => {
+              const red = e.kind === 'REMARK';
+              const busy = signing === e.id || !(drafts[e.id] ?? '').trim();
+              return (
+                <DiaryItem key={e.id} entry={e} index={i} first={i === 0}>
+                  {red &&
+                    (e.signedAt ? (
+                      // The pitch's `.signed` — the mark, then who made it.
+                      <View
+                        testID={`signed-${e.id}`}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                          marginTop: 7,
+                        }}
+                      >
+                        <SignatureMark />
+                        <Text
+                          style={{ color: tokens.color.green, fontSize: 11, fontWeight: '700' }}
+                        >
+                          Signed
+                        </Text>
                         <Text style={{ color: tokens.color.sub, fontSize: 11.5 }}>
                           by {e.signedName}
                         </Text>
                       </View>
                     ) : (
-                      <View style={{ gap: 8 }}>
+                      <View style={{ gap: 8, marginTop: 7 }}>
                         <Text style={{ color: tokens.color.sub, fontSize: 11.5 }}>
                           A copy has already been emailed home. Sign to tell the teacher it was
                           read.
@@ -193,47 +330,47 @@ export default function FamilyDiary() {
                             backgroundColor: tokens.color.surface,
                             borderColor: tokens.color.line,
                             borderWidth: 1.5,
-                            borderRadius: 12,
+                            borderRadius: 11,
                             paddingVertical: 10,
                             paddingHorizontal: 12,
                             fontSize: 14,
                             color: tokens.color.ink,
                           }}
                         />
+                        {/* `.signbtn` — outlined in red, not filled: signing is
+                            an acknowledgement, not the page's primary action,
+                            and a solid red button reads as an alarm. */}
                         <Pressable
                           testID={`sign-${e.id}`}
                           onPress={() => sign(e)}
-                          disabled={signing === e.id || !(drafts[e.id] ?? '').trim()}
+                          disabled={busy}
                           style={({ pressed }) => ({
-                            backgroundColor: tokens.color.red,
-                            opacity:
-                              signing === e.id || !(drafts[e.id] ?? '').trim()
-                                ? 0.45
-                                : pressed
-                                  ? 0.85
-                                  : 1,
-                            borderRadius: 12,
-                            paddingVertical: 11,
+                            alignSelf: 'flex-start',
+                            backgroundColor: pressed ? tokens.color.red50 : tokens.color.surface,
+                            borderColor: tokens.color.red,
+                            borderWidth: 1.5,
+                            opacity: busy ? 0.45 : 1,
+                            borderRadius: 9,
+                            paddingVertical: 7,
+                            paddingHorizontal: 13,
                           })}
                         >
                           <Text
                             style={{
-                              color: tokens.color.onBrand,
+                              color: tokens.color.red,
                               fontWeight: '700',
-                              textAlign: 'center',
-                              fontSize: 13.5,
+                              fontSize: 12.5,
                             }}
                           >
-                            {signing === e.id ? 'Signing…' : 'Sign this remark'}
+                            {signing === e.id ? 'Signing…' : '✍️ Sign this remark'}
                           </Text>
                         </Pressable>
                       </View>
-                    )}
-                  </View>
-                )}
-              </Card>
-            );
-          })}
+                    ))}
+                </DiaryItem>
+              );
+            })}
+          </Page>
         </View>
       ))}
     </Screen>

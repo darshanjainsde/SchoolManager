@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import type { AvatarUploadResponse } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
 
 /**
  * The tap-to-change profile photo used by BOTH profile screens (family and
@@ -21,10 +22,18 @@ export function EditableAvatar({
   photoUrl,
   initials,
   onUploaded,
+  size = 64,
 }: {
   photoUrl: string | null;
   initials: string;
   onUploaded: (url: string) => void;
+  /**
+   * Diameter in px. Defaults to the 64px disc every caller shipped with; the
+   * family profile's `.bigav` asks for 82 (the pitch sets the profile head
+   * bigger than an in-row avatar, because there it IS the page). Optional on
+   * purpose — no existing caller changes.
+   */
+  size?: number;
 }) {
   const tokens = useTokens();
   const [busy, setBusy] = useState(false);
@@ -67,27 +76,38 @@ export function EditableAvatar({
         accessibilityRole="button"
         accessibilityLabel={photoUrl ? 'Change profile photo' : 'Add profile photo'}
         onPress={() => void pick()}
-        style={{ width: 64, height: 64 }}
+        style={{ width: size, height: size }}
       >
         {photoUrl ? (
           <Image
             testID="profile-photo"
             source={{ uri: photoUrl }}
-            style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: tokens.color.surfaceMuted }}
+            style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: tokens.color.surfaceMuted }}
           />
         ) : (
           <View
             testID="profile-initials"
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
+              width: size,
+              height: size,
+              borderRadius: size / 2,
               backgroundColor: tokens.color.indigo50,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Text style={{ fontSize: 20, fontWeight: '800', color: tokens.color.indigo }}>{initials}</Text>
+            {/* The initials are set in the diary serif at the big size — at
+                82px this disc is the head of the page, not a list avatar. */}
+            <Text
+              style={{
+                fontFamily: size >= 80 ? font.serif : undefined,
+                fontSize: Math.round(size * 0.32),
+                fontWeight: size >= 80 ? '700' : '800',
+                color: tokens.color.indigo,
+              }}
+            >
+              {initials}
+            </Text>
           </View>
         )}
         <View

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toaster } from 'sonner';
 import type { AttendanceRatesResult, MyClassSection } from '@skoolos/types';
@@ -56,6 +56,20 @@ function renderPage() {
   );
 }
 
+/**
+ * Drag the benchmark to a value.
+ *
+ * `fireEvent.change` rather than userEvent: a range input has no keyboard or
+ * pointer gesture in jsdom that lands on an exact value, and what the test is
+ * about is the consequence of the benchmark moving, not how a mouse produces
+ * the move.
+ */
+async function slideTo(percent: number) {
+  fireEvent.change(await screen.findByTestId('bar-threshold'), {
+    target: { value: String(percent) },
+  });
+}
+
 beforeEach(() => {
   vi.mocked(useHost).mockReturnValue('school.sckools.com');
 });
@@ -73,11 +87,29 @@ describe('AttendanceBarPage', () => {
     vi.mocked(useApi).mockReturnValue(stub({ post }) as never);
     renderPage();
 
-    const user = userEvent.setup();
-    await user.click(await screen.findByTestId('bar-step-90'));
+    // Wait for the class to load before sliding, so the count that follows is
+    // the re-filter and not the first render.
+    expect(await screen.findByText(/2 of 4 in 8-C/)).toBeInTheDocument();
+    await slideTo(90);
 
     expect(await screen.findByText(/3 of 4 in 8-C/)).toBeInTheDocument();
+    // Sliding is a preview, never a send.
     expect(post).not.toHaveBeenCalled();
+  });
+
+  it('the distribution repaints the tail as the benchmark moves', async () => {
+    vi.mocked(useApi).mockReturnValue(stub() as never);
+    renderPage();
+
+    const dist = await screen.findByTestId('bar-dist');
+    const bars = () => [...dist.querySelectorAll('span')];
+
+    // At 75: Kabir (50%) and Aarav (68%) are under the line.
+    expect(bars().filter((b) => b.dataset.low === 'true')).toHaveLength(2);
+
+    await slideTo(90);
+    // At 90 Diya (78%) joins them; Nia (100%) still clears it.
+    expect(bars().filter((b) => b.dataset.low === 'true')).toHaveLength(3);
   });
 
   it('skips a family told this week and counts only who is left', async () => {

@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { Alert, Animated, Pressable, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { AnnouncementMine } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -7,6 +7,22 @@ import type { MyClassSection } from '@/lib/attendance';
 import { ClassChips } from '@/components/ClassChips';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
+import { DUR, pinStyle, useGesture } from '@/theme/motion';
+
+/**
+ * THE PIN (`.postit.pin`) — an announcement is a thing you PUT UP, so it
+ * arrives from above, slightly askew, and settles straight. Each row fires
+ * once, on the render it first appears in, and never again: replaying the
+ * gesture on an unrelated refetch would claim something was just posted when
+ * nothing was. The stagger (the pitch's `animation-delay:i*.07s`) is what
+ * makes a list read as a sheaf of notes landing rather than one block
+ * appearing.
+ */
+function Pinned({ index, children }: { index: number; children: ReactNode }) {
+  const drop = useGesture(true, DUR.pin, { delay: Math.min(index, 6) * 70 });
+  return <Animated.View style={pinStyle(drop)}>{children}</Animated.View>;
+}
 
 /** Mirrors `formatDateTime` in `(staff)/requests.tsx` — a real timestamp, read in the device's own local time. */
 function formatPostedAt(iso: string): string {
@@ -265,6 +281,11 @@ export default function Post() {
         </Pressable>
       )}
 
+      {/* No `.seenbar` here, deliberately: `AnnouncementMine` carries no
+          open/seen count (see packages/types), and a bar drawn from a number
+          the server never sent would be a decoration pretending to be data.
+          The pitch's own seen bar lives on Assignments, which does have
+          `seenCount` — that is where it is implemented. */}
       <SectionTitle title="Your recent posts" />
 
       {editError && (
@@ -301,7 +322,7 @@ export default function Post() {
           <Text style={{ color: tokens.color.sub }}>You haven&apos;t posted anything yet.</Text>
         </Card>
       )}
-      {mine?.map((a) =>
+      {mine?.map((a, i) =>
         editingId === a.id ? (
           <Card key={a.id} style={{ gap: 10 }} testID={`mine-row-${a.id}`}>
             <TextInput
@@ -338,17 +359,35 @@ export default function Post() {
             </View>
           </Card>
         ) : (
-          <Card key={a.id} testID={`mine-row-${a.id}`}>
+          <Pinned key={a.id} index={i}>
+          <Card testID={`mine-row-${a.id}`}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.indigo }}>
+                {/* The pitch's `.di-sub` eyebrow. Its `text-transform:
+                    uppercase` is done with letter-spacing and weight instead
+                    of by rewriting the string — the class name is the
+                    school's own label and must read back exactly as set. */}
+                <Text style={{ fontSize: 10.5, fontWeight: '800', letterSpacing: 0.7, color: tokens.color.indigo }}>
                   {a.className ?? 'Whole school'}
                 </Text>
-                <Text style={{ fontWeight: '700', fontSize: 14, color: tokens.color.ink, marginTop: 4 }}>
+                {/* `.postit.gone` — a withdrawn post is struck through rather
+                    than vanishing mid-tap: the teacher sees the thing they
+                    asked to remove being removed, which is the honest
+                    account of a delete that is still in flight. */}
+                <Text
+                  style={{
+                    fontFamily: font.serif,
+                    fontWeight: '700',
+                    fontSize: 15,
+                    marginTop: 4,
+                    color: deletingId === a.id ? tokens.color.sub : tokens.color.ink,
+                    textDecorationLine: deletingId === a.id ? 'line-through' : 'none',
+                  }}
+                >
                   {a.title}
                 </Text>
-                <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{a.body}</Text>
-                <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 4 }}>
+                <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 3 }}>{a.body}</Text>
+                <Text style={{ fontSize: 10.5, color: tokens.color.sub, marginTop: 4 }}>
                   {formatPostedAt(a.createdAt)}
                 </Text>
               </View>
@@ -372,6 +411,7 @@ export default function Post() {
               </View>
             </View>
           </Card>
+          </Pinned>
         ),
       )}
     </Screen>

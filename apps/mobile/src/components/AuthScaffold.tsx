@@ -3,7 +3,7 @@ import { Animated, Dimensions, KeyboardAvoidingView, Platform, Text, View } from
 import Svg, { Defs, LinearGradient, Rect, Stop, Circle } from 'react-native-svg';
 import { SckoolsLogo } from '@/components/SckoolsLogo';
 import { useTokens } from '@/theme/theme-context';
-import { brand } from '@/theme/tokens';
+import { brand, font } from '@/theme/tokens';
 
 /**
  * Branded auth scaffold shared by the Connect + Login screens.
@@ -64,16 +64,21 @@ export function AuthScaffold({
         <Animated.View
           style={{ alignItems: 'center', marginBottom: 30, opacity: logoFade, transform: [{ scale: logoScale }] }}
         >
-          <SckoolsLogo size={54} theme="dark" />
+          {/* The pitch's splash: "the S draws itself · the tassel is the '!'".
+              This is the one screen where the mark is the subject rather than
+              a header ornament, so it gets the full pen-draw and then keeps
+              the slow tassel swing while the person types. */}
+          <SckoolsLogo size={54} theme="dark" draw swing />
         </Animated.View>
 
         <Animated.View style={{ transform: [{ translateY: slide }] }}>
           <Text
             style={{
               color: brand.onHero,
-              fontSize: 26,
-              fontWeight: '800',
-              letterSpacing: -0.5,
+              fontFamily: font.serif,
+              fontSize: 27,
+              fontWeight: '600',
+              letterSpacing: -0.3,
               textAlign: 'center',
             }}
           >

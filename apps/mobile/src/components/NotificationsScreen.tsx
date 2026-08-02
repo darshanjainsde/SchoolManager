@@ -1,67 +1,15 @@
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View, type TextStyle } from 'react-native';
-import { router, useFocusEffect, type Href } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import type { NotificationRow } from '@skoolos/types';
 import { ApiError } from '@/lib/api';
 import { fetchNotifications, markNotificationsRead } from '@/lib/notifications';
+import { KIND_ICON, formatWhen, routeFor, type NotificationGroup } from '@/lib/notification-links';
 import { Card, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 import type { ColorPalette } from '@/theme/tokens';
 
-type Group = '(family)' | '(staff)';
-
-const KIND_ICON: Record<string, string> = {
-  MESSAGE: '💬',
-  EXAM: '📝',
-  RESULT: '📊',
-  ASSIGNMENT: '📚',
-  ANNOUNCEMENT: '📣',
-  REQUEST_DECISION: '✅',
-  DIARY: '📔',
-  ATTENDANCE: '📉',
-};
-
-/**
- * Where a tapped notification deep-links, resolved BY ROLE (the same
- * linkType/linkId maps to that role's own route). A kind with no sensible target
- * for this role returns null — the row still marks read, it just doesn't
- * navigate. `thread` links carry the id; the kind-based fallbacks land on the
- * list screen for that kind.
- */
-function routeFor(group: Group, n: NotificationRow): Href | null {
-  if (n.linkType === 'thread' && n.linkId) return `/${group}/messages/${n.linkId}` as Href;
-  if (group === '(family)') {
-    switch (n.kind) {
-      case 'ASSIGNMENT':
-        return '/(family)/assignments';
-      case 'RESULT':
-        return '/(family)/results';
-      case 'EXAM':
-        return '/(family)/home';
-      case 'ANNOUNCEMENT':
-        return '/(family)/notices';
-      case 'DIARY':
-        return '/(family)/diary';
-      case 'ATTENDANCE':
-        return '/(family)/attendance';
-      default:
-        return null;
-    }
-  }
-  // staff
-  if (n.kind === 'REQUEST_DECISION') return '/(staff)/requests';
-  if (n.kind === 'DIARY') return '/(staff)/diary';
-  return null;
-}
-
-function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
+type Group = NotificationGroup;
 
 function groupLabel(tokens: { color: ColorPalette }): TextStyle {
   return {
@@ -126,6 +74,13 @@ function Row({ n, onPress }: { n: NotificationRow; onPress: () => void }) {
  * clears the lot. Reads apply OPTIMISTICALLY so the bell/count update instantly,
  * with the server call fire-and-forget (a failure just leaves the row unread on
  * the next focus refetch).
+ *
+ * Since the paper-slip repaint the BELL no longer opens this screen — it
+ * unfolds `NotificationSlip` in place over whatever you were reading. This
+ * screen stays the full-page surface behind the slip's "See all
+ * notifications", and remains the landing route for a tapped push
+ * notification; both surfaces share `lib/notification-links.ts` so a row goes
+ * to the same place from either.
  */
 export function NotificationsScreen({ group }: { group: Group }) {
   const tokens = useTokens();

@@ -7,7 +7,7 @@ import { shiftISO, todayISO } from '@/lib/attendance';
 import { DEFAULT_SCHEDULE_TIME, isValidMaxMarks, shiftTime, toScheduledAtISO } from '@/lib/exams';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
-import type { ColorPalette } from '@/theme/tokens';
+import { font, type ColorPalette } from '@/theme/tokens';
 
 function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
   return {
@@ -170,7 +170,7 @@ export default function Tests() {
         borderBottomColor: tokens.color.line,
       }}
     >
-      <Text style={{ fontWeight: '600', fontSize: 13, color: tokens.color.ink }}>{exam.title}</Text>
+      <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>{exam.title}</Text>
       <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
         {subjectLabel(exam.subjectId)} · {new Date(exam.scheduledAt).toLocaleString()} · out of{' '}
         {exam.maxMarks}
@@ -232,7 +232,7 @@ export default function Tests() {
       {classSectionId && (
         <Card style={{ gap: 10 }}>
           <View>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>Schedule a test</Text>
+            <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Schedule a test</Text>
             <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 2 }}>
               Students and guardians are emailed as soon as you save.
             </Text>
@@ -362,7 +362,7 @@ export default function Tests() {
 
       {classSectionId && (
         <Card>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>Scheduled tests</Text>
+          <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Scheduled tests</Text>
           {examsLoading && (
             <Text style={{ color: tokens.color.sub, marginTop: 6 }}>Loading tests…</Text>
           )}

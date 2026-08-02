@@ -41,6 +41,15 @@ function dayLabel(iso: string): string {
   });
 }
 
+/** What the family actually received, kept so the teacher can read it back. */
+interface EmailReceipt {
+  /** The remark verbatim — quoted into the preview exactly as it was emailed. */
+  body: string;
+  /** Named children; empty when the API answered without expanding them. */
+  names: string[];
+  subject: string | null;
+}
+
 /**
  * The teacher's Daily Diary on the web (Phase 5·3) — the same page the app
  * writes, with the room a desktop has: the day's entries and the composer side
@@ -61,6 +70,15 @@ export default function TeacherDiaryPage(): React.JSX.Element {
   const [kind, setKind] = useState<'ITEM' | 'REMARK'>('ITEM');
   const [body, setBody] = useState('');
   const [chosen, setChosen] = useState<string[]>([]);
+  /**
+   * The receipt for the last remark written in this sitting. It is not a
+   * toast: the commonest question a teacher has after writing a remark is
+   * "what exactly did the family get?", and the only honest answer is to show
+   * them the email. Cleared whenever the page they are looking at changes,
+   * because a receipt pinned under a different day's diary would read as if it
+   * belonged to that day.
+   */
+  const [receipt, setReceipt] = useState<EmailReceipt | null>(null);
 
   const today = todayIso();
   const isToday = date === today;
@@ -122,6 +140,17 @@ export default function TeacherDiaryPage(): React.JSX.Element {
           ? `Remark written — ${created.students.length === 1 ? 'that family has' : 'those families have'} been emailed.`
           : 'Added to today’s diary.',
       );
+      // Capture the receipt from the row the server echoed back, not from the
+      // local draft: what went out is whatever the API stored.
+      setReceipt(
+        created.kind === 'REMARK'
+          ? {
+              body: created.body,
+              names: created.students.map((s) => s.name),
+              subject: created.subjectName,
+            }
+          : null,
+      );
       setBody('');
       setChosen([]);
       setKind('ITEM');
@@ -141,6 +170,12 @@ export default function TeacherDiaryPage(): React.JSX.Element {
 
   const entries = pageQuery.data?.entries ?? [];
 
+  /** Any move to a different page drops the receipt — see the state comment. */
+  function goTo(next: string) {
+    setDate(next);
+    setReceipt(null);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <header className="sk-pagehead">
@@ -151,21 +186,26 @@ export default function TeacherDiaryPage(): React.JSX.Element {
       </header>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className="sk-btn" data-testid="diary-prev" onClick={() => setDate((d) => shiftIso(d, -1))}>
+        <button
+          type="button"
+          className="sk-btn sk-press"
+          data-testid="diary-prev"
+          onClick={() => goTo(shiftIso(date, -1))}
+        >
           ‹ Prev day
         </button>
         <span className="text-[13px] font-bold text-[var(--sk-ink)]">{dayLabel(date)}</span>
         <button
           type="button"
-          className="sk-btn"
+          className="sk-btn sk-press"
           data-testid="diary-next"
           disabled={isToday}
-          onClick={() => setDate((d) => (d < today ? shiftIso(d, 1) : d))}
+          onClick={() => goTo(date < today ? shiftIso(date, 1) : date)}
         >
           Next day ›
         </button>
         {!isToday && (
-          <button type="button" className="sk-btn" data-testid="diary-today" onClick={() => setDate(today)}>
+          <button type="button" className="sk-btn sk-press" data-testid="diary-today" onClick={() => goTo(today)}>
             Jump to today
           </button>
         )}
@@ -177,10 +217,13 @@ export default function TeacherDiaryPage(): React.JSX.Element {
             <button
               key={c.classSectionId}
               type="button"
-              className="sk-btn"
+              className="sk-btn sk-press"
               data-testid={`diary-class-${c.classSectionId}`}
               data-variant={c.classSectionId === activeId ? 'primary' : undefined}
-              onClick={() => setClassId(c.classSectionId)}
+              onClick={() => {
+                setClassId(c.classSectionId);
+                setReceipt(null);
+              }}
             >
               {c.name}
             </button>
@@ -201,22 +244,31 @@ export default function TeacherDiaryPage(): React.JSX.Element {
                 {isToday ? 'Nothing written yet today.' : 'Nothing was written on this day.'}
               </p>
             )}
-            {entries.map((e) => (
-              <div key={e.id} className="sk-row" data-testid={`diary-entry-${e.id}`}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    className="nm"
-                    style={
-                      e.kind === 'REMARK'
-                        ? { color: 'var(--sk-bad)', fontStyle: 'italic' }
-                        : undefined
-                    }
-                  >
-                    {e.body}
+            {/* Entries land with `pinin` — dropped in rotated, settling
+                square, like a slip pinned to the day's page. The animation is
+                keyed to the entry id, so React only mounts (and therefore
+                only animates) the row that is genuinely new; changing day or
+                class remounts the whole list, which is exactly when the
+                staggered drop is wanted. */}
+            {entries.map((e, i) => (
+              <div
+                key={e.id}
+                className="sk-diary-item sk-pinin sk-in"
+                data-kind={e.kind}
+                data-testid={`diary-entry-${e.id}`}
+                style={{ animationDelay: `${Math.min(i, 8) * 0.06}s` }}
+              >
+                <span className="sdot" aria-hidden="true" />
+                <div className="di-body">
+                  <div className="di-sub">
+                    {e.subjectName ?? 'Diary'}
+                    {e.kind === 'REMARK' && <span className="sk-rem-tag">REMARK</span>}
                   </div>
-                  <div className="meta">
+                  <div className="di-txt">{e.body}</div>
+                  {/* Subject already sits in the eyebrow above, so the byline
+                      carries only who wrote it and how far it has got. */}
+                  <div className="di-by">
                     {e.authorName}
-                    {e.subjectName ? ` · ${e.subjectName}` : ''}
                     {' · '}
                     {e.kind === 'REMARK'
                       ? `${e.signedCount}/${e.recipientCount} signed`
@@ -224,16 +276,10 @@ export default function TeacherDiaryPage(): React.JSX.Element {
                     {e.students.length > 0 && ` · ${e.students.map((s) => s.name).join(', ')}`}
                   </div>
                 </div>
-                <span className="sp" />
-                {e.kind === 'REMARK' && (
-                  <span className="sk-pill" data-tone="bad">
-                    Remark
-                  </span>
-                )}
                 {e.editable && (
                   <button
                     type="button"
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     data-testid={`diary-strike-${e.id}`}
                     disabled={strike.isPending}
                     onClick={() => strike.mutate(e.id)}
@@ -252,18 +298,23 @@ export default function TeacherDiaryPage(): React.JSX.Element {
               <h3>Write</h3>
             </div>
             <div className="sk-card-b flex flex-col gap-3">
-              <div className="flex gap-2">
+              {/* Segmented, not two buttons: the two modes are exclusive and
+                  a teacher needs to see which ink they are about to write in.
+                  `aria-pressed` carries the state for assistive tech; the red
+                  half is styled through the `bad` tone so arming REMARK is
+                  visible before the button below is read. */}
+              <div className="sk-seg" role="group" aria-label="What are you writing?">
                 {(['ITEM', 'REMARK'] as const).map((k) => (
                   <button
                     key={k}
                     type="button"
-                    className="sk-btn"
-                    style={{ flex: 1 }}
+                    className="sk-press"
                     data-testid={`diary-kind-${k}`}
-                    data-variant={kind === k ? 'primary' : undefined}
+                    data-tone={k === 'REMARK' ? 'bad' : undefined}
+                    aria-pressed={kind === k}
                     onClick={() => setKind(k)}
                   >
-                    {k === 'ITEM' ? 'Diary entry' : 'Remark'}
+                    {k === 'ITEM' ? 'Diary entry' : 'Remark ✍️'}
                   </button>
                 ))}
               </div>
@@ -273,6 +324,9 @@ export default function TeacherDiaryPage(): React.JSX.Element {
                 rows={4}
                 value={body}
                 maxLength={MAX_BODY}
+                // Red ink, red field: the composer looks like what it produces,
+                // so the mode can never be lost between arming it and typing.
+                className={isRemark ? 'sk-compose-remark' : undefined}
                 onChange={(e) => setBody(e.target.value)}
                 placeholder={
                   isRemark
@@ -297,7 +351,7 @@ export default function TeacherDiaryPage(): React.JSX.Element {
 
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 data-variant="primary"
                 data-testid="diary-send"
                 disabled={!canSend || add.isPending}
@@ -311,6 +365,43 @@ export default function TeacherDiaryPage(): React.JSX.Element {
                       ? `Add for ${chosen.length}`
                       : 'Add for the whole class'}
               </button>
+
+              {/* The receipt. Keyed on the body so a second remark mounts a
+                  fresh card and drops in again rather than silently swapping
+                  its text — the drop IS the confirmation that a new email
+                  went out. */}
+              {receipt && (
+                <div
+                  key={receipt.body}
+                  className="sk-emailcard sk-pinin sk-in"
+                  data-testid="diary-email-preview"
+                >
+                  <div className="eh">
+                    ✉️ EMAIL SENT
+                    {receipt.names.length > 0 &&
+                      ` · ${receipt.names.length} ${receipt.names.length === 1 ? 'family' : 'families'}`}
+                  </div>
+                  <div className="esub">
+                    Subject: A remark in
+                    {receipt.names.length > 0
+                      ? ` ${receipt.names[0].split(' ')[0]}’s`
+                      : ' your child’s'}{' '}
+                    diary{receipt.subject ? ` — ${receipt.subject}` : ''}
+                  </div>
+                  <div className="ebody">
+                    {/* The remark is highlighted because it is the only part
+                        of the email the teacher wrote, and therefore the only
+                        part they can still get wrong. */}
+                    You wrote today: <mark>“{receipt.body}”</mark>
+                    <br />
+                    Open the diary to sign.
+                  </div>
+                  <div className="enote">
+                    Sent the moment it was written — signing does not replace it. The bell and a
+                    push went too.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
