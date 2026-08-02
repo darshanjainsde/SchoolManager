@@ -1,0 +1,58 @@
+name: db-drift
+
+# Answers one question on a schedule: is each live database actually running
+# the schema this repo says it should?
+#
+# WHY: staging sat four migrations behind main for days and nothing said so.
+# The web build failing was the first symptom, and it was unrelated. A database
+# that silently lags its code fails at RUNTIME, on a real user, on the one
+# endpoint that touches the missing table — which is the worst place to find
+# out.
+#
+# `prisma migrate status` is READ-ONLY. This workflow can never modify a
+# database; it exits non-zero (and so fails loudly, and emails you) when a
+# target has migrations pending.
+
+on:
+  schedule:
+    # 06:30 IST daily — before the school day, so a drift is caught before
+    # anyone is using the thing.
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false # report BOTH environments; one being behind must not hide the other
+      matrix:
+        environment: [staging, production]
+
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Is ${{ matrix.environment }} up to date?
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          set -o pipefail
+          if ! pnpm --filter @skoolos/db exec prisma migrate status 2>&1 | tee status.txt; then
+            echo "::error::${{ matrix.environment }} has migrations pending — run the db-migrate workflow against it."
+            exit 1
+          fi
+          echo "✓ ${{ matrix.environment }} matches the repo."
