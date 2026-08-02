@@ -558,6 +558,11 @@ button.sk-pill { border: 0; cursor: pointer; font: inherit; }
 .sk-notif-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .sk-notif-title { display: flex; align-items: center; gap: 7px; font-weight: 650; font-size: 13.5px; color: var(--sk-ink); }
 .sk-notif-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--sk-brand-2); flex: none; }
+/* As a direct child of the row the dot sits at the right edge, past the
+   timestamp, so a column of rows reads "which have I not opened" down one
+   straight edge. Nudged onto the title's line here rather than with an inline
+   style, so `.sk-notif-dot` keeps owning its own geometry. */
+.sk-notif-row > .sk-notif-dot { margin-top: 5px; }
 .sk-notif-text { font-size: 12.5px; color: var(--sk-ink-2); overflow: hidden; text-overflow: ellipsis; }
 .sk-notif-time { font-size: 11.5px; color: var(--sk-ink-3); white-space: nowrap; flex: none; }
 
@@ -1222,6 +1227,11 @@ input[type="range"].sk-bar:focus-visible { outline: 2px solid var(--sk-brand); o
   text-align: left; cursor: pointer; color: inherit; font: inherit;
 }
 .sk-mrow:first-child { border-top: 0; }
+/* The family portal's inbox wraps each row in an `<li>` (it is a list of
+   people, and it says so to a screen reader). That makes EVERY `.sk-mrow` a
+   `:first-child` of its own `<li>`, so the rule above silently deleted every
+   separator in the list. Restore it for every row but the first `<li>`. */
+li:not(:first-child) > .sk-mrow { border-top: 1px solid var(--sk-line); }
 .sk-mrow:hover .nm { color: var(--sk-brand-2); }
 .sk-mrow .av {
   width: 36px; height: 36px; border-radius: 50%; flex: none;
@@ -1229,7 +1239,14 @@ input[type="range"].sk-bar:focus-visible { outline: 2px solid var(--sk-brand); o
   background: var(--sk-brand-tint); color: var(--sk-brand-2);
 }
 .sk-mrow .nm { font-size: 13.5px; font-weight: 650; }
-.sk-mrow .pv { font-size: 11.5px; color: var(--sk-ink-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; }
+/* One line, ellipsised. `overflow`/`text-overflow` do nothing without
+   `white-space: nowrap` — without it a long preview wraps to three lines and
+   the row heights go ragged down the list, which is exactly what a preview
+   line is supposed to prevent. */
+.sk-mrow .pv {
+  font-size: 11.5px; color: var(--sk-ink-3); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* A bubble, not a row: a conversation is the one place in this product where
    who-said-what has to be readable without reading a label, and side + shape
@@ -1384,7 +1401,11 @@ html[data-theme='light'] .sk-clsrow .ic { color: #fff; }
 .sk-notice .nb { font-size: 13px; color: var(--sk-amber-ink); margin-top: 7px; white-space: pre-wrap; }
 .sk-notice[data-fresh="false"] { background: var(--sk-card); border: 1px solid var(--sk-line); }
 .sk-notice[data-fresh="false"]::before { display: none; }
-.sk-notice[data-fresh="false"] .nt,
+/* The TITLE keeps full ink. Dropping it to `--sk-ink-3` alongside the date
+   made the headline of every notice more than a week old read as disabled
+   text — and on a notice board most of the board is more than a week old.
+   Quieter is the paper and the pin, not the words. */
+.sk-notice[data-fresh="false"] .nt { color: var(--sk-ink); }
 .sk-notice[data-fresh="false"] .nd { color: var(--sk-ink-3); }
 /* The body keeps ink-2, not ink-3: an older notice is quieter, not less
    readable — people go back to look these up. */
@@ -1433,12 +1454,13 @@ html[data-theme='light'] .sk-clsrow .ic { color: #fff; }
    the print. */
 .sk-res { border-top: 1px solid var(--sk-line); }
 .sk-res:first-child { border-top: 0; }
+/* Not a control: every row shows its whole reading, so there is nothing to
+   open. (An earlier pass made this a button opening an accordion, which put
+   the class average — the one comparison the page exists for — behind a tap.) */
 .sk-res > .top {
   display: flex; align-items: center; gap: 12px; width: 100%;
-  padding: 13px 16px; background: transparent; border: 0;
-  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  padding: 13px 16px 0;
 }
-.sk-res > .top:hover { background: var(--sk-bg-2); }
 .sk-res .sub { font-size: 14px; font-weight: 650; }
 .sk-res .ttl { font-size: 11.5px; color: var(--sk-ink-3); margin-top: 1px; }
 .sk-stamp {
@@ -1447,24 +1469,15 @@ html[data-theme='light'] .sk-clsrow .ic { color: #fff; }
   color: var(--sk-brand-2); border: 2px solid var(--sk-brand-2);
   border-radius: 9px; padding: 3px 10px;
 }
-/* The detail drawer opens by max-height rather than by mounting, so the row
-   REVEALS instead of jumping — and so the bars stay in the DOM for the reveal
-   to animate against. */
-.sk-res .det { max-height: 0; overflow: hidden; transition: max-height 0.3s var(--sk-ease); }
-.sk-res[data-open="true"] .det { max-height: 300px; }
-/* Padding lives on an inner box: padding on the clipped element would show
-   through while it is closed. */
 .sk-res .detin { padding: 0 16px 14px; }
 .sk-bar .lbl { display: flex; justify-content: space-between; gap: 10px; font-size: 10.5px; color: var(--sk-ink-3); margin: 9px 0 4px; }
 .sk-bar .tr { height: 7px; border-radius: 999px; background: var(--sk-line); overflow: hidden; }
 .sk-bar .tr > i { display: block; height: 100%; border-radius: 999px; }
-/* The score bars draw themselves only while the row is open. Scoping the
-   animation to the open state is what makes it replay each time the row is
-   opened, and what stops a closed row animating where nobody can see it. */
-.sk-res[data-open="true"] .sk-bar .tr > i { animation: sk-inkline 0.8s var(--sk-ease) both; }
+/* The score bars draw themselves on first paint. The end width is the row's
+   own inline width, so with the animation off the bar is still true. */
+.sk-res .sk-bar .tr > i { animation: sk-inkline 0.8s var(--sk-ease) both; }
 @media (prefers-reduced-motion: reduce) {
-  .sk-res .det { transition: none; }
-  .sk-res[data-open="true"] .sk-bar .tr > i { animation: none; }
+  .sk-res .sk-bar .tr > i { animation: none; }
 }
 
 /* ---- the tick box (Assignments) ----
@@ -1533,9 +1546,12 @@ html[data-theme='light'] .sk-clsrow .ic { color: #fff; }
 }
 
 /* ---- notification rows, the pitch's `.ntitem` reading ----
-   A read row does not vanish; it fades to .55 so the inbox still shows what
-   happened, only quieter. */
-.sk-notif-row[data-unread="false"] { opacity: 0.55; }
+   NO OPACITY ON A READ ROW. A design pass faded read rows to `opacity: .55`,
+   which multiplies through the row's already-quiet `--sk-ink-2` body text and
+   puts most of the list under the contrast floor — and on a notification list
+   most rows are read. Unread already carries the brand tint, the filled icon
+   tile and the dot; that is difference enough without making the other half
+   of the page hard to read. */
 /* A diary notification is the one that can carry a REMARK — the only thing in
    this portal a family is expected to act on. Its tile takes the same red the
    remark itself wears in the diary, so the notice and the entry read as one

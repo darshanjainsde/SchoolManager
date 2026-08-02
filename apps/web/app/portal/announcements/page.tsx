@@ -51,7 +51,11 @@ export default function PortalAnnouncementsPage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="sk-pagehead">
-        <h1>Notice board</h1>
+        {/* The title matches the nav item that got you here. A design pass
+            renamed it "Notice board" while the sidebar still said
+            "Announcements", so the page you landed on appeared to be a
+            different one. */}
+        <h1>Announcements</h1>
         <p>
           School-wide and class announcements addressed to you. This week&rsquo;s stay pinned;
           older ones settle onto the board.

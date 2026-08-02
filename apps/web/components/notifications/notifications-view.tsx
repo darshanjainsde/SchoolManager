@@ -175,8 +175,10 @@ function NotificationItem({ n, onClick }: { n: NotificationRow; onClick: () => v
         </time>
         {/* The unread dot sits at the right edge, past the timestamp, so a
             column of rows reads "which of these have I not opened" down one
-            straight edge rather than by hunting each title. */}
-        {unread && <span className="sk-notif-dot" style={{ marginTop: 5 }} aria-hidden="true" />}
+            straight edge rather than by hunting each title. Its offset is a
+            rule in sk-theme.css, not an inline style — the class already sizes
+            and places itself. */}
+        {unread && <span className="sk-notif-dot" aria-hidden="true" />}
       </button>
     </li>
   );

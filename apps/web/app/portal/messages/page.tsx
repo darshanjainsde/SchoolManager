@@ -194,10 +194,16 @@ export default function PortalMessagesPage() {
           )}
           {/* Threads are ruled rows inside ONE card, not a card each: this is
               a list of people, and a stack of separate cards makes four
-              conversations look like four unrelated documents. */}
+              conversations look like four unrelated documents.
+
+              The rows live in `.sk-card-b`, not straight in `.sk-card`:
+              `.sk-mrow` sets `padding: 11px 0` and relies on the card body for
+              its gutter, so without it the avatar and the unread pill sit hard
+              against the card's border. This is the same nesting the teacher's
+              inbox uses for the same row. */}
           {threads.length > 0 && (
             <div className="sk-card">
-              <ul>
+              <ul className="sk-card-b">
                 {threads.map((t) => (
                   <li key={t.id}>
                     <button

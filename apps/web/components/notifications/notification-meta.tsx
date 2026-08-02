@@ -63,7 +63,9 @@ export function routeForNotification(
       case 'DIARY':
         return '/teacher/diary';
       case 'ATTENDANCE':
-        return '/teacher/attendance-bar';
+        // Who-needs-a-word lives inside Attendance now — it is a view of the
+        // register, not a page of its own.
+        return '/teacher/attendance';
       default:
         return null;
     }

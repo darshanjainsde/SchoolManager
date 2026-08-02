@@ -106,9 +106,12 @@ export default function PortalProfilePage() {
                 )}
               </div>
 
-              <div className="sk-pfname">
+              {/* Still a heading, as it was before the redesign: this is the
+                  name of the record the card is about, and a screen reader
+                  navigating by heading has to be able to land on it. */}
+              <h2 className="sk-pfname">
                 {profile.firstName} {profile.lastName}
-              </div>
+              </h2>
               {/* No class line here on purpose: the ruled record below states
                   it once, as a field. Saying it twice on one small card makes
                   the second one read as a different fact. */}

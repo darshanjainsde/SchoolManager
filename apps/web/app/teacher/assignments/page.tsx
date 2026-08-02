@@ -382,33 +382,24 @@ export default function TeacherAssignmentsPage() {
               <div key={group.label} style={{ marginBottom: 16 }}>
                 <span className="sk-lab">{group.label}</span>
                 <div style={{ marginTop: 8 }}>
-                  {group.rows.map((a, i) => {
-                    // Capped at 100 defensively: `seenCount` counts
-                    // AssignmentSeen rows, and a student moved out of the
-                    // section after opening the sheet can leave the numerator
-                    // above the current roster. A bar past its own track would
-                    // read as a rendering bug rather than as data.
-                    const seenPct =
-                      rosterSize > 0 ? Math.min(100, Math.round((a.seenCount / rosterSize) * 100)) : null;
-                    return (
-                      // THE PIN. A posted assignment is a thing the teacher
-                      // wrote and stuck up, so it lands as a slip rather than
-                      // appearing as a table row — `.sk-postit` + `.sk-pinin`,
-                      // the same gesture the diary and the noticeboard use.
-                      // Staggered by position so a list arrives as a sequence.
-                      <div
-                        className="sk-postit sk-pinin sk-in"
-                        key={a.id}
-                        data-testid={`assignment-${a.id}`}
-                        style={{ animationDelay: `${i * 0.05}s` }}
-                      >
-                        <div className="pt">{a.title}</div>
-                        <div className="pd">
+                  {/* One `.sk-row` per assignment: title over the
+                      subject/due/seen line, `.sp`, then the group pill and
+                      Delete flush right. `.sk-postit` is a block — it dropped
+                      the spacer, stacked the actions under the text and added a
+                      restated "seen" bar, which turned a scannable list into a
+                      column of tall cards. The one thing worth keeping from
+                      that pass is the denominator: "12 seen of 30" is a fact
+                      the row was missing, and it is text, not geometry. */}
+                  {group.rows.map((a) => (
+                    <div className="sk-row" key={a.id} data-testid={`assignment-${a.id}`}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="nm">{a.title}</div>
+                        <div className="meta">
                           {subjectLabel(a.subjectId)} · Due {formatDueDate(a.dueDate)} · {a.seenCount} seen
                           {rosterSize > 0 ? ` of ${rosterSize}` : ''}
                         </div>
                         {a.attachments.length > 0 && (
-                          <div className="pd" style={{ marginTop: 4 }}>
+                          <div className="meta" style={{ marginTop: 2 }}>
                             {a.attachments.map((att) => (
                               <a
                                 key={att.url}
@@ -422,35 +413,22 @@ export default function TeacherAssignmentsPage() {
                             ))}
                           </div>
                         )}
-                        {/* THE SEEN BAR — the same fraction the line above
-                            states, drawn. It FILLS to its real width (the ink
-                            line gesture) because a bar that arrives already
-                            full reads as a label, not as a count that is still
-                            climbing. Purely a restatement, so it is hidden from
-                            assistive tech and from reduced motion it simply
-                            appears at the true width. */}
-                        {seenPct !== null && (
-                          <div className="sk-seenbar" aria-hidden="true">
-                            <i className="sk-inkline" style={{ width: `${seenPct}%` }} />
-                          </div>
-                        )}
-                        <div className="acts">
-                          <span className="sk-pill" data-tone={group.tone}>
-                            {group.label}
-                          </span>
-                          <span style={{ flex: 1 }} />
-                          <button
-                            type="button"
-                            className="sk-btn sk-press"
-                            onClick={() => setConfirmDeleteId(a.id)}
-                            disabled={deletingId === a.id}
-                          >
-                            {deletingId === a.id ? 'Deleting…' : 'Delete'}
-                          </button>
-                        </div>
                       </div>
-                    );
-                  })}
+                      <span className="sp" />
+                      <span className="sk-pill" data-tone={group.tone}>
+                        {group.label}
+                      </span>
+                      <button
+                        type="button"
+                        className="sk-btn sk-press"
+                        style={{ marginLeft: 8 }}
+                        onClick={() => setConfirmDeleteId(a.id)}
+                        disabled={deletingId === a.id}
+                      >
+                        {deletingId === a.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}

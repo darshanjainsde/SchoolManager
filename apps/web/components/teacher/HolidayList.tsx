@@ -66,41 +66,21 @@ export function HolidayList({ holidays }: HolidayListProps): React.JSX.Element {
 
   return (
     <div>
-      {holidays.map((h, i) => {
+      {holidays.map((h) => {
         const { day, weekday } = dayAndWeekday(h.startDate);
         return (
-          // A term calendar is a NOTICEBOARD, not a data table: each holiday is
-          // an amber slip with a red pin bead through its top edge
-          // (`.sk-notice`'s ::before). `.sk-row` stays underneath it because
-          // the flex behaviour — day badge, body, spacer, type pill — is
-          // exactly right and HolidayList's own test reads `.sk-row`; only the
-          // framing changes. The slip draws its own edge, so the rule `.sk-row`
-          // puts between siblings is cancelled.
-          //
-          // THE PIN: the slips DROP onto the board one after another rather
-          // than appearing already there — the gesture is what says "this was
-          // put up", which a static amber box cannot. Staggered so they land as
-          // a sequence; every slip's text is complete without it, and reduced
-          // motion collapses the whole thing to the end state.
-          <div
-            className="sk-row sk-notice sk-pinin sk-in"
-            key={h.id}
-            style={{ borderTop: 0, animationDelay: `${i * 0.06}s` }}
-          >
-            <span
-              className="badge"
-              style={{
-                background: 'var(--sk-amber)',
-                color: 'var(--sk-amber-ink)',
-                fontFamily: 'var(--sk-serif)',
-                fontSize: 17,
-              }}
-            >
+          // A holiday is a row in a term calendar the teacher SCANS: day tile,
+          // name over date, type pill flush right. `.sk-row` already sizes all
+          // four of those (`.sk-row .badge`, `.nm`, `.meta`, `.sp`), so the row
+          // carries no inline geometry of its own — the one thing set here is
+          // the tile's colour, which the class deliberately leaves open.
+          <div className="sk-row" key={h.id}>
+            <span className="badge" style={{ background: 'var(--sk-brand)' }}>
               {day}
             </span>
-            <div style={{ minWidth: 0 }}>
-              <div className="nt">{h.name}</div>
-              <div className="nd">
+            <div>
+              <div className="nm">{h.name}</div>
+              <div className="meta">
                 {weekday} · {dateLabel(h)}
               </div>
             </div>

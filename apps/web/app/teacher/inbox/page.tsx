@@ -12,18 +12,6 @@ import { useHost } from '@/components/use-host';
 const fieldCls =
   'rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-[11px] py-[9px] text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60 disabled:cursor-not-allowed';
 
-/**
- * First letter of the first and last word of a display name. Deliberately
- * tolerant: a single-word name yields one letter rather than throwing, and an
- * empty name yields an empty tile rather than "undefined".
- */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '';
-  const last = parts.length > 1 ? parts[parts.length - 1] : '';
-  return `${parts[0][0] ?? ''}${last[0] ?? ''}`.toUpperCase();
-}
-
 /** A real timestamp read in the browser's local time — mirrors announcements' formatPostedAt. */
 function formatSentAt(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -131,30 +119,28 @@ export default function TeacherInboxPage() {
             )}
             {!threadsQuery.isLoading &&
               !threadsQuery.error &&
-              // The pitch's `.mrow`: a thread is a person, so the row leads
-              // with their initials in a round avatar rather than with a
-              // subject label. Same anatomy the family portal's inbox uses —
-              // one conversation, one rendering.
+              // A `.sk-row` button: name over subject-and-preview, `.sp`, then
+              // the time and the unread count flush right. The avatar column
+              // `.sk-mrow` put in front of the name bought nothing here (a
+              // thread already says whose it is, in the line beside it) and
+              // cost the row its spacer, so the timestamps stopped lining up.
               threads.map((t) => (
                 <button
                   key={t.id}
                   type="button"
-                  className="sk-mrow sk-press"
+                  className="sk-row sk-press"
+                  style={{ width: '100%', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', borderTop: '1px solid var(--sk-line)' }}
                   onClick={() => setSelectedId(t.id)}
                 >
-                  <span className="av" aria-hidden="true">
-                    {initials(t.studentName)}
-                  </span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span className="nm" style={{ display: 'block' }}>
-                      {t.studentName}
-                    </span>
-                    <span className="pv" style={{ display: 'block' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="nm">{t.studentName}</div>
+                    <div className="meta">
                       {t.subjectName}
                       {t.lastMessagePreview ? ` · ${t.lastMessagePreview}` : ''}
-                    </span>
-                  </span>
-                  <span className="pv" style={{ whiteSpace: 'nowrap' }}>{formatSentAt(t.lastMessageAt)}</span>
+                    </div>
+                  </div>
+                  <span className="sp" />
+                  <span className="meta" style={{ whiteSpace: 'nowrap' }}>{formatSentAt(t.lastMessageAt)}</span>
                   {t.unreadCount > 0 && (
                     <span className="sk-pill" data-tone="info" aria-label={`${t.unreadCount} unread`}>
                       {t.unreadCount}

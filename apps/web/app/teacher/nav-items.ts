@@ -11,7 +11,6 @@ import {
   CalendarRange,
   StickyNote,
   NotebookPen,
-  TrendingDown,
 } from 'lucide-react';
 
 /**
@@ -35,7 +34,6 @@ export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashbo
   { href: '/teacher', label: 'Today', icon: LayoutDashboard },
   { href: '/teacher/timetable', label: 'Timetable', icon: CalendarDays },
   { href: '/teacher/attendance', label: 'Attendance', icon: ClipboardCheck },
-  { href: '/teacher/attendance-bar', label: 'Who needs a word', icon: TrendingDown },
   { href: '/teacher/diary', label: 'Diary', icon: NotebookPen },
   { href: '/teacher/assignments', label: 'Assignments', icon: BookOpen },
   { href: '/teacher/tests', label: 'Tests', icon: FileText },

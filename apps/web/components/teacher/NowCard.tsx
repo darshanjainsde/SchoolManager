@@ -128,7 +128,6 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance }: 
               type="button"
               className="sk-btn sk-press"
               data-variant="primary"
-              style={{ marginTop: 13 }}
               onClick={() => onTakeAttendance(slot.classSectionId)}
             >
               Take attendance

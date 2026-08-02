@@ -14,11 +14,11 @@ import type {
 } from '@skoolos/types';
 import { ATTENDANCE_STATUSES } from '@skoolos/types';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { RetakeDialog } from '@/components/teacher/RetakeDialog';
 import { LockedDay } from '@/components/teacher/LockedDay';
+import { WhoNeedsAWord } from '@/components/teacher/WhoNeedsAWord';
 
 const STATUS_LABEL: Record<AttendanceStatusValue, string> = { PRESENT: 'Present', ABSENT: 'Absent', LATE: 'Late' };
 
@@ -547,6 +547,12 @@ function TeacherAttendanceInner() {
           </div>
         </div>
       )}
+
+      {/* Who is slipping in THIS class — the natural next question once the
+          register is in front of you, so it sits under it rather than on a nav
+          item of its own. It reads the term to date, not the selected day, so
+          it does not change as the teacher steps through dates. */}
+      {classSectionId && <WhoNeedsAWord classSectionId={classSectionId} className={selectedClassLabel} />}
 
       {retakeOpen && selectedStatus && (
         <RetakeDialog

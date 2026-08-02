@@ -127,101 +127,104 @@ export default function TeacherProfilePage() {
           {profileQuery.error && <p className="sk-state err">{(profileQuery.error as Error).message}</p>}
           {profile && (
             <div className="flex flex-col gap-3.5">
-              {/* THE HEAD. On this page the photo IS the content — it is what
-                  syncs to every roster, register and message thread in the
-                  school — so it is centred and big rather than a 40px chip
-                  beside a name. Same self-upload flow as the student portal
-                  profile (POST /me/photo). */}
-              <div className="sk-pfhead">
-                <div className="sk-bigav">
-                  {profile.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={profile.photoUrl} alt={`${profile.firstName} ${profile.lastName}`} />
-                  ) : (
-                    initials(profile.firstName, profile.lastName)
-                  )}
+              {/* Photo-or-initials avatar header — same self-upload flow as
+                  the student portal profile (POST /me/photo). The avatar sits
+                  BESIDE the name rather than centred above it: this card is one
+                  panel of a two-column page, and a centred 84px head threw the
+                  whole left column off the grid the password card next to it
+                  still sits on. */}
+              <div className="flex items-center gap-4">
+                {profile.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profile.photoUrl}
+                    alt={`${profile.firstName} ${profile.lastName}`}
+                    className="h-16 w-16 rounded-full object-cover border border-[var(--sk-line)]"
+                  />
+                ) : (
+                  <div
+                    className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold border"
+                    style={{
+                      background: 'var(--sk-brand-tint)',
+                      color: 'var(--sk-brand-2)',
+                      borderColor: 'var(--sk-brand)',
+                    }}
+                  >
+                    {initials(profile.firstName, profile.lastName)}
+                  </div>
+                )}
+                <div>
+                  <div className="nm" style={{ fontSize: 15.5 }}>
+                    {profile.firstName} {profile.lastName}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    aria-label="Choose profile photo"
+                    onChange={(e) => void handleFileChange(e)}
+                  />
+                  <button
+                    type="button"
+                    className="sk-btn sk-press"
+                    style={{ marginTop: 6 }}
+                    disabled={isUploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {isUploading ? 'Uploading…' : profile.photoUrl ? 'Change photo' : 'Add photo'}
+                  </button>
                 </div>
-                <div className="sk-pfname">
-                  {profile.firstName} {profile.lastName}
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  aria-label="Choose profile photo"
-                  onChange={(e) => void handleFileChange(e)}
-                />
-                <button
-                  type="button"
-                  className="sk-btn sk-press"
-                  style={{ marginTop: 12 }}
-                  disabled={isUploading}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {isUploading ? 'Uploading…' : profile.photoUrl ? 'Change photo' : 'Add photo'}
-                </button>
               </div>
               {uploadError && <p className="sk-state err">{uploadError}</p>}
-
-              {/* Ruled rows with an icon tile, the way a form is filled in on
-                  paper: what it is on the left, what it says on the right, a
-                  rule between each. The tiles are decorative — every row is
-                  already named by its label — so they are hidden from
-                  assistive tech rather than read out as emoji. */}
-              <div style={{ marginTop: 4 }}>
-                <div className="sk-pfrow">
-                  <span className="ic" aria-hidden="true">
-                    ✉️
-                  </span>
-                  <span className="sk-lab">Email</span>
-                  <span className="v">{profile.email ?? <span className="sk-muted">Not on file</span>}</span>
+              {/* Label ABOVE value, not beside it. `.sk-pfrow` pinned every
+                  label into a fixed 148px column (re-sizing `.sk-lab` to do it)
+                  and baseline-aligned an emoji tile against a wrapping row of
+                  pills — so the values raggedly stepped down the card and the
+                  two pill rows no longer started at the same left edge. */}
+              <div>
+                <div className="sk-lab">Email</div>
+                <div className="meta" style={{ marginTop: 2 }}>
+                  {profile.email ?? <span className="sk-muted">Not on file</span>}
                 </div>
-                <div className="sk-pfrow">
-                  <span className="ic" aria-hidden="true">
-                    ☎️
-                  </span>
-                  <span className="sk-lab">Phone</span>
-                  <span className="v">{profile.phone ?? <span className="sk-muted">Not on file</span>}</span>
+              </div>
+              <div>
+                <div className="sk-lab">Phone</div>
+                <div className="meta" style={{ marginTop: 2 }}>
+                  {profile.phone ?? <span className="sk-muted">Not on file</span>}
                 </div>
-                <div className="sk-pfrow">
-                  <span className="ic" aria-hidden="true">
-                    📗
-                  </span>
-                  <span className="sk-lab">Subjects taught</span>
-                  <span className="v">
-                    {profile.subjects.length > 0 ? (
-                      <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {profile.subjects.map((s) => (
-                          <span className="sk-pill" data-tone="info" key={s}>
-                            {s}
-                          </span>
-                        ))}
+              </div>
+              <div>
+                <div className="sk-lab">Subjects taught</div>
+                {profile.subjects.length > 0 ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                    {profile.subjects.map((s) => (
+                      <span className="sk-pill" data-tone="info" key={s}>
+                        {s}
                       </span>
-                    ) : (
-                      <span className="sk-muted">No subjects assigned</span>
-                    )}
-                  </span>
-                </div>
-                <div className="sk-pfrow">
-                  <span className="ic" aria-hidden="true">
-                    🏫
-                  </span>
-                  <span className="sk-lab">Class teacher of</span>
-                  <span className="v">
-                    {profile.classTeacherOf.length > 0 ? (
-                      <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {profile.classTeacherOf.map((c) => (
-                          <span className="sk-pill" data-tone="good" key={c}>
-                            {c}
-                          </span>
-                        ))}
+                    ))}
+                  </div>
+                ) : (
+                  <p className="sk-muted" style={{ marginTop: 4 }}>
+                    No subjects assigned
+                  </p>
+                )}
+              </div>
+              <div>
+                <div className="sk-lab">Class teacher of</div>
+                {profile.classTeacherOf.length > 0 ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                    {profile.classTeacherOf.map((c) => (
+                      <span className="sk-pill" data-tone="good" key={c}>
+                        {c}
                       </span>
-                    ) : (
-                      <span className="sk-muted">Not a class teacher</span>
-                    )}
-                  </span>
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="sk-muted" style={{ marginTop: 4 }}>
+                    Not a class teacher
+                  </p>
+                )}
               </div>
             </div>
           )}

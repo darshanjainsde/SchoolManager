@@ -1,5 +1,4 @@
 'use client';
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { GraduationCap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { PublishedResult } from '@skoolos/types';
@@ -98,10 +97,6 @@ export default function PortalResultsPage() {
     staleTime: 60_000,
   });
 
-  // One row open at a time — a report sheet is read one line at a time, and
-  // an accordion keeps the stamps aligned down the right-hand edge.
-  const [openId, setOpenId] = useState<string | null>(null);
-
   // The API returns newest-first; the chart wants oldest-first.
   const results = data ?? [];
   const trendPoints = [...results]
@@ -112,7 +107,7 @@ export default function PortalResultsPage() {
     <div className="flex flex-col gap-6">
       <header className="sk-pagehead">
         <h1>Results</h1>
-        <p>Published marks land with a stamp — tap one to see it against the class.</p>
+        <p>Your published test results, with how the class did overall.</p>
       </header>
 
       {isLoading && <p className="sk-state">Loading results…</p>}
@@ -155,7 +150,14 @@ export default function PortalResultsPage() {
 
               The mark is real text inside the stamp, so it is read out and
               copied normally; only the landing is animation, and reduced
-              motion collapses it to the settled state. */}
+              motion collapses it to the settled state.
+
+              EVERY ROW IS OPEN. A design pass put the class comparison behind
+              a per-row accordion, one row at a time: the baseline page showed
+              the mark, the class average and the above/below reading on every
+              result at once, and hiding two of those three behind a tap is
+              the whole question this page is asked. The stamp stayed — it is
+              paint on a row that is otherwise the shipped one. */}
           <div className="sk-card">
             {results.map((r, i) => {
               const myPct = pct(r.marks, r.maxMarks);
@@ -164,15 +166,9 @@ export default function PortalResultsPage() {
               const above = diff > 0;
               const below = diff < 0;
               const Icon = above ? TrendingUp : below ? TrendingDown : Minus;
-              const open = openId === r.examId;
               return (
-                <div className="sk-res" data-open={open} key={r.examId}>
-                  <button
-                    type="button"
-                    className="top sk-press"
-                    aria-expanded={open}
-                    onClick={() => setOpenId(open ? null : r.examId)}
-                  >
+                <div className="sk-res" key={r.examId}>
+                  <div className="top">
                     <span className="min-w-0 flex-1">
                       <span className="sub block">{r.subjectName}</span>
                       <span className="ttl block">
@@ -188,49 +184,44 @@ export default function PortalResultsPage() {
                     >
                       {r.marks} / {r.maxMarks}
                     </span>
-                  </button>
+                  </div>
 
-                  {/* The detail stays mounted and is revealed by height, so
-                      opening a row is a reveal rather than a jump — and so the
-                      bars below have something to draw into. */}
-                  <div className="det">
-                    <div className="detin">
-                      {/* THE INK LINE, twice: your mark and the class average
-                          on the same scale. Two bars answer "how did I do"
-                          faster than two numbers can, because the comparison
-                          is the length rather than the arithmetic. */}
-                      <div className="sk-bar">
-                        <div className="lbl">
-                          <span>You</span>
-                          <span>
-                            {r.marks} · {myPct}%
-                          </span>
-                        </div>
-                        <div className="tr">
-                          <i style={{ width: `${myPct}%`, background: 'var(--sk-brand)' }} />
-                        </div>
-                        <div className="lbl">
-                          <span>Class average</span>
-                          <span>
-                            {r.classAverage} · {avgPct}%
-                          </span>
-                        </div>
-                        <div className="tr">
-                          <i style={{ width: `${avgPct}%`, background: 'var(--sk-line-2)' }} />
-                        </div>
+                  <div className="detin">
+                    {/* THE INK LINE, twice: your mark and the class average on
+                        the same scale. Two bars answer "how did I do" faster
+                        than two numbers can, because the comparison is the
+                        length rather than the arithmetic. */}
+                    <div className="sk-bar">
+                      <div className="lbl">
+                        <span>You</span>
+                        <span>
+                          {r.marks} · {myPct}%
+                        </span>
                       </div>
-                      <span
-                        className="sk-pill mt-3 inline-flex items-center gap-1"
-                        data-tone={above ? 'good' : below ? 'warn' : 'neutral'}
-                      >
-                        <Icon className="h-3 w-3" aria-hidden="true" />
-                        {above
-                          ? `${diff} above average`
-                          : below
-                            ? `${Math.abs(diff)} below average`
-                            : 'Exactly average'}
-                      </span>
+                      <div className="tr">
+                        <i style={{ width: `${myPct}%`, background: 'var(--sk-brand)' }} />
+                      </div>
+                      <div className="lbl">
+                        <span>Class average</span>
+                        <span>
+                          {r.classAverage} · {avgPct}%
+                        </span>
+                      </div>
+                      <div className="tr">
+                        <i style={{ width: `${avgPct}%`, background: 'var(--sk-line-2)' }} />
+                      </div>
                     </div>
+                    <span
+                      className="sk-pill mt-3 inline-flex items-center gap-1"
+                      data-tone={above ? 'good' : below ? 'warn' : 'neutral'}
+                    >
+                      <Icon className="h-3 w-3" aria-hidden="true" />
+                      {above
+                        ? `${diff} above average`
+                        : below
+                          ? `${Math.abs(diff)} below average`
+                          : 'Exactly average'}
+                    </span>
                   </div>
                 </div>
               );

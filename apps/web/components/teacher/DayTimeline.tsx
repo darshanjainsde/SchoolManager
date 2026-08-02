@@ -40,11 +40,11 @@ function Row({
       <span className="sk-timeline-time">
         {entry.startTime}–{entry.endTime}
       </span>
-      {/* THE MARGIN RULE. The red line ruled down the side of a school
-          exercise book, between the time column and the entry — it is what
-          turns a list of periods into a page. Purely typographic, hence
-          aria-hidden. */}
-      <span className="sk-rail-ml" aria-hidden="true" />
+      {/* No decorative rule between the time and the entry: `.sk-row` lays
+          this out as time-column → body → spacer → action, and slipping a
+          fourth flex child in shifts every entry right of a fixed 92px time
+          column for no information gain. The tone wash below is the whole of
+          what this row needed — colour only, geometry untouched. */}
       <div style={{ minWidth: 0 }}>
         <div className="nm">
           {entry.kind === 'CLASS' && entry.slot

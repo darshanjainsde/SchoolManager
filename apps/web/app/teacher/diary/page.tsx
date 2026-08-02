@@ -244,31 +244,27 @@ export default function TeacherDiaryPage(): React.JSX.Element {
                 {isToday ? 'Nothing written yet today.' : 'Nothing was written on this day.'}
               </p>
             )}
-            {/* Entries land with `pinin` — dropped in rotated, settling
-                square, like a slip pinned to the day's page. The animation is
-                keyed to the entry id, so React only mounts (and therefore
-                only animates) the row that is genuinely new; changing day or
-                class remounts the whole list, which is exactly when the
-                staggered drop is wanted. */}
-            {entries.map((e, i) => (
-              <div
-                key={e.id}
-                className="sk-diary-item sk-pinin sk-in"
-                data-kind={e.kind}
-                data-testid={`diary-entry-${e.id}`}
-                style={{ animationDelay: `${Math.min(i, 8) * 0.06}s` }}
-              >
-                <span className="sdot" aria-hidden="true" />
-                <div className="di-body">
-                  <div className="di-sub">
-                    {e.subjectName ?? 'Diary'}
-                    {e.kind === 'REMARK' && <span className="sk-rem-tag">REMARK</span>}
+            {/* One `.sk-row` per entry: the text over its byline, `.sp`, then
+                the Remark pill and Strike out flush right. `.sk-diary-item`
+                added a subject eyebrow line and a margin dot to every row and
+                dropped the spacer, so a day's page grew a third taller and the
+                Strike out buttons stopped lining up down one right edge. */}
+            {entries.map((e) => (
+              <div key={e.id} className="sk-row" data-testid={`diary-entry-${e.id}`}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    className="nm"
+                    style={
+                      e.kind === 'REMARK'
+                        ? { color: 'var(--sk-bad)', fontStyle: 'italic' }
+                        : undefined
+                    }
+                  >
+                    {e.body}
                   </div>
-                  <div className="di-txt">{e.body}</div>
-                  {/* Subject already sits in the eyebrow above, so the byline
-                      carries only who wrote it and how far it has got. */}
-                  <div className="di-by">
+                  <div className="meta">
                     {e.authorName}
+                    {e.subjectName ? ` · ${e.subjectName}` : ''}
                     {' · '}
                     {e.kind === 'REMARK'
                       ? `${e.signedCount}/${e.recipientCount} signed`
@@ -276,6 +272,12 @@ export default function TeacherDiaryPage(): React.JSX.Element {
                     {e.students.length > 0 && ` · ${e.students.map((s) => s.name).join(', ')}`}
                   </div>
                 </div>
+                <span className="sp" />
+                {e.kind === 'REMARK' && (
+                  <span className="sk-pill" data-tone="bad">
+                    Remark
+                  </span>
+                )}
                 {e.editable && (
                   <button
                     type="button"
@@ -298,23 +300,25 @@ export default function TeacherDiaryPage(): React.JSX.Element {
               <h3>Write</h3>
             </div>
             <div className="sk-card-b flex flex-col gap-3">
-              {/* Segmented, not two buttons: the two modes are exclusive and
-                  a teacher needs to see which ink they are about to write in.
-                  `aria-pressed` carries the state for assistive tech; the red
-                  half is styled through the `bad` tone so arming REMARK is
-                  visible before the button below is read. */}
-              <div className="sk-seg" role="group" aria-label="What are you writing?">
+              {/* Two `.sk-btn`s, the selected one `data-variant="primary"` —
+                  the same "which of these am I on" rendering as the class
+                  picker directly above and the day buttons above that.
+                  `.sk-seg` stripped `.sk-btn` off entirely and re-declared the
+                  padding, radius and selected state privately, so the composer
+                  had a control that looked like nothing else on the page. */}
+              <div className="flex gap-2">
                 {(['ITEM', 'REMARK'] as const).map((k) => (
                   <button
                     key={k}
                     type="button"
-                    className="sk-press"
+                    className="sk-btn sk-press"
+                    style={{ flex: 1 }}
                     data-testid={`diary-kind-${k}`}
-                    data-tone={k === 'REMARK' ? 'bad' : undefined}
+                    data-variant={kind === k ? 'primary' : undefined}
                     aria-pressed={kind === k}
                     onClick={() => setKind(k)}
                   >
-                    {k === 'ITEM' ? 'Diary entry' : 'Remark ✍️'}
+                    {k === 'ITEM' ? 'Diary entry' : 'Remark'}
                   </button>
                 ))}
               </div>

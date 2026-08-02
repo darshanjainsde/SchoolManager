@@ -314,69 +314,31 @@ function ClassDetail({
           {groups.map((g) => (
             <section key={g.date} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div className="sk-lab">{dayLabel(g.date)}</div>
-              {/* A note is a line written on the class's page, so it wears the
-                  diary's own row — the dot in the margin and the entry beside
-                  it — rather than a generic list row with an emoji pin. */}
+              {/* A note is a `.sk-row`: pin glyph, then the body. The diary's
+                  own `.sk-diary-item` sets its own padding, rule and text size,
+                  so mixing it in here put two different row rhythms — notes and
+                  to-dos — inside one dated group. */}
               {g.notes.map((n) => (
-                <div className="sk-diary-item" key={n.id}>
-                  <span className="sdot" aria-hidden="true" />
-                  <div className="di-body">
-                    <div className="di-txt" style={{ whiteSpace: 'pre-wrap' }}>
-                      {n.body}
-                    </div>
+                <div className="sk-row" key={n.id}>
+                  <span aria-hidden="true">📌</span>
+                  <div className="nm" style={{ flex: 1, minWidth: 0, whiteSpace: 'pre-wrap' }}>
+                    {n.body}
                   </div>
                 </div>
               ))}
-              {/* THE TICK. A done to-do is drawn, not asserted: the stroke is
-                  an SVG path whose dash offset animates, so the tick appears
-                  to be written into the box the moment the teacher closes the
-                  item. That is the difference between "the state is now true"
-                  and "you just did that" — a green checkbox can only say the
-                  first.
-
-                  The native checkbox is still the control — it is what the
-                  keyboard and screen readers drive — but it is laid invisibly
-                  over the drawn box rather than shown beside it, so there is
-                  one tick box on the row and not two. It keeps its full hit
-                  area (inset: 0 over the box), so nothing about tapping it
-                  changes.
-
-                  Keyed on the item's done state so the path REMOUNTS when it
-                  is ticked and the stroke actually runs — a permanently
-                  mounted path would finish its animation once, on page load,
-                  and never again. Reduced motion collapses the stroke to a
-                  finished tick, so the row still says "done" either way. */}
+              {/* The native checkbox, shown. `.sk-todo input[type="checkbox"]`
+                  already sizes it (16px, brand accent, flex:none); the drawn
+                  tick replaced that with an absolutely-positioned `opacity: 0`
+                  input inside a 15px box, which overrode the themed rule from
+                  the markup and made the real control invisible. */}
               {g.todos.map((t) => (
                 <label className={`sk-todo${t.done ? ' done' : ''}`} key={t.id}>
-                  <span className="sk-tickbox" data-done={t.done ? 'true' : 'false'} style={{ position: 'relative' }}>
-                    <input
-                      type="checkbox"
-                      checked={t.done}
-                      disabled={toggleTodo.isPending}
-                      onChange={(e) => toggleTodo.mutate({ id: t.id, done: e.target.checked })}
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        width: '100%',
-                        height: '100%',
-                        margin: 0,
-                        opacity: 0,
-                        cursor: 'pointer',
-                      }}
-                    />
-                    {t.done && (
-                      <svg
-                        key={`${t.id}-done`}
-                        className="sk-tick sk-in"
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path d="M4 12.5 L10 18 L20 6" />
-                      </svg>
-                    )}
-                  </span>
+                  <input
+                    type="checkbox"
+                    checked={t.done}
+                    disabled={toggleTodo.isPending}
+                    onChange={(e) => toggleTodo.mutate({ id: t.id, done: e.target.checked })}
+                  />
                   <span>{t.body}</span>
                 </label>
               ))}
