@@ -29,6 +29,8 @@ export const VISIBLE_TABS = [
 /** Detail/utility routes — reachable via navigation (More rows, row taps), hidden from the tab bar. */
 export const HIDDEN_ROUTES = [
   'holidays',
+  'diary',
+  'attendance-bar',
   'requests',
   'take/[classSectionId]',
   'tests',
@@ -64,6 +66,8 @@ export interface MoreItem {
     | '/(staff)/assignments'
     | '/(staff)/messages'
     | '/(staff)/notes'
+    | '/(staff)/diary'
+    | '/(staff)/attendance-bar'
     | '/(staff)/tests'
     | '/(staff)/requests'
     | '/(staff)/holidays'
@@ -73,6 +77,8 @@ export interface MoreItem {
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
+  { label: 'Diary', icon: '📔', route: '/(staff)/diary', tone: 'indigo' },
+  { label: 'Who needs a word', icon: '📉', route: '/(staff)/attendance-bar', tone: 'amber' },
   { label: 'Assignments', icon: '📚', route: '/(staff)/assignments', tone: 'indigo' },
   { label: 'Messages', icon: '💬', route: '/(staff)/messages', tone: 'amber' },
   { label: 'Notes', icon: '📒', route: '/(staff)/notes', tone: 'indigo' },

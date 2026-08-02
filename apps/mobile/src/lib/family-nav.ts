@@ -26,6 +26,7 @@ export const VISIBLE_TABS = [
 /** Detail/utility routes — reachable via navigation (drawer tiles, row taps), hidden from the tab bar. */
 export const HIDDEN_ROUTES = [
   'timetable',
+  'diary',
   'assignments',
   'messages',
   'messages/[threadId]',
@@ -42,6 +43,7 @@ export interface MoreItem {
   label: string;
   icon: string;
   route:
+    | '/(family)/diary'
     | '/(family)/timetable'
     | '/(family)/assignments'
     | '/(family)/messages'
@@ -52,6 +54,7 @@ export interface MoreItem {
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
+  { label: 'Diary', icon: '📔', route: '/(family)/diary', tone: 'indigo' },
   { label: 'Timetable', icon: '📅', route: '/(family)/timetable', tone: 'indigo' },
   { label: 'Assignments', icon: '📚', route: '/(family)/assignments', tone: 'indigo' },
   { label: 'Messages', icon: '💬', route: '/(family)/messages', tone: 'amber' },

@@ -48,9 +48,16 @@ describe('family route honesty', () => {
     }
   });
 
-  it('lists every off-bar tool — Timetable, Assignments, Messages, Notices, Holidays', () => {
+  it('lists every off-bar tool — Diary, Timetable, Assignments, Messages, Notices, Holidays', () => {
     const labels = MORE_ITEMS.map((i) => i.label);
-    expect(labels).toEqual(['Timetable', 'Assignments', 'Messages', 'Notices', 'Holidays']);
+    expect(labels).toEqual([
+      'Diary',
+      'Timetable',
+      'Assignments',
+      'Messages',
+      'Notices',
+      'Holidays',
+    ]);
     // Profile is a core tab now, so it must NOT double up as a drawer tile.
     expect(labels).not.toContain('Profile');
   });
