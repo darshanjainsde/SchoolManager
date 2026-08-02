@@ -32,9 +32,9 @@ const ROLE_TABS: { value: RoleTab; label: string; idLabel: string; submit: strin
   {
     value: 'STUDENT',
     label: 'Student',
-    idLabel: 'Admission no. or email',
+    idLabel: 'Student code, admission no. or email',
     submit: 'Sign in to student portal',
-    hint: 'Students and parents sign in with the admission number on the school record.',
+    hint: 'Use the student code on your school letter (like RAF-00042), the admission number, or the email on the record.',
   },
   {
     value: 'TEACHER',

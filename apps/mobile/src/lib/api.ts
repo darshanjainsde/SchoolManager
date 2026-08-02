@@ -139,6 +139,31 @@ export const api = {
     return res.json() as Promise<T>;
   },
 
+  /**
+   * Starts a password reset from a STUDENT CODE alone (Phase 5·1's
+   * `POST /auth/reset-by-code`), for the family who has the code the school
+   * printed but not the email it was issued against.
+   *
+   * Takes `host` explicitly rather than going through `request()`: that helper
+   * only sends `X-Skoolos-Host` when there is a stored session, and this call
+   * happens before anyone is signed in. Mirrors `login()` for the same reason.
+   *
+   * `emailMasked` is null when the code resolves to no login/email on file —
+   * the caller shows "ask the school office" rather than a false success.
+   */
+  async resetByCode(host: string, code: string): Promise<{ ok: true; emailMasked: string | null }> {
+    const res = await safeFetch(`${BASE}/auth/reset-by-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Skoolos-Host': host },
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body.message ?? 'Could not start a reset for that code.');
+    }
+    return res.json() as Promise<{ ok: true; emailMasked: string | null }>;
+  },
+
   async login(host: string, identifier: string, password: string): Promise<Session> {
     const loginRes = await safeFetch(`${BASE}/auth/login`, {
       method: 'POST',

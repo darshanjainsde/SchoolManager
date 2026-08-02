@@ -56,11 +56,14 @@ export default function Login() {
   const canSubmit = !busy && !!identifier && !!password;
 
   return (
-    <AuthScaffold title="Welcome back" subtitle="Log in with the details your school gave you.">
+    <AuthScaffold
+      title="Welcome back"
+      subtitle="Use the student code on your school letter (like RAF-00042), or your email."
+    >
       <TextInput
         value={identifier}
         onChangeText={setIdentifier}
-        placeholder="Email or admission number"
+        placeholder="Student code, email or admission number"
         placeholderTextColor={tokens.color.placeholder}
         autoCapitalize="none"
         testID="login-id"
@@ -105,6 +108,18 @@ export default function Login() {
       >
         <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 16 }}>
           {busy ? 'Logging in…' : 'Log in'}
+        </Text>
+      </Pressable>
+      <Pressable testID="login-forgot" onPress={() => router.push('/(auth)/reset-by-code')}>
+        <Text
+          style={{
+            color: tokens.color.indigo,
+            fontWeight: '600',
+            textAlign: 'center',
+            fontSize: 13.5,
+          }}
+        >
+          Forgot the password?
         </Text>
       </Pressable>
     </AuthScaffold>

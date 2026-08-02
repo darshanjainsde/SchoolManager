@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import type { TimetableSlot } from '@skoolos/types';
+import type { StudentDiaryResult, TimetableSlot } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 import { minutesOfDay } from '@/lib/teacher-day';
@@ -165,6 +165,7 @@ export default function Home() {
   const [exams, setExams] = useState<UpcomingExam[] | null>(null);
   const [results, setResults] = useState<PublishedResult[] | null>(null);
   const [slots, setSlots] = useState<TimetableSlot[] | null>(null);
+  const [diary, setDiary] = useState<StudentDiaryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Refetch on focus: a new notice, a fresh attendance mark, a newly scheduled
@@ -181,8 +182,11 @@ export default function Home() {
         api.request<UpcomingExam[]>('/me/exams'),
         api.request<PublishedResult[]>('/me/results'),
         api.request<TimetableSlot[]>('/me/timetable'),
+        // A remark waiting for a signature is the most time-sensitive thing on
+        // this screen, so the diary is part of the same load, not a lazy tab.
+        api.request<StudentDiaryResult>('/me/diary'),
       ])
-        .then(([p, a, att, ex, res, tt]) => {
+        .then(([p, a, att, ex, res, tt, d]) => {
           if (cancelled) return;
           setProfile(p);
           setAnnouncements(a);
@@ -190,6 +194,7 @@ export default function Home() {
           setExams(ex);
           setResults(res);
           setSlots(tt);
+          setDiary(d);
         })
         .catch((e: unknown) => {
           if (!cancelled) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
@@ -285,6 +290,39 @@ export default function Home() {
             classesToday={todaySlots.length}
             monthPercent={attendanceMarked > 0 ? (attendance?.percent ?? null) : null}
           />
+
+          {/* An unsigned remark outranks everything else here: it is the one
+              thing on this screen someone at home has to DO, and it came with
+              an email that has already landed. */}
+          {diary && diary.unsignedCount > 0 && (
+            <Pressable testID="diary-banner" onPress={() => router.push('/(family)/diary')}>
+              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    backgroundColor: tokens.color.red50,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 17 }}>📔</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>
+                    {diary.unsignedCount === 1
+                      ? 'A diary remark to sign'
+                      : `${diary.unsignedCount} diary remarks to sign`}
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+                    Open the diary to read and sign.
+                  </Text>
+                </View>
+                <Pill tone="red">Sign</Pill>
+              </Card>
+            </Pressable>
+          )}
 
           {/* Next-test reminder — the thing a student should never miss. Tapping
               it opens the full detail (syllabus, max marks, date) on Results. */}

@@ -69,6 +69,7 @@ function mockEndpoints(overrides: Partial<Record<string, unknown>> = {}) {
     '/me/results': [],
     '/me/timetable': [],
     '/me/notifications/unread-count': { count: 0 },
+    '/me/diary': { entries: [], unsignedCount: 0 },
     ...overrides,
   };
   (api.request as jest.Mock).mockImplementation((path: string) => {
@@ -283,5 +284,31 @@ describe('fetch states', () => {
 
     expect(await findByText('Fresh notice')).toBeTruthy();
     expect(queryByText('No announcements yet.')).toBeNull();
+  });
+});
+
+describe('diary remarks', () => {
+  it('an unsigned remark is banner-worthy — it is the one thing here to DO', async () => {
+    mockEndpoints({ '/me/diary': { entries: [], unsignedCount: 2 } });
+    const { findByTestId, getByText } = render(<Home />);
+
+    expect(await findByTestId('diary-banner')).toBeTruthy();
+    expect(getByText('2 diary remarks to sign')).toBeTruthy();
+  });
+
+  it('is absent when nothing is waiting to be signed', async () => {
+    mockEndpoints();
+    const { queryByTestId, findByTestId } = render(<Home />);
+
+    await findByTestId('screen-scroll');
+    expect(queryByTestId('diary-banner')).toBeNull();
+  });
+
+  it('tapping it opens the diary', async () => {
+    mockEndpoints({ '/me/diary': { entries: [], unsignedCount: 1 } });
+    const { findByTestId } = render(<Home />);
+
+    fireEvent.press(await findByTestId('diary-banner'));
+    expect(mockPush).toHaveBeenCalledWith('/(family)/diary');
   });
 });
