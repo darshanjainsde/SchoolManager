@@ -1705,3 +1705,39 @@ html[data-theme='light'] .sk-composer button,
 html[data-theme='light'] .sk-day[aria-pressed="true"] .dw,
 html[data-theme='light'] .sk-day[aria-pressed="true"] .dn,
 html[data-theme='light'] .sk-notif-row[data-unread="true"][data-kind="DIARY"] .sk-notif-ic { color: #fff; }
+
+/* `.sk-signbanner` — the family portal's one OUTSTANDING item, on the home
+   page above everything that merely reports. Red-tinted because a remark
+   waiting on a signature is the same object the diary draws in red ink, and
+   the two views must not disagree about how serious it looks. A link, not a
+   card with a button inside it: the whole row is the target, which is what
+   the app's version does and what a thumb expects. */
+.sk-signbanner {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--sk-bad-tint);
+  border: 1px solid var(--sk-bad);
+  text-decoration: none;
+  transition: transform 0.14s ease;
+}
+.sk-signbanner:hover { transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) {
+  .sk-signbanner { transition: none; }
+  .sk-signbanner:hover { transform: none; }
+}
+.sk-signbanner .ic {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--sk-card);
+  font-size: 17px;
+}
+.sk-signbanner .tx { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.sk-signbanner .t { font-size: 13.5px; font-weight: 700; color: var(--sk-bad); }
+.sk-signbanner .d { font-size: 11.5px; color: var(--sk-bad); opacity: 0.75; margin-top: 2px; }

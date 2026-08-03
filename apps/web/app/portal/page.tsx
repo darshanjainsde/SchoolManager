@@ -8,6 +8,7 @@ import type {
   AttendanceSummary,
   Profile,
   PublishedResult,
+  StudentDiaryResult,
   TimetableSlot,
   UpcomingExam,
 } from '@skoolos/types';
@@ -184,6 +185,19 @@ export default function PortalDashboardPage() {
     staleTime: 60_000,
   });
 
+  // A remark waiting for a signature is the one thing on this portal that is
+  // ASKED OF the family rather than reported to them, and the app has always
+  // said so on its home screen. On the web it was visible only after opening
+  // Diary — so the same family, on the same account, learned about it on the
+  // phone and not on the laptop.
+  const diaryQuery = useQuery({
+    queryKey: ['portal-diary'],
+    queryFn: () => api.get<StudentDiaryResult>('/me/diary'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+  const unsignedCount = diaryQuery.data?.unsignedCount ?? 0;
+
   const profile = profileQuery.data;
   const todaySlots = (timetableQuery.data ?? [])
     .filter((s) => s.dayOfWeek === todayDayOfWeek())
@@ -260,6 +274,30 @@ export default function PortalDashboardPage() {
         </div>
         {profile?.className && <div className="sk-sub">{profile.className} · Roll {profile.rollNo ?? '—'}</div>}
       </header>
+
+      {/* THE SIGNATURE ASK. Above the hero because it is the only thing on
+          this page that is owed BY the reader — everything below reports what
+          happened; this one waits on them. It renders only when something is
+          actually outstanding, so it never becomes furniture. Twin of the
+          app's `diary-banner`. */}
+      {unsignedCount > 0 && (
+        <Link href="/portal/diary" className="sk-signbanner" data-testid="diary-banner">
+          <span className="ic" aria-hidden="true">
+            📔
+          </span>
+          <span className="tx">
+            <span className="t">
+              {unsignedCount === 1
+                ? 'A diary remark to sign'
+                : `${unsignedCount} diary remarks to sign`}
+            </span>
+            <span className="d">Open the diary to read and sign.</span>
+          </span>
+          <span className="sk-pill" data-tone="bad">
+            Sign
+          </span>
+        </Link>
+      )}
 
       {/* State-aware "right now" hero — mirrors the mobile StudentHero. Shown
           once the timetable resolves; the schedule card below surfaces any error. */}
