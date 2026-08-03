@@ -348,10 +348,26 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 }
 .sk-mobile-topbar .brand { display: flex; align-items: center; gap: 8px; }
 .sk-mobile-topbar .role { font-size: 12px; font-weight: 700; letter-spacing: -0.01em; color: var(--sk-ink); }
-.sk-mobile-menu-btn,
+/* The hamburger is PHONE-ONLY, and says so itself rather than relying on a
+   parent being hidden. The teacher and admin shells keep it inside
+   `.sk-mobile-topbar` (already hidden above the breakpoint), but the student
+   and staff shells put it in their always-visible top bar — so the rule has to
+   live on the button, or those two would carry a hamburger on a laptop next to
+   a sidebar that is already showing every section. */
+.sk-mobile-menu-btn { display: none; }
 .sk-drawer-close {
   display: grid; place-items: center; width: 44px; height: 44px; border: 0; background: transparent;
   border-radius: 11px; color: var(--sk-ink-2); cursor: pointer;
+}
+@media (max-width: 640px) {
+  .sk-mobile-menu-btn {
+    display: grid; place-items: center; width: 44px; height: 44px; border: 0;
+    background: transparent; border-radius: 11px; color: var(--sk-ink-2); cursor: pointer;
+  }
+  /* The tab strip and the drawer are the same nine links. On a phone the strip
+     shows two of them and hides the rest behind a horizontal scroll nothing
+     announces — so the drawer takes over and the strip stands down. */
+  .sk-topbar .sk-tabs { display: none; }
 }
 .sk-mobile-menu-btn:hover,
 .sk-drawer-close:hover { background: var(--sk-brand-tint); color: var(--sk-ink); }

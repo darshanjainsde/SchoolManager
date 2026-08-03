@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
@@ -25,6 +25,7 @@ import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { MobileNavButton, MobileNavDrawer } from '@/components/MobileNavDrawer';
 import '../sk-theme.css';
 
 const NAV_ITEMS = [
@@ -42,6 +43,7 @@ const NAV_ITEMS = [
 export default function PortalLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const hydrated = useHydrated();
   const host = useHost();
   const status = useAuthStore((s) => s.status);
@@ -117,6 +119,14 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
             <LogOut className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Sign out</span>
           </button>
+          {/* Phone-only, by CSS. The tab strip below scrolls, but with nine
+              sections only two or three are ever on screen and nothing hints
+              the rest are there. */}
+          <MobileNavButton
+            open={drawerOpen}
+            onOpen={() => setDrawerOpen(true)}
+            controls="portal-mobile-drawer"
+          />
         </div>
         <nav className="sk-tabs" aria-label="Portal sections">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
@@ -127,6 +137,18 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
       </header>
+
+      <MobileNavDrawer
+        id="portal-mobile-drawer"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title="Student portal"
+        host={host}
+        sectionLabel="Sections"
+        items={NAV_ITEMS}
+        isActive={isActive}
+        foot={<div style={{ padding: '8px 11px' }}><ThemeToggle /></div>}
+      />
 
       <main className="sk-main">{children}</main>
     </div>
