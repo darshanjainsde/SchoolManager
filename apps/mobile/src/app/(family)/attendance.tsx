@@ -185,6 +185,22 @@ function MonthNav({
   );
 }
 
+/**
+ * "August 2026" from "2026-08". Mirrors the web portal's `monthLabel`.
+ *
+ * The figures on this card used to be captioned "this month" no matter which
+ * month Prev/Next had walked back to, so April's numbers were announced as
+ * August's. A month view has to name its own month.
+ */
+function monthLabel(key: string): string {
+  const year = Number(key.slice(0, 4));
+  const monthIndex = Number(key.slice(5, 7)) - 1;
+  return new Date(year, monthIndex, 1).toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 export default function Attendance() {
   const tokens = useTokens();
   const [summary, setSummary] = useState<AttendanceSummary | null>(null);
@@ -273,14 +289,16 @@ export default function Attendance() {
               >
                 {summary.percent}%
               </Text>
-              <Text style={{ fontSize: 11, color: tokens.color.sub }}>present this month</Text>
+              <Text style={{ fontSize: 11, color: tokens.color.sub }}>
+                present across {total} recorded {total === 1 ? 'day' : 'days'}
+              </Text>
             </View>
 
             <InkRule key={month} percent={summary.percent} />
 
             {total === 0 ? (
               <Text style={{ color: tokens.color.sub, fontSize: 12.5 }}>
-                No attendance recorded yet this month.
+                No attendance recorded yet for {month ? monthLabel(month) : 'this month'}.
               </Text>
             ) : (
               <>
@@ -359,8 +377,14 @@ export default function Attendance() {
             {/* The two supporting figures, in mono under the rule — the
                 percentage is the headline, these are its working. */}
             <View style={{ flexDirection: 'row', gap: 18, marginTop: 12 }}>
+              {/* The same three states the web portal breaks out. "school
+                  days" was wrong on both counts: it was the count of MARKED
+                  days (an unmarked day isn't in it), and it left `late`
+                  invisible — so a month with two late arrivals silently
+                  didn't add up. */}
+              <Figure testID="stat-present" value={summary.present} label="present" color={tokens.color.green} />
               <Figure testID="stat-absent" value={summary.absent} label="absent" color={tokens.color.red} />
-              <Figure testID="stat-total" value={total} label="school days" />
+              <Figure testID="stat-late" value={summary.late} label="late" color={tokens.color.late} />
             </View>
           </Card>
 

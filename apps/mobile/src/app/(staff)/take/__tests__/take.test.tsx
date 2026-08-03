@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { act, render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import TakeAttendance from '../[classSectionId]';
 import { api, ApiError } from '@/lib/api';
@@ -79,7 +80,7 @@ const mockBack = jest.fn();
 // Mutable so individual tests can exercise a `date` route param without a
 // fresh jest.mock per test — Jest's out-of-scope-variable check for mock
 // factories allows referencing `mock`-prefixed identifiers like this one.
-let mockParams: { classSectionId: string; name?: string; date?: string } = {
+let mockParams: { classSectionId: string; name?: string; date?: string; takenBy?: string } = {
   classSectionId: 'cs1',
   name: '5-B',
 };
@@ -143,7 +144,10 @@ it('joins attendance marks with student roster names and defaults unmarked stude
   // accessible name, which is what a screen reader reads out.
   expect(await findByLabelText('Asha Rao, roll 1, present')).toBeTruthy();
   expect(await findByLabelText('Ben Lee, roll 2, absent')).toBeTruthy();
-  expect(await findByText(/1 present · 1 absent · 2 total/)).toBeTruthy();
+  // Same four figures the web register states, in the same order. `late` has
+  // to be one of them: without it, two latecomers in a class of forty read
+  // "38 present · 0 absent" with two children unaccounted for.
+  expect(await findByText(/2 students · 1 present · 1 absent · 0 late/)).toBeTruthy();
 });
 
 it('renders one cell per student, showing their roll number while present', async () => {
@@ -312,6 +316,79 @@ it('a save with zero absentees says nobody was absent, not "0 absent … guardia
   fireEvent.press(submit);
   await settled(() => expect(getByText('Attendance saved — 2 students, nobody absent.')).toBeTruthy());
   expect(queryByText(/guardians/i)).toBeNull();
+});
+
+describe('replacing a register someone else already took', () => {
+  // The warning used to fire when the class was merely OPENED, which was
+  // wrong twice over: opening this screen issues no PUT, and "Who needs a
+  // word" lives at the bottom of it — so the question a teacher asks right
+  // after the morning register ("who is slipping?") sat behind a red prompt
+  // about overwriting a colleague's work. It belongs on Save.
+  const mockSave = () =>
+    (api.request as jest.Mock).mockImplementation((path: string) => {
+      if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
+      if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+      if (path === '/manage/attendance') return Promise.resolve({ saved: 2, absentees: 0 });
+      if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
+      throw new Error(`unexpected path: ${path}`);
+    });
+
+  it('names the marker and writes nothing until the teacher confirms', async () => {
+    mockParams = { classSectionId: 'cs1', name: '5-B', takenBy: 'Mr. Rao' };
+    mockSave();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { findByTestId, findByText } = render(<TakeAttendance />);
+
+    // The banner names whose work is about to change, before you change it.
+    expect(await findByText(/Taken by Mr\. Rao\. Saving replaces that record\./)).toBeTruthy();
+
+    fireEvent.press(await findByTestId('submit-attendance'));
+
+    const [title, message, buttons] = alertSpy.mock.calls[0];
+    expect(title).toMatch(/5-B/);
+    expect(message).toMatch(/Mr\. Rao/);
+    expect(message).toMatch(/audit log/i);
+    // Dismissing must not write.
+    expect(
+      (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
+    ).toHaveLength(0);
+
+    await act(async () => {
+      buttons?.find((b: { text?: string }) => b.text === 'Replace')?.onPress?.();
+    });
+    await waitFor(() =>
+      expect(
+        (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
+      ).toHaveLength(1),
+    );
+
+    alertSpy.mockRestore();
+  });
+
+  it('saves an unmarked class straight through, with no confirmation at all', async () => {
+    mockParams = { classSectionId: 'cs1', name: '5-B' }; // no takenBy
+    mockSave();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { findByTestId, queryByText } = render(<TakeAttendance />);
+
+    fireEvent.press(await findByTestId('submit-attendance'));
+
+    // Asserted on the dialog and the PUT, NOT on the save toast: the toast is
+    // a round-trip away, and waiting for it made this test starve under the
+    // concurrent, CPU-oversubscribed run `pnpm preflight` actually uses — a
+    // red suite for a timing reason that has nothing to do with the subject.
+    // The confirmation branch is decided synchronously, so this is the whole
+    // behaviour. (The save toast itself is covered by the tests above.)
+    await waitFor(() =>
+      expect(
+        (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
+      ).toHaveLength(1),
+    );
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(queryByText(/Saving replaces that record/)).toBeNull();
+
+    alertSpy.mockRestore();
+  });
 });
 
 it('a failed save shows the server message verbatim, keeps the marked roster, and does not navigate away', async () => {

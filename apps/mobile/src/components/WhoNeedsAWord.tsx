@@ -137,6 +137,7 @@ export function WhoNeedsAWord({
             <ThresholdSlider
               testID="bar-threshold"
               value={threshold}
+              step={5}
               onChange={setThreshold}
               accessibilityLabel="Attendance benchmark"
             />

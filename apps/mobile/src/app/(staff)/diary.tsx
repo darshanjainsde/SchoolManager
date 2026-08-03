@@ -15,6 +15,9 @@ import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
 
+/** The server's cap, mirrored from the web composer (apps/web/app/teacher/diary). */
+const MAX_BODY = 2000;
+
 type Kind = 'ITEM' | 'REMARK';
 
 /**
@@ -532,6 +535,9 @@ export default function StaffDiary() {
             value={body}
             onChangeText={setBody}
             multiline
+            // Matches the server's cap and the web composer's, so a long entry
+            // stops in the box instead of being lost to a 400 after the send.
+            maxLength={MAX_BODY}
             placeholder={
               isRemark
                 ? 'What happened, in your words — the parent reads this verbatim.'

@@ -173,28 +173,23 @@ it('navigates to the take screen when a pending class is tapped', async () => {
   expect(mockPush).toHaveBeenCalledWith('/(staff)/take/cs-pending?name=5-B');
 });
 
-it('shows a retake confirmation with the marker and prior counts before navigating', async () => {
+it('opens an already-marked register without warning, and carries who marked it', async () => {
+  // Opening writes nothing — the PUT on the take screen is the only write —
+  // so there is no overwrite to confirm here. The confirmation moved to Save,
+  // where the overwrite actually happens. This matters beyond tidiness:
+  // "Who needs a word" lives at the bottom of the take screen, so a warning
+  // at the door put the question "who is slipping?" behind a red, destructive
+  // prompt about damaging a colleague's work.
   mockApi({ status: { [TODAY]: [TAKEN] } });
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const { findByTestId } = render(<StaffAttendance />);
 
-  const retakeBtn = await findByTestId('retake-cs-taken');
-  fireEvent.press(retakeBtn);
+  fireEvent.press(await findByTestId('retake-cs-taken'));
 
-  expect(alertSpy).toHaveBeenCalledTimes(1);
-  const [title, message, buttons] = alertSpy.mock.calls[0];
-  expect(title).toMatch(/6-A/);
-  expect(message).toMatch(/Mr\. Rao/);
-  expect(message).toMatch(/26\/30/);
-  expect(message).toMatch(/audit log/i);
-  expect(message).toMatch(/overwrites/i);
-
-  // Confirming ("Retake") should be the only path into the take screen —
-  // dismissing without pressing it must not navigate.
-  expect(mockPush).not.toHaveBeenCalled();
-  const retake = buttons?.find((b) => b.text === 'Retake');
-  retake?.onPress?.();
-  expect(mockPush).toHaveBeenCalledWith('/(staff)/take/cs-taken?name=6-A');
+  expect(alertSpy).not.toHaveBeenCalled();
+  // `takenBy` is what lets the take screen name the marker in its banner and
+  // in the Save confirmation.
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/take/cs-taken?name=6-A&takenBy=Mr.%20Rao');
 
   alertSpy.mockRestore();
 });

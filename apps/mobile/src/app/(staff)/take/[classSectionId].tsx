@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Alert, Animated, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { type AttendanceStatusValue, type SaveAttendanceResponse } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -136,7 +136,7 @@ function SavedStamp() {
 export default function TakeAttendance() {
   const tokens = useTokens();
   const CELL = cellTones(tokens);
-  const { classSectionId, name, date: dateParam } = useLocalSearchParams<{
+  const { classSectionId, name, date: dateParam, takenBy } = useLocalSearchParams<{
     classSectionId: string;
     name?: string;
     /** YYYY-MM-DD. Omitted by today's link (see attendance.tsx's `goTake`); a
@@ -145,6 +145,11 @@ export default function TakeAttendance() {
      * this screen just proxies whatever date it's given through to the GET
      * and PUT below. */
     date?: string;
+    /** Who already marked this class today, when it has been marked. Present
+     * only on the taken path (attendance.tsx's `goTake`), and used for two
+     * things: the banner naming them, and the overwrite confirmation on
+     * Submit. Absent means "not taken yet", so saving replaces nothing. */
+    takenBy?: string;
   }>();
   const date = dateParam ?? todayISO();
   const [roster, setRoster] = useState<RosterRow[] | null>(null);
@@ -216,6 +221,11 @@ export default function TakeAttendance() {
   const rows = roster ?? [];
   const presentCount = rows.filter((r) => r.status === 'PRESENT').length;
   const absentCount = rows.filter((r) => r.status === 'ABSENT').length;
+  // LATE is a third state the register can be in, so it has to be a third
+  // figure. Without it, marking two latecomers in a class of forty read
+  // "38 present · 0 absent · 40 total" — two children unaccounted for, and
+  // nothing on screen to say where they went.
+  const lateCount = rows.filter((r) => r.status === 'LATE').length;
 
   // Editing after a save invalidates the confirmation (or pending-offline
   // notice) that's on screen — it described a roster that no longer
@@ -255,8 +265,35 @@ export default function TakeAttendance() {
     setLastMark(null);
   };
 
+  /**
+   * OVERWRITING IS CONFIRMED HERE, NOT AT THE DOOR.
+   *
+   * The warning used to fire when a teacher merely OPENED an already-marked
+   * class, and it was doubly wrong: opening this screen writes nothing (the
+   * PUT below is the only write), and "Who needs a word" lives at the bottom
+   * of this screen — so the one question a teacher asks after the morning
+   * register was in ("who is slipping?") sat behind a red, destructive-styled
+   * prompt about overwriting a colleague's work. The web client never gated
+   * viewing; it shows the roster and the insight, and gates only the edit.
+   */
   const submit = async () => {
     if (!classSectionId || rows.length === 0) return;
+    if (takenBy) {
+      const when = date === todayISO() ? 'today' : `on ${date}`;
+      const ok = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          `Replace ${name ?? 'this class'}'s register?`,
+          `${takenBy} already marked it ${when}. Saving replaces that record for ` +
+            `every teacher. The previous version stays in the audit log.`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Replace', style: 'destructive', onPress: () => resolve(true) },
+          ],
+          { onDismiss: () => resolve(false) },
+        );
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     setError(null);
     setConfirmation(null);
@@ -342,7 +379,24 @@ export default function TakeAttendance() {
           text run (rather than the pitch's three separate tiles) because that
           exact sentence is this screen's published summary; the mono/colour
           treatment per figure is what carries the tile idea across. */}
-      {roster !== null && (
+      {/* The web shows "Taken by X" above the roster for the same reason: you
+          can look at a marked register freely, but you should know whose work
+          you are about to change before you change it. */}
+      {takenBy && (
+        <Card style={{ paddingVertical: 9 }}>
+          <Text style={{ fontSize: 11.5, color: tokens.color.sub, textAlign: 'center' }}>
+            Taken by {takenBy}. Saving replaces that record.
+          </Text>
+        </Card>
+      )}
+      {roster !== null && rows.length === 0 && (
+        <Card>
+          <Text style={{ color: tokens.color.sub }}>
+            No students in this class yet — your admin needs to enrol them.
+          </Text>
+        </Card>
+      )}
+      {roster !== null && rows.length > 0 && (
         <Card style={{ paddingVertical: 9, alignItems: 'center' }}>
           <Text
             style={{
@@ -352,9 +406,10 @@ export default function TakeAttendance() {
               textAlign: 'center',
             }}
           >
+            <Text style={statNumber(tokens.color.ink)}>{rows.length}</Text> students ·{' '}
             <Text style={statNumber(tokens.color.green)}>{presentCount}</Text> present ·{' '}
             <Text style={statNumber(tokens.color.red)}>{absentCount}</Text> absent ·{' '}
-            <Text style={statNumber(tokens.color.ink)}>{rows.length}</Text> total
+            <Text style={statNumber(tokens.color.late)}>{lateCount}</Text> late
           </Text>
         </Card>
       )}

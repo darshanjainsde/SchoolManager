@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { RegisterChangeRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -130,20 +130,12 @@ export default function StaffAttendance() {
     // Keep today's link exactly as it was before this date control existed —
     // only a non-today date adds the `date` param.
     const dateParam = date === todayISO() ? '' : `&date=${date}`;
-    router.push(`/(staff)/take/${c.classSectionId}?name=${encodeURIComponent(c.name)}${dateParam}`);
-  };
-
-  const confirmRetake = (c: ClassDayStatus) => {
-    const when = date === today ? 'today' : `on ${date}`;
-    Alert.alert(
-      `Retake attendance for ${c.name}?`,
-      `${c.name} was already marked by ${c.markedBy ?? 'a teacher'} ${when} — ` +
-        `${c.present}/${c.total} present. Retaking overwrites the record for every ` +
-        `teacher ${when}. The previous version stays in the audit log.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Retake', style: 'destructive', onPress: () => goTake(c) },
-      ],
+    // A marked class carries who marked it, so the register screen can name
+    // them and confirm before REPLACING their record. Opening is free; the
+    // save is what needs the warning, and that is where it now lives.
+    const takenParam = c.taken ? `&takenBy=${encodeURIComponent(c.markedBy ?? 'a teacher')}` : '';
+    router.push(
+      `/(staff)/take/${c.classSectionId}?name=${encodeURIComponent(c.name)}${dateParam}${takenParam}`,
     );
   };
 
@@ -235,13 +227,24 @@ export default function StaffAttendance() {
       )}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 11 }}>
         {c.taken ? (
+          // NOT styled destructive, and no confirmation: this opens the
+          // register, and opening writes nothing. The overwrite warning fires
+          // on Save, inside that screen. Styled as a quiet secondary action so
+          // it doesn't compete with the classes still waiting to be marked.
           <Pressable
-            onPress={() => confirmRetake(c)}
+            onPress={() => goTake(c)}
             testID={`retake-${c.classSectionId}`}
-            style={{ flex: 1, backgroundColor: tokens.color.red50, borderRadius: 13, padding: 10 }}
+            style={{
+              flex: 1,
+              backgroundColor: tokens.color.surface,
+              borderWidth: 1,
+              borderColor: tokens.color.line,
+              borderRadius: 13,
+              padding: 10,
+            }}
           >
-            <Text style={{ color: tokens.color.red, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
-              Retake
+            <Text style={{ color: tokens.color.ink, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
+              Open register
             </Text>
           </Pressable>
         ) : (
