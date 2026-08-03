@@ -22,6 +22,18 @@ import { WhoNeedsAWord } from '@/components/teacher/WhoNeedsAWord';
 
 const STATUS_LABEL: Record<AttendanceStatusValue, string> = { PRESENT: 'Present', ABSENT: 'Absent', LATE: 'Late' };
 
+/**
+ * One tap moves a cell on: present → absent → late → present. Absent comes
+ * FIRST because it is overwhelmingly the common exception — a late arrival is
+ * rarer than an absence, and putting it second costs one extra tap on the rarer
+ * case rather than the frequent one.
+ */
+const CYCLE: Record<AttendanceStatusValue, AttendanceStatusValue> = {
+  PRESENT: 'ABSENT',
+  ABSENT: 'LATE',
+  LATE: 'PRESENT',
+};
+
 const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
 
 const fieldCls =
@@ -208,6 +220,11 @@ function TeacherAttendanceInner() {
   // Server marks are the source of truth whenever the class/date changes; local
   // edits layer on top until the next successful fetch.
   const [marks, setMarks] = useState<Record<string, AttendanceStatusValue>>({});
+  /** The last cell tapped, so the caption under the grid can name it and offer
+   *  the way back. Cleared whenever the class or date changes. */
+  const [lastMark, setLastMark] = useState<
+    { id: string; name: string; from: AttendanceStatusValue; to: AttendanceStatusValue } | null
+  >(null);
   useEffect(() => {
     if (!existing.data) return;
     setMarks(Object.fromEntries(existing.data.map((m) => [m.studentId, m.status])));
@@ -503,46 +520,72 @@ function TeacherAttendanceInner() {
             )}
 
             {students.length > 0 && (
-              <div>
-                {students.map((s, i) => {
-                  const status = marks[s.id] ?? 'PRESENT';
-                  return (
-                    <div className="sk-row" key={s.id}>
-                      <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
-                        {initials(s.firstName, s.lastName)}
+              <>
+                {/* THE REGISTER GRID. Everyone starts present; the teacher taps
+                    only the exceptions, and each tap cycles present → absent →
+                    late → present. A cell shows the roll number while present
+                    and swaps to a glyph once marked, so the exceptions are
+                    findable without reading a single number.
+
+                    The name is not on the cell — that is what makes the grid
+                    fast — but it IS the accessible name of every button, so a
+                    screen reader announces "Aarav Sharma, roll 1, present"
+                    while a sighted teacher sees a compact block. */}
+                <div className="sk-rgrid" data-testid="register-grid">
+                  {students.map((s) => {
+                    const status = marks[s.id] ?? 'PRESENT';
+                    const label = `${s.firstName} ${s.lastName}`;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className="sk-rcell"
+                        data-status={status}
+                        data-testid={`cell-${s.id}`}
+                        title={`${label} · roll ${s.rollNo ?? '—'}`}
+                        aria-label={`${label}, roll ${s.rollNo ?? 'none'}, ${STATUS_LABEL[status].toLowerCase()}`}
+                        onClick={() => {
+                          const next = CYCLE[status];
+                          setMarks((m) => ({ ...m, [s.id]: next }));
+                          setLastMark({ id: s.id, name: label, from: status, to: next });
+                        }}
+                      >
+                        {status === 'ABSENT' ? '✕' : status === 'LATE' ? '⏱' : (s.rollNo ?? '·')}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* What you just did, in words. The grid's speed comes from
+                    dropping the names, so the one real risk is tapping the
+                    wrong cell — this is the line that catches it, with the way
+                    back beside it. Announced politely so it never interrupts a
+                    teacher mid-flow. */}
+                <p className="sk-regsaid" aria-live="polite" data-testid="register-said">
+                  {lastMark ? (
+                    <>
+                      <span>
+                        {lastMark.name} · {STATUS_LABEL[lastMark.to].toLowerCase()}
                       </span>
-                      <div>
-                        <div className="nm">
-                          {s.firstName} {s.lastName}
-                        </div>
-                        <div className="meta">Roll {s.rollNo ?? '—'}</div>
-                      </div>
-                      <span className="sp" />
-                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                        {/* The pitch's register cells, worn by the buttons the
-                            web register already has. Present is the quiet
-                            default (good tint); ABSENT goes red AND grows —
-                            the exception is the only mark that costs a
-                            deliberate tap, so it is the only one that moves —
-                            and late is amber. The growth is scale, not size,
-                            so nothing around it reflows. */}
-                        {ATTENDANCE_STATUSES.map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className="sk-mark"
-                            data-status={option}
-                            aria-pressed={status === option}
-                            onClick={() => setMarks((m) => ({ ...m, [s.id]: option }))}
-                          >
-                            {STATUS_LABEL[option]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      <button
+                        type="button"
+                        className="undo"
+                        data-testid="register-undo"
+                        onClick={() => {
+                          setMarks((m) => ({ ...m, [lastMark.id]: lastMark.from }));
+                          setLastMark(null);
+                        }}
+                      >
+                        Undo
+                      </button>
+                    </>
+                  ) : (
+                    <span className="sk-muted">
+                      Everyone starts present — tap the absentees. Tap again for late.
+                    </span>
+                  )}
+                </p>
+              </>
             )}
           </div>
         </div>

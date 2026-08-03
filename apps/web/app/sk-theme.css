@@ -1153,6 +1153,69 @@ input[type="range"].sk-bar:focus-visible { outline: 2px solid var(--sk-brand); o
 }
 @media (prefers-reduced-motion: reduce) { .sk-mark { transition: none; } }
 
+/* ---- the register GRID (the pitch's `.rgrid` / `.rcell`) ----
+   Register by exception: everyone starts present, and the teacher taps only
+   the exceptions. That is why the register is a GRID of roll numbers rather
+   than a list of rows with three buttons each — a class of forty is forty
+   rows and a hundred and twenty controls to scan, versus one block you take
+   in at a glance, where the only things that stand out are the ones that
+   need action.
+
+   A cell carries the roll number when present, and swaps to a glyph when
+   marked, so the exceptions are findable without reading any number at all.
+   Absent also grows very slightly: it is the mark that costs a deliberate
+   tap, so it is the one that moves. */
+.sk-rgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  gap: 5px;
+}
+.sk-rcell {
+  aspect-ratio: 1;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-family: var(--sk-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  background: var(--sk-good-tint);
+  color: var(--sk-good);
+  transition: background 0.15s var(--sk-ease), color 0.15s var(--sk-ease),
+    transform 0.15s var(--sk-ease);
+}
+.sk-rcell:hover { border-color: var(--sk-brand); }
+.sk-rcell:focus-visible {
+  outline: none;
+  border-color: var(--sk-brand);
+  box-shadow: 0 0 0 3px var(--sk-brand-tint);
+}
+.sk-rcell[data-status="ABSENT"] {
+  background: var(--sk-bad-tint); color: var(--sk-bad); transform: scale(1.06);
+}
+.sk-rcell[data-status="LATE"] {
+  background: var(--sk-amber-tint); color: var(--sk-amber-ink);
+}
+/* A past register is a record, not a control. */
+.sk-rcell[data-readonly="true"] { cursor: default; }
+.sk-rcell[data-readonly="true"]:hover { border-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .sk-rcell { transition: none; } }
+
+/* The line under the grid that names what you just did. A grid of numbers is
+   fast precisely because it drops the names — so the one real risk is tapping
+   the wrong cell, and this is the confirmation that catches it. `min-height`
+   holds the space so marking the first student never shifts the layout. */
+.sk-regsaid {
+  min-height: 20px; font-size: 12px; color: var(--sk-ink-2);
+  display: flex; align-items: center; gap: 10px;
+}
+.sk-regsaid .undo {
+  font-size: 11.5px; font-weight: 700; color: var(--sk-brand-2);
+  background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline;
+}
+
 /* ---- the big stamp ----
    The terminal state of a sheet of work: a register saved, a mark sheet
    complete. Print only — the LANDING is `.sk-stampin`, shared with every other

@@ -180,15 +180,15 @@ export default function AvailabilityPage() {
                     </div>
 
                     <span className="sp" />
-                    {/* THE STAMP, and only here: "free all day" / "fully
-                        booked" is a VERDICT on the row above it, the one thing
-                        on this page a head of department is actually hunting
-                        for. The per-period pills stay still — stamping twenty
-                        of them would make the verdict impossible to find. */}
+                    {/* A plain pill. It once carried THE STAMP, which was
+                        wrong: a stamp marks work being COMPLETED, and nothing
+                        completes here — the page just loaded. Thirty teachers
+                        meant thirty stamps thumping down in sequence, which
+                        reads as the page struggling rather than as anything
+                        being said. The verdict is in the words and the tone. */}
                     <span
-                      className="sk-pill sk-stampin sk-in"
+                      className="sk-pill"
                       data-tone={allFree ? 'good' : allBusy ? 'bad' : 'warn'}
-                      style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}
                     >
                       {allFree ? 'Free all day' : allBusy ? 'Fully booked' : 'Partially free'}
                     </span>
