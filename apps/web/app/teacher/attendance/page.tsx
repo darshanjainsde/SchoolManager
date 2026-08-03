@@ -300,50 +300,25 @@ function TeacherAttendanceInner() {
           <h3>Class &amp; date</h3>
         </div>
         <div className="sk-card-b">
-          <div className="grid gap-3 sm:grid-cols-[200px_auto] sm:items-end">
-            <div className="space-y-1.5">
-              <label htmlFor="attn-date" className="sk-lab">
-                Date
-              </label>
-              <Input
-                id="attn-date"
-                type="date"
-                className={`${fieldCls} w-full`}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </div>
-            {editable && (
-              <button
-                type="button"
-                className="sk-btn sk-press"
-                data-variant="primary"
-                disabled={!classSectionId || !date || students.length === 0 || save.isPending}
-                onClick={() => save.mutate()}
-              >
-                {save.isPending ? 'Saving…' : 'Save attendance'}
-              </button>
-            )}
+          {/* This card CHOOSES; the roster card below DOES. Save used to live
+              here, which on a wide screen sat innocently beside the date but
+              on a phone stacked into "pick a date, save attendance, mark all
+              present, ...now pick a class" — offering to save a register
+              before you had said whose. */}
+          <div className="space-y-1.5" style={{ maxWidth: 220 }}>
+            <label htmlFor="attn-date" className="sk-lab">
+              Date
+            </label>
+            <Input
+              id="attn-date"
+              type="date"
+              className={`${fieldCls} w-full`}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
           </div>
 
           {classes.error && <p className="sk-state err">{(classes.error as Error).message}</p>}
-          {editable && listError && <p className="sk-state err">{listError.message}</p>}
-
-          {editable && students.length > 0 && (
-            <div>
-              <button
-                type="button"
-                className="sk-btn sk-press"
-                onClick={() =>
-                  setMarks(
-                    Object.fromEntries(students.map((s) => [s.id, 'PRESENT' as AttendanceStatusValue])),
-                  )
-                }
-              >
-                Mark all present
-              </button>
-            </div>
-          )}
 
           {/* THE CLASS RAIL. The select above is the control (and the thing a
               screen reader and the keyboard drive); this is the pitch's
@@ -585,8 +560,38 @@ function TeacherAttendanceInner() {
                     </span>
                   )}
                 </p>
+
+                {/* The two controls that ACT, under the thing they act on, in
+                    the order they are used: correct a mistake, then commit.
+                    They wrap on a narrow screen rather than shrinking. */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                  <button
+                    type="button"
+                    className="sk-btn sk-press"
+                    onClick={() =>
+                      setMarks(
+                        Object.fromEntries(
+                          students.map((s) => [s.id, 'PRESENT' as AttendanceStatusValue]),
+                        ),
+                      )
+                    }
+                  >
+                    Mark all present
+                  </button>
+                  <button
+                    type="button"
+                    className="sk-btn sk-press"
+                    data-variant="primary"
+                    disabled={!classSectionId || !date || students.length === 0 || save.isPending}
+                    onClick={() => save.mutate()}
+                  >
+                    {save.isPending ? 'Saving…' : 'Save attendance'}
+                  </button>
+                </div>
               </>
             )}
+
+            {editable && listError && <p className="sk-state err">{listError.message}</p>}
           </div>
         </div>
       )}

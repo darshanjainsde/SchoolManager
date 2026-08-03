@@ -259,7 +259,21 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 .sk-grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
 @media (min-width: 720px) { .sk-grid2 { grid-template-columns: 1fr 1fr; } }
 .sk-card { background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r); box-shadow: var(--sk-shadow); }
-.sk-card-h { padding: 14px 16px 0; }
+/* A row, so a header can carry an action on its right without the `.sp`
+   spacer silently doing nothing (it was a block, so a title-plus-button
+   header stacked the button underneath and left it full width). Wraps rather
+   than shrinks: on a narrow screen the action drops to its own line at its
+   own size instead of squeezing the title. */
+.sk-card-h {
+  padding: 14px 16px 0;
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+/* A header whose only child is the title still behaves exactly as before. */
+.sk-card-h > h3 { flex: 0 1 auto; }
+/* Several headers carry a subtitle under the title. In a flex row that would
+   ride up ALONGSIDE the title, so it claims a full line of its own — which is
+   where it already sat when this was a block. */
+.sk-card-h > p { flex: 1 0 100%; margin: 0; }
 /* Card titles carry the serif too. Weight drops from 730 to 650 because a
    Palatino-class face at 730 renders as a synthetic bold on most machines —
    the serif already supplies the contrast the sans needed weight for. */
