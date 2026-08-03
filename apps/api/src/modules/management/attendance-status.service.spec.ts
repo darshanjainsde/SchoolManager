@@ -40,6 +40,37 @@ describe('AttendanceService', () => {
   });
 
   describe('myClassSections', () => {
+    it('a class PICKER is not day-scoped — you can post to a class you next see on Thursday', async () => {
+      txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID });
+      txMock.classSection.findMany.mockResolvedValue([]);
+
+      // No `scheduledOnly`: this is the shape announcements, assignments,
+      // diary and results ask for. Day-scoping it would stop a teacher
+      // posting an announcement on a Sunday.
+      await svc.myClassSections(SCHOOL, TEACHER_USER, 'TEACHER', { date: '2026-08-02' });
+
+      const where = txMock.classSection.findMany.mock.calls[0][0].where;
+      expect(where.OR[0]).toEqual({ classTeacherId: TEACHER_ID });
+      expect(where.OR[1].timetableSlots.some).toEqual({ teacherId: TEACHER_ID });
+    });
+
+    it('asks for the DAY the date falls on — a Sunday register is not everything you teach', async () => {
+      txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID });
+      txMock.classSection.findMany.mockResolvedValue([]);
+
+      // 2026-08-02 is a Sunday. With no slots that weekday the query returns
+      // nothing, which is the point: the page showed every class a teacher had
+      // ever taught, on every date, including days the school does not run.
+      const result = await svc.myClassSections(SCHOOL, TEACHER_USER, 'TEACHER', {
+        date: '2026-08-02',
+        scheduledOnly: true,
+      });
+
+      const where = txMock.classSection.findMany.mock.calls[0][0].where;
+      expect(where.OR[1].timetableSlots.some.dayOfWeek).toBe(7);
+      expect(result).toEqual([]);
+    });
+
     it('returns sections where the user is class teacher or has timetable slots (deduped)', async () => {
       txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID });
       txMock.classSection.findMany.mockResolvedValue([
@@ -57,19 +88,24 @@ describe('AttendanceService', () => {
         },
       ]);
 
-      const result = await svc.myClassSections(SCHOOL, TEACHER_USER, 'TEACHER');
+      // A MONDAY, asked as the REGISTER asks it.
+      const result = await svc.myClassSections(SCHOOL, TEACHER_USER, 'TEACHER', {
+        date: '2026-08-03',
+        scheduledOnly: true,
+      });
 
       expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { userId: TEACHER_USER } });
-      expect(txMock.classSection.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: {
-            OR: [
-              { classTeacherId: TEACHER_ID },
-              { timetableSlots: { some: { teacherId: TEACHER_ID } } },
-            ],
-          },
-        }),
-      );
+      // Both arms are scoped to the DAY: a register belongs to a period on a
+      // timetable, so a class only exists on a date the teacher holds it.
+      // `dayOfWeek: 1` is Monday, in TimetableSlot's 1-7 Monday-first encoding.
+      const where = txMock.classSection.findMany.mock.calls[0][0].where;
+      expect(where.OR[0]).toMatchObject({
+        classTeacherId: TEACHER_ID,
+        timetableSlots: { some: { dayOfWeek: 1 } },
+      });
+      expect(where.OR[1]).toMatchObject({
+        timetableSlots: { some: { teacherId: TEACHER_ID, dayOfWeek: 1 } },
+      });
       expect(result).toEqual([
         { classSectionId: 'section-5b', name: '5-B', studentCount: 28, covering: false },
         { classSectionId: 'section-6a', name: '6-A', studentCount: 30, covering: false },
