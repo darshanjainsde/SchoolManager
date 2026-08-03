@@ -91,3 +91,42 @@ describe('sk-theme palette', () => {
     }
   });
 });
+
+/**
+ * THE CASCADE-ORDER GUARD.
+ *
+ * `.sk-mobile-topbar` declared `display: none` AFTER the `@media (max-width:
+ * 640px)` block that set `display: flex`. Same specificity, later wins — so
+ * the bar was hidden at EVERY width, and the hamburger inside it never
+ * appeared on a phone. Nothing caught it: the rule existed, the media query
+ * existed, and every test passed. Only the order was wrong, and order is
+ * invisible unless you look for it.
+ *
+ * For any selector whose visibility a media query is supposed to flip, the
+ * unconditional rule must come FIRST.
+ */
+describe('cascade order — a media query must not be overridden by a later base rule', () => {
+  // Same resolution the file already uses at the top — `__dirname` is not
+  // available under this test environment.
+
+  const FLIPPED = ['.sk-mobile-topbar', '.sk-mobile-menu-btn'];
+
+  it.each(FLIPPED)('%s sets its base display BEFORE the media query that overrides it', (sel) => {
+    // Last unconditional `display` declaration for this selector...
+    const base = [...css.matchAll(new RegExp(`^\\${sel}\\s*\\{[^}]*display\\s*:`, 'gm'))].pop();
+    // ...versus the media-query one that is meant to win on a phone.
+    const inMedia = [
+      ...css.matchAll(
+        new RegExp(`@media[^{]*max-width[^{]*\\{[^@]*?\\${sel}\\s*\\{[^}]*display\\s*:`, 'gs'),
+      ),
+    ].pop();
+
+    expect(base, `${sel} declares no unconditional display`).toBeTruthy();
+    expect(inMedia, `${sel} is never flipped by a media query`).toBeTruthy();
+    expect(
+      (base as RegExpMatchArray).index,
+      `${sel}'s plain rule sits AFTER the media query, so it wins at every width and the ` +
+        'media query does nothing. Move the unconditional rule above it.',
+    ).toBeLessThan((inMedia as RegExpMatchArray).index as number);
+  });
+});

@@ -348,12 +348,18 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
   .sk-side { display: none; }
   .sk-content { padding: 20px; }
   .sk-app { flex-direction: column; }
-  .sk-mobile-topbar { display: flex; }
+  /* `.sk-mobile-topbar`'s display lives with its own rules further down, so
+     both halves of the decision sit together and cannot be reordered apart. */
 }
 
 /* ---- mobile top bar + drawer (teacher shell) ---- */
 .sk-mobile-topbar {
-  display: none; /* shown only under the 640px breakpoint above */
+  /* NO `display` here. It used to say `display: none`, and because this rule
+     sits AFTER the `@media (max-width: 640px)` block that sets `display: flex`,
+     the two had equal specificity and this one won — at every width. The bar
+     was hidden on phones, which is the only place it was meant to appear, and
+     the hamburger it contains went with it. Both display values now live in
+     the pair below, narrow-screen last. */
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
@@ -383,6 +389,10 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
      announces — so the drawer takes over and the strip stands down. */
   .sk-topbar .sk-tabs { display: none; }
 }
+/* The display pair, kept together and ordered so the phone case wins. */
+.sk-mobile-topbar { display: none; }
+@media (max-width: 640px) { .sk-mobile-topbar { display: flex; } }
+
 .sk-mobile-menu-btn:hover,
 .sk-drawer-close:hover { background: var(--sk-brand-tint); color: var(--sk-ink); }
 .sk-mobile-menu-btn:focus-visible,
