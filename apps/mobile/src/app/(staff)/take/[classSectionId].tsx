@@ -1,11 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import {
-  ATTENDANCE_STATUSES,
-  type AttendanceStatusValue,
-  type SaveAttendanceResponse,
-} from '@skoolos/types';
+import { type AttendanceStatusValue, type SaveAttendanceResponse } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { enqueueSave, flush } from '@/lib/offline-queue';
@@ -58,11 +54,39 @@ const STATUS_LABEL: Record<AttendanceStatusValue, string> = {
   ABSENT: 'Absent',
   LATE: 'Late',
 };
-function statusColor(tokens: { color: ColorPalette }): Record<AttendanceStatusValue, string> {
+
+// REGISTER BY EXCEPTION. One tap cycles the cell; the teacher never selects a
+// state directly, they walk the class marking only the students who aren't
+// simply there. Same order as the web (apps/web/app/teacher/attendance/page.tsx)
+// so a teacher who learns the cycle on one client already knows it on the
+// other. Record-typed for the same reason as STATUS_LABEL: a fourth server
+// state fails the build rather than dead-ending the cycle.
+const CYCLE: Record<AttendanceStatusValue, AttendanceStatusValue> = {
+  PRESENT: 'ABSENT',
+  ABSENT: 'LATE',
+  LATE: 'PRESENT',
+};
+
+// A marked cell drops its roll number for a glyph, so the exceptions are
+// findable in a block of forty without reading a single figure.
+const STATUS_GLYPH: Record<AttendanceStatusValue, string | null> = {
+  PRESENT: null,
+  ABSENT: '✕',
+  LATE: '⏱',
+};
+
+// `.rcell` — tint behind, its own ink on top, one pair per state. `late` (not
+// `amber`) is the ink on the amber tint for the same reason the web has a
+// `--sk-late` at all: the brand accent shifts in dark mode and a status must
+// not shift with it.
+function cellTones(tokens: { color: ColorPalette }): Record<
+  AttendanceStatusValue,
+  { bg: string; ink: string }
+> {
   return {
-    PRESENT: tokens.color.green,
-    ABSENT: tokens.color.red,
-    LATE: tokens.color.amber,
+    PRESENT: { bg: tokens.color.green50, ink: tokens.color.green },
+    ABSENT: { bg: tokens.color.red50, ink: tokens.color.red },
+    LATE: { bg: tokens.color.amber50, ink: tokens.color.late },
   };
 }
 
@@ -110,7 +134,7 @@ function SavedStamp() {
 
 export default function TakeAttendance() {
   const tokens = useTokens();
-  const STATUS_COLOR = statusColor(tokens);
+  const CELL = cellTones(tokens);
   const { classSectionId, name, date: dateParam } = useLocalSearchParams<{
     classSectionId: string;
     name?: string;
@@ -131,6 +155,17 @@ export default function TakeAttendance() {
   // `confirmation` (server confirmed) and `error` (server or client
   // rejected it outright).
   const [pendingOffline, setPendingOffline] = useState(false);
+  // The last cell the teacher tapped, kept so the caption under the grid can
+  // NAME it and offer the way back. The grid is fast precisely because it
+  // drops the names, so the one real risk it introduces is tapping the wrong
+  // cell — this is the whole mitigation, and it holds `from` (not just `to`)
+  // so Undo restores the exact prior state rather than assuming PRESENT.
+  const [lastMark, setLastMark] = useState<{
+    studentId: string;
+    name: string;
+    from: AttendanceStatusValue;
+    to: AttendanceStatusValue;
+  } | null>(null);
 
   // Refetch on focus: if this is a retake, we want the freshest marks and
   // roster every time the screen comes back into view. Also attempts to
@@ -196,7 +231,27 @@ export default function TakeAttendance() {
   const markAllPresent = () => {
     setConfirmation(null);
     setPendingOffline(false);
+    // A wholesale reset makes the single-cell caption a lie (and its Undo
+    // would restore one student into a roster that no longer matches), so
+    // clear it rather than leave it describing a tap that's been overwritten.
+    setLastMark(null);
     setRoster((rs) => (rs ?? []).map((x) => ({ ...x, status: 'PRESENT' })));
+  };
+
+  // ONE TAP PER EXCEPTION: present → absent → late → present. The only way
+  // this screen sets a status now — there is no direct-select control, which
+  // is what lets the roster be a block of roll numbers instead of a list of
+  // rows carrying three buttons each.
+  const cycle = (row: RosterRow) => {
+    const to = CYCLE[row.status];
+    setStatus(row.studentId, to);
+    setLastMark({ studentId: row.studentId, name: row.name, from: row.status, to });
+  };
+
+  const undoLastMark = () => {
+    if (!lastMark) return;
+    setStatus(lastMark.studentId, lastMark.from);
+    setLastMark(null);
   };
 
   const submit = async () => {
@@ -317,93 +372,104 @@ export default function TakeAttendance() {
           Mark all present
         </Text>
       </Pressable>
+      {/* THE REGISTER GRID (`.rgrid`/`.rcell`) — one square cell per student,
+          not a row per student with three buttons on it. A class of forty is
+          one block you take in at a glance instead of forty rows and a
+          hundred and twenty controls to scan, and the only cells that stand
+          out are the ones that needed action.
+
+          A cell carries the ROLL NUMBER while present and swaps to a glyph
+          once marked, so the exceptions are findable without reading any
+          number. The name is deliberately NOT drawn on the cell — that is
+          what makes the grid fast — but it IS the cell's accessible name, so
+          a screen reader still announces "Asha Rao, roll 1, present". */}
       {rows.length > 0 && (
-        <Card style={{ paddingVertical: 2 }}>
-          {rows.map((r) => (
-            <View
-              key={r.studentId}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 9,
-                borderBottomWidth: 1,
-                borderBottomColor: tokens.color.line,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '600', color: tokens.color.ink }}>{r.name}</Text>
-                {/* The roll number is a figure that must line up down the
-                    column — the pitch's `.mkrow .rl`/`.rcell` mono. */}
-                <Text
+        <Card style={{ paddingVertical: 12 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+            {rows.map((r) => {
+              const tone = CELL[r.status];
+              return (
+                <Pressable
+                  key={r.studentId}
+                  testID={`cell-${r.studentId}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${r.name}, roll ${r.rollNo ?? 'none'}, ${STATUS_LABEL[
+                    r.status
+                  ].toLowerCase()}`}
+                  onPress={() => cycle(r)}
                   style={{
-                    fontFamily: font.mono,
-                    fontSize: 11,
-                    color: tokens.color.sub,
-                    marginTop: 2,
+                    width: 46,
+                    height: 46,
+                    borderRadius: 9,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: tone.bg,
+                    // `.rcell[data-status="ABSENT"]{transform:scale(1.06)}` — an
+                    // absence is the mark that costs a deliberate tap, so it is
+                    // the one that moves.
+                    transform: r.status === 'ABSENT' ? [{ scale: 1.06 }] : [],
                   }}
                 >
-                  Roll {r.rollNo ?? '—'}
-                </Text>
-              </View>
-              {/* `.rgrid`/`.rcell` — a recessed tray of equal, square-ish tap
-                  targets. The pitch's register is a single cycling cell per
-                  student; this screen keeps its three-way control (its testIDs
-                  and direct-selection behaviour are a published contract), so
-                  the cell vocabulary lands on the three targets instead: the
-                  SELECTED one carries the state at full ink. */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: 4,
-                  backgroundColor: tokens.color.surfaceMuted,
-                  borderRadius: 11,
-                  padding: 3,
-                }}
-              >
-                {ATTENDANCE_STATUSES.map((status) => {
-                  const on = r.status === status;
-                  const bg = on ? STATUS_COLOR[status] : 'transparent';
-                  return (
-                    <Pressable
-                      key={status}
-                      testID={`${status.toLowerCase()}-${r.studentId}`}
-                      onPress={() => setStatus(r.studentId, status)}
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 11,
-                        borderRadius: 9,
-                        backgroundColor: bg,
-                        // `.rcell.A{transform:scale(1.06)}` — an absence is the
-                        // exception the whole page exists to record, so the cell
-                        // that holds it sits a touch proud of its neighbours and
-                        // can be found without reading a single word.
-                        transform: on && status === 'ABSENT' ? [{ scale: 1.06 }] : [],
-                      }}
-                    >
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: on ? tokens.color.onBrand : tokens.color.sub }}>
-                        {STATUS_LABEL[status]}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ))}
+                  {/* Mono, like every figure in this product that has to line
+                      up with its neighbours down a column. */}
+                  <Text
+                    style={{
+                      fontFamily: font.mono,
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: tone.ink,
+                    }}
+                  >
+                    {STATUS_GLYPH[r.status] ?? r.rollNo ?? '·'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </Card>
       )}
-      {/* `.reghint` — the quiet line under the grid that answers the one
-          question a blank-looking register raises. */}
+      {/* WHAT YOU JUST DID, IN WORDS. The grid's speed comes from dropping the
+          names, so the one real risk is tapping the wrong cell — this line
+          catches it, with the way back beside it. Before the first tap it
+          carries the hint that answers the one question a green-looking
+          register raises. */}
       {rows.length > 0 && (
-        <Text
+        <View
+          testID="register-said"
+          accessibilityLiveRegion="polite"
           style={{
-            fontSize: 10.5,
-            color: tokens.color.sub,
-            textAlign: 'center',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            minHeight: 20,
             marginTop: -4,
           }}
         >
-          Everyone starts present — only the exceptions cost a tap.
-        </Text>
+          {lastMark ? (
+            <>
+              <Text style={{ fontSize: 11.5, color: tokens.color.ink2 }}>
+                {lastMark.name} · {STATUS_LABEL[lastMark.to].toLowerCase()}
+              </Text>
+              <Pressable testID="register-undo" accessibilityRole="button" onPress={undoLastMark}>
+                <Text
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: '700',
+                    color: tokens.color.indigo,
+                    textDecorationLine: 'underline',
+                  }}
+                >
+                  Undo
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <Text style={{ fontSize: 10.5, color: tokens.color.sub, textAlign: 'center' }}>
+              Everyone starts present — tap the absentees. Tap again for late.
+            </Text>
+          )}
+        </View>
       )}
       <Pressable
         onPress={submit}
