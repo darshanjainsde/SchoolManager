@@ -130,6 +130,15 @@
   border-bottom: 1px solid var(--sk-line);
 }
 .sk-topbar-inner { max-width: 68rem; margin: 0 auto; display: flex; align-items: center; gap: 14px; padding: 12px 20px; }
+/* A flex child will not shrink below its content unless told it may. Without
+   this the school host — an arbitrarily long domain — sets a floor on the
+   bar's width, the bar grows past the viewport, and because it is the widest
+   thing on the page EVERYTHING inherits a horizontal scroll while the cards
+   below, which are max-width bound, stop short of it. That is the "navbar is
+   wider than the page" report. */
+.sk-who { min-width: 0; }
+.sk-who .n,
+.sk-who .s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sk-crest {
   width: 38px; height: 38px; border-radius: 12px; flex: none;
   display: grid; place-items: center; color: #fff; font-weight: 750; font-size: 14px;
@@ -392,6 +401,15 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 /* The display pair, kept together and ordered so the phone case wins. */
 .sk-mobile-topbar { display: none; }
 @media (max-width: 640px) { .sk-mobile-topbar { display: flex; } }
+
+@media (max-width: 640px) {
+  /* Six controls do not fit across a phone, and the ones that do not fit are
+     the ones the drawer already holds. The bar keeps what you need AT a
+     glance — who you are, what is unread — and hands the rest to the menu. */
+  .sk-topbar-inner { gap: 10px; padding: 10px 14px; }
+  .sk-topbar-inner .sk-themetoggle,
+  .sk-topbar-inner .sk-signout { display: none; }
+}
 
 .sk-mobile-menu-btn:hover,
 .sk-drawer-close:hover { background: var(--sk-brand-tint); color: var(--sk-ink); }

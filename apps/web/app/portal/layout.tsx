@@ -147,7 +147,27 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
         sectionLabel="Sections"
         items={NAV_ITEMS}
         isActive={isActive}
-        foot={<div style={{ padding: '8px 11px' }}><ThemeToggle /></div>}
+        foot={
+          // The bar hides these two on a phone (they do not fit), so the
+          // drawer is where they have to live — a control that exists at one
+          // width and vanishes at another is worse than one that moved.
+          <>
+            <div style={{ padding: '8px 11px' }}>
+              <ThemeToggle />
+            </div>
+            <button
+              className="sk-nav"
+              style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}
+              onClick={() => {
+                setDrawerOpen(false);
+                clear();
+                router.replace('/login');
+              }}
+            >
+              <LogOut className="ic" aria-hidden="true" /> Sign out
+            </button>
+          </>
+        }
       />
 
       <main className="sk-main">{children}</main>

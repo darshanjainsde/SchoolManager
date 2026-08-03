@@ -114,7 +114,25 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
         sectionLabel="Sections"
         items={NAV_ITEMS}
         isActive={isActive}
-        foot={<div style={{ padding: '8px 11px' }}><ThemeToggle /></div>}
+        foot={
+          // Hidden from the bar on a phone (no room), so the drawer carries
+          // them — see MobileNavDrawer.
+          <>
+            <div style={{ padding: '8px 11px' }}>
+              <ThemeToggle />
+            </div>
+            <button
+              className="sk-nav"
+              style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}
+              onClick={() => {
+                setDrawerOpen(false);
+                void handleLogout();
+              }}
+            >
+              <LogOut className="ic" aria-hidden="true" /> Sign out
+            </button>
+          </>
+        }
       />
 
       <main className="sk-main">{children}</main>
