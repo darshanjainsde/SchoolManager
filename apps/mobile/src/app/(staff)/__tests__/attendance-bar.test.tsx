@@ -51,7 +51,7 @@ const RATES = {
 // PanResponder's own gesture maths expects from the responder system — without
 // it the handlers it wraps around ours would have nothing to read.
 type El = Parameters<typeof fireEvent>[0];
-const TRACK_W = 200; // 50 → 100 across 200px, so 1% = 4px
+const TRACK_W = 200; // 0 → 100 across 200px, so 1% = 2px
 
 const touchHistory = (x: number, t: number) => ({
   touchBank: [
@@ -75,7 +75,7 @@ const touchHistory = (x: number, t: number) => ({
 
 function slideTo(slider: El, percent: number) {
   fireEvent(slider, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: TRACK_W, height: 28 } } });
-  const x = ((percent - 50) / 50) * TRACK_W;
+  const x = (percent / 100) * TRACK_W;
   fireEvent(slider, 'responderGrant', {
     nativeEvent: { locationX: x, locationY: 14 },
     touchHistory: touchHistory(x, 1),
@@ -137,7 +137,9 @@ it('the benchmark can be moved without a drag, from assistive technology', async
 
   const slider = getByTestId('bar-threshold');
   expect(slider.props.accessibilityRole).toBe('adjustable');
-  expect(slider.props.accessibilityValue).toMatchObject({ min: 50, max: 100, now: 75 });
+  // The track is the full 0-100 so the fill matches the number: at 75% it is
+  // three-quarters along, not at the midpoint of a 50-100 range.
+  expect(slider.props.accessibilityValue).toMatchObject({ min: 0, max: 100, now: 75 });
 
   for (let i = 0; i < 3; i++) {
     fireEvent(slider, 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });

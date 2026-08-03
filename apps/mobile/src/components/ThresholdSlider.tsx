@@ -44,7 +44,9 @@ interface ThresholdSliderProps {
  */
 export function ThresholdSlider({
   value,
-  min = 50,
+  // 0-100, so the filled portion always equals the number beside it: a track
+  // that starts at 50 puts 75% at its midpoint and contradicts its own label.
+  min = 0,
   max = 100,
   step = 1,
   onChange,

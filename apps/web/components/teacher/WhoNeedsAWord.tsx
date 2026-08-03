@@ -32,7 +32,16 @@ import { useHost } from '@/components/use-host';
  * not one anybody can defend to a parent.
  */
 
-const BAR_MIN = 50;
+/**
+ * The track runs the FULL 0-100, not the 50-100 the useful range occupies.
+ *
+ * A bar labelled "75%" has to look three-quarters full. Starting the track at
+ * 50 put 75 at the exact midpoint, so the control contradicted its own number
+ * — and a benchmark you cannot read off the bar is worse than no bar. The
+ * compressed range bought a little more precision in the half that matters and
+ * paid for it by lying about where the value sits.
+ */
+const BAR_MIN = 0;
 const BAR_MAX = 100;
 const BAR_STEP = 5;
 

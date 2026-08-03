@@ -14,28 +14,17 @@ import { DUR, EASE, useReduceMotion } from '@/theme/motion';
 import { font } from '@/theme/tokens';
 import { useTokens } from '@/theme/theme-context';
 
-/** The slider's range. Below 50% a benchmark stops being a benchmark — it is a
- *  different conversation (with the family, not the phone) — and above 100%
- *  there is nothing to say. The histogram is drawn on the same 50→100 scale,
- *  which is what lets the dashed rule and the bars line up. */
-const MIN = 50;
+/**
+ * The track runs the FULL 0-100.
+ *
+ * It used to start at 50, on the reasoning that a benchmark below half is a
+ * different conversation. True, but it made the control contradict itself: 75%
+ * landed at the exact midpoint of the track, so a bar labelled "75%" looked
+ * half full. A slider's whole job is to show a value at a glance, and one that
+ * has to be read off the number beside it is not doing that job.
+ */
+const MIN = 0;
 const MAX = 100;
-
-/** Histogram geometry, from the pitch's `.dist`: a 64px band with 10px of air
- *  above the tallest bar, so a 100% bar reads as "full" without touching the
- *  card's own edge. */
-const DIST_H = 64;
-const DIST_TOP = 10;
-const BAR_MIN = 6;
-const BAR_MAX = DIST_H - DIST_TOP; // 54
-
-/** Where a percentage sits on the histogram's 50→100 scale, in pixels off the
- *  floor. Anything at or under MIN is drawn as the 6px stub rather than as
- *  nothing: a child at 20% must still be a visible mark on the page. */
-function barHeight(percent: number): number {
-  const p = Math.max(0, Math.min(100, percent));
-  return Math.max(BAR_MIN, Math.min(BAR_MAX, ((p - MIN) / (MAX - MIN)) * (BAR_MAX - BAR_MIN) + BAR_MIN));
-}
 
 function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -61,104 +50,6 @@ function DashedRule({ color }: { color: string }) {
           style={{ flex: 1, height: 2, backgroundColor: i % 2 === 0 ? color : undefined }}
         />
       ))}
-    </View>
-  );
-}
-
-/**
- * The distribution — one bar per child, shortest first, with the benchmark
- * ruled across it.
- *
- * WHY A HISTOGRAM AND NOT A COUNT: "6 below 75%" is a number; a shape tells
- * the teacher whether those six are a cliff (a handful of children in real
- * trouble) or a slope (a class that drifts). The dashed amber rule slides as
- * the benchmark moves, so the teacher can literally see the line cut the
- * class, and the bars it crosses flip to red underneath it. That flip is the
- * feedback that makes a continuous slider safe: you never have to guess who a
- * number would catch.
- *
- * The bars grow from the floor once when the register arrives — the ink line,
- * one of the six gestures — and the rule's position eases over the pitch's
- * .25s whenever the benchmark moves. Neither carries meaning; both are how
- * the change ARRIVES.
- */
-function Distribution({ rows, threshold }: { rows: AttendanceRateRow[]; threshold: number }) {
-  const tokens = useTokens();
-  const reduced = useReduceMotion();
-  const grow = useRef(new Animated.Value(0)).current;
-  const line = useRef(new Animated.Value(-barHeight(threshold))).current;
-  const grown = useRef(false);
-
-  // Both animations are transforms on the UI thread rather than layout
-  // (`height`/`bottom`) animations: a histogram that re-lays-out 30 bars on
-  // every frame of a drag would stutter on the phones this app is actually
-  // used on. `transformOrigin: 'bottom'` is what lets a scale stand in for a
-  // height — the bar grows out of the floor, not out of its own middle.
-  // Both are stopped on unmount so a half-finished animation cannot keep
-  // driving a torn-down screen.
-  useEffect(() => {
-    if (rows.length === 0 || grown.current) return;
-    grown.current = true;
-    if (reduced.current) {
-      grow.setValue(1);
-      return;
-    }
-    const anim = Animated.timing(grow, {
-      toValue: 1,
-      duration: DUR.ink / 2,
-      easing: EASE,
-      useNativeDriver: true,
-    });
-    anim.start();
-    return () => anim.stop();
-  }, [rows.length, grow, reduced]);
-
-  useEffect(() => {
-    const to = -barHeight(threshold);
-    if (reduced.current) {
-      line.setValue(to);
-      return;
-    }
-    const anim = Animated.timing(line, { toValue: to, duration: 250, easing: EASE, useNativeDriver: true });
-    anim.start();
-    return () => anim.stop();
-  }, [threshold, line, reduced]);
-
-  return (
-    <View
-      style={{
-        height: DIST_H,
-        paddingTop: DIST_TOP,
-        paddingHorizontal: 12,
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-        gap: 2,
-        marginHorizontal: -14, // bleed to the card's edges, like the pitch's full-width `.dist`
-      }}
-    >
-      {rows.map((s) => {
-        const lo = s.percent < threshold;
-        return (
-          <Animated.View
-            key={s.studentId}
-            style={{
-              flex: 1,
-              height: barHeight(s.percent),
-              borderTopLeftRadius: 2,
-              borderTopRightRadius: 2,
-              backgroundColor: lo ? tokens.color.red : tokens.color.green50,
-              opacity: lo ? 0.75 : 1,
-              transformOrigin: 'bottom',
-              transform: [{ scaleY: grow }],
-            }}
-          />
-        );
-      })}
-      <Animated.View
-        style={{ position: 'absolute', left: 8, right: 8, bottom: 0, transform: [{ translateY: line }] }}
-      >
-        <DashedRule color={tokens.color.amber} />
-      </Animated.View>
     </View>
   );
 }
@@ -416,7 +307,6 @@ export default function AttendanceBar() {
             : 'Reading the register…'}
         </Text>
 
-        <Distribution rows={marked} threshold={threshold} />
 
         <ThresholdSlider
           testID="bar-threshold"
