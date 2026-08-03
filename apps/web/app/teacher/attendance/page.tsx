@@ -103,6 +103,13 @@ function TeacherAttendanceInner() {
   // chronological order and mirrors the server's own `dto.date < today` check.
   const isPastDate = !!date && date < todayIso();
 
+  // A FUTURE date is not markable either — the server rejects the save
+  // (AttendanceService.save) — but this page used to load the roster anyway,
+  // so a teacher could tap through forty children and only then be told the
+  // day doesn't exist yet. The app has always refused up front; this is the
+  // web catching up, not a new rule.
+  const isFutureDate = !!date && date > todayIso();
+
   // Retaking a class the moment a new class/date is chosen would carry over a
   // stale confirmation from whatever was selected before.
   const [retakeOpen, setRetakeOpen] = useState(false);
@@ -197,7 +204,8 @@ function TeacherAttendanceInner() {
     [myRequests.data, classSectionId, date],
   );
   const unlockedPastDate = isPastDate && !!unlockRequest;
-  const editable = statusKnown && (!isPastDate || unlockedPastDate) && (!taken || unlocked);
+  const editable =
+    statusKnown && !isFutureDate && (!isPastDate || unlockedPastDate) && (!taken || unlocked);
 
   const roster = useQuery({
     queryKey: ['t-attn-roster', classSectionId],
@@ -390,7 +398,19 @@ function TeacherAttendanceInner() {
         </div>
       </div>
 
-      {classSectionId && isPastDate && !unlockedPastDate ? (
+      {classSectionId && isFutureDate ? (
+        <div className="sk-card">
+          <div className="sk-card-h">
+            <h3>Roster</h3>
+          </div>
+          <div className="sk-card-b">
+            <p className="sk-state">
+              You cannot take attendance for a future date. Pick today, or a past day you have an
+              unlock for.
+            </p>
+          </div>
+        </div>
+      ) : classSectionId && isPastDate && !unlockedPastDate ? (
         <LockedDay
           className={selectedClassLabel}
           date={date}

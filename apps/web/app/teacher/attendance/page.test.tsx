@@ -235,6 +235,38 @@ describe('TeacherAttendancePage', () => {
     expect(api.put).not.toHaveBeenCalled();
   });
 
+  it('selecting a future date refuses up front instead of loading a roster the server will reject', async () => {
+    // The server rejects a future save outright, and the app has always said
+    // so before letting you start. This page used to load the roster anyway,
+    // so a teacher could tap through forty children and only then be told the
+    // day doesn't exist yet.
+    searchParams = new URLSearchParams('classSectionId=sec-1');
+    const api = mockApi({
+      get: mockGet([
+        ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
+        ['/manage/attendance?', () => Promise.resolve([])],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
+        ['/manage/students?', () => Promise.resolve(students)],
+        ['/manage/register-changes/mine', () => Promise.resolve([])],
+      ]),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderPage();
+    await screen.findByRole('button', { name: /Asha Rao/ });
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2099-01-01' } });
+
+    expect(await screen.findByText(/cannot take attendance for a future date/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('register-grid')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save attendance/i })).not.toBeInTheDocument();
+    expect(api.put).not.toHaveBeenCalled();
+    // A future day is not a LOCKED day — offering the unlock-request form
+    // here would invite a teacher to ask an admin to reopen a day that has
+    // not happened.
+    expect(screen.queryByText(/is closed/i)).not.toBeInTheDocument();
+  });
+
   describe('local-vs-UTC date correctness', () => {
     const originalTZ = process.env.TZ;
 
