@@ -79,14 +79,30 @@ function InkRule({ percent }: { percent: number }) {
  * lines up), its word in the UI sans. Two nodes rather than one sentence, so
  * the figure itself stays independently addressable.
  */
-function Figure({ testID, value, label }: { testID: string; value: number; label: string }) {
+function Figure({
+  testID,
+  value,
+  label,
+  color,
+}: {
+  testID: string;
+  value: number;
+  label: string;
+  color?: string;
+}) {
   const tokens = useTokens();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-      <Text testID={testID} style={{ fontFamily: font.mono, fontSize: 12, fontWeight: '700', color: tokens.color.ink2 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
+      {/* Kept at a figure's own size and in its own ink. The repaint shrank
+          these to 12px grey, which buried the ABSENCE COUNT — the one number
+          on this screen a family actually goes looking for. */}
+      <Text
+        testID={testID}
+        style={{ fontFamily: font.mono, fontSize: 17, fontWeight: '800', color: color ?? tokens.color.ink }}
+      >
         {value}
       </Text>
-      <Text style={{ fontSize: 10.5, color: tokens.color.sub }}>{label}</Text>
+      <Text style={{ fontSize: 11, color: tokens.color.sub }}>{label}</Text>
     </View>
   );
 }
@@ -279,8 +295,8 @@ export default function Attendance() {
                       style={{
                         width: CELL_WIDTH,
                         textAlign: 'center',
-                        fontSize: 8.5,
-                        fontWeight: '800',
+                        fontSize: 10,
+                        fontWeight: '700',
                         color: tokens.color.sub,
                         marginBottom: 4,
                       }}
@@ -294,7 +310,11 @@ export default function Attendance() {
                       <View
                         key={`cell-${i}`}
                         testID={`attn-cell-${i}`}
-                        style={{ width: CELL_WIDTH, aspectRatio: 1, padding: 2.5, maxWidth: 34 }}
+                        // NO `maxWidth` here. The weekday header above is laid
+                        // out on the same `100/7%` column, with no cap — clamp
+                        // only the cells and the two rows stop agreeing, so
+                        // every letter sits off its own column.
+                        style={{ width: CELL_WIDTH, aspectRatio: 1, padding: 2.5 }}
                       >
                         {cell.day !== null && (
                           <View
@@ -312,7 +332,7 @@ export default function Attendance() {
                               testID={`attn-day-${cell.day}`}
                               style={{
                                 fontFamily: font.mono,
-                                fontSize: 9.5,
+                                fontSize: 12,
                                 fontWeight: cell.status && cell.status !== 'PRESENT' ? '800' : '600',
                                 color: fg,
                               }}
@@ -338,8 +358,8 @@ export default function Attendance() {
 
             {/* The two supporting figures, in mono under the rule — the
                 percentage is the headline, these are its working. */}
-            <View style={{ flexDirection: 'row', gap: 14, marginTop: 12 }}>
-              <Figure testID="stat-absent" value={summary.absent} label="absent" />
+            <View style={{ flexDirection: 'row', gap: 18, marginTop: 12 }}>
+              <Figure testID="stat-absent" value={summary.absent} label="absent" color={tokens.color.red} />
               <Figure testID="stat-total" value={total} label="school days" />
             </View>
           </Card>

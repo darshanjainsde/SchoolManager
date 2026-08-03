@@ -5,6 +5,7 @@ import { type AttendanceStatusValue, type SaveAttendanceResponse } from '@skoolo
 import { api, ApiError } from '@/lib/api';
 import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { enqueueSave, flush } from '@/lib/offline-queue';
+import { WhoNeedsAWord } from '@/components/WhoNeedsAWord';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
@@ -481,6 +482,14 @@ export default function TakeAttendance() {
           {busy ? 'Submitting…' : 'Submit attendance'}
         </Text>
       </Pressable>
+
+      {/* Who is slipping in THIS class, under the register you just took —
+          the same placement the web uses. It used to be a tab of its own with
+          its own class picker, which meant choosing the class a second time to
+          answer a question about the register already in front of you. */}
+      {/* `name` is a route param and therefore optional; the class is still
+          named in the header above, so an empty label here costs nothing. */}
+      <WhoNeedsAWord classSectionId={classSectionId} className={name ?? 'this class'} />
     </Screen>
   );
 }

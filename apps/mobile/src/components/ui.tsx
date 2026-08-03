@@ -187,9 +187,9 @@ export function PageHeader({
       {/* The pitch's 650 weight has no RN equivalent (only the 100-900
           ladder), so every serif heading in this app lands on '600'. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-        {icon ? <Text style={{ fontSize: 13 }}>{icon}</Text> : null}
+        {icon ? <Text style={{ fontSize: 14 }}>{icon}</Text> : null}
         <Text
-          style={{ fontFamily: font.serif, fontSize: 13, fontWeight: '600', color: tokens.color.ink, flex: 1 }}
+          style={{ fontFamily: font.serif, fontSize: 14, fontWeight: '600', color: tokens.color.ink, flex: 1 }}
           numberOfLines={1}
         >
           {title}
@@ -197,7 +197,7 @@ export function PageHeader({
       </View>
       {actionLabel && (
         <Pressable testID={actionTestID} onPress={onAction} hitSlop={6}>
-          <Text style={{ fontSize: 10, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
         </Pressable>
       )}
     </View>
@@ -303,13 +303,17 @@ export function RailRow({
       {state === 'now' && <RowWash color={tokens.color.amber50} />}
       {state === 'free' && <RowWash color={tokens.color.green50} />}
 
+      {/* The margin figures stay at the list's own reading size. The repaint
+          shipped these at 9px, which is below the smallest size iOS and
+          Android will render legibly on a real handset — a time column you
+          have to squint at is not a time column. */}
       <Text
         style={{
-          width: 50,
+          width: 52,
           textAlign: 'center',
           fontFamily: font.mono,
-          fontSize: 9,
-          lineHeight: 11.7,
+          fontSize: 11,
+          lineHeight: 14,
           color: tokens.color.sub,
         }}
       >
@@ -319,12 +323,12 @@ export function RailRow({
       </Text>
       <View style={{ width: 1.5, alignSelf: 'stretch', backgroundColor: tokens.color.marginRed, opacity: 0.5 }} />
 
-      <View style={{ flex: 1, minWidth: 0, paddingVertical: 7, paddingHorizontal: 10 }}>
-        <Text numberOfLines={1} style={{ fontSize: 12.5, fontWeight: '600', color: tokens.color.ink }}>
+      <View style={{ flex: 1, minWidth: 0, paddingVertical: 8, paddingHorizontal: 10 }}>
+        <Text numberOfLines={1} style={{ fontSize: 13.5, fontWeight: '700', color: tokens.color.ink }}>
           {title}
         </Text>
         {subtitle ? (
-          <Text numberOfLines={1} style={{ fontSize: 9.5, color: tokens.color.sub }}>
+          <Text numberOfLines={1} style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }}>
             {subtitle}
           </Text>
         ) : null}
@@ -337,7 +341,7 @@ export function RailRow({
           testID="rail-live-ink"
           style={{
             position: 'absolute',
-            left: 51.5,
+            left: 53.5,
             bottom: -1,
             height: 2,
             borderRadius: 2,
@@ -385,7 +389,7 @@ export function RailStatus({ tone, children }: PropsWithChildren<{ tone: 'good' 
   const tokens = useTokens();
   const color =
     tone === 'good' ? tokens.color.green : tone === 'now' ? tokens.color.late : tokens.color.sub;
-  return <Text style={{ fontSize: 9.5, fontWeight: '700', color }}>{children}</Text>;
+  return <Text style={{ fontSize: 11, fontWeight: '700', color }}>{children}</Text>;
 }
 
 function pillTones(tokens: { color: ColorPalette }) {

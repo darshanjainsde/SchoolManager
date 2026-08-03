@@ -133,9 +133,9 @@ export function DayTimeline({ entries, currentIndex, onTakeAttendance }: DayTime
           <Text
             testID="timeline-earlier-label"
             style={{
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: '800',
-              letterSpacing: 0.9,
+              letterSpacing: 0.6,
               textTransform: 'uppercase',
               color: tokens.color.sub,
               paddingTop: 4,

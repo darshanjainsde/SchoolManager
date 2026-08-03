@@ -83,50 +83,32 @@ export default function Holidays() {
         const { day, weekday } = holidayDateParts(h.startDate);
         return (
           <PinnedNotice key={h.id} index={i}>
-            {/* `.notice` — an amber slip with the pin's own red head showing
-                above its top edge (the pitch's `.notice::before`). Amber
-                because a holiday is the school's own good news, not an alert. */}
-            <Card
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 11,
-                backgroundColor: tokens.color.amber50,
-                borderColor: tokens.color.amber50,
-              }}
-            >
-              <View
-                style={{
-                  position: 'absolute',
-                  top: -5,
-                  left: 24,
-                  width: 9,
-                  height: 9,
-                  borderRadius: 5,
-                  backgroundColor: tokens.color.marginRed,
-                }}
-              />
+            {/* ORDINARY PAPER. The repaint painted the whole card amber and
+                set the holiday's name AND its weekday in amber ink on top of
+                it — so a list of holidays became one uninterrupted block of
+                colour with its lowest-contrast text in the middle of it. The
+                tint stays where it reads: on the date cell, and on the type
+                Pill that already colour-codes the row. */}
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
               <View
                 style={{
                   width: 44,
                   height: 44,
                   borderRadius: 12,
-                  backgroundColor: tokens.color.surface,
+                  backgroundColor: tokens.color.indigo50,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
                 {/* The date numeral in the serif, the way a wall calendar
                     prints it. */}
-                <Text style={{ fontFamily: font.serif, fontSize: 18, fontWeight: '700', color: tokens.color.late }}>
+                <Text style={{ fontFamily: font.serif, fontSize: 18, fontWeight: '700', color: tokens.color.indigo }}>
                   {day}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13.5, fontWeight: '700', color: tokens.color.late }}>{h.name}</Text>
-                <Text style={{ fontSize: 11.5, color: tokens.color.late, opacity: 0.75, marginTop: 2 }}>
-                  {weekday}
-                </Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: tokens.color.ink }}>{h.name}</Text>
+                <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{weekday}</Text>
               </View>
               <Pill tone={typeTone(h.type)}>{h.type}</Pill>
             </Card>

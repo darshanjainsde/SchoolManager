@@ -28,6 +28,18 @@ export interface TimetableListProps {
    * Friday's periods are not "over" when you look at them on a Monday.
    */
   nowMinutes?: number | null;
+  /**
+   * Which half of the cell leads the row.
+   *
+   * A TEACHER's row leads with the CLASS (they teach one subject to many
+   * classes, so the class is what changes period to period); a STUDENT's leads
+   * with the SUBJECT (their class never changes and a column of their own
+   * class name says nothing). Same anatomy, opposite emphasis — which is a
+   * flag, not a reason for the student's timetable to keep a private copy of
+   * this component. It had one after the repaint, complete with its own bugs;
+   * this prop is what let that fork be deleted.
+   */
+  lead?: 'class' | 'subject';
 }
 
 /**
@@ -50,12 +62,18 @@ export interface TimetableListProps {
  * apps/web/components/timetable/WeekGrid.tsx: the "current" highlight never
  * applies to a free row, even if its period is the one happening right now.
  *
- * A teacher's row leads with the CLASS and follows with the subject (a teacher
- * teaches one subject to many classes, so the class is the thing that changes
- * period to period). The student's timetable inverts that on its own screen for
- * the mirrored reason.
+ * A teacher's row leads with the CLASS and follows with the subject; a
+ * student's inverts that (`lead`).
+ *
+ * THE PERIOD LABEL STAYS ON THE ROW. The margin shows clock times, but a
+ * school day is spoken in period names ("bring it to period 4"), and the
+ * repaint dropped `period.label` from every row that happened to have times —
+ * it survived only as the fallback for a period with none. It rides the
+ * right-hand status slot now (the same slot the family home already puts it
+ * in), so both ways of naming the same slot are on the row, and neither is
+ * welded into another node's string.
  */
-export function TimetableList({ rows, currentPeriodId, nowMinutes }: TimetableListProps) {
+export function TimetableList({ rows, currentPeriodId, nowMinutes, lead = 'class' }: TimetableListProps) {
   if (rows.length === 0) {
     return (
       <Page testID="timetable-list-empty">
@@ -71,6 +89,7 @@ export function TimetableList({ rows, currentPeriodId, nowMinutes }: TimetableLi
         const isPast =
           nowMinutes != null && !isCurrent && !!period.endTime && nowMinutes >= minutesOfDay(period.endTime);
         const state: RailState = isCurrent ? 'now' : !slot ? 'free' : isPast ? 'done' : 'upcoming';
+        const follows = slot ? (lead === 'class' ? slot.subjectName : slot.className) : null;
         return (
           <RailRow
             key={period.id}
@@ -82,15 +101,21 @@ export function TimetableList({ rows, currentPeriodId, nowMinutes }: TimetableLi
             // to the word "undefined".
             startTime={period.startTime ?? period.label}
             endTime={period.endTime ?? ''}
-            title={slot ? slot.className : 'Free'}
-            subtitle={slot ? slot.subjectName : undefined}
+            title={slot ? (lead === 'class' ? slot.className : slot.subjectName) : 'Free'}
+            subtitle={follows ?? undefined}
             right={
               isCurrent ? (
                 <RailStatus tone="now">Now</RailStatus>
-              ) : slot ? undefined : (
+              ) : slot ? (
+                <RailStatus tone="muted">{period.label}</RailStatus>
+              ) : (
                 // A free period keeps its own marker node so a caller (or a
-                // test) can find the gap itself, not just the word in the row.
-                <View testID={`period-row-free-${period.id}`} />
+                // test) can find the gap itself, not just the word in the row
+                // — and the node carries the period name rather than being an
+                // empty View that only exists to hold a testID.
+                <View testID={`period-row-free-${period.id}`}>
+                  <RailStatus tone="muted">{period.label}</RailStatus>
+                </View>
               )
             }
           />

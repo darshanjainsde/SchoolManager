@@ -9,6 +9,16 @@ import { pendingSaves } from '@/lib/offline-queue';
  * directly. `setTo` presses a cell until it holds the status the test wants,
  * so every assertion below still says what it always said.
  */
+/** WhoNeedsAWord now renders under the register; this keeps it silent. */
+const RATES_EMPTY = {
+  classSectionId: 'sec-1',
+  className: '8-A',
+  from: '2026-05-05',
+  to: '2026-08-03',
+  daysMarked: 0,
+  students: [],
+};
+
 const CYCLE_ORDER = ['PRESENT', 'ABSENT', 'LATE'] as const;
 async function setTo(
   findByTestId: (id: string) => Promise<{ props: { accessibilityLabel?: string } }>,
@@ -120,6 +130,9 @@ it('joins attendance marks with student roster names and defaults unmarked stude
   (api.request as jest.Mock).mockImplementation((path: string) => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -137,6 +150,9 @@ it('renders one cell per student, showing their roll number while present', asyn
   (api.request as jest.Mock).mockImplementation((path: string) => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -159,6 +175,9 @@ it('renders a dash for a student with no roll number yet, never the string "null
     if (path.startsWith('/manage/students?')) {
       return Promise.resolve([{ id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: null }]);
     }
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -177,6 +196,9 @@ it('cycling a student and submitting sends the exact PUT contract, then shows th
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
     if (path === '/manage/attendance') return Promise.resolve({ saved: 2, absentees: 1 });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -224,6 +246,9 @@ it('loads a LATE student as LATE, not as present', async () => {
     if (path.startsWith('/manage/students?')) {
       return Promise.resolve([{ id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: '1' }]);
     }
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -248,6 +273,9 @@ it('submitting a roster with a LATE student sends LATE', async () => {
       return Promise.resolve([{ id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: '1' }]);
     }
     if (path === '/manage/attendance') return Promise.resolve({ saved: 1, absentees: 0 });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -272,6 +300,9 @@ it('a save with zero absentees says nobody was absent, not "0 absent … guardia
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
     if (path === '/manage/attendance') return Promise.resolve({ saved: 2, absentees: 0 });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -291,6 +322,9 @@ it('a failed save shows the server message verbatim, keeps the marked roster, an
       const { ApiError } = jest.requireActual('@/lib/api');
       return Promise.reject(new ApiError(409, 'That day is closed. Ask your admin to reopen it from Requests.'));
     }
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -319,6 +353,9 @@ it('mark-all-present sets every row to PRESENT, including rows that were ABSENT 
       ]);
     }
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -349,6 +386,9 @@ it('mark-all-present is disabled while a save is in flight', async () => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
     if (path === '/manage/attendance') return new Promise((resolve) => { resolvePut = resolve; });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -386,6 +426,9 @@ it('accepts a date param and passes it through to both the GET and the PUT', asy
     }
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
     if (path === '/manage/attendance') return Promise.resolve({ saved: 2, absentees: 1 });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -405,6 +448,9 @@ it('defaults to today when no date param is given (no regression)', async () => 
   (api.request as jest.Mock).mockImplementation((path: string) => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -427,6 +473,7 @@ it('a network-fail save is queued on the device, toasts instead of erroring, and
       // screen's point of view.
       return Promise.reject(new ApiError(0, 'Could not reach the school server.'));
     }
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path} ${JSON.stringify(opts)}`);
   });
 

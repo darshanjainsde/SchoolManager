@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { TimetableSlot } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { minutesOfDay } from '@/lib/teacher-day';
 import { buildGrid, cellKey, toGridSlot, type GridPeriodRow } from '@/lib/timetable-grid';
 import { DaySelector } from '@/components/DaySelector';
-import { Card, Empty, Page, RailRow, RailStatus, Screen, SectionTitle, type RailState } from '@/components/ui';
+import { TimetableList, type TimetableRow } from '@/components/TimetableList';
+import { Card, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 
 // The student's own weekly timetable. `GET /me/timetable`
@@ -21,12 +22,10 @@ import { useTokens } from '@/theme/theme-context';
 // are `RailRow`s on a `Page` — the shared `.rowln` with its red margin rule,
 // the same object the family home and the teacher's day are drawn from.
 //
-// The rows stay written out here rather than reusing `TimetableList` for ONE
-// reason: a student's row leads with the SUBJECT (their class never changes,
-// their subject changes every period), and a teacher's leads with the CLASS
-// (their subject never changes, their class does). Same anatomy, opposite
-// emphasis — a shared component would have to take a flag that means "whose
-// timetable is this", which is the screen's own knowledge.
+// A student's row leads with the SUBJECT (their class never changes, their
+// subject changes every period) and a teacher's leads with the CLASS. Same
+// anatomy, opposite emphasis — which is `TimetableList`'s `lead` prop, not a
+// reason for this screen to keep a private copy of the list.
 
 /** ISO weekday matching TimetableSlot.dayOfWeek: 1 = Mon … 7 = Sun. */
 function todayDayOfWeek(): number {
@@ -82,7 +81,7 @@ export default function Timetable() {
   const now = nowMinutes();
   const currentPeriodId = isViewingToday ? findCurrentPeriodId(shape.periods, now) : null;
 
-  const rows = shape.periods.map((period) => ({
+  const rows: TimetableRow[] = shape.periods.map((period) => ({
     period,
     slot: selectedDay !== null ? (shape.cells.get(cellKey(selectedDay, period.id)) ?? null) : null,
   }));
@@ -123,49 +122,17 @@ export default function Timetable() {
             onSelect={setPickedDay}
           />
 
-          {rows.length === 0 ? (
-            <Page testID="timetable-list-empty">
-              <Empty>No periods scheduled this day.</Empty>
-            </Page>
-          ) : (
-            <Page testID="timetable-list">
-              {rows.map(({ period, slot }, i) => {
-                // Mirrors the fill-only-for-an-actual-class rule from
-                // apps/web/components/timetable/WeekGrid.tsx: the live
-                // highlight never applies to a free row, even when its period
-                // is the one happening right now.
-                const isCurrent = !!slot && period.id === currentPeriodId;
-                const isPast =
-                  isViewingToday && !isCurrent && !!period.endTime && now >= minutesOfDay(period.endTime);
-                // `done` is the pitch's finished row: still readable (it is
-                // the record of the day) but at .55, so it stops competing
-                // with the period that is actually live.
-                const state: RailState = isCurrent ? 'now' : !slot ? 'free' : isPast ? 'done' : 'upcoming';
-                return (
-                  <RailRow
-                    key={period.id}
-                    testID={`period-row-${period.id}`}
-                    first={i === 0}
-                    state={state}
-                    startTime={period.startTime ?? period.label}
-                    endTime={period.endTime ?? ''}
-                    title={slot ? slot.subjectName : 'Free'}
-                    subtitle={slot ? slot.className : undefined}
-                    right={
-                      isCurrent ? (
-                        <RailStatus tone="now">Now</RailStatus>
-                      ) : slot ? undefined : (
-                        // A free period keeps its own marker node so the
-                        // testID contract this screen shipped with survives
-                        // the move off `TimetableList`.
-                        <View testID={`period-row-free-${period.id}`} />
-                      )
-                    }
-                  />
-                );
-              })}
-            </Page>
-          )}
+          {/* The SHARED list, with `lead="subject"`. The repaint copied this
+              component into this file to invert the row's emphasis; the copy
+              then drifted (it dropped the period label and rendered an empty
+              View as the free-period marker) and no test covered it. The flag
+              belongs on the component. */}
+          <TimetableList
+            rows={rows}
+            currentPeriodId={currentPeriodId}
+            nowMinutes={isViewingToday ? now : null}
+            lead="subject"
+          />
         </>
       )}
     </Screen>

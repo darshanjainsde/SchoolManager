@@ -76,8 +76,8 @@ function NeedRow({
         <Text style={{ fontSize: 14 }}>{icon}</Text>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 12, fontWeight: '600', color: tokens.color.ink }}>{title}</Text>
-        <Text style={{ fontSize: 9.5, color: tokens.color.sub }} numberOfLines={1}>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{title}</Text>
+        <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }} numberOfLines={1}>
           {note}
         </Text>
       </View>
@@ -162,7 +162,7 @@ export default function Today() {
 
       {/* The day in one line, in the pitch's `.gatesub` voice — a note under
           the greeting rather than a card competing with the hero below it. */}
-      <Text style={{ marginHorizontal: 4, marginTop: -4, fontSize: 11.5, color: tokens.color.sub }}>
+      <Text style={{ marginHorizontal: 4, marginTop: -2, fontSize: 12, color: tokens.color.sub }}>
         {day === null && !error
           ? 'Loading your day…'
           : `${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}

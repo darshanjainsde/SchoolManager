@@ -66,8 +66,8 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
               position: 'absolute',
               top: -5,
               right: -5,
-              minWidth: 15,
-              height: 15,
+              minWidth: 17,
+              height: 17,
               borderRadius: 99,
               paddingHorizontal: 3,
               // `--margin-red`, the red of a margin rule / an unread mark —
@@ -83,7 +83,7 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: brand.onHero, fontSize: 8.5, fontWeight: '800' }}>
+            <Text style={{ color: brand.onHero, fontSize: 10, fontWeight: '800' }}>
               {count > 99 ? '99+' : count}
             </Text>
           </View>

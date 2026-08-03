@@ -15,7 +15,7 @@ import {
   type StudentProfile,
   type UpcomingExam,
 } from '@/lib/portal';
-import { Card, Empty, Page, PageHeader, RailRow, RailStatus, Screen, Tick } from '@/components/ui';
+import { Card, Page, PageHeader, Pill, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
 import { NotificationBell } from '@/components/NotificationBell';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
@@ -80,18 +80,26 @@ function Dateline() {
 }
 
 /**
- * `.notice` — a slip pinned to the page: amber paper, a red pin head poking
- * over its top-left corner, and it lands with THE PIN (it arrives from above,
- * slightly askew, and settles). Everything on this screen that ARRIVED —
- * a scheduled test, a circular from the office — wears this, because the
- * gesture is the difference between "this is here" and "this just came in".
+ * A card that ARRIVED — a scheduled test, a circular from the office. It
+ * lands with THE PIN (from above, slightly askew, settling straight), which
+ * is the difference between "this is here" and "this just came in".
+ *
+ * The card itself is ordinary paper: ink title on the surface, behind its own
+ * tinted icon tile. The repaint painted these as solid amber slips with amber
+ * body text at 10px/75% opacity, which put the two things a family opens this
+ * screen to read — the next test and the latest circular — at the lowest
+ * contrast on the page. The tint belongs on the ICON, not on the words.
  */
 function Notice({
+  icon,
+  tint,
   title,
   detail,
   onPress,
   testID,
 }: {
+  icon: string;
+  tint: string;
   title: string;
   detail: string;
   onPress?: () => void;
@@ -101,56 +109,27 @@ function Notice({
   const pin = useGesture(true, DUR.pin, { native: true });
   return (
     <Animated.View style={pinStyle(pin)}>
-      <Pressable
-        testID={testID}
-        onPress={onPress}
-        style={{
-          backgroundColor: tokens.color.amber50,
-          borderRadius: 11,
-          paddingVertical: 10,
-          paddingHorizontal: 12,
-          marginHorizontal: 2,
-        }}
-      >
-        <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.late }}>{title}</Text>
-        <Text style={{ fontSize: 10, color: tokens.color.late, opacity: 0.75, marginTop: 2 }}>{detail}</Text>
-        {/* The pin head itself — the one red mark on an amber slip. */}
-        <View
-          style={{
-            position: 'absolute',
-            top: -5,
-            left: 24,
-            width: 9,
-            height: 9,
-            borderRadius: 4.5,
-            backgroundColor: tokens.color.marginRed,
-          }}
-        />
+      <Pressable testID={testID} onPress={onPress}>
+        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+          <View
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              backgroundColor: tint,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 16 }}>{icon}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{title}</Text>
+            <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{detail}</Text>
+          </View>
+        </Card>
       </Pressable>
     </Animated.View>
-  );
-}
-
-/** `.chip.good` — a small green receipt with THE TICK stroking itself on. */
-function TickChip({ children }: { children: ReactNode }) {
-  const tokens = useTokens();
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        alignSelf: 'flex-start',
-        backgroundColor: tokens.color.green50,
-        borderRadius: 999,
-        paddingVertical: 5,
-        paddingHorizontal: 11,
-        marginHorizontal: 2,
-      }}
-    >
-      <Tick size={12} />
-      <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.green }}>{children}</Text>
-    </View>
   );
 }
 
@@ -214,12 +193,6 @@ function railStatusFor(state: 'past' | 'now' | 'upcoming', periodLabel: string):
   if (state === 'now') return <RailStatus tone="now">now</RailStatus>;
   if (state === 'past') return <RailStatus tone="good">✓</RailStatus>;
   return <RailStatus tone="muted">{periodLabel}</RailStatus>;
-}
-
-function statusWord(status: 'PRESENT' | 'ABSENT' | 'LATE'): string {
-  if (status === 'PRESENT') return 'Present · marked today';
-  if (status === 'LATE') return 'Late · marked today';
-  return 'Absent · marked today';
 }
 
 export default function Home() {
@@ -347,7 +320,7 @@ export default function Home() {
           {/* Class + roll are the student's OWN (not a parent-facing "your
               child" label) — one shared STUDENT login can't tell who's holding
               the phone, so this must read to either. */}
-          <Text style={{ marginHorizontal: 4, marginTop: -4, fontSize: 12, color: tokens.color.sub }}>
+          <Text style={{ marginHorizontal: 4, marginTop: 2, fontSize: 12, color: tokens.color.sub }}>
             {profile.className ?? 'No class assigned'}
             {profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}
           </Text>
@@ -383,32 +356,50 @@ export default function Home() {
 
           {/* An unsigned remark outranks everything else here: it is the one
               thing on this screen someone at home has to DO, and it came with
-              an email that has already landed. It takes the RED wash because
-              red ink is this product's one voice for a remark. */}
+              an email that has already landed.
+              It is a CARD, not a `Page` + `PageHeader`: a page heading has
+              room for a title and nothing else, so the repaint's version lost
+              the line that says what to do about it, and nested a second
+              Pressable ("Sign ›") inside the banner's own. */}
           {diary && diary.unsignedCount > 0 && (
             <Pressable testID="diary-banner" onPress={() => router.push('/(family)/diary')}>
-              <Page style={{ backgroundColor: tokens.color.red50 }}>
-                <PageHeader
-                  icon="📔"
-                  title={
-                    diary.unsignedCount === 1
+              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    backgroundColor: tokens.color.red50,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 17 }}>📔</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>
+                    {diary.unsignedCount === 1
                       ? 'A diary remark to sign'
-                      : `${diary.unsignedCount} diary remarks to sign`
-                  }
-                  actionLabel="Sign ›"
-                  onAction={() => router.push('/(family)/diary')}
-                />
-              </Page>
+                      : `${diary.unsignedCount} diary remarks to sign`}
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+                    Open the diary to read and sign.
+                  </Text>
+                </View>
+                <Pill tone="red">Sign</Pill>
+              </Card>
             </Pressable>
           )}
 
           {/* Next-test reminder — the thing a student should never miss.
               A test that has been SCHEDULED is something that arrived, so it
-              is a pinned notice, not a static card. Tapping it opens the full
-              detail (syllabus, max marks, date) on Results. */}
+              is a pinned notice. Tapping it opens the full detail (syllabus,
+              max marks, date) on Results. */}
           {nextExam && (
             <Notice
               testID="next-exam-banner"
+              icon="🔔"
+              tint={tokens.color.amber50}
               title={`${nextExam.subjectName} · ${nextExam.title} — ${daysUntilLabel(nextExam.scheduledAt).toLowerCase()}`}
               detail={`${formatDate(nextExam.scheduledAt)}${nextExam.syllabus ? ` · ${nextExam.syllabus}` : ''} · out of ${nextExam.maxMarks}`}
               onPress={() => router.push('/(family)/results')}
@@ -460,31 +451,32 @@ export default function Home() {
                   );
                 })}
               </Page>
-
-              {/* The attendance receipt. It carries THE TICK because being
-                  marked present is something a person DID to this page today —
-                  the stroke is the mark being made, not a status icon. */}
-              {todayStatus && <TickChip>{statusWord(todayStatus)}</TickChip>}
+              {/* NO attendance "receipt" chip here. The repaint added a green
+                  chip with a green TICK stroking itself on — and rendered it
+                  for ABSENT too, so a day the register marked absent read as a
+                  green tick. Today's status is already stated honestly, in its
+                  own colour, by the hero above; a second copy of it that can
+                  only ever be green is worse than no copy at all. */}
             </>
           )}
 
-          <Page>
-            <PageHeader title="Latest announcements" />
-            {latestAnnouncements.length === 0 ? (
-              <Empty>No announcements yet.</Empty>
-            ) : (
-              <View style={{ paddingBottom: 10, gap: 8 }}>
-                {latestAnnouncements.map((a) => (
-                  <Notice
-                    key={a.id}
-                    title={a.title}
-                    detail={`${a.classSectionId ? 'Your class' : 'Whole school'} · ${relativeTime(a.createdAt)}`}
-                    onPress={() => router.push('/(family)/notices')}
-                  />
-                ))}
-              </View>
-            )}
-          </Page>
+          <SectionTitle title="Latest announcements" />
+          {latestAnnouncements.length === 0 ? (
+            <Card>
+              <Text style={{ color: tokens.color.sub }}>No announcements yet.</Text>
+            </Card>
+          ) : (
+            latestAnnouncements.map((a) => (
+              <Notice
+                key={a.id}
+                icon="📣"
+                tint={tokens.color.indigo50}
+                title={a.title}
+                detail={`${a.classSectionId ? 'Your class' : 'Whole school'} · ${relativeTime(a.createdAt)}`}
+                onPress={() => router.push('/(family)/notices')}
+              />
+            ))
+          )}
         </>
       )}
     </Screen>

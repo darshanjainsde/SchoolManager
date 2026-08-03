@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text } from 'react-native';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -88,12 +88,12 @@ export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: Day
             accessibilityState={{ selected: isSelected }}
             onPress={() => onSelect(day)}
             style={{
-              width: 44,
+              width: 52,
               alignItems: 'center',
               borderWidth: 1,
               borderRadius: 11,
               paddingTop: 6,
-              paddingBottom: 7,
+              paddingBottom: 6,
               backgroundColor: isSelected
                 ? tokens.color.indigo
                 : isToday
@@ -108,7 +108,7 @@ export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: Day
           >
             <Text
               style={{
-                fontSize: 8.5,
+                fontSize: 11,
                 fontWeight: '800',
                 letterSpacing: 0.5,
                 color: isSelected ? tokens.color.onBrand : isToday ? tokens.color.late : tokens.color.sub,
@@ -126,18 +126,22 @@ export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: Day
             >
               {dateOfWeekday(day)}
             </Text>
+            {/* "Today" stays a WORD. The repaint reduced it to a 4px bead with
+                an `accessibilityLabel` on a non-accessible View — so the one
+                signal that survives selecting another day became a dot that
+                says nothing and is announced by nothing. */}
             {isToday && (
-              <View
+              <Text
                 testID={`day-chip-today-label-${day}`}
-                accessibilityLabel="Today"
                 style={{
-                  width: 4,
-                  height: 4,
-                  borderRadius: 2,
-                  marginTop: 3,
-                  backgroundColor: isSelected ? tokens.color.onBrand : tokens.color.amber,
+                  fontSize: 8.5,
+                  fontWeight: '800',
+                  marginTop: 2,
+                  color: isSelected ? tokens.color.onBrand : tokens.color.late,
                 }}
-              />
+              >
+                Today
+              </Text>
             )}
           </Pressable>
         );

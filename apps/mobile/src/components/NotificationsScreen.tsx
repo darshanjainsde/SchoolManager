@@ -55,9 +55,12 @@ function Row({ n, index, onPress }: { n: NotificationRow; index: number; onPress
           flexDirection: 'row',
           gap: 11,
           alignItems: 'flex-start',
-          opacity: unread ? 1 : 0.55,
-          backgroundColor: unread ? tokens.color.surface : tokens.color.appBg,
-          borderColor: unread ? tokens.color.line2 : tokens.color.line,
+          // Unread keeps its tint and its outline. The repaint took the
+          // highlight OFF the unread row and put a .55 fade ON the read one,
+          // which made "what haven't I opened" a subtler question than it was
+          // and made everything already read harder to go back and read.
+          backgroundColor: unread ? tokens.color.indigo50 : tokens.color.surface,
+          borderColor: unread ? tokens.color.indigo : tokens.color.line,
         }}
       >
         <View

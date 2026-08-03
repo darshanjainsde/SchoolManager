@@ -60,8 +60,10 @@ const hero = StyleSheet.create({
     marginBottom: 1,
   },
   meta: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.9)',
+    // 12.5, not the repaint's 11: this line carries the class, the subject and
+    // who is being covered for, on the one card a teacher reads mid-corridor.
+    fontSize: 12.5,
+    color: 'rgba(255,255,255,0.93)',
   },
 });
 
@@ -391,15 +393,18 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
               // `.nowbtn` — white paper on the saturated card, so the one
               // thing the teacher is being asked to do is the one thing on
               // this card that looks like a page.
+              // Kept at button size. The repaint took it to 12px text in
+              // 9x14 padding — this is the card's ONE call to action, and the
+              // hardest tap in the app to land while walking.
               style={{
                 backgroundColor: brand.onHero,
-                borderRadius: 10,
-                paddingVertical: 9,
-                paddingHorizontal: 14,
+                borderRadius: 12,
+                paddingVertical: 11,
+                paddingHorizontal: 16,
                 alignSelf: 'flex-start',
               }}
             >
-              <Text style={{ color: brand.hero.ctaInk, fontWeight: '800', fontSize: 12 }}>
+              <Text style={{ color: brand.hero.ctaInk, fontWeight: '800', fontSize: 13 }}>
                 Take attendance →
               </Text>
             </Pressable>

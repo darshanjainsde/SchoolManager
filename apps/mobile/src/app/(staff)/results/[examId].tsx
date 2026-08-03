@@ -301,10 +301,13 @@ export default function ExamResults() {
       {exam && (
         <Card>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            {/* The running count now lives under the ink line (below), where
-                it is next to the thing that moves — so it is stated once. */}
+            {/* The running count stays HERE, above the sheet. The repaint
+                moved it under the ink line at the foot of the list — which on
+                a class of forty is several screens down, so "how many are
+                still blank" stopped being answerable without scrolling to the
+                bottom. The line below still draws it; this states it. */}
             <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 15, color: tokens.color.ink }}>
-              Out of {exam.maxMarks}
+              Out of {exam.maxMarks} · {parsed.length} of {students.length} entered
             </Text>
             {alreadyPublished && <Pill tone="green">Published</Pill>}
           </View>

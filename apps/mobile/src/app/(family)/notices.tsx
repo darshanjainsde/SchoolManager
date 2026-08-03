@@ -28,16 +28,17 @@ import { useTokens } from '@/theme/theme-context';
  * VISUAL layout — the full body text is always present in the tree, so it
  * is always accessible to a screen reader regardless of expand state.
  *
- * Opening a notice also marks it read for this visit: the amber slip drops to
- * the plain `.notice.read` treatment and loses its pin, so a board that has
- * been worked through LOOKS worked through. Purely local (there is no
- * read-receipt endpoint for announcements) — nothing is sent, and a fresh
- * fetch shows every notice unread again.
+ * NO local "read" state. The repaint dimmed a notice the instant you tapped
+ * it — dropping the title, the meta AND the body to `sub` — so the act of
+ * opening a circular made it harder to read, and the state was a fiction
+ * anyway (there is no read-receipt endpoint for announcements, so a refetch
+ * showed everything unread again). The tint likewise stays on the ICON: a
+ * whole board of solid amber slips with amber body text is one colour where
+ * the reader needs a column of legible sentences.
  */
 function NoticeRow({ a, index }: { a: Announcement; index: number }) {
   const tokens = useTokens();
   const [expanded, setExpanded] = useState(false);
-  const [read, setRead] = useState(false);
   const pin = useGesture(true, DUR.pin, { delay: 150 + index * 180 });
 
   return (
@@ -45,64 +46,38 @@ function NoticeRow({ a, index }: { a: Announcement; index: number }) {
       <Pressable
         testID={`notice-${a.id}`}
         accessibilityRole="button"
-        onPress={() => {
-          setExpanded((e) => !e);
-          setRead(true);
-        }}
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded((e) => !e)}
       >
-        <Card
-          style={{
-            backgroundColor: read ? tokens.color.surface : tokens.color.amber50,
-            borderColor: read ? tokens.color.line : 'transparent',
-            borderRadius: 11,
-            padding: 12,
-          }}
-        >
-          <Text style={{ fontSize: 12.5, fontWeight: '700', color: read ? tokens.color.sub : tokens.color.late }}>
-            {a.title}
-          </Text>
-          <Text
-            style={{
-              fontSize: 10,
-              marginTop: 2,
-              color: read ? tokens.color.sub : tokens.color.late,
-              opacity: read ? 1 : 0.75,
-            }}
-          >
-            {a.classSectionId ? 'Your class' : 'Whole school'} · {relativeTime(a.createdAt)}
-          </Text>
-          <Text
-            style={{
-              fontSize: 12.5,
-              color: read ? tokens.color.sub : tokens.color.ink2,
-              marginTop: 7,
-              lineHeight: 17,
-            }}
-            numberOfLines={expanded ? undefined : 2}
-          >
-            {a.body}
-          </Text>
-          <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.indigo, marginTop: 5 }}>
-            {expanded ? 'Show less' : 'Show more'}
-          </Text>
-        </Card>
-
-        {/* The pin itself: a red bead through the top-left corner of the
-            slip. It goes when the notice has been read — the slip is still
-            on the board, it just isn't demanding attention any more. */}
-        {!read && (
+        <Card style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 11 }}>
           <View
             style={{
-              position: 'absolute',
-              top: -5,
-              left: 24,
-              width: 9,
-              height: 9,
-              borderRadius: 5,
-              backgroundColor: tokens.color.marginRed,
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              backgroundColor: tokens.color.indigo50,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-          />
-        )}
+          >
+            <Text style={{ fontSize: 16 }}>📣</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{a.title}</Text>
+            <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+              {a.classSectionId ? 'Your class' : 'Whole school'} · {relativeTime(a.createdAt)}
+            </Text>
+            <Text
+              style={{ fontSize: 12.5, color: tokens.color.ink, marginTop: 6, lineHeight: 17 }}
+              numberOfLines={expanded ? undefined : 2}
+            >
+              {a.body}
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.indigo, marginTop: 4 }}>
+              {expanded ? 'Show less' : 'Show more'}
+            </Text>
+          </View>
+        </Card>
       </Pressable>
     </Animated.View>
   );

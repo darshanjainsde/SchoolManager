@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { formatDate, type PublishedResult, type UpcomingExam } from '@/lib/portal';
 import { Card, Page, Pill, Screen, SectionTitle } from '@/components/ui';
-import { DUR, inkWidth, play, stampStyle, useGesture, useReduceMotion } from '@/theme/motion';
+import { DUR, inkWidth, play, useReduceMotion } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -104,21 +104,20 @@ function ScoreBar({
 }
 
 /**
- * One `.res` row. The grade lands with THE STAMP.
+ * One `.res` row: subject, paper, the mark, and how it sat against the class.
+ * Tap to roll out the two comparison bars.
  *
- * WHY the stamp: a published result is not news the app generates, it is a
- * decision a teacher made and CLOSED — the same act the six gestures reserve
- * the stamp for (attendance saved, marks entered, a request approved). It
- * arrives oversized and rotated and settles two degrees off square, because a
- * hand-held stamp never lands straight. Rows stamp in sequence (`index`
- * staggers the delay) so a page of results reads as being stamped one after
- * another, not as a block appearing.
+ * NO STAMP ON THE MARK. The repaint wrapped the score in `stampStyle`, whose
+ * resting state is `rotate(-2deg)` — so every mark on the page stayed
+ * permanently crooked — and staggered the landing by `250 + index * 220`ms,
+ * which left the tenth result's mark INVISIBLE for well over two seconds after
+ * the page had otherwise finished loading. The mark is the one thing this
+ * screen exists to show; it does not get to arrive late or off square.
  */
-function ResultRow({ r, index, first }: { r: PublishedResult; index: number; first: boolean }) {
+function ResultRow({ r, first }: { r: PublishedResult; first: boolean }) {
   const tokens = useTokens();
   const [open, setOpen] = useState(false);
   const reveal = useReveal(open);
-  const stamp = useGesture(true, DUR.stamp, { delay: 250 + index * 220 });
 
   const diff = Math.round((r.marks - r.classAverage) * 10) / 10;
   const tone = diff > 0 ? 'green' : diff < 0 ? 'amber' : 'neutral';
@@ -139,28 +138,13 @@ function ResultRow({ r, index, first }: { r: PublishedResult; index: number; fir
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 12.5, fontWeight: '700', color: tokens.color.ink }}>{r.subjectName}</Text>
-          <Text style={{ fontSize: 9.5, color: tokens.color.sub, marginTop: 1 }}>{r.title}</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{r.subjectName}</Text>
+          <Text style={{ fontSize: 12, color: tokens.color.sub, marginTop: 1 }}>{r.title}</Text>
         </View>
-        <Animated.View style={stampStyle(stamp)}>
-          <Text
-            style={{
-              fontFamily: font.serif,
-              fontSize: 12,
-              fontWeight: '700',
-              color: tokens.color.indigo,
-              borderWidth: 2,
-              borderColor: tokens.color.indigo,
-              borderRadius: 8,
-              paddingHorizontal: 9,
-              paddingVertical: 2,
-              overflow: 'hidden',
-            }}
-          >
-            {r.marks}
-            <Text style={{ fontSize: 10 }}>/{r.maxMarks}</Text>
-          </Text>
-        </Animated.View>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: tokens.color.ink }}>
+          {r.marks}
+          <Text style={{ fontSize: 12, fontWeight: '600', color: tokens.color.sub }}>/{r.maxMarks}</Text>
+        </Text>
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'wrap' }}>
@@ -260,13 +244,13 @@ export default function Results() {
           ) : (
             <>
               <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -4 }}>
-                Published marks land with a stamp — tap one to see it against the class.
+                Tap a result to see it against the class.
               </Text>
               {/* One sheet of paper, ruled between results — the pitch's
                   `.page` holding a run of `.res` rows. */}
               <Page>
                 {results.map((r, i) => (
-                  <ResultRow key={r.examId} r={r} index={i} first={i === 0} />
+                  <ResultRow key={r.examId} r={r} first={i === 0} />
                 ))}
               </Page>
             </>

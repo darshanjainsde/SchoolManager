@@ -3,7 +3,7 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentAssignment, StudentAssignmentList } from '@/lib/portal';
-import { Card, Page, Screen, SectionTitle, Tick } from '@/components/ui';
+import { Card, Page, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -14,21 +14,14 @@ function formatDueDate(dueDate: string): string {
 }
 
 /**
- * One `.todo` row — homework as a line on a checklist.
+ * One assignment row, expandable to its instructions and attachments.
  *
- * THE TICK is the gesture, and it is the only one that fits: a checkbox glyph
- * that is simply *there* states a fact, while a tick that STROKES ITSELF ON
- * (SVG path, `strokeDashoffset` running down to zero) is the mark somebody
- * made. That difference is the whole reason the six gestures name it — see
- * `Tick` in `components/ui.tsx`, which owns the stroke and its `native: false`
- * (a dash offset is not a transform, so it can never run on the UI thread).
- *
- * WHAT the tick claims, precisely: the DUE DATE HAS PASSED — this row is off
- * the list of things still to do. `GET /me/assignments` splits upcoming/past
- * and carries no submission state, so the app has no idea whether the work was
- * actually handed in and must not imply that it does. Hence the row goes .55
- * and the title is struck through when it is in the `past` bucket, and never
- * as a result of anything the reader taps.
+ * NO TICK, NO CHECKBOX, NO STRIKE-THROUGH. The repaint drew a past-due row as
+ * a ticked, struck-out checklist line — and `GET /me/assignments` carries NO
+ * submission state at all. It splits `upcoming`/`past` purely on the due date,
+ * so a green tick against a piece of homework says "handed in" about something
+ * the app cannot know. `past` gets the section heading it already had, and the
+ * dimming, and nothing that reads as a receipt.
  */
 function TodoRow({
   a,
@@ -50,7 +43,7 @@ function TodoRow({
       style={{
         borderTopWidth: first ? 0 : 1,
         borderTopColor: tokens.color.line,
-        opacity: done ? 0.55 : 1,
+        opacity: done ? 0.7 : 1,
       }}
     >
       <Pressable
@@ -58,40 +51,16 @@ function TodoRow({
         accessibilityRole="button"
         accessibilityState={{ expanded: isOpen }}
         onPress={onToggle}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 12 }}
       >
-        <View
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 7,
-            borderWidth: 1.5,
-            borderColor: done ? tokens.color.green : tokens.color.line2,
-            backgroundColor: done ? tokens.color.green50 : tokens.color.appBg,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {done && <Tick size={12} />}
-        </View>
-
         <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              fontSize: 12.5,
-              fontWeight: '600',
-              color: done ? tokens.color.sub : tokens.color.ink,
-              textDecorationLine: done ? 'line-through' : 'none',
-            }}
-          >
-            {a.title}
-          </Text>
-          <Text style={{ fontSize: 9.5, color: tokens.color.sub, marginTop: 1 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{a.title}</Text>
+          <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
             {a.subjectName} · due {formatDueDate(a.dueDate)}
           </Text>
         </View>
 
-        <Text style={{ fontSize: 12, color: tokens.color.sub }}>{isOpen ? '▲' : '▼'}</Text>
+        <Text style={{ fontSize: 13, color: tokens.color.sub }}>{isOpen ? '▲' : '▼'}</Text>
       </Pressable>
 
       {isOpen && (
@@ -100,7 +69,9 @@ function TodoRow({
             paddingHorizontal: 12,
             paddingBottom: 12,
             paddingTop: 2,
-            marginLeft: 30,
+            // The 30dp indent existed to clear the checkbox that used to lead
+            // the row; with no checkbox it just left the instructions hanging.
+            marginLeft: 12,
             borderLeftWidth: 1.5,
             borderLeftColor: tokens.color.line,
           }}

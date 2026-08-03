@@ -5,49 +5,34 @@ import { family, type ChildProfile } from '@/lib/family-store';
 import { session } from '@/lib/session';
 import { Card, Screen, SectionTitle } from '@/components/ui';
 import { DUR, EASE, useReduceMotion } from '@/theme/motion';
-import { font } from '@/theme/tokens';
 import { useTokens } from '@/theme/theme-context';
 
-/** The pitch's shelf geometry: four spines to a shelf, a 7px board under each. */
-const PER_SHELF = 4;
-const SPINE_H = 96;
-const ADD_H = 80;
-const BAND_H = 9;
-const BOARD_H = 7;
 /** Past this many children the shelf stops being scannable and needs a filter. */
 const SEARCH_AFTER = 8;
 
-/** The pitch's `.spine` corners: rounded at the head, barely rounded at the
- *  foot — a book standing on a shelf, not a rounded rectangle. */
-const SPINE_RADII = {
-  borderTopLeftRadius: 7,
-  borderTopRightRadius: 7,
-  borderBottomLeftRadius: 3,
-  borderBottomRightRadius: 3,
-} as const;
+/** "AS" for Aarav Sharma. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase();
+}
 
 /**
- * One spine on the shelf.
+ * One spine on the shelf — school-coloured band, the child's initials, the
+ * child's own first name and their school, and an OPEN marker on the active
+ * one.
  *
- * WHY A BOOK AND NOT A TILE: this app is a paper diary, and a family with
- * three children owns three diaries — objects that stand next to each other
- * and are picked up one at a time. A grid of avatar tiles says "accounts";
- * a row of spines on a board says "your children's books", which is exactly
- * the relationship: you open one, you are inside it, and nothing of the
- * others comes with you.
- *
- * The name is set the way a real spine is set — running down the book, in the
- * serif the rest of the diary is written in. That is what `writing-mode:
- * vertical-rl` does in the pitch: it rotates the whole run 90° clockwise
- * rather than stacking upright letters, so it is a rotation here too. The
- * rotated `Text` is absolutely positioned so its unrotated (wide, short)
- * layout box cannot push the spine's width around.
+ * UPRIGHT, deliberately. The repaint set the name the way a real book spine is
+ * set — rotated 90°, uppercase, clipped to one line inside a 71dp box — and
+ * dropped the initials disc, the school name and the OPEN marker with it. On a
+ * shelf whose whole job is "which of my children is this, and which one am I
+ * currently in", that removed both answers: a sideways truncated forename is
+ * slower to read than a horizontal one, and the school is the thing that tells
+ * two children at different schools apart.
  *
  * WHY IT LIFTS ON PRESS: 6px up is the book being drawn a little way out of
  * the shelf before you take it — the acknowledgement that this tap landed on
- * THIS spine, which matters most when four of them sit 9px apart. Under
- * reduce-motion the lift simply does not happen; the navigation that follows
- * is the feedback.
+ * THIS spine. Under reduce-motion the lift simply does not happen; the
+ * navigation that follows is the feedback.
  */
 function Spine({ child, active, onPress }: { child: ChildProfile; active: boolean; onPress: () => void }) {
   const tokens = useTokens();
@@ -60,7 +45,7 @@ function Spine({ child, active, onPress }: { child: ChildProfile; active: boolea
   };
 
   return (
-    <Animated.View style={{ flex: 1, transform: [{ translateY: lift }] }}>
+    <Animated.View style={{ width: '23%', transform: [{ translateY: lift }] }}>
       <Pressable
         testID={`spine-${child.key}`}
         accessibilityRole="button"
@@ -70,63 +55,41 @@ function Spine({ child, active, onPress }: { child: ChildProfile; active: boolea
         onPressOut={() => move(0)}
         onPress={onPress}
         style={{
-          height: SPINE_H,
-          ...SPINE_RADII,
-          borderWidth: active ? 1.5 : 1,
+          borderRadius: 12,
+          borderWidth: active ? 2 : 1,
           borderColor: active ? child.accent : tokens.color.line,
           backgroundColor: tokens.color.surface,
-          // The pitch's `--shadow` is two shadows (a hairline contact shadow
-          // and a wide soft one). RN gets one, so this is the soft one, tinted
-          // with the ink colour rather than black — paper shadows are never
-          // neutral grey.
-          shadowColor: tokens.color.ink,
-          shadowOpacity: 0.18,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 2,
+          overflow: 'hidden',
+          alignItems: 'center',
+          paddingBottom: 10,
         }}
       >
+        <View style={{ alignSelf: 'stretch', height: 8, backgroundColor: child.accent }} />
         <View
           style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: BAND_H,
-            borderTopLeftRadius: 6,
-            borderTopRightRadius: 6,
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            marginTop: 10,
+            marginBottom: 6,
             backgroundColor: child.accent,
-          }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            top: BAND_H,
-            left: 0,
-            right: 0,
-            bottom: 8,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Text
-            numberOfLines={1}
-            style={{
-              position: 'absolute',
-              width: SPINE_H - BAND_H - 16,
-              textAlign: 'center',
-              fontFamily: font.serif,
-              fontSize: 11.5,
-              fontWeight: '600',
-              letterSpacing: 0.7,
-              textTransform: 'uppercase',
-              color: tokens.color.ink,
-              transform: [{ rotate: '90deg' }],
-            }}
-          >
-            {child.displayName.split(' ')[0]}
+          <Text style={{ color: tokens.color.onBrand, fontWeight: '800', fontSize: 14 }}>
+            {initials(child.displayName)}
           </Text>
         </View>
+        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: tokens.color.ink, maxWidth: '90%' }}>
+          {child.displayName.split(' ')[0]}
+        </Text>
+        <Text numberOfLines={1} style={{ fontSize: 8.5, color: tokens.color.sub, maxWidth: '92%' }}>
+          {child.schoolHost.split('.')[0]}
+        </Text>
+        {active && (
+          <Text style={{ fontSize: 8.5, fontWeight: '800', color: child.accent, marginTop: 2 }}>OPEN</Text>
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -183,12 +146,6 @@ export default function Shelf() {
     );
   }, [children, query]);
 
-  // Children first, then the ＋ — so "add another" is always the last object on
-  // the last shelf, where a new book would physically go.
-  const tiles: (ChildProfile | null)[] = [...shown, null];
-  const shelves: (ChildProfile | null)[][] = [];
-  for (let i = 0; i < tiles.length; i += PER_SHELF) shelves.push(tiles.slice(i, i + PER_SHELF));
-
   return (
     <Screen>
       <SectionTitle title="Your shelf" />
@@ -222,70 +179,35 @@ export default function Shelf() {
           <Text style={{ color: tokens.color.sub }}>Loading…</Text>
         </Card>
       ) : (
-        <View>
-          {shelves.map((shelf, si) => (
-            <View key={si}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'flex-end',
-                  gap: 9,
-                  paddingHorizontal: 6,
-                  paddingTop: 14,
-                }}
-              >
-                {shelf.map((child) =>
-                  child ? (
-                    <Spine
-                      key={child.key}
-                      child={child}
-                      active={child.key === activeKey}
-                      onPress={() => void open(child)}
-                    />
-                  ) : (
-                    <Pressable
-                      key="add"
-                      testID="shelf-add"
-                      accessibilityRole="button"
-                      accessibilityLabel="Add a child"
-                      onPress={() => void addChild()}
-                      style={{
-                        flex: 1,
-                        height: ADD_H,
-                        ...SPINE_RADII,
-                        borderWidth: 1.5,
-                        borderStyle: 'dashed',
-                        borderColor: tokens.color.line,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ fontSize: 19, color: tokens.color.sub }}>＋</Text>
-                    </Pressable>
-                  ),
-                )}
-                {/* Keeps the last shelf's spines the same width as a full one —
-                    a grid column that happens to be empty, not a wider book. */}
-                {Array.from({ length: PER_SHELF - shelf.length }, (_, i) => (
-                  <View key={`gap-${i}`} style={{ flex: 1 }} />
-                ))}
-              </View>
-              <View
-                style={{
-                  height: BOARD_H,
-                  borderRadius: 4,
-                  marginHorizontal: 6,
-                  backgroundColor: tokens.color.line2,
-                }}
-              />
-            </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9, justifyContent: 'flex-start' }}>
+          {shown.map((c) => (
+            <Spine key={c.key} child={c} active={c.key === activeKey} onPress={() => void open(c)} />
           ))}
+          <Pressable
+            testID="shelf-add"
+            accessibilityRole="button"
+            accessibilityLabel="Add a child"
+            onPress={() => void addChild()}
+            style={{
+              width: '23%',
+              minHeight: 108,
+              borderRadius: 12,
+              borderWidth: 1.5,
+              borderStyle: 'dashed',
+              borderColor: tokens.color.line,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 22, color: tokens.color.sub }}>＋</Text>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: tokens.color.sub, marginTop: 2 }}>Add a child</Text>
+          </Pressable>
         </View>
       )}
 
       <Text style={{ marginHorizontal: 4, fontSize: 10, color: tokens.color.sub, textAlign: 'center', marginTop: 6 }}>
-        Four spines per shelf, new shelves underneath.{'\n'}＋ adds a child by their code (RAF-00042) and password —
-        even at another school.{'\n'}Each child keeps their own notifications, badges and data.
+        Adding a child: their school, their code (RAF-00042) and password — once.{'\n'}Each child keeps their own
+        notifications, badges and data.
       </Text>
     </Screen>
   );

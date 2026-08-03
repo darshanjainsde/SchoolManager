@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Animated, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type {
   DiaryEntryRow,
@@ -16,33 +16,6 @@ import { font } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
 
 type Kind = 'ITEM' | 'REMARK';
-
-/**
- * The pitch's date strip is six cells wide — Mon…Sat, one school week ending
- * at today. Not seven: nothing is written in the diary on a Sunday, and a
- * dead cell in a six-cell strip is a quarter of the control doing nothing.
- */
-const STRIP_DAYS = 6;
-
-/** `2026-08-03` → `{ dow: 'MON', num: '3' }` for one cell of the date strip. */
-function cellLabels(iso: string): { dow: string; num: string } {
-  const [y, m, d] = iso.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  return {
-    dow: dt.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase(),
-    num: String(d),
-  };
-}
-
-/** `2026-08-03` → `Mon, 3 Aug` — the accessible name of a date-strip cell. */
-function longLabel(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-}
 
 /**
  * One written line — the pitch's `.diary-item`.
@@ -71,12 +44,10 @@ function DiaryItem({
   children?: ReactNode;
 }) {
   const tokens = useTokens();
-  const pin = useGesture(true, DUR.pin, { delay: index * 80 });
+  // Capped stagger: `index * 80` meant the twentieth line of a busy day did
+  // not arrive until 1.6s after the page did.
+  const pin = useGesture(true, DUR.pin, { delay: Math.min(index, 6) * 80 });
   const red = entry.kind === 'REMARK';
-  const recipients =
-    entry.students.length > 0
-      ? `For: ${entry.students.map((s) => s.name.split(' ')[0]).join(', ')}`
-      : 'Whole class';
 
   return (
     <Animated.View
@@ -153,10 +124,31 @@ function DiaryItem({
           {entry.body}
         </Text>
 
-        <Text style={{ color: tokens.color.sub, fontSize: 11, marginTop: 2 }}>
+        {/* WHO it is for, by NAME. The repaint compressed the recipients to
+            first names only, on one line, which on a class with two Aaravs
+            stops identifying anybody — and a remark is precisely the entry
+            where the teacher has to be certain which child it landed on. */}
+        {entry.students.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+            {entry.students.map((s) => (
+              <View
+                key={s.studentId}
+                style={{
+                  backgroundColor: tokens.color.surfaceMuted,
+                  borderRadius: tokens.radius.chip,
+                  paddingVertical: 3,
+                  paddingHorizontal: 8,
+                }}
+              >
+                <Text style={{ color: tokens.color.sub, fontSize: 11, fontWeight: '600' }}>{s.name}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <Text style={{ color: tokens.color.sub, fontSize: 11, marginTop: 5 }}>
           {entry.authorName}
-          {' · '}
-          {recipients}
+          {entry.students.length > 0 ? '' : ' · Whole class'}
         </Text>
         <Text
           style={{
@@ -354,30 +346,6 @@ export default function StaffDiary() {
     [roster],
   );
 
-  // The trailing school week, oldest first — the pitch's `DATES`.
-  const strip = useMemo(() => {
-    const out: string[] = [];
-    for (let i = STRIP_DAYS - 1; i >= 0; i--) out.push(shiftISO(today, -i));
-    return out;
-  }, [today]);
-
-  const prevISO = shiftISO(date, -1);
-  const nextISO = shiftISO(date, 1);
-  /**
-   * The strip replaced the old ‹ Prev day / Next day › / Jump-to-today
-   * buttons, but those three testIDs still name real, reachable affordances
-   * — so they ride on the cells that DO the same thing (the day before the
-   * selected one, the day after it, today) instead of being retired. Priority
-   * order avoids the one collision: when yesterday is selected, "the next
-   * day" and "today" are the same cell, and `diary-next` wins.
-   */
-  const cellTestID = (iso: string) => {
-    if (iso === prevISO) return 'diary-prev';
-    if (iso === nextISO) return 'diary-next';
-    if (iso === today && !isToday) return 'diary-today';
-    return `diary-day-${iso}`;
-  };
-
   const needsNames = kind === 'REMARK' || chosen.length > 0;
   const canSend = !saving && !!classId && body.trim().length > 0 && (kind !== 'REMARK' || chosen.length > 0);
 
@@ -438,73 +406,44 @@ export default function StaffDiary() {
     <Screen>
       <SectionTitle title={`Diary · ${isToday ? 'today' : date}`} />
 
-      {/* THE DATE STRIP — the pitch's `.dstrip`. Six 44dp cells you scrub
-          through with a thumb, replacing a pair of ‹ › buttons that made
-          "three days ago" a three-tap guess. `.sel` is a solid indigo fill;
-          `.today` keeps its amber border and tint even when another day is
-          open, so "which day am I looking at" and "which day is it" stay two
-          separate, simultaneously-readable facts. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 6, paddingHorizontal: 2, paddingTop: 4, paddingBottom: 8 }}
+      {/* Paged, not a strip. The repaint replaced these three buttons with a
+          six-cell window ending at today, and hung `diary-prev`/`diary-next`
+          on whichever CELL happened to be the day either side of the selected
+          one — so pressing "previous" twice did nothing the second time, and
+          a teacher could no longer walk back past six days at all. A relative
+          shift with no window limit is the whole point of this control. */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginHorizontal: 4,
+        }}
       >
-        {strip.map((iso) => {
-          const sel = iso === date;
-          const isTodayCell = iso === today;
-          const { dow, num } = cellLabels(iso);
-          return (
-            <Pressable
-              key={iso}
-              testID={cellTestID(iso)}
-              accessibilityRole="button"
-              accessibilityLabel={longLabel(iso)}
-              accessibilityState={{ selected: sel }}
-              onPress={() => setDate(iso)}
-              style={{
-                width: 44,
-                alignItems: 'center',
-                borderRadius: 11,
-                borderWidth: 1,
-                paddingTop: 6,
-                paddingBottom: 7,
-                borderColor: sel
-                  ? tokens.color.indigo
-                  : isTodayCell
-                    ? tokens.color.amber
-                    : tokens.color.line,
-                backgroundColor: sel
-                  ? tokens.color.indigo
-                  : isTodayCell
-                    ? tokens.color.amber50
-                    : tokens.color.surface,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 9,
-                  fontWeight: '800',
-                  letterSpacing: 0.45,
-                  color: sel ? tokens.color.onBrand : tokens.color.sub,
-                }}
-              >
-                {dow}
-              </Text>
-              <Text
-                style={{
-                  fontFamily: font.serif,
-                  fontSize: 15,
-                  fontWeight: '600',
-                  marginTop: 1,
-                  color: sel ? tokens.color.onBrand : tokens.color.ink,
-                }}
-              >
-                {num}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+        <Pressable testID="diary-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}>
+          <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>‹ Prev day</Text>
+        </Pressable>
+        {!isToday && (
+          <Pressable testID="diary-today" onPress={() => setDate(today)} hitSlop={8}>
+            <Text style={{ color: tokens.color.sub, fontWeight: '600', fontSize: 12 }}>Jump to today</Text>
+          </Pressable>
+        )}
+        <Pressable
+          testID="diary-next"
+          onPress={() => setDate((d) => (d < today ? shiftISO(d, 1) : d))}
+          hitSlop={8}
+        >
+          <Text
+            style={{
+              color: isToday ? tokens.color.placeholder : tokens.color.indigo,
+              fontWeight: '700',
+              fontSize: 13,
+            }}
+          >
+            Next day ›
+          </Text>
+        </Pressable>
+      </View>
 
       {classes && classes.length > 1 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
@@ -667,8 +606,12 @@ export default function StaffDiary() {
         </Card>
       )}
 
+      {/* Solid, not dashed: RN draws a dashed border on a view that also has a
+          border radius as a solid one on iOS and as a broken outline on
+          Android, so `borderStyle: 'dashed'` here bought nothing and risked a
+          visibly different frame per platform. */}
       {!isToday && (
-        <Page style={{ borderStyle: 'dashed' }}>
+        <Page>
           <Empty>
             This page is closed — a diary a family has already read cannot be rewritten. Jump to
             today to add anything new.

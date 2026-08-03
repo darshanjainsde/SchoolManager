@@ -66,13 +66,17 @@ function Bubble({ m, mine, senderLabel }: { m: MessageRow; mine: boolean; sender
         arrival,
       ]}
     >
-      <Text style={{ fontSize: 9.5, fontWeight: '700', color: mine ? tokens.color.onBrand : tokens.color.sub }}>
+      {/* Message type stays at the size it shipped at (10.5 / 13.5 / 10). The
+          repaint took the BODY of a conversation down to 12.5 and its
+          timestamps to 9 — the staff side of the same thread was left alone,
+          so the two ends of one conversation were being set differently. */}
+      <Text style={{ fontSize: 10.5, fontWeight: '700', color: mine ? tokens.color.onBrand : tokens.color.sub }}>
         {senderLabel}
       </Text>
       <Text
         style={{
-          fontSize: 12.5,
-          lineHeight: 17,
+          fontSize: 13.5,
+          lineHeight: 19,
           color: mine ? tokens.color.onBrand : tokens.color.ink,
           marginTop: 3,
         }}
@@ -82,7 +86,7 @@ function Bubble({ m, mine, senderLabel }: { m: MessageRow; mine: boolean; sender
       <Text
         style={{
           fontFamily: font.mono,
-          fontSize: 9,
+          fontSize: 10,
           color: mine ? tokens.color.onBrand : tokens.color.sub,
           opacity: mine ? 0.85 : 1,
           marginTop: 4,

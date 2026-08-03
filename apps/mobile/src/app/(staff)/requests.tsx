@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Animated, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type {
   LeaveApplication,
@@ -13,7 +13,6 @@ import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
-import { DUR, stampStyle, useGesture } from '@/theme/motion';
 
 const LEAVE_TYPE_LABEL: Record<LeaveTypeValue, string> = {
   SICK: 'Sick leave',
@@ -147,47 +146,6 @@ function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
     paddingVertical: 9,
     paddingHorizontal: 13,
   };
-}
-
-/**
- * THE STAMP (`.reqstamp`) — a request is a piece of paper sent to the office,
- * and the office answers by stamping it. So the decision does not fade in as
- * a pill: it lands, oversized and crooked, and settles a few degrees off
- * square. That is the whole point of the gesture here — it makes the office's
- * answer feel like it arrived from somewhere, rather than like a colour this
- * app chose. Fires once per row, on the render the row first appears in.
- */
-function ReqStamp({ tone, label }: { tone: PillTone; label: string }) {
-  const tokens = useTokens();
-  const ink: Record<PillTone, string> = {
-    green: tokens.color.green,
-    red: tokens.color.red,
-    // `.reqstamp.pn` — deep gold text on an amber edge, never the brand amber
-    // as text (it fails contrast on paper).
-    amber: tokens.color.late,
-    indigo: tokens.color.indigo,
-    neutral: tokens.color.sub,
-  };
-  const edge: Record<PillTone, string> = { ...ink, amber: tokens.color.amber };
-  const land = useGesture(true, DUR.stamp);
-  return (
-    <Animated.View
-      style={[
-        {
-          borderWidth: 2,
-          borderColor: edge[tone],
-          borderRadius: 8,
-          paddingHorizontal: 9,
-          paddingVertical: 2,
-        },
-        stampStyle(land),
-      ]}
-    >
-      <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 11.5, color: ink[tone] }}>
-        {label}
-      </Text>
-    </Animated.View>
-  );
 }
 
 export default function Requests() {
@@ -504,7 +462,13 @@ export default function Requests() {
                       )}
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                      <ReqStamp tone={pill.tone} label={pill.label} />
+                      {/* A `Pill`, not a stamp. `stampStyle` RESTS at
+                          `rotate(-2deg)`, so every decision in this list sat
+                          permanently crooked inside a right-aligned column —
+                          the misalignment reads as a rendering fault, not as
+                          character, and it is the office's answer that has to
+                          be unambiguous here. */}
+                      <Pill tone={pill.tone}>{pill.label}</Pill>
                       {item.kind === 'leave' && item.cancellable && (
                         <Pressable
                           testID={`cancel-${item.id}`}

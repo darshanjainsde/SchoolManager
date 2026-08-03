@@ -337,29 +337,29 @@ export default function FamilyDiary() {
                             color: tokens.color.ink,
                           }}
                         />
-                        {/* `.signbtn` — outlined in red, not filled: signing is
-                            an acknowledgement, not the page's primary action,
-                            and a solid red button reads as an alarm. */}
+                        {/* Signing IS this screen's primary action — it is the
+                            only thing anyone at home is being asked to do, and
+                            the teacher is waiting on it. The repaint shrank it
+                            to a 30dp outlined chip pushed to the left margin,
+                            under the minimum comfortable touch target. Full
+                            width, filled, and at button size. */}
                         <Pressable
                           testID={`sign-${e.id}`}
                           onPress={() => sign(e)}
                           disabled={busy}
                           style={({ pressed }) => ({
-                            alignSelf: 'flex-start',
-                            backgroundColor: pressed ? tokens.color.red50 : tokens.color.surface,
-                            borderColor: tokens.color.red,
-                            borderWidth: 1.5,
-                            opacity: busy ? 0.45 : 1,
-                            borderRadius: 9,
-                            paddingVertical: 7,
-                            paddingHorizontal: 13,
+                            backgroundColor: tokens.color.red,
+                            opacity: busy ? 0.45 : pressed ? 0.85 : 1,
+                            borderRadius: 12,
+                            paddingVertical: 11,
                           })}
                         >
                           <Text
                             style={{
-                              color: tokens.color.red,
+                              color: tokens.color.onBrand,
                               fontWeight: '700',
-                              fontSize: 12.5,
+                              textAlign: 'center',
+                              fontSize: 13.5,
                             }}
                           >
                             {signing === e.id ? 'Signing…' : '✍️ Sign this remark'}
