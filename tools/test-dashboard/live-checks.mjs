@@ -296,12 +296,28 @@ function defineChecks(env, creds) {
         const wrong = wrongRole(ctx, FAMILY_ROLES);
         if (wrong) return { skipped: true, detail: wrong };
         const r = await req(`${env.api}/me/diary`, { headers: authed(ctx.token) });
-        const shaped = r.json && Array.isArray(r.json.days) && typeof r.json.unsignedCount === 'number';
+        // `entries`, not `days` — StudentDiaryResult in @skoolos/types, which
+        // is also what both real clients read. The first version of this check
+        // asserted `days` from memory rather than from the contract and failed
+        // against a perfectly healthy production.
+        const entries = r.json?.entries;
+        const shaped = Array.isArray(entries) && typeof r.json?.unsignedCount === 'number';
         return {
           ok: r.status === 200 && shaped,
           ms: r.ms,
-          detail: r.status === 200 ? `HTTP 200 · ${r.json?.days?.length ?? 0} days · ${r.json?.unsignedCount ?? '—'} unsigned` : `HTTP ${r.status} · ${(r.text || '').slice(0, 160)}`,
-          failedBecause: r.status !== 200 ? `expected 200, got ${r.status}` : shaped ? null : 'response is not the StudentDiaryResult shape',
+          // Reports what is ACTUALLY there. The previous `?? 0` printed
+          // "0 days" whether the array was empty or missing entirely, so the
+          // detail line contradicted the verdict beside it.
+          detail:
+            r.status === 200
+              ? `HTTP 200 · entries=${Array.isArray(entries) ? entries.length : typeof entries} · unsignedCount=${r.json?.unsignedCount ?? 'absent'}`
+              : `HTTP ${r.status} · ${(r.text || '').slice(0, 160)}`,
+          failedBecause:
+            r.status !== 200
+              ? `expected 200, got ${r.status}`
+              : shaped
+                ? null
+                : `not the StudentDiaryResult shape — got keys [${Object.keys(r.json ?? {}).join(', ')}]`,
         };
       },
     },
