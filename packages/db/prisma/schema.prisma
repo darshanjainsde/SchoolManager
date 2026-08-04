@@ -87,6 +87,24 @@ enum EventStatus {
   REJECTED
 }
 
+enum RegistrationStatus {
+  HELD
+  CONFIRMED
+  WAITLISTED
+  DECLINED
+  CANCELLED
+}
+
+/// Deliberately present before there is any gateway. `NOT_REQUIRED` is what a
+/// free event carries, so "free" is not a separate code path that lets the paid
+/// branch rot — it is the same path with a zero price.
+enum PaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  REFUNDED
+}
+
 enum EnquiryStatus {
   NEW
   CONTACTED
@@ -1025,26 +1043,128 @@ model Notification {
 
 // ── Community ────────────────────────────────────────────
 model Event {
-  id               String      @id @default(uuid()) @db.Uuid
-  schoolId         String      @db.Uuid
+  id               String              @id @default(uuid()) @db.Uuid
+  schoolId         String              @db.Uuid
   title            String
   description      String?
-  coverAssetId     String?     @db.Uuid
+  coverAssetId     String?             @db.Uuid
   startAt          DateTime
   endAt            DateTime?
   venue            String?
   coverUrl         String?
   originSchoolName String?
-  scope            EventScope  @default(SCHOOL)
-  status           EventStatus @default(DRAFT)
-  createdByUserId  String?     @db.Uuid
-  approvedByUserId String?     @db.Uuid
+  scope            EventScope          @default(SCHOOL)
+  status           EventStatus         @default(DRAFT)
+  createdByUserId  String?             @db.Uuid
+  approvedByUserId String?             @db.Uuid
   approvedAt       DateTime?
-  createdAt        DateTime    @default(now())
-  school           School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt        DateTime            @default(now())
+  school           School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  ticketTypes      EventTicketType[]
+  registrations    EventRegistration[]
 
   @@index([schoolId])
   @@index([scope, status])
+}
+
+/// A thing you can register for. An event has one or many; a free event has a
+/// single type priced at zero rather than no type at all, so every event is
+/// registered for the same way.
+model EventTicketType {
+  id            String              @id @default(uuid()) @db.Uuid
+  eventId       String              @db.Uuid
+  schoolId      String              @db.Uuid
+  name          String
+  /// Minor units — paise, cents. NEVER a float: rounding error in money is the
+  /// bug you find in reconciliation months later and never fully clean up.
+  priceMinor    Int                 @default(0)
+  currency      String              @default("INR")
+  /// null = unlimited. 0 is a real value meaning "sold out by configuration".
+  capacity      Int?
+  salesOpenAt   DateTime?
+  salesCloseAt  DateTime?
+  createdAt     DateTime            @default(now())
+  event         Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registrations EventRegistration[]
+
+  @@index([eventId])
+  @@index([schoolId])
+}
+
+/// One person's place at one event.
+///
+/// It lives in the HOST school's tenant — `schoolId` is the host, and that is
+/// what RLS scopes on. The host owns its attendee list; that single decision is
+/// what stops one school reading another's registrations, and it is why a
+/// student of school A registering for school B's network event writes a row
+/// into B rather than A.
+model EventRegistration {
+  id           String @id @default(uuid()) @db.Uuid
+  eventId      String @db.Uuid
+  /// The HOST school. Not the registrant's.
+  schoolId     String @db.Uuid
+  ticketTypeId String @db.Uuid
+  quantity     Int    @default(1)
+
+  /// Signed in: the student, who may belong to another school in the network.
+  studentId    String? @db.Uuid
+  /// Which school the registrant came from — the first thing an admin asks
+  /// about a network registration, and not derivable from `schoolId` (that is
+  /// the host). Null for a true guest.
+  fromSchoolId String? @db.Uuid
+
+  /// Signed out: a public-site registration. Exactly one of studentId or
+  /// guestEmail is expected; the service enforces it.
+  guestName  String?
+  guestEmail String?
+  guestPhone String?
+
+  status        RegistrationStatus @default(HELD)
+  /// Copied from the ticket type at registration time. If a school raises the
+  /// price mid-sale, people who already registered keep the price they agreed
+  /// to — the record must not be re-derivable from a mutable ticket type.
+  amountMinor   Int                @default(0)
+  currency      String             @default("INR")
+  paymentStatus PaymentStatus      @default(NOT_REQUIRED)
+  /// Position in the queue when WAITLISTED, so "you are third" can be said.
+  waitlistPos   Int?
+  checkedInAt   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  event      Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketType EventTicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  payments   EventPayment[]
+
+  /// One place per student per event. A family needing two seats uses
+  /// `quantity`, not a second row — otherwise capacity cannot be counted.
+  @@unique([eventId, studentId])
+  @@index([schoolId, eventId])
+  @@index([eventId, status])
+  @@index([fromSchoolId])
+}
+
+/// Money that changed hands. Written today by an admin recording cash at the
+/// office (`provider = "MANUAL"`), and by a gateway later — the same row, which
+/// is the entire reason to build this table before there is a gateway to fill
+/// it. When one arrives, nothing above this table moves.
+model EventPayment {
+  id             String            @id @default(uuid()) @db.Uuid
+  registrationId String            @db.Uuid
+  schoolId       String            @db.Uuid
+  provider       String            @default("MANUAL")
+  providerRef    String?
+  amountMinor    Int
+  currency       String            @default("INR")
+  status         PaymentStatus     @default(PAID)
+  /// The admin who recorded it, when it was taken by hand.
+  recordedBy     String?           @db.Uuid
+  note           String?
+  createdAt      DateTime          @default(now())
+  registration   EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([registrationId])
 }
 
 // Single-use, short-lived tokens for the self-serve "forgot password" flow.
