@@ -5,19 +5,37 @@ import type { PublicCourse } from '@/lib/public-api';
 const COURSE_EMOJIS = ['🧸', '📚', '🔬', '🎓', '🎨', '🏆', '🌟', '💡'];
 
 /** Full catalogue — every course, featured or not. Nav dropdown items land here. */
-export default function AcademicsSection({ courses }: { courses: PublicCourse[] }) {
+/**
+ * `onOwnPage` — this section is the WHOLE page, not a band on the home page.
+ *
+ * Each of these sections carries its own eyebrow and heading, which is correct
+ * on the home page where it has to introduce itself between other bands. On its
+ * own page it is wrong twice over: PublicSite already renders a page header, so
+ * the eyebrow appeared TWICE and two headings competed — one left-aligned, one
+ * centred, saying nearly the same thing. It is the same bug class as the fee
+ * table: a section that does not know which context it is in.
+ */
+export default function AcademicsSection({
+  courses,
+  onOwnPage = false,
+}: {
+  courses: PublicCourse[];
+  onOwnPage?: boolean;
+}) {
   if (courses.length === 0) return null;
 
   return (
     <section id="academics" className="bg-white border-t border-black/5">
-      <div className="max-w-6xl mx-auto px-6 py-20">
-        <div className="reveal text-center max-w-2xl mx-auto">
-          <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
-            Academics
+      <div className={onOwnPage ? 'max-w-6xl mx-auto px-6 pt-10 pb-20' : 'max-w-6xl mx-auto px-6 py-20'}>
+        {!onOwnPage && (
+          <div className="reveal text-center max-w-2xl mx-auto">
+            <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
+              Academics
+            </div>
+            <h2 className="ps-head text-4xl font-bold mt-3">Programmes for every stage</h2>
           </div>
-          <h2 className="ps-head text-4xl font-bold mt-3">Programmes for every stage</h2>
-        </div>
-        <div className="mt-12 grid gap-5">
+        )}
+        <div className={onOwnPage ? 'grid gap-5' : 'mt-12 grid gap-5'}>
           {courses.map((c, i) => (
             <div
               key={c.id}

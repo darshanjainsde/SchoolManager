@@ -99,6 +99,47 @@ const PS_CSS = `
   .ps-twinkle { animation: ps-twinkle calc(3.2s / (var(--motion) + .06)) ease-in-out infinite; }
   @keyframes ps-shine { to { background-position: 200% center; } }
 
+
+  /* ── SUBPAGE MASTHEAD ────────────────────────────────────────────────────
+     An editorial split, not a stack. The headline takes the measure it needs
+     and the standfirst sits beside it in its own column, separated by a rule
+     that draws itself in — so the masthead reads as one object arriving,
+     rather than three left-aligned blocks landing in sequence.
+
+     Derived entirely from --ps1/--ps2, so it wears whatever the school chose. */
+  .ps-masthead { max-width: 72rem; }
+  .ps-masthead-eyebrow {
+    font-size: 12.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  }
+  .ps-masthead-split {
+    display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 12px 44px; align-items: end; margin-top: 14px; position: relative; padding-bottom: 26px;
+  }
+  .ps-masthead-title {
+    font-size: clamp(2.1rem, 5.2vw, 3.6rem); font-weight: 700; line-height: 1.02;
+    letter-spacing: -.03em; margin: 0; text-wrap: balance;
+  }
+  .ps-masthead-lede {
+    margin: 0 0 .35rem; color: var(--ink-3, #64748b); font-size: 1.02rem; line-height: 1.6;
+    /* Hangs off the accent, which ties the standfirst to the school's colour
+       without tinting the words themselves. */
+    border-left: 2px solid var(--ps2); padding-left: 16px;
+  }
+  /* The rule under the whole masthead draws from the left on entry. */
+  .ps-masthead-split::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+    background: linear-gradient(90deg, var(--ps1), color-mix(in srgb, var(--ps1) 12%, transparent));
+    transform: scaleX(0); transform-origin: left;
+    transition: transform .9s cubic-bezier(.2,.7,.2,1) .12s;
+  }
+  .reveal.in .ps-masthead-split::after, .ps-masthead.in .ps-masthead-split::after { transform: scaleX(1); }
+  @media (max-width: 760px) {
+    .ps-masthead-split { grid-template-columns: 1fr; align-items: start; gap: 16px; }
+    .ps-masthead-lede { border-left-width: 2px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ps-masthead-split::after { transition: none; transform: scaleX(1); }
+  }
   /* reveal on scroll */
   .reveal { opacity: 0; transform: translateY(calc(26px * var(--motion) + 4px)); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
   .reveal.in { opacity: 1; transform: none; }
@@ -447,19 +488,32 @@ export default function PublicSite({ data, view = 'home' }: Props) {
           {/* ── SUBPAGE BODY (academics / admissions / gallery / events / contact) ── */}
           <section className="max-w-6xl mx-auto px-6 pt-12">
             <Link href="/" className="text-sm text-slate-500 hover:text-slate-800 transition">← Back to home</Link>
+            {/* THE SUBPAGE MASTHEAD.
+                Was a stacked block — eyebrow, headline, paragraph, all left in
+                one narrow column — directly above a section that repeated the
+                same eyebrow and a second, centred heading. Two headings arguing
+                about which one introduces the page.
+
+                Now one masthead, set as an editorial split: the headline holds
+                the left, the standfirst sits in its own column against the
+                baseline rule, and the section below simply begins. The rule
+                draws itself in on entry, so the two halves read as one object
+                arriving rather than two blocks stacking. */}
             {SUBPAGES[view] && (
-              <div className="reveal mt-6 max-w-2xl">
-                <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
+              <div className="ps-masthead reveal mt-6">
+                <div className="ps-masthead-eyebrow" style={{ color: 'var(--ps1)' }}>
                   {SUBPAGES[view].eyebrow}
                 </div>
-                <h1 className="ps-head text-5xl font-bold mt-3">
-                  {SUBPAGES[view].title.replace('{school}', schoolName)}
-                </h1>
-                <p className="mt-4 text-slate-600">{SUBPAGES[view].blurb}</p>
+                <div className="ps-masthead-split">
+                  <h1 className="ps-head ps-masthead-title">
+                    {SUBPAGES[view].title.replace('{school}', schoolName)}
+                  </h1>
+                  <p className="ps-masthead-lede">{SUBPAGES[view].blurb}</p>
+                </div>
               </div>
             )}
           </section>
-          {view === 'academics' && <AcademicsSection courses={data.courses} />}
+          {view === 'academics' && <AcademicsSection courses={data.courses} onOwnPage />}
           {view === 'admissions' && (
             // The ONE caller that shows fees. See AdmissionsSection's
             // `showFeeTable` for why it is opt-in rather than opt-out.
