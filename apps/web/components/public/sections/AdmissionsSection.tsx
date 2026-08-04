@@ -18,14 +18,38 @@ export default function AdmissionsSection({
   admissions,
   courses,
   variant = 'journey',
+  showFeeTable = false,
 }: {
   admissions: Admissions;
   courses: PublicCourse[];
   variant?: 'journey' | 'rail';
+  /**
+   * FEES LIVE ON /admissions AND NOWHERE ELSE.
+   *
+   * This section is rendered twice — as a band on the home page and as the
+   * whole of the admissions page — and the fee table used to come with it in
+   * both places. So a school that filled in its fees found them published
+   * halfway down its front page, next to the photographs.
+   *
+   * Fees are the most consequential figures on a school's site: they are what
+   * a family screenshots, what a competitor reads, and what an admissions
+   * office wants read IN CONTEXT, under the process and the note that explains
+   * what the number includes. The home page has none of that context.
+   *
+   * Defaulting to `false` is the point — the fee table cannot appear anywhere
+   * new by accident, because every caller has to ask for it explicitly, and
+   * only one does.
+   */
+  showFeeTable?: boolean;
 }) {
   if (!admissionsHasContent(admissions, courses)) return null;
-  const feeRows = admissions.showFees ? courses.filter((c) => c.fee) : [];
+  const feeRows = showFeeTable && admissions.showFees ? courses.filter((c) => c.fee) : [];
   const steps = admissions.steps;
+  // A school whose only admissions content is its fees now has NOTHING to put
+  // on the home page — `admissionsHasContent` counts fees, but this render no
+  // longer shows them. Without this guard that school gets an empty headed
+  // band on its front page, which is a worse bug than the one being fixed.
+  if (steps.length === 0 && feeRows.length === 0) return null;
   // The connector path only reads as one line when every step sits in one row.
   const journeyCols =
     steps.length >= 4 ? 'lg:grid-cols-4' : steps.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2';

@@ -461,7 +461,14 @@ export default function PublicSite({ data, view = 'home' }: Props) {
           </section>
           {view === 'academics' && <AcademicsSection courses={data.courses} />}
           {view === 'admissions' && (
-            <AdmissionsSection admissions={data.admissions} courses={data.courses} variant="rail" />
+            // The ONE caller that shows fees. See AdmissionsSection's
+            // `showFeeTable` for why it is opt-in rather than opt-out.
+            <AdmissionsSection
+              admissions={data.admissions}
+              courses={data.courses}
+              variant="rail"
+              showFeeTable
+            />
           )}
           {view === 'gallery' && <GallerySection gallery={data.gallery} schoolName={schoolName} />}
           {view === 'events' && <EventsSection events={data.events} timezone={data.school.timezone} />}
