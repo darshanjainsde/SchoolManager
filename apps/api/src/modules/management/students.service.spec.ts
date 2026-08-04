@@ -5,6 +5,7 @@ const txMock = {
     findMany: jest.fn(),
     findFirst: jest.fn(),
     update: jest.fn(),
+    create: jest.fn(),
   },
   user: {
     create: jest.fn(),
@@ -20,6 +21,12 @@ const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown)
 
 jest.mock('@skoolos/db', () => ({
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
+  // `prisma-errors.ts` reads `Prisma` from THIS module and does an `instanceof`
+  // against it. Replacing the module without re-exporting `Prisma` left that
+  // undefined, so isP2002 threw a TypeError instead of classifying the error —
+  // meaning any P2002 path in a service under this mock could not be tested at
+  // all. Real class, so the instanceof genuinely matches.
+  Prisma: jest.requireActual('@prisma/client').Prisma,
   // StudentsController pulls in the tenancy barrel, whose users.controller reads
   // these enum members at decoration time.
   UserRole: {
@@ -112,6 +119,78 @@ describe('StudentsService.list', () => {
       classSection: { select: { name: true, grade: { select: { name: true } } } },
     });
     expect(args.where).toEqual({ schoolId: SCHOOL });
+  });
+});
+
+
+describe('StudentsService.create — every student gets a code', () => {
+  const passwords = { hash: jest.fn() };
+  const invites = { sendInvite: jest.fn() };
+  const svc = new StudentsService(
+    passwords as unknown as PasswordService,
+    invites as unknown as LoginInviteService,
+  );
+  const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    txMock.school.findUnique.mockResolvedValue({ name: 'Raffles Primary School', codePrefix: 'RAF' });
+    txMock.student.findFirst.mockResolvedValue(null);
+    txMock.student.create.mockImplementation((args: { data: unknown }) => args.data);
+  });
+
+  // THE BUG THIS FIXES: codes were minted only by createLogin/resendInvite, so
+  // a student added through the roster carried code = null until somebody
+  // happened to invite them. On production that was 300 of 300 students, and
+  // the student-code login the school had been told about worked for none of
+  // them, with nothing on screen to explain why.
+  it('allocates a code when the student is created, not when they are invited', async () => {
+    const out = await svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-1' } as never);
+    expect(out).toMatchObject({ code: 'RAF-00001' });
+  });
+
+  it('continues the school\'s existing sequence rather than restarting it', async () => {
+    txMock.student.findFirst.mockResolvedValue({ code: 'RAF-00042' });
+    const out = await svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-2' } as never);
+    expect(out).toMatchObject({ code: 'RAF-00043' });
+  });
+
+  it('derives and persists a prefix for a school that has none yet', async () => {
+    txMock.school.findUnique.mockResolvedValue({ name: 'Greenvale Academy', codePrefix: null });
+    const out = await svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-3' } as never);
+    expect(out).toMatchObject({ code: 'GRE-00001' });
+    // Persisted, so renaming the school later cannot change existing codes.
+    expect(txMock.school.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { codePrefix: 'GRE' } }),
+    );
+  });
+
+  it('reports a duplicate CODE as retryable, not as a duplicate admission number', async () => {
+    // Two concurrent enrolments can read the same max and pick the same code.
+    // Telling the user their admission number is taken sends them to fix a
+    // field that is perfectly correct.
+    const { Prisma } = jest.requireActual('@prisma/client');
+    txMock.student.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('dup', {
+        code: 'P2002', clientVersion: '5', meta: { target: ['schoolId', 'code'] },
+      }),
+    );
+    await expect(
+      svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-4' } as never),
+    ).rejects.toThrow(/student code was just taken/i);
+  });
+
+  it('still reports a duplicate admission number as one', async () => {
+    const { Prisma } = jest.requireActual('@prisma/client');
+    txMock.student.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('dup', {
+        code: 'P2002', clientVersion: '5', meta: { target: ['schoolId', 'admissionNo'] },
+      }),
+    );
+    await expect(
+      svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-1' } as never),
+    ).rejects.toThrow(/admission number already exists/i);
   });
 });
 
