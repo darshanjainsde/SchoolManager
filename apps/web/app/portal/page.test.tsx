@@ -17,7 +17,10 @@ vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
 function stubWithDiary(unsignedCount: number): ApiStub {
   return {
     get: vi.fn((path: string) => {
-      if (path.startsWith('/me/diary')) return Promise.resolve({ days: [], unsignedCount });
+      // `entries`, matching StudentDiaryResult. The stub said `days`, which the
+      // banner happened not to read — a stub that disagrees with the contract
+      // still passes today and lies to whoever extends it tomorrow.
+      if (path.startsWith('/me/diary')) return Promise.resolve({ entries: [], unsignedCount });
       if (path.startsWith('/me/profile'))
         return Promise.resolve({ firstName: 'Asha', lastName: 'Rao', className: '8-A', rollNo: 3 });
       if (path.startsWith('/me/attendance'))

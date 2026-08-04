@@ -97,18 +97,40 @@ export class StudentsService {
     }
     const { dob, ...rest } = dto;
     try {
-      return await withTenant(schoolId, (tx) =>
-        tx.student.create({
+      return await withTenant(schoolId, async (tx) => {
+        // A CODE IS PART OF BEING A STUDENT, not part of being invited.
+        //
+        // It used to be minted only by `createLogin`/`resendInvite`, so every
+        // student added through the roster carried `code = null` until somebody
+        // happened to invite them. On production that meant 300 of 300 students
+        // had no code, and the student-code login the school had been told
+        // about simply did not work for any of them — with nothing on screen
+        // to explain why.
+        //
+        // Allocating here also makes the code printable the moment a child is
+        // enrolled, which is when the office actually wants it: it goes on the
+        // welcome letter, not on an invite email that may never be sent.
+        const code = await this.allocateCode(tx, schoolId);
+        return tx.student.create({
           data: {
             ...rest,
             schoolId,
+            code,
             dob: dob ? new Date(dob) : undefined,
           },
-        }),
-      );
+        });
+      });
     } catch (e) {
-      if (isP2002(e))
+      if (isP2002(e)) {
+        // Two unique indexes can land here. `allocateCode` reads the current
+        // max and adds one, so two concurrent enrolments can pick the same
+        // code; that is a retryable clash and must not be reported as a
+        // duplicate admission number, which is a mistake the user must fix.
+        if (p2002Target(e).includes('code')) {
+          throw new ConflictException('That student code was just taken — please try again');
+        }
         throw new ConflictException('A student with that admission number already exists');
+      }
       throw e;
     }
   }
