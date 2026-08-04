@@ -190,6 +190,27 @@ export class TimetableService {
     }
   }
 
+  /**
+   * `kind` and the clock times are part of the availability payload, not just
+   * the timetable's.
+   *
+   * The availability grid has to draw a BREAK as a gap rather than as a period
+   * where the whole staff is conveniently free, and it has to open on the
+   * period that is actually running — an admin looking for cover almost always
+   * wants the current hour or the next one. Both facts live here; without them
+   * the client is left inferring a break from whether the label happens to
+   * contain the word "lunch", which is a guess that breaks on the first school
+   * that calls it "Recess".
+   */
+  private static readonly PERIOD_FIELDS = {
+    id: true,
+    order: true,
+    label: true,
+    kind: true,
+    startTime: true,
+    endTime: true,
+  } as const;
+
   async availability(schoolId: string, query: AvailabilityQueryDto) {
     return withTenant(schoolId, async (tx) => {
       // Resolve the academic year: use query param if provided, else fall back to isCurrent.
@@ -208,7 +229,7 @@ export class TimetableService {
             }),
             tx.period.findMany({
               where: { schoolId },
-              select: { id: true, order: true, label: true },
+              select: TimetableService.PERIOD_FIELDS,
               orderBy: { order: 'asc' },
             }),
           ]);
@@ -225,7 +246,7 @@ export class TimetableService {
         }),
         tx.period.findMany({
           where: { schoolId },
-          select: { id: true, order: true, label: true },
+          select: TimetableService.PERIOD_FIELDS,
           orderBy: { order: 'asc' },
         }),
         tx.timetableSlot.findMany({

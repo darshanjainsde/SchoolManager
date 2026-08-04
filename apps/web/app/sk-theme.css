@@ -1741,3 +1741,66 @@ html[data-theme='light'] .sk-notif-row[data-unread="true"][data-kind="DIARY"] .s
 .sk-signbanner .tx { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .sk-signbanner .t { font-size: 13.5px; font-weight: 700; color: var(--sk-bad); }
 .sk-signbanner .d { font-size: 11.5px; color: var(--sk-bad); opacity: 0.75; margin-top: 2px; }
+
+/* ── THE AVAILABILITY GRID ────────────────────────────────────────────────
+   The week is the surface and a cell is the question: "who can cover this
+   hour?". It replaced a teacher-first list of thirty rows × nine pills, which
+   made the admin count to the Nth pill in every row to answer that — and which
+   hid Saturday entirely behind a hardcoded five-day list.
+
+   The column count is set inline from the number of teaching days, because the
+   days come from the timetable data now: a five-day school gets five columns,
+   a six-day school six, and neither is written down anywhere in CSS. */
+.sk-availwrap { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .sk-availwrap { grid-template-columns: 1fr; } }
+
+.sk-availgrid { display: grid; gap: 4px; min-width: 0; }
+.sk-availhead {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--sk-ink-3); text-align: center; padding: 2px 0 4px;
+}
+/* Today is named in the brand colour and says so, rather than relying on a
+   colour a reader has to already know the meaning of. */
+.sk-availhead[data-now="true"] { color: var(--sk-brand); }
+.sk-availhead[data-now="true"]::after {
+  content: 'today'; display: block; font-size: 8px; letter-spacing: 0.1em; font-weight: 700;
+}
+.sk-availrow {
+  font-size: 11.5px; color: var(--sk-ink-2); display: flex; align-items: center;
+  padding-right: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sk-availrow[data-now="true"] { color: var(--sk-brand); font-weight: 700; }
+
+.sk-availcell {
+  border: 1px solid transparent; border-radius: 9px; padding: 8px 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: inherit; cursor: pointer; min-width: 0;
+  background: var(--sk-good-tint); color: var(--sk-good);
+}
+.sk-availcell > b { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.sk-availcell > small { font-size: 9px; opacity: 0.75; letter-spacing: 0.03em; }
+/* Thin, not empty — the hour still has cover but not much, and that is the
+   state an admin wants to spot before it becomes zero. */
+.sk-availcell[data-tone="tight"] { background: var(--sk-amber-tint); color: var(--sk-amber-ink); }
+.sk-availcell[data-tone="none"] { background: var(--sk-bad-tint); color: var(--sk-bad); }
+/* A break is drawn as a gap. Counting it would put the biggest number on the
+   page against the one hour nobody can teach. */
+.sk-availcell[data-tone="break"] { background: transparent; color: var(--sk-ink-3); cursor: default; font-size: 12px; }
+.sk-availcell[data-tone="busy"] { background: var(--sk-bad-tint); color: var(--sk-bad); font-size: 10.5px; }
+.sk-availcell[data-tone="free"] { background: var(--sk-good-tint); color: var(--sk-good); }
+.sk-availcell[data-on="true"] { border-color: var(--sk-brand); box-shadow: 0 0 0 2px var(--sk-brand-tint); }
+button.sk-availcell:hover { filter: brightness(0.97); }
+.sk-availcell:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; }
+
+.sk-availpanel {
+  background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm);
+  padding: 14px 16px; position: sticky; top: 16px;
+}
+.sk-availpanel h4 { margin: 0 0 2px; font-size: 14.5px; }
+.sk-availpanel .meta { font-size: 11.5px; color: var(--sk-ink-3); margin-bottom: 8px; }
+
+.sk-input {
+  border: 1px solid var(--sk-line-2); border-radius: 10px; padding: 7px 11px;
+  background: var(--sk-card); color: var(--sk-ink); font: inherit; font-size: 13px;
+}
+.sk-input:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; border-color: var(--sk-brand); }
