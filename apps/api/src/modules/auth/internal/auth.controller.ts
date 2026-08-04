@@ -5,7 +5,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
-import { ForgotPasswordDto, ImpersonateDto, LoginDto, RefreshDto, ResetPasswordDto } from './dto';
+import { ForgotPasswordDto, ImpersonateDto, LoginDto, RefreshDto, ResetByCodeDto, ResetPasswordDto } from './dto';
 import { TenantContextService } from '../../tenancy';
 import { FeatureResolverService } from '../../features';
 import { Public } from '../../../common/auth/public.decorator';
@@ -68,6 +68,22 @@ export class AuthController {
     await this.passwordReset.requestReset(ctx.schoolId, dto.email);
     // Identical response whether or not the account exists.
     return { ok: true };
+  }
+
+  /**
+   * Phase 5·1 — reset with only the student code. Tighter throttle than
+   * forgot-password: the response carries a masked email (the confirmation
+   * the parent sees), so brute-forcing codes must stay expensive.
+   */
+  @Public()
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Post('reset-by-code')
+  async resetByCode(@Body() dto: ResetByCodeDto) {
+    const ctx = this.tenantCtx.requireTenant();
+    const emailMasked = await this.passwordReset.requestResetByCode(ctx.schoolId, dto.code);
+    // ok:true either way; a null mask means "no login/email on file — contact
+    // the school office" in client copy.
+    return { ok: true, emailMasked };
   }
 
   @Public()

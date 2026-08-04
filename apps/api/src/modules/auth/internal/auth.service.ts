@@ -250,11 +250,32 @@ export class AuthService {
     schoolId: string,
     identifier: string,
   ): Promise<User | null> {
+    // A code-shaped identifier (RAF-00042, Phase 5·1) resolves via the
+    // student code first — then falls through to the older paths, so a
+    // username that merely LOOKS like a code still works. Same
+    // null-not-throw contract as the other resolvers: no enumeration.
+    if (/^[A-Za-z]{3}-\d{5,}$/.test(identifier)) {
+      const byCode = await this.resolveUserByStudentCode(platform, schoolId, identifier);
+      if (byCode) return byCode;
+    }
     const byUsername = await platform.user.findFirst({
       where: { schoolId, username: { equals: identifier, mode: 'insensitive' } },
     });
     if (byUsername) return byUsername;
     return this.resolveUserByAdmissionNo(platform, schoolId, identifier);
+  }
+
+  /** Resolves a student's linked User by their RAF-00042 code (case-insensitive). */
+  private async resolveUserByStudentCode(
+    platform: ReturnType<typeof getPlatformPrisma>,
+    schoolId: string,
+    code: string,
+  ): Promise<User | null> {
+    const student = await platform.student.findFirst({
+      where: { schoolId, code: { equals: code, mode: 'insensitive' } },
+    });
+    if (!student?.userId) return null;
+    return platform.user.findUnique({ where: { id: student.userId } });
   }
 
   /**

@@ -82,12 +82,15 @@ describe('shared portal contracts', () => {
     expect(oneClass.className).toBe('5-A');
   });
 
-  it('a student Profile carries a nullable roll number and class name', () => {
+  it('a student Profile carries a nullable roll number, class name and student code', () => {
     const p: Profile = {
-      firstName: 'Asha', lastName: 'Rao', admissionNo: 'A-001',
+      firstName: 'Asha', lastName: 'Rao', admissionNo: 'A-001', code: null,
       rollNo: null, className: null, photoUrl: null,
     };
     expect(p.rollNo).toBeNull();
+    // Code is null until a login exists; once allocated it is AAA-00001-shaped.
+    const withCode: Profile = { ...p, code: 'RAF-00042' };
+    expect(withCode.code).toMatch(/^[A-Z]{3}-\d{5,}$/);
   });
 
   it('AttendanceSummary days use the same three-state status as the register', () => {

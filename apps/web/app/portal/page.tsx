@@ -8,6 +8,7 @@ import type {
   AttendanceSummary,
   Profile,
   PublishedResult,
+  StudentDiaryResult,
   TimetableSlot,
   UpcomingExam,
 } from '@skoolos/types';
@@ -49,6 +50,23 @@ function nowMinutes(): number {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
+}
+
+/** "Saturday, 2 August" — the dateline that opens the page, written out. */
+function datelineLabel(d: Date): string {
+  return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+/**
+ * Where a period sits relative to the clock. Times can arrive empty from the
+ * API (`period.startTime`/`endTime` are optional in the timetable UI), in
+ * which case `minutesOfDay` yields NaN, every comparison is false, and the row
+ * falls through to `future` — an un-timed period is never claimed to be over.
+ */
+function railState(startTime: string, endTime: string, now: number): 'past' | 'now' | 'future' {
+  if (now >= minutesOfDay(endTime)) return 'past';
+  if (now >= minutesOfDay(startTime)) return 'now';
+  return 'future';
 }
 
 /** `YYYY-MM` for the given local date — the key `/me/attendance` expects. */
@@ -167,6 +185,19 @@ export default function PortalDashboardPage() {
     staleTime: 60_000,
   });
 
+  // A remark waiting for a signature is the one thing on this portal that is
+  // ASKED OF the family rather than reported to them, and the app has always
+  // said so on its home screen. On the web it was visible only after opening
+  // Diary — so the same family, on the same account, learned about it on the
+  // phone and not on the laptop.
+  const diaryQuery = useQuery({
+    queryKey: ['portal-diary'],
+    queryFn: () => api.get<StudentDiaryResult>('/me/diary'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+  const unsignedCount = diaryQuery.data?.unsignedCount ?? 0;
+
   const profile = profileQuery.data;
   const todaySlots = (timetableQuery.data ?? [])
     .filter((s) => s.dayOfWeek === todayDayOfWeek())
@@ -223,7 +254,16 @@ export default function PortalDashboardPage() {
   return (
     <div className="sk-anim" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <header>
-        <div className="sk-greet">
+        {/* The dateline. A diary page starts with its date, so the portal
+            does too — serif italic, the same margin-note voice the empty
+            states use, with the day itself tagged in amber because "which
+            day am I looking at" is the question every other card answers
+            relative to. */}
+        <div className="sk-dateline">
+          <span className="dow">{datelineLabel(new Date())}</span>
+          <span className="sk-todaytag">TODAY</span>
+        </div>
+        <div className="sk-greet" style={{ marginTop: 4 }}>
           {profile ? (
             <>
               Hi, {profile.firstName} <span className="wave">👋</span>
@@ -234,6 +274,30 @@ export default function PortalDashboardPage() {
         </div>
         {profile?.className && <div className="sk-sub">{profile.className} · Roll {profile.rollNo ?? '—'}</div>}
       </header>
+
+      {/* THE SIGNATURE ASK. Above the hero because it is the only thing on
+          this page that is owed BY the reader — everything below reports what
+          happened; this one waits on them. It renders only when something is
+          actually outstanding, so it never becomes furniture. Twin of the
+          app's `diary-banner`. */}
+      {unsignedCount > 0 && (
+        <Link href="/portal/diary" className="sk-signbanner" data-testid="diary-banner">
+          <span className="ic" aria-hidden="true">
+            📔
+          </span>
+          <span className="tx">
+            <span className="t">
+              {unsignedCount === 1
+                ? 'A diary remark to sign'
+                : `${unsignedCount} diary remarks to sign`}
+            </span>
+            <span className="d">Open the diary to read and sign.</span>
+          </span>
+          <span className="sk-pill" data-tone="bad">
+            Sign
+          </span>
+        </Link>
+      )}
 
       {/* State-aware "right now" hero — mirrors the mobile StudentHero. Shown
           once the timetable resolves; the schedule card below surfaces any error. */}
@@ -362,7 +426,11 @@ export default function PortalDashboardPage() {
       </div>
 
       <div className="sk-grid2">
-        {/* Today's timetable */}
+        {/* Today's timetable, as the pitch's ruled rail: the time in the
+            margin column, a red margin rule down the left, the entry written
+            to the right of it. A list of periods drawn this way reads as a
+            page out of an exercise book rather than as a table — which is the
+            whole argument of the redesign. */}
         <div className="sk-card">
           <div className="sk-card-h">
             <h3>Today&apos;s schedule</h3>
@@ -375,22 +443,43 @@ export default function PortalDashboardPage() {
             )}
             {todaySlots.length > 0 && (
               <div>
-                {todaySlots.map((slot) => (
-                  <div className="sk-row" key={slot.id}>
-                    <span
-                      className="badge"
-                      style={{ background: 'var(--sk-brand-2)', width: 34, height: 34, fontSize: 11 }}
-                    >
-                      {slot.period.label}
-                    </span>
-                    <div>
-                      <div className="nm">{slot.subject.name}</div>
-                      <div className="meta">
-                        {slot.teacher.firstName} {slot.teacher.lastName}
+                {todaySlots.map((slot) => {
+                  const state = railState(slot.period.startTime, slot.period.endTime, nowMin);
+                  return (
+                    <div className="sk-rowln" data-state={state} key={slot.id}>
+                      <span className="time">
+                        {slot.period.startTime}
+                        <br />
+                        {slot.period.endTime}
+                      </span>
+                      {/* THE MARGIN RULE — decorative, so it is hidden from
+                          assistive tech; the times already say where the row
+                          sits in the day. */}
+                      <span className="sk-rail-ml" aria-hidden="true" />
+                      <div className="bd">
+                        <div className="sub">{slot.subject.name}</div>
+                        <div className="tch">
+                          {slot.teacher.firstName} {slot.teacher.lastName} · {slot.period.label}
+                        </div>
                       </div>
+                      <span className="st">
+                        {state === 'past' ? '✓' : state === 'now' ? 'now' : slot.id === nextSlot?.id ? 'next' : ''}
+                      </span>
+                      {/* THE INK LINE. Grows under the period happening right
+                          now, to the fraction of it that has elapsed — the same
+                          number the hero states in words above. It is drawn to
+                          its real width, so switching the animation off (as
+                          reduced motion does) still leaves a true bar. */}
+                      {state === 'now' && (
+                        <span
+                          className="sk-liveink sk-inkline"
+                          style={{ width: `${heroPct}%` }}
+                          aria-hidden="true"
+                        />
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -407,16 +496,22 @@ export default function PortalDashboardPage() {
             {!announcementsQuery.isLoading && !announcementsQuery.error && latestAnnouncements.length === 0 && (
               <p className="sk-state">No announcements yet.</p>
             )}
+            {/* Announcements arrive as pinned slips, not as list rows: THE PIN
+                (`sk-pinin`) drops each one in slightly askew and settles it,
+                which is how a noticeboard says "this went up recently".
+                Staggered so three slips read as three separate pieces of
+                paper rather than as one block appearing. */}
             {latestAnnouncements.length > 0 && (
               <div>
-                {latestAnnouncements.map((ann) => (
-                  <div className="sk-row" key={ann.id} style={{ alignItems: 'flex-start' }}>
-                    <span className="badge" style={{ background: 'var(--sk-amber)', color: '#2a1c04', width: 34, height: 34 }}>
-                      📣
-                    </span>
-                    <div>
-                      <div className="nm">{ann.title}</div>
-                      <div className="meta">{formatDate(ann.createdAt)}</div>
+                {latestAnnouncements.map((ann, i) => (
+                  <div
+                    className="sk-notice sk-pinin sk-in"
+                    key={ann.id}
+                    style={{ animationDelay: `${i * 0.09}s` }}
+                  >
+                    <div className="nt">{ann.title}</div>
+                    <div className="nd">
+                      {ann.classSectionId ? 'Your class' : 'Whole school'} · {formatDate(ann.createdAt)}
                     </div>
                   </div>
                 ))}

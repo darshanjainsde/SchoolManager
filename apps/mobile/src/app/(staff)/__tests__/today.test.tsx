@@ -314,8 +314,9 @@ it('dims periods before the current one under "Earlier today" in the timeline', 
   render(<Today />);
 
   expect(await screen.findByText('Earlier today')).toBeTruthy();
+  // .55, not .5 — the pitch's `.rail.done` (see DayTimeline.test.tsx).
   const earlierRow = screen.getByTestId(`timeline-row-${DAY.entries[0].periodId}`);
-  expect(earlierRow.props.style).toEqual(expect.objectContaining({ opacity: 0.5 }));
+  expect(earlierRow.props.style).toEqual(expect.objectContaining({ opacity: 0.55 }));
 });
 
 it('tapping Take attendance in the hero navigates to the take screen with the class name', async () => {

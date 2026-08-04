@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -265,6 +266,8 @@ export default function EventsPage() {
   const queryClient = useQueryClient();
 
   const [showAdd, setShowAdd] = useState(false);
+  // Id of the event created in this session — see `sk-pinin` on the list.
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
 
   // ── Query ─────────────────────────────────────────────────────────────────
   const eventsQuery = useQuery({
@@ -279,6 +282,8 @@ export default function EventsPage() {
   const createMutation = useMutation({
     mutationFn: (body: CreateEventBody) => api.post<SchoolEvent>('/manage/events', body),
     onSuccess: (event) => {
+      // Which card is the new one — see `sk-pinin` on the list below.
+      setJustAddedId(event?.id ?? null);
       void queryClient.invalidateQueries({ queryKey: ['events'] });
       setShowAdd(false);
       if (event.scope === 'NETWORK') {
@@ -302,14 +307,16 @@ export default function EventsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex items-center justify-between">
+      {/* `sk-pagehead` rather than a bare h1: it is what sets every heading in
+          this portal in the pitch's serif, so Events reads as the same document
+          as the rest of the admin desk. */}
+      <header className="sk-pagehead flex items-center justify-between" style={{ marginBottom: 0 }}>
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Events</h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--sk-ink-3)' }}>
-            Manage school events and network submissions.
-          </p>
+          <h1>Events</h1>
+          <p>Manage school events and network submissions.</p>
         </div>
         <Button
+          className="sk-press"
           onClick={() => setShowAdd((v) => !v)}
           variant="outline"
         >
@@ -356,7 +363,10 @@ export default function EventsPage() {
       {(eventsQuery.data?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-3">
           {eventsQuery.data!.map((event) => (
-            <Card key={event.id}>
+            // `sk-pinin` on the event just created: the list is date-ordered,
+            // so a new event drops into the middle of it. The gesture points
+            // at where it landed; reduced motion shows it already in place.
+            <Card key={event.id} className={event.id === justAddedId ? 'sk-pinin sk-in' : undefined}>
               <CardContent className="flex items-start justify-between gap-4 pt-4">
                 {event.coverUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -378,17 +388,31 @@ export default function EventsPage() {
                     <StatusBadge status={event.status} />
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => deleteMutation.mutate(event.id)}
-                  className="shrink-0"
-                  style={{ color: 'var(--sk-bad)' }}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Delete
-                </Button>
+                {/* An event is now something you can OPEN. It was previously a
+                    poster with a delete button — the only thing you could do to
+                    an event was destroy it, because there was nothing behind it
+                    to look at. */}
+                <div className="flex shrink-0 items-center gap-1">
+                  <Link
+                    href={`/app/events/${event.id}`}
+                    className="sk-btn sk-press"
+                    data-variant="primary"
+                    data-testid={`open-${event.id}`}
+                  >
+                    Who&rsquo;s coming
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => deleteMutation.mutate(event.id)}
+                    className="sk-press"
+                    style={{ color: 'var(--sk-bad)' }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Delete
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}

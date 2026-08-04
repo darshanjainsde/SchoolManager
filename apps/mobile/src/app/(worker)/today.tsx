@@ -2,8 +2,22 @@ import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
-import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
+
+// ── The paper skin, for the staff who are not teachers ───────────────────────
+// There is no pitch page for this role, so nothing here is invented: every
+// piece is the same object a teacher already sees somewhere else — the pitch's
+// `.regstat` figure boxes, a `.page` of ruled rows, a serif `.ph` heading, and
+// the diary's own italic hand for a page with nothing written on it. Driver,
+// office and security staff open the same app as the teachers; the one thing
+// this screen must never look like is a different product.
+//
+// Deliberately no motion. The six gestures all mark a CHANGE to the page (a
+// tick, a stamp, a pin…), and nothing on this screen changes: it is a record
+// someone else wrote about you, read back. Animating it would be decoration
+// pretending to be an event.
 
 // ── Types ────────────────────────────────────────────────────────────────────
 // Mirrors StaffAttendanceService.mine's MyStaffAttendanceResult
@@ -58,6 +72,15 @@ const STAFF_ROLE_LABEL: Record<string, string> = {
   OTHER: 'Staff',
 };
 
+/**
+ * The pitch's `.regstat` — a figure box off the register.
+ *
+ * The number is MONO because these three sit side by side and a percentage, a
+ * count and another count only read as one row of figures when their digits are
+ * the same width. The label under it is the pitch's small-caps meta: uppercase,
+ * tracked, dim, in the UI sans — chrome a paper register would not contain, so
+ * it stays out of the book face the headings use.
+ */
 function StatBox({ testID, value, label, color }: { testID: string; value: string; label: string; color: string }) {
   const tokens = useTokens();
   return (
@@ -67,15 +90,27 @@ function StatBox({ testID, value, label, color }: { testID: string; value: strin
         backgroundColor: tokens.color.surface,
         borderColor: tokens.color.line,
         borderWidth: 1,
-        borderRadius: 14,
-        padding: 12,
+        borderRadius: 11,
+        paddingVertical: 9,
+        paddingHorizontal: 10,
         alignItems: 'center',
       }}
     >
-      <Text testID={testID} style={{ fontSize: 20, fontWeight: '800', color }}>
+      <Text testID={testID} style={{ fontFamily: font.mono, fontSize: 19, fontWeight: '700', color }}>
         {value}
       </Text>
-      <Text style={{ fontSize: 10.5, color: tokens.color.sub, marginTop: 1 }}>{label}</Text>
+      <Text
+        style={{
+          fontSize: 8.5,
+          fontWeight: '700',
+          letterSpacing: 0.55,
+          textTransform: 'uppercase',
+          color: tokens.color.sub,
+          marginTop: 3,
+        }}
+      >
+        {label}
+      </Text>
     </View>
   );
 }
@@ -111,7 +146,9 @@ export default function Today() {
     <Screen>
       <SectionTitle title={data ? `Hi, ${data.person.firstName}` : 'Today'} />
       {data && (
-        <Text style={{ marginHorizontal: 4, marginTop: -6, fontSize: 12, color: tokens.color.sub }}>
+        // The pitch's `.gatesub` — the one line under a serif heading that says
+        // whose page this is, in the UI sans so it never competes with it.
+        <Text style={{ marginHorizontal: 4, marginTop: -6, fontSize: 11.5, color: tokens.color.sub }}>
           {STAFF_ROLE_LABEL[data.person.role] ?? 'Staff'}
         </Text>
       )}
@@ -128,9 +165,12 @@ export default function Today() {
       )}
 
       {summary && !error && marked === 0 && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>No attendance has been recorded for you yet this month.</Text>
-        </Card>
+        // A month nobody has marked yet is a clean page, not a failure — so it
+        // is said in the diary's own italic hand rather than in system grey.
+        <Page>
+          <PageHeader title="This month" icon="🗓" />
+          <Empty>No attendance has been recorded for you yet this month.</Empty>
+        </Page>
       )}
 
       {summary && !error && marked > 0 && (
@@ -141,9 +181,15 @@ export default function Today() {
             <StatBox testID="stat-absent" value={String(summary.absent)} label="Absent" color={tokens.color.red} />
           </View>
 
-          <SectionTitle title="Recent" />
-          <Card style={{ paddingVertical: 2 }}>
-            {recent.map((d) => (
+          {/* A `.page` of ruled rows, not a stack of cards: these days are
+              consecutive lines in one register, and a rule between them is what
+              says so. The date is MONO so the column of dates lines up the way
+              a register's does; the status keeps the same `Pill` tones the
+              teacher's attendance screens use, so PRESENT is the same green
+              everywhere in the app. */}
+          <Page testID="recent-days">
+            <PageHeader title="Recent" icon="📋" />
+            {recent.map((d, i) => (
               <View
                 key={d.date}
                 style={{
@@ -151,29 +197,31 @@ export default function Today() {
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   paddingVertical: 9,
-                  borderBottomWidth: 1,
-                  borderBottomColor: tokens.color.line,
+                  paddingHorizontal: 12,
+                  borderTopWidth: i === 0 ? 0 : 1,
+                  borderTopColor: tokens.color.line,
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: '600', color: tokens.color.ink }}>{d.date}</Text>
+                <Text style={{ fontFamily: font.mono, fontSize: 12, color: tokens.color.ink2 }}>{d.date}</Text>
                 <Pill tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Pill>
               </View>
             ))}
-          </Card>
+          </Page>
         </>
       )}
 
       {/* Honest placeholder — see apps/web/app/staff/page.tsx's matching
           note for why: LeaveApplication is Teacher-row-scoped only today,
           and a Staff-row leave path is real schema work, not a focused diff
-          to bolt on alongside an attendance view. */}
-      <SectionTitle title="Leave" />
-      <Card>
-        <Text style={{ color: tokens.color.sub }}>
+          to bolt on alongside an attendance view. Drawn as a page with nothing
+          written on it, which is exactly what it is. */}
+      <Page>
+        <PageHeader title="Leave" icon="✉️" />
+        <Empty>
           Applying for leave isn&rsquo;t available here yet — ask your school admin in the meantime. It&rsquo;s
           planned for a future update.
-        </Text>
-      </Card>
+        </Empty>
+      </Page>
     </Screen>
   );
 }

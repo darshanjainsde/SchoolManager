@@ -201,7 +201,7 @@ export default function TeacherTestsPage() {
             <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 data-variant="primary"
                 disabled={!canCreate || create.isPending}
                 onClick={() => create.mutate()}
@@ -246,12 +246,17 @@ export default function TeacherTestsPage() {
               <div key={group.label} style={{ marginBottom: 16 }}>
                 <span className="sk-lab">{group.label}</span>
                 <div style={{ marginTop: 8 }}>
+                  {/* A schedule of tests is a list to SCAN: subject tile, title
+                      over the when-and-out-of line, status pill flush right.
+                      Every one of those is already sized by `.sk-row` — the
+                      only inline value is the tile's colour, which the class
+                      leaves open on purpose. An amber slip with its own
+                      padding, its own margin and a re-set title size broke the
+                      one thing a schedule needs, which is a straight left edge
+                      and a constant row rhythm. */}
                   {group.rows.map((exam, i) => (
                     <div className="sk-row" key={exam.id}>
-                      <span
-                        className="badge"
-                        style={{ background: SUBJECT_COLORS[i % SUBJECT_COLORS.length] }}
-                      >
+                      <span className="badge" style={{ background: SUBJECT_COLORS[i % SUBJECT_COLORS.length] }}>
                         {(subjects.data ?? []).find((s) => s.id === exam.subjectId)?.code.slice(0, 2).toUpperCase() ??
                           '—'}
                       </span>

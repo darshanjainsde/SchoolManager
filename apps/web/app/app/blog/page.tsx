@@ -72,9 +72,10 @@ export default function BlogPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">Blog</h1>
-        <p className="mt-1 text-sm text-slate-500">
+      {/* `sk-pagehead` supplies the portal's serif heading — see /app/events. */}
+      <header className="sk-pagehead" style={{ marginBottom: 0 }}>
+        <h1>Blog</h1>
+        <p>
           Write posts for your school blog, curate posts from the Sckools network, and arrange how your blog looks.
         </p>
       </header>
@@ -85,7 +86,7 @@ export default function BlogPage() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={[
-              'px-4 py-2 border-b-2 whitespace-nowrap transition-colors',
+              'sk-press px-4 py-2 border-b-2 whitespace-nowrap transition-colors',
               activeTab === tab.id
                 ? 'border-teal-600 text-teal-600 font-semibold'
                 : 'border-transparent text-slate-500 hover:text-slate-700',
@@ -96,6 +97,16 @@ export default function BlogPage() {
         ))}
       </div>
 
+      {/* THE TAB BODY, WRAPPED AND KEYED ON THE TAB.
+          Four tabs of a blog console look alike at a glance — a table of posts
+          and a table of library posts are the same shape. `sk-wfade` is the
+          pitch's answer to exactly that: the view fades and rises when the
+          thing it shows is REPLACED, which is otherwise indistinguishable from
+          "the click did nothing". The key is what re-runs it; the bodies
+          already mount and unmount per tab, so nothing about their lifecycle
+          changes. Reduced motion shows the new tab with no transition — the
+          same content, arrived instantly. */}
+      <div className="sk-wfade" key={activeTab}>
       {activeTab === 'posts' && <PostsTab postsQuery={postsQuery} onEdit={handleEdit} onNew={handleNew} />}
       {/* key: the editor seeds its fields from `target` at mount instead of
           syncing them in an effect, so switching post — or getting a fresh row
@@ -111,6 +122,7 @@ export default function BlogPage() {
       )}
       {activeTab === 'library' && <LibraryTab libraryQuery={libraryQuery} />}
       {activeTab === 'layout' && <LayoutTab settingsQuery={settingsQuery} selectionsQuery={selectionsQuery} />}
+      </div>
     </div>
   );
 }

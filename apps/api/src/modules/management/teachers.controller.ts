@@ -92,4 +92,15 @@ export class TeachersController {
   resendInvite(@Param('id', ParseUUIDPipe) id: string) {
     return this.teachers.resendInvite(this.sid(), id);
   }
+
+  /**
+   * Phase 5·1 — "remove from this school": deactivate + disable the login
+   * (never a hard delete), freeing the teacher for onboarding elsewhere.
+   */
+  @Post(':id/release')
+  @UseGuards(RolesGuard)
+  @Roles('SCHOOL_ADMIN')
+  release(@Param('id', ParseUUIDPipe) id: string) {
+    return this.teachers.release(this.sid(), id);
+  }
 }

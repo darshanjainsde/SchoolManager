@@ -25,6 +25,21 @@ function formatDueDate(dueDate: string): string {
 
 // ── Row ───────────────────────────────────────────────────────────────────────
 
+/**
+ * NO TICK BOX HERE, DELIBERATELY.
+ *
+ * A design pass put a green ticked checkbox on every row in the "Past"
+ * section. `StudentAssignment` carries no submission field — the API has never
+ * been asked whether this student handed anything in, and `/me/assignments`
+ * splits `upcoming`/`past` purely on the due date. A filled green tick beside a
+ * piece of homework reads as "handed in" to anyone who does not stop and read
+ * the small print, and the family that stops reading is the family whose work
+ * is still on the kitchen table.
+ *
+ * The section heading already says "Past", and the row says the due date in
+ * words. That is the whole of what this page actually knows. If a submission
+ * field ever lands, a tick becomes honest and can come back.
+ */
 function AssignmentRow({
   assignment,
   isOpen,
@@ -46,7 +61,9 @@ function AssignmentRow({
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-[var(--sk-ink)]">{assignment.title}</p>
             <p className="text-sm text-[var(--sk-ink-2)]">{assignment.subjectName}</p>
-            <p className="mt-0.5 text-xs text-[var(--sk-ink-3)]">Due {formatDueDate(assignment.dueDate)}</p>
+            <p className="mt-0.5 text-xs text-[var(--sk-ink-3)]">
+              Due {formatDueDate(assignment.dueDate)}
+            </p>
           </div>
           <ChevronDown
             className={`h-4 w-4 shrink-0 text-[var(--sk-ink-3)] transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -144,7 +161,7 @@ export default function PortalAssignmentsPage() {
 
       {upcoming.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-[var(--sk-ink-2)]">Upcoming</h2>
+          <h2 className="sk-lab">Upcoming</h2>
           {upcoming.map((a) => (
             <AssignmentRow key={a.id} assignment={a} isOpen={openIds.has(a.id)} onToggle={() => toggle(a.id)} />
           ))}
@@ -153,7 +170,7 @@ export default function PortalAssignmentsPage() {
 
       {past.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-[var(--sk-ink-2)]">Past</h2>
+          <h2 className="sk-lab">Past</h2>
           {past.map((a) => (
             <AssignmentRow key={a.id} assignment={a} isOpen={openIds.has(a.id)} onToggle={() => toggle(a.id)} />
           ))}

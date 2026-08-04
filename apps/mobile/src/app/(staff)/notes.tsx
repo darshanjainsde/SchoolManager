@@ -5,6 +5,7 @@ import type { NoteClass } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
 
 /**
  * Notes & To-dos — the per-class history tab. The live "Today" panel
@@ -80,20 +81,52 @@ export default function Notes() {
           testID={`note-class-${c.classSectionId}-${c.subjectId}`}
           onPress={() => open(c)}
         >
+          {/* `.clsrow` — the same 34px serif-initial tile the attendance
+              class list uses, so a class is the same object on both screens. */}
           <Card style={{ gap: 7 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  backgroundColor: tokens.color.indigo,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: font.serif,
+                    fontWeight: '700',
+                    fontSize: 14,
+                    color: tokens.color.onBrand,
+                  }}
+                >
+                  {c.className.trim().charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <Text
+                style={{
+                  fontFamily: font.serif,
+                  fontSize: 15,
+                  fontWeight: '700',
+                  color: tokens.color.ink,
+                  flex: 1,
+                }}
+              >
                 {`${c.className} · ${c.subjectName}`}
               </Text>
               <Pill tone={c.isClassTeacher ? 'indigo' : 'neutral'}>
                 {c.isClassTeacher ? 'Class teacher' : 'Subject teacher'}
               </Pill>
             </View>
-            <View style={{ flexDirection: 'row', gap: 14 }}>
-              <Text style={{ fontSize: 12, color: tokens.color.sub }}>
+            {/* Counts in mono — figures that must line up row to row. */}
+            <View style={{ flexDirection: 'row', gap: 14, marginLeft: 45 }}>
+              <Text style={{ fontFamily: font.mono, fontSize: 11, color: tokens.color.sub }}>
                 {`📌 ${c.noteCount} ${c.noteCount === 1 ? 'note' : 'notes'}`}
               </Text>
-              <Text style={{ fontSize: 12, color: tokens.color.sub }}>
+              <Text style={{ fontFamily: font.mono, fontSize: 11, color: tokens.color.sub }}>
                 {`✓ ${c.openTodoCount} open ${c.openTodoCount === 1 ? 'to-do' : 'to-dos'}`}
               </Text>
             </View>

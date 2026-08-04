@@ -4,7 +4,6 @@ import { GraduationCap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { PublishedResult } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,11 +105,9 @@ export default function PortalResultsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Results</h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--sk-ink-3)' }}>
-          Your published test results, with how the class did overall.
-        </p>
+      <header className="sk-pagehead">
+        <h1>Results</h1>
+        <p>Your published test results, with how the class did overall.</p>
       </header>
 
       {isLoading && <p className="sk-state">Loading results…</p>}
@@ -129,76 +126,107 @@ export default function PortalResultsPage() {
       {results.length > 0 && (
         <>
           {trendPoints.length >= 2 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Your trend</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <div className="sk-card">
+              <div className="sk-card-h">
+                <h3>Your trend</h3>
+              </div>
+              <div className="sk-card-b">
                 <MarksTrend points={trendPoints} />
-                <p className="mt-1 text-xs" style={{ color: 'var(--sk-ink-3)' }}>
+                <p className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>
                   Marks percentage across your last {trendPoints.length} published tests, oldest
                   first.
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
-          <ul className="flex flex-col gap-3">
-            {results.map((r) => {
+          {/* ── The report sheet ───────────────────────────────────────────
+              One card, one row per published result, each row landing THE
+              STAMP: serif, drawn border, arriving oversized and settling a
+              couple of degrees off square, because a rubber stamp never lands
+              straight. A stamp is this product's word for "closed" — the
+              teacher decided this mark and it is not going to change, which is
+              precisely what a grade is and what a plain number fails to say.
+
+              The mark is real text inside the stamp, so it is read out and
+              copied normally; only the landing is animation, and reduced
+              motion collapses it to the settled state.
+
+              EVERY ROW IS OPEN. A design pass put the class comparison behind
+              a per-row accordion, one row at a time: the baseline page showed
+              the mark, the class average and the above/below reading on every
+              result at once, and hiding two of those three behind a tap is
+              the whole question this page is asked. The stamp stayed — it is
+              paint on a row that is otherwise the shipped one. */}
+          <div className="sk-card">
+            {results.map((r, i) => {
               const myPct = pct(r.marks, r.maxMarks);
+              const avgPct = pct(r.classAverage, r.maxMarks);
               const diff = Math.round((r.marks - r.classAverage) * 10) / 10;
               const above = diff > 0;
               const below = diff < 0;
               const Icon = above ? TrendingUp : below ? TrendingDown : Minus;
               return (
-                <li key={r.examId}>
-                  <Card>
-                    <CardContent className="pt-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold" style={{ color: 'var(--sk-ink)' }}>{r.subjectName}</p>
-                          <p className="text-sm" style={{ color: 'var(--sk-ink-2)' }}>{r.title}</p>
-                          <p className="mt-0.5 text-xs" style={{ color: 'var(--sk-ink-3)' }}>
-                            {formatDate(r.scheduledAt)}
-                          </p>
-                        </div>
+                <div className="sk-res" key={r.examId}>
+                  <div className="top">
+                    <span className="min-w-0 flex-1">
+                      <span className="sub block">{r.subjectName}</span>
+                      <span className="ttl block">
+                        {r.title} · {formatDate(r.scheduledAt)}
+                      </span>
+                    </span>
+                    {/* Stamps land one after another down the sheet, not all
+                        at once — staggered, and capped so a long term's worth
+                        of results never leaves the last one waiting. */}
+                    <span
+                      className="sk-stamp sk-stampin sk-in"
+                      style={{ animationDelay: `${0.12 + Math.min(i, 6) * 0.11}s` }}
+                    >
+                      {r.marks} / {r.maxMarks}
+                    </span>
+                  </div>
 
-                        <div className="shrink-0 text-right">
-                          <p className="text-xl font-bold" style={{ color: 'var(--sk-ink)' }}>
-                            {r.marks}
-                            <span className="text-sm font-normal" style={{ color: 'var(--sk-ink-3)' }}>
-                              /{r.maxMarks}
-                            </span>
-                          </p>
-                          <p className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>{myPct}%</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3 text-xs" style={{ borderColor: 'var(--sk-line)' }}>
-                        <span style={{ color: 'var(--sk-ink-3)' }}>
-                          Class average: <span className="font-medium" style={{ color: 'var(--sk-ink-2)' }}>
-                            {r.classAverage}
-                          </span>
-                          /{r.maxMarks}
-                        </span>
-                        <span
-                          className="sk-pill inline-flex items-center gap-1"
-                          data-tone={above ? 'good' : below ? 'warn' : 'neutral'}
-                        >
-                          <Icon className="h-3 w-3" aria-hidden="true" />
-                          {above
-                            ? `${diff} above average`
-                            : below
-                              ? `${Math.abs(diff)} below average`
-                              : 'Exactly average'}
+                  <div className="detin">
+                    {/* THE INK LINE, twice: your mark and the class average on
+                        the same scale. Two bars answer "how did I do" faster
+                        than two numbers can, because the comparison is the
+                        length rather than the arithmetic. */}
+                    <div className="sk-bar">
+                      <div className="lbl">
+                        <span>You</span>
+                        <span>
+                          {r.marks} · {myPct}%
                         </span>
                       </div>
-                    </CardContent>
-                  </Card>
-                </li>
+                      <div className="tr">
+                        <i style={{ width: `${myPct}%`, background: 'var(--sk-brand)' }} />
+                      </div>
+                      <div className="lbl">
+                        <span>Class average</span>
+                        <span>
+                          {r.classAverage} · {avgPct}%
+                        </span>
+                      </div>
+                      <div className="tr">
+                        <i style={{ width: `${avgPct}%`, background: 'var(--sk-line-2)' }} />
+                      </div>
+                    </div>
+                    <span
+                      className="sk-pill mt-3 inline-flex items-center gap-1"
+                      data-tone={above ? 'good' : below ? 'warn' : 'neutral'}
+                    >
+                      <Icon className="h-3 w-3" aria-hidden="true" />
+                      {above
+                        ? `${diff} above average`
+                        : below
+                          ? `${Math.abs(diff)} below average`
+                          : 'Exactly average'}
+                    </span>
+                  </div>
+                </div>
               );
             })}
-          </ul>
+          </div>
         </>
       )}
     </div>

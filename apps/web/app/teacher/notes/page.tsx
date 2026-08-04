@@ -126,7 +126,7 @@ export default function TeacherNotesPage(): React.JSX.Element {
                 <button
                   type="button"
                   key={`${c.classSectionId}:${c.subjectId}`}
-                  className="sk-row"
+                  className="sk-row sk-press"
                   style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}
                   onClick={() => setSelected(c)}
                 >
@@ -223,7 +223,7 @@ function ClassDetail({
   return (
     <>
       <div>
-        <button type="button" className="sk-btn" onClick={onBack}>
+        <button type="button" className="sk-btn sk-press" onClick={onBack}>
           ← All classes
         </button>
       </div>
@@ -291,7 +291,7 @@ function ClassDetail({
           <div>
             <button
               type="button"
-              className="sk-btn"
+              className="sk-btn sk-press"
               data-variant="primary"
               disabled={trimmed.length === 0 || add.isPending}
               onClick={() => add.mutate()}
@@ -314,6 +314,10 @@ function ClassDetail({
           {groups.map((g) => (
             <section key={g.date} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div className="sk-lab">{dayLabel(g.date)}</div>
+              {/* A note is a `.sk-row`: pin glyph, then the body. The diary's
+                  own `.sk-diary-item` sets its own padding, rule and text size,
+                  so mixing it in here put two different row rhythms — notes and
+                  to-dos — inside one dated group. */}
               {g.notes.map((n) => (
                 <div className="sk-row" key={n.id}>
                   <span aria-hidden="true">📌</span>
@@ -322,6 +326,11 @@ function ClassDetail({
                   </div>
                 </div>
               ))}
+              {/* The native checkbox, shown. `.sk-todo input[type="checkbox"]`
+                  already sizes it (16px, brand accent, flex:none); the drawn
+                  tick replaced that with an absolutely-positioned `opacity: 0`
+                  input inside a 15px box, which overrode the themed rule from
+                  the markup and made the real control invisible. */}
               {g.todos.map((t) => (
                 <label className={`sk-todo${t.done ? ' done' : ''}`} key={t.id}>
                   <input

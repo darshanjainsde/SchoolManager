@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight, CalendarCheck } from 'lucide-react';
 import type { AttendanceStatusValue, AttendanceSummary } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -13,10 +12,19 @@ import { cn } from '@/lib/cn';
 /** Monday-first, to match the timetable's day ordering. */
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+/**
+ * The tally boxes and the legend swatches. The calendar cells themselves are
+ * painted by `.sk-cell[data-att]` in sk-theme.css — the two must agree, which
+ * is why both sides read the same three semantic token pairs.
+ *
+ * LATE takes `--sk-amber-ink`, not `--sk-amber`: #f59e0b on its own #fde9c8
+ * tint is about 1.8:1 and unreadable. Amber is the fill; amber-ink is the
+ * writing that goes on it.
+ */
 const STATUS_STYLES: Record<AttendanceStatusValue, CSSProperties> = {
   PRESENT: { background: 'var(--sk-good-tint)', color: 'var(--sk-good)', borderColor: 'var(--sk-good)' },
   ABSENT: { background: 'var(--sk-bad-tint)', color: 'var(--sk-bad)', borderColor: 'var(--sk-bad)' },
-  LATE: { background: 'var(--sk-amber-tint)', color: 'var(--sk-amber)', borderColor: 'var(--sk-amber)' },
+  LATE: { background: 'var(--sk-amber-tint)', color: 'var(--sk-amber-ink)', borderColor: 'var(--sk-amber)' },
 };
 
 const STATUS_LABELS: Record<AttendanceStatusValue, string> = {
@@ -100,9 +108,9 @@ export default function PortalAttendancePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--sk-ink)' }}>Attendance</h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--sk-ink-3)' }}>Your day-by-day attendance record.</p>
+      <header className="sk-pagehead">
+        <h1>Attendance</h1>
+        <p>Your day-by-day attendance record.</p>
       </header>
 
       {/* Month picker */}
@@ -141,63 +149,75 @@ export default function PortalAttendancePage() {
           aria-busy={isPlaceholderData}
           className={cn('flex flex-col gap-6 transition-opacity', isPlaceholderData && 'opacity-50')}
         >
-          {/* Month summary */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">This month</CardTitle>
-            </CardHeader>
-            <CardContent>
+          {/* ── Month summary ──────────────────────────────────────────────
+              The pitch's `.attkpi`: one big monospace figure and a quiet
+              label. This page is asked exactly one question — "what is the
+              percentage" — so the answer is the largest thing on it, and it
+              is set in the register's face because it is a figure that moves
+              month to month, not a heading. */}
+          <div className="sk-card">
+            <div className="sk-card-h">
+              <h3>This month</h3>
+            </div>
+            <div className="sk-card-b">
               {marked === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
                   <CalendarCheck className="h-10 w-10" style={{ color: 'var(--sk-ink-3)' }} />
-                  <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>
-                    No attendance recorded yet for {monthLabel(month)}.
-                  </p>
+                  <p className="sk-state">No attendance recorded yet for {monthLabel(month)}.</p>
                 </div>
               ) : (
-                <div className="flex flex-wrap items-center gap-6">
-                  <div>
-                    <p className="text-3xl font-bold" style={{ color: 'var(--sk-ink)' }}>{data.percent}%</p>
-                    <p className="text-xs" style={{ color: 'var(--sk-ink-3)' }}>
+                <div>
+                  <div className="sk-attkpi">
+                    <span className="n">{data.percent}%</span>
+                    <span className="l">
                       present across {marked} recorded {marked === 1 ? 'day' : 'days'}
-                    </p>
+                    </span>
                   </div>
-                  <dl className="flex flex-wrap gap-3 text-sm">
-                    <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--sk-good-tint)' }}>
-                      <dt className="text-xs font-medium" style={{ color: 'var(--sk-good)' }}>Present</dt>
-                      <dd className="text-lg font-bold" style={{ color: 'var(--sk-good)' }}>{data.present}</dd>
-                    </div>
-                    <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--sk-bad-tint)' }}>
-                      <dt className="text-xs font-medium" style={{ color: 'var(--sk-bad)' }}>Absent</dt>
-                      <dd className="text-lg font-bold" style={{ color: 'var(--sk-bad)' }}>{data.absent}</dd>
-                    </div>
-                    <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--sk-amber-tint)' }}>
-                      <dt className="text-xs font-medium" style={{ color: 'var(--sk-amber)' }}>Late</dt>
-                      <dd className="text-lg font-bold" style={{ color: 'var(--sk-amber)' }}>{data.late}</dd>
-                    </div>
+                  {/* THE INK LINE — the month filling up like a pen stroke.
+                      The width is the real percentage, so the bar is correct
+                      whether or not the animation ever runs. */}
+                  <div className="sk-attink">
+                    <i className="sk-inkline" style={{ width: `${data.percent}%` }} />
+                  </div>
+                  <dl className="mt-4 flex flex-wrap gap-3 text-sm">
+                    {(
+                      [
+                        ['PRESENT', data.present],
+                        ['ABSENT', data.absent],
+                        ['LATE', data.late],
+                      ] as [AttendanceStatusValue, number][]
+                    ).map(([status, count]) => (
+                      <div
+                        key={status}
+                        className="rounded-lg px-3 py-2 text-center"
+                        style={{ background: STATUS_STYLES[status].background }}
+                      >
+                        <dt className="text-xs font-medium" style={{ color: STATUS_STYLES[status].color }}>
+                          {STATUS_LABELS[status]}
+                        </dt>
+                        <dd className="text-lg font-bold" style={{ color: STATUS_STYLES[status].color }}>
+                          {count}
+                        </dd>
+                      </div>
+                    ))}
                   </dl>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          {/* Month calendar */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">{monthLabel(month)}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div
-                className="grid grid-cols-7 gap-1.5"
-                aria-label={`Attendance calendar for ${monthLabel(month)}`}
-              >
+          {/* ── Month calendar ─────────────────────────────────────────────
+              Tinted cells rather than icons, so the shape of the month reads
+              as a pattern at a glance. A day with no record stays an outline:
+              "not marked" must never be mistakable for "present". */}
+          <div className="sk-card">
+            <div className="sk-card-h">
+              <h3>{monthLabel(month)}</h3>
+            </div>
+            <div className="sk-card-b">
+              <div className="sk-cal" aria-label={`Attendance calendar for ${monthLabel(month)}`}>
                 {WEEKDAY_LABELS.map((label) => (
-                  <div
-                    key={label}
-                    aria-hidden="true"
-                    className="pb-1 text-center text-xs font-medium"
-                    style={{ color: 'var(--sk-ink-3)' }}
-                  >
+                  <div key={label} aria-hidden="true" className="wd">
                     {label}
                   </div>
                 ))}
@@ -208,20 +228,13 @@ export default function PortalAttendancePage() {
                   }
                   const date = `${month}-${String(dayNum).padStart(2, '0')}`;
                   const status = statusByDate.get(date);
-                  const isToday = date === today;
                   return (
                     <div
                       key={date}
+                      className="sk-cell"
+                      data-att={status ?? 'none'}
+                      data-today={date === today}
                       aria-label={`${date}: ${status ? STATUS_LABELS[status] : 'no record'}`}
-                      className="flex aspect-square items-center justify-center rounded-md border text-xs font-medium"
-                      style={{
-                        ...(status
-                          ? STATUS_STYLES[status]
-                          : { background: 'var(--sk-paper)', color: 'var(--sk-ink-3)', borderColor: 'var(--sk-line)' }),
-                        ...(isToday
-                          ? { boxShadow: '0 0 0 1px var(--sk-card), 0 0 0 3px var(--sk-brand)' }
-                          : {}),
-                      }}
                     >
                       {dayNum}
                     </div>
@@ -229,21 +242,22 @@ export default function PortalAttendancePage() {
                 })}
               </div>
 
-              {/* Legend */}
-              <ul className="mt-4 flex flex-wrap gap-4 text-xs" style={{ color: 'var(--sk-ink-3)' }}>
+              {/* Legend — the swatches are the same token pairs the cells use,
+                  so what the key says is what the grid shows. */}
+              <ul className="sk-legend">
                 {(Object.keys(STATUS_LABELS) as AttendanceStatusValue[]).map((s) => (
-                  <li key={s} className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded border" style={STATUS_STYLES[s]} />
+                  <li key={s}>
+                    <b style={{ background: STATUS_STYLES[s].background }} />
                     {STATUS_LABELS[s]}
                   </li>
                 ))}
-                <li className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded border" style={{ background: 'var(--sk-paper)', borderColor: 'var(--sk-line)' }} />
+                <li>
+                  <b style={{ background: 'var(--sk-paper)', border: '1px solid var(--sk-line)' }} />
                   No record
                 </li>
               </ul>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       )}
     </div>

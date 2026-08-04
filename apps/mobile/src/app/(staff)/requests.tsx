@@ -12,7 +12,7 @@ import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
-import type { ColorPalette } from '@/theme/tokens';
+import { font, type ColorPalette } from '@/theme/tokens';
 
 const LEAVE_TYPE_LABEL: Record<LeaveTypeValue, string> = {
   SICK: 'Sick leave',
@@ -440,7 +440,15 @@ export default function Requests() {
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <View style={{ flex: 1, paddingRight: 8 }}>
                       <Pill tone="indigo">{item.kind === 'leave' ? 'Leave' : 'Register change'}</Pill>
-                      <Text style={{ fontWeight: '700', fontSize: 14, color: tokens.color.ink, marginTop: 6 }}>
+                      <Text
+                        style={{
+                          fontFamily: font.serif,
+                          fontWeight: '700',
+                          fontSize: 15,
+                          color: tokens.color.ink,
+                          marginTop: 6,
+                        }}
+                      >
                         {item.title}
                       </Text>
                       <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
@@ -454,6 +462,12 @@ export default function Requests() {
                       )}
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 8 }}>
+                      {/* A `Pill`, not a stamp. `stampStyle` RESTS at
+                          `rotate(-2deg)`, so every decision in this list sat
+                          permanently crooked inside a right-aligned column —
+                          the misalignment reads as a rendering fault, not as
+                          character, and it is the office's answer that has to
+                          be unambiguous here. */}
                       <Pill tone={pill.tone}>{pill.label}</Pill>
                       {item.kind === 'leave' && item.cancellable && (
                         <Pressable

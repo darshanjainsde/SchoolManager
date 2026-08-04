@@ -39,6 +39,19 @@ async function safeFetch(url: string, init: RequestInit): Promise<Response> {
   }
 }
 
+// Multipart sibling of rawFetch: same auth + tenant headers, but the body is
+// FormData and Content-Type is deliberately NOT set — fetch must generate the
+// multipart boundary itself, and a manual header would omit it (the server
+// would then see an unparseable body).
+async function rawUpload(path: string, s: Session | null, form: FormData) {
+  const headers: Record<string, string> = {};
+  if (s) {
+    headers['X-Skoolos-Host'] = s.schoolHost;
+    headers['Authorization'] = `Bearer ${s.accessToken}`;
+  }
+  return safeFetch(`${BASE}${path}`, { method: 'POST', headers, body: form });
+}
+
 async function rawFetch(path: string, s: Session | null, opts: Opts) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (s) {
@@ -100,6 +113,55 @@ export const api = {
       throw new ApiError(res.status, body.message ?? `Request failed (${res.status})`);
     }
     return res.json() as Promise<T>;
+  },
+
+  /**
+   * POSTs multipart FormData (file uploads — e.g. POST /me/photo). Mirrors
+   * request()'s 401-refresh-retry exactly; only the body encoding differs.
+   * api.request can't be reused because it JSON-encodes every body.
+   */
+  async upload<T>(path: string, form: FormData): Promise<T> {
+    let s = await session.get();
+    let res = await rawUpload(path, s, form);
+    if (res.status === 401 && s) {
+      const refreshed = await tryRefresh(s);
+      if (!refreshed) {
+        await session.clear();
+        throw new ApiError(401, 'Session expired — please log in again.');
+      }
+      s = refreshed;
+      res = await rawUpload(path, s, form);
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body.message ?? `Request failed (${res.status})`);
+    }
+    return res.json() as Promise<T>;
+  },
+
+  /**
+   * Starts a password reset from a STUDENT CODE alone (Phase 5·1's
+   * `POST /auth/reset-by-code`), for the family who has the code the school
+   * printed but not the email it was issued against.
+   *
+   * Takes `host` explicitly rather than going through `request()`: that helper
+   * only sends `X-Skoolos-Host` when there is a stored session, and this call
+   * happens before anyone is signed in. Mirrors `login()` for the same reason.
+   *
+   * `emailMasked` is null when the code resolves to no login/email on file —
+   * the caller shows "ask the school office" rather than a false success.
+   */
+  async resetByCode(host: string, code: string): Promise<{ ok: true; emailMasked: string | null }> {
+    const res = await safeFetch(`${BASE}/auth/reset-by-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Skoolos-Host': host },
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body.message ?? 'Could not start a reset for that code.');
+    }
+    return res.json() as Promise<{ ok: true; emailMasked: string | null }>;
   },
 
   async login(host: string, identifier: string, password: string): Promise<Session> {

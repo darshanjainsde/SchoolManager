@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { Animated, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   MESSAGE_BODY_MAX,
@@ -9,6 +9,8 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { Card } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
+import { DUR, useGesture } from '@/theme/motion';
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', {
@@ -17,6 +19,32 @@ function formatWhen(iso: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+/**
+ * The pitch's `.bub`/`bubin` — a message fades in and RISES a few pixels into
+ * place. Deliberately NOT one of the six paper gestures: a chat bubble is the
+ * one surface in this app that is not paper, and dropping it from above with
+ * THE PIN (or thumping it down with THE STAMP) would say "a note was filed"
+ * when what happened is "someone spoke". It rises because a reply comes up
+ * out of the composer, which is where the teacher's attention already is.
+ * Fires once per message, on the render it first appears in, so the history
+ * does not re-animate every time the thread refetches.
+ */
+function Bubble({ index, mine, children }: { index: number; mine: boolean; children: ReactNode }) {
+  const arrive = useGesture(true, DUR.screen, { delay: Math.min(index, 8) * 35 });
+  return (
+    <Animated.View
+      style={{
+        alignSelf: mine ? 'flex-end' : 'flex-start',
+        maxWidth: '86%',
+        opacity: arrive,
+        transform: [{ translateY: arrive.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
 }
 
 /**
@@ -29,11 +57,11 @@ function formatWhen(iso: string): string {
 export default function StaffThread() {
   const tokens = useTokens();
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
+  // `.composer input` — bare inside the pill, since the pill itself is the
+  // field; a box drawn inside a box reads as two controls.
   const inputStyle = {
-    borderWidth: 1,
-    borderColor: tokens.color.line,
-    borderRadius: 11,
-    padding: 11,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
     fontSize: 13.5,
     color: tokens.color.ink,
     flex: 1,
@@ -97,7 +125,7 @@ export default function StaffThread() {
       >
         {detail && (
           <Card>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: tokens.color.ink }}>
+            <Text style={{ fontFamily: font.serif, fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>
               {detail.thread.studentName}
             </Text>
             <Text style={{ fontSize: 12, color: tokens.color.indigo, marginTop: 2 }}>
@@ -124,19 +152,22 @@ export default function StaffThread() {
           </Card>
         )}
 
-        {detail?.messages.map((m: MessageRow) => {
+        {detail?.messages.map((m: MessageRow, i: number) => {
           const mine = m.senderRole === 'TEACHER';
           return (
+            <Bubble key={m.id} index={i} mine={mine}>
+            {/* `.bub` — the tail corner is squared off on the side the message
+                came from, which is what makes a column of bubbles readable as
+                a conversation rather than a stack of cards. */}
             <View
-              key={m.id}
               testID={`message-${m.id}`}
               style={{
-                alignSelf: mine ? 'flex-end' : 'flex-start',
-                maxWidth: '86%',
                 backgroundColor: mine ? tokens.color.indigo : tokens.color.surface,
                 borderColor: tokens.color.line,
                 borderWidth: mine ? 0 : 1,
-                borderRadius: 14,
+                borderRadius: 13,
+                borderBottomRightRadius: mine ? 5 : 13,
+                borderBottomLeftRadius: mine ? 13 : 5,
                 padding: 11,
               }}
             >
@@ -157,46 +188,57 @@ export default function StaffThread() {
                 {formatWhen(m.createdAt)}
               </Text>
             </View>
+            </Bubble>
           );
         })}
       </ScrollView>
 
+      {/* `.composer` — one pill floating over the page, not a docked toolbar:
+          replying is a small act, and the control should look like one. */}
       {detail && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'flex-end',
-            gap: 8,
-            padding: 12,
-            borderTopWidth: 1,
-            borderTopColor: tokens.color.line,
-            backgroundColor: tokens.color.surface,
-          }}
-        >
-          <TextInput
-            testID="reply-body"
-            value={body}
-            onChangeText={setBody}
-            placeholder="Write a reply…"
-            placeholderTextColor={tokens.color.sub}
-            multiline
-            maxLength={MESSAGE_BODY_MAX}
-            style={[inputStyle, { maxHeight: 110 }]}
-          />
-          <Pressable
-            testID="reply-send"
-            onPress={() => void send()}
-            disabled={!canSend}
+        <View style={{ padding: 12 }}>
+          <View
             style={{
-              backgroundColor: tokens.color.indigo,
-              borderRadius: 12,
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              opacity: canSend ? 1 : 0.6,
+              flexDirection: 'row',
+              alignItems: 'flex-end',
+              gap: 7,
+              paddingLeft: 3,
+              paddingRight: 4,
+              paddingVertical: 4,
+              borderWidth: 1,
+              borderColor: tokens.color.line,
+              borderRadius: 999,
+              backgroundColor: tokens.color.surface,
             }}
           >
-            <Text style={{ color: tokens.color.onBrand, fontWeight: '700' }}>{sending ? '…' : 'Send'}</Text>
-          </Pressable>
+            <TextInput
+              testID="reply-body"
+              value={body}
+              onChangeText={setBody}
+              placeholder="Write a reply…"
+              placeholderTextColor={tokens.color.placeholder}
+              multiline
+              maxLength={MESSAGE_BODY_MAX}
+              style={[inputStyle, { maxHeight: 110 }]}
+            />
+            <Pressable
+              testID="reply-send"
+              onPress={() => void send()}
+              disabled={!canSend}
+              style={{
+                backgroundColor: tokens.color.indigo,
+                borderRadius: 999,
+                minWidth: 34,
+                height: 34,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 12,
+                opacity: canSend ? 1 : 0.6,
+              }}
+            >
+              <Text style={{ color: tokens.color.onBrand, fontWeight: '700' }}>{sending ? '…' : 'Send'}</Text>
+            </Pressable>
+          </View>
         </View>
       )}
       {sendError && (

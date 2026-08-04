@@ -176,6 +176,11 @@ export default function TeacherAssignmentsPage() {
 
   const upcoming = assignmentsQuery.data?.upcoming ?? [];
   const past = assignmentsQuery.data?.past ?? [];
+  // The roster the "seen" count is a fraction OF. It already arrives with the
+  // class picker's own query, so the seen bar costs no extra round trip — and
+  // when it is missing (0, or a class not in the picker) the bar is simply not
+  // drawn rather than being drawn against a guessed denominator.
+  const rosterSize = ownedClasses.find((c) => c.classSectionId === classSectionId)?.studentCount ?? 0;
   const deletingId = deleteMutation.isPending ? (deleteMutation.variables ?? null) : null;
   const deletingTarget = [...upcoming, ...past].find((a) => a.id === confirmDeleteId) ?? null;
 
@@ -291,7 +296,7 @@ export default function TeacherAssignmentsPage() {
                 />
                 <button
                   type="button"
-                  className="sk-btn"
+                  className="sk-btn sk-press"
                   disabled={uploading || attachments.length >= MAX_ATTACHMENTS}
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -332,7 +337,7 @@ export default function TeacherAssignmentsPage() {
             <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 data-variant="primary"
                 disabled={!canCreate || create.isPending}
                 onClick={() => create.mutate()}
@@ -377,12 +382,21 @@ export default function TeacherAssignmentsPage() {
               <div key={group.label} style={{ marginBottom: 16 }}>
                 <span className="sk-lab">{group.label}</span>
                 <div style={{ marginTop: 8 }}>
+                  {/* One `.sk-row` per assignment: title over the
+                      subject/due/seen line, `.sp`, then the group pill and
+                      Delete flush right. `.sk-postit` is a block — it dropped
+                      the spacer, stacked the actions under the text and added a
+                      restated "seen" bar, which turned a scannable list into a
+                      column of tall cards. The one thing worth keeping from
+                      that pass is the denominator: "12 seen of 30" is a fact
+                      the row was missing, and it is text, not geometry. */}
                   {group.rows.map((a) => (
                     <div className="sk-row" key={a.id} data-testid={`assignment-${a.id}`}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="nm">{a.title}</div>
                         <div className="meta">
                           {subjectLabel(a.subjectId)} · Due {formatDueDate(a.dueDate)} · {a.seenCount} seen
+                          {rosterSize > 0 ? ` of ${rosterSize}` : ''}
                         </div>
                         {a.attachments.length > 0 && (
                           <div className="meta" style={{ marginTop: 2 }}>
@@ -406,7 +420,7 @@ export default function TeacherAssignmentsPage() {
                       </span>
                       <button
                         type="button"
-                        className="sk-btn"
+                        className="sk-btn sk-press"
                         style={{ marginLeft: 8 }}
                         onClick={() => setConfirmDeleteId(a.id)}
                         disabled={deletingId === a.id}

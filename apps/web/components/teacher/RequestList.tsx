@@ -97,6 +97,10 @@ export function RequestList({ items, onCancelLeave, cancellingId }: RequestListP
         const cancelling = item.kind === 'leave' && cancellingId === item.id;
 
         return (
+          // A plain `.sk-row`: kind pill, title over detail, spacer, then the
+          // status flush right. `.sk-reqcard` boxed each row and re-set `.nm`'s
+          // face and size on top of `.sk-row`'s own — two rules for one
+          // element, and a list that no longer scanned down a single left edge.
           <div className="sk-row" key={`${item.kind}-${item.id}`}>
             <span className="sk-pill" data-tone="info">
               {item.kind === 'leave' ? 'Leave' : 'Register change'}
@@ -115,7 +119,7 @@ export function RequestList({ items, onCancelLeave, cancellingId }: RequestListP
             {item.kind === 'leave' && item.cancellable && (
               <button
                 type="button"
-                className="sk-btn"
+                className="sk-btn sk-press"
                 disabled={cancelling}
                 onClick={() => onCancelLeave(item.id)}
                 style={{ marginRight: 8 }}

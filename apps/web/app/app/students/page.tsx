@@ -24,8 +24,14 @@ interface Student {
   rollNo: string | null;
   guardianName: string | null;
   guardianPhone: string | null;
+  photoAssetId: string | null;
   classSection: { name: string; grade: { name: string } } | null;
   userId: string | null;
+}
+
+interface MediaAsset {
+  id: string;
+  url: string;
 }
 
 /** Shape returned by both `.../login` and `.../invite/resend`. */
@@ -173,7 +179,7 @@ function InviteSentModal({
     <DialogShell onClose={onClose} labelledBy="invite-sent-h">
       <div className="sk-card-h" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <h3 id="invite-sent-h">Invite sent</h3>
-        <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
+        <button onClick={onClose} className="sk-btn sk-press" aria-label="Close" style={{ padding: 7 }}>
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -206,12 +212,12 @@ function InviteSentModal({
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           {!result.emailSent && (
-            <button className="sk-btn" data-variant="primary" disabled={resending} onClick={onResend}>
+            <button className="sk-btn sk-press" data-variant="primary" disabled={resending} onClick={onResend}>
               <Send className="h-3.5 w-3.5" />
               {resending ? 'Resending…' : 'Resend invite'}
             </button>
           )}
-          <button className="sk-btn" onClick={onClose}>
+          <button className="sk-btn sk-press" onClick={onClose}>
             Close
           </button>
         </div>
@@ -238,7 +244,7 @@ function EmailPromptModal({
     <DialogShell onClose={onClose} labelledBy="email-prompt-h">
       <div className="sk-card-h" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <h3 id="email-prompt-h">Send login invite</h3>
-        <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
+        <button onClick={onClose} className="sk-btn sk-press" aria-label="Close" style={{ padding: 7 }}>
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -260,14 +266,14 @@ function EmailPromptModal({
         </Field>
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
-            className="sk-btn"
+            className="sk-btn sk-press"
             data-variant="primary"
             disabled={isSaving || !email.trim()}
             onClick={() => onSubmit(email.trim())}
           >
             {isSaving ? 'Sending…' : 'Send invite'}
           </button>
-          <button className="sk-btn" onClick={onClose}>
+          <button className="sk-btn sk-press" onClick={onClose}>
             Cancel
           </button>
         </div>
@@ -424,7 +430,7 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
 
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
-            className="sk-btn"
+            className="sk-btn sk-press"
             data-variant="primary"
             onClick={() =>
               onSave({
@@ -442,7 +448,7 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
           >
             {isSaving ? 'Saving…' : 'Save'}
           </button>
-          <button className="sk-btn" onClick={onCancel}>
+          <button className="sk-btn sk-press" onClick={onCancel}>
             Cancel
           </button>
         </div>
@@ -456,6 +462,52 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
 function classBadgeLabel(student: Student): string | null {
   if (!student.classSection) return null;
   return `${student.classSection.grade.name} — ${student.classSection.name}`;
+}
+
+function studentInitials(student: Student): string {
+  return `${student.firstName.charAt(0)}${student.lastName.charAt(0)}`.toUpperCase();
+}
+
+/** Small photo-or-initials avatar for the roster rows — mirrors the Teachers
+ *  tab's photoUrlMap rendering (photoAssetId resolved via /site/media). */
+function StudentAvatar({ student, photoUrl }: { student: Student; photoUrl: string | null }) {
+  if (photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photoUrl}
+        alt={`${student.firstName} ${student.lastName}`}
+        style={{
+          height: 28,
+          width: 28,
+          borderRadius: '50%',
+          objectFit: 'cover',
+          border: '1px solid var(--sk-line)',
+          flex: 'none',
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        height: 28,
+        width: 28,
+        borderRadius: '50%',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 10.5,
+        fontWeight: 700,
+        background: 'var(--sk-brand-tint)',
+        color: 'var(--sk-brand-2)',
+        flex: 'none',
+      }}
+    >
+      {studentInitials(student)}
+    </span>
+  );
 }
 
 function apiErrorMessage(err: Error): string {
@@ -490,6 +542,9 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState('');
+  // Id of the student added in this session, so their row can be seen landing
+  // in the register rather than just being there on the next render.
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
   const [inviteResult, setInviteResult] = useState<(LoginInviteResult & { studentId: string }) | null>(
     null,
   );
@@ -515,6 +570,21 @@ export default function StudentsPage() {
     enabled: !!host,
   });
 
+  // Self-uploaded avatars (POST /me/photo) land as kind=AVATAR MediaAssets —
+  // resolve photoAssetId → url exactly like the Teachers tab's photoUrlMap.
+  const avatarMediaQuery = useQuery({
+    queryKey: ['site-media-avatar'],
+    queryFn: () => api.get<MediaAsset[]>('/site/media?kind=AVATAR'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
+  });
+
+  const photoUrlMap: Record<string, string> = {};
+  for (const asset of avatarMediaQuery.data ?? []) {
+    photoUrlMap[asset.id] = asset.url;
+  }
+
   // ── Mutations ─────────────────────────────────────────────────────────────
   const addMutation = useMutation({
     mutationFn: (data: StudentFormData) => {
@@ -530,7 +600,12 @@ export default function StudentsPage() {
       };
       return api.post<Student>('/manage/students', body);
     },
-    onSuccess: () => {
+    onSuccess: (created) => {
+      // Remember which row is the new one so it can drop into the register
+      // (see `sk-pinin` on the <tr> below). Presentational only — the roll is
+      // sorted by the server, so a student added mid-list would otherwise
+      // appear silently somewhere the admin is not looking.
+      setJustAddedId(created?.id ?? null);
       void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
       setShowAdd(false);
       toast.success('Student added');
@@ -662,7 +737,7 @@ export default function StudentsPage() {
           <p>Manage enrolled students.</p>
         </div>
         <button
-          className="sk-btn"
+          className="sk-btn sk-press"
           data-variant="primary"
           onClick={() => {
             setShowAdd((v) => !v);
@@ -683,18 +758,20 @@ export default function StudentsPage() {
 
       {students.length > 0 && (
         <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
+          {/* Counts read against each other — monospace, tabular, so the
+              digits share a grid and stop shifting as the query settles. */}
           <div className="sk-kpi">
             <span className="lab">Students shown</span>
-            <span className="n">{students.length}</span>
+            <span className="n sk-num">{students.length}</span>
             {classFilter && <span className="hint">Filtered by class</span>}
           </div>
           <div className="sk-kpi" data-tone={unassignedCount > 0 ? 'warn' : undefined}>
             <span className="lab">Without a class</span>
-            <span className="n">{unassignedCount}</span>
+            <span className="n sk-num">{unassignedCount}</span>
           </div>
           <div className="sk-kpi" data-tone="good">
             <span className="lab">Portal logins</span>
-            <span className="n">{loginCount}</span>
+            <span className="n sk-num">{loginCount}</span>
           </div>
         </div>
       )}
@@ -785,12 +862,35 @@ export default function StudentsPage() {
               </thead>
               <tbody>
                 {students.map((student) => (
-                  <tr key={student.id}>
-                    <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }}>{student.rollNo ?? '—'}</td>
-                    <td style={{ ...tdStyle, fontWeight: 650 }}>
-                      {student.firstName} {student.lastName}
+                  // `sk-pinin` on the one row just created: it drops in
+                  // slightly rotated and settles square, the way a new slip is
+                  // pinned to a register. The point is locating it — the list
+                  // is server-sorted, so a new student can land anywhere in a
+                  // long table, and the toast alone does not say WHERE.
+                  // Reduced motion collapses this to the settled row, which is
+                  // the same information minus the pointer.
+                  <tr key={student.id} className={student.id === justAddedId ? 'sk-pinin sk-in' : undefined}>
+                    {/* Roll and admission numbers are read down the column, so
+                        they take the register's monospace face. */}
+                    <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }} className="sk-num">
+                      {student.rollNo ?? '—'}
                     </td>
-                    <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }}>{student.admissionNo}</td>
+                    <td style={{ ...tdStyle, fontWeight: 650 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <StudentAvatar
+                          student={student}
+                          photoUrl={
+                            student.photoAssetId ? (photoUrlMap[student.photoAssetId] ?? null) : null
+                          }
+                        />
+                        <span>
+                          {student.firstName} {student.lastName}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }} className="sk-num">
+                      {student.admissionNo}
+                    </td>
                     <td style={tdStyle}>
                       {classBadgeLabel(student) ? (
                         <span className="sk-pill" data-tone="info">
@@ -810,7 +910,7 @@ export default function StudentsPage() {
                             Has login
                           </span>
                           <button
-                            className="sk-btn"
+                            className="sk-btn sk-press"
                             disabled={resendInviteMutation.isPending}
                             onClick={() => resendInviteMutation.mutate(student.id)}
                           >
@@ -820,7 +920,7 @@ export default function StudentsPage() {
                         </div>
                       ) : (
                         <button
-                          className="sk-btn"
+                          className="sk-btn sk-press"
                           disabled={createLoginMutation.isPending}
                           onClick={() => handleCreateLogin(student)}
                         >
@@ -832,7 +932,7 @@ export default function StudentsPage() {
                     <td style={tdStyle}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <button
-                          className="sk-btn"
+                          className="sk-btn sk-press"
                           onClick={() => {
                             setShowAdd(false);
                             setEditId(student.id);
@@ -842,7 +942,7 @@ export default function StudentsPage() {
                           Edit
                         </button>
                         <button
-                          className="sk-btn"
+                          className="sk-btn sk-press"
                           disabled={deleteMutation.isPending}
                           onClick={() => confirmDeleteStudent(student)}
                           style={{ color: 'var(--sk-bad)' }}

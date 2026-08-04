@@ -189,20 +189,42 @@ describe('ClassNotesService', () => {
 
   // ── Notes tab: noteClasses ───────────────────────────────────────────────
   describe('noteClasses', () => {
-    function slot(sectionId: string, sectionName: string, subjectId: string, subjectName: string, classTeacherId: string | null) {
+    /**
+     * `sectionName` is the section ALONE ("B"), with the grade passed
+     * separately — which is how the rows actually come back from Prisma.
+     *
+     * This fixture used to pass a pre-composed "7-B" as the section name, and
+     * that is precisely what hid the bug it was meant to cover: the service
+     * returned the bare section name, the fixture had already glued the grade
+     * on, and the assertion passed while a real teacher saw three rows all
+     * labelled "A · Art & Craft".
+     */
+    function slot(
+      sectionId: string,
+      gradeName: string,
+      sectionName: string,
+      subjectId: string,
+      subjectName: string,
+      classTeacherId: string | null,
+      gradeOrder = 0,
+    ) {
       return {
         classSectionId: sectionId,
         subjectId,
-        classSection: { name: sectionName, classTeacherId },
+        classSection: {
+          name: sectionName,
+          classTeacherId,
+          grade: { name: gradeName, order: gradeOrder },
+        },
         subject: { name: subjectName },
       };
     }
 
     it('returns the distinct (section, subject) pairs the teacher teaches, deduped, with the class-teacher flag', async () => {
       txMock.timetableSlot.findMany.mockResolvedValue([
-        slot(SECTION, '8-C', MATHS, 'Mathematics', TID), // class teacher of 8-C
-        slot(SECTION, '8-C', MATHS, 'Mathematics', TID), // duplicate slot → one entry
-        slot('sec-7b', '7-B', MATHS, 'Mathematics', 'other-teacher'), // subject teacher only
+        slot(SECTION, '8', 'C', MATHS, 'Mathematics', TID, 8), // class teacher of 8-C
+        slot(SECTION, '8', 'C', MATHS, 'Mathematics', TID, 8), // duplicate slot → one entry
+        slot('sec-7b', '7', 'B', MATHS, 'Mathematics', 'other-teacher', 7), // subject teacher only
       ]);
 
       const out = await svc.noteClasses(SCHOOL, USER);
@@ -212,8 +234,27 @@ describe('ClassNotesService', () => {
       expect(out.find((c) => c.className === '8-C')).toMatchObject({ isClassTeacher: true });
     });
 
+    it('distinguishes same-named sections across grades — the "A · Art & Craft" bug', async () => {
+      // A school with one section per grade has a "Nursery-A", an "LKG-A" and a
+      // "UKG-A". Labelled by section alone they are three identical rows, and a
+      // teacher cannot tell which is which — which is exactly what a real
+      // teacher hit on the Raffles data.
+      txMock.timetableSlot.findMany.mockResolvedValue([
+        slot('sec-ukg', 'UKG', 'A', 'sub-art', 'Art & Craft', null, 3),
+        slot('sec-nur', 'Nursery', 'A', 'sub-art', 'Art & Craft', null, 1),
+        slot('sec-lkg', 'LKG', 'A', 'sub-art', 'Art & Craft', null, 2),
+      ]);
+
+      const out = await svc.noteClasses(SCHOOL, USER);
+
+      expect(out.map((c) => c.className)).toEqual(['Nursery-A', 'LKG-A', 'UKG-A']);
+      // ...and in the school's own order, not alphabetically — "Class 10"
+      // sorts before "Class 2" on a naive string compare.
+      expect(new Set(out.map((c) => c.className)).size).toBe(3);
+    });
+
     it('maps note and open-todo counts from groupBy onto the right class', async () => {
-      txMock.timetableSlot.findMany.mockResolvedValue([slot(SECTION, '8-C', MATHS, 'Mathematics', TID)]);
+      txMock.timetableSlot.findMany.mockResolvedValue([slot(SECTION, '8', 'C', MATHS, 'Mathematics', TID, 8)]);
       txMock.classNote.groupBy.mockResolvedValue([{ classSectionId: SECTION, subjectId: MATHS, _count: { _all: 4 } }]);
       txMock.classTodo.groupBy.mockResolvedValue([{ classSectionId: SECTION, subjectId: MATHS, _count: { _all: 1 } }]);
 

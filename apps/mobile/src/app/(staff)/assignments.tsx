@@ -1,12 +1,46 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Pressable, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { Assignment, AssignmentList, MyClassSection, Subject } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
-import type { ColorPalette } from '@/theme/tokens';
+import { font, type ColorPalette } from '@/theme/tokens';
+import { DUR, inkWidth, useGesture } from '@/theme/motion';
+
+/**
+ * THE INK LINE (`.seenbar`) — how far a posted assignment has actually
+ * reached. It fills once, on the render the row first appears in, because the
+ * number it draws is a fact fetched from the server, not something happening
+ * live; re-running it on every refetch would imply students had just opened
+ * it. Drawn ONLY when the class roster size is known — a bar with a guessed
+ * denominator is a picture of nothing.
+ */
+function SeenBar({ seen, of }: { seen: number; of: number }) {
+  const tokens = useTokens();
+  const percent = of > 0 ? Math.min(100, Math.round((seen / of) * 100)) : 0;
+  const fill = useGesture(true, DUR.ink, { native: false });
+  return (
+    <View style={{ marginTop: 6, gap: 3 }}>
+      <View
+        style={{ height: 5, borderRadius: 999, backgroundColor: tokens.color.line, overflow: 'hidden' }}
+      >
+        <Animated.View
+          style={{
+            height: '100%',
+            borderRadius: 999,
+            backgroundColor: tokens.color.green,
+            width: inkWidth(fill, percent),
+          }}
+        />
+      </View>
+      <Text style={{ fontFamily: font.mono, fontSize: 10, color: tokens.color.sub }}>
+        {`opened by ${seen} of ${of}`}
+      </Text>
+    </View>
+  );
+}
 
 function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
   return {
@@ -194,6 +228,11 @@ export default function Assignments() {
     ]);
   }
 
+  // The roster size of the class currently on screen — the only honest
+  // denominator for the seen bar below. `undefined` until the class list has
+  // loaded, in which case no bar is drawn at all.
+  const rosterSize = ownedClasses.find((c) => c.classSectionId === classSectionId)?.studentCount;
+
   const renderRow = (a: Assignment) => (
     <View
       key={a.id}
@@ -202,7 +241,9 @@ export default function Assignments() {
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <View style={{ flex: 1, paddingRight: 8 }}>
-          <Text style={{ fontWeight: '600', fontSize: 13, color: tokens.color.ink }}>{a.title}</Text>
+          <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>
+            {a.title}
+          </Text>
           <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
             {subjectLabel(a.subjectId)} · Due {formatDueDate(a.dueDate)} · {a.seenCount} seen
           </Text>
@@ -213,6 +254,7 @@ export default function Assignments() {
           </Text>
         </Pressable>
       </View>
+      {rosterSize !== undefined && rosterSize > 0 && <SeenBar seen={a.seenCount} of={rosterSize} />}
     </View>
   );
 
@@ -265,7 +307,7 @@ export default function Assignments() {
       {classSectionId && (
         <Card style={{ gap: 10 }}>
           <View>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>Post an assignment</Text>
+            <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Post an assignment</Text>
             <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 2 }}>
               Attach files from the web portal — this app can only post plain-text assignments for now.
             </Text>
@@ -358,7 +400,7 @@ export default function Assignments() {
 
       {classSectionId && (
         <Card>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>Posted assignments</Text>
+          <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Posted assignments</Text>
           {listLoading && <Text style={{ color: tokens.color.sub, marginTop: 6 }}>Loading assignments…</Text>}
           {listError && (
             <Text testID="list-error" style={{ color: tokens.color.red, marginTop: 6 }}>

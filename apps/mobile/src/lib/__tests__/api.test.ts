@@ -95,6 +95,55 @@ it('single-flights concurrent refreshes on 401 instead of double-refreshing', as
   expect((await session.get())?.accessToken).toBe('at2');
 });
 
+// api.upload() is the multipart sibling of api.request(): same auth + tenant
+// headers and 401-refresh-retry, but the FormData body must pass through
+// untouched and Content-Type must NOT be set manually — fetch generates the
+// multipart boundary itself, and a hand-set header would omit it.
+describe('api.upload()', () => {
+  it('POSTs the FormData as-is with tenant host + bearer token and NO manual Content-Type', async () => {
+    await seed();
+    mockFetch.mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ assetId: 'asset-1', photoUrl: 'https://cdn.example.com/a.jpg' }),
+    });
+
+    const form = new FormData();
+    const out = await api.upload<{ assetId: string; photoUrl: string }>('/me/photo', form);
+
+    expect(out.photoUrl).toBe('https://cdn.example.com/a.jpg');
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toContain('/me/photo');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(form);
+    expect(init.headers['X-Skoolos-Host']).toBe('raffles.sckools.com');
+    expect(init.headers['Authorization']).toBe('Bearer at1');
+    expect(init.headers['Content-Type']).toBeUndefined();
+  });
+
+  it('refreshes once on 401 then retries with the new token', async () => {
+    await seed();
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ accessToken: 'at2', refreshToken: 'rt2', expiresIn: 900 }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ assetId: 'asset-1', photoUrl: 'u' }) });
+
+    const out = await api.upload<{ assetId: string }>('/me/photo', new FormData());
+
+    expect(out.assetId).toBe('asset-1');
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    const [, retryInit] = mockFetch.mock.calls[2];
+    expect(retryInit.headers['Authorization']).toBe('Bearer at2');
+  });
+
+  it('surfaces the server error message as ApiError', async () => {
+    await seed();
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 413, json: async () => ({ message: 'Keep photos under 2MB' }),
+    });
+    await expect(api.upload('/me/photo', new FormData())).rejects.toThrow('Keep photos under 2MB');
+  });
+});
+
 // The real POST /auth/login response is `{ accessToken, refreshToken, expiresIn }`
 // with no embedded user object (see apps/api/src/modules/auth/internal/auth.service.ts
 // `IssuedTokens` and auth.controller.ts `login`/`refresh`). Role is only available via

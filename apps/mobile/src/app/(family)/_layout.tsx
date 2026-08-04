@@ -1,38 +1,42 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useTokens } from '@/theme/theme-context';
 import { registerForPush } from '@/lib/push';
-
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-const icon =
-  (name: IoniconName) =>
-  ({ color, size }: { color: string; size: number }) =>
-    <Ionicons name={name} size={size} color={color} />;
+import { FamilyTabBar, type FamilyTabBarProps } from '@/components/FamilyTabBar';
+import { FamilyToolsDrawer } from '@/components/FamilyToolsDrawer';
+import { VISIBLE_TABS, HIDDEN_ROUTES } from '@/lib/family-nav';
 
 export default function FamilyTabs() {
-  const tokens = useTokens();
+  const [toolsOpen, setToolsOpen] = useState(false);
   useEffect(() => { void registerForPush(); }, []);
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: tokens.color.indigo,
-        tabBarInactiveTintColor: tokens.color.sub,
-      }}
-    >
-      <Tabs.Screen name="home" options={{ title: 'Home', tabBarIcon: icon('home-outline') }} />
-      <Tabs.Screen name="attendance" options={{ title: 'Attendance', tabBarIcon: icon('checkbox-outline') }} />
-      <Tabs.Screen name="notices" options={{ title: 'Notices', tabBarIcon: icon('notifications-outline') }} />
-      <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: icon('ellipsis-horizontal') }} />
-      <Tabs.Screen name="holidays" options={{ href: null }} />
-      <Tabs.Screen name="profile" options={{ href: null }} />
-      <Tabs.Screen name="timetable" options={{ href: null }} />
-      <Tabs.Screen name="results" options={{ href: null }} />
-      <Tabs.Screen name="assignments" options={{ href: null }} />
-      <Tabs.Screen name="messages" options={{ href: null }} />
-      <Tabs.Screen name="messages/[threadId]" options={{ href: null }} />
-      <Tabs.Screen name="notifications" options={{ href: null }} />
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{ headerShown: false }}
+        tabBar={(props) => (
+          <FamilyTabBar
+            state={props.state}
+            // react-navigation types `emit`'s `canPreventDefault` as the
+            // literal `true`; our narrowed local nav type accepts `boolean`.
+            // Runtime shape is identical — cast bridges the variance only.
+            navigation={props.navigation as unknown as FamilyTabBarProps['navigation']}
+            insets={props.insets}
+            toolsOpen={toolsOpen}
+            onToolsPress={() => setToolsOpen((o) => !o)}
+          />
+        )}
+      >
+        {VISIBLE_TABS.map(({ name, title }) => (
+          <Tabs.Screen key={name} name={name} options={{ title }} />
+        ))}
+        {HIDDEN_ROUTES.map((name) => (
+          <Tabs.Screen key={name} name={name} options={{ href: null }} />
+        ))}
+      </Tabs>
+
+      {/* Overlay above the tab bar; renders nothing while closed. */}
+      <FamilyToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} />
+    </View>
   );
 }

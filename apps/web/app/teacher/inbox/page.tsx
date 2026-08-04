@@ -119,11 +119,16 @@ export default function TeacherInboxPage() {
             )}
             {!threadsQuery.isLoading &&
               !threadsQuery.error &&
+              // A `.sk-row` button: name over subject-and-preview, `.sp`, then
+              // the time and the unread count flush right. The avatar column
+              // `.sk-mrow` put in front of the name bought nothing here (a
+              // thread already says whose it is, in the line beside it) and
+              // cost the row its spacer, so the timestamps stopped lining up.
               threads.map((t) => (
                 <button
                   key={t.id}
                   type="button"
-                  className="sk-row"
+                  className="sk-row sk-press"
                   style={{ width: '100%', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', borderTop: '1px solid var(--sk-line)' }}
                   onClick={() => setSelectedId(t.id)}
                 >
@@ -165,19 +170,25 @@ export default function TeacherInboxPage() {
             {detailQuery.error && <p className="sk-state err">{(detailQuery.error as Error).message}</p>}
             {!detailQuery.isLoading && !detailQuery.error && (
               <div className="flex flex-col gap-2" style={{ maxHeight: 420, overflowY: 'auto' }}>
-                {messages.map((m) => (
+                {/* THE BUBBLES. Each one fades and rises in (`sk-wfade` — the
+                    same "this content is new on the page" gesture the rest of
+                    the portal uses), staggered down the thread so opening a
+                    conversation reads as it arriving rather than as it being
+                    already there. The rise is what makes a reply you just
+                    sent visibly the newest thing without a "sent" label.
+
+                    Keyed on the message id, so React only mounts — and so
+                    only animates — a message that is genuinely new; a refetch
+                    of the same thread does not replay the whole conversation. */}
+                {messages.map((m, i) => (
                   <div
                     key={m.id}
-                    className="rounded-[12px] px-3 py-2 text-[13.5px]"
-                    style={{
-                      alignSelf: m.senderRole === 'TEACHER' ? 'flex-end' : 'flex-start',
-                      maxWidth: '85%',
-                      background: m.senderRole === 'TEACHER' ? 'var(--sk-brand-tint)' : 'var(--sk-line)',
-                      color: 'var(--sk-ink)',
-                    }}
+                    className="sk-bub sk-wfade"
+                    data-mine={m.senderRole === 'TEACHER' ? 'true' : 'false'}
+                    style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}
                   >
                     <div className="whitespace-pre-wrap">{m.body}</div>
-                    <div className="meta" style={{ marginTop: 2 }}>{formatSentAt(m.createdAt)}</div>
+                    <div className="when">{formatSentAt(m.createdAt)}</div>
                   </div>
                 ))}
                 <div ref={bottomRef} />

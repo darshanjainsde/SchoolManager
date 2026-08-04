@@ -3,8 +3,9 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentAssignment, StudentAssignmentList } from '@/lib/portal';
-import { Card, Screen, SectionTitle } from '@/components/ui';
+import { Card, Page, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
 
 /** `StudentAssignment.dueDate` (`@db.Date`, `YYYY-MM-DD`) — a plain calendar date, no time component. */
 function formatDueDate(dueDate: string): string {
@@ -12,48 +13,86 @@ function formatDueDate(dueDate: string): string {
   return new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function AssignmentCard({
+/**
+ * One assignment row, expandable to its instructions and attachments.
+ *
+ * NO TICK, NO CHECKBOX, NO STRIKE-THROUGH. The repaint drew a past-due row as
+ * a ticked, struck-out checklist line — and `GET /me/assignments` carries NO
+ * submission state at all. It splits `upcoming`/`past` purely on the due date,
+ * so a green tick against a piece of homework says "handed in" about something
+ * the app cannot know. `past` gets the section heading it already had, and the
+ * dimming, and nothing that reads as a receipt.
+ */
+function TodoRow({
   a,
+  done,
   isOpen,
   onToggle,
+  first,
 }: {
   a: StudentAssignment;
+  done: boolean;
   isOpen: boolean;
   onToggle: () => void;
+  first: boolean;
 }) {
   const tokens = useTokens();
   return (
-    <Card testID={`assignment-${a.id}`}>
-      <Pressable testID={`assignment-toggle-${a.id}`} onPress={onToggle}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{a.title}</Text>
-            <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{a.subjectName}</Text>
-            <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 2 }}>Due {formatDueDate(a.dueDate)}</Text>
-          </View>
-          <Text style={{ fontSize: 14, color: tokens.color.sub }}>{isOpen ? '▲' : '▼'}</Text>
+    <View
+      testID={`assignment-${a.id}`}
+      style={{
+        borderTopWidth: first ? 0 : 1,
+        borderTopColor: tokens.color.line,
+        opacity: done ? 0.7 : 1,
+      }}
+    >
+      <Pressable
+        testID={`assignment-toggle-${a.id}`}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isOpen }}
+        onPress={onToggle}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 12 }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{a.title}</Text>
+          <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+            {a.subjectName} · due {formatDueDate(a.dueDate)}
+          </Text>
         </View>
+
+        <Text style={{ fontSize: 13, color: tokens.color.sub }}>{isOpen ? '▲' : '▼'}</Text>
       </Pressable>
 
       {isOpen && (
-        <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: tokens.color.line }}>
-          <Text style={{ fontSize: 12.5, color: tokens.color.ink }}>{a.instructions}</Text>
+        <View
+          style={{
+            paddingHorizontal: 12,
+            paddingBottom: 12,
+            paddingTop: 2,
+            // The 30dp indent existed to clear the checkbox that used to lead
+            // the row; with no checkbox it just left the instructions hanging.
+            marginLeft: 12,
+            borderLeftWidth: 1.5,
+            borderLeftColor: tokens.color.line,
+          }}
+        >
+          <Text style={{ fontSize: 12.5, color: tokens.color.ink2, lineHeight: 18, paddingLeft: 10 }}>
+            {a.instructions}
+          </Text>
           {a.attachments.length > 0 && (
-            <View style={{ marginTop: 8, gap: 6 }}>
+            <View style={{ marginTop: 8, gap: 6, paddingLeft: 10 }}>
               {a.attachments.map((att) => (
-                <Pressable
-                  key={att.url}
-                  testID={`attachment-${att.name}`}
-                  onPress={() => void Linking.openURL(att.url)}
-                >
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: tokens.color.indigo }}>📎 {att.name}</Text>
+                <Pressable key={att.url} testID={`attachment-${att.name}`} onPress={() => void Linking.openURL(att.url)}>
+                  <Text style={{ fontFamily: font.mono, fontSize: 11.5, fontWeight: '700', color: tokens.color.indigo }}>
+                    📎 {att.name}
+                  </Text>
                 </Pressable>
               ))}
             </View>
           )}
         </View>
       )}
-    </Card>
+    </View>
   );
 }
 
@@ -132,17 +171,35 @@ export default function Assignments() {
       {upcoming.length > 0 && (
         <>
           <SectionTitle title="Upcoming" />
-          {upcoming.map((a) => (
-            <AssignmentCard key={a.id} a={a} isOpen={openIds.has(a.id)} onToggle={() => toggle(a.id)} />
-          ))}
+          <Page>
+            {upcoming.map((a, i) => (
+              <TodoRow
+                key={a.id}
+                a={a}
+                done={false}
+                first={i === 0}
+                isOpen={openIds.has(a.id)}
+                onToggle={() => toggle(a.id)}
+              />
+            ))}
+          </Page>
         </>
       )}
       {past.length > 0 && (
         <>
           <SectionTitle title="Past" />
-          {past.map((a) => (
-            <AssignmentCard key={a.id} a={a} isOpen={openIds.has(a.id)} onToggle={() => toggle(a.id)} />
-          ))}
+          <Page>
+            {past.map((a, i) => (
+              <TodoRow
+                key={a.id}
+                a={a}
+                done
+                first={i === 0}
+                isOpen={openIds.has(a.id)}
+                onToggle={() => toggle(a.id)}
+              />
+            ))}
+          </Page>
         </>
       )}
     </Screen>

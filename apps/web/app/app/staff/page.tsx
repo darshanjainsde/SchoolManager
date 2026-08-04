@@ -155,7 +155,7 @@ function InviteSentModal({
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
         >
           <h3 id="s-invite-h">Invite sent</h3>
-          <button onClick={onClose} className="sk-btn" aria-label="Close" style={{ padding: 7 }}>
+          <button onClick={onClose} className="sk-btn sk-press" aria-label="Close" style={{ padding: 7 }}>
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -186,12 +186,12 @@ function InviteSentModal({
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             {!result.emailSent && (
-              <button className="sk-btn" data-variant="primary" disabled={resending} onClick={onResend}>
+              <button className="sk-btn sk-press" data-variant="primary" disabled={resending} onClick={onResend}>
                 <Send className="h-3.5 w-3.5" />
                 {resending ? 'Resending…' : 'Resend invite'}
               </button>
             )}
-            <button className="sk-btn" onClick={onClose}>
+            <button className="sk-btn sk-press" onClick={onClose}>
               Close
             </button>
           </div>
@@ -283,7 +283,7 @@ function StaffForm({ title, initial = {}, onSave, isSaving, onCancel }: StaffFor
 
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
-            className="sk-btn"
+            className="sk-btn sk-press"
             data-variant="primary"
             onClick={() =>
               onSave({
@@ -298,7 +298,7 @@ function StaffForm({ title, initial = {}, onSave, isSaving, onCancel }: StaffFor
           >
             {isSaving ? 'Saving…' : 'Save'}
           </button>
-          <button className="sk-btn" onClick={onCancel}>
+          <button className="sk-btn sk-press" onClick={onCancel}>
             Cancel
           </button>
         </div>
@@ -316,6 +316,8 @@ export default function StaffPage() {
 
   // ── Local state ──────────────────────────────────────────────────────────
   const [showAdd, setShowAdd] = useState(false);
+  // Id of the staff member added in this session — see `sk-pinin` below.
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [inviteResult, setInviteResult] = useState<(LoginInviteResult & { staffId: string }) | null>(
     null,
@@ -339,7 +341,9 @@ export default function StaffPage() {
       email?: string;
       phone?: string;
     }) => api.post<Staff>('/manage/staff', body),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      // Which card is the new one — see `sk-pinin` on the grid below.
+      setJustAddedId(created?.id ?? null);
       void queryClient.invalidateQueries({ queryKey: ['mng-staff'] });
       setShowAdd(false);
       toast.success('Staff member added');
@@ -421,7 +425,7 @@ export default function StaffPage() {
           <p>Manage your school&apos;s non-teaching staff — office, support, drivers, and more.</p>
         </div>
         <button
-          className="sk-btn"
+          className="sk-btn sk-press"
           data-variant="primary"
           onClick={() => {
             setShowAdd((v) => !v);
@@ -442,13 +446,15 @@ export default function StaffPage() {
 
       {staff.length > 0 && (
         <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(2, minmax(0,1fr))' }}>
+          {/* Head-counts compared against each other — monospace + tabular
+              so the digits sit on one grid instead of shifting as they load. */}
           <div className="sk-kpi">
             <span className="lab">Total staff</span>
-            <span className="n">{staff.length}</span>
+            <span className="n sk-num">{staff.length}</span>
           </div>
           <div className="sk-kpi" data-tone="good">
             <span className="lab">Active</span>
-            <span className="n">{activeCount}</span>
+            <span className="n sk-num">{activeCount}</span>
           </div>
         </div>
       )}
@@ -505,7 +511,16 @@ export default function StaffPage() {
                 onCancel={() => setEditId(null)}
               />
             ) : (
-              <div key={member.id} className="sk-entity" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+              // `sk-pinin` on the one card just created: it drops in slightly
+              // rotated and settles square, like a slip pinned to a board.
+              // The grid is server-sorted, so a new entry can appear anywhere
+              // in it — the gesture says WHERE, which the toast cannot.
+              // Reduced motion collapses it to the settled card.
+              <div
+                key={member.id}
+                className={member.id === justAddedId ? 'sk-entity sk-pinin sk-in' : 'sk-entity'}
+                style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span className="av" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
                     {initials(member)}
@@ -538,7 +553,7 @@ export default function StaffPage() {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {member.userId ? (
                     <button
-                      className="sk-btn"
+                      className="sk-btn sk-press"
                       disabled={resendInviteMutation.isPending}
                       onClick={() => resendInviteMutation.mutate(member.id)}
                     >
@@ -547,7 +562,7 @@ export default function StaffPage() {
                     </button>
                   ) : (
                     <button
-                      className="sk-btn"
+                      className="sk-btn sk-press"
                       data-variant="primary"
                       disabled={createLoginMutation.isPending}
                       onClick={() => createLoginMutation.mutate(member.id)}
@@ -558,7 +573,7 @@ export default function StaffPage() {
                     </button>
                   )}
                   <button
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     onClick={() => {
                       setShowAdd(false);
                       setEditId(member.id);
@@ -568,7 +583,7 @@ export default function StaffPage() {
                     Edit
                   </button>
                   <button
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     disabled={deleteMutation.isPending}
                     onClick={() => confirmDeleteStaff(member)}
                     style={{ color: 'var(--sk-bad)' }}

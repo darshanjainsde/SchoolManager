@@ -69,6 +69,11 @@ export function HolidayList({ holidays }: HolidayListProps): React.JSX.Element {
       {holidays.map((h) => {
         const { day, weekday } = dayAndWeekday(h.startDate);
         return (
+          // A holiday is a row in a term calendar the teacher SCANS: day tile,
+          // name over date, type pill flush right. `.sk-row` already sizes all
+          // four of those (`.sk-row .badge`, `.nm`, `.meta`, `.sp`), so the row
+          // carries no inline geometry of its own — the one thing set here is
+          // the tile's colour, which the class deliberately leaves open.
           <div className="sk-row" key={h.id}>
             <span className="badge" style={{ background: 'var(--sk-brand)' }}>
               {day}

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { getPlatformPrisma, withTenant } from '@skoolos/db';
 import type { TeacherProfile } from '@skoolos/types';
 import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
@@ -50,6 +50,17 @@ export class TeachersService {
         throw new NotFoundException('No teacher profile found for this login');
       }
 
+      // Resolve photoAssetId → MediaAsset.url, mirroring PortalService.profile()
+      // — self-uploaded avatars (POST /me/photo) land as MediaAsset rows.
+      let photoUrl: string | null = null;
+      if (teacher.photoAssetId) {
+        const asset = await tx.mediaAsset.findFirst({
+          where: { id: teacher.photoAssetId },
+          select: { url: true },
+        });
+        photoUrl = asset?.url ?? null;
+      }
+
       return {
         id: teacher.id,
         firstName: teacher.firstName,
@@ -68,6 +79,7 @@ export class TeachersService {
         classTeacherOf: [...teacher.classSections]
           .sort((a, b) => a.grade.order - b.grade.order || a.name.localeCompare(b.name))
           .map((cs) => `${cs.grade.name}-${cs.name}`),
+        photoUrl,
       };
     });
   }
@@ -108,6 +120,37 @@ export class TeachersService {
   }
 
   /**
+   * "Remove from this school" (Phase 5·1) — the clean off-board that FREES a
+   * teacher to be onboarded elsewhere. Deactivates rather than deletes (a
+   * hard delete fails on references and erases history): Teacher.isActive
+   * false + their login disabled and every session revoked. The one-school
+   * guard in `createLogin` only blocks on ACTIVE rows, so after this the new
+   * school onboards them normally.
+   */
+  async release(schoolId: string, id: string): Promise<{ released: true }> {
+    const userId = await withTenant(schoolId, async (tx) => {
+      const teacher = await tx.teacher.findFirst({ where: { id }, select: { userId: true } });
+      if (!teacher) throw new NotFoundException('Teacher not found');
+      await tx.teacher.update({ where: { id }, data: { isActive: false } });
+      return teacher.userId;
+    });
+
+    if (userId) {
+      // Login shutdown is cross-cutting auth state — platform client, same
+      // revoke-all pattern as a password reset.
+      const platform = getPlatformPrisma();
+      await platform.$transaction([
+        platform.user.update({ where: { id: userId }, data: { isActive: false } }),
+        platform.refreshToken.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        }),
+      ]);
+    }
+    return { released: true };
+  }
+
+  /**
    * Creates the teacher's login and emails a "welcome — set your password"
    * invite. `dto.email` falls back to the teacher's existing contact email
    * (Teacher.email) when omitted — either way a real, usable address is
@@ -124,6 +167,31 @@ export class TeachersService {
       const email = (dto.email?.trim() || teacher.email?.trim() || '').toLowerCase();
       if (!email) {
         throw new ApiError('EMAIL_REQUIRED', 'An email address is required to send the invite', 400, 'email');
+      }
+
+      // One school per teacher (Phase 5·1): the same identity (email) must
+      // not hold an ACTIVE teaching post with a login at another school.
+      // Cross-tenant by nature, so this runs on the platform client — the
+      // tenant-scoped `tx` cannot see other schools by design. Released
+      // teachers (isActive=false) don't block; neither do rows never linked
+      // to a login.
+      const platform = getPlatformPrisma();
+      const elsewhere = await platform.teacher.findFirst({
+        where: {
+          email: { equals: email, mode: 'insensitive' },
+          isActive: true,
+          userId: { not: null },
+          schoolId: { not: schoolId },
+        },
+        select: { school: { select: { name: true } } },
+      });
+      if (elsewhere) {
+        throw new ApiError(
+          'ALREADY_AT_SCHOOL',
+          `This teacher is active at ${elsewhere.school.name} — that school's office must release them before onboarding here`,
+          409,
+          'email',
+        );
       }
 
       const placeholder = randomBytes(32).toString('base64url');

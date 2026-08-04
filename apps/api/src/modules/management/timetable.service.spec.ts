@@ -2,9 +2,9 @@ import 'reflect-metadata';
 
 const txMock = {
   classSection: { findUnique: jest.fn() },
-  period: { findUnique: jest.fn() },
+  period: { findUnique: jest.fn(), findMany: jest.fn() },
   subject: { findUnique: jest.fn() },
-  teacher: { findUnique: jest.fn(), findFirst: jest.fn() },
+  teacher: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn() },
   academicYear: { findUnique: jest.fn(), findFirst: jest.fn() },
   timetableSlot: {
     findFirst: jest.fn(),
@@ -317,4 +317,56 @@ describe('TimetableService — versioned assign/unassign/read', () => {
       expect(txMock.timetableSlot.update).not.toHaveBeenCalled();
     });
   });
+
+describe('availability', () => {
+  const svc = new TimetableService();
+
+  beforeEach(() => {
+    txMock.academicYear.findFirst.mockResolvedValue({ id: YEAR });
+    txMock.teacher.findMany.mockResolvedValue([]);
+    txMock.period.findMany.mockResolvedValue([]);
+    txMock.timetableSlot.findMany.mockResolvedValue([]);
+  });
+
+  // The availability grid cannot be drawn from id/order/label alone, and both
+  // of the facts it is missing produce a WRONG page rather than a broken one:
+  // without `kind` a break renders as the hour when the entire staff is free
+  // (the biggest number on the page, against the one time nobody can teach),
+  // and without the clock times the page cannot open on the period actually
+  // running, which is the hour cover is nearly always needed for.
+  it('selects kind and the clock times, not just id/order/label', async () => {
+    await svc.availability(SCHOOL, {});
+    const select = txMock.period.findMany.mock.calls.at(-1)?.[0]?.select;
+    expect(select).toMatchObject({
+      id: true,
+      order: true,
+      label: true,
+      kind: true,
+      startTime: true,
+      endTime: true,
+    });
+  });
+
+  it('selects the same period fields when there is no current academic year', async () => {
+    // This branch returns early with an empty busy list; it used to carry its
+    // own hand-written select, which is exactly how the two drift apart and a
+    // school with no current year silently loses breaks on the grid.
+    txMock.academicYear.findFirst.mockResolvedValue(null);
+    await svc.availability(SCHOOL, {});
+    const select = txMock.period.findMany.mock.calls.at(-1)?.[0]?.select;
+    expect(select).toMatchObject({ kind: true, startTime: true, endTime: true });
+  });
+
+  it('returns every weekday the timetable holds, including Saturday', async () => {
+    // The client derives its columns from these rows. Filtering the week here
+    // would recreate, on the server, the exact bug the page just lost.
+    txMock.timetableSlot.findMany.mockResolvedValue([
+      { teacherId: TEACHER_OLD, dayOfWeek: 1, periodId: PERIOD },
+      { teacherId: TEACHER_OLD, dayOfWeek: 6, periodId: PERIOD },
+    ]);
+    const out = await svc.availability(SCHOOL, {});
+    expect(out.busy.map((b: { dayOfWeek: number }) => b.dayOfWeek)).toEqual([1, 6]);
+  });
+});
+
 });

@@ -151,22 +151,34 @@ function NotificationItem({ n, onClick }: { n: NotificationRow; onClick: () => v
       <button
         type="button"
         onClick={onClick}
-        className="sk-notif-row"
+        // sk-pinin fires on the unread rows only, and only as they mount: an
+        // unread notification is a slip that has just been pinned up. A row
+        // being marked read moves it into "Earlier", where it must arrive
+        // quietly — the gesture would otherwise read as "something new".
+        // sk-press is the tap itself.
+        className={unread ? 'sk-notif-row sk-press sk-pinin sk-in' : 'sk-notif-row sk-press'}
         data-unread={unread}
+        // The kind decides the tile's colour: a DIARY notice is the one thing
+        // here that can carry a remark needing a signature, so its tile wears
+        // the same red the remark itself wears in the diary.
+        data-kind={n.kind}
       >
         <span className="sk-notif-ic" aria-hidden="true">
           <Icon className="h-4 w-4" />
         </span>
         <span className="sk-notif-body">
-          <span className="sk-notif-title">
-            {unread && <span className="sk-notif-dot" aria-hidden="true" />}
-            {n.title}
-          </span>
+          <span className="sk-notif-title">{n.title}</span>
           {n.body && <span className="sk-notif-text">{n.body}</span>}
         </span>
         <time className="sk-notif-time" dateTime={n.createdAt}>
           {relativeTime(n.createdAt)}
         </time>
+        {/* The unread dot sits at the right edge, past the timestamp, so a
+            column of rows reads "which of these have I not opened" down one
+            straight edge rather than by hunting each title. Its offset is a
+            rule in sk-theme.css, not an inline style — the class already sizes
+            and places itself. */}
+        {unread && <span className="sk-notif-dot" aria-hidden="true" />}
       </button>
     </li>
   );

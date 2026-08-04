@@ -33,6 +33,10 @@ export class EmailChannel implements NotificationChannel {
         return this.mail.sendAbsenceNotice(to, message.payload);
       case 'ANNOUNCEMENT':
         return this.mail.sendAnnouncement(to, message.payload);
+      case 'DIARY_REMARK':
+        return this.mail.sendDiaryRemark(to, message.payload);
+      case 'LOW_ATTENDANCE':
+        return this.mail.sendLowAttendance(to, message.payload);
       default: {
         // Exhaustiveness guard — a new NotificationKind must be handled above.
         const _exhaustive: never = message;

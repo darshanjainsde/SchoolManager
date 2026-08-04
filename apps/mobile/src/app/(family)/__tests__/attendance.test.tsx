@@ -47,8 +47,9 @@ it('renders the stat row and the month grid from the real AttendanceSummary shap
   const { findByTestId, findByText } = render(<Attendance />);
 
   expect(await findByTestId('stat-percent')).toHaveTextContent('67%');
+  expect(await findByTestId('stat-present')).toHaveTextContent('2');
   expect(await findByTestId('stat-absent')).toHaveTextContent('1');
-  expect(await findByTestId('stat-total')).toHaveTextContent('3');
+  expect(await findByTestId('stat-late')).toHaveTextContent('0');
   // The Recent list renders raw dates from the summary.
   expect(await findByText('2026-07-01')).toBeTruthy();
 });
@@ -63,9 +64,13 @@ it('shows the stat boxes matching the summary the server returned', async () => 
     ]),
   );
   const { findByTestId } = render(<Attendance />);
-  expect(await findByTestId('stat-percent')).toHaveTextContent('50%'); // 2 present / 4 total
+  expect(await findByTestId('stat-percent')).toHaveTextContent('50%'); // 2 present / 4 marked
+  expect(await findByTestId('stat-present')).toHaveTextContent('2');
   expect(await findByTestId('stat-absent')).toHaveTextContent('1');
-  expect(await findByTestId('stat-total')).toHaveTextContent('4');
+  // The reason this screen breaks out all three states rather than
+  // "absent / school days": a LATE day is neither present nor absent, so a
+  // two-figure row leaves it invisible and the figures stop adding up.
+  expect(await findByTestId('stat-late')).toHaveTextContent('1');
 });
 
 describe('calendar is Monday-first', () => {
@@ -143,10 +148,13 @@ describe('month navigation', () => {
   });
 });
 
-it('shows an empty state for a month with no attendance records', async () => {
+it('names the month in the empty state rather than saying "this month"', async () => {
+  // Prev/Next walks this screen back through the term while the captions
+  // stayed on "this month", so April's figures were announced as August's.
+  // A month view has to name the month it is showing.
   (api.request as jest.Mock).mockResolvedValue(summaryFor('2026-08'));
   const { findByText } = render(<Attendance />);
-  expect(await findByText('No attendance recorded yet this month.')).toBeTruthy();
+  expect(await findByText('No attendance recorded yet for August 2026.')).toBeTruthy();
 });
 
 describe('fetch states', () => {

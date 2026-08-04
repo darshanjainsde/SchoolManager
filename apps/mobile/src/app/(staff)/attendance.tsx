@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { RegisterChangeRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -8,6 +8,7 @@ import { flush, pendingSaves, queueKey, type FlushResult } from '@/lib/offline-q
 import { LockedDayCard } from '@/components/LockedDayCard';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
 
 /** True once an APPROVED row's `expiresAt` is still in the future — absolute
  * epoch comparison, so it is correct regardless of the device's timezone.
@@ -129,20 +130,12 @@ export default function StaffAttendance() {
     // Keep today's link exactly as it was before this date control existed —
     // only a non-today date adds the `date` param.
     const dateParam = date === todayISO() ? '' : `&date=${date}`;
-    router.push(`/(staff)/take/${c.classSectionId}?name=${encodeURIComponent(c.name)}${dateParam}`);
-  };
-
-  const confirmRetake = (c: ClassDayStatus) => {
-    const when = date === today ? 'today' : `on ${date}`;
-    Alert.alert(
-      `Retake attendance for ${c.name}?`,
-      `${c.name} was already marked by ${c.markedBy ?? 'a teacher'} ${when} — ` +
-        `${c.present}/${c.total} present. Retaking overwrites the record for every ` +
-        `teacher ${when}. The previous version stays in the audit log.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Retake', style: 'destructive', onPress: () => goTake(c) },
-      ],
+    // A marked class carries who marked it, so the register screen can name
+    // them and confirm before REPLACING their record. Opening is free; the
+    // save is what needs the warning, and that is where it now lives.
+    const takenParam = c.taken ? `&takenBy=${encodeURIComponent(c.markedBy ?? 'a teacher')}` : '';
+    router.push(
+      `/(staff)/take/${c.classSectionId}?name=${encodeURIComponent(c.name)}${dateParam}${takenParam}`,
     );
   };
 
@@ -177,9 +170,33 @@ export default function StaffAttendance() {
     return (
     <Card key={c.classSectionId}>
       <View
-        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 11 }}
       >
-        <View>
+        {/* `.clsrow .ic` — the 34px serif-initial tile. A class is a *place*
+            in a teacher's day, and a labelled tile is how a paper timetable
+            names one: the initial reads at a glance down a column of rows. */}
+        <View
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 10,
+            backgroundColor: tokens.color.indigo,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: font.serif,
+              fontWeight: '700',
+              fontSize: 14,
+              color: tokens.color.onBrand,
+            }}
+          >
+            {c.name.trim().charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
           <Text style={{ fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>
             {c.name}
           </Text>
@@ -210,13 +227,24 @@ export default function StaffAttendance() {
       )}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 11 }}>
         {c.taken ? (
+          // NOT styled destructive, and no confirmation: this opens the
+          // register, and opening writes nothing. The overwrite warning fires
+          // on Save, inside that screen. Styled as a quiet secondary action so
+          // it doesn't compete with the classes still waiting to be marked.
           <Pressable
-            onPress={() => confirmRetake(c)}
+            onPress={() => goTake(c)}
             testID={`retake-${c.classSectionId}`}
-            style={{ flex: 1, backgroundColor: tokens.color.red50, borderRadius: 13, padding: 10 }}
+            style={{
+              flex: 1,
+              backgroundColor: tokens.color.surface,
+              borderWidth: 1,
+              borderColor: tokens.color.line,
+              borderRadius: 13,
+              padding: 10,
+            }}
           >
-            <Text style={{ color: tokens.color.red, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
-              Retake
+            <Text style={{ color: tokens.color.ink, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
+              Open register
             </Text>
           </Pressable>
         ) : (
@@ -265,16 +293,22 @@ export default function StaffAttendance() {
   return (
     <Screen>
       <SectionTitle title={`Attendance · ${date === today ? 'today' : date}`} />
+      {/* The date control keeps its WORDS. The repaint replaced "‹ Prev day" /
+          "Next day ›" with bare chevrons and turned "Jump to today" into an
+          unlabelled date tile — three affordances that all stopped saying what
+          they do, in a row that also stopped sitting flush to the page's
+          margins. A control a teacher uses to walk back through a term is not
+          the place to spend legibility on shape. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 4 }}>
-        <Pressable testID="date-prev" onPress={() => setDate((d) => shiftISO(d, -1))}>
+        <Pressable testID="date-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}>
           <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>‹ Prev day</Text>
         </Pressable>
         {date !== today && (
-          <Pressable testID="date-today" onPress={() => setDate(today)}>
+          <Pressable testID="date-today" onPress={() => setDate(today)} hitSlop={8}>
             <Text style={{ color: tokens.color.sub, fontWeight: '600', fontSize: 12 }}>Jump to today</Text>
           </Pressable>
         )}
-        <Pressable testID="date-next" onPress={() => setDate((d) => shiftISO(d, 1))}>
+        <Pressable testID="date-next" onPress={() => setDate((d) => shiftISO(d, 1))} hitSlop={8}>
           <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>Next day ›</Text>
         </Pressable>
       </View>

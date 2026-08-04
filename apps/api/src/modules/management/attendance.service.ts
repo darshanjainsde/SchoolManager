@@ -9,7 +9,7 @@ import { resolveStudentRecipients } from '../../common/notifications/recipients'
 import { runInBackground } from '../../common/notifications/run-in-background';
 import { isP2002 } from '../../common/errors/prisma-errors';
 import { requireClassAccess } from './internal/class-access';
-import { istTodayISO } from './internal/timetable-date';
+import { istTodayISO, resolveAsOfDate } from './internal/timetable-date';
 import type { SaveAttendanceDto } from './management.dto';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -106,7 +106,7 @@ export class AttendanceService {
     schoolId: string,
     userId: string,
     role: string,
-    opts: { date?: string } = {},
+    opts: { date?: string; scheduledOnly?: boolean } = {},
   ): Promise<MyClassSection[]> {
     const date = opts.date ?? istTodayISO();
     if (!DATE_RE.test(date)) {
@@ -125,11 +125,43 @@ export class AttendanceService {
       const teacher = await tx.teacher.findFirst({ where: { userId } });
       if (!teacher) return [];
 
+      // TWO DIFFERENT QUESTIONS, one method.
+      //
+      // `scheduledOnly` (the register): WHICH DAY IT IS decides which classes
+      // exist. A register belongs to a PERIOD on a timetable, so a class only
+      // appears on a date the teacher actually holds it — a Sunday shows
+      // nothing, and a Monday shows Monday's classes, not everything they have
+      // ever taught.
+      //
+      // Without it (a class PICKER — announcements, assignments, diary,
+      // results): every class the teacher holds at all. Day-scoping those
+      // would mean a teacher could not post an announcement on a Sunday, or
+      // set homework for a class they next see on Thursday.
+      //
+      // `dayOfWeek` is 1-7 Monday-first (`getUTCDay() || 7`), matching
+      // TimetableSlot; anchored to IST midnight like every other timetable
+      // consumer so a past date reads the version that was live THAT day.
+      const dayOfWeek = new Date(`${date}T00:00:00Z`).getUTCDay() || 7;
+      const asOf = resolveAsOfDate(date, new Date());
+      const effective = opts.scheduledOnly
+        ? {
+            dayOfWeek,
+            effectiveFrom: { lte: asOf },
+            OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
+          }
+        : {};
+
       const owned = await tx.classSection.findMany({
         where: {
           OR: [
-            { classTeacherId: teacher.id },
-            { timetableSlots: { some: { teacherId: teacher.id } } },
+            // A class teacher takes their form class's register — but only on
+            // days that class actually meets. Without the `some`, their class
+            // would sit there on a Sunday waiting for a register that no
+            // period exists to hold.
+            opts.scheduledOnly
+              ? { classTeacherId: teacher.id, timetableSlots: { some: effective } }
+              : { classTeacherId: teacher.id },
+            { timetableSlots: { some: { teacherId: teacher.id, ...effective } } },
           ],
         },
         select: AttendanceService.CLASS_SELECT,
@@ -196,7 +228,10 @@ export class AttendanceService {
     }
     // Pass `date` through so a past day's status includes whoever covered a
     // section as a substitute THAT day, not who is substituting today.
-    const classes = await this.myClassSections(schoolId, userId, role, { date });
+    const classes = await this.myClassSections(schoolId, userId, role, {
+      date,
+      scheduledOnly: true,
+    });
     if (classes.length === 0) return [];
     const day = new Date(date);
     const classSectionIds = classes.map((c) => c.classSectionId);

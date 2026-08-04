@@ -120,11 +120,11 @@ describe('TeacherAttendancePage', () => {
 
     renderPage();
 
-    expect(await screen.findByText('Asha Rao')).toBeInTheDocument();
-    // Per-student status toggles only exist on the editable roster.
-    expect(screen.getAllByRole('button', { name: 'Present' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Absent' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Late' }).length).toBeGreaterThan(0);
+    expect(await screen.findByRole('button', { name: /Asha Rao/ })).toBeInTheDocument();
+    // The editable roster is the register GRID: one cell per student, its
+    // accessible name carrying who they are and how they currently stand.
+    expect(screen.getByTestId('register-grid')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Asha Rao.*present/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /re-take attendance/i })).not.toBeInTheDocument();
   });
 
@@ -139,7 +139,15 @@ describe('TeacherAttendancePage', () => {
     ];
     const api = mockApi({
       get: mockGet([
-        ['/manage/attendance/status', () => Promise.resolve([])],
+        // The rail is built from `status`, so it has to carry both classes.
+        [
+          '/manage/attendance/status',
+          () =>
+            Promise.resolve([
+              statusRow({ classSectionId: 'sec-1', name: '8-A' }),
+              statusRow({ classSectionId: 'sec-2', name: '9-B', total: 5 }),
+            ]),
+        ],
         ['/manage/attendance?', () => Promise.resolve([])],
         ['/manage/attendance/my-classes', () => Promise.resolve(withCovering)],
         ['/manage/students?', () => Promise.resolve([])],
@@ -150,9 +158,14 @@ describe('TeacherAttendancePage', () => {
 
     renderPage();
 
-    const select = await screen.findByLabelText('Class');
-    expect(await within(select).findByRole('option', { name: '8-A' })).toBeInTheDocument();
-    expect(within(select).getByRole('option', { name: '9-B (covering)' })).toBeInTheDocument();
+    // The rail IS the picker now — the duplicate <select> above it was
+    // removed, since it listed the same classes with strictly less
+    // information (no taken/due state) and made the page look like it had two
+    // separate controls.
+    expect(await screen.findByRole('button', { name: /8-A/ })).toBeInTheDocument();
+    // A substitute covering a class may still take its register, so the row
+    // stays — labelled, so an unusual class in the list explains itself.
+    expect(screen.getByRole('button', { name: /9-B · covering/ })).toBeInTheDocument();
     // Whitelist the endpoints actually stubbed above — anything outside this
     // set (in particular the old unscoped roster endpoint) is a regression.
     const allowedPrefixes = [
@@ -187,10 +200,10 @@ describe('TeacherAttendancePage', () => {
     expect(await screen.findByText(/1 of 2 present/)).toBeInTheDocument();
     expect(screen.getByText(/Taken by Anita Rao/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /re-take attendance/i })).toBeInTheDocument();
-    // No editable roster: no per-student toggle buttons, and the roster/marks
+    // No editable roster: no register grid at all, and the roster/marks
     // endpoints for the editable view must never even be requested.
-    expect(screen.queryByRole('button', { name: 'Present' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('register-grid')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Asha Rao/ })).not.toBeInTheDocument();
     expect(api.get).not.toHaveBeenCalledWith(expect.stringContaining('/manage/students'));
   });
 
@@ -208,7 +221,7 @@ describe('TeacherAttendancePage', () => {
     vi.mocked(useApi).mockReturnValue(api as never);
 
     renderPage();
-    await screen.findByText('Asha Rao');
+    await screen.findByRole('button', { name: /Asha Rao/ });
 
     // `fireEvent.change` rather than `user.type` — a native `type="date"`
     // input parses its value from complete date parts, not individual
@@ -217,9 +230,41 @@ describe('TeacherAttendancePage', () => {
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
 
     expect(await screen.findByText(/is closed/i)).toBeInTheDocument();
-    expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Asha Rao/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /save attendance/i })).not.toBeInTheDocument();
     expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it('selecting a future date refuses up front instead of loading a roster the server will reject', async () => {
+    // The server rejects a future save outright, and the app has always said
+    // so before letting you start. This page used to load the roster anyway,
+    // so a teacher could tap through forty children and only then be told the
+    // day doesn't exist yet.
+    searchParams = new URLSearchParams('classSectionId=sec-1');
+    const api = mockApi({
+      get: mockGet([
+        ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
+        ['/manage/attendance?', () => Promise.resolve([])],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
+        ['/manage/students?', () => Promise.resolve(students)],
+        ['/manage/register-changes/mine', () => Promise.resolve([])],
+      ]),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderPage();
+    await screen.findByRole('button', { name: /Asha Rao/ });
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2099-01-01' } });
+
+    expect(await screen.findByText(/cannot take attendance for a future date/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('register-grid')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save attendance/i })).not.toBeInTheDocument();
+    expect(api.put).not.toHaveBeenCalled();
+    // A future day is not a LOCKED day — offering the unlock-request form
+    // here would invite a teacher to ask an admin to reopen a day that has
+    // not happened.
+    expect(screen.queryByText(/is closed/i)).not.toBeInTheDocument();
   });
 
   describe('local-vs-UTC date correctness', () => {
@@ -264,7 +309,7 @@ describe('TeacherAttendancePage', () => {
       vi.mocked(useApi).mockReturnValue(api as never);
 
       renderPage();
-      await screen.findByText('Asha Rao');
+      await screen.findByRole('button', { name: /Asha Rao/ });
 
       await user.click(screen.getByRole('button', { name: /save attendance/i }));
 
@@ -291,7 +336,7 @@ describe('TeacherAttendancePage', () => {
     vi.mocked(useApi).mockReturnValue(api as never);
 
     renderPage();
-    await screen.findByText('Asha Rao');
+    await screen.findByRole('button', { name: /Asha Rao/ });
 
     await user.click(screen.getByRole('button', { name: /save attendance/i }));
 
@@ -321,7 +366,7 @@ describe('TeacherAttendancePage', () => {
 
     expect(await screen.findByText('Loading roster…')).toBeInTheDocument();
     resolveStudents(students);
-    expect(await screen.findByText('Asha Rao')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Asha Rao/ })).toBeInTheDocument();
   });
 
   it('renders the server error message when the roster fails to load', async () => {
@@ -403,7 +448,7 @@ describe('TeacherAttendancePage', () => {
     vi.mocked(useApi).mockReturnValue(api as never);
 
     renderPage();
-    await screen.findByText('Asha Rao');
+    await screen.findByRole('button', { name: /Asha Rao/ });
 
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
 
@@ -440,11 +485,11 @@ describe('TeacherAttendancePage', () => {
       vi.mocked(useApi).mockReturnValue(api as never);
 
       renderPage();
-      await screen.findByText('Asha Rao');
+      await screen.findByRole('button', { name: /Asha Rao/ });
       fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
 
       // The unlocked roster, not LockedDay.
-      expect(await screen.findByText('Asha Rao')).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: /Asha Rao/ })).toBeInTheDocument();
       expect(screen.queryByText(/is closed/i)).not.toBeInTheDocument();
       expect(screen.getByText(/reopened by your admin/i)).toBeInTheDocument();
 
@@ -474,7 +519,7 @@ describe('TeacherAttendancePage', () => {
       vi.mocked(useApi).mockReturnValue(api as never);
 
       renderPage();
-      await screen.findByText('Asha Rao');
+      await screen.findByRole('button', { name: /Asha Rao/ });
       fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
 
       // `myRequests` briefly renders LockedDay in its own "checking" loading
@@ -487,7 +532,7 @@ describe('TeacherAttendancePage', () => {
       await waitForElementToBeRemoved(() => screen.queryByText(/checking for an existing request/i));
 
       expect(screen.getByText(/is closed/i)).toBeInTheDocument();
-      expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Asha Rao/ })).not.toBeInTheDocument();
       expect(api.put).not.toHaveBeenCalled();
     });
 
@@ -508,12 +553,12 @@ describe('TeacherAttendancePage', () => {
       vi.mocked(useApi).mockReturnValue(api as never);
 
       renderPage();
-      await screen.findByText('Asha Rao');
+      await screen.findByRole('button', { name: /Asha Rao/ });
       fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
 
       expect(await screen.findByText(/is closed/i)).toBeInTheDocument();
       expect(await screen.findByText(/waiting on your admin/i)).toBeInTheDocument();
-      expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Asha Rao/ })).not.toBeInTheDocument();
     });
 
     it('while `mine` is loading on a past date, neither the roster nor the request form renders', async () => {
@@ -534,13 +579,13 @@ describe('TeacherAttendancePage', () => {
       vi.mocked(useApi).mockReturnValue(api as never);
 
       renderPage();
-      await screen.findByText('Asha Rao');
+      await screen.findByRole('button', { name: /Asha Rao/ });
       fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2020-01-01' } });
 
       // Neither the editable roster nor a submittable form is shown while we
       // don't yet know if an approved, unexpired unlock exists.
       expect(await screen.findByText(/checking for an existing request/i)).toBeInTheDocument();
-      expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Asha Rao/ })).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Reason for reopening')).not.toBeInTheDocument();
 
       resolveMyRequests([]);
@@ -573,12 +618,12 @@ describe('TeacherAttendancePage', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/Taken by Anita Rao/)).toBeInTheDocument();
     // Roster is still not editable while the dialog is only open, not confirmed.
-    expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Asha Rao/ })).not.toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.queryByText('Asha Rao')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Asha Rao/ })).not.toBeInTheDocument();
     expect(retakeBtn).toHaveFocus();
   });
 
@@ -606,12 +651,82 @@ describe('TeacherAttendancePage', () => {
     await user.click(within(dialog).getByRole('button', { name: /yes, re-take attendance/i }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(await screen.findByText('Asha Rao')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Present' }).length).toBeGreaterThan(0);
+    expect(await screen.findByRole('button', { name: /Asha Rao/ })).toBeInTheDocument();
+    expect(screen.getByTestId('register-grid')).toBeInTheDocument();
     // RetakeDialog's own focus-restore targets a detached node once it and its
     // trigger both unmount in this render, so the page must move focus itself
     // — otherwise a keyboard/screen-reader user is left on document.body.
     expect(document.body).not.toHaveFocus();
     expect(screen.getByRole('heading', { name: 'Roster' })).toHaveFocus();
+  });
+});
+
+describe('the register grid', () => {
+  /** The editable grid needs an untaken class for today. */
+  function editable() {
+    return mockApi({
+      get: mockGet([
+        ['/manage/attendance/status', () => Promise.resolve([statusRow({ taken: false })])],
+        ['/manage/attendance?', () => Promise.resolve([])],
+        ['/manage/attendance/my-classes', () => Promise.resolve(classSections)],
+        ['/manage/students?', () => Promise.resolve(students)],
+        ['/manage/register-changes/mine', () => Promise.resolve([])],
+      ]),
+    });
+  }
+
+  it('everyone starts present, and a cell shows the roll number until it is marked', async () => {
+    searchParams = new URLSearchParams('classSectionId=sec-1');
+    vi.mocked(useApi).mockReturnValue(editable() as never);
+    renderPage();
+
+    const cell = await screen.findByRole('button', { name: /Asha Rao/ });
+    expect(cell).toHaveAttribute('data-status', 'PRESENT');
+    // Present reads as the roll number; the exceptions are what change shape.
+    expect(cell).toHaveTextContent(String(students[0].rollNo));
+  });
+
+  it('one tap cycles present → absent → late → present', async () => {
+    searchParams = new URLSearchParams('classSectionId=sec-1');
+    vi.mocked(useApi).mockReturnValue(editable() as never);
+    renderPage();
+    const user = userEvent.setup();
+
+    const cell = await screen.findByRole('button', { name: /Asha Rao/ });
+
+    await user.click(cell);
+    expect(cell).toHaveAttribute('data-status', 'ABSENT');
+    expect(cell).toHaveTextContent('✕');
+
+    await user.click(cell);
+    expect(cell).toHaveAttribute('data-status', 'LATE');
+
+    await user.click(cell);
+    expect(cell).toHaveAttribute('data-status', 'PRESENT');
+  });
+
+  it('names what you just tapped — the whole risk of a grid of numbers', async () => {
+    searchParams = new URLSearchParams('classSectionId=sec-1');
+    vi.mocked(useApi).mockReturnValue(editable() as never);
+    renderPage();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: /Asha Rao/ }));
+
+    expect(screen.getByTestId('register-said')).toHaveTextContent('Asha Rao · absent');
+  });
+
+  it('undo puts the cell back where it was', async () => {
+    searchParams = new URLSearchParams('classSectionId=sec-1');
+    vi.mocked(useApi).mockReturnValue(editable() as never);
+    renderPage();
+    const user = userEvent.setup();
+
+    const cell = await screen.findByRole('button', { name: /Asha Rao/ });
+    await user.click(cell);
+    expect(cell).toHaveAttribute('data-status', 'ABSENT');
+
+    await user.click(screen.getByTestId('register-undo'));
+    expect(cell).toHaveAttribute('data-status', 'PRESENT');
   });
 });

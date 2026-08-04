@@ -16,10 +16,12 @@
  */
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, stat, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve, relative } from 'node:path';
+import { dirname, join, resolve, relative, sep } from 'node:path';
+import { buildCatalogue, runnerFor, workspaceFor } from './catalogue.mjs';
+import { describeLive, runLive, ENVIRONMENTS as LIVE_ENVS } from './live-checks.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -29,6 +31,15 @@ const PORT = Number(process.env.DASH_PORT ?? 4000);
 /**
  * The jobs the dashboard can run. `kind: 'jest'` jobs additionally emit a JSON
  * report and a coverage summary, which is what powers the coverage view.
+ *
+ * THE FLAGS HERE MUST MIRROR EACH PACKAGE'S OWN `test` SCRIPT. They did not,
+ * and it produced the one result this dashboard must never produce: a red
+ * suite that is green in the gate. `apps/mobile` pins `--maxWorkers=2`; bare
+ * `jest` took seven workers on an eight-core machine and starved one
+ * async save-flow test past its timeout, nondeterministically. The board then
+ * reported a real regression that did not exist. A dashboard whose verdict
+ * disagrees with `pnpm test` is worse than no dashboard, so if you change a
+ * package's test script, change it here too.
  */
 const JOBS = {
   api: {
@@ -36,7 +47,7 @@ const JOBS = {
     detail: 'NestJS · services, controllers, guards',
     kind: 'jest',
     cwd: 'apps/api',
-    args: ['exec', 'jest', '--silent'],
+    args: ['exec', 'jest', '--passWithNoTests', '--silent'],
     src: 'apps/api/src',
   },
   mobile: {
@@ -44,7 +55,7 @@ const JOBS = {
     detail: 'Expo · screens, hooks, lib',
     kind: 'jest',
     cwd: 'apps/mobile',
-    args: ['exec', 'jest', '--silent'],
+    args: ['exec', 'jest', '--maxWorkers=2', '--silent'],
     src: 'apps/mobile/src',
   },
   db: {
@@ -55,13 +66,18 @@ const JOBS = {
     args: ['exec', 'jest', '--silent'],
     src: 'packages/db/src',
   },
+  // WAS `kind: 'none'` with "No test harness installed. Every change here is
+  // verified by hand." That stopped being true — apps/web now runs vitest over
+  // 43 files — and a dashboard reporting a harness that exists as absent is
+  // worse than one reporting nothing: it tells you not to trust a suite that
+  // is, in fact, guarding the code.
   web: {
     label: 'Web',
     detail: 'Next.js · marketing, school sites, 4 consoles',
-    kind: 'none',
+    kind: 'vitest',
     cwd: 'apps/web',
+    args: ['exec', 'vitest', 'run'],
     src: 'apps/web',
-    missing: 'No test harness installed. Every change here is verified by hand.',
   },
   lint: { label: 'Lint', detail: 'eslint, all workspaces', kind: 'gate', cwd: '.', args: ['lint'] },
   typecheck: { label: 'Typecheck', detail: 'tsc --noEmit, all workspaces', kind: 'gate', cwd: '.', args: ['typecheck'] },
@@ -198,6 +214,15 @@ function run(id, withCoverage = false) {
   if (current?.status === 'running') return { error: 'already running' };
 
   const args = [...job.args];
+  if (job.kind === 'vitest') {
+    // vitest speaks the same report shape as jest for the fields this
+    // dashboard reads (numTotalTests, testResults[].assertionResults[]), so
+    // one reader serves both runners.
+    args.push('--reporter=json', `--outputFile=${join(CACHE, `${id}.report.json`)}`);
+    if (withCoverage) {
+      args.push('--coverage', '--coverage.reporter=json-summary', `--coverage.reportsDirectory=${join(CACHE, `${id}-coverage`)}`);
+    }
+  }
   if (job.kind === 'jest') {
     args.push('--json', `--outputFile=${join(CACHE, `${id}.report.json`)}`);
     // Coverage is opt-in: instrumenting the code makes runs several times
@@ -245,7 +270,7 @@ function run(id, withCoverage = false) {
     entry.status = code === 0 ? 'pass' : 'fail';
     entry.exitCode = code;
     entry.finishedAt = Date.now();
-    if (job.kind === 'jest') {
+    if (job.kind === 'jest' || job.kind === 'vitest') {
       try {
         entry.summary = await readJestReport(id);
         if (withCoverage) entry.coverage = await readCoverage(id);
@@ -284,6 +309,175 @@ function publicState() {
   return { jobs, now: Date.now() };
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The catalogue — every test in the repo, grouped the way a person thinks
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Cached because a full scan reads ~170 files, and the board re-renders often.
+ * Invalidated on a fingerprint of (file count, newest mtime), so editing any
+ * test file rebuilds it and nothing else has to remember to.
+ */
+let catalogueCache = null;
+
+async function getCatalogue(force = false) {
+  if (!force && catalogueCache) {
+    const fresh = await buildCatalogue(REPO);
+    if (fresh.fingerprint === catalogueCache.fingerprint) return catalogueCache;
+    catalogueCache = fresh;
+    return fresh;
+  }
+  catalogueCache = await buildCatalogue(REPO);
+  return catalogueCache;
+}
+
+/**
+ * Merges the last run's per-test results INTO the catalogue, so a test in the
+ * tree carries its own pass/fail rather than only its file's.
+ *
+ * Matched on file + full name. A test present in a report but absent from the
+ * catalogue means the parser missed it — surfaced as `unmatched` rather than
+ * dropped, because a silently missing test is the failure mode this whole
+ * dashboard was built to prevent.
+ */
+async function catalogueResults() {
+  const byKey = new Map();
+  let unmatched = 0;
+  for (const id of Object.keys(JOBS)) {
+    const file = join(CACHE, `${id}.report.json`);
+    if (!existsSync(file)) continue;
+    let report;
+    try {
+      report = JSON.parse(await readFile(file, 'utf8'));
+    } catch {
+      continue;
+    }
+    for (const suite of report.testResults ?? []) {
+      const rel = relative(REPO, suite.name).split(sep).join('/');
+      for (const t of suite.assertionResults ?? []) {
+        const full = t.fullName || [...(t.ancestorTitles ?? []), t.title].join(' ');
+        const row = {
+          status: t.status,
+          ms: t.duration ?? null,
+          full,
+          failure: (t.failureMessages?.[0] ?? '').split('\n').slice(0, 8).join('\n') || null,
+          job: id,
+        };
+        // Keyed on the FULL name (describe titles + title), because a bare
+        // title is not unique inside a file — this repo repeatedly reuses one
+        // title across sibling describes, and keying on it alone silently
+        // collapsed them so one test's verdict was shown against another's.
+        byKey.set(`${rel}::${full}`, row);
+        // Title-only kept as a fallback for tests with no enclosing describe.
+        if (!byKey.has(`${rel}::${t.title}`)) byKey.set(`${rel}::${t.title}`, row);
+      }
+    }
+  }
+  return { byKey, unmatched };
+}
+
+let singleSeq = 0;
+
+/** Regex-escapes a test name so `-t` matches it literally. */
+function escapeForPattern(name) {
+  return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Runs ONE test, by file and name.
+ *
+ * Deliberately synchronous-and-awaited rather than fire-and-forget: a single
+ * test finishes in a second or two, and the caller wants the verdict in the
+ * response rather than having to subscribe to a stream for it.
+ */
+async function runSingle({ path: relPath, name }) {
+  if (!relPath || !name) return { error: 'need both a file and a test name' };
+  // Contain it: the path must be a test file inside the repo, not an
+  // arbitrary path handed to a spawned process.
+  const abs = resolve(REPO, relPath);
+  if (!abs.startsWith(REPO + sep) || !/\.(test|spec)\.(ts|tsx|mts|mjs)$/.test(relPath)) {
+    return { error: 'not a test file in this repo' };
+  }
+  if (!existsSync(abs)) return { error: `no such file: ${relPath}` };
+
+  const runner = runnerFor(relPath);
+  const ws = workspaceFor(relPath);
+  const fileFromWs = relative(resolve(REPO, ws), abs).split(sep).join('/');
+  // A unique file per run. A single shared `single.report.json` meant two runs
+  // — two browser tabs, or a re-click before the first finished — read each
+  // other's results, which is how a passing test reports as a failing one.
+  await mkdir(CACHE, { recursive: true });
+  const out = join(CACHE, `single-${process.pid}-${singleSeq++}.report.json`);
+  const pattern = escapeForPattern(name);
+
+  // `--runTestsByPath`, NOT a positional: jest reads a bare path argument as a
+  // REGEX, so `src/app/(staff)/take/...` turned "(staff)" into a capture group
+  // and matched no file at all — silently, reported as a failing test. Every
+  // Expo Router group directory in this repo is parenthesised, so that hit
+  // roughly a third of the mobile suite.
+  const args =
+    runner === 'vitest'
+      ? ['exec', 'vitest', 'run', fileFromWs, '-t', pattern, '--reporter=json', `--outputFile=${out}`]
+      : ['exec', 'jest', '--runTestsByPath', fileFromWs, '-t', pattern, '--json', `--outputFile=${out}`, '--silent'];
+
+  const started = Date.now();
+  const res = await new Promise((done) => {
+    const child = spawn('pnpm', args, {
+      cwd: resolve(REPO, ws),
+      env: { ...process.env, FORCE_COLOR: '0', CI: '1' },
+    });
+    let log = '';
+    child.stdout.on('data', (d) => (log += d));
+    child.stderr.on('data', (d) => (log += d));
+    child.on('close', (code) => done({ code, log }));
+  });
+
+  let matched = [];
+  let readError = null;
+  try {
+    const report = JSON.parse(await readFile(out, 'utf8'));
+    for (const suite of report.testResults ?? []) {
+      for (const t of suite.assertionResults ?? []) {
+        if (t.status === 'pending' || t.status === 'skipped' || t.status === 'todo') continue;
+        matched.push({
+          title: t.title,
+          full: t.fullName || t.title,
+          status: t.status,
+          ms: t.duration ?? null,
+          failure: (t.failureMessages?.[0] ?? '').split('\n').slice(0, 20).join('\n') || null,
+        });
+      }
+    }
+  } catch (e) {
+    // Surfaced rather than swallowed: "no report" and "test failed" are
+    // different problems, and a silent catch here reported the first as the
+    // second while I was building this.
+    readError = e.message;
+  }
+  await rm(out, { force: true }).catch(() => undefined);
+
+  return {
+    ok: res.code === 0,
+    readError,
+    exitCode: res.code,
+    runner,
+    workspace: ws,
+    // Shown in the UI so the run is reproducible in a terminal by hand —
+    // which means the arguments have to be quoted the way a shell needs them,
+    // not merely joined. A test name with spaces is the common case here.
+    command: `pnpm ${args
+      .filter((a) => !a.startsWith('--outputFile'))
+      .map((a) => (/[\s()[\]$'"*?]/.test(a) ? `'${a.replace(/'/g, `'\\''`)}'` : a))
+      .join(' ')}`,
+    durationMs: Date.now() - started,
+    matched,
+    // A pattern that matched nothing exits non-zero on jest but says so only
+    // in the log; calling that out explicitly saves a confusing "it failed".
+    matchedNothing: matched.length === 0,
+    log: res.log.split('\n').filter(Boolean).slice(-60),
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Branches & deploys
@@ -537,6 +731,76 @@ const server = createServer(async (req, res) => {
       url.searchParams.get('confirm'),
       url.searchParams.get('to'),
     );
+    res.writeHead(r.error ? 400 : 200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(r));
+    return;
+  }
+
+  if (url.pathname === '/api/catalogue') {
+    const cat = await getCatalogue(url.searchParams.get('refresh') === '1');
+    const { byKey } = await catalogueResults();
+    // Attach the last known verdict to each test as the catalogue goes out,
+    // so the tree can be browsed and read at the same time.
+    const consumed = new Set();
+    const files = cat.files.map((f) => ({
+      ...f,
+      tests: f.tests.map((t) => {
+        if (!t.name) return { ...t, result: null };
+        // Full name first — same key the report is written under — then the
+        // bare title for tests that sit outside any describe.
+        const full = [...t.groups.map((g) => g.title), t.name].join(' ');
+        const kFull = `${f.path}::${full}`;
+        const kTitle = `${f.path}::${t.name}`;
+        const result = byKey.get(kFull) ?? byKey.get(kTitle) ?? null;
+        if (result) consumed.add(byKey.has(kFull) ? kFull : kTitle);
+        return { ...t, result };
+      }),
+    }));
+
+    // Results the runners produced that no source test claims. Almost always
+    // `it.each`, which expands one source line into N runtime tests — but it
+    // is also exactly what a parser bug looks like, so the number is reported
+    // rather than hidden. A catalogue that quietly drops results would be the
+    // same blind spot this dashboard was built to remove.
+    const ran = new Set();
+    for (const k of byKey.keys()) if (!k.endsWith('::undefined')) ran.add(k);
+    const orphans = [...byKey.entries()]
+      .filter(([k, v]) => !consumed.has(k) && v.full && k.endsWith(`::${v.full}`))
+      .map(([k]) => k);
+
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({
+      ...cat,
+      files,
+      results: {
+        matched: [...consumed].length,
+        unmatched: orphans.length,
+        examples: orphans.slice(0, 8),
+      },
+    }));
+    return;
+  }
+
+  if (url.pathname === '/api/run-one' && req.method === 'POST') {
+    const r = await runSingle({
+      path: url.searchParams.get('path'),
+      name: url.searchParams.get('name'),
+    });
+    res.writeHead(r.error ? 400 : 200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(r));
+    return;
+  }
+
+  if (url.pathname === '/api/live') {
+    const envId = url.searchParams.get('env') ?? 'staging';
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ environments: Object.keys(LIVE_ENVS), suite: describeLive(envId) }));
+    return;
+  }
+
+  if (url.pathname === '/api/live/run' && req.method === 'POST') {
+    const envId = url.searchParams.get('env') ?? 'staging';
+    const r = await runLive(envId, (row) => broadcast('live', row));
     res.writeHead(r.error ? 400 : 200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(r));
     return;

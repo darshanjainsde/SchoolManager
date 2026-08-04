@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { LogOut } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
@@ -13,12 +13,14 @@ import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
 import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { MobileNavButton, MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { NAV_ITEMS } from './nav-items';
 import '../sk-theme.css';
 
 export default function StaffLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const hydrated = useHydrated();
   const host = useHost();
   const status = useAuthStore((s) => s.status);
@@ -86,6 +88,12 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
             <LogOut className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Sign out</span>
           </button>
+          {/* Phone-only, by CSS — see MobileNavDrawer. */}
+          <MobileNavButton
+            open={drawerOpen}
+            onOpen={() => setDrawerOpen(true)}
+            controls="staff-mobile-drawer"
+          />
         </div>
         <nav className="sk-tabs" aria-label="Staff portal sections">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
@@ -96,6 +104,36 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
       </header>
+
+      <MobileNavDrawer
+        id="staff-mobile-drawer"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title="Staff portal"
+        host={host}
+        sectionLabel="Sections"
+        items={NAV_ITEMS}
+        isActive={isActive}
+        foot={
+          // Hidden from the bar on a phone (no room), so the drawer carries
+          // them — see MobileNavDrawer.
+          <>
+            <div style={{ padding: '8px 11px' }}>
+              <ThemeToggle />
+            </div>
+            <button
+              className="sk-nav"
+              style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}
+              onClick={() => {
+                setDrawerOpen(false);
+                void handleLogout();
+              }}
+            >
+              <LogOut className="ic" aria-hidden="true" /> Sign out
+            </button>
+          </>
+        }
+      />
 
       <main className="sk-main">{children}</main>
     </div>

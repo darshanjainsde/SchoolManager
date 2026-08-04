@@ -1,7 +1,39 @@
-import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { act, render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import TakeAttendance from '../[classSectionId]';
 import { api, ApiError } from '@/lib/api';
 import { pendingSaves } from '@/lib/offline-queue';
+
+/**
+ * The register is a GRID now: one cell per student that CYCLES
+ * present → absent → late on each press, rather than three buttons you select
+ * directly. `setTo` presses a cell until it holds the status the test wants,
+ * so every assertion below still says what it always said.
+ */
+/** WhoNeedsAWord now renders under the register; this keeps it silent. */
+const RATES_EMPTY = {
+  classSectionId: 'sec-1',
+  className: '8-A',
+  from: '2026-05-05',
+  to: '2026-08-03',
+  daysMarked: 0,
+  students: [],
+};
+
+const CYCLE_ORDER = ['PRESENT', 'ABSENT', 'LATE'] as const;
+async function setTo(
+  findByTestId: (id: string) => Promise<{ props: { accessibilityLabel?: string } }>,
+  studentId: string,
+  want: (typeof CYCLE_ORDER)[number],
+) {
+  for (let i = 0; i < CYCLE_ORDER.length; i++) {
+    const cell = await findByTestId(`cell-${studentId}`);
+    const label = String(cell.props.accessibilityLabel ?? '').toLowerCase();
+    if (label.includes(want.toLowerCase())) return cell;
+    fireEvent.press(cell as never);
+  }
+  return findByTestId(`cell-${studentId}`);
+}
 
 // The offline queue's default storage goes through expo-secure-store — an
 // in-memory fake so enqueueSave/pendingSaves in the tests below actually
@@ -34,18 +66,21 @@ const flush = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
  * can itself flake on a busy machine. */
 async function settled(assertion: () => void) {
   await flush();
-  // 15s (well under the 20s testTimeout): these async save-flow assertions poll
-  // for a state update that, under the parallel suite load of `pnpm test`/CI,
-  // can be starved past the old 8s budget. Higher timeout only costs time on a
-  // genuine failure, never on the happy path.
-  await waitFor(assertion, { timeout: 15000 });
+  // 30s (well under the 45s testTimeout): these async save-flow assertions poll
+  // for a state update that gets starved on a busy machine. `pnpm preflight`
+  // runs this suite CONCURRENTLY with the api and web suites under turbo, which
+  // oversubscribes the CPU far harder than `pnpm test` in this package alone —
+  // 15s was enough for the latter and not the former, so the gate flaked while
+  // the same file passed in isolation every time. Higher timeout only costs
+  // time on a genuine failure, never on the happy path.
+  await waitFor(assertion, { timeout: 30000 });
 }
 
 const mockBack = jest.fn();
 // Mutable so individual tests can exercise a `date` route param without a
 // fresh jest.mock per test — Jest's out-of-scope-variable check for mock
 // factories allows referencing `mock`-prefixed identifiers like this one.
-let mockParams: { classSectionId: string; name?: string; date?: string } = {
+let mockParams: { classSectionId: string; name?: string; date?: string; takenBy?: string } = {
   classSectionId: 'cs1',
   name: '5-B',
 };
@@ -72,6 +107,20 @@ const STUDENTS = [
   { id: 's2', firstName: 'Ben', lastName: 'Lee', rollNo: '2' },
 ];
 
+// The light palette's cell tints (theme/tokens.ts). Asserted by value rather
+// than by importing the token so a silent repaint of the register still
+// trips a test — these are the three colours the whole screen reads by.
+const PRESENT_TINT = '#E3F4EC'; // green50
+const ABSENT_TINT = '#FBE9E8'; // red50
+const LATE_TINT = '#FDE9C8'; // amber50
+
+/** Re-query before every press: a cell's onPress closes over the status from
+ * the render that produced it, so cycling twice off one stale reference would
+ * apply the same first transition twice. */
+function tap(getByTestId: (id: string) => unknown, id: string) {
+  fireEvent.press(getByTestId(id) as Parameters<typeof fireEvent.press>[0]);
+}
+
 beforeEach(() => {
   mockBack.mockReset();
   (api.request as jest.Mock).mockReset();
@@ -82,27 +131,42 @@ it('joins attendance marks with student roster names and defaults unmarked stude
   (api.request as jest.Mock).mockImplementation((path: string) => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
-  const { findByText } = render(<TakeAttendance />);
+  const { findByLabelText, findByText } = render(<TakeAttendance />);
 
-  expect(await findByText('Asha Rao')).toBeTruthy();
-  expect(await findByText('Ben Lee')).toBeTruthy();
-  expect(await findByText(/1 present · 1 absent · 2 total/)).toBeTruthy();
+  // The grid drops the names from the face of the cell — that is what makes it
+  // fast — so the join is asserted where the name now lives: the cell's
+  // accessible name, which is what a screen reader reads out.
+  expect(await findByLabelText('Asha Rao, roll 1, present')).toBeTruthy();
+  expect(await findByLabelText('Ben Lee, roll 2, absent')).toBeTruthy();
+  // Same four figures the web register states, in the same order. `late` has
+  // to be one of them: without it, two latecomers in a class of forty read
+  // "38 present · 0 absent" with two children unaccounted for.
+  expect(await findByText(/2 students · 1 present · 1 absent · 0 late/)).toBeTruthy();
 });
 
-it('renders each roster row with its roll number', async () => {
+it('renders one cell per student, showing their roll number while present', async () => {
   (api.request as jest.Mock).mockImplementation((path: string) => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
-  const { findByText } = render(<TakeAttendance />);
+  const { findByTestId, getByTestId } = render(<TakeAttendance />);
 
-  expect(await findByText('Roll 1')).toBeTruthy();
-  expect(await findByText('Roll 2')).toBeTruthy();
+  // s1 is present, so its cell reads as its roll number.
+  expect(within(await findByTestId('cell-s1')).getByText('1')).toBeTruthy();
+  // s2 is absent, so its cell has swapped the number for the glyph — and there
+  // is exactly ONE control per student, not three.
+  expect(within(getByTestId('cell-s2')).getByText('✕')).toBeTruthy();
 });
 
 it('renders a dash for a student with no roll number yet, never the string "null"', async () => {
@@ -115,28 +179,40 @@ it('renders a dash for a student with no roll number yet, never the string "null
     if (path.startsWith('/manage/students?')) {
       return Promise.resolve([{ id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: null }]);
     }
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
-  const { findByText, queryByText, getByText } = render(<TakeAttendance />);
+  const { findByTestId, queryByText, getByLabelText } = render(<TakeAttendance />);
 
-  expect(await findByText('Asha Rao')).toBeTruthy();
-  expect(getByText('Roll —')).toBeTruthy();
+  const cell = await findByTestId('cell-s1');
+  // The cell falls back to a mid-dot rather than printing nothing (or "null"),
+  // and the accessible name says "roll none" in words.
+  expect(within(cell).getByText('·')).toBeTruthy();
+  expect(getByLabelText('Asha Rao, roll none, present')).toBeTruthy();
   expect(queryByText(/null/i)).toBeNull();
 });
 
-it('toggling a student and submitting sends the exact PUT contract, then shows the confirmation before Done navigates back', async () => {
+it('cycling a student and submitting sends the exact PUT contract, then shows the confirmation before Done navigates back', async () => {
   (api.request as jest.Mock).mockImplementation((path: string) => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
     if (path === '/manage/attendance') return Promise.resolve({ saved: 2, absentees: 1 });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
   const { findByTestId, getByText, getByTestId } = render(<TakeAttendance />);
 
-  const markPresent = await findByTestId('present-s2');
-  fireEvent.press(markPresent);
+  // s2 loads ABSENT; two taps cycle it absent → late → present, which is the
+  // only way this screen sets a status now.
+  await findByTestId('cell-s2');
+  tap(getByTestId, 'cell-s2');
+  tap(getByTestId, 'cell-s2');
 
   const submit = await findByTestId('submit-attendance');
   fireEvent.press(submit);
@@ -174,16 +250,21 @@ it('loads a LATE student as LATE, not as present', async () => {
     if (path.startsWith('/manage/students?')) {
       return Promise.resolve([{ id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: '1' }]);
     }
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
-  const { findByTestId } = render(<TakeAttendance />);
+  const { findByTestId, getByLabelText } = render(<TakeAttendance />);
 
-  const lateButton = await findByTestId('late-s1');
-  // The selected pill for a LATE student must be Late, not Present.
-  expect(lateButton.props.style).toMatchObject({ backgroundColor: '#F59E0B' });
-  const presentButton = await findByTestId('present-s1');
-  expect(presentButton.props.style).not.toMatchObject({ backgroundColor: '#16B364' });
+  // The cell for a LATE student must read as Late, not Present: amber tint,
+  // the clock glyph in place of the roll number, and "late" in its name.
+  const cell = await findByTestId('cell-s1');
+  expect(cell.props.style).toMatchObject({ backgroundColor: LATE_TINT });
+  expect(cell.props.style).not.toMatchObject({ backgroundColor: PRESENT_TINT });
+  expect(within(cell).getByText('⏱')).toBeTruthy();
+  expect(getByLabelText('Asha Rao, roll 1, late')).toBeTruthy();
 });
 
 it('submitting a roster with a LATE student sends LATE', async () => {
@@ -196,14 +277,17 @@ it('submitting a roster with a LATE student sends LATE', async () => {
       return Promise.resolve([{ id: 's1', firstName: 'Asha', lastName: 'Rao', rollNo: '1' }]);
     }
     if (path === '/manage/attendance') return Promise.resolve({ saved: 1, absentees: 0 });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
   const { findByTestId, getByText } = render(<TakeAttendance />);
 
-  // Wait for the roster row to render before pressing submit — until then
-  // the button is disabled (rows.length === 0) and the press is a no-op.
-  await findByTestId('late-s1');
+  // Wait for the roster to render before pressing submit — until then the
+  // button is disabled (rows.length === 0) and the press is a no-op.
+  await findByTestId('cell-s1');
   const submit = await findByTestId('submit-attendance');
   fireEvent.press(submit);
   await settled(() => expect(getByText('Attendance saved — 1 students, nobody absent.')).toBeTruthy());
@@ -220,6 +304,9 @@ it('a save with zero absentees says nobody was absent, not "0 absent … guardia
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
     if (path === '/manage/attendance') return Promise.resolve({ saved: 2, absentees: 0 });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -231,6 +318,79 @@ it('a save with zero absentees says nobody was absent, not "0 absent … guardia
   expect(queryByText(/guardians/i)).toBeNull();
 });
 
+describe('replacing a register someone else already took', () => {
+  // The warning used to fire when the class was merely OPENED, which was
+  // wrong twice over: opening this screen issues no PUT, and "Who needs a
+  // word" lives at the bottom of it — so the question a teacher asks right
+  // after the morning register ("who is slipping?") sat behind a red prompt
+  // about overwriting a colleague's work. It belongs on Save.
+  const mockSave = () =>
+    (api.request as jest.Mock).mockImplementation((path: string) => {
+      if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
+      if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+      if (path === '/manage/attendance') return Promise.resolve({ saved: 2, absentees: 0 });
+      if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
+      throw new Error(`unexpected path: ${path}`);
+    });
+
+  it('names the marker and writes nothing until the teacher confirms', async () => {
+    mockParams = { classSectionId: 'cs1', name: '5-B', takenBy: 'Mr. Rao' };
+    mockSave();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { findByTestId, findByText } = render(<TakeAttendance />);
+
+    // The banner names whose work is about to change, before you change it.
+    expect(await findByText(/Taken by Mr\. Rao\. Saving replaces that record\./)).toBeTruthy();
+
+    fireEvent.press(await findByTestId('submit-attendance'));
+
+    const [title, message, buttons] = alertSpy.mock.calls[0];
+    expect(title).toMatch(/5-B/);
+    expect(message).toMatch(/Mr\. Rao/);
+    expect(message).toMatch(/audit log/i);
+    // Dismissing must not write.
+    expect(
+      (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
+    ).toHaveLength(0);
+
+    await act(async () => {
+      buttons?.find((b: { text?: string }) => b.text === 'Replace')?.onPress?.();
+    });
+    await waitFor(() =>
+      expect(
+        (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
+      ).toHaveLength(1),
+    );
+
+    alertSpy.mockRestore();
+  });
+
+  it('saves an unmarked class straight through, with no confirmation at all', async () => {
+    mockParams = { classSectionId: 'cs1', name: '5-B' }; // no takenBy
+    mockSave();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { findByTestId, queryByText } = render(<TakeAttendance />);
+
+    fireEvent.press(await findByTestId('submit-attendance'));
+
+    // Asserted on the dialog and the PUT, NOT on the save toast: the toast is
+    // a round-trip away, and waiting for it made this test starve under the
+    // concurrent, CPU-oversubscribed run `pnpm preflight` actually uses — a
+    // red suite for a timing reason that has nothing to do with the subject.
+    // The confirmation branch is decided synchronously, so this is the whole
+    // behaviour. (The save toast itself is covered by the tests above.)
+    await waitFor(() =>
+      expect(
+        (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
+      ).toHaveLength(1),
+    );
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(queryByText(/Saving replaces that record/)).toBeNull();
+
+    alertSpy.mockRestore();
+  });
+});
+
 it('a failed save shows the server message verbatim, keeps the marked roster, and does not navigate away', async () => {
   (api.request as jest.Mock).mockImplementation((path: string, opts?: { method?: string }) => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
@@ -239,13 +399,15 @@ it('a failed save shows the server message verbatim, keeps the marked roster, an
       const { ApiError } = jest.requireActual('@/lib/api');
       return Promise.reject(new ApiError(409, 'That day is closed. Ask your admin to reopen it from Requests.'));
     }
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
   const { findByTestId, getByText } = render(<TakeAttendance />);
 
-  const markPresent = await findByTestId('present-s2');
-  fireEvent.press(markPresent);
+  await setTo(findByTestId, 's2', 'PRESENT');
 
   const submit = await findByTestId('submit-attendance');
   fireEvent.press(submit);
@@ -254,9 +416,9 @@ it('a failed save shows the server message verbatim, keeps the marked roster, an
   );
   expect(mockBack).not.toHaveBeenCalled();
 
-  // The marked roster survives the failed save — s2's pill is still PRESENT.
-  const presentButton = await findByTestId('present-s2');
-  expect(presentButton.props.style).toMatchObject({ backgroundColor: '#16B364' });
+  // The marked roster survives the failed save — s2's cell still reads present.
+  const cell = await findByTestId('cell-s2');
+  expect(String(cell.props.accessibilityLabel).toLowerCase()).toContain('present');
 });
 
 it('mark-all-present sets every row to PRESENT, including rows that were ABSENT and LATE, without saving', async () => {
@@ -268,19 +430,25 @@ it('mark-all-present sets every row to PRESENT, including rows that were ABSENT 
       ]);
     }
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
   const { findByTestId } = render(<TakeAttendance />);
 
-  await findByTestId('absent-s1');
-  const markAll = await findByTestId('mark-all-present');
-  fireEvent.press(markAll);
+  // Both arrive already marked from the server — s1 absent, s2 late.
+  const before = await findByTestId('cell-s1');
+  expect(String(before.props.accessibilityLabel).toLowerCase()).toContain('absent');
 
-  const present1 = await findByTestId('present-s1');
-  const present2 = await findByTestId('present-s2');
-  expect(present1.props.style).toMatchObject({ backgroundColor: '#16B364' });
-  expect(present2.props.style).toMatchObject({ backgroundColor: '#16B364' });
+  fireEvent.press(await findByTestId('mark-all-present'));
+
+  // ...and mark-all-present clears BOTH, not just the absent one.
+  const c1 = await findByTestId('cell-s1');
+  const c2 = await findByTestId('cell-s2');
+  expect(String(c1.props.accessibilityLabel).toLowerCase()).toContain('present');
+  expect(String(c2.props.accessibilityLabel).toLowerCase()).toContain('present');
 
   // Edge: it must not have called the API at all.
   expect(api.request as jest.Mock).not.toHaveBeenCalledWith(
@@ -295,6 +463,9 @@ it('mark-all-present is disabled while a save is in flight', async () => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
     if (path === '/manage/attendance') return new Promise((resolve) => { resolvePut = resolve; });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
@@ -332,11 +503,14 @@ it('accepts a date param and passes it through to both the GET and the PUT', asy
     }
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
     if (path === '/manage/attendance') return Promise.resolve({ saved: 2, absentees: 1 });
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
-  const { findByText, findByTestId } = render(<TakeAttendance />);
-  expect(await findByText('Asha Rao')).toBeTruthy();
+  const { findByLabelText, findByTestId } = render(<TakeAttendance />);
+  expect(await findByLabelText(/Asha Rao/)).toBeTruthy();
 
   const submit = await findByTestId('submit-attendance');
   fireEvent.press(submit);
@@ -351,11 +525,14 @@ it('defaults to today when no date param is given (no regression)', async () => 
   (api.request as jest.Mock).mockImplementation((path: string) => {
     if (path.startsWith('/manage/attendance?')) return Promise.resolve(MARKS);
     if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    // WhoNeedsAWord renders under the register and fetches this. Answered
+    // here rather than in each mock so a ninth mock cannot forget it.
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path}`);
   });
 
-  const { findByText } = render(<TakeAttendance />);
-  expect(await findByText('Asha Rao')).toBeTruthy();
+  const { findByLabelText } = render(<TakeAttendance />);
+  expect(await findByLabelText(/Asha Rao/)).toBeTruthy();
 
   const getCall = (api.request as jest.Mock).mock.calls.find(([path]: [string]) =>
     path.startsWith('/manage/attendance?'),
@@ -373,13 +550,13 @@ it('a network-fail save is queued on the device, toasts instead of erroring, and
       // screen's point of view.
       return Promise.reject(new ApiError(0, 'Could not reach the school server.'));
     }
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
     throw new Error(`unexpected path: ${path} ${JSON.stringify(opts)}`);
   });
 
   const { findByTestId, getByTestId, queryByText, findByText } = render(<TakeAttendance />);
 
-  const markPresent = await findByTestId('present-s2');
-  fireEvent.press(markPresent);
+  await setTo(findByTestId, 's2', 'PRESENT');
 
   const submit = await findByTestId('submit-attendance');
   fireEvent.press(submit);
@@ -389,9 +566,9 @@ it('a network-fail save is queued on the device, toasts instead of erroring, and
   // No error state — a dead signal is not a rejection.
   expect(queryByText('Could not reach the school server.')).toBeNull();
 
-  // The marked roster survives — s2's pill is still PRESENT.
-  const presentButton = await findByTestId('present-s2');
-  expect(presentButton.props.style).toMatchObject({ backgroundColor: '#16B364' });
+  // The marked roster survives — s2's cell still reads present.
+  const survivor = await findByTestId('cell-s2');
+  expect(String(survivor.props.accessibilityLabel).toLowerCase()).toContain('present');
 
   const pending = await pendingSaves();
   expect(pending).toHaveLength(1);

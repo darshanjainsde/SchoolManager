@@ -1,3 +1,9 @@
+import { Platform } from 'react-native';
+// The paper-and-ink diary palette from the approved Phase 5 pitches
+// (both artifacts share one `:root` block — warm paper, indigo-black ink,
+// pencil rules). Every KEY here kept its original name through the Phase 5·4
+// repaint so no consumer had to change; only the hexes moved.
+//
 // Palette shape shared by both colour schemes. Every consumer (component or
 // test) can assume every key below exists in BOTH `light` and `dark` — see
 // `apps/mobile/src/theme/__tests__/tokens.test.ts`, which fails the build if
@@ -40,6 +46,17 @@ export interface ColorPalette {
   onBrand: string;
   // Placeholder text — deliberately dimmer than `sub` in both schemes.
   placeholder: string;
+  // ── Paper/ink diary skin (Phase 5·4, from the approved pitches) ───────────
+  // `ink2` is body-secondary (the pitch's --ink-2); `sub` is the dimmer meta
+  // tone (--ink-3). `line2` is the heavier pencil rule (--rule-2), used for
+  // grab handles and checkbox borders where `line` is too faint.
+  ink2: string;
+  line2: string;
+  // The deep indigo the pitch uses for text ON a tint (--indigo-deep).
+  indigoDeep: string;
+  // The red of a margin rule / unread dot / notice pin (--margin-red). Warmer
+  // and lighter than `red`, which is reserved for remark ink itself.
+  marginRed: string;
 }
 
 const light: ColorPalette = {
@@ -48,20 +65,24 @@ const light: ColorPalette = {
   indigo50: '#EEF0FF',
   amber: '#F59E0B',
   amberDark: '#FBBF24',
-  amber50: '#FFF6E6',
-  late: '#9A6B12',
-  ink: '#0F172A',
-  sub: '#64748B',
-  line: '#E9E9F2',
-  green: '#16B364',
-  green50: '#E7F7EF',
-  red: '#EF4444',
-  red50: '#FDECEC',
-  appBg: '#F4F5FB',
+  amber50: '#FDE9C8',
+  late: '#7A4E06',
+  ink: '#211D45',
+  sub: '#8A87A0',
+  line: '#E7E3D6',
+  green: '#178A5B',
+  green50: '#E3F4EC',
+  red: '#C4453F',
+  red50: '#FBE9E8',
+  appBg: '#FBF9F4',
   surface: '#FFFFFF',
-  surfaceMuted: '#F1F3F7',
+  surfaceMuted: '#F3F0E7',
   onBrand: '#FFFFFF',
-  placeholder: '#9AA4B2',
+  placeholder: '#A6A3B8',
+  ink2: '#4B4768',
+  line2: '#D9D4C4',
+  indigoDeep: '#3730A3',
+  marginRed: '#E86A6A',
 };
 
 // Values lifted from apps/web/app/sk-theme.css's `@media (prefers-color-scheme:
@@ -71,27 +92,50 @@ const light: ColorPalette = {
 const dark: ColorPalette = {
   indigo: '#8B87FF',
   indigoDark: '#818CF8',
-  indigo50: '#232050',
-  amber: '#F3B547',
+  indigo50: '#232052',
+  amber: '#F5B23C',
   amberDark: '#FBBF24',
-  amber50: '#3B2D11',
-  late: '#D9A43A',
-  ink: '#EFEEFC',
-  sub: '#ABA9CE',
-  line: '#262545',
-  green: '#35B57E',
-  green50: '#122720',
-  red: '#E0694A',
-  red50: '#2A1712',
-  appBg: '#0A0917',
-  surface: '#14132A',
-  surfaceMuted: '#1E1D3C',
+  amber50: '#3D2E14',
+  late: '#F5CE8A',
+  ink: '#EDEBFA',
+  sub: '#807DA0',
+  line: '#2B2847',
+  green: '#4CC08E',
+  green50: '#173327',
+  red: '#E0656F',
+  red50: '#3A1B1E',
+  appBg: '#141224',
+  surface: '#1B1830',
+  surfaceMuted: '#100E1E',
   onBrand: '#07130E',
   placeholder: '#7A789E',
+  ink2: '#B9B6D0',
+  line2: '#37335A',
+  indigoDeep: '#A5A1FF',
+  marginRed: '#E86A6A',
 };
 
 export const palette = { light, dark } as const;
 export type ColorScheme = keyof typeof palette;
+
+/**
+ * Typography from the pitches. The diary voice is a SERIF — every heading,
+ * diary entry, remark, stamp and empty state is set in it; the sans is for
+ * UI chrome (labels, buttons, meta) and the mono for figures that must line
+ * up (percentages, roll numbers, times).
+ *
+ * These are platform system faces, deliberately NOT a bundled font file:
+ * the pitch's own stack ("Iowan Old Style", Palatino, Georgia, serif) is all
+ * system fonts, and shipping a webfont would add an asset the EAS build has
+ * to resolve for no visual gain. iOS resolves Palatino; Android's `serif`
+ * alias is Noto Serif.
+ */
+export const font = {
+  serif: Platform.select({ ios: 'Palatino', android: 'serif', default: 'serif' }) as string,
+  mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }) as string,
+  /** The UI face — RN's platform default, named here so callers never guess. */
+  sans: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }) as string,
+} as const;
 
 export const GAP = 11; // vertical rhythm between containers (mockup system)
 export const RADIUS = { card: 16, chip: 999, sheet: 22 } as const;
@@ -122,6 +166,13 @@ export const brand = {
   // (which already exist and adapt to dark mode) — only the hero gradient needs
   // these exact pitch hues.
   hero: {
+    /**
+     * `.nowcard` — `linear-gradient(135deg, var(--indigo), #6D5CF0)`, the
+     * teacher pitch's live-class hero, exactly two stops. Kept separate from
+     * `indigo` below (three stops, ending in violet) because the pitch draws
+     * this one card and only this one card with the short ramp.
+     */
+    now: ['#4F46E5', '#6D5CF0'] as const,
     indigo: ['#4F46E5', '#6D5CF0', '#8B5CF6'] as const,
     green: ['#10B981', '#0EA5A4', '#22C55E'] as const,
     done: ['#334155', '#4338CA', '#6D5CF0'] as const,

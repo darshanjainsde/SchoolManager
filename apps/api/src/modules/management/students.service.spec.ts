@@ -10,6 +10,10 @@ const txMock = {
     create: jest.fn(),
     findUnique: jest.fn(),
   },
+  school: {
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -130,10 +134,15 @@ describe('StudentsService.createLogin', () => {
     txMock.student.findFirst.mockResolvedValue({
       id: STUDENT_ID,
       admissionNo: 'SUN-2231',
+      code: null,
       userId: null,
     });
     txMock.student.update.mockResolvedValue({});
     txMock.user.create.mockResolvedValue({ id: 'user-1' });
+    // Code allocation (Phase 5·1): a stable persisted prefix by default, and
+    // no prior codes — so the first allocation is SUN-00001.
+    txMock.school.findUnique.mockResolvedValue({ name: 'Sunrise Public School', codePrefix: 'SUN' });
+    txMock.school.update.mockResolvedValue({});
   });
 
   it('throws EMAIL_REQUIRED when no email is supplied', async () => {
@@ -170,18 +179,55 @@ describe('StudentsService.createLogin', () => {
     });
     expect(txMock.student.update).toHaveBeenCalledWith({
       where: { id: STUDENT_ID },
-      data: { userId: 'user-1', email: 'parent@example.com' },
+      data: { userId: 'user-1', email: 'parent@example.com', code: 'SUN-00001' },
     });
     // "Mints a token" is LoginInviteService's job (tested there in isolation);
-    // here we assert the collaborator is invoked with the right (userId, loginName).
-    expect(invites.sendInvite).toHaveBeenCalledWith('user-1', 'SUN-2231');
+    // here we assert the collaborator is invoked with the right (userId, loginName)
+    // — the loginName is now the allocated student code (Phase 5·1).
+    expect(invites.sendInvite).toHaveBeenCalledWith('user-1', 'SUN-00001');
     expect(result).toEqual({
       email: 'parent@example.com',
       username: null,
-      loginName: 'SUN-2231',
+      loginName: 'SUN-00001',
       invited: true,
       emailSent: true,
     });
+  });
+
+  it('derives and PERSISTS the prefix from the school name when none is stored', async () => {
+    txMock.school.findUnique.mockResolvedValue({ name: 'Green Valley School', codePrefix: null });
+
+    const result = await svc.createLogin(SCHOOL, STUDENT_ID, { email: 'parent@example.com' });
+
+    expect(txMock.school.update).toHaveBeenCalledWith({
+      where: { id: SCHOOL },
+      data: { codePrefix: 'GRE' },
+    });
+    expect(result.loginName).toBe('GRE-00001');
+  });
+
+  it('increments from the highest existing code for the school', async () => {
+    txMock.student.findFirst
+      .mockResolvedValueOnce({ id: STUDENT_ID, admissionNo: 'SUN-2231', code: null, userId: null })
+      .mockResolvedValueOnce({ code: 'SUN-00041' }); // allocateCode's "last" lookup
+
+    const result = await svc.createLogin(SCHOOL, STUDENT_ID, { email: 'parent@example.com' });
+
+    expect(result.loginName).toBe('SUN-00042');
+  });
+
+  it('keeps an already-allocated code instead of minting a new one', async () => {
+    txMock.student.findFirst.mockResolvedValue({
+      id: STUDENT_ID,
+      admissionNo: 'SUN-2231',
+      code: 'SUN-00007',
+      userId: null,
+    });
+
+    const result = await svc.createLogin(SCHOOL, STUDENT_ID, { email: 'parent@example.com' });
+
+    expect(result.loginName).toBe('SUN-00007');
+    expect(txMock.school.update).not.toHaveBeenCalled();
   });
 
   it('persists a username when supplied', async () => {
@@ -219,7 +265,7 @@ describe('StudentsService.createLogin', () => {
     expect(result).toEqual({
       email: 'parent@example.com',
       username: null,
-      loginName: 'SUN-2231',
+      loginName: 'SUN-00001',
       invited: true,
       emailSent: false,
     });
@@ -247,6 +293,7 @@ describe('StudentsService.resendInvite', () => {
     txMock.student.findFirst.mockResolvedValue({
       id: STUDENT_ID,
       admissionNo: 'SUN-2231',
+      code: 'SUN-00005',
       userId: 'user-1',
     });
     txMock.user.findUnique.mockResolvedValue({
@@ -254,25 +301,43 @@ describe('StudentsService.resendInvite', () => {
       email: 'parent@example.com',
       username: null,
     });
+    txMock.student.update.mockResolvedValue({});
+    txMock.school.findUnique.mockResolvedValue({ name: 'Sunrise Public School', codePrefix: 'SUN' });
+    txMock.school.update.mockResolvedValue({});
   });
 
   it('mints a fresh token and re-sends for a student that already has a login', async () => {
     const result = await svc.resendInvite(SCHOOL, STUDENT_ID);
 
-    expect(invites.sendInvite).toHaveBeenCalledWith('user-1', 'SUN-2231');
+    expect(invites.sendInvite).toHaveBeenCalledWith('user-1', 'SUN-00005');
     expect(result).toEqual({
       email: 'parent@example.com',
       username: null,
-      loginName: 'SUN-2231',
+      loginName: 'SUN-00005',
       invited: true,
       emailSent: true,
     });
+  });
+
+  it('backfills a code for a pre-5·1 login (no code yet) and persists it', async () => {
+    txMock.student.findFirst
+      .mockResolvedValueOnce({ id: STUDENT_ID, admissionNo: 'SUN-2231', code: null, userId: 'user-1' })
+      .mockResolvedValueOnce(null); // allocateCode's "last" lookup — no codes yet
+
+    const result = await svc.resendInvite(SCHOOL, STUDENT_ID);
+
+    expect(txMock.student.update).toHaveBeenCalledWith({
+      where: { id: STUDENT_ID },
+      data: { code: 'SUN-00001' },
+    });
+    expect(result.loginName).toBe('SUN-00001');
   });
 
   it('rejects a student with no login to resend', async () => {
     txMock.student.findFirst.mockResolvedValue({
       id: STUDENT_ID,
       admissionNo: 'SUN-2231',
+      code: null,
       userId: null,
     });
 

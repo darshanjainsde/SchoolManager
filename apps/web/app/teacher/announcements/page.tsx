@@ -240,6 +240,11 @@ export default function TeacherAnnouncementsPage() {
           {!mineQuery.isLoading && !mineQuery.error && mine.length === 0 && (
             <p className="sk-state">You haven&apos;t posted anything yet.</p>
           )}
+          {/* One `.sk-row` per post: audience pill, title over body-and-time,
+              spacer, then Edit/Delete flush right. `.sk-postit` is a block, so
+              it dropped the spacer and pushed both buttons onto a third line —
+              every row grew by a button-height and the actions stopped lining
+              up down a single right edge. */}
           {!mineQuery.isLoading &&
             !mineQuery.error &&
             mine.map((a) =>
@@ -297,7 +302,7 @@ export default function TeacherAnnouncementsPage() {
                   <span className="sp" />
                   <button
                     type="button"
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     style={{ marginRight: 8 }}
                     onClick={() => startEdit(a)}
                     disabled={deletingId === a.id}
@@ -306,7 +311,7 @@ export default function TeacherAnnouncementsPage() {
                   </button>
                   <button
                     type="button"
-                    className="sk-btn"
+                    className="sk-btn sk-press"
                     onClick={() => setConfirmDeleteId(a.id)}
                     disabled={deletingId === a.id}
                   >

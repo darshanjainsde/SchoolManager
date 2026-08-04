@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { Card } from './ui';
 import { useTokens } from '@/theme/theme-context';
-import { brand } from '@/theme/tokens';
+import { brand, font } from '@/theme/tokens';
+import { DUR, inkWidth, useGesture, useReduceMotion } from '@/theme/motion';
 
 /** Day-complete wrap-up counts, shown only when the day is genuinely over. */
 export interface NowCardSummary {
@@ -38,25 +39,31 @@ function entryLabel(e: TeacherDayEntry): string {
 
 // Hero text always sits on a saturated gradient, so its colours are fixed
 // white (theme-independent), exactly like AuthScaffold's on-hero text.
+// Numbers are the pitch's `.nowcard` (`.eye` / `.big` / `.met`): the eyebrow
+// is small, wide-tracked and shouty; the headline is the diary SERIF, because
+// even the one saturated card in the teacher's day is still a page of the
+// same book.
 const hero = StyleSheet.create({
   eyebrow: {
-    fontSize: 10.5,
+    fontSize: 9.5,
     fontWeight: '800',
-    letterSpacing: 1.2,
+    letterSpacing: 1.33, // .14em at 9.5px
     textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.94)',
+    color: 'rgba(255,255,255,0.9)',
   },
   title: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.4,
+    fontFamily: font.serif,
+    fontSize: 20,
+    fontWeight: '600',
     color: brand.onHero,
-    marginTop: 7,
+    marginTop: 5,
+    marginBottom: 1,
   },
   meta: {
+    // 12.5, not the repaint's 11: this line carries the class, the subject and
+    // who is being covered for, on the one card a teacher reads mid-corridor.
     fontSize: 12.5,
     color: 'rgba(255,255,255,0.93)',
-    marginTop: 2,
   },
 });
 
@@ -76,7 +83,7 @@ function GradientHero({
   children,
 }: {
   id: string;
-  colors: readonly [string, string, string];
+  colors: readonly string[];
   testID?: string;
   children: ReactNode;
 }) {
@@ -89,8 +96,10 @@ function GradientHero({
         setSize((s) => (s.w === width && s.h === height ? s : { w: width, h: height }));
       }}
       style={{
-        borderRadius: 22,
-        padding: 16,
+        // `.nowcard` — radius 16 and 14px of padding: a card on the page, not
+        // a slab. Same lift as a `Page`, in ink rather than neutral grey.
+        borderRadius: 16,
+        padding: 14,
         overflow: 'hidden',
         backgroundColor: colors[0],
         shadowColor: brand.hero.shadow,
@@ -108,10 +117,11 @@ function GradientHero({
           pointerEvents="none"
         >
           <Defs>
+            {/* 135deg, exactly as the pitch writes it. */}
             <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={colors[0]} />
-              <Stop offset="0.5" stopColor={colors[1]} />
-              <Stop offset="1" stopColor={colors[2]} />
+              {colors.map((c, i) => (
+                <Stop key={c + String(i)} offset={String(i / (colors.length - 1))} stopColor={c} />
+              ))}
             </LinearGradient>
           </Defs>
           <Rect width={size.w} height={size.h} fill={`url(#${id})`} />
@@ -163,20 +173,90 @@ function SummaryCell({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** The pulsing "live" indicator, kept as a simple solid dot (no timers). */
+/**
+ * `.livedot` — the 7px dot that pulses beside "live now".
+ *
+ * NOT one of the six gestures, deliberately. The six all mark a CHANGE to the
+ * page (a tick, a stamp, a pin…) and each one runs exactly once because the
+ * thing it marks happened exactly once. This marks no change at all: it is a
+ * heartbeat saying the card is speaking in the present tense, which is why it
+ * is the only motion in this app allowed to repeat forever. The pitch draws it
+ * as an expanding ring of white that fades (`box-shadow: 0 0 0 8px` → 0
+ * opacity); a scaling, fading sibling view is the same beat in RN, and both
+ * of its animated props are transform/opacity so it can ride the native
+ * driver and never touch the JS thread.
+ *
+ * Reduce-motion leaves the plain dot: the word "live now" is next to it, so
+ * nothing is lost.
+ */
 function LiveDot() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const reduced = useReduceMotion();
+  useEffect(() => {
+    if (reduced.current) return;
+    const loop = Animated.loop(
+      Animated.timing(pulse, {
+        toValue: 1,
+        duration: DUR.pulse,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, reduced]);
+
+  return (
+    <View style={{ width: 7, height: 7, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          width: 7,
+          height: 7,
+          borderRadius: 3.5,
+          backgroundColor: brand.onHero,
+          // The ring reaches 0 opacity at 70% of the beat and then rests, so
+          // the pulse is a beat followed by a pause — a pulse, not a strobe.
+          opacity: pulse.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.6, 0, 0] }),
+          transform: [
+            { scale: pulse.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 3.3, 3.3] }) },
+          ],
+        }}
+      />
+      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: brand.onHero }} />
+    </View>
+  );
+}
+
+/**
+ * `.nowprog` — THE INK LINE. A 5px rule under the hero that grows from
+ * nothing to how far through the period we are, 0.3s after the card lands.
+ *
+ * It is the Ink Line rather than a progress bar because of what it measures:
+ * a lesson being used up. A bar that simply appeared at 58% would state a
+ * fact; a rule that draws itself to 58% says the lesson has been running,
+ * which is the thing a teacher glancing at this card actually wants to feel.
+ */
+function NowProgress({ percent }: { percent: number }) {
+  const ink = useGesture(true, DUR.ink, { native: false, delay: 300 });
   return (
     <View
+      testID="now-progress"
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: percent }}
       style={{
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: brand.onHero,
-        shadowColor: brand.onHero,
-        shadowOpacity: 0.7,
-        shadowRadius: 4,
+        height: 5,
+        borderRadius: 99,
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        marginTop: 10,
+        overflow: 'hidden',
       }}
-    />
+    >
+      <Animated.View
+        style={{ width: inkWidth(ink, percent), height: '100%', borderRadius: 99, backgroundColor: brand.onHero }}
+      />
+    </View>
   );
 }
 
@@ -226,7 +306,7 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
         <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub, textTransform: 'uppercase' }}>
           Right now
         </Text>
-        <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink, marginTop: 4 }}>
+        <Text style={{ fontFamily: font.serif, fontSize: 17, fontWeight: '600', color: tokens.color.ink, marginTop: 4 }}>
           Nothing on right now
         </Text>
         <Text style={{ fontSize: 12.5, color: tokens.color.sub, marginTop: 3 }}>
@@ -242,7 +322,7 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
         <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub, textTransform: 'uppercase' }}>
           Right now
         </Text>
-        <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink, marginTop: 4 }}>
+        <Text style={{ fontFamily: font.serif, fontSize: 17, fontWeight: '600', color: tokens.color.ink, marginTop: 4 }}>
           {entry.label}
         </Text>
         {nextEntry ? (
@@ -284,7 +364,7 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
   const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
 
   return (
-    <GradientHero id="hero-indigo" colors={brand.hero.indigo} testID="now-card">
+    <GradientHero id="hero-indigo" colors={brand.hero.now} testID="now-card">
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
         <LiveDot />
         <Text style={hero.eyebrow}>{`${entry.label} · Live now`}</Text>
@@ -295,22 +375,9 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
         <Text style={[hero.meta, { fontWeight: '700' }]}>{`Covering for ${slot.coveringFor}`}</Text>
       )}
 
-      <View
-        testID="now-progress"
-        accessibilityRole="progressbar"
-        accessibilityValue={{ min: 0, max: 100, now: pct }}
-        style={{
-          height: 7,
-          borderRadius: 5,
-          backgroundColor: 'rgba(255,255,255,0.24)',
-          marginTop: 13,
-          overflow: 'hidden',
-        }}
-      >
-        <View style={{ width: `${pct}%`, height: '100%', borderRadius: 5, backgroundColor: brand.onHero }} />
-      </View>
+      <NowProgress percent={pct} />
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 12, flexWrap: 'wrap' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 10, flexWrap: 'wrap' }}>
         {register?.taken ? (
           <>
             <HeroChip>{`✓ ${register.present}/${register.total} present`}</HeroChip>
@@ -323,9 +390,15 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
             <Pressable
               testID={`now-take-${slot.classSectionId}`}
               onPress={() => onTakeAttendance(slot.classSectionId)}
+              // `.nowbtn` — white paper on the saturated card, so the one
+              // thing the teacher is being asked to do is the one thing on
+              // this card that looks like a page.
+              // Kept at button size. The repaint took it to 12px text in
+              // 9x14 padding — this is the card's ONE call to action, and the
+              // hardest tap in the app to land while walking.
               style={{
                 backgroundColor: brand.onHero,
-                borderRadius: 13,
+                borderRadius: 12,
                 paddingVertical: 11,
                 paddingHorizontal: 16,
                 alignSelf: 'flex-start',

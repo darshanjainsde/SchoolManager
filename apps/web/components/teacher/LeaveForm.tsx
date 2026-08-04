@@ -104,7 +104,7 @@ export function LeaveForm({ isSubmitting, onSubmit }: LeaveFormProps): React.JSX
         />
       </div>
       <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <button type="button" className="sk-btn" data-variant="primary" disabled={!canSubmit} onClick={submit}>
+        <button type="button" className="sk-btn sk-press" data-variant="primary" disabled={!canSubmit} onClick={submit}>
           {isSubmitting ? 'Submitting…' : 'Submit request'}
         </button>
         {dateOrderInvalid && <span className="sk-state err">The end date must be on or after the start date.</span>}

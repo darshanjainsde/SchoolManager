@@ -4,6 +4,8 @@ import { loadEnv } from '@skoolos/config';
 import type {
   AbsenceNoticePayload,
   AnnouncementPayload,
+  DiaryRemarkPayload,
+  LowAttendancePayload,
   ResultsPublishedPayload,
   TestReminderPayload,
   TestScheduledPayload,
@@ -19,6 +21,8 @@ export type TestReminderInfo = TestReminderPayload;
 export type ResultsPublishedInfo = ResultsPublishedPayload;
 export type AbsenceNoticeInfo = AbsenceNoticePayload;
 export type AnnouncementInfo = AnnouncementPayload;
+export type DiaryRemarkInfo = DiaryRemarkPayload;
+export type LowAttendanceInfo = LowAttendancePayload;
 
 /**
  * Escapes a value for interpolation into an HTML email body. School-authored
@@ -186,6 +190,43 @@ export class MailService {
         <h2 style="color:#134e4a;margin:0 0 12px">Absence notice</h2>
         <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b> marked <b>${escapeHtml(info.studentName)}</b> absent on ${escapeHtml(info.date)}.</p>
         <p style="color:#64748b;font-size:13px;margin-top:20px">If this is unexpected, please contact the school office.</p>
+      </div>`;
+    return this.send(to, subject, html, text);
+  }
+
+  /**
+   * The red-ink remark, sent to the family the moment a teacher writes it —
+   * ALWAYS, even if the child then signs it in the app (the pitch's rule: a
+   * remark reaches the parent, it does not sit in a child's phone). The
+   * remark is quoted in a bordered block so it reads as the teacher's own
+   * words rather than platform copy.
+   */
+  async sendDiaryRemark(to: string, info: DiaryRemarkInfo): Promise<boolean> {
+    const subject = `Diary remark for ${info.studentName} — ${info.schoolName}`;
+    const text = `${info.teacherName} wrote a remark in ${info.studentName}'s diary on ${info.date} (${info.className}).\n\n"${info.remark}"\n\nOpen the school app to read and sign it.`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#b91c1c;margin:0 0 12px">Diary remark</h2>
+        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.teacherName)}</b> wrote a remark in <b>${escapeHtml(info.studentName)}</b>'s diary on ${escapeHtml(info.date)} (${escapeHtml(info.className)}).</p>
+        <blockquote style="margin:18px 0;padding:12px 16px;border-left:4px solid #b91c1c;background:#fef2f2;color:#7f1d1d;line-height:1.6;white-space:pre-wrap">${escapeHtml(info.remark)}</blockquote>
+        <p style="color:#64748b;font-size:13px;margin-top:20px">Open the school app to read it in full and sign it.</p>
+      </div>`;
+    return this.send(to, subject, html, text);
+  }
+
+  /**
+   * The attendance bar's private nudge — one family, their own child, their
+   * own number. Never names or counts other students (see
+   * `AttendanceBarService.notifyLow`).
+   */
+  async sendLowAttendance(to: string, info: LowAttendanceInfo): Promise<boolean> {
+    const subject = `${info.studentName}'s attendance is ${info.percent}%`;
+    const text = `${info.schoolName}: ${info.studentName} (${info.className}) has attended ${info.percent}% of classes over ${info.period}, below the school's ${info.threshold}% benchmark.\n\nIf something is making it hard to attend, please tell the class teacher — we would rather know.`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#b45309;margin:0 0 12px">Attendance update</h2>
+        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.studentName)}</b> (${escapeHtml(info.className)}) has attended <b>${escapeHtml(info.percent)}%</b> of classes over ${escapeHtml(info.period)} — below ${escapeHtml(info.schoolName)}'s ${escapeHtml(info.threshold)}% benchmark.</p>
+        <p style="color:#64748b;font-size:13px;line-height:1.6;margin-top:20px">If something is making it hard to attend, please tell the class teacher — we would rather know.</p>
       </div>`;
     return this.send(to, subject, html, text);
   }

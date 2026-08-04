@@ -111,6 +111,16 @@ export function formatNotification(message: NotificationMessage): NotificationTe
         title: `📣 ${message.payload.schoolName}`,
         body: `${message.payload.title} — ${message.payload.body.slice(0, 120)}`,
       };
+    case 'DIARY_REMARK':
+      return {
+        title: `Diary remark for ${message.payload.studentName}`,
+        body: `${message.payload.teacherName}: ${message.payload.remark.slice(0, 120)}`,
+      };
+    case 'LOW_ATTENDANCE':
+      return {
+        title: `Attendance: ${message.payload.studentName}`,
+        body: `${message.payload.percent}% this term — below the school's ${message.payload.threshold}% benchmark.`,
+      };
     default: {
       // Exhaustiveness guard — a new NotificationKind must be handled above.
       const _exhaustive: never = message;

@@ -5,6 +5,16 @@ import type { MessageThreadRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { Card, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
+import { font } from '@/theme/tokens';
+
+/** "AS" for Aarav Sharma — the pitch's `.mrow .av` initials disc. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0]?.charAt(0) ?? '';
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.charAt(0) ?? '') : '';
+  return (first + last).toUpperCase();
+}
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', {
@@ -75,10 +85,30 @@ export default function StaffMessages() {
           testID={`thread-${t.id}`}
           onPress={() => router.push(`/(staff)/messages/${t.id}`)}
         >
+          {/* `.mrow` — an initials disc, the thread, and the unread count. A
+              conversation is with a PERSON, and a disc bearing their initials
+              is the cheapest way to say so on a list of otherwise identical
+              rows. */}
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 17,
+                backgroundColor: tokens.color.indigo50,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '800', color: tokens.color.indigo }}>
+                {initials(t.studentName)}
+              </Text>
+            </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{t.studentName}</Text>
+                <Text style={{ fontFamily: font.serif, fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>
+                  {t.studentName}
+                </Text>
                 <Text style={{ fontSize: 11, color: tokens.color.sub }}>{formatWhen(t.lastMessageAt)}</Text>
               </View>
               <Text style={{ fontSize: 11.5, color: tokens.color.indigo, marginTop: 1 }}>{t.subjectName}</Text>

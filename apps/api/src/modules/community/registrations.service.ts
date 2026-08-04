@@ -1,0 +1,211 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { withTenant } from '@skoolos/db';
+import { TenantContextService } from '../tenancy';
+import type { RegisterDto } from './community.dto';
+
+/**
+ * Who is coming to an event.
+ *
+ * The events feature could previously advertise an event and nothing else — a
+ * school ran an open day, sixty families turned up unannounced, and the system
+ * that published it held no record anyone was ever coming. This is the half
+ * that was missing.
+ *
+ * THE PAYMENT DOOR IS BUILT AND SHUT. Every ticket type currently costs zero,
+ * so every registration is `NOT_REQUIRED` and confirms without money changing
+ * hands. The paid branch is not a separate code path waiting to be written
+ * later; it is the same path with a non-zero price, which is what stops it
+ * rotting before it is ever used. Nothing here talks to a payment provider and
+ * nothing charges anybody.
+ */
+@Injectable()
+export class RegistrationsService {
+  constructor(private readonly tenant: TenantContextService) {}
+
+  /**
+   * Capacity is counted inside the same transaction as the insert.
+   *
+   * Two families registering for the last seat at the same moment is not a
+   * hypothetical on an open-day link shared to a WhatsApp group — it is the
+   * normal case. Counting outside the transaction would let both through and
+   * oversell the hall.
+   */
+  private async seatsTaken(tx: TenantTxLike, ticketTypeId: string): Promise<number> {
+    const rows = await tx.eventRegistration.findMany({
+      where: { ticketTypeId, status: { in: ['HELD', 'CONFIRMED'] } },
+      select: { quantity: true },
+    });
+    return rows.reduce((n, r) => n + r.quantity, 0);
+  }
+
+  /** The host's own view: every registration for one of its events. */
+  async listForEvent(eventId: string) {
+    const { schoolId } = this.tenant.requireTenant();
+    return withTenant(schoolId, async (tx) => {
+      const event = await tx.event.findFirst({ where: { id: eventId, schoolId } });
+      if (!event) throw new NotFoundException('Event not found');
+
+      const [rows, ticketTypes] = await Promise.all([
+        tx.eventRegistration.findMany({
+          where: { eventId, schoolId },
+          orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+        }),
+        tx.eventTicketType.findMany({ where: { eventId }, orderBy: { createdAt: 'asc' } }),
+      ]);
+
+      // Student names are resolved separately: a registration may reference a
+      // student of ANOTHER school (a network event), and that row is not
+      // readable from this tenant. An unresolvable name is reported as the
+      // school it came from rather than left blank, because "someone from
+      // Bloom Public" is useful and an empty row is not.
+      const studentIds = rows.map((r) => r.studentId).filter((x): x is string => !!x);
+      const students = studentIds.length
+        ? await tx.student.findMany({
+            where: { id: { in: studentIds } },
+            select: { id: true, firstName: true, lastName: true, admissionNo: true },
+          })
+        : [];
+      const byId = new Map(students.map((s) => [s.id, s]));
+
+      const counts = {
+        confirmed: rows.filter((r) => r.status === 'CONFIRMED').reduce((n, r) => n + r.quantity, 0),
+        held: rows.filter((r) => r.status === 'HELD').reduce((n, r) => n + r.quantity, 0),
+        waitlisted: rows.filter((r) => r.status === 'WAITLISTED').reduce((n, r) => n + r.quantity, 0),
+        declined: rows.filter((r) => r.status === 'DECLINED').length,
+        cancelled: rows.filter((r) => r.status === 'CANCELLED').length,
+        /** People, not rows — a family of four is one row and four seats. */
+        seats: rows
+          .filter((r) => r.status === 'HELD' || r.status === 'CONFIRMED')
+          .reduce((n, r) => n + r.quantity, 0),
+      };
+
+      return {
+        event: {
+          id: event.id,
+          title: event.title,
+          startAt: event.startAt.toISOString(),
+          endAt: event.endAt?.toISOString() ?? null,
+          venue: event.venue,
+          scope: event.scope,
+          status: event.status,
+        },
+        capacity: ticketTypes.reduce<number | null>(
+          (acc, t) => (t.capacity == null || acc == null ? null : acc + t.capacity),
+          0,
+        ),
+        counts,
+        registrations: rows.map((r) => {
+          const s = r.studentId ? byId.get(r.studentId) : undefined;
+          return {
+            id: r.id,
+            name: s ? `${s.firstName} ${s.lastName}`.trim() : (r.guestName ?? 'Someone from another school'),
+            admissionNo: s?.admissionNo ?? null,
+            /** Null means our own school; a name means they came from elsewhere. */
+            fromSchoolId: r.fromSchoolId,
+            isGuest: !r.studentId,
+            email: r.guestEmail,
+            phone: r.guestPhone,
+            quantity: r.quantity,
+            status: r.status,
+            paymentStatus: r.paymentStatus,
+            amountMinor: r.amountMinor,
+            currency: r.currency,
+            waitlistPos: r.waitlistPos,
+            checkedInAt: r.checkedInAt?.toISOString() ?? null,
+            createdAt: r.createdAt.toISOString(),
+          };
+        }),
+      };
+    });
+  }
+
+  /**
+   * Register somebody. Runs for the HOST tenant — the host owns its attendee
+   * list, which is the decision the RLS policies rest on.
+   */
+  async register(eventId: string, dto: RegisterDto) {
+    const { schoolId } = this.tenant.requireTenant();
+    return withTenant(schoolId, async (tx) => {
+      const event = await tx.event.findFirst({ where: { id: eventId } });
+      if (!event) throw new NotFoundException('Event not found');
+      if (event.status !== 'APPROVED') {
+        throw new BadRequestException('That event is not open for registration yet');
+      }
+
+      const ticket = dto.ticketTypeId
+        ? await tx.eventTicketType.findFirst({ where: { id: dto.ticketTypeId, eventId } })
+        : await tx.eventTicketType.findFirst({ where: { eventId }, orderBy: { createdAt: 'asc' } });
+      if (!ticket) throw new BadRequestException('That event has no ticket type to register against');
+
+      const now = new Date();
+      if (ticket.salesOpenAt && ticket.salesOpenAt > now) {
+        throw new BadRequestException('Registration has not opened yet');
+      }
+      if (ticket.salesCloseAt && ticket.salesCloseAt < now) {
+        throw new BadRequestException('Registration has closed');
+      }
+
+      const quantity = dto.quantity ?? 1;
+      const taken = await this.seatsTaken(tx, ticket.id);
+      const overCapacity = ticket.capacity != null && taken + quantity > ticket.capacity;
+
+      // Past capacity the honest answer is a place in the queue with a number
+      // on it, not a refusal — a refusal loses the person entirely, and a
+      // waitlist is information the school can act on.
+      const waitlisted = overCapacity;
+      const waitlistPos = waitlisted
+        ? (await tx.eventRegistration.count({ where: { eventId, status: 'WAITLISTED' } })) + 1
+        : null;
+
+      const amountMinor = ticket.priceMinor * quantity;
+      // A free event is not a separate path: price zero, payment NOT_REQUIRED,
+      // and it confirms immediately. A paid one is HELD until the money is
+      // recorded — today by an admin, later by a gateway, same row either way.
+      const free = amountMinor === 0;
+
+      return tx.eventRegistration.create({
+        data: {
+          eventId,
+          schoolId: event.schoolId,
+          ticketTypeId: ticket.id,
+          quantity,
+          studentId: dto.studentId ?? null,
+          fromSchoolId: dto.fromSchoolId ?? schoolId,
+          guestName: dto.guestName ?? null,
+          guestEmail: dto.guestEmail ?? null,
+          guestPhone: dto.guestPhone ?? null,
+          status: waitlisted ? 'WAITLISTED' : free ? 'CONFIRMED' : 'HELD',
+          waitlistPos,
+          amountMinor,
+          currency: ticket.currency,
+          paymentStatus: free ? 'NOT_REQUIRED' : 'PENDING',
+        },
+      });
+    });
+  }
+
+  /** The host confirming or turning down a request. */
+  async setStatus(registrationId: string, status: 'CONFIRMED' | 'DECLINED' | 'CANCELLED') {
+    const { schoolId } = this.tenant.requireTenant();
+    return withTenant(schoolId, async (tx) => {
+      const existing = await tx.eventRegistration.findFirst({
+        where: { id: registrationId, schoolId },
+      });
+      if (!existing) throw new NotFoundException('Registration not found');
+      return tx.eventRegistration.update({ where: { id: registrationId }, data: { status } });
+    });
+  }
+}
+
+/**
+ * The slice of the tenant transaction this service touches.
+ *
+ * Declared locally rather than importing the full generated client type: it
+ * keeps the capacity helper testable with a small hand-built stub, and makes
+ * the surface this service is allowed to reach explicit.
+ */
+interface TenantTxLike {
+  eventRegistration: {
+    findMany(args: unknown): Promise<{ quantity: number }[]>;
+  };
+}

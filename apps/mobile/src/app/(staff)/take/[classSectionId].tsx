@@ -1,17 +1,15 @@
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Animated, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import {
-  ATTENDANCE_STATUSES,
-  type AttendanceStatusValue,
-  type SaveAttendanceResponse,
-} from '@skoolos/types';
+import { type AttendanceStatusValue, type SaveAttendanceResponse } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { enqueueSave, flush } from '@/lib/offline-queue';
+import { WhoNeedsAWord } from '@/components/WhoNeedsAWord';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
-import type { ColorPalette } from '@/theme/tokens';
+import { font, type ColorPalette } from '@/theme/tokens';
+import { DUR, stampStyle, useGesture } from '@/theme/motion';
 
 interface RosterRow {
   studentId: string;
@@ -57,18 +55,88 @@ const STATUS_LABEL: Record<AttendanceStatusValue, string> = {
   ABSENT: 'Absent',
   LATE: 'Late',
 };
-function statusColor(tokens: { color: ColorPalette }): Record<AttendanceStatusValue, string> {
+
+// REGISTER BY EXCEPTION. One tap cycles the cell; the teacher never selects a
+// state directly, they walk the class marking only the students who aren't
+// simply there. Same order as the web (apps/web/app/teacher/attendance/page.tsx)
+// so a teacher who learns the cycle on one client already knows it on the
+// other. Record-typed for the same reason as STATUS_LABEL: a fourth server
+// state fails the build rather than dead-ending the cycle.
+const CYCLE: Record<AttendanceStatusValue, AttendanceStatusValue> = {
+  PRESENT: 'ABSENT',
+  ABSENT: 'LATE',
+  LATE: 'PRESENT',
+};
+
+// A marked cell drops its roll number for a glyph, so the exceptions are
+// findable in a block of forty without reading a single figure.
+const STATUS_GLYPH: Record<AttendanceStatusValue, string | null> = {
+  PRESENT: null,
+  ABSENT: '✕',
+  LATE: '⏱',
+};
+
+// `.rcell` — tint behind, its own ink on top, one pair per state. `late` (not
+// `amber`) is the ink on the amber tint for the same reason the web has a
+// `--sk-late` at all: the brand accent shifts in dark mode and a status must
+// not shift with it.
+function cellTones(tokens: { color: ColorPalette }): Record<
+  AttendanceStatusValue,
+  { bg: string; ink: string }
+> {
   return {
-    PRESENT: tokens.color.green,
-    ABSENT: tokens.color.red,
-    LATE: tokens.color.amber,
+    PRESENT: { bg: tokens.color.green50, ink: tokens.color.green },
+    ABSENT: { bg: tokens.color.red50, ink: tokens.color.red },
+    LATE: { bg: tokens.color.amber50, ink: tokens.color.late },
   };
+}
+
+/**
+ * THE STAMP (`.bigstamp`) — the register is the one page a teacher must
+ * *close*, and a rubber stamp is what closing a page looks like on paper: it
+ * arrives oversized and crooked, thumps past its resting size and settles a
+ * few degrees off square. It exists so "saved" is felt, not merely read;
+ * the Toast beside it carries the actual numbers. Mounted only once the
+ * SERVER has confirmed, so the stamp can never claim a save that didn't
+ * happen — a queued/offline save deliberately gets no stamp, only the
+ * pending Toast.
+ */
+function SavedStamp() {
+  const tokens = useTokens();
+  const land = useGesture(true, DUR.stamp);
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Animated.View
+        style={[
+          {
+            borderWidth: 2.5,
+            borderColor: tokens.color.green,
+            borderRadius: 10,
+            paddingVertical: 6,
+            paddingHorizontal: 16,
+          },
+          stampStyle(land),
+        ]}
+      >
+        <Text
+          style={{
+            fontFamily: font.serif,
+            fontWeight: '700',
+            fontSize: 15,
+            color: tokens.color.green,
+          }}
+        >
+          Register saved
+        </Text>
+      </Animated.View>
+    </View>
+  );
 }
 
 export default function TakeAttendance() {
   const tokens = useTokens();
-  const STATUS_COLOR = statusColor(tokens);
-  const { classSectionId, name, date: dateParam } = useLocalSearchParams<{
+  const CELL = cellTones(tokens);
+  const { classSectionId, name, date: dateParam, takenBy } = useLocalSearchParams<{
     classSectionId: string;
     name?: string;
     /** YYYY-MM-DD. Omitted by today's link (see attendance.tsx's `goTake`); a
@@ -77,6 +145,11 @@ export default function TakeAttendance() {
      * this screen just proxies whatever date it's given through to the GET
      * and PUT below. */
     date?: string;
+    /** Who already marked this class today, when it has been marked. Present
+     * only on the taken path (attendance.tsx's `goTake`), and used for two
+     * things: the banner naming them, and the overwrite confirmation on
+     * Submit. Absent means "not taken yet", so saving replaces nothing. */
+    takenBy?: string;
   }>();
   const date = dateParam ?? todayISO();
   const [roster, setRoster] = useState<RosterRow[] | null>(null);
@@ -88,6 +161,17 @@ export default function TakeAttendance() {
   // `confirmation` (server confirmed) and `error` (server or client
   // rejected it outright).
   const [pendingOffline, setPendingOffline] = useState(false);
+  // The last cell the teacher tapped, kept so the caption under the grid can
+  // NAME it and offer the way back. The grid is fast precisely because it
+  // drops the names, so the one real risk it introduces is tapping the wrong
+  // cell — this is the whole mitigation, and it holds `from` (not just `to`)
+  // so Undo restores the exact prior state rather than assuming PRESENT.
+  const [lastMark, setLastMark] = useState<{
+    studentId: string;
+    name: string;
+    from: AttendanceStatusValue;
+    to: AttendanceStatusValue;
+  } | null>(null);
 
   // Refetch on focus: if this is a retake, we want the freshest marks and
   // roster every time the screen comes back into view. Also attempts to
@@ -137,6 +221,11 @@ export default function TakeAttendance() {
   const rows = roster ?? [];
   const presentCount = rows.filter((r) => r.status === 'PRESENT').length;
   const absentCount = rows.filter((r) => r.status === 'ABSENT').length;
+  // LATE is a third state the register can be in, so it has to be a third
+  // figure. Without it, marking two latecomers in a class of forty read
+  // "38 present · 0 absent · 40 total" — two children unaccounted for, and
+  // nothing on screen to say where they went.
+  const lateCount = rows.filter((r) => r.status === 'LATE').length;
 
   // Editing after a save invalidates the confirmation (or pending-offline
   // notice) that's on screen — it described a roster that no longer
@@ -153,11 +242,58 @@ export default function TakeAttendance() {
   const markAllPresent = () => {
     setConfirmation(null);
     setPendingOffline(false);
+    // A wholesale reset makes the single-cell caption a lie (and its Undo
+    // would restore one student into a roster that no longer matches), so
+    // clear it rather than leave it describing a tap that's been overwritten.
+    setLastMark(null);
     setRoster((rs) => (rs ?? []).map((x) => ({ ...x, status: 'PRESENT' })));
   };
 
+  // ONE TAP PER EXCEPTION: present → absent → late → present. The only way
+  // this screen sets a status now — there is no direct-select control, which
+  // is what lets the roster be a block of roll numbers instead of a list of
+  // rows carrying three buttons each.
+  const cycle = (row: RosterRow) => {
+    const to = CYCLE[row.status];
+    setStatus(row.studentId, to);
+    setLastMark({ studentId: row.studentId, name: row.name, from: row.status, to });
+  };
+
+  const undoLastMark = () => {
+    if (!lastMark) return;
+    setStatus(lastMark.studentId, lastMark.from);
+    setLastMark(null);
+  };
+
+  /**
+   * OVERWRITING IS CONFIRMED HERE, NOT AT THE DOOR.
+   *
+   * The warning used to fire when a teacher merely OPENED an already-marked
+   * class, and it was doubly wrong: opening this screen writes nothing (the
+   * PUT below is the only write), and "Who needs a word" lives at the bottom
+   * of this screen — so the one question a teacher asks after the morning
+   * register was in ("who is slipping?") sat behind a red, destructive-styled
+   * prompt about overwriting a colleague's work. The web client never gated
+   * viewing; it shows the roster and the insight, and gates only the edit.
+   */
   const submit = async () => {
     if (!classSectionId || rows.length === 0) return;
+    if (takenBy) {
+      const when = date === todayISO() ? 'today' : `on ${date}`;
+      const ok = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          `Replace ${name ?? 'this class'}'s register?`,
+          `${takenBy} already marked it ${when}. Saving replaces that record for ` +
+            `every teacher. The previous version stays in the audit log.`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Replace', style: 'destructive', onPress: () => resolve(true) },
+          ],
+          { onDismiss: () => resolve(false) },
+        );
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     setError(null);
     setConfirmation(null);
@@ -196,11 +332,23 @@ export default function TakeAttendance() {
     }
   };
 
+  // `.regstat .n` — the pitch sets every countable figure in the mono face so
+  // the three numerals line up as a column of figures would in a paper
+  // register. Only the NUMBERS are mono; the words stay in the UI sans, per
+  // the type rule in theme/tokens.ts.
+  const statNumber = (color: string) => ({
+    fontFamily: font.mono,
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color,
+  });
+
   return (
     <Screen>
       <SectionTitle
         title={`${name ?? 'Class'} · Attendance${date === todayISO() ? '' : ` · ${date}`}`}
       />
+      {confirmation && <SavedStamp />}
       {confirmation && (
         <Toast
           kind="success"
@@ -227,10 +375,41 @@ export default function TakeAttendance() {
           <Text style={{ color: tokens.color.sub }}>Loading roster…</Text>
         </Card>
       )}
-      {roster !== null && (
+      {/* `.regstats` — the running count, mono numerals on paper. Kept as ONE
+          text run (rather than the pitch's three separate tiles) because that
+          exact sentence is this screen's published summary; the mono/colour
+          treatment per figure is what carries the tile idea across. */}
+      {/* The web shows "Taken by X" above the roster for the same reason: you
+          can look at a marked register freely, but you should know whose work
+          you are about to change before you change it. */}
+      {takenBy && (
+        <Card style={{ paddingVertical: 9 }}>
+          <Text style={{ fontSize: 11.5, color: tokens.color.sub, textAlign: 'center' }}>
+            Taken by {takenBy}. Saving replaces that record.
+          </Text>
+        </Card>
+      )}
+      {roster !== null && rows.length === 0 && (
         <Card>
-          <Text style={{ fontWeight: '700', color: tokens.color.ink }}>
-            {presentCount} present · {absentCount} absent · {rows.length} total
+          <Text style={{ color: tokens.color.sub }}>
+            No students in this class yet — your admin needs to enrol them.
+          </Text>
+        </Card>
+      )}
+      {roster !== null && rows.length > 0 && (
+        <Card style={{ paddingVertical: 9, alignItems: 'center' }}>
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: '700',
+              color: tokens.color.sub,
+              textAlign: 'center',
+            }}
+          >
+            <Text style={statNumber(tokens.color.ink)}>{rows.length}</Text> students ·{' '}
+            <Text style={statNumber(tokens.color.green)}>{presentCount}</Text> present ·{' '}
+            <Text style={statNumber(tokens.color.red)}>{absentCount}</Text> absent ·{' '}
+            <Text style={statNumber(tokens.color.late)}>{lateCount}</Text> late
           </Text>
         </Card>
       )}
@@ -240,7 +419,7 @@ export default function TakeAttendance() {
         testID="mark-all-present"
         style={{
           backgroundColor: tokens.color.indigo50,
-          borderRadius: 13,
+          borderRadius: 11,
           padding: 11,
           opacity: busy || rows.length === 0 ? 0.6 : 1,
         }}
@@ -249,59 +428,123 @@ export default function TakeAttendance() {
           Mark all present
         </Text>
       </Pressable>
+      {/* THE REGISTER GRID (`.rgrid`/`.rcell`) — one square cell per student,
+          not a row per student with three buttons on it. A class of forty is
+          one block you take in at a glance instead of forty rows and a
+          hundred and twenty controls to scan, and the only cells that stand
+          out are the ones that needed action.
+
+          A cell carries the ROLL NUMBER while present and swaps to a glyph
+          once marked, so the exceptions are findable without reading any
+          number. The name is deliberately NOT drawn on the cell — that is
+          what makes the grid fast — but it IS the cell's accessible name, so
+          a screen reader still announces "Asha Rao, roll 1, present". */}
       {rows.length > 0 && (
-        <Card style={{ paddingVertical: 2 }}>
-          {rows.map((r) => (
-            <View
-              key={r.studentId}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 9,
-                borderBottomWidth: 1,
-                borderBottomColor: tokens.color.line,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '600', color: tokens.color.ink }}>{r.name}</Text>
-                <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 1 }}>
-                  Roll {r.rollNo ?? '—'}
-                </Text>
-              </View>
-              <View
-                style={{ flexDirection: 'row', backgroundColor: tokens.color.surfaceMuted, borderRadius: 10, padding: 3 }}
-              >
-                {ATTENDANCE_STATUSES.map((status) => {
-                  const on = r.status === status;
-                  const bg = on ? STATUS_COLOR[status] : 'transparent';
-                  return (
-                    <Pressable
-                      key={status}
-                      testID={`${status.toLowerCase()}-${r.studentId}`}
-                      onPress={() => setStatus(r.studentId, status)}
-                      style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, backgroundColor: bg }}
-                    >
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: on ? tokens.color.onBrand : tokens.color.sub }}>
-                        {STATUS_LABEL[status]}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ))}
+        <Card style={{ paddingVertical: 12 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+            {rows.map((r) => {
+              const tone = CELL[r.status];
+              return (
+                <Pressable
+                  key={r.studentId}
+                  testID={`cell-${r.studentId}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${r.name}, roll ${r.rollNo ?? 'none'}, ${STATUS_LABEL[
+                    r.status
+                  ].toLowerCase()}`}
+                  onPress={() => cycle(r)}
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 9,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: tone.bg,
+                    // `.rcell[data-status="ABSENT"]{transform:scale(1.06)}` — an
+                    // absence is the mark that costs a deliberate tap, so it is
+                    // the one that moves.
+                    transform: r.status === 'ABSENT' ? [{ scale: 1.06 }] : [],
+                  }}
+                >
+                  {/* Mono, like every figure in this product that has to line
+                      up with its neighbours down a column. */}
+                  <Text
+                    style={{
+                      fontFamily: font.mono,
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: tone.ink,
+                    }}
+                  >
+                    {STATUS_GLYPH[r.status] ?? r.rollNo ?? '·'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </Card>
+      )}
+      {/* WHAT YOU JUST DID, IN WORDS. The grid's speed comes from dropping the
+          names, so the one real risk is tapping the wrong cell — this line
+          catches it, with the way back beside it. Before the first tap it
+          carries the hint that answers the one question a green-looking
+          register raises. */}
+      {rows.length > 0 && (
+        <View
+          testID="register-said"
+          accessibilityLiveRegion="polite"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            minHeight: 20,
+            marginTop: -4,
+          }}
+        >
+          {lastMark ? (
+            <>
+              <Text style={{ fontSize: 11.5, color: tokens.color.ink2 }}>
+                {lastMark.name} · {STATUS_LABEL[lastMark.to].toLowerCase()}
+              </Text>
+              <Pressable testID="register-undo" accessibilityRole="button" onPress={undoLastMark}>
+                <Text
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: '700',
+                    color: tokens.color.indigo,
+                    textDecorationLine: 'underline',
+                  }}
+                >
+                  Undo
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <Text style={{ fontSize: 10.5, color: tokens.color.sub, textAlign: 'center' }}>
+              Everyone starts present — tap the absentees. Tap again for late.
+            </Text>
+          )}
+        </View>
       )}
       <Pressable
         onPress={submit}
         disabled={busy || rows.length === 0}
         testID="submit-attendance"
-        style={{ backgroundColor: tokens.color.indigo, borderRadius: 14, padding: 15, opacity: busy || rows.length === 0 ? 0.6 : 1 }}
+        style={{ backgroundColor: tokens.color.indigo, borderRadius: 11, padding: 14, opacity: busy || rows.length === 0 ? 0.6 : 1 }}
       >
         <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
           {busy ? 'Submitting…' : 'Submit attendance'}
         </Text>
       </Pressable>
+
+      {/* Who is slipping in THIS class, under the register you just took —
+          the same placement the web uses. It used to be a tab of its own with
+          its own class picker, which meant choosing the class a second time to
+          answer a question about the register already in front of you. */}
+      {/* `name` is a route param and therefore optional; the class is still
+          named in the header above, so an empty label here costs nothing. */}
+      <WhoNeedsAWord classSectionId={classSectionId} className={name ?? 'this class'} />
     </Screen>
   );
 }
