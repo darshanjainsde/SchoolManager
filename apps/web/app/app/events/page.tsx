@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -387,17 +388,31 @@ export default function EventsPage() {
                     <StatusBadge status={event.status} />
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => deleteMutation.mutate(event.id)}
-                  className="shrink-0 sk-press"
-                  style={{ color: 'var(--sk-bad)' }}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Delete
-                </Button>
+                {/* An event is now something you can OPEN. It was previously a
+                    poster with a delete button — the only thing you could do to
+                    an event was destroy it, because there was nothing behind it
+                    to look at. */}
+                <div className="flex shrink-0 items-center gap-1">
+                  <Link
+                    href={`/app/events/${event.id}`}
+                    className="sk-btn sk-press"
+                    data-variant="primary"
+                    data-testid={`open-${event.id}`}
+                  >
+                    Who&rsquo;s coming
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => deleteMutation.mutate(event.id)}
+                    className="sk-press"
+                    style={{ color: 'var(--sk-bad)' }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Delete
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}

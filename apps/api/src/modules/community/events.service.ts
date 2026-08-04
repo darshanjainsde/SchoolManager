@@ -36,7 +36,7 @@ export class EventsService {
       }
       const status = dto.scope === 'NETWORK' ? 'PENDING' : 'APPROVED';
       try {
-        return await tx.event.create({
+        const created = await tx.event.create({
           data: {
             schoolId,
             title: dto.title,
@@ -51,6 +51,29 @@ export class EventsService {
             originSchoolName: school.name,
           },
         });
+
+        // EVERY EVENT GETS A TICKET TYPE, and by default a free one.
+        //
+        // Not a convenience: it is what keeps "free" from being a separate code
+        // path. Registration always resolves a ticket type, always copies its
+        // price onto the row, and always writes a payment status — so the paid
+        // branch is exercised by every single registration in the system
+        // rather than sitting unused until the day money is switched on, which
+        // is when an unexercised branch is discovered to be broken.
+        //
+        // `capacity: null` means unlimited. A school that wants a limit sets
+        // one; nothing here invents a number for them.
+        await tx.eventTicketType.create({
+          data: {
+            eventId: created.id,
+            schoolId,
+            name: 'Attendance',
+            priceMinor: 0,
+            capacity: dto.capacity ?? null,
+          },
+        });
+
+        return created;
       } catch (e) {
         if (isP2002(e)) throw new ConflictException('Duplicate event');
         throw e;
