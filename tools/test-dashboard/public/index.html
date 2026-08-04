@@ -179,6 +179,111 @@
   .toggle { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px;
             color: var(--ink-2); cursor: pointer; user-select: none; }
   .toggle input { accent-color: var(--brand); width: 15px; height: 15px; cursor: pointer; }
+  /* ── Catalogue ──────────────────────────────────────────────────────────
+     A two-pane browser: the tree narrows, the panel explains. Deliberately
+     not an accordion of everything — 1,440 rows in one column is a list you
+     scroll past, not one you read. */
+  .cat-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .cat-controls input[type="search"] { flex: 1 1 320px; min-width: 220px; }
+  .cat-controls input, .cat-controls select, #live-env {
+    background: var(--surface-2); border: 1px solid var(--line-2); color: var(--ink);
+    border-radius: 8px; padding: 8px 11px; font: inherit; font-size: 13.5px;
+  }
+  .cat-controls input:focus-visible, .cat-controls select:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+  .cat-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .cat-split { grid-template-columns: 1fr; } }
+
+  .cat-tree {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    max-height: 74vh; overflow: auto; padding: 6px;
+  }
+  .cat-detail {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px; max-height: 74vh; overflow: auto; position: sticky; top: 74px;
+  }
+
+  .cat-portal > summary, .cat-feature > summary {
+    cursor: pointer; list-style: none; padding: 8px 10px; border-radius: 8px;
+    display: flex; align-items: center; gap: 9px; font-size: 13.5px;
+  }
+  .cat-portal > summary::-webkit-details-marker, .cat-feature > summary::-webkit-details-marker { display: none; }
+  .cat-portal > summary:hover, .cat-feature > summary:hover { background: var(--surface-2); }
+  .cat-portal > summary { font-weight: 700; }
+  .cat-feature { margin-left: 12px; }
+  .cat-feature > summary { color: var(--ink-2); }
+  .cat-portal > summary::before, .cat-feature > summary::before {
+    content: '▸'; color: var(--ink-3); font-size: 11px; transition: transform .12s ease; display: inline-block;
+  }
+  .cat-portal[open] > summary::before, .cat-feature[open] > summary::before { transform: rotate(90deg); }
+
+  .cat-file { margin: 4px 0 8px 26px; }
+  .cat-file .fname {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    padding: 3px 4px; word-break: break-all;
+  }
+  .cat-test {
+    display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left;
+    background: none; border: 0; color: var(--ink-2); font: inherit; font-size: 12.8px;
+    padding: 6px 8px; border-radius: 7px; cursor: pointer; line-height: 1.4;
+  }
+  .cat-test:hover { background: var(--surface-2); color: var(--ink); }
+  .cat-test[aria-current="true"] { background: var(--brand); color: #fff; }
+  .cat-test[aria-current="true"] .cat-why { color: rgba(255,255,255,.75); }
+  .cat-test .cat-why { display: block; font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+
+  /* A square per test, coloured by its last known verdict. Grey means never
+     run — deliberately NOT green, because "no result" is not "passing". */
+  .tdot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; margin-top: 5px; background: var(--idle-bg); border: 1px solid var(--line-2); }
+  .tdot.passed { background: var(--pass); border-color: var(--pass); }
+  .tdot.failed { background: var(--fail); border-color: var(--fail); }
+  .tdot.skipped { background: var(--amber); border-color: var(--amber); }
+
+  .cat-count { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); margin-left: auto; }
+  .cat-detail h3 { margin: 0 0 4px; font-size: 16px; line-height: 1.35; }
+  .cat-detail .crumbs { font-size: 11.5px; color: var(--ink-3); margin-bottom: 14px; }
+  .cat-detail .crumbs b { color: var(--ink-2); font-weight: 600; }
+  .cat-sec { margin: 16px 0 0; }
+  .cat-sec > .lab {
+    font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 700; margin-bottom: 5px;
+  }
+  .cat-sec p { margin: 0; font-size: 13px; color: var(--ink-2); white-space: pre-wrap; }
+  .cat-sec .src { border-left: 2px solid var(--line-2); padding-left: 11px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    font-family: var(--mono); font-size: 10.5px; background: var(--surface-2);
+    border: 1px solid var(--line-2); color: var(--ink-2); border-radius: 5px; padding: 2px 6px;
+  }
+  .cat-run { display: flex; gap: 9px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+  .cat-out { margin-top: 12px; }
+  pre.cmd {
+    font-family: var(--mono); font-size: 11px; background: var(--ground); color: var(--ink-2);
+    border: 1px solid var(--line); border-radius: 7px; padding: 9px 11px; overflow-x: auto; margin: 8px 0 0;
+  }
+
+  /* ── Live checks ────────────────────────────────────────────────────── */
+  .lv-group { margin-bottom: 18px; }
+  .lv-group > h3 { margin: 0 0 8px; font-size: 13px; color: var(--ink-2); }
+  .lv-row {
+    display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 12px; align-items: start;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 7px;
+  }
+  .lv-row .st {
+    font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .06em;
+    text-align: center; border-radius: 5px; padding: 3px 0;
+  }
+  .lv-row .st.pass { background: var(--pass-bg); color: var(--pass); }
+  .lv-row .st.fail { background: var(--fail-bg); color: var(--fail); }
+  .lv-row .st.skipped { background: var(--idle-bg); color: var(--ink-3); }
+  .lv-row .st.running { background: var(--run-bg); color: var(--run); }
+  .lv-row .t { font-size: 13.5px; font-weight: 600; }
+  .lv-row .d { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 4px; word-break: break-word; }
+  .lv-row .fb { font-size: 12px; color: var(--fail); margin-top: 5px; }
+  .lv-row .ex { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
+  .lv-row .ms { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+  .lv-row details summary { cursor: pointer; font-size: 11.5px; color: var(--ink-3); margin-top: 7px; }
 </style>
 </head>
 <body>
@@ -195,7 +300,9 @@
       Sckools <small>test dashboard</small>
     </span>
     <span class="tabs" role="tablist">
-      <button class="tab" role="tab" aria-selected="true" data-tab="tests">Tests</button>
+      <button class="tab" role="tab" aria-selected="true" data-tab="tests">Suites</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="catalogue">Every test</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="live">Live environments</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="git">Branches &amp; deploys</button>
     </span>
     <span class="spacer"></span>
@@ -244,6 +351,77 @@
 
   <footer>
     127.0.0.1 only · runs repo scripts directly · results cached in tools/test-dashboard/.cache
+  </footer>
+</div>
+
+<div class="wrap" id="tab-catalogue" hidden>
+  <div class="verdict">
+    <span class="badge unknown" id="cat-badge"><span class="dot"></span>reading source</span>
+    <h1 id="cat-headline">Cataloguing every test in the repo…</h1>
+    <span class="spacer"></span>
+    <button class="sm" id="cat-refresh">Rescan</button>
+  </div>
+
+  <p class="hint" style="margin:0 0 14px">
+    Built by reading the test files themselves, not by running them — so it is complete
+    even when a gate is red and nothing has executed. Pick a portal to drill in.
+    <b>Verdicts appear against a test once its suite has been run</b> on the Suites tab.
+  </p>
+  <p class="hint" style="margin:0 0 14px" id="cat-note"></p>
+
+  <div class="cat-controls">
+    <input type="search" id="cat-search" placeholder="Search test names, files, explanations…" autocomplete="off" />
+    <select id="cat-portal"><option value="">All portals</option></select>
+    <select id="cat-state">
+      <option value="">Any result</option>
+      <option value="failed">Failing only</option>
+      <option value="passed">Passing only</option>
+      <option value="unrun">Never run</option>
+      <option value="undocumented">Unexplained only</option>
+    </select>
+    <span class="spacer"></span>
+    <span class="meta" id="cat-count"></span>
+  </div>
+
+  <div class="cat-split">
+    <div class="cat-tree" id="cat-tree"><p class="empty">Loading…</p></div>
+    <div class="cat-detail" id="cat-detail">
+      <p class="empty">Choose a test on the left to see what it covers, why it exists, and to run it on its own.</p>
+    </div>
+  </div>
+
+  <footer>
+    Explanations are the comments the author wrote above the test, above its group, or at its assertions.
+    A test with none is listed as unexplained rather than given a made-up description.
+  </footer>
+</div>
+
+<div class="wrap" id="tab-live" hidden>
+  <div class="verdict">
+    <span class="badge unknown" id="live-badge"><span class="dot"></span>not run</span>
+    <h1 id="live-headline">Checks that run against a deployed environment</h1>
+    <span class="spacer"></span>
+    <select id="live-env"><option value="staging">Staging</option><option value="production">Production</option></select>
+    <button class="primary" id="live-run">Run against this environment</button>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <h3>Why these are separate from the 1,440 tests</h3>
+    <p class="hint" style="margin:6px 0 0">
+      Those tests mock the network — <code>api.request</code> is a stub and no HTTP leaves the machine — so
+      “running them against staging” would change nothing while appearing to prove something.
+      The checks below make <b>real requests to the deployed environment</b> and assert on the real
+      responses: that it is up, that a hostname resolves to the right school, that an unknown hostname is
+      <i>refused</i> rather than served a default, and that the commit answering traffic is the one you think you shipped.
+    </p>
+    <p class="hint" style="margin:10px 0 0" id="live-creds"></p>
+  </div>
+
+  <div id="live-results"><p class="empty">Nothing run yet.</p></div>
+
+  <footer>
+    Signed-in checks need an account: set <code>DASH_LIVE_IDENTIFIER</code> and <code>DASH_LIVE_PASSWORD</code>
+    before starting the dashboard. Without them those checks report <b>skipped</b> — never passed.
   </footer>
 </div>
 
@@ -551,11 +729,299 @@ document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     const which = btn.dataset.tab;
     document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
-    el('tab-tests').hidden = which !== 'tests';
-    el('tab-git').hidden = which !== 'git';
+    for (const id of ['tests', 'catalogue', 'live', 'git']) el('tab-' + id).hidden = which !== id;
     if (which === 'git' && !gitData) loadGit();
+    if (which === 'catalogue' && !catalogue) loadCatalogue();
+    if (which === 'live' && !liveSuite) loadLive();
   });
 });
+
+// ── The catalogue: every test, grouped the way a person thinks ──────────────
+let catalogue = null;
+let selectedTest = null;
+
+async function loadCatalogue(refresh = false) {
+  el('cat-tree').innerHTML = '<p class="empty">Reading test files…</p>';
+  catalogue = await fetch('/api/catalogue' + (refresh ? '?refresh=1' : '')).then((r) => r.json());
+
+  const portals = [...new Set(catalogue.files.map((f) => f.portal))].sort();
+  el('cat-portal').innerHTML =
+    '<option value="">All portals</option>' + portals.map((p) => '<option>' + esc(p) + '</option>').join('');
+
+  const s = catalogue.stats;
+  const pct = Math.round((s.describedCount / s.testCount) * 100);
+  el('cat-badge').className = 'badge pass';
+  el('cat-badge').innerHTML = '<span class="dot"></span>' + s.testCount + ' tests';
+  el('cat-headline').textContent =
+    s.testCount + ' tests across ' + s.fileCount + ' files, in ' + portals.length + ' areas';
+  el('cat-count').textContent = pct + '% carry an explanation (' + s.describedCount + ' of ' + s.testCount + ')';
+
+  // State the mismatch rather than absorbing it. `it.each` legitimately turns
+  // one source line into several runtime tests, so a gap is expected — but an
+  // unexplained gap is also what a parser bug looks like, and the whole point
+  // of this board is that a number nobody can account for gets said out loud.
+  const r = catalogue.results;
+  el('cat-note').innerHTML = r
+    ? r.matched + ' of these have a recorded verdict. ' +
+      (r.unmatched
+        ? '<b>' + r.unmatched + ' result(s) from the runners matched no source test</b> — normally parametrised <code>it.each</code> tests, which expand one line into several at runtime.'
+        : 'Every recorded result matched a test in the tree.')
+    : '';
+  renderTree();
+}
+
+/** A test's last known verdict, or null. Never invented. */
+const verdict = (t) => (t.result ? t.result.status : null);
+
+function testMatches(t, f, q, state) {
+  if (state === 'failed' && verdict(t) !== 'failed') return false;
+  if (state === 'passed' && verdict(t) !== 'passed') return false;
+  if (state === 'unrun' && verdict(t) !== null) return false;
+  if (state === 'undocumented' && (t.why || t.notes?.length || t.groups.some((g) => g.why))) return false;
+  if (!q) return true;
+  const hay = [t.name, t.why, f.path, f.feature, f.portal, ...(t.notes ?? []).map((n) => n.text), ...t.groups.map((g) => g.title)]
+    .filter(Boolean).join(' ').toLowerCase();
+  return hay.includes(q);
+}
+
+function renderTree() {
+  if (!catalogue) return;
+  const q = el('cat-search').value.trim().toLowerCase();
+  const portalFilter = el('cat-portal').value;
+  const state = el('cat-state').value;
+
+  // portal → feature → file → tests, built only from what survives the filter
+  // so an empty group never renders as a heading with nothing under it.
+  const tree = new Map();
+  let shown = 0;
+  for (const f of catalogue.files) {
+    if (portalFilter && f.portal !== portalFilter) continue;
+    const tests = f.tests.filter((t) => t.name && testMatches(t, f, q, state));
+    if (!tests.length) continue;
+    shown += tests.length;
+    if (!tree.has(f.portal)) tree.set(f.portal, new Map());
+    const feats = tree.get(f.portal);
+    const key = f.group ? f.group + ' · ' + f.feature : f.feature;
+    if (!feats.has(key)) feats.set(key, []);
+    feats.get(key).push({ file: f, tests });
+  }
+
+  if (!tree.size) {
+    el('cat-tree').innerHTML = '<p class="empty">Nothing matches that filter.</p>';
+    return;
+  }
+
+  // Auto-open when the filter has already narrowed things down; keep it shut
+  // when the whole repo is listed, or the tree opens to 1,440 rows.
+  const narrow = shown < 60;
+  let html = '';
+  for (const [portal, feats] of [...tree].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const n = [...feats.values()].flat().reduce((a, x) => a + x.tests.length, 0);
+    html += '<details class="cat-portal"' + (narrow ? ' open' : '') + '><summary>' + esc(portal) +
+            '<span class="cat-count">' + n + '</span></summary>';
+    for (const [feature, files] of [...feats].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const fn = files.reduce((a, x) => a + x.tests.length, 0);
+      html += '<details class="cat-feature"' + (narrow ? ' open' : '') + '><summary>' + esc(feature) +
+              '<span class="cat-count">' + fn + '</span></summary>';
+      for (const { file, tests } of files) {
+        html += '<div class="cat-file"><div class="fname">' + esc(file.path) + '</div>';
+        for (const t of tests) {
+          const v = verdict(t);
+          const why = t.why || t.groups.find((g) => g.why)?.why || t.notes?.[0]?.text || '';
+          html +=
+            '<button class="cat-test" data-path="' + esc(file.path) + '" data-name="' + esc(t.name) + '">' +
+            '<span class="tdot ' + (v ?? '') + '"></span><span>' + esc(t.name) +
+            (why ? '<span class="cat-why">' + esc(why.split('\n')[0].slice(0, 110)) + '</span>' : '') +
+            '</span></button>';
+        }
+        html += '</div>';
+      }
+      html += '</details>';
+    }
+    html += '</details>';
+  }
+  el('cat-tree').innerHTML = html;
+  el('cat-count').textContent = shown + ' test' + (shown === 1 ? '' : 's') + ' shown';
+}
+
+function findTest(path, name) {
+  const f = catalogue.files.find((x) => x.path === path);
+  return f ? { file: f, test: f.tests.find((t) => t.name === name) } : null;
+}
+
+function showTest(path, name) {
+  const hit = findTest(path, name);
+  if (!hit) return;
+  selectedTest = { path, name };
+  const { file, test } = hit;
+  const v = verdict(test);
+
+  const sec = (label, body) => '<div class="cat-sec"><div class="lab">' + label + '</div>' + body + '</div>';
+  const groupWhy = test.groups.filter((g) => g.why);
+
+  let html =
+    '<h3>' + esc(test.name) + '</h3>' +
+    '<div class="crumbs"><b>' + esc(file.portal) + '</b> › ' + esc(file.feature) +
+    (test.groups.length ? ' › ' + test.groups.map((g) => esc(g.title)).join(' › ') : '') +
+    '<br>' + esc(file.path) + ':' + test.line + ' · run by ' + file.runner + '</div>';
+
+  if (v) {
+    const cls = v === 'passed' ? 'pass' : v === 'failed' ? 'fail' : 'skipped';
+    html += '<span class="badge ' + (v === 'passed' ? 'pass' : v === 'failed' ? 'fail' : 'unknown') + '"><span class="dot"></span>' +
+            v + (test.result.ms != null ? ' · ' + fmtDur(test.result.ms) : '') + '</span>';
+    if (test.result.failure) html += '<pre class="cmd" style="color:var(--fail)">' + esc(test.result.failure) + '</pre>';
+  } else {
+    html += '<span class="badge unknown"><span class="dot"></span>no result yet — run it below, or run its suite</span>';
+  }
+
+  // WHY IT EXISTS, from whatever the author actually wrote. Nothing is
+  // generated: a test with no comment says so, rather than being handed a
+  // plausible-sounding description this tool invented.
+  if (test.why) html += sec('Why this test exists', '<p class="src">' + esc(test.why) + '</p>');
+  for (const g of groupWhy) {
+    html += sec('About the group “' + esc(g.title) + '”', '<p class="src">' + esc(g.why) + '</p>');
+  }
+  if (!test.why && !groupWhy.length && file.why) {
+    html += sec('About this file', '<p class="src">' + esc(file.why.slice(0, 700)) + '</p>');
+  }
+  if (!test.why && !groupWhy.length && !file.why) {
+    html += sec('Why this test exists', '<p style="color:var(--ink-3)">No comment was written above this test, its group, or its file. Nothing is invented here — this is a genuine documentation gap.</p>');
+  }
+
+  if (test.notes?.length) {
+    html += sec('Reasoning noted at the assertions',
+      test.notes.map((n) => '<p class="src" style="margin-bottom:9px">' + esc(n.text) +
+        (n.about ? '<br><span style="font-family:var(--mono);font-size:10.5px;color:var(--ink-3)">→ ' + esc(n.about) + '</span>' : '') +
+        '</p>').join(''));
+  }
+
+  if (test.assertions.length) {
+    html += sec('What it actually checks',
+      '<div class="chips">' + test.assertions.map((a) => '<span class="chip">' + esc(a) + '</span>').join('') + '</div>' +
+      '<p style="font-size:11.5px;color:var(--ink-3);margin-top:7px">The matchers this test uses, in the order they appear — ' +
+      test.lineCount + ' lines of body.</p>');
+  }
+
+  html +=
+    '<div class="cat-run">' +
+    '<button class="primary" id="cat-run-btn">Run this test on its own</button>' +
+    '<span class="meta">' + esc(file.workspace) + ' · ' + file.runner + '</span>' +
+    '</div><div class="cat-out" id="cat-out"></div>';
+
+  el('cat-detail').innerHTML = html;
+  document.querySelectorAll('.cat-test').forEach((b) =>
+    b.setAttribute('aria-current', String(b.dataset.path === path && b.dataset.name === name)));
+
+  el('cat-run-btn').addEventListener('click', async () => {
+    const out = el('cat-out');
+    el('cat-run-btn').disabled = true;
+    out.innerHTML = '<p class="empty">Running…</p>';
+    const r = await fetch('/api/run-one?path=' + encodeURIComponent(path) + '&name=' + encodeURIComponent(name),
+      { method: 'POST' }).then((x) => x.json());
+    el('cat-run-btn').disabled = false;
+
+    if (r.error) { out.innerHTML = '<p style="color:var(--fail)">' + esc(r.error) + '</p>'; return; }
+
+    // A pattern that matched nothing is reported as itself. Left as a plain
+    // "failed" it reads as a broken test, which is a different bug entirely.
+    let body;
+    if (r.matchedNothing) {
+      body = '<p style="color:var(--amber)">The runner started but matched no test by that name' +
+             (r.readError ? ' (' + esc(r.readError) + ')' : '') + '.</p>';
+    } else {
+      body = r.matched.map((m) =>
+        '<p style="color:' + (m.status === 'passed' ? 'var(--pass)' : 'var(--fail)') + '">' +
+        esc(m.status) + ' — ' + esc(m.title) + (m.ms != null ? ' (' + fmtDur(m.ms) + ')' : '') + '</p>' +
+        (m.failure ? '<pre class="cmd" style="color:var(--fail)">' + esc(m.failure) + '</pre>' : '')).join('');
+    }
+    out.innerHTML =
+      body +
+      '<pre class="cmd">' + esc(r.command) + '</pre>' +
+      '<details><summary style="cursor:pointer;font-size:11.5px;color:var(--ink-3);margin-top:8px">Runner output</summary>' +
+      '<pre class="cmd">' + esc(r.log.join('\n')) + '</pre></details>';
+  });
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.cat-test');
+  if (btn) showTest(btn.dataset.path, btn.dataset.name);
+});
+['cat-search', 'cat-portal', 'cat-state'].forEach((id) =>
+  el(id).addEventListener('input', renderTree));
+el('cat-refresh').addEventListener('click', () => loadCatalogue(true));
+
+// ── Live environment checks ────────────────────────────────────────────────
+let liveSuite = null;
+
+async function loadLive() {
+  const env = el('live-env').value;
+  const d = await fetch('/api/live?env=' + env).then((r) => r.json());
+  liveSuite = d.suite;
+  el('live-creds').innerHTML = liveSuite.credsConfigured
+    ? '<b style="color:var(--pass)">Signed-in checks are enabled</b> — an account is configured, so the endpoint checks below will run.'
+    : '<b style="color:var(--amber)">Signed-in checks are switched off</b> — no account configured, so they will report <b>skipped</b>. They are never counted as passing.';
+  renderLive(liveSuite.checks.map((c) => ({ ...c, status: 'idle' })), null);
+}
+
+function renderLive(rows, summary) {
+  const groups = new Map();
+  for (const r of rows) {
+    if (!groups.has(r.group)) groups.set(r.group, []);
+    groups.get(r.group).push(r);
+  }
+  let html = '';
+  for (const [group, list] of groups) {
+    html += '<div class="lv-group"><h3>' + esc(group) + '</h3>';
+    for (const c of list) {
+      const st = c.status === 'idle' ? 'skipped' : c.status;
+      const label = c.status === 'idle' ? '—' : c.status === 'pass' ? 'PASS' : c.status === 'fail' ? 'FAIL' : c.status === 'running' ? '···' : 'SKIP';
+      html +=
+        '<div class="lv-row"><div class="st ' + st + '">' + label + '</div><div>' +
+        '<div class="t">' + esc(c.title) + '</div>' +
+        (c.detail ? '<div class="d">' + esc(c.detail) + '</div>' : '') +
+        (c.failedBecause ? '<div class="fb">✗ ' + esc(c.failedBecause) + '</div>' : '') +
+        '<details><summary>What this checks and why</summary>' +
+        '<div class="ex"><b>Request:</b> <span style="font-family:var(--mono);font-size:11px">' + esc(c.what) + '</span></div>' +
+        '<div class="ex"><b>Passes when:</b> ' + esc(c.expect) + '</div>' +
+        '<div class="ex">' + esc(c.why) + '</div></details>' +
+        '</div><div class="ms">' + (c.ms != null ? c.ms + 'ms' : '') + '</div></div>';
+    }
+    html += '</div>';
+  }
+  el('live-results').innerHTML = html;
+
+  if (summary) {
+    const bad = summary.failed > 0;
+    // The badge must never say "all passing" while anything was skipped — the
+    // first version did, directly above a headline that said "2 skipped". A
+    // summary that contradicts its own detail is the failure mode this whole
+    // dashboard exists to prevent, so it is not allowed to happen here.
+    el('live-badge').className = 'badge ' + (bad ? 'fail' : summary.skipped ? 'unknown' : 'pass');
+    el('live-badge').innerHTML =
+      '<span class="dot"></span>' +
+      (bad ? summary.failed + ' failing' : summary.skipped ? summary.skipped + ' not checked' : 'all passing');
+    // Skipped is stated separately, never folded into passed — a suite that
+    // "passed" because half of it never ran is the exact thing this dashboard
+    // was built to stop hiding.
+    el('live-headline').textContent =
+      summary.passed + ' of ' + summary.total + ' checks passed' +
+      (summary.skipped ? ', ' + summary.skipped + ' skipped' : '') +
+      (summary.failed ? ', ' + summary.failed + ' failed' : '');
+  }
+}
+
+el('live-run').addEventListener('click', async () => {
+  const env = el('live-env').value;
+  el('live-run').disabled = true;
+  el('live-badge').className = 'badge running';
+  el('live-badge').innerHTML = '<span class="dot"></span>running';
+  el('live-headline').textContent = 'Checking ' + env + '…';
+  const r = await fetch('/api/live/run?env=' + env, { method: 'POST' }).then((x) => x.json());
+  el('live-run').disabled = false;
+  if (r.error) { el('live-headline').textContent = r.error; return; }
+  renderLive(r.results, r.summary);
+});
+el('live-env').addEventListener('change', loadLive);
 
 // ── rollback, two steps ─────────────────────────────────────────────────────
 el('rb-prepare').addEventListener('click', async () => {
