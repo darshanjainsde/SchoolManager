@@ -1,4 +1,5 @@
 import type { NavFlags } from './SiteNav';
+import type { NavConfig } from './nav-config';
 
 /**
  * The single nav model. Desktop CLASSIC/PILL, the CENTER split bar and the
@@ -42,6 +43,64 @@ export interface NavModelInput {
   courses: NavCourse[];
   /** On /academics the programme anchors are same-page. */
   onAcademicsPage?: boolean;
+  /**
+   * The school's own arrangement. Absent — which is every school until an
+   * admin touches the editor — means the default model below.
+   */
+  config?: NavConfig | null;
+}
+
+/**
+ * Where each page lives and whether this school has it.
+ *
+ * One table, so the default model and a school's own arrangement resolve a
+ * page the same way: a school that renames "Gallery" to "Photos" moves a label,
+ * never a URL.
+ */
+function pageTable(flags: NavFlags, base: string): Record<string, { href: string; has: boolean; label: string }> {
+  return {
+    about: { href: `${base}#about`, has: flags.hasAbout, label: 'About' },
+    hof: { href: `${base}#hall-of-fame`, has: flags.hasHof, label: 'Hall of Fame' },
+    gallery: { href: '/gallery', has: flags.hasGallery, label: 'Gallery' },
+    academics: { href: '/academics', has: flags.hasAcademics, label: 'Academics' },
+    admissions: { href: '/admissions', has: flags.hasAdmissions, label: 'Admissions' },
+    connect: { href: '/connect', has: flags.hasEvents, label: 'Connect' },
+    blog: { href: '/blog', has: flags.hasBlog, label: 'Blog' },
+    contact: { href: '/contact', has: flags.hasContact || flags.hasEnquiry, label: 'Contact' },
+  };
+}
+
+/**
+ * Build the menu from a school's own arrangement.
+ *
+ * Unpublished pages are dropped rather than linked into a 404 — the editor
+ * refuses to LOSE a page, but a school can still turn a feature off after
+ * arranging its menu, and the menu has to survive that.
+ */
+function fromConfig(config: NavConfig, input: NavModelInput): NavNode[] {
+  const pages = pageTable(input.flags, input.base);
+  const nodes: (NavNode | null)[] = config.items.map((item) => {
+    const children: NavLeaf[] = item.children
+      .filter((c) => pages[c.key]?.has)
+      .map((c) => ({ key: c.key, label: c.label, href: pages[c.key].href }));
+
+    const own = pages[item.key];
+    if (item.children.length === 0) {
+      // A flat item IS a page; if the school does not have it, it goes.
+      if (!own?.has) return null;
+      return { kind: 'link', key: item.key, label: item.label, href: own.href };
+    }
+    return collapse({
+      kind: 'group',
+      key: item.key,
+      label: item.label,
+      // `page` and `overview` both give the group somewhere to land; `menu`
+      // deliberately navigates nowhere.
+      href: item.behaviour === 'menu' ? undefined : own?.href,
+      children,
+    });
+  });
+  return nodes.filter((n): n is NavNode => n !== null);
 }
 
 /** A group earns its slot only if it opens onto more than one thing. */
@@ -58,7 +117,10 @@ function collapse(node: Extract<NavNode, { kind: 'group' }>): NavNode | null {
   return node;
 }
 
-export function navModel({ flags, base, courses, onAcademicsPage }: NavModelInput): NavNode[] {
+export function navModel(input: NavModelInput): NavNode[] {
+  const { flags, base, courses, onAcademicsPage } = input;
+  if (input.config?.items?.length) return fromConfig(input.config, input);
+
   const ourSchool: NavLeaf[] = [
     ...(flags.hasAbout ? [{ key: 'about', label: 'About', href: `${base}#about` }] : []),
     ...(flags.hasHof ? [{ key: 'hof', label: 'Hall of Fame', href: `${base}#hall-of-fame` }] : []),

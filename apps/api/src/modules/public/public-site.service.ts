@@ -102,6 +102,7 @@ export class PublicSiteService {
               sectionShape: profile.sectionShape,
               motionGesture: profile.motionGesture,
               backgroundTexture: profile.backgroundTexture,
+              navConfig: profile.navConfig,
               navStyle: profile.navStyle,
               navColor: profile.navColor,
               navTextColor: profile.navTextColor,

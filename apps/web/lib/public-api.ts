@@ -33,6 +33,8 @@ export interface PublicSiteData {
     sectionShape?: string;
     motionGesture?: string;
     backgroundTexture?: string;
+    /** The school's own menu arrangement; absent = the default model. */
+    navConfig?: { items: { key: string; slug: string; label: string; behaviour: 'menu' | 'page' | 'overview'; children: { key: string; label: string }[] }[] } | null;
     navStyle: string;
     navColor: string;
     navTextColor: string;

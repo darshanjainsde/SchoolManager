@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { Prisma, withTenant } from '@skoolos/db';
 import type { UpdateProfileDto, UpdateHomepageDto, StatItemDto, SocialLinkDto } from './cms.dto';
 
 @Injectable()
@@ -36,8 +36,17 @@ export class SiteContentService {
         data.heroLayout = data.heroStyle === 'PHOTO' ? 'FULL_BLEED' : data.heroStyle;
       }
     }
+    // navConfig is the profile's only JSON column, and Prisma types JSON input
+    // as InputJsonValue rather than a plain object — so it cannot ride along in
+    // the spread the way every scalar field does.
+    const { navConfig, ...scalars } = data;
+    const jsonPart = navConfig === undefined ? {} : { navConfig: navConfig as Prisma.InputJsonValue };
     await withTenant(schoolId, (tx) =>
-      tx.schoolProfile.upsert({ where: { schoolId }, update: data, create: { schoolId, ...data } }),
+      tx.schoolProfile.upsert({
+        where: { schoolId },
+        update: { ...scalars, ...jsonPart },
+        create: { schoolId, ...scalars, ...jsonPart },
+      }),
     );
     return this.getContent(schoolId);
   }

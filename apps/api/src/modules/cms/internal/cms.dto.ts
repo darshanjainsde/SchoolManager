@@ -5,6 +5,7 @@ import {
   IsHexColor,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
@@ -55,6 +56,13 @@ export class UpdateProfileDto {
   /** WHAT a section does as it arrives; animationLevel stays the volume. */
   @IsOptional() @IsIn(['RISE', 'FADE', 'DRAW']) motionGesture?: string;
   @IsOptional() @IsIn(['NONE', 'GRID', 'DOTS', 'PAPER']) backgroundTexture?: string;
+  /**
+   * The school's menu arrangement. Shape is validated on the WEB side by
+   * validateNavConfig before it is ever sent — the rules there (six controls,
+   * no empty group, no nesting, no lost page) are product rules with messages
+   * an admin reads, not field constraints.
+   */
+  @IsOptional() @IsObject() navConfig?: Record<string, unknown>;
   @IsOptional() @IsIn(['CLASSIC', 'CENTER', 'PILL', 'STRIP', 'GHOST']) navStyle?: string;
   @IsOptional() @IsIn(['PAPER', 'WHITE', 'DARK', 'BRAND']) navColor?: string;
   @IsOptional() @IsIn(['AUTO', 'LIGHT', 'DARK']) navTextColor?: string;

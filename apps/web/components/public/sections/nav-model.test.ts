@@ -160,3 +160,92 @@ describe('Academics is a page that also opens', () => {
     expect(academics.children[0].href).toBe('#course-c1');
   });
 });
+
+describe('a school that has arranged its own menu', () => {
+  it('renders the school’s arrangement instead of the default', () => {
+    const nodes = navModel({
+      flags: ALL_ON,
+      base: '',
+      courses: COURSES,
+      config: {
+        items: [
+          { key: 'about', slug: 'about', label: 'About us', behaviour: 'page', children: [] },
+          {
+            key: 'learning',
+            slug: 'learning',
+            label: 'Learning',
+            behaviour: 'menu',
+            children: [
+              { key: 'academics', label: 'Programmes' },
+              { key: 'admissions', label: 'Joining us' },
+            ],
+          },
+        ],
+      },
+    });
+    expect(labels(nodes)).toEqual(['About us', 'Learning']);
+    const learning = nodes.find((n) => n.label === 'Learning');
+    expect(learning?.kind).toBe('group');
+    if (learning?.kind !== 'group') throw new Error('Learning should be a group');
+    expect(learning.children.map((c) => c.label)).toEqual(['Programmes', 'Joining us']);
+  });
+
+  it('renames a group without moving where its pages live', () => {
+    // The label is the school's; the hrefs belong to the pages themselves.
+    const nodes = navModel({
+      flags: ALL_ON,
+      base: '',
+      courses: COURSES,
+      config: {
+        items: [
+          {
+            key: 'ours',
+            slug: 'our-school',
+            label: 'Discover us',
+            behaviour: 'menu',
+            children: [
+              { key: 'gallery', label: 'Photos' },
+              { key: 'about', label: 'Our story' },
+            ],
+          },
+        ],
+      },
+    });
+    const group = nodes[0];
+    if (group.kind !== 'group') throw new Error('expected a group');
+    expect(group.label).toBe('Discover us');
+    expect(group.children.map((c) => c.href)).toEqual(['/gallery', '#about']);
+  });
+
+  it('drops a page the school has not published, rather than linking into a 404', () => {
+    const nodes = navModel({
+      flags: { ...ALL_ON, hasBlog: false },
+      base: '',
+      courses: COURSES,
+      config: {
+        items: [
+          {
+            key: 'news',
+            slug: 'news-events',
+            label: 'News',
+            behaviour: 'menu',
+            children: [
+              { key: 'connect', label: 'Connect' },
+              { key: 'blog', label: 'Blog' },
+            ],
+          },
+        ],
+      },
+    });
+    const group = nodes[0];
+    // One surviving child collapses to a flat link, exactly as the default does.
+    expect(group.kind).toBe('link');
+    expect(group.label).toBe('Connect');
+  });
+
+  it('falls back to the default when the school has arranged nothing', () => {
+    expect(labels(navModel({ flags: ALL_ON, base: '', courses: COURSES, config: null }))).toEqual(
+      labels(model()),
+    );
+  });
+});

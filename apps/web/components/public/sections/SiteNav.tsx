@@ -267,7 +267,13 @@ export default function SiteNav({
   const pill = style === 'PILL';
 
   // The one model every bar below reads.
-  const nodes = navModel({ flags, base, courses: data.courses, onAcademicsPage });
+  const nodes = navModel({
+    flags,
+    base,
+    courses: data.courses,
+    onAcademicsPage,
+    config: data.profile?.navConfig ?? null,
+  });
 
   // Mobile menu open/close state, shared across every layout branch below.
   const [mobileOpen, setMobileOpen] = useState(false);

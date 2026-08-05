@@ -383,6 +383,10 @@ model SchoolProfile {
   /// A quiet repeating ground for the page paper, drawn from the school's own
   /// --ps1: NONE (default) | GRID | DOTS | PAPER.
   backgroundTexture   String  @default("NONE")
+  /// The school's own arrangement of its menu: groups, their labels, their
+  /// FROZEN slugs and what sits under each. Null = the default five-control
+  /// model, which is what every school has until an admin rearranges it.
+  navConfig           Json?
   navStyle            String  @default("CLASSIC")
   navColor            String  @default("PAPER")
   navTextColor        String  @default("AUTO")
