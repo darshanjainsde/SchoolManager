@@ -52,6 +52,36 @@ export function safeHttpsUrl(u: string | null | undefined): string | null {
   return u && /^https:\/\//i.test(u) ? u : null;
 }
 
+/**
+ * The same instant, split into the pieces a date BLOCK needs rather than one
+ * sentence. Formatted per-part by Intl — never by slicing `formatEventDate`'s
+ * output, which would break the first time a locale or zone reorders it.
+ */
+export interface EventDateParts {
+  day: string;
+  month: string;
+  weekday: string;
+  time: string;
+}
+export function eventDateParts(iso: string, timeZone: string): EventDateParts {
+  const at = new Date(iso);
+  const fmt = (opts: Intl.DateTimeFormatOptions): string => {
+    try {
+      return new Intl.DateTimeFormat('en-GB', { ...opts, timeZone }).format(at);
+    } catch {
+      // Bad/unknown School.timezone → UTC, so a misconfigured school still
+      // gets a readable card instead of a thrown RangeError.
+      return new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: 'UTC' }).format(at);
+    }
+  };
+  return {
+    day: fmt({ day: 'numeric' }),
+    month: fmt({ month: 'short' }),
+    weekday: fmt({ weekday: 'short' }),
+    time: fmt({ hour: 'numeric', minute: '2-digit', hour12: true }),
+  };
+}
+
 // Format an event's start in the SCHOOL's timezone with a fixed locale, so the
 // server (often UTC) and the client produce identical strings — otherwise
 // `toLocale*` with the runtime locale/zone causes a hydration mismatch.

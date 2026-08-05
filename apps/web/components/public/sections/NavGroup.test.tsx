@@ -50,7 +50,7 @@ describe('the group control', () => {
   });
 
   it('opens on click and lists every child', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<NavGroup node={OUR_SCHOOL} />);
     await user.click(trigger('Our school'));
     expect(trigger('Our school')).toHaveAttribute('aria-expanded', 'true');
@@ -59,14 +59,14 @@ describe('the group control', () => {
   });
 
   it('opens on hover, because that is what a mouse expects of a nav', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<NavGroup node={OUR_SCHOOL} />);
     await user.hover(trigger('Our school'));
     expect(trigger('Our school')).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('opens when a keyboard tabs onto it', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<NavGroup node={OUR_SCHOOL} />);
     await user.tab();
     expect(trigger('Our school')).toHaveFocus();
@@ -74,7 +74,7 @@ describe('the group control', () => {
   });
 
   it('closes on Escape and hands focus back to the button that opened it', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<NavGroup node={OUR_SCHOOL} />);
     await user.click(trigger('Our school'));
     await user.keyboard('{Escape}');
@@ -85,7 +85,7 @@ describe('the group control', () => {
 
 describe('a group that is also a page', () => {
   it('keeps the page reachable as a row in the menu, never as the control', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<NavGroup node={ACADEMICS} />);
     // The control itself must not navigate — on a phone that first tap is the
     // only chance the visitor gets to see the menu.
@@ -95,7 +95,7 @@ describe('a group that is also a page', () => {
   });
 
   it('shows each programme with its age range', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<NavGroup node={ACADEMICS} />);
     await user.click(trigger('Academics'));
     expect(screen.getByRole('link', { name: /Preschool/ })).toHaveAttribute('href', '/academics#course-c1');

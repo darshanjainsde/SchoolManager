@@ -132,7 +132,7 @@ describe.each(['CLASSIC', 'PILL', 'CENTER', 'GHOST', 'STRIP'])('the %s bar', (na
   });
 
   it('reaches Hall of Fame, which the CENTER bar used to drop entirely', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderNav(navStyle);
     await user.click(primaryNav().getByRole('button', { name: /Our school/ }));
     expect(primaryNav().getByRole('link', { name: 'Hall of Fame' })).toHaveAttribute('href', '#hall-of-fame');
@@ -141,7 +141,7 @@ describe.each(['CLASSIC', 'PILL', 'CENTER', 'GHOST', 'STRIP'])('the %s bar', (na
 
 describe('the mobile drawer', () => {
   it('renders the groups as expandable sections rather than the old flat list', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderNav('CLASSIC');
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
     const drawer = within(screen.getByRole('navigation', { name: 'Mobile' }));
@@ -152,7 +152,7 @@ describe('the mobile drawer', () => {
   });
 
   it('opens the programme list on the first tap instead of navigating away', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderNav('CLASSIC');
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
     const drawer = within(screen.getByRole('navigation', { name: 'Mobile' }));

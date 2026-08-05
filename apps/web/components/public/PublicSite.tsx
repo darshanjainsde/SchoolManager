@@ -13,6 +13,7 @@ import AdmissionsSection, { admissionsHasContent } from './sections/AdmissionsSe
 import HallOfFame, { hofCourses } from './sections/HallOfFame';
 import GallerySection from './sections/GallerySection';
 import EventsSection from './sections/EventsSection';
+import ConnectSection from './sections/ConnectSection';
 import ContactSection from './sections/ContactSection';
 
 export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'contact';
@@ -156,6 +157,19 @@ const PS_CSS = `
   .btn-glow { position: relative; overflow: hidden; }
   .btn-glow::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120px circle at var(--x,50%) var(--y,50%),rgba(255,255,255,.28),transparent 60%); opacity: 0; transition: opacity .3s; }
   .btn-glow:hover::after { opacity: 1; }
+
+  /* ── Ambient header layer (/connect) ──
+     Two blurred brand-coloured drifts. No canvas and no library: two divs and
+     one keyframe, scaled by the school's own --motion so a NONE school gets a
+     still background rather than a slower one. */
+  .ps-amb { position: absolute; border-radius: 9999px; filter: blur(60px); opacity: .28; }
+  .ps-amb-1 { width: 42vw; height: 42vw; max-width: 520px; max-height: 520px; top: -14%; left: -6%;
+    background: var(--ps1); animation: ps-amb-a calc(21s / (var(--motion) + .06)) ease-in-out infinite; }
+  .ps-amb-2 { width: 34vw; height: 34vw; max-width: 420px; max-height: 420px; top: -6%; right: -4%;
+    background: var(--ps2); animation: ps-amb-b calc(18s / (var(--motion) + .06)) ease-in-out infinite; }
+  @keyframes ps-amb-a { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(4%, 6%, 0); } }
+  @keyframes ps-amb-b { 0%,100% { transform: translate3d(0,0,0); } 50% { transform: translate3d(-5%, 4%, 0); } }
+  .ps-motion-off .ps-amb { animation: none; }
 
   /* ── Nav group menus ──
      The menu is mounted only while open (it is a real button + aria-expanded,
@@ -303,6 +317,7 @@ const PS_CSS = `
     .ps-underline path { stroke-dashoffset: 0; }
     .ps-flip-inner { transition: none; }
     .ps-menu { animation: none; }
+    .ps-amb { animation: none; }
     .ps-champ { animation: none; opacity: 1; transform: none; }
     .ps-marker { animation: none; background-size: 100% .38em; }
     .ps-accent-grow { animation: none; transform: scaleX(1); }
@@ -532,7 +547,11 @@ export default function PublicSite({ data, view = 'home' }: Props) {
             />
           )}
           {view === 'gallery' && <GallerySection gallery={data.gallery} schoolName={schoolName} />}
-          {view === 'events' && <EventsSection events={data.events} timezone={data.school.timezone} />}
+          {/* The /connect PAGE is the one with the front door on it: joining,
+              seats, the waitlist. The home band stays a teaser. */}
+          {view === 'events' && (
+            <ConnectSection events={data.events} timezone={data.school.timezone} schoolName={schoolName} />
+          )}
           {view === 'contact' && (
             <ContactSection
               profile={data.profile}

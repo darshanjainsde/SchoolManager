@@ -73,6 +73,18 @@ export interface PublicSiteData {
     scope: 'SCHOOL' | 'NETWORK';
     originSchoolName: string | null;
     isHost: boolean;
+    // Registration facts. OPTIONAL on purpose: web and api are two Vercel
+    // projects fed by the same push and live in mixed versions for minutes, so
+    // the page has to render against an api that has never heard of them.
+    /** The ticket a public join registers against. Null = nothing to join. */
+    ticketTypeId?: string | null;
+    /** null = uncapped. 0 is real: sold out by configuration. */
+    capacity?: number | null;
+    /** null means UNKNOWN — uncapped, or another school's event we cannot count. */
+    seatsLeft?: number | null;
+    registrationOpen?: boolean;
+    priceMinor?: number;
+    currency?: string;
   }[];
 }
 
