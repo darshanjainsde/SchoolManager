@@ -19,6 +19,7 @@ import { OwnerModule } from './modules/owner';
 import { CmsModule } from './modules/cms';
 import { ManagementModule } from './modules/management';
 import { CommunityModule } from './modules/community';
+import { HiringModule } from './modules/hiring';
 import { PublicModule } from './modules/public';
 import { PortalModule } from './modules/portal';
 import { DirectoryModule } from './modules/directory/directory.module';
@@ -64,6 +65,7 @@ import { BlogModule } from './modules/blog';
     CmsModule,
     ManagementModule,
     CommunityModule,
+    HiringModule,
     PublicModule,
     PortalModule,
     DirectoryModule,

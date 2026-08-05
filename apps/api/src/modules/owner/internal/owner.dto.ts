@@ -50,3 +50,14 @@ export class OwnerCreateEventDto {
   @IsOptional() @IsDateString() endAt?: string;
   @IsOptional() @IsString() @Length(0, 200) venue?: string;
 }
+
+/**
+ * The owner's decision on a vacancy. Declared HERE, not imported from the
+ * hiring module: a DTO belongs to the module whose controller consumes it, and
+ * the boundary rule forbids reaching into another module's internals.
+ */
+export class ModerateJobDto {
+  @IsIn(['APPROVE', 'REJECT']) decision!: 'APPROVE' | 'REJECT';
+  /** Required on REJECT — a refusal with no reason cannot be acted on. */
+  @IsOptional() @IsString() @Length(2, 500) reason?: string;
+}

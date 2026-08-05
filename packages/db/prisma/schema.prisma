@@ -227,6 +227,8 @@ model School {
   messages               Message[]
   diaryEntries           DiaryEntry[]
   attendanceNotices      AttendanceNotice[]
+  jobPosts            JobPost[]
+
 }
 
 model Domain {
@@ -1513,4 +1515,122 @@ model AttendanceNotice {
   /// The cooldown lookup: this student's most recent notice.
   @@index([schoolId, studentId, sentAt])
   @@index([schoolId, classSectionId, sentAt])
+}
+
+/// ── Hiring ──────────────────────────────────────────────────────────────────
+/// A vacancy, the questions it screens on, and the applications against it.
+/// Deliberately the shape of event registrations: a thing, an application
+/// against it, and a status the host owns.
+///
+/// Hiring appears ONLY on sckools.com — never on a school's own site — which is
+/// what makes owner approval load-bearing: every post lands on the owner's own
+/// front door. See docs/superpowers/specs/2026-08-05-hiring-design.md.
+enum JobStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CLOSED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  TEMPORARY
+}
+
+/// TEXT is the only kind that cannot become a filter, and the builder says so.
+enum JobQuestionKind {
+  CHOICE
+  YES_NO
+  NUMBER
+  TEXT
+}
+
+enum JobApplicationStatus {
+  NEW
+  SHORTLISTED
+  INTERVIEWING
+  REJECTED
+  HIRED
+}
+
+model JobPost {
+  id               String           @id @default(uuid()) @db.Uuid
+  schoolId         String           @db.Uuid
+  title            String
+  summary          String
+  description      String
+  employmentType   EmploymentType   @default(FULL_TIME)
+  /// Free text — "Physics", "Primary". A filter on the board.
+  subject          String?
+  /// How many people the school needs. An Int, NOT a boolean "is open":
+  /// schools hire in batches and "we need three" is the most useful fact on a
+  /// listing. It deliberately does NOT interact with applications — nothing
+  /// decrements it and nothing auto-closes.
+  posts            Int              @default(1)
+  /// Minor units — paise, cents. Never a float.
+  salaryMinMinor   Int?
+  salaryMaxMinor   Int?
+  currency         String           @default("INR")
+  applyBy          DateTime?
+  status           JobStatus        @default(DRAFT)
+  /// The owner owes a reason when refusing.
+  rejectedReason   String?
+  createdByUserId  String?          @db.Uuid
+  approvedByUserId String?          @db.Uuid
+  approvedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  school           School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  questions        JobQuestion[]
+  applications     JobApplication[]
+
+  @@index([schoolId])
+  @@index([status])
+}
+
+model JobQuestion {
+  id         String          @id @default(uuid()) @db.Uuid
+  jobPostId  String          @db.Uuid
+  /// Carried for RLS, exactly as EventTicketType carries it.
+  schoolId   String          @db.Uuid
+  prompt     String
+  kind       JobQuestionKind @default(CHOICE)
+  /// CHOICE only.
+  options    String[]
+  required   Boolean         @default(false)
+  order      Int             @default(0)
+  createdAt  DateTime        @default(now())
+  jobPost    JobPost         @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+
+  @@index([jobPostId])
+  @@index([schoolId])
+}
+
+/// THE MOST SENSITIVE DATA THIS PRODUCT STORES: a private individual's name,
+/// phone and CV link, submitted by somebody with no account. It belongs to the
+/// hiring school ALONE — RLS is single-tenant with no cross-school read, now or
+/// later, even when someone asks for network-wide candidate search.
+model JobApplication {
+  id        String               @id @default(uuid()) @db.Uuid
+  jobPostId String               @db.Uuid
+  /// The HIRING school. Always derived from the vacancy, never from a request.
+  schoolId  String               @db.Uuid
+  name      String
+  email     String
+  phone     String?
+  /// A LINK, not a file. There is no public upload endpoint in this product.
+  cvUrl     String
+  /// { [questionId]: string | number | boolean } — at most four entries.
+  answers   Json?
+  status    JobApplicationStatus @default(NEW)
+  /// The school's own private note about the candidate.
+  note      String?
+  createdAt DateTime             @default(now())
+  jobPost   JobPost              @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+
+  @@index([jobPostId])
+  @@index([schoolId])
 }
