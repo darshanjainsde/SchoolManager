@@ -14,7 +14,7 @@ import { join } from 'node:path';
  * These read the stylesheet rather than a rendered DOM on purpose: jsdom has no
  * cascade, so a render test cannot see whether the escape hatch exists at all.
  */
-const CSS = readFileSync(join(__dirname, 'PublicSite.tsx'), 'utf8');
+const CSS = readFileSync(join(__dirname, 'ps-css.ts'), 'utf8');
 
 describe('the customisation axes obey the motion switches', () => {
   it('settles the DRAW gesture instead of leaving a section half-uncovered', () => {

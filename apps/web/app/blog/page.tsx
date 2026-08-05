@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
 import { fetchGlobalBlog, fetchSchoolBlog } from '@/lib/blog-api';
 import { fetchPublicSite } from '@/lib/public-api';
+import SchoolChrome from '@/components/public/SchoolChrome';
 import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
 import BlogIndexList from '@/components/blog/BlogIndexList';
 import '@/components/blog/blog.css';
@@ -61,23 +61,26 @@ export default async function BlogIndexPage() {
     );
   }
 
-  const data = await fetchSchoolBlog(host);
-  if (!data) notFound();
+  // Both in parallel: the posts, and the school identity the page wears.
+  const [data, site] = await Promise.all([fetchSchoolBlog(host), fetchPublicSite(host)]);
+  if (!data || !site) notFound();
 
+  // The school's own chrome, not a bare "← Home" bar: a parent arriving from a
+  // newsletter link has to land somewhere that is recognisably this school,
+  // with the same way back into the site as every other page.
   return (
-    <div className="blog">
-      <div className="blog-topbar">
-        <Link href="/"><b>← Home</b></Link>
-        <div className="blog-topbar-spacer" />
-        <Link href="/blog">Blog</Link>
-      </div>
-      <div className="wrap">
-        <header className="blog-head">
-          <span className="blog-eyebrow">Blog</span>
-          <h1>Latest posts</h1>
+    <SchoolChrome data={site}>
+      <div className="blog max-w-6xl mx-auto px-6 py-14">
+        <header className="blog-head reveal">
+          <span className="blog-eyebrow" style={{ color: 'var(--ps1)' }}>
+            Blog
+          </span>
+          <h1 className="ps-head">
+            <span className="ps-accent-mark">Latest posts</span>
+          </h1>
         </header>
         <BlogIndexList posts={data.posts} layout={data.layout} />
       </div>
-    </div>
+    </SchoolChrome>
   );
 }

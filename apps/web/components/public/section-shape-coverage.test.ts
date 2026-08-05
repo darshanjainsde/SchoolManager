@@ -51,7 +51,7 @@ describe('every band below the fold answers to the shape control', () => {
 });
 
 describe('the shapes are real systems, not three radius values', () => {
-  const CSS = source('PublicSite.tsx');
+  const CSS = source('ps-css.ts');
 
   it('drives every panel from tokens, so one class redefines all of them', () => {
     expect(CSS).toMatch(/\.ps-panel\s*\{[^}]*border-radius:\s*var\(--ps-radius\)/);
