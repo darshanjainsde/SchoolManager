@@ -183,7 +183,12 @@ export default function ConnectSection({
   const [quantity, setQuantity] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [justJoined, setJustJoined] = useState<{ status: string; waitlistPos: number | null; email: string } | null>(null);
+  const [justJoined, setJustJoined] = useState<{
+    status: string;
+    waitlistPos: number | null;
+    email: string;
+    quantity: number;
+  } | null>(null);
 
   // localStorage is read AFTER mount, never during render: the server cannot
   // reproduce it, and React 19 discards a mismatched subtree silently.
@@ -228,7 +233,7 @@ export default function ConnectSection({
       // A browser refusing storage still gets the confirmation on screen; it
       // only loses the memory of it after a reload.
     }
-    setJustJoined({ status: result.status, waitlistPos: result.waitlistPos, email: email.trim() });
+    setJustJoined({ status: result.status, waitlistPos: result.waitlistPos, email: email.trim(), quantity });
     setJoining(null);
   }
 
@@ -250,11 +255,13 @@ export default function ConnectSection({
             className="mb-8 rounded-2xl border border-black/5 bg-white px-5 py-4 text-sm font-semibold"
             style={{ color: 'var(--ps1)' }}
           >
-            {/* The CARD already says "you’re going" — this banner must add what
-                the card cannot, not repeat it back. */}
+            {/* The CARD already says "you’re going" — this banner adds what the
+                card cannot, and PROMISES NOTHING THE SYSTEM DOES NOT DO. There
+                is no confirmation email on this path: the row goes to the
+                school's desk and the school works it. */}
             {justJoined.status === 'WAITLISTED'
-              ? `Kept your place in the queue — you’re number ${justJoined.waitlistPos ?? '—'}. We’ll email if a seat frees up.`
-              : `Confirmed. We’ve emailed the details to ${justJoined.email}.`}
+              ? `Kept your place in the queue — you’re number ${justJoined.waitlistPos ?? '—'}. The school will be in touch if a seat frees up.`
+              : `Confirmed — ${justJoined.quantity === 1 ? 'your place is' : `all ${justJoined.quantity} places are`} on the school’s list under ${justJoined.email}.`}
           </div>
         )}
 

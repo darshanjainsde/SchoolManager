@@ -14,6 +14,7 @@ import HallOfFame, { hofCourses } from './sections/HallOfFame';
 import GallerySection from './sections/GallerySection';
 import EventsSection from './sections/EventsSection';
 import ConnectSection from './sections/ConnectSection';
+import { SUBPAGES } from './subpages';
 import ContactSection from './sections/ContactSection';
 
 export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'contact';
@@ -23,35 +24,6 @@ interface Props {
   /** 'home' = full landing page; anything else = a dedicated section page with the same chrome. */
   view?: SiteView;
 }
-
-// Header copy for each dedicated section page.
-const SUBPAGES: Record<string, { eyebrow: string; title: string; blurb: string }> = {
-  academics: {
-    eyebrow: 'Academics',
-    title: 'Programmes at {school}',
-    blurb: 'Everything we offer, from the earliest years up — tap a programme in the menu above to jump straight to it.',
-  },
-  admissions: {
-    eyebrow: 'Admissions',
-    title: 'Joining {school}',
-    blurb: 'How admissions work, step by step — and the full fee structure.',
-  },
-  gallery: {
-    eyebrow: 'Gallery',
-    title: 'Life at {school}',
-    blurb: 'Moments from classrooms, playgrounds and celebrations across the campus.',
-  },
-  events: {
-    eyebrow: 'Connect · Events',
-    title: 'Events & community',
-    blurb: 'Everything happening at our school and across the network — one shared calendar.',
-  },
-  contact: {
-    eyebrow: 'Contact',
-    title: 'Get in touch',
-    blurb: 'Reach the front office directly or leave your details — admissions responds within a working day.',
-  },
-};
 
 const MOTION_MAP: Record<string, number> = { FULL: 1, SUBTLE: 0.5, NONE: 0 };
 

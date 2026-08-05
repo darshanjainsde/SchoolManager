@@ -174,6 +174,24 @@ describe('joining', () => {
     expect(await screen.findByText(/you’re going/i)).toBeInTheDocument();
   });
 
+  it('does not promise an email, because registering sends none', async () => {
+    // RegistrationsService writes the row and stops — there is no mail on the
+    // public registration path (the school works the desk). Saying "we've
+    // emailed you the details" was a straight lie to a parent who then waits
+    // for a message that never arrives. If confirmation mail is ever added,
+    // delete this test in the same commit that sends it.
+    const user = userEvent.setup({ delay: null });
+    renderConnect([event({ id: 'e1', title: 'Open Day' })]);
+    await user.click(screen.getByRole('button', { name: /join/i }));
+    const sheet = within(screen.getByRole('dialog'));
+    await user.type(sheet.getByLabelText(/your name/i), 'Priya Nair');
+    await user.type(sheet.getByLabelText(/email/i), 'priya@example.com');
+    await user.click(sheet.getByRole('button', { name: /confirm/i }));
+
+    const banner = await screen.findByRole('status');
+    expect(banner.textContent).not.toMatch(/emailed|we’ll email|we will email/i);
+  });
+
   it('says a place was kept in the queue when the event was already full', async () => {
     submitRegistration.mockResolvedValue({ ok: true, status: 'WAITLISTED', waitlistPos: 4 });
     const user = userEvent.setup({ delay: null });

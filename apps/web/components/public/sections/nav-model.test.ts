@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { navModel, NAV_CAP, type NavNode } from './nav-model';
 import type { NavFlags } from './SiteNav';
+import { SUBPAGES } from '../subpages';
 
 /**
  * ONE MODEL, READ BY EVERY BAR.
@@ -74,18 +75,36 @@ describe('the cap', () => {
 });
 
 describe('reachability', () => {
-  it('reaches every page a school can publish', () => {
+  /**
+   * Where each dedicated page actually lives. Read against PublicSite's own
+   * SUBPAGES rather than a list copied by hand: a hand-copied list cannot fail
+   * when somebody adds a page, which is the entire failure this guards. Note
+   * `events` is served at /connect — the map is where that stops being folklore.
+   */
+  const ROUTE_OF: Record<keyof typeof SUBPAGES, string> = {
+    academics: '/academics',
+    admissions: '/admissions',
+    gallery: '/gallery',
+    events: '/connect',
+    contact: '/contact',
+  };
+
+  it('has somewhere to send every dedicated page the site renders', () => {
+    // If this fails after you added a page, the page has no route in the nav
+    // model — decide which group owns it rather than deleting the assertion.
+    expect(Object.keys(ROUTE_OF).sort()).toEqual(Object.keys(SUBPAGES).sort());
+  });
+
+  it('reaches every one of those pages from the default model', () => {
     const reachable = hrefs(model());
-    for (const href of [
-      '#about',
-      '#hall-of-fame',
-      '/gallery',
-      '/academics',
-      '/admissions',
-      '/connect',
-      '/blog',
-      '/contact',
-    ]) {
+    for (const href of Object.values(ROUTE_OF)) {
+      expect(reachable).toContain(href);
+    }
+  });
+
+  it('also reaches the sections that are anchors on the home page, and the blog', () => {
+    const reachable = hrefs(model());
+    for (const href of ['#about', '#hall-of-fame', '/blog']) {
       expect(reachable).toContain(href);
     }
   });
