@@ -155,7 +155,7 @@ function Group({
   if (events.length === 0) return null;
   return (
     <div className="mt-12 first:mt-0">
-      <h2 className="ps-head text-2xl font-bold">{title}</h2>
+      <h2 className="ps-head text-2xl font-bold"><span className="ps-accent-mark">{title}</span></h2>
       <p className="text-sm text-slate-500 mt-1">{blurb}</p>
       <div className="mt-6 grid md:grid-cols-3 gap-5">
         {events.map((e) => (

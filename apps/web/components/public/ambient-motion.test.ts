@@ -16,6 +16,29 @@ import { join } from 'node:path';
  */
 const CSS = readFileSync(join(__dirname, 'PublicSite.tsx'), 'utf8');
 
+describe('the customisation axes obey the motion switches', () => {
+  it('settles the DRAW gesture instead of leaving a section half-uncovered', () => {
+    // A clip-path reveal that never runs would hide the section forever. Under
+    // either escape it must land at fully-shown, not at its start frame.
+    expect(CSS).toMatch(/\.ps-motion-off \.ps-gesture-draw \.reveal[^}]*clip-path:\s*none/);
+    const reduced = CSS.slice(CSS.indexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(reduced).toMatch(/\.ps-gesture-draw \.reveal\s*\{[^}]*clip-path:\s*none/);
+  });
+
+  it('settles the escaped headline motif at drawn, not at nothing', () => {
+    expect(CSS).toMatch(/\.ps-motion-off \.ps-accent-mark::after[^}]*transform:\s*scaleX\(1\)/);
+    const reduced = CSS.slice(CSS.indexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(reduced).toMatch(/\.ps-accent-mark::after\s*\{[^}]*transform:\s*scaleX\(1\)/);
+  });
+
+  it('draws every texture from the school’s own colour, never a fixed grey', () => {
+    for (const cls of ['ps-texture-grid', 'ps-texture-dots', 'ps-texture-paper']) {
+      const rule = CSS.slice(CSS.indexOf(`.${cls}`), CSS.indexOf(`.${cls}`) + 400);
+      expect(rule).toMatch(/var\(--ps[12]\)/);
+    }
+  });
+});
+
 describe('the ambient background', () => {
   it('is drawn with plain blurred divs — no canvas, no library', () => {
     expect(CSS).toContain('.ps-amb');

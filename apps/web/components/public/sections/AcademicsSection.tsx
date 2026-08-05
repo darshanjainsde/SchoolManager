@@ -32,7 +32,9 @@ export default function AcademicsSection({
             <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
               Academics
             </div>
-            <h2 className="ps-head text-4xl font-bold mt-3">Programmes for every stage</h2>
+            <h2 className="ps-head text-4xl font-bold mt-3">
+              <span className="ps-accent-mark">Programmes for every stage</span>
+            </h2>
           </div>
         )}
         <div className={onOwnPage ? 'grid gap-5' : 'mt-12 grid gap-5'}>

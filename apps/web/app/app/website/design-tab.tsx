@@ -11,6 +11,11 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SECTION_SHAPES } from '@/components/public/section-shape';
+import {
+  BACKGROUND_TEXTURES,
+  MOTION_GESTURES,
+  STYLE_PRESETS,
+} from '@/components/public/site-style';
 
 // ── Local types (web cannot import API types) ────────────────────────────────
 interface SiteProfile {
@@ -21,6 +26,8 @@ interface SiteProfile {
   heroHeight?: string | null;
   headlineAccent?: string | null;
   sectionShape?: string | null;
+  motionGesture?: string | null;
+  backgroundTexture?: string | null;
   navStyle?: string | null;
   navColor?: string | null;
   navTextColor?: string | null;
@@ -512,6 +519,132 @@ export default function DesignTab() {
                   {a.value === 'GROW' && <span className="mt-1.5 block h-1.5 w-16 rounded-full bg-amber-400" />}
                   <span className="mt-2 block text-xs font-semibold text-slate-700">{a.label}</span>
                   <span className="block text-[11px] text-slate-400">{a.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Ready-made looks ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Ready-made looks</CardTitle>
+          <p className="text-sm text-slate-500">
+            Each one sets the section shape, motion, background and headline accent together. Pick the closest,
+            then adjust anything below.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {STYLE_PRESETS.map((preset) => {
+              const on =
+                (profile?.sectionShape ?? 'SOFT') === preset.values.sectionShape &&
+                (profile?.motionGesture ?? 'RISE') === preset.values.motionGesture &&
+                (profile?.backgroundTexture ?? 'NONE') === preset.values.backgroundTexture &&
+                (profile?.headlineAccent ?? 'DRAW') === preset.values.headlineAccent;
+              return (
+                <button
+                  key={preset.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ ...preset.values })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  <span className="block text-sm font-semibold text-slate-800">{preset.label}</span>
+                  <span className="mt-1 block text-[11px] leading-snug text-slate-400">{preset.hint}</span>
+                  {on && <span className="mt-2 block text-[11px] font-semibold text-teal-700">In use</span>}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Motion ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>How sections arrive</CardTitle>
+          <p className="text-sm text-slate-500">
+            What a section does as it comes into view. Separate from the animation level above, which decides how
+            much motion there is at all — set that to None and the page stays still whatever you pick here.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {MOTION_GESTURES.map((g) => {
+              const on = (profile?.motionGesture ?? 'RISE') === g.value;
+              return (
+                <button
+                  key={g.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ motionGesture: g.value })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  <span className="block text-xs font-semibold text-slate-700">{g.label}</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-400">{g.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Background texture ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Page background</CardTitle>
+          <p className="text-sm text-slate-500">
+            A quiet pattern behind the whole site, drawn from your own brand colour.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {BACKGROUND_TEXTURES.map((t) => {
+              const on = (profile?.backgroundTexture ?? 'NONE') === t.value;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ backgroundTexture: t.value })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  <span
+                    className="mb-2 block h-10 rounded-lg border border-slate-200 bg-slate-50"
+                    aria-hidden="true"
+                    style={
+                      t.value === 'GRID'
+                        ? {
+                            backgroundImage:
+                              'linear-gradient(rgba(15,118,110,.18) 1px, transparent 1px), linear-gradient(90deg, rgba(15,118,110,.18) 1px, transparent 1px)',
+                            backgroundSize: '10px 10px',
+                          }
+                        : t.value === 'DOTS'
+                          ? {
+                              backgroundImage: 'radial-gradient(rgba(15,118,110,.28) 1px, transparent 1px)',
+                              backgroundSize: '8px 8px',
+                            }
+                          : t.value === 'PAPER'
+                            ? {
+                                backgroundImage:
+                                  'radial-gradient(circle at 25% 20%, rgba(15,118,110,.16), transparent 45%), radial-gradient(circle at 75% 70%, rgba(15,118,110,.12), transparent 45%)',
+                              }
+                            : undefined
+                    }
+                  />
+                  <span className="block text-xs font-semibold text-slate-700">{t.label}</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-400">{t.hint}</span>
                 </button>
               );
             })}

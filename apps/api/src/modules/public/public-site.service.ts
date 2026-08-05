@@ -100,6 +100,8 @@ export class PublicSiteService {
               heroHeight: profile.heroHeight,
               headlineAccent: profile.headlineAccent,
               sectionShape: profile.sectionShape,
+              motionGesture: profile.motionGesture,
+              backgroundTexture: profile.backgroundTexture,
               navStyle: profile.navStyle,
               navColor: profile.navColor,
               navTextColor: profile.navTextColor,

@@ -31,6 +31,8 @@ export interface PublicSiteData {
     headlineAccent: string;
     /** Optional: the api may predate the column by a few minutes on deploy. */
     sectionShape?: string;
+    motionGesture?: string;
+    backgroundTexture?: string;
     navStyle: string;
     navColor: string;
     navTextColor: string;

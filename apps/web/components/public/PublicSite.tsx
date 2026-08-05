@@ -16,6 +16,7 @@ import EventsSection from './sections/EventsSection';
 import ConnectSection from './sections/ConnectSection';
 import { SUBPAGES } from './subpages';
 import { sectionShapeClass } from './section-shape';
+import { accentClass, backgroundTextureClass, motionGestureClass } from './site-style';
 import ContactSection from './sections/ContactSection';
 
 export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'contact';
@@ -130,6 +131,56 @@ const PS_CSS = `
   .btn-glow { position: relative; overflow: hidden; }
   .btn-glow::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120px circle at var(--x,50%) var(--y,50%),rgba(255,255,255,.28),transparent 60%); opacity: 0; transition: opacity .3s; }
   .btn-glow:hover::after { opacity: 1; }
+
+  /* ── Motion gesture ──────────────────────────────────────────────────────
+     WHAT a section does as it arrives. animationLevel remains the volume: at
+     NONE, .ps-motion-off silences all three of these. RISE is the base .reveal
+     rule above, so it needs nothing here. */
+  .ps-gesture-fade .reveal { transform: none; }
+  .ps-gesture-fade .reveal.in { transform: none; }
+  /* DRAW uncovers the section left to right, the way the headline motif draws
+     itself — the same gesture at section scale, not a second idea. */
+  .ps-gesture-draw .reveal { opacity: 1; transform: none;
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path .85s cubic-bezier(.2,.7,.2,1); }
+  .ps-gesture-draw .reveal.in { clip-path: inset(0 0 0 0); }
+  .ps-motion-off .ps-gesture-draw .reveal, .ps-gesture-draw.ps-motion-off .reveal {
+    clip-path: none; transition: none; }
+
+  /* ── Background texture ──────────────────────────────────────────────────
+     Drawn from the school's own --ps1 at low alpha, so a texture can never
+     fight the palette. Fixed attachment would judder on iOS; these scroll. */
+  .ps-texture-grid { background-image:
+      linear-gradient(color-mix(in srgb, var(--ps1) 7%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--ps1) 7%, transparent) 1px, transparent 1px);
+    background-size: 28px 28px; }
+  .ps-texture-dots { background-image:
+      radial-gradient(color-mix(in srgb, var(--ps1) 12%, transparent) 1px, transparent 1px);
+    background-size: 20px 20px; }
+  .ps-texture-paper { background-image:
+      radial-gradient(circle at 20% 15%, color-mix(in srgb, var(--ps1) 6%, transparent), transparent 45%),
+      radial-gradient(circle at 78% 60%, color-mix(in srgb, var(--ps2) 6%, transparent), transparent 40%),
+      radial-gradient(circle at 45% 88%, color-mix(in srgb, var(--ps1) 5%, transparent), transparent 42%);
+    background-size: 900px 900px; }
+
+  /* ── The headline motif, off the headline ────────────────────────────────
+     A band heading wears the SAME motif the hero headline does, so the page
+     reads as one page. Driven by the school's existing headlineAccent — there
+     is deliberately no second control that could disagree with the first. */
+  .ps-accent-mark { position: relative; display: inline-block; }
+  .ps-accent-draw .ps-accent-mark::after { content: ""; position: absolute; left: 0; right: 0; bottom: -6px;
+    height: 3px; border-radius: 3px; background: var(--ps2);
+    transform: scaleX(0); transform-origin: left;
+    transition: transform .8s cubic-bezier(.2,.7,.2,1) .1s; }
+  .reveal.in .ps-accent-mark::after, .ps-accent-mark.in::after { transform: scaleX(1); }
+  .ps-accent-marker .ps-accent-mark { background: linear-gradient(to top,
+      color-mix(in srgb, var(--ps2) 38%, transparent) 38%, transparent 38%);
+    padding: 0 .12em; }
+  .ps-accent-grow-on .ps-accent-mark::after { content: ""; position: absolute; left: 0; bottom: -8px;
+    width: 3.5rem; height: 5px; border-radius: 4px; background: var(--ps2);
+    transform: scaleX(0); transform-origin: left;
+    transition: transform .6s cubic-bezier(.2,.7,.2,1) .1s; }
+  .ps-motion-off .ps-accent-mark::after { transition: none; transform: scaleX(1); }
 
   /* ── Section shape ──────────────────────────────────────────────────────
      One control for every band BELOW the fold. The base values here are SOFT,
@@ -376,6 +427,8 @@ const PS_CSS = `
     .reveal { opacity: 1; transform: none; }
     .ps-underline path { stroke-dashoffset: 0; }
     .ps-flip-inner { transition: none; }
+    .ps-gesture-draw .reveal { clip-path: none; transition: none; }
+    .ps-accent-mark::after { transition: none; transform: scaleX(1); }
     .ps-menu-card, .ps-menu-row { animation: none; }
     .ps-menu-row, .ps-menu-row-arrow { transition: none; }
     .ps-amb { animation: none; }
@@ -409,7 +462,16 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   const onAcademicsPage = view === 'academics';
   // Section anchors live on the homepage; from other pages they need the "/" prefix.
   const base = view !== 'home' ? '/' : '';
-  const shapeClass = sectionShapeClass(data.profile?.sectionShape);
+  // Every style axis is a class on the root; the defaults emit nothing, so a
+  // school that has chosen nothing renders exactly what it rendered before.
+  const styleClasses = [
+    sectionShapeClass(data.profile?.sectionShape),
+    motionGestureClass(data.profile?.motionGesture),
+    backgroundTextureClass(data.profile?.backgroundTexture),
+    accentClass(data.profile?.headlineAccent),
+  ]
+    .filter(Boolean)
+    .join(' ');
   const brandColor = data.profile?.brandColorPrimary ?? '#2f6b4f';
   // Secondary drives the second gradient stop. If a school leaves it near-white
   // (the default), a lightened tint of the primary reads better than pure white.
@@ -533,7 +595,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   return (
     <div
       className={`ps-root ${fontVars}${motion === 0 ? ' ps-motion-off' : ''}${
-        shapeClass ? ` ${shapeClass}` : ''
+        styleClasses ? ` ${styleClasses}` : ''
       }`}
       style={
         {

@@ -376,6 +376,13 @@ model SchoolProfile {
   /// the rest of the page differ between schools by more than two colours.
   /// SOFT (pillowy cards) | EDITORIAL (ruled, boxless) | CRISP (bordered).
   sectionShape        String  @default("SOFT")
+  /// WHAT a section does as it arrives, not how much of it: RISE (default,
+  /// today's behaviour) | FADE | DRAW. animationLevel stays the volume knob —
+  /// NONE still silences everything.
+  motionGesture       String  @default("RISE")
+  /// A quiet repeating ground for the page paper, drawn from the school's own
+  /// --ps1: NONE (default) | GRID | DOTS | PAPER.
+  backgroundTexture   String  @default("NONE")
   navStyle            String  @default("CLASSIC")
   navColor            String  @default("PAPER")
   navTextColor        String  @default("AUTO")
