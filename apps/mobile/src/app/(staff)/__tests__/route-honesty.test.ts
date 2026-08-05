@@ -27,7 +27,11 @@ describe('staff route honesty', () => {
   it('shows exactly the four core tabs — no "More" tab (it became the tools drawer)', () => {
     // Menu-drawer revision: the fifth "More" tab is gone; its contents moved
     // into the chevron-FAB bottom sheet (ToolsDrawer), driven by MORE_ITEMS.
-    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['today', 'attendance', 'timetable', 'post']);
+    // Profile, not post: "Announcements" is thirteen characters in a
+    // quarter-width tab and wrapped to two lines on narrower phones, dropping
+    // that label off the bar's shared baseline. The family bar hit the same
+    // problem and fixed it the same way on 2026-08-02.
+    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['today', 'attendance', 'timetable', 'profile']);
     expect(VISIBLE_TABS.some((t) => t.name === 'more')).toBe(false);
     expect(routeFileExists('more')).toBe(false);
   });
@@ -46,9 +50,12 @@ describe('staff route honesty', () => {
     }
   });
 
-  it('lists the web nav sections — Tests & Results (one row on mobile), Requests, Holidays, Profile', () => {
+  it('lists the web nav sections — Tests & Results (one row on mobile), Requests, Holidays, Announcements', () => {
     const labels = MORE_ITEMS.map((i) => i.label);
-    expect(labels).toEqual(expect.arrayContaining(['Tests & Results', 'Requests', 'Holidays', 'Profile']));
+    // Profile was promoted OUT of the drawer into the tab bar and
+    // Announcements took its place, so the drawer must still offer it —
+    // otherwise posting an announcement becomes unreachable.
+    expect(labels).toEqual(expect.arrayContaining(['Tests & Results', 'Requests', 'Holidays', 'Announcements']));
     // Tests and Results are a single row here (they'd point at the same screen
     // otherwise) — the tests screen opens a test's results on tap.
     expect(labels).not.toContain('Results');
@@ -74,8 +81,12 @@ describe('staff route honesty', () => {
     expect(routeFileExists('notes/[classSectionId]')).toBe(true);
   });
 
-  it('names the "Today" tab and the "Announcements" tab to match the web nav', () => {
+  it('names the "Today" tab, and every tab label is short enough not to wrap', () => {
     expect(VISIBLE_TABS.find((t) => t.name === 'today')?.title).toBe('Today');
-    expect(VISIBLE_TABS.find((t) => t.name === 'post')?.title).toBe('Announcements');
+    expect(VISIBLE_TABS.find((t) => t.name === 'profile')?.title).toBe('Profile');
+    // The actual constraint, asserted rather than assumed: a quarter-width tab
+    // on a 360dp phone fits about ten characters at this type size. This is
+    // the guard that stops the two-line label coming back under a new name.
+    for (const t of VISIBLE_TABS) expect(t.title.length).toBeLessThanOrEqual(10);
   });
 });

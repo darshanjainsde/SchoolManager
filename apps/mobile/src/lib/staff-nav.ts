@@ -19,11 +19,26 @@
  * resolves" check.
  */
 
+/**
+ * FOUR TABS, AND EVERY LABEL FITS ON ONE LINE.
+ *
+ * "Announcements" is thirteen characters in a quarter-width tab; on any phone
+ * narrower than a Pixel it wrapped to two lines, which pushed that one tab's
+ * label off the shared baseline and made the whole bar look broken. The family
+ * bar hit the identical problem with "Notices/Announcements" and fixed it on
+ * 2026-08-02 by promoting Profile into the bar; staff was left behind.
+ *
+ * Profile is the right promotion rather than an arbitrary short word: it is
+ * where a teacher signs out, and sign-out is the one action that must never be
+ * more than a tap away from somewhere obvious. Announcements moves into the
+ * tools drawer with the rest of the compose-style tools, which is where it
+ * belongs — it is something a teacher does occasionally, not a place they live.
+ */
 export const VISIBLE_TABS = [
   { name: 'today', title: 'Today', icon: 'today-outline' as const },
   { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
   { name: 'timetable', title: 'Timetable', icon: 'calendar-outline' as const },
-  { name: 'post', title: 'Announcements', icon: 'megaphone-outline' as const },
+  { name: 'profile', title: 'Profile', icon: 'person-outline' as const },
 ];
 
 /** Detail/utility routes — reachable via navigation (More rows, row taps), hidden from the tab bar. */
@@ -31,6 +46,7 @@ export const HIDDEN_ROUTES = [
   'holidays',
   'diary',
   'requests',
+  'post',
   'take/[classSectionId]',
   'tests',
   'results/[examId]',
@@ -39,7 +55,6 @@ export const HIDDEN_ROUTES = [
   'messages/[threadId]',
   'notes',
   'notes/[classSectionId]',
-  'profile',
   'notifications',
 ];
 
@@ -69,7 +84,7 @@ export interface MoreItem {
     | '/(staff)/tests'
     | '/(staff)/requests'
     | '/(staff)/holidays'
-    | '/(staff)/profile';
+    | '/(staff)/post';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
 }
@@ -82,5 +97,5 @@ export const MORE_ITEMS: readonly MoreItem[] = [
   { label: 'Tests & Results', icon: '📊', route: '/(staff)/tests', tone: 'indigo' },
   { label: 'Requests', icon: '📝', route: '/(staff)/requests', tone: 'amber' },
   { label: 'Holidays', icon: '📅', route: '/(staff)/holidays', tone: 'green' },
-  { label: 'Profile', icon: '👤', route: '/(staff)/profile', tone: 'indigo' },
+  { label: 'Announcements', icon: '📣', route: '/(staff)/post', tone: 'amber' },
 ];

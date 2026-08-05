@@ -3,8 +3,7 @@ import { AccessibilityInfo, Animated, BackHandler, Pressable, Text, View } from 
 import { router } from 'expo-router';
 import type { UnreadCountResult } from '@skoolos/types';
 import { api } from '@/lib/api';
-import { family } from '@/lib/family-store';
-import { session } from '@/lib/session';
+import { signOut } from '@/lib/sign-out';
 import type { MoreTone } from '@/lib/staff-nav';
 import { useTokens } from '@/theme/theme-context';
 import { brand } from '@/theme/tokens';
@@ -18,26 +17,6 @@ export interface DrawerItem {
   icon: string;
   route: string;
   tone?: MoreTone;
-}
-
-/**
- * Revokes the refresh token server-side first (best-effort — see
- * `api.logout`, which swallows network failures so an offline/lost device
- * still signs out locally), then clears the persisted session and returns to
- * the school-connect screen — not `/(auth)/login`, since a tester switching
- * roles/schools for the closed test needs to be able to re-pick a school
- * host too, not just re-enter credentials for the same one.
- *
- * Moved verbatim from the old `more.tsx` screens (removed with the More tab)
- * so the login/logout call shape is unchanged.
- */
-async function logout() {
-  await api.logout();
-  await session.clear();
-  // Full sign-out forgets the whole family shelf too (Phase 5·2) — harmless
-  // no-op for the staff portal, which never populates it.
-  await family.clearAll();
-  router.replace('/(auth)/connect');
 }
 
 function toneTile(tokens: ReturnType<typeof useTokens>, tone: MoreTone | undefined) {
@@ -248,7 +227,7 @@ export function PortalToolsDrawer({ open, onClose, items, badgeEndpoints = {} }:
   }
 
   async function onLogout() {
-    await logout();
+    await signOut();
     onClose();
   }
 

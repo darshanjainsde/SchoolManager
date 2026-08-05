@@ -1,8 +1,9 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { TeacherProfile } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
+import { signOut } from '@/lib/sign-out';
 import { AppearanceSetting } from '@/components/AppearanceSetting';
 import { EditableAvatar } from '@/components/EditableAvatar';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
@@ -195,6 +196,30 @@ export default function Profile() {
       <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4 }}>
         Change your password on the web portal.
       </Text>
+
+      {/* SIGN OUT LIVES HERE.
+          It was reachable only from the tools drawer, behind a chevron FAB —
+          the one screen on the phone where nobody looks for it. Every other app
+          has taught people that signing out is at the bottom of Profile, so it
+          is here as well as there. Styled as a quiet destructive action, not a
+          primary button: it is the last thing on the screen, not the point of
+          it. */}
+      <Pressable
+        testID="profile-signout"
+        accessibilityRole="button"
+        onPress={() => void signOut()}
+        style={{
+          marginTop: 4,
+          borderWidth: 1,
+          borderColor: tokens.color.red,
+          borderRadius: 12,
+          paddingVertical: 13,
+        }}
+      >
+        <Text style={{ color: tokens.color.red, fontWeight: '700', textAlign: 'center', fontSize: 14 }}>
+          Sign out
+        </Text>
+      </Pressable>
     </Screen>
   );
 }
