@@ -672,7 +672,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               showFeeTable
             />
           )}
-          {view === 'gallery' && <GallerySection gallery={data.gallery} schoolName={schoolName} />}
+          {view === 'gallery' && <GallerySection gallery={data.gallery} schoolName={schoolName} onOwnPage />}
           {/* The /connect PAGE is the one with the front door on it: joining,
               seats, the waitlist. The home band stays a teaser. */}
           {view === 'events' && (
@@ -685,6 +685,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               hasEnquiry={hasEnquiry}
               courses={data.courses.map((c) => c.name)}
               schoolName={schoolName}
+              onOwnPage
             />
           )}
           {view !== 'contact' && (

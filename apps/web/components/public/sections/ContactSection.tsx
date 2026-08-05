@@ -44,24 +44,36 @@ export default function ContactSection({
   hasEnquiry,
   courses,
   schoolName,
+  onOwnPage,
 }: {
   profile: PublicSiteData['profile'];
   socialLinks: PublicSiteData['socialLinks'];
   hasEnquiry: boolean;
   courses: string[];
   schoolName: string;
+  /** True when this section IS /contact — the masthead already said it. */
+  onOwnPage?: boolean;
 }) {
   return (
     <section id="enquire" className="relative max-w-6xl mx-auto px-6 py-24">
-      <div className="relative ps-panel overflow-hidden p-8 md:p-12 grid md:grid-cols-2 gap-12 items-center">
+      {/* The page animated all the way down and then stopped dead here: this
+          band carried no reveal at all while its neighbours carried one to
+          four. */}
+      <div className="reveal relative ps-panel overflow-hidden p-8 md:p-12 grid md:grid-cols-2 gap-12 items-center">
         <div className="absolute -top-16 -right-10 h-64 w-64 rounded-full ps-about-glow" />
         <div className="relative">
-          <h2 className="ps-head text-4xl font-bold">
-            Ready to <span className="ps-grad-text">join us?</span>
-          </h2>
-          <p className="mt-4 text-slate-600">
-            Leave your details and our admissions team reaches out within a working day.
-          </p>
+          {!onOwnPage && (
+            <>
+              <h2 className="ps-head text-4xl font-bold">
+                <span className="ps-accent-mark">
+                  Ready to <span className="ps-grad-text">join us?</span>
+                </span>
+              </h2>
+              <p className="mt-4 text-slate-600">
+                Leave your details and our admissions team reaches out within a working day.
+              </p>
+            </>
+          )}
           {(profile?.phone || profile?.email || profile?.addressLine1) && (
             <div className="mt-6 space-y-2 text-sm text-slate-700">
               {profile?.phone && <div>📞 {profile.phone}</div>}

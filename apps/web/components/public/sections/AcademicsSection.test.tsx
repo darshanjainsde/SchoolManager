@@ -61,8 +61,23 @@ describe('the same section as the whole /academics page', () => {
     expect(screen.getByText('Primary (I–V)')).toBeInTheDocument();
   });
 
-  it('renders nothing at all when the school has no programmes', () => {
+  /**
+   * CHANGED by the Phase 6 §5 audit, deliberately.
+   *
+   * This used to assert an empty container, and on the HOME page that is still
+   * right — a band with nothing in it should not appear between bands that do.
+   * But /academics is a page a visitor asked for by name, and answering it with
+   * a masthead and silence is the "series of silent gaps" the audit found. The
+   * page now says what will be there.
+   */
+  it('says what is coming rather than leaving the page a silent gap', () => {
     const { container } = render(<AcademicsSection courses={[]} onOwnPage />);
+    expect(screen.getByText(/no programmes listed yet/i)).toBeInTheDocument();
+    expect(container.querySelector('svg')).toBeInTheDocument();
+  });
+
+  it('still renders nothing as a BAND on the home page, where silence is right', () => {
+    const { container } = render(<AcademicsSection courses={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 });
