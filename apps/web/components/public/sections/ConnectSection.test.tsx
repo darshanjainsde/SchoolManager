@@ -24,8 +24,12 @@ import type { PublicSiteData } from '@/lib/public-api';
  */
 
 const submitRegistration = vi.fn();
+const submitRegistrationAsStudent = vi.fn();
+const probeSignedIn = vi.fn();
 vi.mock('../registration-client', () => ({
   submitRegistration: (...args: unknown[]) => submitRegistration(...args),
+  submitRegistrationAsStudent: (...args: unknown[]) => submitRegistrationAsStudent(...args),
+  probeSignedIn: (...args: unknown[]) => probeSignedIn(...args),
 }));
 
 type Ev = PublicSiteData['events'][number];
@@ -56,7 +60,12 @@ function renderConnect(events: Ev[]) {
 
 beforeEach(() => {
   submitRegistration.mockReset();
+  submitRegistrationAsStudent.mockReset();
+  probeSignedIn.mockReset();
   submitRegistration.mockResolvedValue({ ok: true, status: 'CONFIRMED', waitlistPos: null });
+  submitRegistrationAsStudent.mockResolvedValue({ ok: true, status: 'CONFIRMED', waitlistPos: null });
+  // Most visitors to a school's public site are not signed in.
+  probeSignedIn.mockResolvedValue({ signedIn: false });
   window.localStorage.clear();
 });
 
@@ -225,6 +234,60 @@ describe('joining', () => {
     renderConnect([event({ id: 'e1', title: 'Open Day' })]);
     expect(screen.getByText(/you’re going/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^join/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('a family that is already signed in', () => {
+  /**
+   * One tap, and the school gets a record it recognises.
+   *
+   * A guest row for a school's own pupil is a worse record than the school
+   * could have had: the desk shows a typed name where it could show the child,
+   * their class and their admission number. So a signed-in family is never
+   * asked to retype what the school already knows.
+   */
+  const AARAV = { signedIn: true as const, token: 'tok', name: 'Aarav Sharma' };
+
+  it('is not asked for a name and email the school already has', async () => {
+    probeSignedIn.mockResolvedValue(AARAV);
+    const user = userEvent.setup({ delay: null });
+    renderConnect([event({ id: 'e1', title: 'Open Day' })]);
+    await user.click(screen.getByRole('button', { name: /join/i }));
+
+    const sheet = within(await screen.findByRole('dialog'));
+    await waitFor(() => expect(sheet.queryByLabelText(/your name/i)).not.toBeInTheDocument());
+    expect(sheet.queryByLabelText(/email/i)).not.toBeInTheDocument();
+  });
+
+  it('is told whose place it is booking, so nobody registers as the wrong person', async () => {
+    probeSignedIn.mockResolvedValue(AARAV);
+    const user = userEvent.setup({ delay: null });
+    renderConnect([event({ id: 'e1', title: 'Open Day' })]);
+    await user.click(screen.getByRole('button', { name: /join/i }));
+    expect(await screen.findByText(/Aarav Sharma/)).toBeInTheDocument();
+  });
+
+  it('books through the signed-in door, so the desk shows the pupil and not a guest', async () => {
+    probeSignedIn.mockResolvedValue(AARAV);
+    const user = userEvent.setup({ delay: null });
+    renderConnect([event({ id: 'e1', title: 'Open Day' })]);
+    await user.click(screen.getByRole('button', { name: /join/i }));
+    const sheet = within(await screen.findByRole('dialog'));
+    await user.click(await sheet.findByRole('button', { name: /confirm/i }));
+
+    await waitFor(() => expect(submitRegistrationAsStudent).toHaveBeenCalledWith('e1', 1, 'tok'));
+    expect(submitRegistration).not.toHaveBeenCalled();
+    expect(await screen.findByText(/you’re going/i)).toBeInTheDocument();
+  });
+
+  it('falls back to the guest form when the session check cannot answer', async () => {
+    // A refresh that errors must not cost the family the ability to register.
+    probeSignedIn.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup({ delay: null });
+    renderConnect([event({ id: 'e1', title: 'Open Day' })]);
+    await user.click(screen.getByRole('button', { name: /join/i }));
+    const sheet = within(await screen.findByRole('dialog'));
+    expect(await sheet.findByLabelText(/your name/i)).toBeInTheDocument();
   });
 });
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { eventDateParts, safeHttpUrl } from '../site-utils';
-import { submitRegistration } from '../registration-client';
+import { probeSignedIn, submitRegistration, submitRegistrationAsStudent, type SessionProbe } from '../registration-client';
 
 type Ev = PublicSiteData['events'][number];
 
@@ -183,6 +183,9 @@ export default function ConnectSection({
   const [quantity, setQuantity] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Resolved once, the first time somebody opens the sheet — an anonymous
+  // visitor who never registers never pays for the request.
+  const [session, setSession] = useState<SessionProbe | 'checking' | null>(null);
   const [justJoined, setJustJoined] = useState<{
     status: string;
     waitlistPos: number | null;
@@ -202,18 +205,31 @@ export default function ConnectSection({
     setError(null);
     setJustJoined(null);
     setQuantity(1);
+    if (session !== null) return;
+    setSession('checking');
+    void probeSignedIn()
+      .then((r) => setSession(r))
+      // A session check that cannot answer must never cost the family the
+      // ability to register: fall through to the guest form.
+      .catch(() => setSession({ signedIn: false }));
   }
+
+  const signedIn = session !== null && session !== 'checking' && session.signedIn ? session : null;
 
   async function confirm() {
     if (!joining) return;
     setBusy(true);
     setError(null);
-    const result = await submitRegistration(joining.id, {
-      guestName: name.trim(),
-      guestEmail: email.trim(),
-      guestPhone: phone.trim(),
-      quantity,
-    });
+    // Signed in: the place is filed against the pupil, and the family is never
+    // asked to retype what the school already knows.
+    const result = signedIn
+      ? await submitRegistrationAsStudent(joining.id, quantity, signedIn.token)
+      : await submitRegistration(joining.id, {
+          guestName: name.trim(),
+          guestEmail: email.trim(),
+          guestPhone: phone.trim(),
+          quantity,
+        });
     setBusy(false);
     if (!result.ok) {
       setError(
@@ -233,7 +249,12 @@ export default function ConnectSection({
       // A browser refusing storage still gets the confirmation on screen; it
       // only loses the memory of it after a reload.
     }
-    setJustJoined({ status: result.status, waitlistPos: result.waitlistPos, email: email.trim(), quantity });
+    setJustJoined({
+      status: result.status,
+      waitlistPos: result.waitlistPos,
+      email: signedIn ? signedIn.name : email.trim(),
+      quantity,
+    });
     setJoining(null);
   }
 
@@ -302,37 +323,57 @@ export default function ConnectSection({
             <p className="text-sm text-slate-500 mt-1">
               {(joining.seatsLeft ?? null) === 0
                 ? 'This one is full — we’ll keep your place in the queue.'
-                : 'Three things and you’re in.'}
+                : signedIn
+                  ? 'One tap and you’re in.'
+                  : 'Three things and you’re in.'}
             </p>
 
-            <label className="block mt-5 text-sm font-semibold">
-              Your name
-              <input
-                value={name}
-                onChange={(ev) => setName(ev.target.value)}
-                className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 font-normal"
-                autoComplete="name"
-              />
-            </label>
-            <label className="block mt-3 text-sm font-semibold">
-              Email
-              <input
-                type="email"
-                value={email}
-                onChange={(ev) => setEmail(ev.target.value)}
-                className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 font-normal"
-                autoComplete="email"
-              />
-            </label>
-            <label className="block mt-3 text-sm font-semibold">
-              Phone <span className="font-normal text-slate-400">(optional)</span>
-              <input
-                value={phone}
-                onChange={(ev) => setPhone(ev.target.value)}
-                className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 font-normal"
-                autoComplete="tel"
-              />
-            </label>
+            {session === 'checking' && <p className="mt-5 text-sm text-slate-400">Just a moment…</p>}
+
+            {signedIn && (
+              /* Whose place this is, stated plainly. A one-tap join that does
+                 not say who it books is how the wrong child gets registered on
+                 a shared family phone. */
+              <div className="mt-5 rounded-2xl border border-black/5 ps-chip px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide opacity-70">Booking for</div>
+                <div className="ps-head font-bold text-lg mt-0.5">{signedIn.name}</div>
+              </div>
+            )}
+
+            {session !== 'checking' && !signedIn && (
+              <>
+                <label className="block mt-5 text-sm font-semibold">
+                  Your name
+                  <input
+                    value={name}
+                    onChange={(ev) => setName(ev.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 font-normal"
+                    autoComplete="name"
+                  />
+                </label>
+                <label className="block mt-3 text-sm font-semibold">
+                  Email
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(ev) => setEmail(ev.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 font-normal"
+                    autoComplete="email"
+                  />
+                </label>
+                <label className="block mt-3 text-sm font-semibold">
+                  Phone <span className="font-normal text-slate-400">(optional)</span>
+                  <input
+                    value={phone}
+                    onChange={(ev) => setPhone(ev.target.value)}
+                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 font-normal"
+                    autoComplete="tel"
+                  />
+                </label>
+              </>
+            )}
+
+            {session !== 'checking' && (
             <label className="block mt-3 text-sm font-semibold">
               How many of you?
               <input
@@ -344,13 +385,14 @@ export default function ConnectSection({
                 className="mt-1 w-24 rounded-xl border border-black/10 px-3 py-2 font-normal"
               />
             </label>
+            )}
 
             {error && <p className="mt-4 text-sm font-semibold text-red-600">{error}</p>}
 
             <div className="mt-6 flex items-center gap-2">
               <button
                 type="button"
-                disabled={busy || !name.trim() || !email.trim()}
+                disabled={busy || session === 'checking' || (!signedIn && (!name.trim() || !email.trim()))}
                 onClick={confirm}
                 className="btn-glow ps-accentbg text-sm font-semibold px-4 py-2 rounded-xl ps-soft disabled:opacity-50"
                 style={{ color: 'var(--ink)' }}
