@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NavGroup from './NavGroup';
 import type { NavNode } from './nav-model';
@@ -79,6 +79,89 @@ describe('the group control', () => {
     await user.click(trigger('Our school'));
     await user.keyboard('{Escape}');
     expect(trigger('Our school')).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger('Our school')).toHaveFocus();
+  });
+});
+
+describe('travelling from the tab to the menu', () => {
+  /**
+   * THE MENU MUST NOT SHUT UNDER THE CURSOR.
+   *
+   * The panel hangs 10px below its tab, and a pointer moving diagonally toward
+   * the second row crosses that gap — leaving the wrapper, firing mouseleave,
+   * and closing the menu the visitor was reaching into. It is the single most
+   * common way a hover menu is unusable, and it reads as "the site is broken"
+   * rather than "I moved my mouse wrong".
+   *
+   * Two defences, both tested here: the gap is BRIDGED so the pointer never
+   * actually leaves, and leaving at all only closes after a grace period —
+   * longer when the pointer is heading toward the panel rather than away.
+   */
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Pointer events only: userEvent's own scheduling fights fake timers. */
+  function openByHover() {
+    render(<NavGroup node={OUR_SCHOOL} />);
+    const wrap = document.querySelector('.ps-menu-wrap') as HTMLElement;
+    fireEvent.mouseEnter(wrap);
+    return wrap;
+  }
+
+  it('stays open when the pointer dips out and comes straight back', () => {
+    const wrap = openByHover();
+
+    fireEvent.mouseLeave(wrap, { clientY: 40 });
+    act(() => void vi.advanceTimersByTime(60)); // still inside the grace period
+    fireEvent.mouseEnter(wrap);
+    act(() => void vi.advanceTimersByTime(1000));
+
+    expect(trigger('Our school')).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('closes once the pointer has genuinely left and stayed away', () => {
+    const wrap = openByHover();
+
+    fireEvent.mouseLeave(wrap, { clientY: 0 }); // upward, away from the panel
+    act(() => void vi.advanceTimersByTime(1000));
+
+    expect(trigger('Our school')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('bridges the gap, so a pointer crossing it is still inside the menu', () => {
+    render(<NavGroup node={OUR_SCHOOL} />);
+    fireEvent.mouseEnter(document.querySelector('.ps-menu-wrap') as HTMLElement);
+    // The hit area starts flush at the tab; the visible card is the inner
+    // element, pushed down by the bridge's own padding.
+    expect(document.querySelector('.ps-menu')).toBeInTheDocument();
+    expect(document.querySelector('.ps-menu-card')).toBeInTheDocument();
+  });
+});
+
+describe('driving the menu from the keyboard', () => {
+  it('opens on ArrowDown and lands on the first row, not on nothing', async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<NavGroup node={OUR_SCHOOL} />);
+    trigger('Our school').focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('link', { name: 'About' })).toHaveFocus();
+  });
+
+  it('walks down the rows and stops at the last one rather than wrapping into nowhere', async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<NavGroup node={OUR_SCHOOL} />);
+    trigger('Our school').focus();
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(screen.getByRole('link', { name: 'Gallery' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('link', { name: 'Gallery' })).toHaveFocus();
+  });
+
+  it('walks back up, and past the top returns to the tab that opened it', async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<NavGroup node={OUR_SCHOOL} />);
+    trigger('Our school').focus();
+    await user.keyboard('{ArrowDown}{ArrowUp}');
     expect(trigger('Our school')).toHaveFocus();
   });
 });

@@ -204,16 +204,48 @@ const PS_CSS = `
      not a :hover rule), so this styles the open state and animates the entrance
      rather than toggling visibility. */
   .ps-menu-wrap { position: relative; }
-  @keyframes ps-menu-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-  .ps-menu { position: absolute; top: calc(100% + 10px); left: 0;
-    width: 340px; max-width: 92vw; background: #fff; border: 1px solid rgba(28,45,36,.10); border-radius: 18px;
-    box-shadow: 0 16px 40px -20px rgba(28,45,36,.3); padding: 12px; z-index: 60;
+  @keyframes ps-menu-in { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
+  @keyframes ps-menu-row-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+  /* The OUTER element is the pointer bridge: it starts flush against the tab
+     and its padding-top is what holds the visible card 10px clear. A pointer
+     travelling from the tab to a row therefore never leaves the menu, which is
+     what stops the panel closing under the cursor. */
+  .ps-menu { position: absolute; top: 100%; left: 0; padding-top: 10px; z-index: 60; }
+  .ps-menu-card { width: 340px; max-width: 92vw; background: #fff;
+    border: 1px solid rgba(28,45,36,.10); border-radius: 18px; padding: 8px;
+    box-shadow: 0 24px 50px -26px rgba(28,45,36,.42), 0 2px 6px -2px rgba(28,45,36,.12);
     display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px;
-    animation: ps-menu-in .2s cubic-bezier(.2,.7,.2,1); }
-  /* caret anchoring the menu to its own tab so it reads as belonging to it */
-  .ps-menu::before { content: ""; position: absolute; top: -7px; left: 24px; width: 13px; height: 13px;
+    transform-origin: top left;
+    animation: ps-menu-in .18s cubic-bezier(.2,.7,.2,1) both; }
+  /* caret anchoring the card to its own tab so it reads as belonging to it */
+  .ps-menu-card::before { content: ""; position: absolute; top: 4px; left: 24px; width: 13px; height: 13px;
     background: #fff; border-left: 1px solid rgba(28,45,36,.10); border-top: 1px solid rgba(28,45,36,.10);
     border-radius: 3px 0 0 0; transform: rotate(45deg); }
+
+  .ps-menu-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+    border-radius: 12px; text-decoration: none; position: relative;
+    transition: background .18s ease, transform .18s cubic-bezier(.2,.7,.2,1);
+    animation: ps-menu-row-in .22s cubic-bezier(.2,.7,.2,1) both;
+    animation-delay: calc(var(--i, 0) * 28ms + 30ms); }
+  .ps-menu-row:hover, .ps-menu-row:focus-visible { background: color-mix(in srgb, var(--ps1) 8%, #fff); }
+  /* The row slides a touch toward its destination — the same direction the
+     arrow points, so the motion says "this goes somewhere" rather than "look
+     at me". */
+  .ps-menu-row:hover { transform: translateX(2px); }
+  .ps-menu-row-label { display: block; font-size: 13px; font-weight: 700; color: var(--ink); }
+  .ps-menu-row-hint { display: block; font-size: 11px; color: #94a3b8; }
+  .ps-menu-row-arrow { margin-left: auto; font-size: 13px; color: var(--ps1);
+    opacity: 0; transform: translateX(-4px);
+    transition: opacity .18s ease, transform .18s cubic-bezier(.2,.7,.2,1); }
+  .ps-menu-row:hover .ps-menu-row-arrow, .ps-menu-row:focus-visible .ps-menu-row-arrow {
+    opacity: 1; transform: none; }
+
+  /* Motion is the school's decision and the visitor's: both escapes drop the
+     choreography to a plain appearance, never to a broken half-state. */
+  .ps-motion-off .ps-menu-card, .ps-motion-off .ps-menu-row { animation: none; }
+  .ps-motion-off .ps-menu-row, .ps-motion-off .ps-menu-row-arrow { transition: none; }
+
   /* Drawer variant: rows expand in place, indented under the group they belong to. */
   .ps-submenu { display: grid; gap: 2px; padding: 2px 0 6px 14px; margin-left: 10px;
     border-left: 2px solid rgba(28,45,36,.10); }
@@ -344,7 +376,8 @@ const PS_CSS = `
     .reveal { opacity: 1; transform: none; }
     .ps-underline path { stroke-dashoffset: 0; }
     .ps-flip-inner { transition: none; }
-    .ps-menu { animation: none; }
+    .ps-menu-card, .ps-menu-row { animation: none; }
+    .ps-menu-row, .ps-menu-row-arrow { transition: none; }
     .ps-amb { animation: none; }
     .ps-champ { animation: none; opacity: 1; transform: none; }
     .ps-marker { animation: none; background-size: 100% .38em; }
