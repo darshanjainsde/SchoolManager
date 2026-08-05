@@ -157,18 +157,24 @@ const PS_CSS = `
   .btn-glow::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120px circle at var(--x,50%) var(--y,50%),rgba(255,255,255,.28),transparent 60%); opacity: 0; transition: opacity .3s; }
   .btn-glow:hover::after { opacity: 1; }
 
-  /* ── Academics nav dropdown ── */
-  .ps-acad { position: relative; }
-  .ps-dropdown { position: absolute; top: calc(100% + 10px); left: 0; transform: translateY(6px);
+  /* ── Nav group menus ──
+     The menu is mounted only while open (it is a real button + aria-expanded,
+     not a :hover rule), so this styles the open state and animates the entrance
+     rather than toggling visibility. */
+  .ps-menu-wrap { position: relative; }
+  @keyframes ps-menu-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .ps-menu { position: absolute; top: calc(100% + 10px); left: 0;
     width: 340px; max-width: 92vw; background: #fff; border: 1px solid rgba(28,45,36,.10); border-radius: 18px;
-    box-shadow: 0 16px 40px -20px rgba(28,45,36,.3); padding: 12px; opacity: 0; visibility: hidden;
-    transition: opacity .2s, transform .2s, visibility .2s; z-index: 60;
-    display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
-  /* caret anchoring the menu to the Academics tab so it reads as belonging to it */
-  .ps-dropdown::before { content: ""; position: absolute; top: -7px; left: 24px; width: 13px; height: 13px;
+    box-shadow: 0 16px 40px -20px rgba(28,45,36,.3); padding: 12px; z-index: 60;
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px;
+    animation: ps-menu-in .2s cubic-bezier(.2,.7,.2,1); }
+  /* caret anchoring the menu to its own tab so it reads as belonging to it */
+  .ps-menu::before { content: ""; position: absolute; top: -7px; left: 24px; width: 13px; height: 13px;
     background: #fff; border-left: 1px solid rgba(28,45,36,.10); border-top: 1px solid rgba(28,45,36,.10);
     border-radius: 3px 0 0 0; transform: rotate(45deg); }
-  .ps-acad:hover .ps-dropdown, .ps-acad:focus-within .ps-dropdown { opacity: 1; visibility: visible; transform: translateY(0); }
+  /* Drawer variant: rows expand in place, indented under the group they belong to. */
+  .ps-submenu { display: grid; gap: 2px; padding: 2px 0 6px 14px; margin-left: 10px;
+    border-left: 2px solid rgba(28,45,36,.10); }
 
   /* ── Course flip cards ── */
   .ps-flip { perspective: 1200px; height: 340px; cursor: pointer; outline-offset: 4px; }
@@ -296,7 +302,7 @@ const PS_CSS = `
     .reveal { opacity: 1; transform: none; }
     .ps-underline path { stroke-dashoffset: 0; }
     .ps-flip-inner { transition: none; }
-    .ps-dropdown { transition: none; }
+    .ps-menu { animation: none; }
     .ps-champ { animation: none; opacity: 1; transform: none; }
     .ps-marker { animation: none; background-size: 100% .38em; }
     .ps-accent-grow { animation: none; transform: scaleX(1); }
@@ -314,6 +320,7 @@ const PS_CSS = `
   .ps-motion-off .ps-accent-grow { animation: none; transform: scaleX(1); }
   .ps-motion-off .ps-underline path { animation: none; stroke-dashoffset: 0; }
   .ps-motion-off .ps-kb { animation: none; }
+  .ps-motion-off .ps-menu { animation: none; }
   .ps-motion-off .ps-jline-mask, .ps-motion-off .ps-jbadge, .ps-motion-off .ps-jbody,
   .ps-motion-off .ps-rail-fill, .ps-motion-off .ps-rstep { transition: none; }
   .ps-motion-off .ps-jline-mask { width: 100%; }
