@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
 import { EMPLOYMENT_LABEL, fetchJob, formatPay } from '@/lib/jobs-api';
+import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
 import ApplyForm from '@/components/marketing/ApplyForm';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -28,6 +29,8 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
   const pay = formatPay(job);
 
   return (
+    <>
+      <PlatformBlogNav variant="job" />
     <div className="mkt">
       <div className="mx-auto max-w-3xl px-6 py-16">
         <Link href="/jobs" className="text-sm font-semibold text-indigo-600">
@@ -70,5 +73,6 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
         </section>
       </div>
     </div>
+    </>
   );
 }

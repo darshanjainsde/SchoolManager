@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
 import { EMPLOYMENT_LABEL, fetchJobs, formatPay } from '@/lib/jobs-api';
+import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
 
 export const metadata: Metadata = {
   title: 'Teaching jobs across the Sckools network',
@@ -33,6 +34,8 @@ export default async function JobsBoardPage({
   });
 
   return (
+    <>
+      <PlatformBlogNav variant="jobs" />
     <div className="mkt">
       <div className="mx-auto max-w-5xl px-6 py-16">
         <header>
@@ -99,5 +102,6 @@ export default async function JobsBoardPage({
         )}
       </div>
     </div>
+    </>
   );
 }
