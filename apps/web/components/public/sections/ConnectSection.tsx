@@ -31,7 +31,7 @@ export function formatPrice(minor: number, currency: string): string {
 /** A drawn empty state. A 48px emoji is a shrug; this says what would fill it. */
 function NothingOn({ schoolName }: { schoolName: string }) {
   return (
-    <div className="reveal mt-10 rounded-3xl border border-black/5 bg-white/60 p-12 text-center">
+    <div className="reveal mt-10 ps-panel p-12 text-center">
       <svg viewBox="0 0 120 90" className="mx-auto h-24 w-32" fill="none" aria-hidden="true">
         <rect x="12" y="18" width="96" height="62" rx="10" stroke="var(--ps1)" strokeWidth="2.5" opacity=".35" />
         <path d="M12 34h96" stroke="var(--ps1)" strokeWidth="2.5" opacity=".35" />
@@ -72,14 +72,14 @@ function EventCard({
   return (
     <div
       data-testid={`event-card-${event.id}`}
-      className="reveal ps-lift rounded-3xl overflow-hidden border border-black/5 bg-white flex flex-col"
+      className="reveal ps-lift ps-panel overflow-hidden flex flex-col"
     >
       {cover && <div className="h-36 bg-cover bg-center" style={{ backgroundImage: `url('${cover}')` }} />}
       <div className="p-5 flex-1 flex flex-col">
         <div className="flex items-start gap-4">
           {/* The date is an object, not a substring of a grey sentence: WHEN is
               the one fact a parent scans a listing for. */}
-          <div className="flex-none w-14 rounded-2xl border border-black/5 text-center py-2 ps-chip">
+          <div className="flex-none w-14 ps-panel-sm border border-black/5 text-center py-2 ps-chip">
             <div className="text-[11px] font-semibold uppercase tracking-wide opacity-70">{when.month}</div>
             <div className="ps-head text-2xl font-bold leading-none mt-0.5">{when.day}</div>
             <div className="text-[10px] opacity-60 mt-1">{when.weekday}</div>
@@ -110,7 +110,7 @@ function EventCard({
               <button
                 type="button"
                 onClick={() => onJoin(event)}
-                className="btn-glow ps-accentbg text-sm font-semibold px-4 py-2 rounded-xl ps-soft hover:scale-[1.03] transition"
+                className="btn-glow ps-accentbg ps-btn text-sm font-semibold px-4 py-2 hover:scale-[1.03] transition"
                 style={{ color: 'var(--ink)' }}
               >
                 {full ? 'Join the waitlist' : 'Join'}
@@ -273,7 +273,7 @@ export default function ConnectSection({
         {justJoined && (
           <div
             role="status"
-            className="mb-8 rounded-2xl border border-black/5 bg-white px-5 py-4 text-sm font-semibold"
+            className="mb-8 ps-panel px-5 py-4 text-sm font-semibold"
             style={{ color: 'var(--ps1)' }}
           >
             {/* The CARD already says "you’re going" — this banner adds what the
@@ -317,7 +317,7 @@ export default function ConnectSection({
             role="dialog"
             aria-modal="true"
             aria-label={`Join ${joining.title}`}
-            className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl"
+            className="relative w-full sm:max-w-md ps-panel p-6"
           >
             <h3 className="ps-head font-bold text-xl">{joining.title}</h3>
             <p className="text-sm text-slate-500 mt-1">
@@ -334,7 +334,7 @@ export default function ConnectSection({
               /* Whose place this is, stated plainly. A one-tap join that does
                  not say who it books is how the wrong child gets registered on
                  a shared family phone. */
-              <div className="mt-5 rounded-2xl border border-black/5 ps-chip px-4 py-3">
+              <div className="mt-5 ps-panel-sm border border-black/5 ps-chip px-4 py-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wide opacity-70">Booking for</div>
                 <div className="ps-head font-bold text-lg mt-0.5">{signedIn.name}</div>
               </div>
@@ -394,7 +394,7 @@ export default function ConnectSection({
                 type="button"
                 disabled={busy || session === 'checking' || (!signedIn && (!name.trim() || !email.trim()))}
                 onClick={confirm}
-                className="btn-glow ps-accentbg text-sm font-semibold px-4 py-2 rounded-xl ps-soft disabled:opacity-50"
+                className="btn-glow ps-accentbg ps-btn text-sm font-semibold px-4 py-2 disabled:opacity-50"
                 style={{ color: 'var(--ink)' }}
               >
                 {busy ? 'Saving…' : 'Confirm my place'}

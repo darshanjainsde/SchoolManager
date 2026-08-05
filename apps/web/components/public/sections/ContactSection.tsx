@@ -53,7 +53,7 @@ export default function ContactSection({
 }) {
   return (
     <section id="enquire" className="relative max-w-6xl mx-auto px-6 py-24">
-      <div className="relative ps-card ps-soft rounded-[2rem] overflow-hidden p-8 md:p-12 grid md:grid-cols-2 gap-12 items-center">
+      <div className="relative ps-panel overflow-hidden p-8 md:p-12 grid md:grid-cols-2 gap-12 items-center">
         <div className="absolute -top-16 -right-10 h-64 w-64 rounded-full ps-about-glow" />
         <div className="relative">
           <h2 className="ps-head text-4xl font-bold">
@@ -97,7 +97,7 @@ export default function ContactSection({
             const map = resolveMap(profile);
             if (map.embedSrc) {
               return (
-                <div className="mt-6 rounded-2xl overflow-hidden ps-card">
+                <div className="mt-6 overflow-hidden ps-panel">
                   <iframe
                     src={map.embedSrc}
                     className="w-full h-40 border-0"
@@ -126,7 +126,7 @@ export default function ContactSection({
         {hasEnquiry ? (
           <EnquiryForm courses={courses} />
         ) : (
-          <div className="relative ps-chip rounded-2xl p-6 text-sm">
+          <div className="relative ps-chip ps-panel-sm p-6 text-sm">
             Reach out to us using the contact details on the left.
           </div>
         )}
@@ -200,7 +200,7 @@ function EnquiryForm({ courses }: { courses: string[] }) {
       <button
         type="submit"
         disabled={status === 'sending'}
-        className="btn-glow w-full font-semibold py-3.5 rounded-xl ps-soft hover:scale-[1.01] transition disabled:opacity-60 ps-accentbg"
+        className="btn-glow w-full font-semibold py-3.5 ps-btn hover:scale-[1.01] transition disabled:opacity-60 ps-accentbg"
         style={{ color: 'var(--ink)' }}
       >
         {status === 'sending' ? 'Sending…' : 'Submit enquiry →'}

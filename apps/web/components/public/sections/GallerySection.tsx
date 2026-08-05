@@ -59,7 +59,7 @@ export default function GallerySection({
         <h2 className="ps-head text-4xl font-bold mt-3">Life at {schoolName}</h2>
       </div>
       {gallery.length === 0 ? (
-        <div className="reveal mt-10 ps-card ps-soft rounded-3xl p-10 text-center">
+        <div className="reveal mt-10 ps-panel p-10 text-center">
           <div className="text-5xl">📷</div>
           <h3 className="ps-head font-bold text-lg mt-4">Photos coming soon</h3>
           <p className="text-sm text-slate-500 mt-1">Moments from campus life will appear here.</p>
@@ -72,7 +72,7 @@ export default function GallerySection({
               type="button"
               onClick={() => setLb(i)}
               aria-label={`View ${img.caption ?? `photo ${i + 1}`} full size`}
-              className="reveal group relative rounded-2xl overflow-hidden ps-card ps-soft cursor-zoom-in text-left p-0"
+              className="reveal group relative overflow-hidden ps-panel ps-panel-sm cursor-zoom-in text-left p-0"
               style={{ transitionDelay: `${i * 0.05}s` }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -142,7 +142,7 @@ export default function GallerySection({
             <img
               src={open.url}
               alt={open.caption ?? `${schoolName} gallery photo`}
-              className="max-h-[82vh] max-w-full rounded-2xl object-contain shadow-2xl"
+              className="max-h-[82vh] max-w-full ps-panel-sm object-contain"
             />
             {(open.caption || gallery.length > 1) && (
               <figcaption className="mt-3 flex items-baseline justify-between gap-4 text-sm text-white/85">

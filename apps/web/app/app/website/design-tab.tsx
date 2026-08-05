@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SECTION_SHAPES } from '@/components/public/section-shape';
 
 // ── Local types (web cannot import API types) ────────────────────────────────
 interface SiteProfile {
@@ -19,6 +20,7 @@ interface SiteProfile {
   heroOverlayOpacity?: number | null;
   heroHeight?: string | null;
   headlineAccent?: string | null;
+  sectionShape?: string | null;
   navStyle?: string | null;
   navColor?: string | null;
   navTextColor?: string | null;
@@ -510,6 +512,54 @@ export default function DesignTab() {
                   {a.value === 'GROW' && <span className="mt-1.5 block h-1.5 w-16 rounded-full bg-amber-400" />}
                   <span className="mt-2 block text-xs font-semibold text-slate-700">{a.label}</span>
                   <span className="block text-[11px] text-slate-400">{a.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Section shape ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Section shape</CardTitle>
+          <p className="text-sm text-slate-500">
+            How every band BELOW your hero is drawn — the programme cards, the gallery, admissions, events and
+            contact. Your hero keeps its own layout.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {SECTION_SHAPES.map((shape) => {
+              const on = (profile?.sectionShape ?? 'SOFT') === shape.value;
+              return (
+                <button
+                  key={shape.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ sectionShape: shape.value })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  {/* Three stacked bars drawn the way that shape draws a card,
+                      so the choice is visible rather than described. */}
+                  <span className="block space-y-1.5" aria-hidden="true">
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        className={[
+                          'block h-4 bg-white',
+                          shape.value === 'SOFT' ? 'rounded-lg shadow-md' : '',
+                          shape.value === 'CRISP' ? 'rounded-sm border border-slate-300' : '',
+                          shape.value === 'EDITORIAL' ? 'border-t-2 border-teal-600 bg-transparent' : '',
+                        ].join(' ')}
+                      />
+                    ))}
+                  </span>
+                  <span className="mt-3 block text-xs font-semibold text-slate-700">{shape.label}</span>
+                  <span className="block text-[11px] text-slate-400">{shape.hint}</span>
                 </button>
               );
             })}

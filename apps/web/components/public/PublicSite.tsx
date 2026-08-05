@@ -15,6 +15,7 @@ import GallerySection from './sections/GallerySection';
 import EventsSection from './sections/EventsSection';
 import ConnectSection from './sections/ConnectSection';
 import { SUBPAGES } from './subpages';
+import { sectionShapeClass } from './section-shape';
 import ContactSection from './sections/ContactSection';
 
 export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'contact';
@@ -129,6 +130,61 @@ const PS_CSS = `
   .btn-glow { position: relative; overflow: hidden; }
   .btn-glow::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120px circle at var(--x,50%) var(--y,50%),rgba(255,255,255,.28),transparent 60%); opacity: 0; transition: opacity .3s; }
   .btn-glow:hover::after { opacity: 1; }
+
+  /* ── Section shape ──────────────────────────────────────────────────────
+     One control for every band BELOW the fold. The base values here are SOFT,
+     which is what every school already renders, so the control's arrival
+     changes nothing until somebody picks another shape.
+
+     .ps-panel is the only thing a band below the fold may draw itself with —
+     a hardcoded radius or shadow down there is a place the shape cannot reach,
+     which is the bug this control exists to fix. */
+  .ps-root { --ps-radius: 24px; --ps-radius-sm: 14px;
+    --ps-card-bg: #fff;
+    --ps-card-border: 1px solid rgba(28,45,36,.06);
+    --ps-card-shadow: 0 18px 40px -28px rgba(28,45,36,.45);
+    --ps-card-pad: 1.25rem;
+    --ps-band-pad: 5rem; }
+  /* NOT .ps-card — that one already means "white with a hairline" and is worn
+     by the hero's floating cards, which sit ABOVE the fold and must keep their
+     shape whatever a school picks below it. */
+  .ps-panel { background: var(--ps-card-bg); border-radius: var(--ps-radius);
+    border: var(--ps-card-border); box-shadow: var(--ps-card-shadow); }
+  .ps-panel-sm { border-radius: var(--ps-radius-sm); }
+  /* For a band that is already dark (the events band's brand gradient): the
+     SHAPE still applies, but a white fill on a coloured band would be a hole
+     in it. Declared after .ps-panel so it wins the background. */
+  /* A button is chrome, not a panel, but it still carries the school's shape:
+     a Crisp school asked for no soft shadows anywhere, and getting them on
+     every button is exactly the "one control that doesn't reach" bug. */
+  .ps-btn { border-radius: var(--ps-radius-sm); box-shadow: var(--ps-card-shadow); }
+  .ps-shape-editorial .ps-btn { box-shadow: none; }
+  .ps-shape-crisp .ps-btn { box-shadow: none; }
+
+  .ps-panel-glass { background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.15); box-shadow: none; }
+  .ps-shape-editorial .ps-panel-glass { border: 0; border-top: 2px solid rgba(255,255,255,.5); }
+  .ps-band { padding-top: var(--ps-band-pad); padding-bottom: var(--ps-band-pad); }
+
+  /* EDITORIAL: the card stops being an object. No fill, no shadow, no corner —
+     a hairline rule above each entry, so a grid reads as ruled columns in a
+     prospectus rather than as a tray of tiles. */
+  .ps-shape-editorial { --ps-radius: 0px; --ps-radius-sm: 0px;
+    --ps-card-bg: transparent;
+    --ps-card-border: 0;
+    --ps-card-shadow: none;
+    --ps-card-pad: 0rem;
+    --ps-band-pad: 5.5rem; }
+  .ps-shape-editorial .ps-panel { border-top: 2px solid var(--ps1); padding-top: 1rem; }
+
+  /* CRISP: the card is drawn, not floated. A real border carries the edge, so
+     the shadow is not needed to say where the panel ends. */
+  .ps-shape-crisp { --ps-radius: 6px; --ps-radius-sm: 4px;
+    --ps-card-bg: #fff;
+    --ps-card-border: 1px solid rgba(28,45,36,.16);
+    --ps-card-shadow: none;
+    --ps-card-pad: 1rem;
+    --ps-band-pad: 4rem; }
 
   /* ── Ambient header layer (/connect) ──
      Two blurred brand-coloured drifts. No canvas and no library: two divs and
@@ -320,6 +376,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   const onAcademicsPage = view === 'academics';
   // Section anchors live on the homepage; from other pages they need the "/" prefix.
   const base = view !== 'home' ? '/' : '';
+  const shapeClass = sectionShapeClass(data.profile?.sectionShape);
   const brandColor = data.profile?.brandColorPrimary ?? '#2f6b4f';
   // Secondary drives the second gradient stop. If a school leaves it near-white
   // (the default), a lightened tint of the primary reads better than pure white.
@@ -442,7 +499,9 @@ export default function PublicSite({ data, view = 'home' }: Props) {
 
   return (
     <div
-      className={`ps-root ${fontVars}${motion === 0 ? ' ps-motion-off' : ''}`}
+      className={`ps-root ${fontVars}${motion === 0 ? ' ps-motion-off' : ''}${
+        shapeClass ? ` ${shapeClass}` : ''
+      }`}
       style={
         {
           '--ps1': brandColor,

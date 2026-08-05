@@ -94,7 +94,7 @@ export default function AdmissionsSection({
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <div
-                  className="ps-jbody ps-card ps-soft rounded-3xl p-5"
+                  className="ps-jbody ps-panel p-5"
                   style={{ transitionDelay: `${0.55 + i * 0.28}s` }}
                 >
                   <h3 className="ps-head font-bold">{s.title}</h3>
@@ -113,7 +113,7 @@ export default function AdmissionsSection({
           {steps.map((s, i) => (
             <div
               key={i}
-              className={`ps-rstep ${i % 2 ? 'ps-rstep-r' : 'ps-rstep-l'} ps-card ps-soft rounded-2xl p-5 my-5`}
+              className={`ps-rstep ${i % 2 ? 'ps-rstep-r' : 'ps-rstep-l'} ps-panel p-5 my-5`}
               style={{ transitionDelay: `${0.3 + i * 0.3}s` }}
             >
               <span className="ps-rdot" aria-hidden="true" />
@@ -131,7 +131,7 @@ export default function AdmissionsSection({
       )}
 
       {feeRows.length > 0 && (
-        <div className="reveal mt-10 ps-card ps-soft rounded-3xl overflow-hidden">
+        <div className="reveal mt-10 ps-panel overflow-hidden">
           <div className="px-6 py-4 flex items-center justify-between border-b border-black/5">
             <h3 className="ps-head font-bold text-lg">Fee structure</h3>
           </div>

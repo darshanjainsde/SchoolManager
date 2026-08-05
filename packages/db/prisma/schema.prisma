@@ -371,6 +371,11 @@ model SchoolProfile {
   heroOverlayOpacity  Int     @default(65)
   heroHeight          String  @default("FULL")
   headlineAccent      String  @default("DRAW")
+  /// How every band BELOW the fold is shaped — radius, border, shadow, padding.
+  /// The first screen already had seven layouts; this is the control that makes
+  /// the rest of the page differ between schools by more than two colours.
+  /// SOFT (pillowy cards) | EDITORIAL (ruled, boxless) | CRISP (bordered).
+  sectionShape        String  @default("SOFT")
   navStyle            String  @default("CLASSIC")
   navColor            String  @default("PAPER")
   navTextColor        String  @default("AUTO")

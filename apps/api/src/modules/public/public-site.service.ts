@@ -99,6 +99,7 @@ export class PublicSiteService {
               heroOverlayOpacity: profile.heroOverlayOpacity,
               heroHeight: profile.heroHeight,
               headlineAccent: profile.headlineAccent,
+              sectionShape: profile.sectionShape,
               navStyle: profile.navStyle,
               navColor: profile.navColor,
               navTextColor: profile.navTextColor,

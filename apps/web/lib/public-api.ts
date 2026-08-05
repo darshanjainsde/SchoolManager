@@ -29,6 +29,8 @@ export interface PublicSiteData {
     heroOverlayOpacity: number;
     heroHeight: string;
     headlineAccent: string;
+    /** Optional: the api may predate the column by a few minutes on deploy. */
+    sectionShape?: string;
     navStyle: string;
     navColor: string;
     navTextColor: string;

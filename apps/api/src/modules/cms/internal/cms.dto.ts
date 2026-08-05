@@ -50,6 +50,8 @@ export class UpdateProfileDto {
   @IsOptional() @IsInt() @Min(10) @Max(95) heroOverlayOpacity?: number;
   @IsOptional() @IsIn(['FULL', 'COMPACT']) heroHeight?: string;
   @IsOptional() @IsIn(['DRAW', 'MARKER', 'GROW', 'NONE']) headlineAccent?: string;
+  /** How every band below the fold is drawn. See SECTION_SHAPES on the web. */
+  @IsOptional() @IsIn(['SOFT', 'EDITORIAL', 'CRISP']) sectionShape?: string;
   @IsOptional() @IsIn(['CLASSIC', 'CENTER', 'PILL', 'STRIP', 'GHOST']) navStyle?: string;
   @IsOptional() @IsIn(['PAPER', 'WHITE', 'DARK', 'BRAND']) navColor?: string;
   @IsOptional() @IsIn(['AUTO', 'LIGHT', 'DARK']) navTextColor?: string;

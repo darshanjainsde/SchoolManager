@@ -40,7 +40,7 @@ export default function AcademicsSection({
             <div
               key={c.id}
               id={`course-${c.id}`}
-              className="reveal ps-lift grid md:grid-cols-[220px,1fr] rounded-3xl overflow-hidden ps-card scroll-mt-24"
+              className="reveal ps-lift grid md:grid-cols-[220px,1fr] overflow-hidden ps-panel scroll-mt-24"
               style={{ transitionDelay: `${i * 0.05}s`, background: 'var(--paper)' }}
             >
               {c.imageUrl ? (
