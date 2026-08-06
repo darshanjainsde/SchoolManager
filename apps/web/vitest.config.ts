@@ -10,6 +10,13 @@ export default defineConfig({
     globals: true,
     // Component tests import from app/ and lib/; exclude build output and e2e.
     include: ['{app,lib,components}/**/*.test.{ts,tsx}'],
+    // Vitest's 5s default measures WALL CLOCK, not this test's own work, so it
+    // is really a limit on how busy the machine is allowed to be. Suites run in
+    // parallel: one genuinely slow test has twice now pushed unrelated,
+    // already-passing tests past 5s and failed them — a red run that says
+    // nothing about the code. A higher ceiling costs time only on a real
+    // failure, never on the happy path.
+    testTimeout: 20000,
   },
   resolve: {
     alias: {
