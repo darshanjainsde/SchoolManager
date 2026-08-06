@@ -1,14 +1,13 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import {
   Animated,
-  Dimensions,
+  
   KeyboardAvoidingView,
   Platform,
   Pressable,
   Text,
   View,
-  type TextStyle,
-} from 'react-native';
+  type TextStyle, useWindowDimensions } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop, Circle } from 'react-native-svg';
 import { SckoolsLogo } from '@/components/SckoolsLogo';
 import { useTokens } from '@/theme/theme-context';
@@ -31,7 +30,10 @@ export function AuthScaffold({
   children: ReactNode;
 }) {
   const tokens = useTokens();
-  const { width, height } = Dimensions.get('window');
+  // useWindowDimensions SUBSCRIBES; Dimensions.get() is a one-off read that
+  // goes stale the moment the window changes — split-screen, a foldable
+  // unfolding, or the keyboard resizing the view on Android.
+  const { width, height } = useWindowDimensions();
   const slide = useRef(new Animated.Value(28)).current;
   const logoScale = useRef(new Animated.Value(0.82)).current;
   const logoFade = useRef(new Animated.Value(0)).current;

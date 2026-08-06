@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
-import type { RegisterDto } from './community.dto';
+import type { PublicRegisterDto, RegisterDto } from './community.dto';
 
 /**
  * Who is coming to an event.
@@ -120,14 +120,49 @@ export class RegistrationsService {
   }
 
   /**
+   * The public front door.
+   *
+   * Narrower than `register` on purpose. It runs the SAME path, so capacity and
+   * the waitlist cannot behave one way for a parent and another for the office,
+   * but it trusts nothing the caller says about who they are:
+   *
+   *   - `studentId` is ignored outright. A stranger cannot claim to be a pupil.
+   *   - `fromSchoolId` is forced to this tenant, not read from the body.
+   *   - the event must be one THIS school hosts. A network event is readable
+   *     here, but its registrations are not (RLS `read_own_outbound_...`), so a
+   *     public join would count seats from rows we cannot see and oversell
+   *     somebody else's hall. Those events link out to the school running them.
+   */
+  async registerPublicly(eventId: string, dto: PublicRegisterDto) {
+    const { schoolId } = this.tenant.requireTenant();
+    const row = await this.register(eventId, {
+      quantity: dto.quantity,
+      guestName: dto.guestName,
+      guestEmail: dto.guestEmail,
+      guestPhone: dto.guestPhone,
+      fromSchoolId: schoolId,
+      requireHostedBy: schoolId,
+    });
+    return {
+      id: row.id,
+      status: row.status,
+      waitlistPos: row.waitlistPos ?? null,
+      quantity: row.quantity,
+    };
+  }
+
+  /**
    * Register somebody. Runs for the HOST tenant — the host owns its attendee
    * list, which is the decision the RLS policies rest on.
    */
-  async register(eventId: string, dto: RegisterDto) {
+  async register(eventId: string, dto: RegisterDto & { requireHostedBy?: string }) {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
       const event = await tx.event.findFirst({ where: { id: eventId } });
       if (!event) throw new NotFoundException('Event not found');
+      if (dto.requireHostedBy && event.schoolId !== dto.requireHostedBy) {
+        throw new BadRequestException('That event is run by another school — register on their own site');
+      }
       if (event.status !== 'APPROVED') {
         throw new BadRequestException('That event is not open for registration yet');
       }
@@ -169,6 +204,8 @@ export class RegistrationsService {
           schoolId: event.schoolId,
           ticketTypeId: ticket.id,
           quantity,
+          // Forced null on the public path: `registerPublicly` never forwards a
+          // studentId, so a stranger cannot file a place as somebody's child.
           studentId: dto.studentId ?? null,
           fromSchoolId: dto.fromSchoolId ?? schoolId,
           guestName: dto.guestName ?? null,

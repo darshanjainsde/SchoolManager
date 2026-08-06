@@ -17,10 +17,27 @@ function routeFileExists(routeName: string): boolean {
   return fs.existsSync(path.join(FAMILY_DIR, `${routeName}.tsx`));
 }
 
+/**
+ * Tabs live one level down in the `(tabs)` group; detail screens sit at the
+ * group root and are PUSHED over them by the Stack in `_layout.tsx`. The
+ * directory layout is the mechanism, so it is what these tests check: a tab
+ * that drifts out of `(tabs)` silently loses its tab bar, and a detail screen
+ * that drifts in silently loses its back stack.
+ */
+function tabFileExists(routeName: string): boolean {
+  return fs.existsSync(path.join(FAMILY_DIR, '(tabs)', `${routeName}.tsx`));
+}
+
 describe('family route honesty', () => {
   it('every visible tab points at a screen file that exists', () => {
     for (const { name } of VISIBLE_TABS) {
-      expect(routeFileExists(name)).toBe(true);
+      expect(`${name}: ${tabFileExists(name)}`).toBe(`${name}: true`);
+    }
+  });
+
+  it('keeps detail screens out of the tab group, so back has a stack to pop', () => {
+    for (const name of HIDDEN_ROUTES) {
+      expect(`${name} is a tab: ${tabFileExists(name)}`).toBe(`${name} is a tab: false`);
     }
   });
 
@@ -86,9 +103,15 @@ describe('family route honesty', () => {
       }
       if (entry.isDirectory() && entry.name !== '__tests__') {
         for (const sub of fs.readdirSync(path.join(FAMILY_DIR, entry.name))) {
-          if (sub.endsWith('.tsx') && !/ \d+\.tsx$/.test(sub)) {
-            screens.push(`${entry.name}/${sub.replace(/\.tsx$/, '')}`);
+          if (!sub.endsWith('.tsx') || / \d+\.tsx$/.test(sub)) continue;
+          // `(tabs)` is a route GROUP, not a route: it is transparent in the
+          // URL, so its children are registered under their bare names and its
+          // own _layout is a navigator rather than a screen.
+          if (entry.name === '(tabs)') {
+            if (sub !== '_layout.tsx') screens.push(sub.replace(/\.tsx$/, ''));
+            continue;
           }
+          screens.push(`${entry.name}/${sub.replace(/\.tsx$/, '')}`);
         }
       }
     }

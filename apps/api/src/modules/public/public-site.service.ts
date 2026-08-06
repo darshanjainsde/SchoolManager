@@ -99,6 +99,10 @@ export class PublicSiteService {
               heroOverlayOpacity: profile.heroOverlayOpacity,
               heroHeight: profile.heroHeight,
               headlineAccent: profile.headlineAccent,
+              sectionShape: profile.sectionShape,
+              motionGesture: profile.motionGesture,
+              backgroundTexture: profile.backgroundTexture,
+              navConfig: profile.navConfig,
               navStyle: profile.navStyle,
               navColor: profile.navColor,
               navTextColor: profile.navTextColor,
@@ -106,6 +110,7 @@ export class PublicSiteService {
               navShowCta: profile.navShowCta,
               navShowLogin: profile.navShowLogin,
               navLoginLabel: profile.navLoginLabel,
+              navLoginStyle: profile.navLoginStyle,
             }
           : null,
         homepage: homepage

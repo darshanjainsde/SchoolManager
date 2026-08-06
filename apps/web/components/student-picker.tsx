@@ -22,6 +22,18 @@ const fieldCls =
  * Backspace on an empty field removes the last chip — the conventions a
  * to-field has had since email clients, so nobody has to be taught them.
  */
+/**
+ * How a pupil is named where it MATTERS THAT THEY ARE NOT SOMEBODY ELSE.
+ *
+ * Two children can share a name exactly. Anywhere a teacher confirms an action
+ * against a specific pupil — a chip they are about to send a remark to, a
+ * control they are about to remove — the roll number goes with the name.
+ */
+export function labelFor(student?: { name: string; rollNo?: string | null }): string {
+  if (!student) return 'student';
+  return student.rollNo ? `${student.name}, roll ${student.rollNo}` : student.name;
+}
+
 export function StudentPicker({
   students,
   selected,
@@ -89,9 +101,15 @@ export function StudentPicker({
               data-testid={`token-${id}`}
               onClick={() => onChange(selected.filter((x) => x !== id))}
               className="sk-tok sk-tokin sk-press"
-              aria-label={`Remove ${byId.get(id)?.name ?? 'student'}`}
+              aria-label={`Remove ${labelFor(byId.get(id))}`}
             >
               {byId.get(id)?.name ?? 'Student'}
+              {/* TWO CHILDREN CAN SHARE A NAME EXACTLY. The dropdown always
+                  showed the roll number, but once picked a chip showed the name
+                  alone — so two pupils called the same thing became two
+                  identical chips and the teacher could not tell which remark
+                  was going to which child. The roll rides along on the chip. */}
+              {byId.get(id)?.rollNo ? <span className="rl">{byId.get(id)?.rollNo}</span> : null}
               <span className="x" aria-hidden="true">
                 ×
               </span>

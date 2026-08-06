@@ -51,8 +51,23 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           set -o pipefail
-          if ! pnpm --filter @skoolos/db exec prisma migrate status 2>&1 | tee status.txt; then
-            echo "::error::${{ matrix.environment }} has migrations pending — run the db-migrate workflow against it."
+          # A MISSING ANSWER IS NOT A CLEAN ANSWER. `prisma migrate status`
+          # exits non-zero for pending migrations AND for every other reason —
+          # no credentials, unreachable host, invalid schema. Reporting all of
+          # them as "migrations pending" is how this check spent days claiming
+          # a drift that did not exist while the real fault (empty
+          # DATABASE_URL/DIRECT_URL on this GitHub environment) went unread.
+          if [ -z "$DATABASE_URL" ] || [ -z "$DIRECT_URL" ]; then
+            echo "::error::${{ matrix.environment }}: DATABASE_URL/DIRECT_URL are empty on this GitHub environment, so NOTHING was checked — this is not a drift report. Add both under Settings → Environments → ${{ matrix.environment }} → Environment secrets."
             exit 1
           fi
-          echo "✓ ${{ matrix.environment }} matches the repo."
+          if pnpm --filter @skoolos/db exec prisma migrate status 2>&1 | tee status.txt; then
+            echo "✓ ${{ matrix.environment }} matches the repo."
+            exit 0
+          fi
+          if grep -qiE 'have not yet been applied|migrations? (is|are) pending' status.txt; then
+            echo "::error::${{ matrix.environment }} has migrations pending — run the db-migrate workflow against it."
+          else
+            echo "::error::${{ matrix.environment }}: could not read migration status at all (see the log above). The database was never reached, so this says NOTHING about whether it has drifted."
+          fi
+          exit 1

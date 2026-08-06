@@ -47,6 +47,9 @@ import type { TenantContextService } from '../tenancy';
 import type { TimetableService } from '../management';
 import type { HolidaysService } from '../management';
 import type { DiaryService } from '../management';
+// Type-only: the community barrel re-exports CommunityModule, and importing it
+// for real here would load the module graph this file deliberately stubs out.
+import type { RegistrationsService } from '../community';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const USER = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -67,11 +70,15 @@ describe('PortalService', () => {
   // `/me/diary` and `/me/diary/:id/sign` delegate wholesale to DiaryService
   // (which owns its own spec) — this stub only has to satisfy the constructor.
   const diarySvc = { studentDiary: jest.fn(), sign: jest.fn() };
+  // Same again for the events engine: `/me/events/:id/register` delegates to
+  // RegistrationsService and is covered by portal-events.service.spec.
+  const registrations = { register: jest.fn() };
   const svc = new PortalService(
     tenant as unknown as TenantContextService,
     timetable as unknown as TimetableService,
     holidaysSvc as unknown as HolidaysService,
     diarySvc as unknown as DiaryService,
+    registrations as unknown as RegistrationsService,
   );
 
   beforeEach(() => {

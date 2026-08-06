@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import type { TimetableSlot } from '@skoolos/types';
-import Timetable from '../timetable';
+import Timetable from '../(tabs)/timetable';
 import { api, ApiError } from '@/lib/api';
 
 jest.mock('expo-router', () => ({
@@ -81,7 +81,7 @@ it('shows a loading state while the week is in flight', async () => {
   setNow(2026, 6, 29, 8, 20);
   (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
   render(<Timetable />);
-  expect(await screen.findByText('Loading your timetable…')).toBeTruthy();
+  expect(await screen.findByLabelText('Loading your timetable…')).toBeTruthy();
 });
 
 it("shows the server's error message verbatim when the week fails to load", async () => {

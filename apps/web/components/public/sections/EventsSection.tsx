@@ -21,7 +21,7 @@ export default function EventsSection({
           </p>
         </div>
         {events.length === 0 ? (
-          <div className="reveal mt-10 bg-white/10 backdrop-blur rounded-3xl border border-white/15 p-10 text-center">
+          <div className="reveal mt-10 backdrop-blur ps-panel ps-panel-glass p-10 text-center">
             <div className="text-5xl">📅</div>
             <h3 className="ps-head font-bold text-lg mt-4 text-white">No upcoming events right now</h3>
             <p className="text-sm text-white/80 mt-1">Check back soon — new events land here as they&rsquo;re announced.</p>
@@ -36,7 +36,7 @@ export default function EventsSection({
               return (
                 <div
                   key={e.id}
-                  className="reveal ps-lift bg-white/10 backdrop-blur rounded-3xl overflow-hidden border border-white/15"
+                  className="reveal ps-lift backdrop-blur ps-panel ps-panel-glass overflow-hidden"
                   style={{ transitionDelay: `${i * 0.07}s` }}
                 >
                   {coverSrc ? (

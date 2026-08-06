@@ -12,6 +12,7 @@ import CoursesTab from './courses-tab';
 import AdmissionsTab from './admissions-tab';
 import HallOfFameTab from './hof-tab';
 import DesignTab from './design-tab';
+import MenuTab from './menu-tab';
 
 /**
  * Website console shell: the tab bar, plus the one shared settings form the
@@ -24,6 +25,7 @@ type Tab =
   | 'branding'
   | 'theme'
   | 'design'
+  | 'menu'
   | 'homepage'
   | 'about'
   | 'contact'
@@ -37,6 +39,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'branding', label: 'Branding' },
   { id: 'theme', label: 'Theme' },
   { id: 'design', label: 'Design' },
+  { id: 'menu', label: 'Menu' },
   { id: 'homepage', label: 'Homepage' },
   { id: 'about', label: 'About' },
   { id: 'contact', label: 'Contact & address' },
@@ -96,6 +99,7 @@ export default function WebsitePage() {
       {activeTab === 'about' && <AboutTab form={form} />}
       {activeTab === 'contact' && <ContactTab form={form} />}
       {activeTab === 'design' && <DesignTab />}
+      {activeTab === 'menu' && <MenuTab />}
       {activeTab === 'courses' && <CoursesTab />}
       {activeTab === 'admissions' && <AdmissionsTab />}
       {activeTab === 'hof' && <HallOfFameTab />}

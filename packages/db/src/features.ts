@@ -2,14 +2,14 @@ import type { Tier } from '@prisma/client';
 
 export type FeatureKey =
   | 'PUBLIC_SITE' | 'GALLERY' | 'ENQUIRY' | 'SOCIAL'
-  | 'ABOUT_CONTACT' | 'EVENTS' | 'MANAGEMENT' | 'BLOG';
+  | 'ABOUT_CONTACT' | 'EVENTS' | 'MANAGEMENT' | 'BLOG' | 'HIRING';
 
-const ALL_KEYS: FeatureKey[] = ['PUBLIC_SITE','GALLERY','ENQUIRY','SOCIAL','ABOUT_CONTACT','EVENTS','MANAGEMENT','BLOG'];
+const ALL_KEYS: FeatureKey[] = ['PUBLIC_SITE','GALLERY','ENQUIRY','SOCIAL','ABOUT_CONTACT','EVENTS','MANAGEMENT','BLOG','HIRING'];
 const isFeatureKey = (k: string): k is FeatureKey => (ALL_KEYS as string[]).includes(k);
 
 const BASIC: FeatureKey[] = ['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL'];
 const STANDARD: FeatureKey[] = [...BASIC, 'ABOUT_CONTACT', 'EVENTS', 'BLOG'];
-const PRO: FeatureKey[] = [...STANDARD, 'MANAGEMENT'];
+const PRO: FeatureKey[] = [...STANDARD, 'MANAGEMENT', 'HIRING'];
 
 export const TIER_FEATURES: Record<Tier, FeatureKey[]> = {
   BASIC, STANDARD, PRO,

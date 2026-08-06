@@ -1,5 +1,5 @@
 import { render, fireEvent, act } from '@testing-library/react-native';
-import Home from '../home';
+import Home from '../(tabs)/home';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 
@@ -258,8 +258,8 @@ describe('navigation', () => {
 describe('fetch states', () => {
   it('shows a loading state before any endpoint resolves', () => {
     (api.request as jest.Mock).mockReturnValue(new Promise(() => {})); // never resolves
-    const { getByText } = render(<Home />);
-    expect(getByText('Loading…')).toBeTruthy();
+    const { getByLabelText } = render(<Home />);
+    expect(getByLabelText('Loading your details…')).toBeTruthy();
   });
 
   it('shows the API error message when a fetch fails', async () => {

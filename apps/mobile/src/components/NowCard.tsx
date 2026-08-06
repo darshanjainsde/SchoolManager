@@ -3,6 +3,8 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { Card } from './ui';
+import { Touchable } from './Touchable';
+import { CountUp } from './CountUp';
 import { useTokens } from '@/theme/theme-context';
 import { brand, font } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture, useReduceMotion } from '@/theme/motion';
@@ -24,6 +26,12 @@ export interface NowCardProps {
   /** Shown when nothing is current: before school, after school, or in a gap. */
   nextEntry: TeacherDayEntry | null;
   onTakeAttendance: (classSectionId: string) => void;
+  /**
+   * Opens the class itself — the roster, who is out, the notes. Optional so
+   * the card stays renderable (and testable) without a navigator; when it is
+   * omitted the hero is simply not tappable, rather than tappable-and-inert.
+   */
+  onOpenClass?: (classSectionId: string) => void;
   /**
    * Day-complete wrap-up figures, used only in the "day over" state
    * (`entry === null && nextEntry === null`). Optional so the other states
@@ -80,11 +88,14 @@ function GradientHero({
   id,
   colors,
   testID,
+  /** 16 on the live-class hero, which carries the most and is tapped as a whole. */
+  padding = 14,
   children,
 }: {
   id: string;
   colors: readonly string[];
   testID?: string;
+  padding?: number;
   children: ReactNode;
 }) {
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -96,10 +107,10 @@ function GradientHero({
         setSize((s) => (s.w === width && s.h === height ? s : { w: width, h: height }));
       }}
       style={{
-        // `.nowcard` — radius 16 and 14px of padding: a card on the page, not
-        // a slab. Same lift as a `Page`, in ink rather than neutral grey.
+        // `.nowcard` — radius 16: a card on the page, not a slab. Same lift as
+        // a `Page`, in ink rather than neutral grey.
         borderRadius: 16,
-        padding: 14,
+        padding,
         overflow: 'hidden',
         backgroundColor: colors[0],
         shadowColor: brand.hero.shadow,
@@ -151,8 +162,14 @@ function HeroChip({ children }: { children: ReactNode }) {
   );
 }
 
-/** A single "5 / classes taught" figure cell in the day-complete summary row. */
-function SummaryCell({ value, label }: { value: string; label: string }) {
+/**
+ * A single "5 / classes taught" figure cell in the day-complete summary row.
+ *
+ * The figure counts up, and this is the one card in the app where that is
+ * right: the day is over, nothing here will change again, and the number is
+ * the point of the card rather than a side effect of what you are doing.
+ */
+function SummaryCell({ value, label, testID }: { value: number; label: string; testID?: string }) {
   return (
     <View
       style={{
@@ -165,7 +182,11 @@ function SummaryCell({ value, label }: { value: string; label: string }) {
         paddingVertical: 9,
       }}
     >
-      <Text style={{ color: brand.onHero, fontSize: 19, fontWeight: '800' }}>{value}</Text>
+      <CountUp
+        testID={testID}
+        value={value}
+        style={{ color: brand.onHero, fontSize: 19, fontWeight: '800' }}
+      />
       <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 10.5, fontWeight: '600', marginTop: 1 }}>
         {label}
       </Text>
@@ -279,7 +300,15 @@ function NowProgress({ percent }: { percent: number }) {
  * card (kept as a plain surface, not a hero). Mirrors
  * apps/web/components/teacher/NowCard.tsx.
  */
-export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, summary }: NowCardProps) {
+export function NowCard({
+  entry,
+  elapsed,
+  total,
+  nextEntry,
+  onTakeAttendance,
+  onOpenClass,
+  summary,
+}: NowCardProps) {
   const tokens = useTokens();
 
   // Nothing is current: either the day is over (a wrap-up hero) or we're before
@@ -295,8 +324,8 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
             {`${s.classesTaught} ${s.classesTaught === 1 ? 'class' : 'classes'} taught`}
           </Text>
           <View testID="now-summary" style={{ flexDirection: 'row', gap: 8, marginTop: 13 }}>
-            <SummaryCell value={String(s.classesTaught)} label="classes taught" />
-            <SummaryCell value={String(s.studentsMarked)} label="students marked" />
+            <SummaryCell testID="summary-classes" value={s.classesTaught} label="classes taught" />
+            <SummaryCell testID="summary-marked" value={s.studentsMarked} label="students marked" />
           </View>
         </GradientHero>
       );
@@ -363,8 +392,10 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
   // must not assume its caller upheld that invariant — guard the division.
   const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
 
-  return (
-    <GradientHero id="hero-indigo" colors={brand.hero.now} testID="now-card">
+  const openable = onOpenClass && slot ? () => onOpenClass(slot.classSectionId) : null;
+
+  const card = (
+    <GradientHero id="hero-indigo" colors={brand.hero.now} testID="now-card" padding={16}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
         <LiveDot />
         <Text style={hero.eyebrow}>{`${entry.label} · Live now`}</Text>
@@ -411,6 +442,47 @@ export function NowCard({ entry, elapsed, total, nextEntry, onTakeAttendance, su
           )
         )}
       </View>
+
+      {/* THE WAY INTO THE ROOM. A rule and a line of text rather than a second
+          button competing with the one above it: taking the register is the
+          action, looking at who is in the room is the follow-on. It is its own
+          Pressable (not just decoration on the tappable card) so a screen
+          reader gets a real, named button rather than a sentence it cannot
+          act on. */}
+      {openable && (
+        <Pressable
+          testID={`now-open-${slot!.classSectionId}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${slot!.className}, see who is in the room`}
+          onPress={openable}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 13,
+            paddingTop: 11,
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(255,255,255,0.24)',
+          }}
+        >
+          <Text style={{ color: 'rgba(255,255,255,0.93)', fontSize: 12, fontWeight: '700' }}>
+            See who&apos;s in the room
+          </Text>
+          <Text style={{ color: brand.onHero, fontSize: 15, fontWeight: '800' }}>›</Text>
+        </Pressable>
+      )}
     </GradientHero>
+  );
+
+  if (!openable) return card;
+  // The WHOLE hero is the target, not just the line at its foot — it is the
+  // largest thing on Home and a teacher reaching for it mid-corridor should
+  // not have to land on a 20px row. `accessible={false}` keeps that
+  // convenience from collapsing the card into one VoiceOver element and
+  // hiding the two real buttons inside it.
+  return (
+    <Touchable testID="now-card-press" accessible={false} onPress={openable}>
+      {card}
+    </Touchable>
   );
 }

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { StaffTabBar, type StaffTabBarProps } from '../StaffTabBar';
-import { ToolsDrawer } from '../ToolsDrawer';
 import { VISIBLE_TABS } from '@/lib/staff-nav';
 
 // ToolsDrawer (used by the integration harness) pulls in these.
@@ -33,26 +32,16 @@ function makeProps(overrides: Partial<StaffTabBarProps> = {}): StaffTabBarProps 
     },
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
     descriptors: {},
-    toolsOpen: false,
-    onToolsPress: jest.fn(),
     ...overrides,
   } as unknown as StaffTabBarProps;
 }
 
-it('renders the four core tabs and the central tools chevron', () => {
-  const { getByText, getByTestId } = render(<StaffTabBar {...makeProps()} />);
+it('renders the four core tabs, and nothing between them', () => {
+  const { getByText } = render(<StaffTabBar {...makeProps()} />);
   for (const { title } of VISIBLE_TABS) {
     expect(getByText(title)).toBeTruthy();
   }
   expect(VISIBLE_TABS).toHaveLength(4);
-  expect(getByTestId('tools-fab')).toBeTruthy();
-});
-
-it('tapping the chevron FAB fires onToolsPress', () => {
-  const onToolsPress = jest.fn();
-  const { getByTestId } = render(<StaffTabBar {...makeProps({ onToolsPress })} />);
-  fireEvent.press(getByTestId('tools-fab'));
-  expect(onToolsPress).toHaveBeenCalledTimes(1);
 });
 
 it('tapping an unfocused tab navigates to it', () => {
@@ -81,21 +70,10 @@ it('does not re-navigate to the already-focused tab', () => {
  * actually brings the sheet up (the pitch's core interaction), not just that
  * a callback fired.
  */
-function Harness() {
-  const [open, setOpen] = useState(false);
-  return (
-    <View>
-      <StaffTabBar {...makeProps({ toolsOpen: open, onToolsPress: () => setOpen((o) => !o) })} />
-      <ToolsDrawer open={open} onClose={() => setOpen(false)} />
-    </View>
-  );
-}
 
-it('pressing the chevron opens the drawer sheet', async () => {
-  const { getByTestId, queryByTestId, findByTestId } = render(<Harness />);
-  expect(queryByTestId('tools-sheet')).toBeNull();
-
-  fireEvent.press(getByTestId('tools-fab'));
-
-  expect(await findByTestId('tools-sheet')).toBeTruthy();
+it('has no tools FAB — the drawer it opened is gone, and every tab is equal', () => {
+  // The FAB used to sit between the middle pair, squeezing the two tabs either
+  // side toward the edges. Its removal is what makes the four tabs even.
+  const { queryByTestId } = render(<StaffTabBar {...makeProps({})} />);
+  expect(queryByTestId('tools-fab')).toBeNull();
 });

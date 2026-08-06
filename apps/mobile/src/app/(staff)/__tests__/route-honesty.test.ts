@@ -17,17 +17,39 @@ function routeFileExists(routeName: string): boolean {
   return fs.existsSync(path.join(STAFF_DIR, `${routeName}.tsx`));
 }
 
+/**
+ * Tabs live one level down in the `(tabs)` group; detail screens sit at the
+ * group root and are PUSHED over them by the Stack in `_layout.tsx`. The
+ * directory layout is the mechanism, so it is what these tests check: a tab
+ * that drifts out of `(tabs)` silently loses its tab bar, and a detail screen
+ * that drifts in silently loses its back stack — which is how taking a register
+ * used to close the app.
+ */
+function tabFileExists(routeName: string): boolean {
+  return fs.existsSync(path.join(STAFF_DIR, '(tabs)', `${routeName}.tsx`));
+}
+
 describe('staff route honesty', () => {
   it('every visible tab points at a screen file that exists', () => {
     for (const { name } of VISIBLE_TABS) {
-      expect(routeFileExists(name)).toBe(true);
+      expect(`${name}: ${tabFileExists(name)}`).toBe(`${name}: true`);
+    }
+  });
+
+  it('keeps detail screens out of the tab group, so back has a stack to pop', () => {
+    for (const name of HIDDEN_ROUTES) {
+      expect(`${name} is a tab: ${tabFileExists(name)}`).toBe(`${name} is a tab: false`);
     }
   });
 
   it('shows exactly the four core tabs — no "More" tab (it became the tools drawer)', () => {
     // Menu-drawer revision: the fifth "More" tab is gone; its contents moved
     // into the chevron-FAB bottom sheet (ToolsDrawer), driven by MORE_ITEMS.
-    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['today', 'attendance', 'timetable', 'post']);
+    // Profile, not post: "Announcements" is thirteen characters in a
+    // quarter-width tab and wrapped to two lines on narrower phones, dropping
+    // that label off the bar's shared baseline. The family bar hit the same
+    // problem and fixed it the same way on 2026-08-02.
+    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['today', 'attendance', 'timetable', 'profile']);
     expect(VISIBLE_TABS.some((t) => t.name === 'more')).toBe(false);
     expect(routeFileExists('more')).toBe(false);
   });
@@ -46,9 +68,12 @@ describe('staff route honesty', () => {
     }
   });
 
-  it('lists the web nav sections — Tests & Results (one row on mobile), Requests, Holidays, Profile', () => {
+  it('lists the web nav sections — Tests & Results (one row on mobile), Requests, Holidays, Announcements', () => {
     const labels = MORE_ITEMS.map((i) => i.label);
-    expect(labels).toEqual(expect.arrayContaining(['Tests & Results', 'Requests', 'Holidays', 'Profile']));
+    // Profile was promoted OUT of the drawer into the tab bar and
+    // Announcements took its place, so the drawer must still offer it —
+    // otherwise posting an announcement becomes unreachable.
+    expect(labels).toEqual(expect.arrayContaining(['Tests & Results', 'Requests', 'Holidays', 'Announcements']));
     // Tests and Results are a single row here (they'd point at the same screen
     // otherwise) — the tests screen opens a test's results on tap.
     expect(labels).not.toContain('Results');
@@ -74,8 +99,16 @@ describe('staff route honesty', () => {
     expect(routeFileExists('notes/[classSectionId]')).toBe(true);
   });
 
-  it('names the "Today" tab and the "Announcements" tab to match the web nav', () => {
-    expect(VISIBLE_TABS.find((t) => t.name === 'today')?.title).toBe('Today');
-    expect(VISIBLE_TABS.find((t) => t.name === 'post')?.title).toBe('Announcements');
+  it('names the first tab "Home", and every tab label is short enough not to wrap', () => {
+    // The tab is the place a teacher LANDS, and "Today" described its contents
+    // rather than its job — which left the day's actual work with no name of
+    // its own. The screen keeps the `today` route (nothing linking to it has to
+    // move); the word "Today" now belongs to the section that carries the work.
+    expect(VISIBLE_TABS.find((t) => t.name === 'today')?.title).toBe('Home');
+    expect(VISIBLE_TABS.find((t) => t.name === 'profile')?.title).toBe('Profile');
+    // The actual constraint, asserted rather than assumed: a quarter-width tab
+    // on a 360dp phone fits about ten characters at this type size. This is
+    // the guard that stops the two-line label coming back under a new name.
+    for (const t of VISIBLE_TABS) expect(t.title.length).toBeLessThanOrEqual(10);
   });
 });

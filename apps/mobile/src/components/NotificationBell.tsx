@@ -83,7 +83,9 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: brand.onHero, fontSize: 10, fontWeight: '800' }}>
+            {/* A number inside an 18px circle — it cannot grow with the OS
+                setting without becoming a clipped glyph. */}
+            <Text maxFontSizeMultiplier={1.2} style={{ color: brand.onHero, fontSize: 10, fontWeight: '800' }}>
               {count > 99 ? '99+' : count}
             </Text>
           </View>

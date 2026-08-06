@@ -10,7 +10,8 @@ import type {
 import { LEAVE_TYPES } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
-import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Card, Empty, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 
@@ -408,9 +409,7 @@ export default function Requests() {
       )}
 
       {queueLoading ? (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading your requests…</Text>
-        </Card>
+        <LoadingRows label="Loading your requests…" rows={3} />
       ) : (
         <>
           {errorMessages.map((msg) => (
@@ -421,8 +420,8 @@ export default function Requests() {
             </Card>
           ))}
           {anyData && items.length === 0 && (
-            <Card>
-              <Text style={{ color: tokens.color.sub }}>No requests yet.</Text>
+            <Card style={{ padding: 0 }}>
+              <Empty icon="requests">No requests yet.</Empty>
             </Card>
           )}
           {anyData &&

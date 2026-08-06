@@ -26,6 +26,8 @@ interface MeResponse {
   userId: string;
   schoolId: string;
   role: Session['role'];
+  /** The person's real name. Null when no role record claims them yet. */
+  name: string | null;
   features: string[];
 }
 
@@ -197,7 +199,12 @@ export const api = {
       refreshToken: tokens.refreshToken,
       role: me.role,
       schoolHost: host,
-      displayName: identifier,
+      // The person's NAME, not what they typed to get in. `identifier` is an
+      // email address, a username or an admission number, so the home screen
+      // used to greet a teacher with "Good day, priya@stjohns.edu". It stays as
+      // the fallback for an account no role record claims yet, where the
+      // identifier is at least something they recognise.
+      displayName: me.name?.trim() || identifier,
     };
     await session.set(s);
     await session.setSchoolHost(host);

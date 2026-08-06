@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Globe, Inbox, LogOut, School, Users, GraduationCap, UserCog, CalendarDays, Clock, CalendarHeart, Megaphone, Settings, ClipboardList, ClipboardCheck, CalendarX, Menu, X, Newspaper } from 'lucide-react';
+import { Briefcase, CalendarDays, CalendarHeart, CalendarX, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -33,6 +33,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; re
   { href: '/app/leave', label: 'Leave', icon: CalendarX, requiredFeature: 'MANAGEMENT' },
   { href: '/app/requests', label: 'Requests', icon: ClipboardCheck, requiredFeature: 'MANAGEMENT' },
   { href: '/app/settings', label: 'Settings', icon: Settings, requiredFeature: 'MANAGEMENT' },
+  { href: '/app/jobs', label: 'Jobs', icon: Briefcase, requiredFeature: 'HIRING' },
   { href: '/app/events', label: 'Events', icon: CalendarHeart, requiredFeature: 'EVENTS' },
   { href: '/app/announcements', label: 'Announcements', icon: Megaphone },
 ];

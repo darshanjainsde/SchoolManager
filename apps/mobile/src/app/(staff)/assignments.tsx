@@ -5,6 +5,7 @@ import type { Assignment, AssignmentList, MyClassSection, Subject } from '@skool
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
@@ -271,9 +272,7 @@ export default function Assignments() {
         </Card>
       )}
       {classes === null && !classesError && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading your classes…</Text>
-        </Card>
+        <LoadingRows label="Loading your classes…" rows={5} />
       )}
       {classes && ownedClasses.length === 0 && !classesError && (
         <Card>
@@ -401,7 +400,7 @@ export default function Assignments() {
       {classSectionId && (
         <Card>
           <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Posted assignments</Text>
-          {listLoading && <Text style={{ color: tokens.color.sub, marginTop: 6 }}>Loading assignments…</Text>}
+          {listLoading && <LoadingRows label="Loading assignments…" rows={3} bare />}
           {listError && (
             <Text testID="list-error" style={{ color: tokens.color.red, marginTop: 6 }}>
               {listError}

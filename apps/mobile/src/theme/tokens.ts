@@ -75,7 +75,12 @@ const light: ColorPalette = {
   red: '#C4453F',
   red50: '#FBE9E8',
   appBg: '#FBF9F4',
-  surface: '#FFFFFF',
+  // Paper, not white. This was #FFFFFF — the one value in the light scheme
+  // outside the warm family it shares with appBg, surfaceMuted and line — so
+  // every card read as a cold rectangle on a warm ground, which is why the
+  // light theme felt wrong while the dark one did not. Still lighter than
+  // appBg, because that difference is what makes a card read as a card.
+  surface: '#FFFDF8',
   surfaceMuted: '#F3F0E7',
   onBrand: '#FFFFFF',
   placeholder: '#A6A3B8',

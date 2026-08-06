@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
-import { fontVars, FONT_STACK } from '@/lib/fonts';
 import HeroSection, { heroImagesOf, heroIsPhotoLayout } from './sections/HeroSection';
 import SiteNav from './sections/SiteNav';
 import CoursesFeatured from './sections/CoursesFeatured';
@@ -13,6 +12,10 @@ import AdmissionsSection, { admissionsHasContent } from './sections/AdmissionsSe
 import HallOfFame, { hofCourses } from './sections/HallOfFame';
 import GallerySection from './sections/GallerySection';
 import EventsSection from './sections/EventsSection';
+import ConnectSection from './sections/ConnectSection';
+import { SUBPAGES } from './subpages';
+import { PS_CSS } from './ps-css';
+import { themeRootProps } from './site-theme';
 import ContactSection from './sections/ContactSection';
 
 export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'contact';
@@ -23,36 +26,6 @@ interface Props {
   view?: SiteView;
 }
 
-// Header copy for each dedicated section page.
-const SUBPAGES: Record<string, { eyebrow: string; title: string; blurb: string }> = {
-  academics: {
-    eyebrow: 'Academics',
-    title: 'Programmes at {school}',
-    blurb: 'Everything we offer, from the earliest years up — tap a programme in the menu above to jump straight to it.',
-  },
-  admissions: {
-    eyebrow: 'Admissions',
-    title: 'Joining {school}',
-    blurb: 'How admissions work, step by step — and the full fee structure.',
-  },
-  gallery: {
-    eyebrow: 'Gallery',
-    title: 'Life at {school}',
-    blurb: 'Moments from classrooms, playgrounds and celebrations across the campus.',
-  },
-  events: {
-    eyebrow: 'Connect · Events',
-    title: 'Events & community',
-    blurb: 'Everything happening at our school and across the network — one shared calendar.',
-  },
-  contact: {
-    eyebrow: 'Contact',
-    title: 'Get in touch',
-    blurb: 'Reach the front office directly or leave your details — admissions responds within a working day.',
-  },
-};
-
-const MOTION_MAP: Record<string, number> = { FULL: 1, SUBTLE: 0.5, NONE: 0 };
 
 function parseStatValue(val: string): { numeric: boolean; num: number; suffix: string } {
   const clean = val.trim();
@@ -63,228 +36,12 @@ function parseStatValue(val: string): { numeric: boolean; num: number; suffix: s
   return { numeric: false, num: 0, suffix: '' };
 }
 
-// Static, theme-variable-driven CSS. Colours/font/motion come from CSS vars set
-// per-render on the root, so the same stylesheet themes each school.
-const PS_CSS = `
-  .ps-root { font-family: 'Inter', sans-serif; background: var(--paper); color: #43514a; overflow-x: hidden; min-height: 100vh; }
-  .ps-head { font-family: var(--font-head); color: var(--ink); letter-spacing: -.01em; }
-  /* This stylesheet loads after Tailwind, so .ps-head's ink color silently beat
-     Tailwind's .text-white on dark sections (invisible headings/names on the
-     Hall of Fame & Events). Re-assert white when both classes are present. */
-  .ps-head.text-white { color: #fff; }
-
-  .ps-soft { box-shadow: 0 22px 48px -24px rgba(28,45,36,.38); }
-  .ps-card { background: #fff; border: 1px solid rgba(28,45,36,.07); }
-  .ps-chip { background: color-mix(in srgb, var(--ps1) 12%, #fff); color: var(--ps1); }
-  .ps-brandbg { background: var(--ps1); }
-  .ps-accentbg { background: var(--ps2); }
-  .ps-brandgrad { background: linear-gradient(120deg, var(--ps1), color-mix(in srgb, var(--ps1) 55%, var(--ps2))); }
-  .ps-logo-bg { background: linear-gradient(135deg, var(--ps1), var(--ps2)); }
-  .ps-cta-btn { background: var(--ps1); color: #fff; }
-  .ps-icon-bg { background: linear-gradient(135deg, var(--ps2), var(--ps1)); }
-  .ps-progress-bar { background: linear-gradient(90deg, var(--ps1), var(--ps2)); height: 100%; }
-
-  /* gradient/underline accents */
-  .ps-grad-text { background: linear-gradient(100deg,var(--ps1),color-mix(in srgb, var(--ps1) 40%, var(--ps2))); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .ps-about-glow { background: linear-gradient(135deg, color-mix(in srgb, var(--ps1) 20%, transparent), color-mix(in srgb, var(--ps2) 20%, transparent)); filter: blur(2rem); }
-
-  /* ── School-themed motion, all scaled by --motion (0..1) ── */
-  @keyframes ps-floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(calc(-12px * var(--motion)))} }
-  .ps-float { animation: ps-floaty calc(7s / (var(--motion) + .06)) ease-in-out infinite; }
-  .ps-d1 { animation-delay: -2.5s; }
-  .ps-d2 { animation-delay: -4.5s; }
-  @keyframes ps-sway { 0%,100%{transform:rotate(calc(-3deg * var(--motion)))} 50%{transform:rotate(calc(3deg * var(--motion)))} }
-  .ps-sway { animation: ps-sway calc(5s / (var(--motion) + .06)) ease-in-out infinite; transform-origin: top center; }
-  @keyframes ps-twinkle { 0%,100%{opacity: calc(1 - .65 * var(--motion))} 50%{opacity:1} }
-  .ps-twinkle { animation: ps-twinkle calc(3.2s / (var(--motion) + .06)) ease-in-out infinite; }
-  @keyframes ps-shine { to { background-position: 200% center; } }
-
-  /* reveal on scroll */
-  .reveal { opacity: 0; transform: translateY(calc(26px * var(--motion) + 4px)); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
-  .reveal.in { opacity: 1; transform: none; }
-
-  /* hand-drawn underline draws itself once */
-  @keyframes ps-draw { to { stroke-dashoffset: 0; } }
-  .ps-underline path { stroke-dasharray: 300; stroke-dashoffset: 300; animation: ps-draw 1.5s ease .35s forwards; }
-
-  /* gentle lift on hover */
-  .ps-lift { transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s; }
-  .ps-lift:hover { transform: translateY(-6px); box-shadow: 0 30px 60px -28px rgba(28,45,36,.45); }
-
-  /* glow button */
-  .btn-glow { position: relative; overflow: hidden; }
-  .btn-glow::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120px circle at var(--x,50%) var(--y,50%),rgba(255,255,255,.28),transparent 60%); opacity: 0; transition: opacity .3s; }
-  .btn-glow:hover::after { opacity: 1; }
-
-  /* ── Academics nav dropdown ── */
-  .ps-acad { position: relative; }
-  .ps-dropdown { position: absolute; top: calc(100% + 10px); left: 0; transform: translateY(6px);
-    width: 340px; max-width: 92vw; background: #fff; border: 1px solid rgba(28,45,36,.10); border-radius: 18px;
-    box-shadow: 0 16px 40px -20px rgba(28,45,36,.3); padding: 12px; opacity: 0; visibility: hidden;
-    transition: opacity .2s, transform .2s, visibility .2s; z-index: 60;
-    display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
-  /* caret anchoring the menu to the Academics tab so it reads as belonging to it */
-  .ps-dropdown::before { content: ""; position: absolute; top: -7px; left: 24px; width: 13px; height: 13px;
-    background: #fff; border-left: 1px solid rgba(28,45,36,.10); border-top: 1px solid rgba(28,45,36,.10);
-    border-radius: 3px 0 0 0; transform: rotate(45deg); }
-  .ps-acad:hover .ps-dropdown, .ps-acad:focus-within .ps-dropdown { opacity: 1; visibility: visible; transform: translateY(0); }
-
-  /* ── Course flip cards ── */
-  .ps-flip { perspective: 1200px; height: 340px; cursor: pointer; outline-offset: 4px; }
-  .ps-flip-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d;
-    transition: transform .65s cubic-bezier(.2,.7,.2,1); }
-  .ps-flipped .ps-flip-inner { transform: rotateY(180deg); }
-  .ps-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
-    border-radius: 1.5rem; overflow: hidden; display: flex; flex-direction: column; }
-  .ps-face-back { transform: rotateY(180deg);
-    background: linear-gradient(150deg, var(--ps1), color-mix(in srgb, var(--ps1) 45%, #14261d)); }
-
-  /* ── Headline accent variants (admin-selectable) ── */
-  @keyframes ps-marker-sweep { to { background-size: 100% .38em; } }
-  .ps-marker { background-image: linear-gradient(0deg, color-mix(in srgb, var(--ps2) 50%, transparent), color-mix(in srgb, var(--ps2) 50%, transparent));
-    background-repeat: no-repeat; background-size: 0% .38em; background-position: 0 90%;
-    -webkit-box-decoration-break: clone; box-decoration-break: clone;
-    animation: ps-marker-sweep .9s cubic-bezier(.2,.7,.2,1) .4s forwards; }
-  @keyframes ps-accent-grow { to { transform: scaleX(1); } }
-  .ps-accent-grow { display: block; margin-top: 14px; height: 6px; width: 8rem; border-radius: 999px;
-    background: linear-gradient(90deg, var(--ps2), color-mix(in srgb, var(--ps2) 55%, var(--ps1)));
-    transform: scaleX(0); transform-origin: left;
-    animation: ps-accent-grow .8s cubic-bezier(.2,.7,.2,1) .35s forwards; }
-  .ps-accent-grow.mx-auto { transform-origin: center; }
-
-  /* ── Hero photo tiles + slideshow ── */
-  .ps-tile { background-size: cover; background-position: center; }
-  .ps-slide { position: absolute; inset: 0; background-size: cover; background-position: center;
-    opacity: 0; transition: opacity 1.1s ease; }
-  .ps-slide.on { opacity: 1; }
-  @keyframes ps-kb { from { transform: scale(1); } to { transform: scale(calc(1 + 0.07 * var(--motion))); } }
-  .ps-kb { animation: ps-kb 7.5s ease-out forwards; }
-
-  /* ── Navbar variants ── */
-  /* Links never break mid-label ("Hall of Fame" stays one line). */
-  .ps-nav-link { white-space: nowrap; }
-  .ps-nav-strip { background: var(--ink); color: rgba(255,255,255,.85); }
-
-  /* Admin-picked bar colour (applies to classic/center/pill/strip, and to
-     ghost's scrolled state). */
-  .ps-navc-paper { background: color-mix(in srgb, var(--paper) 85%, transparent); }
-  .ps-navc-white { background: rgba(255,255,255,.92); }
-  .ps-navc-dark  { background: color-mix(in srgb, var(--ink) 96%, transparent); }
-  .ps-navc-brand { background: color-mix(in srgb, var(--ps1) 96%, transparent); }
-  /* Dark/brand bars flip text to light. */
-  .ps-nav-ondark { border-color: rgba(255,255,255,.08); }
-  .ps-nav-ondark nav { color: rgba(255,255,255,.85); }
-  .ps-nav-ondark .ps-nav-link:hover { background: rgba(255,255,255,.12); }
-  .ps-nav-ondark .ps-nav-name { color: #fff; }
-
-  /* Ghost: fully transparent until scrolled, then the colour class shows. */
-  .ps-nav-ghost:not(.ps-nav-scrolled) { background: transparent; }
-  .ps-nav-ghost .ps-nav-link { color: rgba(255,255,255,.92); }
-  .ps-nav-ghost .ps-nav-link:hover { background: rgba(255,255,255,.14); }
-  .ps-nav-ghost .ps-nav-name { color: #fff; }
-  /* Ghost with dark text at top (admin "Text on photo" = Dark, or Auto over a
-     light paper wash) — white links are invisible on a washed-out photo. */
-  .ps-nav-ghost-darktext:not(.ps-nav-scrolled) .ps-nav-link { color: #475569; }
-  .ps-nav-ghost-darktext:not(.ps-nav-scrolled) .ps-nav-link:hover { background: rgba(0,0,0,.06); }
-  .ps-nav-ghost-darktext:not(.ps-nav-scrolled) .ps-nav-name { color: var(--ink); }
-  .ps-nav-ghost.ps-nav-scrolled { backdrop-filter: blur(8px); border-color: rgba(0,0,0,.05); }
-  .ps-nav-ghost.ps-nav-scrolled:not(.ps-nav-ondark) .ps-nav-link { color: #475569; }
-  .ps-nav-ghost.ps-nav-scrolled:not(.ps-nav-ondark) .ps-nav-link:hover { background: rgba(0,0,0,.05); }
-  .ps-nav-ghost.ps-nav-scrolled:not(.ps-nav-ondark) .ps-nav-name { color: var(--ink); }
-
-  /* ── Admissions: journey path (homepage) ── */
-  .ps-journey { position: relative; }
-  .ps-jline { position: absolute; top: 16px; left: 2%; right: 2%; height: 30px; }
-  .ps-jline-mask { width: 0%; height: 100%; overflow: hidden;
-    transition: width 1s cubic-bezier(.4,0,.2,1) .1s; }
-  .ps-journey.in .ps-jline-mask { width: 100%; }
-  .ps-jbadge { position: relative; z-index: 1; display: inline-grid; place-items: center;
-    min-width: 34px; height: 34px; border-radius: 999px; padding: 0 10px;
-    font-size: 11px; font-weight: 800; letter-spacing: .1em;
-    box-shadow: 0 0 0 6px var(--paper);
-    transform: scale(0); transition: transform .5s cubic-bezier(.34,1.56,.64,1); }
-  .ps-journey.in .ps-jbadge { transform: scale(1); }
-  .ps-jbody { opacity: 0; transform: translateY(calc(18px * var(--motion) + 4px)); margin-top: 10px;
-    transition: opacity .6s cubic-bezier(.2,.7,.2,1), transform .6s cubic-bezier(.2,.7,.2,1), box-shadow .35s; }
-  .ps-journey.in .ps-jbody { opacity: 1; transform: none; }
-  .ps-journey.in .ps-jbody:hover { transform: translateY(-6px); box-shadow: 0 30px 60px -28px rgba(28,45,36,.45); }
-
-  /* ── Admissions: timeline rail (/admissions page) ── */
-  .ps-rail { position: relative; }
-  .ps-rail-line, .ps-rail-fill { position: absolute; top: 8px; bottom: 8px; left: 14px; width: 3px; border-radius: 2px; }
-  .ps-rail-line { background: rgba(28,45,36,.1); }
-  .ps-rail-fill { background: linear-gradient(180deg, var(--ps1), var(--ps2)); bottom: auto; height: 0;
-    transition: height 1.6s cubic-bezier(.4,0,.2,1) .15s; }
-  .ps-rail.in .ps-rail-fill { height: calc(100% - 16px); }
-  .ps-rstep { position: relative; opacity: 0; transition: opacity .55s ease, transform .55s cubic-bezier(.2,.7,.2,1); }
-  .ps-rdot { position: absolute; top: 22px; width: 13px; height: 13px; border-radius: 999px;
-    background: var(--ps2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ps1) 25%, transparent); }
-  .ps-rail.in .ps-rstep { opacity: 1; transform: none; }
-  @media (min-width: 768px) {
-    .ps-rail-line, .ps-rail-fill { left: 50%; margin-left: -1.5px; }
-    .ps-rstep { width: 46%; }
-    .ps-rstep-l { margin-right: auto; transform: translateX(calc(-22px * var(--motion))); }
-    .ps-rstep-l .ps-rdot { right: -9.2%; margin-right: -6.5px; }
-    .ps-rstep-r { margin-left: auto; transform: translateX(calc(22px * var(--motion))); }
-    .ps-rstep-r .ps-rdot { left: -9.2%; margin-left: -6.5px; }
-  }
-  @media (max-width: 767.98px) {
-    .ps-rstep { margin-left: 40px; transform: translateY(calc(14px * var(--motion))); }
-    .ps-rstep .ps-rdot { left: -32.5px; }
-  }
-
-  /* ── Gallery lightbox ── */
-  .ps-lb { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1.25rem;
-    background: rgba(16,26,20,.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-    animation: ps-lb-fade .25s ease; }
-  @keyframes ps-lb-fade { from { opacity: 0; } to { opacity: 1; } }
-  .ps-lb-img { animation: ps-lb-zoom .32s cubic-bezier(.2,.7,.2,1); }
-  @keyframes ps-lb-zoom { from { opacity: 0; transform: scale(.92) translateY(10px); } to { opacity: 1; transform: none; } }
-  .ps-lb-closing { animation: ps-lb-fade .2s ease reverse forwards; }
-  .ps-lb-closing .ps-lb-img { animation: ps-lb-zoomout .2s ease forwards; }
-  @keyframes ps-lb-zoomout { to { opacity: 0; transform: scale(.94); } }
-
-  /* ── Hall of fame podium rise ── */
-  @keyframes ps-rise { to { opacity: 1; transform: none; } }
-  .ps-champ { opacity: 0; transform: translateY(26px); animation: ps-rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
-  .ps-champ-2 { animation-delay: .18s; }
-  .ps-champ-3 { animation-delay: .34s; }
-
-  @media (prefers-reduced-motion: reduce) {
-    .ps-root { --motion: 0 !important; }
-    .reveal { opacity: 1; transform: none; }
-    .ps-underline path { stroke-dashoffset: 0; }
-    .ps-flip-inner { transition: none; }
-    .ps-dropdown { transition: none; }
-    .ps-champ { animation: none; opacity: 1; transform: none; }
-    .ps-marker { animation: none; background-size: 100% .38em; }
-    .ps-accent-grow { animation: none; transform: scaleX(1); }
-    .ps-slide { transition: none; }
-    .ps-kb { animation: none; }
-    .ps-lb, .ps-lb-img, .ps-lb-closing, .ps-lb-closing .ps-lb-img { animation: none; }
-    .ps-jline-mask, .ps-jbadge, .ps-jbody, .ps-rail-fill, .ps-rstep { transition: none; }
-    .ps-jline-mask { width: 100%; }
-    .ps-jbadge { transform: scale(1); }
-    .ps-jbody, .ps-rstep { opacity: 1; transform: none; }
-    .ps-rail-fill { height: calc(100% - 16px); }
-  }
-  /* Animation level = Off — same statics as reduced-motion, admin-driven. */
-  .ps-motion-off .ps-marker { animation: none; background-size: 100% .38em; }
-  .ps-motion-off .ps-accent-grow { animation: none; transform: scaleX(1); }
-  .ps-motion-off .ps-underline path { animation: none; stroke-dashoffset: 0; }
-  .ps-motion-off .ps-kb { animation: none; }
-  .ps-motion-off .ps-jline-mask, .ps-motion-off .ps-jbadge, .ps-motion-off .ps-jbody,
-  .ps-motion-off .ps-rail-fill, .ps-motion-off .ps-rstep { transition: none; }
-  .ps-motion-off .ps-jline-mask { width: 100%; }
-  .ps-motion-off .ps-jbadge { transform: scale(1); }
-  .ps-motion-off .ps-jbody, .ps-motion-off .ps-rstep { opacity: 1; transform: none; }
-  .ps-motion-off .ps-rail-fill { height: calc(100% - 16px); }
-`;
 
 export default function PublicSite({ data, view = 'home' }: Props) {
   const onAcademicsPage = view === 'academics';
   // Section anchors live on the homepage; from other pages they need the "/" prefix.
   const base = view !== 'home' ? '/' : '';
+
   const brandColor = data.profile?.brandColorPrimary ?? '#2f6b4f';
   // Secondary drives the second gradient stop. If a school leaves it near-white
   // (the default), a lightened tint of the primary reads better than pure white.
@@ -293,15 +50,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
   const ink = mix(brandColor, '#14261d', 0.55); // deep heading tone derived from primary
 
   // Theme controls
-  const fontHead = FONT_STACK[data.profile?.headingFont ?? 'INTER'] ?? FONT_STACK.INTER;
   const heroPreloadUrl = heroIsPhotoLayout(data) ? heroImagesOf(data)[0] ?? null : null;
-  const motion = MOTION_MAP[data.profile?.animationLevel ?? 'FULL'] ?? 1;
-  // Declared layout (before image fallbacks) drives the MINIMAL motion damping,
-  // exactly as the legacy heroStyle=MINIMAL did.
-  const declaredLayout =
-    data.profile?.heroLayout ??
-    (data.profile?.heroStyle === 'PHOTO' ? 'FULL_BLEED' : (data.profile?.heroStyle ?? 'ILLUSTRATION'));
-  const minimal = declaredLayout === 'MINIMAL';
 
   const schoolName = data.school.name;
   const aboutText = data.homepage?.aboutText;
@@ -405,20 +154,11 @@ export default function PublicSite({ data, view = 'home' }: Props) {
     };
   }, []);
 
+  // One definition of what a school looks like, shared with the blog's chrome.
+  const themeRoot = themeRootProps(data);
+
   return (
-    <div
-      className={`ps-root ${fontVars}${motion === 0 ? ' ps-motion-off' : ''}`}
-      style={
-        {
-          '--ps1': brandColor,
-          '--ps2': brandColor2,
-          '--ink': ink,
-          '--font-head': fontHead,
-          '--motion': minimal ? 0.25 : motion,
-          '--paper': '#f7f5ef',
-        } as React.CSSProperties
-      }
-    >
+    <div className={themeRoot.className} style={themeRoot.style}>
       {/* Injected theme CSS */}
       <style dangerouslySetInnerHTML={{ __html: PS_CSS }} />
 
@@ -447,19 +187,32 @@ export default function PublicSite({ data, view = 'home' }: Props) {
           {/* ── SUBPAGE BODY (academics / admissions / gallery / events / contact) ── */}
           <section className="max-w-6xl mx-auto px-6 pt-12">
             <Link href="/" className="text-sm text-slate-500 hover:text-slate-800 transition">← Back to home</Link>
+            {/* THE SUBPAGE MASTHEAD.
+                Was a stacked block — eyebrow, headline, paragraph, all left in
+                one narrow column — directly above a section that repeated the
+                same eyebrow and a second, centred heading. Two headings arguing
+                about which one introduces the page.
+
+                Now one masthead, set as an editorial split: the headline holds
+                the left, the standfirst sits in its own column against the
+                baseline rule, and the section below simply begins. The rule
+                draws itself in on entry, so the two halves read as one object
+                arriving rather than two blocks stacking. */}
             {SUBPAGES[view] && (
-              <div className="reveal mt-6 max-w-2xl">
-                <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
+              <div className="ps-masthead reveal mt-6">
+                <div className="ps-masthead-eyebrow" style={{ color: 'var(--ps1)' }}>
                   {SUBPAGES[view].eyebrow}
                 </div>
-                <h1 className="ps-head text-5xl font-bold mt-3">
-                  {SUBPAGES[view].title.replace('{school}', schoolName)}
-                </h1>
-                <p className="mt-4 text-slate-600">{SUBPAGES[view].blurb}</p>
+                <div className="ps-masthead-split">
+                  <h1 className="ps-head ps-masthead-title">
+                    {SUBPAGES[view].title.replace('{school}', schoolName)}
+                  </h1>
+                  <p className="ps-masthead-lede">{SUBPAGES[view].blurb}</p>
+                </div>
               </div>
             )}
           </section>
-          {view === 'academics' && <AcademicsSection courses={data.courses} />}
+          {view === 'academics' && <AcademicsSection courses={data.courses} onOwnPage />}
           {view === 'admissions' && (
             // The ONE caller that shows fees. See AdmissionsSection's
             // `showFeeTable` for why it is opt-in rather than opt-out.
@@ -468,10 +221,15 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               courses={data.courses}
               variant="rail"
               showFeeTable
+              onOwnPage
             />
           )}
-          {view === 'gallery' && <GallerySection gallery={data.gallery} schoolName={schoolName} />}
-          {view === 'events' && <EventsSection events={data.events} timezone={data.school.timezone} />}
+          {view === 'gallery' && <GallerySection gallery={data.gallery} schoolName={schoolName} onOwnPage />}
+          {/* The /connect PAGE is the one with the front door on it: joining,
+              seats, the waitlist. The home band stays a teaser. */}
+          {view === 'events' && (
+            <ConnectSection events={data.events} timezone={data.school.timezone} schoolName={schoolName} />
+          )}
           {view === 'contact' && (
             <ContactSection
               profile={data.profile}
@@ -479,6 +237,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               hasEnquiry={hasEnquiry}
               courses={data.courses.map((c) => c.name)}
               schoolName={schoolName}
+              onOwnPage
             />
           )}
           {view !== 'contact' && (

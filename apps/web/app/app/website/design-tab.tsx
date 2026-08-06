@@ -10,6 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SECTION_SHAPES } from '@/components/public/section-shape';
+import {
+  BACKGROUND_TEXTURES,
+  MOTION_GESTURES,
+  STYLE_PRESETS,
+} from '@/components/public/site-style';
 
 // ── Local types (web cannot import API types) ────────────────────────────────
 interface SiteProfile {
@@ -19,6 +25,9 @@ interface SiteProfile {
   heroOverlayOpacity?: number | null;
   heroHeight?: string | null;
   headlineAccent?: string | null;
+  sectionShape?: string | null;
+  motionGesture?: string | null;
+  backgroundTexture?: string | null;
   navStyle?: string | null;
   navColor?: string | null;
   navTextColor?: string | null;
@@ -26,6 +35,7 @@ interface SiteProfile {
   navShowCta?: boolean | null;
   navShowLogin?: boolean | null;
   navLoginLabel?: string | null;
+  navLoginStyle?: string | null;
   brandColorPrimary?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -517,7 +527,229 @@ export default function DesignTab() {
         </CardContent>
       </Card>
 
-      {/* ── Navbar ── */}
+      {/* ── Ready-made looks ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Ready-made looks</CardTitle>
+          <p className="text-sm text-slate-500">
+            Each one sets the section shape, motion, background and headline accent together. Pick the closest,
+            then adjust anything below.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {STYLE_PRESETS.map((preset) => {
+              const on =
+                (profile?.sectionShape ?? 'SOFT') === preset.values.sectionShape &&
+                (profile?.motionGesture ?? 'RISE') === preset.values.motionGesture &&
+                (profile?.backgroundTexture ?? 'NONE') === preset.values.backgroundTexture &&
+                (profile?.headlineAccent ?? 'DRAW') === preset.values.headlineAccent;
+              return (
+                <button
+                  key={preset.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ ...preset.values })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  <span className="block text-sm font-semibold text-slate-800">{preset.label}</span>
+                  <span className="mt-1 block text-[11px] leading-snug text-slate-400">{preset.hint}</span>
+                  {on && <span className="mt-2 block text-[11px] font-semibold text-teal-700">In use</span>}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Motion ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>How sections arrive</CardTitle>
+          <p className="text-sm text-slate-500">
+            What a section does as it comes into view. Separate from the animation level above, which decides how
+            much motion there is at all — set that to None and the page stays still whatever you pick here.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {MOTION_GESTURES.map((g) => {
+              const on = (profile?.motionGesture ?? 'RISE') === g.value;
+              return (
+                <button
+                  key={g.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ motionGesture: g.value })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  <span className="block text-xs font-semibold text-slate-700">{g.label}</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-400">{g.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Background texture ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Page background</CardTitle>
+          <p className="text-sm text-slate-500">
+            A quiet pattern behind the whole site, drawn from your own brand colour.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {BACKGROUND_TEXTURES.map((t) => {
+              const on = (profile?.backgroundTexture ?? 'NONE') === t.value;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ backgroundTexture: t.value })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  <span
+                    className="mb-2 block h-10 rounded-lg border border-slate-200 bg-slate-50"
+                    aria-hidden="true"
+                    style={
+                      t.value === 'GRID'
+                        ? {
+                            backgroundImage:
+                              'linear-gradient(rgba(15,118,110,.18) 1px, transparent 1px), linear-gradient(90deg, rgba(15,118,110,.18) 1px, transparent 1px)',
+                            backgroundSize: '10px 10px',
+                          }
+                        : t.value === 'DOTS'
+                          ? {
+                              backgroundImage: 'radial-gradient(rgba(15,118,110,.28) 1px, transparent 1px)',
+                              backgroundSize: '8px 8px',
+                            }
+                          : t.value === 'PAPER'
+                            ? {
+                                backgroundImage:
+                                  'radial-gradient(circle at 25% 20%, rgba(15,118,110,.16), transparent 45%), radial-gradient(circle at 75% 70%, rgba(15,118,110,.12), transparent 45%)',
+                              }
+                            : undefined
+                    }
+                  />
+                  <span className="block text-xs font-semibold text-slate-700">{t.label}</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-400">{t.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Section shape ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Section shape</CardTitle>
+          <p className="text-sm text-slate-500">
+            How every band BELOW your hero is drawn — the programme cards, the gallery, admissions, events and
+            contact. Your hero keeps its own layout.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {SECTION_SHAPES.map((shape) => {
+              const on = (profile?.sectionShape ?? 'SOFT') === shape.value;
+              return (
+                <button
+                  key={shape.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ sectionShape: shape.value })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  {/* Three stacked bars drawn the way that shape draws a card,
+                      so the choice is visible rather than described. */}
+                  <span className="block space-y-1.5" aria-hidden="true">
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        className={[
+                          'block h-4 bg-white',
+                          shape.value === 'SOFT' ? 'rounded-lg shadow-md' : '',
+                          shape.value === 'CRISP' ? 'rounded-sm border border-slate-300' : '',
+                          shape.value === 'EDITORIAL' ? 'border-t-2 border-teal-600 bg-transparent' : '',
+                        ].join(' ')}
+                      />
+                    ))}
+                  </span>
+                  <span className="mt-3 block text-xs font-semibold text-slate-700">{shape.label}</span>
+                  <span className="block text-[11px] text-slate-400">{shape.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* -- Login button -- */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Sign-in button</CardTitle>
+          <p className="text-sm text-slate-500">
+            How the Login control is drawn in your navbar. All three take their colour from the bar itself, so
+            none of them can end up invisible against it.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[
+              { value: 'LINK', label: 'Plain link', hint: 'Quietest. What your site uses now.' },
+              { value: 'OUTLINE', label: 'Outlined', hint: 'A drawn edge — easiest to find on a busy bar.' },
+              { value: 'SOLID', label: 'Filled', hint: 'A soft filled chip, still behind your main button.' },
+            ].map((o) => {
+              const on = (profile?.navLoginStyle ?? 'LINK') === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ navLoginStyle: o.value })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  <span className="mb-2 flex h-9 items-center justify-center rounded-lg bg-slate-800" aria-hidden="true">
+                    <span
+                      className={[
+                        'px-2.5 py-1 text-[11px] font-semibold text-white',
+                        o.value === 'OUTLINE' ? 'rounded-md border border-white' : '',
+                        o.value === 'SOLID' ? 'rounded-md bg-white/25' : '',
+                      ].join(' ')}
+                    >
+                      Login
+                    </span>
+                  </span>
+                  <span className="block text-xs font-semibold text-slate-700">{o.label}</span>
+                  <span className="block text-[11px] text-slate-400">{o.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* -- Navbar -- */}
       <Card>
         <CardHeader>
           <CardTitle>Navbar</CardTitle>

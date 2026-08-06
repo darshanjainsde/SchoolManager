@@ -10,6 +10,12 @@ const prismaMock = {
   student: {
     findFirst: jest.fn(),
   },
+  teacher: {
+    findFirst: jest.fn(),
+  },
+  staff: {
+    findFirst: jest.fn(),
+  },
 };
 
 const txMock = {
@@ -201,5 +207,69 @@ describe('AuthService.login', () => {
     );
 
     await expect(svc.login(SCHOOL, 'SUN-2231', 'correct-password')).rejects.toThrow(ForbiddenException);
+  });
+});
+
+/**
+ * GREETING SOMEONE BY THEIR EMAIL ADDRESS IS NOT A GREETING.
+ *
+ * `User` stores credentials and has no name column, so the mobile app had
+ * nothing to show but the identifier typed at the login box — the staff home
+ * screen read "Good day, rao@raffles.sckools.com". The name lives on whichever
+ * role record points back at the user, and this resolves it.
+ */
+describe('AuthService.displayNameFor', () => {
+  const jwt = new JwtService({});
+  const passwords = { verify: jest.fn() };
+  const svc = new AuthService(jwt, passwords as unknown as PasswordService);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prismaMock.teacher.findFirst.mockResolvedValue(null);
+    prismaMock.student.findFirst.mockResolvedValue(null);
+    prismaMock.staff.findFirst.mockResolvedValue(null);
+  });
+
+  it('reads a teacher name off the Teacher record', async () => {
+    prismaMock.teacher.findFirst.mockResolvedValue({ firstName: 'Priya', lastName: 'Sharma' });
+    await expect(svc.displayNameFor(SCHOOL, 'user-1', 'TEACHER')).resolves.toBe('Priya Sharma');
+  });
+
+  it('scopes the lookup to the school AND the user, never the user alone', async () => {
+    prismaMock.teacher.findFirst.mockResolvedValue({ firstName: 'Priya', lastName: 'Sharma' });
+    await svc.displayNameFor(SCHOOL, 'user-1', 'TEACHER');
+    expect(prismaMock.teacher.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { schoolId: SCHOOL, userId: 'user-1' } }),
+    );
+  });
+
+  it('checks the role-hinted table first, so the common case costs one query', async () => {
+    prismaMock.student.findFirst.mockResolvedValue({ firstName: 'Aarav', lastName: 'Patel' });
+    await expect(svc.displayNameFor(SCHOOL, 'user-1', 'STUDENT')).resolves.toBe('Aarav Patel');
+    expect(prismaMock.teacher.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.staff.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('finds a SCHOOL_ADMIN, whose name sits on a Staff row no role name points at', async () => {
+    // The JWT role has no matching table of its own. Hinting STAFF is what
+    // stops an admin being greeted by their email forever.
+    prismaMock.staff.findFirst.mockResolvedValue({ firstName: 'Ravi', lastName: 'Menon' });
+    await expect(svc.displayNameFor(SCHOOL, 'user-1', 'SCHOOL_ADMIN')).resolves.toBe('Ravi Menon');
+  });
+
+  it('keeps looking when the hinted table has nothing — a re-roled account still has a name', async () => {
+    prismaMock.teacher.findFirst.mockResolvedValue({ firstName: 'Nadia', lastName: 'Khan' });
+    await expect(svc.displayNameFor(SCHOOL, 'user-1', 'SCHOOL_ADMIN')).resolves.toBe('Nadia Khan');
+  });
+
+  it('returns null when no role record claims the user, rather than a stray space', async () => {
+    // A fresh admin invited by email before any staff record exists. The client
+    // must render something sensible — never the word "null".
+    await expect(svc.displayNameFor(SCHOOL, 'user-1', 'SCHOOL_ADMIN')).resolves.toBeNull();
+  });
+
+  it('treats a whitespace-only name as no name at all', async () => {
+    prismaMock.teacher.findFirst.mockResolvedValue({ firstName: ' ', lastName: ' ' });
+    await expect(svc.displayNameFor(SCHOOL, 'user-1', 'TEACHER')).resolves.toBeNull();
   });
 });

@@ -107,6 +107,6 @@ it('shows a generic message when a non-ApiError rejection occurs', async () => {
 
 it('shows a loading state before the fetch resolves', () => {
   (api.request as jest.Mock).mockReturnValue(new Promise(() => {})); // never resolves
-  const { getByText } = render(<Notices />);
-  expect(getByText('Loading notices…')).toBeTruthy();
+  const { getByLabelText } = render(<Notices />);
+  expect(getByLabelText('Loading notices…')).toBeTruthy();
 });

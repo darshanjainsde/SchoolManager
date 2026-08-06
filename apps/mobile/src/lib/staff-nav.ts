@@ -7,7 +7,7 @@
  * Menu-drawer revision (2026-08-01): the tab bar now shows FOUR core tabs
  * (Today, Attendance, Timetable, Announcements) with a central chevron FAB
  * between them that lifts a bottom-sheet tools drawer (see
- * `src/components/ToolsDrawer.tsx`) over whatever screen you're on. There is
+ * `components/HomeToolGrid.tsx`) as the 'Go to' block on Home. There is
  * no "More" tab any more — everything the web nav additionally lists (Tests,
  * Results, Requests, Holidays) plus Assignments, Messages, Notes and the
  * web's sidebar-foot profile link lives in that drawer instead. `MORE_ITEMS`
@@ -19,11 +19,26 @@
  * resolves" check.
  */
 
+/**
+ * FOUR TABS, AND EVERY LABEL FITS ON ONE LINE.
+ *
+ * "Announcements" is thirteen characters in a quarter-width tab; on any phone
+ * narrower than a Pixel it wrapped to two lines, which pushed that one tab's
+ * label off the shared baseline and made the whole bar look broken. The family
+ * bar hit the identical problem with "Notices/Announcements" and fixed it on
+ * 2026-08-02 by promoting Profile into the bar; staff was left behind.
+ *
+ * Profile is the right promotion rather than an arbitrary short word: it is
+ * where a teacher signs out, and sign-out is the one action that must never be
+ * more than a tap away from somewhere obvious. Announcements moves into the
+ * tools drawer with the rest of the compose-style tools, which is where it
+ * belongs — it is something a teacher does occasionally, not a place they live.
+ */
 export const VISIBLE_TABS = [
-  { name: 'today', title: 'Today', icon: 'today-outline' as const },
+  { name: 'today', title: 'Home', icon: 'today-outline' as const },
   { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
   { name: 'timetable', title: 'Timetable', icon: 'calendar-outline' as const },
-  { name: 'post', title: 'Announcements', icon: 'megaphone-outline' as const },
+  { name: 'profile', title: 'Profile', icon: 'person-outline' as const },
 ];
 
 /** Detail/utility routes — reachable via navigation (More rows, row taps), hidden from the tab bar. */
@@ -31,7 +46,11 @@ export const HIDDEN_ROUTES = [
   'holidays',
   'diary',
   'requests',
+  'post',
   'take/[classSectionId]',
+  // Reached by tapping the "right now" hero on Home — the LOOKING half of the
+  // pair whose MARKING half is take/[classSectionId] above.
+  'class/[classSectionId]',
   'tests',
   'results/[examId]',
   'assignments',
@@ -39,8 +58,8 @@ export const HIDDEN_ROUTES = [
   'messages/[threadId]',
   'notes',
   'notes/[classSectionId]',
-  'profile',
   'notifications',
+  'settings',
 ];
 
 /**
@@ -60,6 +79,12 @@ export type MoreTone = 'indigo' | 'amber' | 'green';
 
 export interface MoreItem {
   label: string;
+  /**
+   * A duotone glyph name from components/icons.tsx — not an emoji, and no
+   * longer an Ionicons name. Emoji were drawn by the OS (different on iOS and
+   * Android, pre-coloured, unable to take a school's colour); a single hairline
+   * Ionicon then read as faint. See the icon set for why two layers.
+   */
   icon: string;
   route:
     | '/(staff)/assignments'
@@ -69,18 +94,18 @@ export interface MoreItem {
     | '/(staff)/tests'
     | '/(staff)/requests'
     | '/(staff)/holidays'
-    | '/(staff)/profile';
+    | '/(staff)/post';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
-  { label: 'Diary', icon: '📔', route: '/(staff)/diary', tone: 'indigo' },
-  { label: 'Assignments', icon: '📚', route: '/(staff)/assignments', tone: 'indigo' },
-  { label: 'Messages', icon: '💬', route: '/(staff)/messages', tone: 'amber' },
-  { label: 'Notes', icon: '📒', route: '/(staff)/notes', tone: 'indigo' },
-  { label: 'Tests & Results', icon: '📊', route: '/(staff)/tests', tone: 'indigo' },
-  { label: 'Requests', icon: '📝', route: '/(staff)/requests', tone: 'amber' },
-  { label: 'Holidays', icon: '📅', route: '/(staff)/holidays', tone: 'green' },
-  { label: 'Profile', icon: '👤', route: '/(staff)/profile', tone: 'indigo' },
+  { label: 'Diary', icon: 'diary', route: '/(staff)/diary', tone: 'indigo' },
+  { label: 'Assignments', icon: 'assignments', route: '/(staff)/assignments', tone: 'indigo' },
+  { label: 'Messages', icon: 'messages', route: '/(staff)/messages', tone: 'amber' },
+  { label: 'Notes', icon: 'notes', route: '/(staff)/notes', tone: 'indigo' },
+  { label: 'Tests & Results', icon: 'results', route: '/(staff)/tests', tone: 'indigo' },
+  { label: 'Requests', icon: 'requests', route: '/(staff)/requests', tone: 'amber' },
+  { label: 'Holidays', icon: 'timetable', route: '/(staff)/holidays', tone: 'green' },
+  { label: 'Announcements', icon: 'notices', route: '/(staff)/post', tone: 'amber' },
 ];

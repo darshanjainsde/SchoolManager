@@ -28,7 +28,7 @@ function attendance(overrides: Partial<{ present: number; absent: number; late: 
 it('renders a loading state while /manage/staff-attendance/mine is in flight', () => {
   (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
   render(<Today />);
-  expect(screen.getByText('Loading your attendance…')).toBeTruthy();
+  expect(screen.getByLabelText('Loading your attendance…')).toBeTruthy();
 });
 
 it("renders the server's error message verbatim on failure", async () => {

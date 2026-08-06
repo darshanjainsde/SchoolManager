@@ -27,6 +27,11 @@ export default function WorkerTabs() {
   useEffect(() => { void registerForPush(); }, []);
   return (
     <Tabs
+      // Every detail screen here is a HIDDEN TAB, not a pushed stack screen, so
+      // there is no stack for back to pop. "history" makes the hardware back
+      // button retrace the route actually taken — Home, Attendance, Take, then
+      // back out the same way — instead of closing the app mid-register.
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: tokens.color.indigo,

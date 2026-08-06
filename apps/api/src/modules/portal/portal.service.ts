@@ -17,6 +17,7 @@ import type {
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002 } from '../../common/errors/prisma-errors';
 import { TenantContextService } from '../tenancy';
+import { RegistrationsService } from '../community';
 import { TimetableService } from '../management';
 import { HolidaysService } from '../management';
 import { DiaryService } from '../management';
@@ -63,7 +64,48 @@ export class PortalService {
     private readonly timetableSvc: TimetableService,
     private readonly holidaysSvc: HolidaysService,
     private readonly diarySvc: DiaryService,
+    private readonly registrations: RegistrationsService,
   ) {}
+
+  /**
+   * A signed-in family taking a place at an event.
+   *
+   * The public door (`POST /public/events/:id/register`) can only file a GUEST
+   * row: a name, an email, and no link to anybody the school already knows.
+   * When the family is signed in the school can have the real record — the
+   * pupil, their class, their admission number — and can tell its own families
+   * from walk-ins on the desk.
+   *
+   * Like every other route on this controller the pupil comes from the caller's
+   * own JWT, never from the request, and no guest fields are forwarded: there
+   * is nothing here a caller could say to be filed as somebody else.
+   */
+  async registerForEvent(userId: string, eventId: string, quantity = 1) {
+    const { schoolId } = this.tenant.requireTenant();
+    const student = await this.myStudent(schoolId, userId);
+    // A TEACHER/STAFF login is signed in and has no Student row; it is not an
+    // error worth a 500 — that person registers through the public door.
+    if (!student) throw new NotFoundException('No student record for this login');
+
+    // Clamped here as well as in the DTO: the validator is one door into this
+    // method, not the only one.
+    const seats = Math.max(1, Math.min(20, Math.trunc(quantity) || 1));
+
+    const row = await this.registrations.register(eventId, {
+      studentId: student.id,
+      quantity: seats,
+      fromSchoolId: schoolId,
+      // The same rule the public door obeys: seats on another school's event
+      // cannot be counted from here, so they cannot be sold from here either.
+      requireHostedBy: schoolId,
+    });
+    return {
+      id: row.id,
+      status: row.status,
+      waitlistPos: row.waitlistPos ?? null,
+      quantity: row.quantity,
+    };
+  }
 
   /**
    * The child's own diary page(s) — see `DiaryService.studentDiary`, which

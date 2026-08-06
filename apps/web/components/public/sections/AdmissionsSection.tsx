@@ -14,11 +14,37 @@ export { admissionsHasContent };
  * rail fills while alternating steps arrive. Both are static under
  * reduced-motion / Animation=Off (see PS_CSS).
  */
+/** A requested page must never answer with silence. See /academics, /gallery. */
+function AdmissionsEmpty() {
+  return (
+    <section className="max-w-6xl mx-auto px-6 py-6">
+      <div className="ps-panel p-12 text-center">
+        <svg viewBox="0 0 120 84" className="mx-auto h-24 w-32" fill="none" aria-hidden="true">
+          <path
+            d="M30 12h44l16 16v44a6 6 0 0 1-6 6H30a6 6 0 0 1-6-6V18a6 6 0 0 1 6-6z"
+            stroke="var(--ps1)"
+            strokeWidth="2.5"
+            opacity=".35"
+          />
+          <path d="M74 12v16h16" stroke="var(--ps1)" strokeWidth="2.5" opacity=".45" />
+          <path d="M38 44h40M38 56h28" stroke="var(--ps1)" strokeWidth="2.5" strokeLinecap="round" opacity=".3" />
+          <circle cx="84" cy="62" r="10" fill="var(--ps2)" opacity=".18" />
+        </svg>
+        <h3 className="ps-head font-bold text-lg mt-5">Admissions details are on the way</h3>
+        <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
+          The steps to apply — and the fees, if the school publishes them — appear here once they are added.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export default function AdmissionsSection({
   admissions,
   courses,
   variant = 'journey',
   showFeeTable = false,
+  onOwnPage,
 }: {
   admissions: Admissions;
   courses: PublicCourse[];
@@ -41,15 +67,27 @@ export default function AdmissionsSection({
    * only one does.
    */
   showFeeTable?: boolean;
+  /** True when this section IS /admissions — a requested page, never silent. */
+  onOwnPage?: boolean;
 }) {
-  if (!admissionsHasContent(admissions, courses)) return null;
+  if (!admissionsHasContent(admissions, courses)) {
+    if (!onOwnPage) return null;
+    return <AdmissionsEmpty />;
+  }
   const feeRows = showFeeTable && admissions.showFees ? courses.filter((c) => c.fee) : [];
   const steps = admissions.steps;
   // A school whose only admissions content is its fees now has NOTHING to put
   // on the home page — `admissionsHasContent` counts fees, but this render no
   // longer shows them. Without this guard that school gets an empty headed
   // band on its front page, which is a worse bug than the one being fixed.
-  if (steps.length === 0 && feeRows.length === 0) return null;
+  if (steps.length === 0 && feeRows.length === 0) {
+    // A BAND with nothing in it should not appear between bands that do. A PAGE
+    // the visitor asked for by name must never answer with silence — the same
+    // rule /academics and /gallery follow.
+    if (!onOwnPage) return null;
+    return <AdmissionsEmpty />;
+  }
+
   // The connector path only reads as one line when every step sits in one row.
   const journeyCols =
     steps.length >= 4 ? 'lg:grid-cols-4' : steps.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2';
@@ -94,7 +132,7 @@ export default function AdmissionsSection({
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <div
-                  className="ps-jbody ps-card ps-soft rounded-3xl p-5"
+                  className="ps-jbody ps-panel p-5"
                   style={{ transitionDelay: `${0.55 + i * 0.28}s` }}
                 >
                   <h3 className="ps-head font-bold">{s.title}</h3>
@@ -113,7 +151,7 @@ export default function AdmissionsSection({
           {steps.map((s, i) => (
             <div
               key={i}
-              className={`ps-rstep ${i % 2 ? 'ps-rstep-r' : 'ps-rstep-l'} ps-card ps-soft rounded-2xl p-5 my-5`}
+              className={`ps-rstep ${i % 2 ? 'ps-rstep-r' : 'ps-rstep-l'} ps-panel p-5 my-5`}
               style={{ transitionDelay: `${0.3 + i * 0.3}s` }}
             >
               <span className="ps-rdot" aria-hidden="true" />
@@ -131,7 +169,7 @@ export default function AdmissionsSection({
       )}
 
       {feeRows.length > 0 && (
-        <div className="reveal mt-10 ps-card ps-soft rounded-3xl overflow-hidden">
+        <div className="reveal mt-10 ps-panel overflow-hidden">
           <div className="px-6 py-4 flex items-center justify-between border-b border-black/5">
             <h3 className="ps-head font-bold text-lg">Fee structure</h3>
           </div>

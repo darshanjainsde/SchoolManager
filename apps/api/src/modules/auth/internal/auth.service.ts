@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomUUID } from 'node:crypto';
 import { getPlatformPrisma, withTenant } from '@skoolos/db';
-import type { User } from '@skoolos/db';
+import type { User, UserRole } from '@skoolos/db';
 import { loadEnv } from '@skoolos/config';
 import { PasswordService } from './password.service';
 import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
@@ -311,6 +311,56 @@ export class AuthService {
       this.logger.warn(`User ${user.id} locked for ${this.env.LOCKOUT_DURATION_SECONDS}s`);
     }
   }
+
+  /**
+   * THE PERSON'S OWN NAME, for greeting them by it.
+   *
+   * `User` carries credentials, not identity — it has an email and a username
+   * and no name column at all. With nothing better to hand, the app stored
+   * whatever was typed into the login box and greeted teachers with their own
+   * email address across the top of the home screen.
+   *
+   * The name lives on whichever role record points back at the user. The role
+   * on the JWT says which table to read, but it is only a hint: an account can
+   * be re-roled, and a SCHOOL_ADMIN is usually a Staff row. So the hinted table
+   * is tried first and the others after, rather than trusting the hint alone
+   * and returning nothing.
+   *
+   * Returns null when no role record claims the user — a real state for a fresh
+   * admin invited by email before any staff record exists. Callers must render
+   * something sensible instead of the word "null".
+   */
+  async displayNameFor(schoolId: string, userId: string, role: UserRole): Promise<string | null> {
+    const platform = getPlatformPrisma();
+    const where = { schoolId, userId };
+    const select = { firstName: true, lastName: true } as const;
+
+    const lookups: Record<'TEACHER' | 'STUDENT' | 'STAFF', () => Promise<Named | null>> = {
+      TEACHER: () => platform.teacher.findFirst({ where, select }),
+      STUDENT: () => platform.student.findFirst({ where, select }),
+      STAFF: () => platform.staff.findFirst({ where, select }),
+    };
+    type Table = keyof typeof lookups;
+    const hinted: Table = role === 'TEACHER' || role === 'STUDENT' ? role : 'STAFF';
+    const order: Table[] = [
+      hinted,
+      ...(['TEACHER', 'STUDENT', 'STAFF'] as const).filter((k) => k !== hinted),
+    ];
+
+    for (const key of order) {
+      const rec = await lookups[key]();
+      if (rec) {
+        const full = `${rec.firstName} ${rec.lastName}`.trim();
+        if (full) return full;
+      }
+    }
+    return null;
+  }
+}
+
+interface Named {
+  firstName: string;
+  lastName: string;
 }
 
 function sha256(s: string): string {

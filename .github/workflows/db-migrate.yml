@@ -32,6 +32,25 @@ on:
         required: false
         type: boolean
         default: false
+      inspect_only:
+        description: >-
+          Change NOTHING. Print the migration history and the schema drift, then
+          stop. The question "what does this database actually have?" needed the
+          production password on someone's laptop until this existed, which is
+          why a hand-applied migration could sit unrecorded for months.
+        required: false
+        type: boolean
+        default: false
+      resolve_applied:
+        description: >-
+          RECOVERY ONLY — a migration name to record as already applied,
+          WITHOUT running its SQL. For a database whose schema has the objects
+          but whose _prisma_migrations lost (or never got) the row, which is
+          what hand-applied migrations leave behind. Also clears a failed row,
+          which otherwise blocks every later migration.
+        required: false
+        type: string
+        default: ''
 
   # Auto-apply to staging whenever a migration lands on the staging branch, so
   # code and schema can never drift apart there again. Production stays manual
@@ -74,6 +93,44 @@ jobs:
           echo "::error::Seeding writes demo schools and known-password logins. Never production."
           exit 1
 
+      - name: Inspect only — what does this database actually have?
+        if: ${{ github.event.inputs.inspect_only == 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          echo "=== migration history ==="
+          pnpm --filter @skoolos/db exec prisma migrate status || true
+          echo
+          echo "=== schema drift ==="
+          echo "SQL below = what this database is MISSING relative to schema.prisma."
+          echo "No SQL below = the schema already matches, whatever the history says."
+          # `migrate diff` reads the live schema and compares it to the datamodel.
+          # It is the only way to tell a database that genuinely lacks a table
+          # from one that has the table and merely lost the row saying so — and
+          # that distinction is exactly what makes `resolve --applied` safe or
+          # catastrophic.
+          pnpm --filter @skoolos/db exec prisma migrate diff \
+            --from-url "$DIRECT_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --script || true
+
+      # Runs BEFORE the status/deploy below, because a failed or missing row is
+      # exactly what stops those two from being able to say anything useful.
+      # `migrate resolve --applied` writes the bookkeeping row and nothing else:
+      # it never touches the schema, so it can only ever be wrong about history,
+      # never destructive. Verify the objects really exist before using it —
+      # marking a migration applied that did NOT run leaves a database that
+      # passes `migrate status` and fails at runtime on the first query.
+      - name: Record ${{ github.event.inputs.resolve_applied }} as already applied
+        if: ${{ github.event.inputs.resolve_applied != '' && github.event.inputs.inspect_only != 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          pnpm --filter @skoolos/db exec prisma migrate resolve \
+            --applied "${{ github.event.inputs.resolve_applied }}"
+
       - name: Show what will be applied
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -85,13 +142,14 @@ jobs:
           pnpm --filter @skoolos/db exec prisma migrate status || true
 
       - name: Apply migrations
+        if: ${{ github.event.inputs.inspect_only != 'true' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: pnpm --filter @skoolos/db exec prisma migrate deploy
 
       - name: Seed demo data
-        if: ${{ github.event.inputs.seed == 'true' }}
+        if: ${{ github.event.inputs.seed == 'true' && github.event.inputs.inspect_only != 'true' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}

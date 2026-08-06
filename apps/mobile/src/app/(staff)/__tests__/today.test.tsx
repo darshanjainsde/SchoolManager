@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, within, act } from '@testing-library/react-native';
 import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
-import Today from '../today';
+import Today from '../(tabs)/today';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
 
@@ -131,7 +131,7 @@ it('shows a loading state before the day arrives', async () => {
   (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
   render(<Today />);
 
-  expect(await screen.findByText('Loading your day…')).toBeTruthy();
+  expect(await screen.findByLabelText('Loading your day…')).toBeTruthy();
 });
 
 it('shows the server error message verbatim when the fetch fails', async () => {
@@ -155,8 +155,23 @@ it('greets the teacher by name and shows the classes/taken/pending summary', asy
   mockDay(DAY);
   render(<Today />);
 
-  expect(await screen.findByText('Good day, Priya Sharma')).toBeTruthy();
+  // The NAME stands alone on the serif line — the salutation is a separate
+  // eyebrow above it, so the name is a title rather than the tail of a
+  // sentence. Asserted as its own text node for exactly that reason.
+  expect(await screen.findByText('Priya Sharma')).toBeTruthy();
+  expect(await screen.findByText('Good morning')).toBeTruthy();
   expect(await screen.findByText('2 classes today · 0 taken · 2 pending')).toBeTruthy();
+});
+
+it('never greets the teacher with the email address they signed in with', async () => {
+  // `displayName` used to be the login identifier, so this line read
+  // "Good day, rao@raffles.sckools.com" across the top of the home screen.
+  setNow(8, 20);
+  mockDay(DAY);
+  render(<Today />);
+
+  await screen.findByText('Priya Sharma');
+  expect(screen.queryByText(/@/)).toBeNull();
 });
 
 it('during a current CLASS period, renders the hero with class/subject/progress and mounts the notes panel', async () => {
@@ -326,6 +341,58 @@ it('tapping Take attendance in the hero navigates to the take screen with the cl
 
   fireEvent.press(await screen.findByTestId('now-take-sec-8a'));
   expect(mockPush).toHaveBeenCalledWith('/(staff)/take/sec-8a?name=8-A');
+});
+
+it('tapping the live hero opens the class, carrying everything Home already knew', async () => {
+  // The class screen's header — subject, period, clock times, who marked it —
+  // is all sitting in the entry Home is holding. Passing it through means the
+  // next screen renders complete on arrival instead of flashing a bare title
+  // while it refetches something we just threw away.
+  setNow(8, 20);
+  mockDay({
+    date: '2026-07-30',
+    dayOfWeek: 4,
+    entries: [
+      classEntry({ register: { taken: true, present: 26, total: 28, markedBy: 'Mr. Rao' } }),
+      breakEntry,
+      p2,
+    ],
+  });
+  render(<Today />);
+
+  fireEvent.press(await screen.findByTestId('now-card-press'));
+  expect(mockPush).toHaveBeenCalledWith(
+    '/(staff)/class/sec-8a?name=8-A&subject=Mathematics&period=P1&start=08%3A00&end=08%3A45&takenBy=Mr.+Rao',
+  );
+});
+
+it('flips at the bell while the teacher is still looking at it', async () => {
+  // 08:44 — P1 (08:00–08:45) has one minute left. Home used to read the clock
+  // once, at render, so a teacher who opened the app during first period and
+  // glanced at it again after break was still being told P1 was live, and the
+  // only cure was to leave the tab and come back.
+  setNow(8, 44);
+  mockDay(DAY);
+  render(<Today />);
+
+  const before = await screen.findByTestId('now-card');
+  expect(within(before).getByText('8-A · Mathematics')).toBeTruthy();
+  // The queue says this register is the one being missed RIGHT NOW.
+  expect(within(screen.getByTestId('need-take-sec-8a')).getByText('now')).toBeTruthy();
+
+  await act(async () => {
+    jest.advanceTimersByTime(60_000);
+  });
+
+  // 08:45. Nothing refetched, nobody navigated — the clock moved and the whole
+  // derived day moved with it.
+  const after = screen.getByTestId('now-card');
+  expect(within(after).getByText('Break')).toBeTruthy();
+  expect(within(after).queryByText('8-A · Mathematics')).toBeNull();
+  // 8-A's register is still open, so the row stays — but it is no longer the
+  // live one, so it stops shouting.
+  expect(screen.getByTestId('need-take-sec-8a')).toBeTruthy();
+  expect(within(screen.getByTestId('need-take-sec-8a')).queryByText('now')).toBeNull();
 });
 
 it('refetches on focus so a colleague marking the register elsewhere shows up without a manual reload', async () => {

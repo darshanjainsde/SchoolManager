@@ -5,6 +5,7 @@ import {
   IsHexColor,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
@@ -50,6 +51,19 @@ export class UpdateProfileDto {
   @IsOptional() @IsInt() @Min(10) @Max(95) heroOverlayOpacity?: number;
   @IsOptional() @IsIn(['FULL', 'COMPACT']) heroHeight?: string;
   @IsOptional() @IsIn(['DRAW', 'MARKER', 'GROW', 'NONE']) headlineAccent?: string;
+  /** How every band below the fold is drawn. See SECTION_SHAPES on the web. */
+  @IsOptional() @IsIn(['LINK', 'OUTLINE', 'SOLID']) navLoginStyle?: string;
+  @IsOptional() @IsIn(['SOFT', 'EDITORIAL', 'CRISP']) sectionShape?: string;
+  /** WHAT a section does as it arrives; animationLevel stays the volume. */
+  @IsOptional() @IsIn(['RISE', 'FADE', 'DRAW']) motionGesture?: string;
+  @IsOptional() @IsIn(['NONE', 'GRID', 'DOTS', 'PAPER']) backgroundTexture?: string;
+  /**
+   * The school's menu arrangement. Shape is validated on the WEB side by
+   * validateNavConfig before it is ever sent — the rules there (six controls,
+   * no empty group, no nesting, no lost page) are product rules with messages
+   * an admin reads, not field constraints.
+   */
+  @IsOptional() @IsObject() navConfig?: Record<string, unknown>;
   @IsOptional() @IsIn(['CLASSIC', 'CENTER', 'PILL', 'STRIP', 'GHOST']) navStyle?: string;
   @IsOptional() @IsIn(['PAPER', 'WHITE', 'DARK', 'BRAND']) navColor?: string;
   @IsOptional() @IsIn(['AUTO', 'LIGHT', 'DARK']) navTextColor?: string;

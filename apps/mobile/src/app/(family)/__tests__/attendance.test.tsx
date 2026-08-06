@@ -1,5 +1,5 @@
 import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
-import Attendance from '../attendance';
+import Attendance from '../(tabs)/attendance';
 import { api, ApiError } from '@/lib/api';
 
 let capturedFocusEffect: (() => void) | undefined;
@@ -160,8 +160,8 @@ it('names the month in the empty state rather than saying "this month"', async (
 describe('fetch states', () => {
   it('shows a loading state before the fetch resolves', () => {
     (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
-    const { getByText } = render(<Attendance />);
-    expect(getByText('Loading attendance…')).toBeTruthy();
+    const { getByLabelText } = render(<Attendance />);
+    expect(getByLabelText('Loading attendance…')).toBeTruthy();
   });
 
   it('shows the API error message verbatim when the fetch fails', async () => {

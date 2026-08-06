@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import type { PublicCourse } from '@/lib/public-api';
 import { submitEnquiry, type EnquiryResult } from '../enquiry-client';
-
-const COURSE_EMOJIS = ['🧸', '📚', '🔬', '🎓', '🎨', '🏆', '🌟', '💡'];
+import ProgrammeMark from '../ProgrammeMark';
 
 /** Homepage strip: featured courses as 3D flip cards with a phone capture on the back. */
 export default function CoursesFeatured({ courses }: { courses: PublicCourse[] }) {
@@ -24,14 +23,14 @@ export default function CoursesFeatured({ courses }: { courses: PublicCourse[] }
       </div>
       <div className="mt-10 grid md:grid-cols-3 gap-6">
         {featured.map((c, i) => (
-          <FlipCard key={c.id} course={c} emoji={COURSE_EMOJIS[i % COURSE_EMOJIS.length]} delay={i * 0.07} />
+          <FlipCard key={c.id} course={c} delay={i * 0.07} />
         ))}
       </div>
     </section>
   );
 }
 
-function FlipCard({ course, emoji, delay }: { course: PublicCourse; emoji: string; delay: number }) {
+function FlipCard({ course, delay }: { course: PublicCourse; delay: number }) {
   const [flipped, setFlipped] = useState(false);
   const [status, setStatus] = useState<'idle' | 'sending' | EnquiryResult>('idle');
   const [phone, setPhone] = useState('');
@@ -77,7 +76,7 @@ function FlipCard({ course, emoji, delay }: { course: PublicCourse; emoji: strin
           {course.imageUrl ? (
             <div className="h-40 bg-cover bg-center" style={{ backgroundImage: `url('${course.imageUrl}')` }} />
           ) : (
-            <div className="h-40 ps-brandgrad grid place-items-center text-5xl text-white">{emoji}</div>
+            <ProgrammeMark name={course.name} className="h-40" />
           )}
           <div className="p-5 flex flex-col gap-1.5 flex-1">
             {course.ageRange && (

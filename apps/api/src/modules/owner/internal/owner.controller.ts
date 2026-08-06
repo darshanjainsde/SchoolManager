@@ -4,6 +4,8 @@ import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
 import type { PlatformJwtPayload } from '../../../common/auth/jwt-payload';
 import { MarketingService, SetLeadStatusDto, UpdateMarketingConfigDto } from '../../marketing';
+import { JobsService } from '../../hiring';
+import { ModerateJobDto } from './owner.dto';
 import { CreateSchoolDto, ModerateEventDto, OwnerCreateEventDto, SetFeatureDto, SetStatusDto, SetTierDto } from './owner.dto';
 import { ImpersonationService } from './impersonation.service';
 import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
@@ -20,6 +22,7 @@ export class OwnerController {
     private readonly impersonation: ImpersonationService,
     private readonly overviewSvc: OwnerOverviewService,
     private readonly marketing: MarketingService,
+    private readonly jobs: JobsService,
   ) {}
 
   @Get('overview')
@@ -103,6 +106,25 @@ export class OwnerController {
   @Get('events')
   listEvents(@Query('status') status?: 'PENDING' | 'APPROVED' | 'REJECTED') {
     return this.ownerEvents.listNetwork(status);
+  }
+
+  /**
+   * The vacancy queue. The SAME desk as network events, deliberately — §6 of
+   * the Phase 6 plan: a second moderation queue is how one of them stops being
+   * read.
+   *
+   * The owner moderates VACANCIES and never sees an application. There is no
+   * endpoint here that returns a candidate, and JobApplication carries no
+   * owner read policy.
+   */
+  @Get('jobs')
+  listJobs(@Query('status') status?: string) {
+    return this.jobs.ownerList(status);
+  }
+
+  @Patch('jobs/:id')
+  moderateJob(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ModerateJobDto) {
+    return this.jobs.moderate(id, dto);
   }
 
   @Patch('events/:id')

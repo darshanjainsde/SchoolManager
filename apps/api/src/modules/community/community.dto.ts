@@ -32,6 +32,21 @@ export interface PublicEvent {
   scope: 'SCHOOL' | 'NETWORK';
   originSchoolName: string | null; // null when it's the host school's own event
   isHost: boolean;                 // true when this event belongs to the viewing school
+
+  // ── What the public page needs to offer a place ──────────────────────────
+  /** The ticket a public join registers against. Null = nothing to join. */
+  ticketTypeId: string | null;
+  /** null = uncapped. 0 is a real value: sold out by configuration. */
+  capacity: number | null;
+  /**
+   * null means UNKNOWN, not unlimited — either the event is uncapped, or it
+   * belongs to another school whose registrations RLS correctly hides from us.
+   */
+  seatsLeft: number | null;
+  /** Whether the public Join button should be offered at all. */
+  registrationOpen: boolean;
+  priceMinor: number;
+  currency: string;
 }
 
 /**
@@ -49,6 +64,20 @@ export class RegisterDto {
   @IsOptional() @IsString() @Length(1, 120) guestName?: string;
   @IsOptional() @IsEmail() guestEmail?: string;
   @IsOptional() @IsString() @Length(4, 24) guestPhone?: string;
+}
+
+/**
+ * What a visitor on the public site may say about themselves — and nothing
+ * more. There is deliberately no `studentId` and no `fromSchoolId` here: the
+ * admin `RegisterDto` has them because an authenticated office is trusted to
+ * name a pupil, and a stranger on the internet is not. Adding either field to
+ * this class is how that distinction would be lost.
+ */
+export class PublicRegisterDto {
+  @IsString() @Length(2, 120) guestName!: string;
+  @IsEmail() guestEmail!: string;
+  @IsOptional() @IsString() @Length(4, 24) guestPhone?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(20) quantity?: number;
 }
 
 export class SetRegistrationStatusDto {

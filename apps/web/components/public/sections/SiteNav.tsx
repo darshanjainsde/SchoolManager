@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { heroIsPhotoLayout } from './HeroSection';
+import { navModel, type NavNode } from './nav-model';
+import NavGroup from './NavGroup';
 
 // Mobile menu enter animation + reduced-motion handling. Scoped to this file
 // (rendered once, only from the branch that's actually active) rather than
@@ -57,84 +59,40 @@ function Logo({ data, small }: { data: PublicSiteData; small?: boolean }) {
   );
 }
 
-function NavLinks({
-  data,
-  flags,
-  base,
-  onAcademicsPage,
+/**
+ * Every bar renders THIS — the desktop CLASSIC/PILL/GHOST/STRIP bar, the CENTER
+ * bar's split halves and the mobile drawer. The lists used to be written out
+ * three times and had already drifted apart: CENTER dropped Hall of Fame, and
+ * the drawer flattened Academics to a single link. A page a school publishes
+ * must not depend on which nav style it picked.
+ */
+function NavItems({
+  nodes,
   mobile,
+  onNavigate,
 }: {
-  data: PublicSiteData;
-  flags: NavFlags;
-  base: string;
-  onAcademicsPage: boolean;
-  /** Stacked, large-tap-target variant for the mobile menu panel. Also
-   * collapses the Academics hover-dropdown to a single link — a hover
-   * affordance doesn't translate to touch, and the plan-of-record is to keep
-   * the mobile menu simple rather than reimplement it as an accordion. */
+  nodes: NavNode[];
+  /** Stacked, large-tap-target variant for the mobile drawer. */
   mobile?: boolean;
+  onNavigate?: () => void;
 }) {
   const linkCls = mobile
-    ? 'ps-nav-link block w-full px-3 py-3 rounded-xl hover:bg-black/5 transition text-base font-medium'
+    ? 'ps-nav-link block w-full px-3 py-3 rounded-xl hover:bg-black/5 transition text-base font-medium text-left'
     : 'ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition';
   return (
     <>
-      <a className={linkCls} href={`${base}#home`}>Home</a>
-      {flags.hasAbout && (
-        <a className={linkCls} href={`${base}#about`}>About</a>
-      )}
-      {flags.hasAcademics && (
-        mobile ? (
-          <a className={linkCls} href="/academics">Academics</a>
+      {nodes.map((node) =>
+        node.kind === 'group' ? (
+          <NavGroup key={node.key} node={node} className={linkCls} inline={mobile} onNavigate={onNavigate} />
+        ) : node.href.startsWith('/blog') ? (
+          <Link key={node.key} className={linkCls} href={node.href}>
+            {node.label}
+          </Link>
         ) : (
-          <div className="ps-acad">
-            <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition inline-block" href="/academics">
-              Academics <span className="text-[10px] opacity-60">▾</span>
-            </a>
-            <div className="ps-dropdown">
-              {data.courses.map((c, i) => (
-                <a
-                  key={c.id}
-                  href={onAcademicsPage ? `#course-${c.id}` : `/academics#course-${c.id}`}
-                  className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 hover:bg-black/[.04] transition"
-                >
-                  <span className="h-9 w-9 rounded-lg ps-chip grid place-items-center text-base flex-none">
-                    {['🧸', '📚', '🔬', '🎓', '🎨', '🏆', '🌟', '💡'][i % 8]}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-bold" style={{ color: 'var(--ink)' }}>{c.name}</span>
-                    {c.ageRange && <span className="block text-[11px] text-slate-400">{c.ageRange}</span>}
-                  </span>
-                </a>
-              ))}
-              <a
-                href="/academics"
-                className="border-t border-black/5 mt-1 pt-2 px-2.5 pb-0.5 text-xs font-semibold"
-                style={{ color: 'var(--ps1)' }}
-              >
-                View all programmes →
-              </a>
-            </div>
-          </div>
-        )
-      )}
-      {flags.hasAdmissions && (
-        <a className={linkCls} href="/admissions">Admissions</a>
-      )}
-      {flags.hasHof && (
-        <a className={linkCls} href={`${base}#hall-of-fame`}>Hall of Fame</a>
-      )}
-      {flags.hasGallery && (
-        <a className={linkCls} href="/gallery">Gallery</a>
-      )}
-      {flags.hasEvents && (
-        <a className={linkCls} href="/connect">Connect</a>
-      )}
-      {flags.hasBlog && (
-        <Link className={linkCls} href="/blog">Blog</Link>
-      )}
-      {(flags.hasContact || flags.hasEnquiry) && (
-        <a className={linkCls} href="/contact">Contact</a>
+          <a key={node.key} className={linkCls} href={node.href}>
+            {node.label}
+          </a>
+        ),
       )}
     </>
   );
@@ -175,10 +133,15 @@ function Cta({
 function LoginLink({ data, fullWidth }: { data: PublicSiteData; fullWidth?: boolean }) {
   if (data.profile?.navShowLogin === false) return null;
   const label = data.profile?.navLoginLabel?.trim() || 'Login';
+  // LINK is what every school renders today, so it adds no class. The other two
+  // derive from the bar's own text colour, which means a school cannot pick a
+  // palette that makes sign-in invisible.
+  const style = data.profile?.navLoginStyle;
+  const styleCls = style === 'OUTLINE' ? ' ps-login-outline' : style === 'SOLID' ? ' ps-login-solid' : '';
   return (
     <a
       href="/login"
-      className={`ps-nav-link text-sm font-semibold px-3 py-2 rounded-lg hover:bg-black/5 transition whitespace-nowrap${
+      className={`ps-nav-link text-sm font-semibold px-3 py-2 rounded-lg hover:bg-black/5 transition whitespace-nowrap${styleCls}${
         fullWidth ? ' flex items-center justify-center w-full border border-black/10' : ''
       }`}
     >
@@ -244,9 +207,7 @@ function HamburgerButton({
  */
 function MobileMenu({
   data,
-  flags,
-  base,
-  onAcademicsPage,
+  nodes,
   enquireHref,
   ink,
   barCls,
@@ -254,9 +215,7 @@ function MobileMenu({
   panelRef,
 }: {
   data: PublicSiteData;
-  flags: NavFlags;
-  base: string;
-  onAcademicsPage: boolean;
+  nodes: NavNode[];
   enquireHref: string;
   ink: string;
   /** Same bar-colour + onDark classes as the header, applied directly to the
@@ -280,7 +239,7 @@ function MobileMenu({
           if ((e.target as HTMLElement).closest('a')) onClose();
         }}
       >
-        <NavLinks data={data} flags={flags} base={base} onAcademicsPage={onAcademicsPage} mobile />
+        <NavItems nodes={nodes} mobile onNavigate={onClose} />
       </nav>
       <div className="flex flex-col gap-2 px-4 pb-5 pt-3 border-t border-black/5 mt-2">
         <LoginLink data={data} fullWidth />
@@ -311,6 +270,15 @@ export default function SiteNav({
   const profile = data.profile;
   const ghost = style === 'GHOST';
   const pill = style === 'PILL';
+
+  // The one model every bar below reads.
+  const nodes = navModel({
+    flags,
+    base,
+    courses: data.courses,
+    onAcademicsPage,
+    config: data.profile?.navConfig ?? null,
+  });
 
   // Mobile menu open/close state, shared across every layout branch below.
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -428,8 +396,8 @@ export default function SiteNav({
             className={`ps-pill-bar${onDarkCls} ${color.bar} w-fit max-w-full mx-auto px-5 h-14 flex flex-nowrap items-center gap-4 rounded-full backdrop-blur border border-black/5 shadow-lg transition-shadow`}
           >
             <Logo data={data} small />
-            <nav className="hidden md:flex items-center gap-1 text-sm text-slate-600">
-              <NavLinks data={data} flags={flags} base={base} onAcademicsPage={onAcademicsPage} />
+            <nav aria-label="Primary" className="hidden md:flex items-center gap-1 text-sm text-slate-600">
+              <NavItems nodes={nodes} />
             </nav>
             <div className="flex items-center gap-1.5">
               <NavActions data={data} enquireHref={enquireHref} ink={ink} />
@@ -439,9 +407,7 @@ export default function SiteNav({
           {mobileOpen && (
             <MobileMenu
               data={data}
-              flags={flags}
-              base={base}
-              onAcademicsPage={onAcademicsPage}
+              nodes={nodes}
               enquireHref={enquireHref}
               ink={ink}
               barCls={`${color.bar}${onDarkCls} mx-4 mt-2 rounded-2xl`}
@@ -464,33 +430,22 @@ export default function SiteNav({
           id="ps-nav"
           className={`sticky top-0 z-50 transition-all duration-300 ${color.bar}${onDarkCls} backdrop-blur border-b border-black/5 [&.ps-nav-scrolled]:shadow-sm`}
         >
-          <div className="max-w-6xl mx-auto px-6 h-16 hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-            <nav className="flex items-center justify-end gap-1 text-sm text-slate-600">
-              <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#home`}>Home</a>
-              {flags.hasAbout && (
-                <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href={`${base}#about`}>About</a>
-              )}
-              {flags.hasAdmissions && (
-                <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/admissions">Admissions</a>
-              )}
-            </nav>
+          {/* One nav, split around the crest — not two lists that can drift.
+              The crest sits inside it because it is the link home, which is why
+              there is no Home control to spend a slot on. */}
+          <nav
+            aria-label="Primary"
+            className="max-w-6xl mx-auto px-6 h-16 hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-sm text-slate-600"
+          >
+            <span className="flex items-center justify-end gap-1">
+              <NavItems nodes={nodes.slice(0, Math.ceil(nodes.length / 2))} />
+            </span>
             <Logo data={data} />
-            <nav className="flex items-center gap-1 text-sm text-slate-600">
-              {flags.hasGallery && (
-                <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/gallery">Gallery</a>
-              )}
-              {flags.hasEvents && (
-                <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/connect">Connect</a>
-              )}
-              {flags.hasBlog && (
-                <Link className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/blog">Blog</Link>
-              )}
-              {(flags.hasContact || flags.hasEnquiry) && (
-                <a className="ps-nav-link px-3 py-2 rounded-lg hover:bg-black/5 transition" href="/contact">Contact</a>
-              )}
+            <span className="flex items-center gap-1">
+              <NavItems nodes={nodes.slice(Math.ceil(nodes.length / 2))} />
               <span className="ml-2"><NavActions data={data} enquireHref={enquireHref} ink={ink} /></span>
-            </nav>
-          </div>
+            </span>
+          </nav>
           <div className="max-w-6xl mx-auto px-6 h-16 flex md:hidden items-center justify-between">
             <Logo data={data} />
             <div className="flex items-center gap-1.5">
@@ -501,9 +456,7 @@ export default function SiteNav({
           {mobileOpen && (
             <MobileMenu
               data={data}
-              flags={flags}
-              base={base}
-              onAcademicsPage={onAcademicsPage}
+              nodes={nodes}
               enquireHref={enquireHref}
               ink={ink}
               barCls={`${color.bar}${onDarkCls}`}
@@ -533,8 +486,8 @@ export default function SiteNav({
         {strip}
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <Logo data={data} />
-          <nav className="hidden md:flex items-center gap-1 text-sm text-slate-600">
-            <NavLinks data={data} flags={flags} base={base} onAcademicsPage={onAcademicsPage} />
+          <nav aria-label="Primary" className="hidden md:flex items-center gap-1 text-sm text-slate-600">
+            <NavItems nodes={nodes} />
           </nav>
           <div className="flex items-center gap-1.5">
             <NavActions data={data} enquireHref={enquireHref} ink={ink} />
@@ -544,9 +497,7 @@ export default function SiteNav({
         {mobileOpen && (
           <MobileMenu
             data={data}
-            flags={flags}
-            base={base}
-            onAcademicsPage={onAcademicsPage}
+            nodes={nodes}
             enquireHref={enquireHref}
             ink={ink}
             barCls={`${color.bar}${onDarkCls}`}

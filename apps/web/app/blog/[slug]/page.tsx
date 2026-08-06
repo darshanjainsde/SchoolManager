@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isPlatformHost, schoolHref } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
 import { fetchGlobalPost, fetchSchoolPost, type BlogPostFull } from '@/lib/blog-api';
 import { fetchPublicSite } from '@/lib/public-api';
+import SchoolChrome from '@/components/public/SchoolChrome';
 import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
 import BlogBlocks from '@/components/blog/BlogBlocks';
 import '@/components/blog/blog.css';
@@ -179,15 +179,15 @@ export default async function BlogPostPage({ params }: Props) {
     mainEntityOfPage: post.canonicalUrl,
   };
 
+  // Wearing the school's identity, like every other page a parent can reach.
+  // `site` is already fetched above for the metadata, so this costs nothing.
+  if (!site) notFound();
   return (
-    <div className="blog">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <div className="blog-topbar">
-        <Link href="/"><b>← Home</b></Link>
-        <div className="blog-topbar-spacer" />
-        <Link href="/blog">Blog</Link>
+    <SchoolChrome data={site}>
+      <div className="blog">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <ArticleBody post={post} />
       </div>
-      <ArticleBody post={post} />
-    </div>
+    </SchoolChrome>
   );
 }

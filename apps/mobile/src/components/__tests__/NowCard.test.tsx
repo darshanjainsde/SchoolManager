@@ -165,4 +165,91 @@ describe('NowCard', () => {
     expect(screen.queryByText(/NaN/)).toBeNull();
     expect(screen.getByTestId('now-progress').props.accessibilityValue.now).toBe(0);
   });
+
+  describe('opening the class', () => {
+    // The register deliberately drops the names so it can be marked at walking
+    // pace. This is the way to the screen that has them.
+    it('offers no way in when no handler was given, rather than a dead tap', () => {
+      render(
+        <NowCard entry={classEntry()} elapsed={20} total={45} nextEntry={null} onTakeAttendance={jest.fn()} />,
+      );
+      expect(screen.queryByTestId('now-card-press')).toBeNull();
+      expect(screen.queryByTestId('now-open-sec-8a')).toBeNull();
+    });
+
+    it('makes the WHOLE hero the target — the biggest thing on Home, reached mid-corridor', () => {
+      const open = jest.fn();
+      render(
+        <NowCard
+          entry={classEntry()}
+          elapsed={20}
+          total={45}
+          nextEntry={null}
+          onTakeAttendance={jest.fn()}
+          onOpenClass={open}
+        />,
+      );
+      fireEvent.press(screen.getByTestId('now-card-press'));
+      expect(open).toHaveBeenCalledWith('sec-8a');
+    });
+
+    it('also gives the foot of the card its own named button', () => {
+      // Not decoration on a tappable card: a screen reader needs something it
+      // can land on and activate, and "See who's in the room" is not that
+      // unless it is a real button.
+      const open = jest.fn();
+      render(
+        <NowCard
+          entry={classEntry()}
+          elapsed={20}
+          total={45}
+          nextEntry={null}
+          onTakeAttendance={jest.fn()}
+          onOpenClass={open}
+        />,
+      );
+      const row = screen.getByTestId('now-open-sec-8a');
+      expect(row.props.accessibilityLabel).toBe('Open 8-A, see who is in the room');
+      fireEvent.press(row);
+      expect(open).toHaveBeenCalledWith('sec-8a');
+    });
+
+    it('does not swallow the Take attendance button into one accessibility element', () => {
+      // Pressable defaults to accessible:true, which on iOS collapses
+      // everything inside it into a single VoiceOver element. If the wrapper
+      // ever stops opting out, the one action this card asks for disappears
+      // for the people who most need it labelled.
+      const open = jest.fn();
+      const take = jest.fn();
+      render(
+        <NowCard
+          entry={classEntry()}
+          elapsed={20}
+          total={45}
+          nextEntry={null}
+          onTakeAttendance={take}
+          onOpenClass={open}
+        />,
+      );
+      expect(screen.getByTestId('now-card-press').props.accessible).toBe(false);
+      fireEvent.press(screen.getByTestId('now-take-sec-8a'));
+      expect(take).toHaveBeenCalledWith('sec-8a');
+      expect(open).not.toHaveBeenCalled();
+    });
+
+    it('stays untappable on a FREE period — there is no class to open', () => {
+      const free = classEntry({ kind: 'FREE', slot: null, register: null, label: 'P4' });
+      render(
+        <NowCard
+          entry={free}
+          elapsed={10}
+          total={45}
+          nextEntry={nextClass}
+          onTakeAttendance={jest.fn()}
+          onOpenClass={jest.fn()}
+        />,
+      );
+      expect(screen.queryByTestId('now-card-press')).toBeNull();
+    });
+  });
 });

@@ -37,6 +37,18 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "NPM_CONFIG_NODE_LINKER": "hoisted"
       }
+    },
+    "staging-store": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.test.sckools.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "NPM_CONFIG_NODE_LINKER": "hoisted"
+      }
     }
   },
   "submit": {

@@ -1,12 +1,37 @@
 import { useRef, type PropsWithChildren, type ReactNode } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import {
+  Animated,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
+import { Icon, type IconName } from './icons';
 
-export function Screen({ children }: PropsWithChildren) {
+export function Screen({
+  children,
+  onRefresh,
+  refreshing = false,
+}: PropsWithChildren<{
+  /**
+   * Pull-to-refresh. The gesture everyone tries first, which until now did
+   * nothing — a screen that reloads on focus still looks stuck when you are
+   * staring at it waiting for a colleague's mark to appear.
+   *
+   * Optional: a screen with no cheap way to reload simply omits it, and gets
+   * no spinner to pull rather than one that lies.
+   */
+  onRefresh?: () => void;
+  refreshing?: boolean;
+}>) {
   const tokens = useTokens();
   // Top safe-area inset (Phase 5·0b): with headerShown:false the tab
   // navigator renders from the very top of the display, so without this the
@@ -18,6 +43,20 @@ export function Screen({ children }: PropsWithChildren) {
     <ScrollView
       testID="screen-scroll"
       style={{ flex: 1, backgroundColor: tokens.color.appBg }}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            testID="screen-refresh"
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            // The school's own colour on the spinner, so even the reload
+            // belongs to the school rather than to the platform.
+            tintColor={tokens.color.indigo}
+            colors={[tokens.color.indigo]}
+            progressBackgroundColor={tokens.color.surface}
+          />
+        ) : undefined
+      }
       contentContainerStyle={{
         paddingTop: insets.top + 10,
         paddingHorizontal: 14,
@@ -89,10 +128,26 @@ export function SectionTitle({ title, actionLabel, onAction, right }:
  * still reads as a page and not as a failure. Meant to sit inside a `Page`
  * (or a zero-padded `Card`), exactly as the pitch nests `.empty` in `.page`.
  */
-export function Empty({ children, testID }: PropsWithChildren<{ testID?: string }>) {
+export function Empty({
+  children,
+  testID,
+  /**
+   * A duotone glyph drawn faintly above the line. Not decoration: an empty
+   * screen is the one screen with nothing on it to say WHICH screen it is, so
+   * a page reached by mistake reads as "no messages" rather than as a page
+   * that failed to load. Left off where the surrounding page already names
+   * itself unmistakably.
+   */
+  icon,
+}: PropsWithChildren<{ testID?: string; icon?: IconName }>) {
   const tokens = useTokens();
   return (
-    <View testID={testID} style={{ paddingVertical: 20, paddingHorizontal: 14, alignItems: 'center' }}>
+    <View testID={testID} style={{ paddingVertical: 20, paddingHorizontal: 14, alignItems: 'center', gap: 9 }}>
+      {icon && (
+        // Faint on purpose — it sits behind the sentence in the reading order,
+        // and an empty state that shouts is worse than one that waits.
+        <Icon name={icon} size={26} color={tokens.color.line2} fillOpacity={0.5} />
+      )}
       <Text
         style={{
           color: tokens.color.sub,

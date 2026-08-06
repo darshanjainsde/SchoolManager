@@ -1,5 +1,5 @@
 import { render, act, fireEvent } from '@testing-library/react-native';
-import Profile from '../profile';
+import Profile from '../(tabs)/profile';
 import { api, ApiError } from '@/lib/api';
 
 let capturedFocusEffect: (() => void) | undefined;
@@ -77,8 +77,8 @@ it('seats the Appearance (theme) setting on this screen since the drawer replace
 describe('fetch states', () => {
   it('shows a loading state before the fetch resolves', () => {
     (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
-    const { getByText } = render(<Profile />);
-    expect(getByText('Loading profile…')).toBeTruthy();
+    const { getByLabelText } = render(<Profile />);
+    expect(getByLabelText('Loading profile…')).toBeTruthy();
   });
 
   it('shows the API error message verbatim when the fetch fails', async () => {

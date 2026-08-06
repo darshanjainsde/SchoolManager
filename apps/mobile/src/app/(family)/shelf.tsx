@@ -3,7 +3,8 @@ import { Animated, Pressable, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { family, type ChildProfile } from '@/lib/family-store';
 import { session } from '@/lib/session';
-import { Card, Screen, SectionTitle } from '@/components/ui';
+import { Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { DUR, EASE, useReduceMotion } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
 
@@ -175,9 +176,7 @@ export default function Shelf() {
       )}
 
       {children === null ? (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading…</Text>
-        </Card>
+        <LoadingRows label="Loading your shelf…" rows={2} />
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9, justifyContent: 'flex-start' }}>
           {shown.map((c) => (

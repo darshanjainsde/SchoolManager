@@ -6,6 +6,7 @@ import type { ClassLog, ClassLogNote, ClassLogTodo } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DASH, DUR, strokeDashoffset, useGesture } from '@/theme/motion';
@@ -197,9 +198,7 @@ export default function ClassNotesHistory() {
         </Card>
       )}
       {log === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading notes…</Text>
-        </Card>
+        <LoadingRows label="Loading notes…" rows={3} />
       )}
       {empty && !error && (
         <Card>

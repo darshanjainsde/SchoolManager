@@ -1,11 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { PortalService } from './portal.service';
-import { RegisterPushTokenDto, SignDiaryEntryDto } from './portal.dto';
+import { RequireFeature, RequireFeatureGuard } from '../features';
+import { RegisterForEventDto, RegisterPushTokenDto, SignDiaryEntryDto } from './portal.dto';
 
 @UseGuards(SchoolJwtGuard, RolesGuard)
 @Roles('STUDENT')
@@ -33,6 +34,25 @@ export class PortalController {
    */
   @Get('diary') diary(@CurrentUser() u: SchoolJwtPayload, @Query('date') date?: string) {
     return this.portal.diary(u.sub, date);
+  }
+
+  /**
+   * Take a place at one of the school's events while signed in.
+   *
+   * The same engine the public door and the admin desk use, so capacity and the
+   * waitlist behave identically — the only difference is that this one knows
+   * which pupil is coming, so the desk shows a name it recognises.
+   */
+  @Post('events/:id/register')
+  @UseGuards(RequireFeatureGuard)
+  @RequireFeature('EVENTS')
+  @HttpCode(201)
+  registerForEvent(
+    @CurrentUser() u: SchoolJwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RegisterForEventDto,
+  ) {
+    return this.portal.registerForEvent(u.sub, id, dto.quantity ?? 1);
   }
 
   /** The signature in the margin of a red-ink remark. */

@@ -5,7 +5,7 @@
  * Menu-drawer revision (2026-08-02): the family tab bar drops the stock
  * expo-router Tabs for the same pattern the staff portal ships — FOUR core
  * tabs (Home, Attendance, Results, Profile) with a central chevron FAB that
- * lifts a bottom-sheet tools drawer (`src/components/FamilyToolsDrawer.tsx`)
+ * are rendered as the 'Go to' grid on Home (`components/HomeToolGrid.tsx`)
  * over whatever screen you're on. Profile replaces Notices in the bar (the
  * old fifth "More" tab is gone, and the two-line "Notices/Announcements"
  * label bug goes with it); Notices lives in the drawer with the rest of the
@@ -34,6 +34,7 @@ export const HIDDEN_ROUTES = [
   'holidays',
   'notifications',
   'shelf',
+  'settings',
 ];
 
 /** Icon-tile colour family for a drawer tool — mirrors staff-nav's `MoreTone`. */
@@ -41,6 +42,12 @@ export type MoreTone = 'indigo' | 'amber' | 'green';
 
 export interface MoreItem {
   label: string;
+  /**
+   * A duotone glyph name from components/icons.tsx — not an emoji, and no
+   * longer an Ionicons name. Emoji were drawn by the OS (different on iOS and
+   * Android, pre-coloured, unable to take a school's colour); a single hairline
+   * Ionicon then read as faint. See the icon set for why two layers.
+   */
   icon: string;
   route:
     | '/(family)/diary'
@@ -54,10 +61,10 @@ export interface MoreItem {
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
-  { label: 'Diary', icon: '📔', route: '/(family)/diary', tone: 'indigo' },
-  { label: 'Timetable', icon: '📅', route: '/(family)/timetable', tone: 'indigo' },
-  { label: 'Assignments', icon: '📚', route: '/(family)/assignments', tone: 'indigo' },
-  { label: 'Messages', icon: '💬', route: '/(family)/messages', tone: 'amber' },
-  { label: 'Notices', icon: '📣', route: '/(family)/notices', tone: 'amber' },
-  { label: 'Holidays', icon: '🌴', route: '/(family)/holidays', tone: 'green' },
+  { label: 'Diary', icon: 'diary', route: '/(family)/diary', tone: 'indigo' },
+  { label: 'Timetable', icon: 'timetable', route: '/(family)/timetable', tone: 'indigo' },
+  { label: 'Assignments', icon: 'assignments', route: '/(family)/assignments', tone: 'indigo' },
+  { label: 'Messages', icon: 'messages', route: '/(family)/messages', tone: 'amber' },
+  { label: 'Notices', icon: 'notices', route: '/(family)/notices', tone: 'amber' },
+  { label: 'Holidays', icon: 'holidays', route: '/(family)/holidays', tone: 'green' },
 ];

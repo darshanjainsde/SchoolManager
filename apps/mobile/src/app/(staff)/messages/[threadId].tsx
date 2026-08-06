@@ -7,7 +7,8 @@ import {
   type MessageThreadDetail,
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Card } from '@/components/ui';
+import { Card, Empty } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, useGesture } from '@/theme/motion';
@@ -142,13 +143,11 @@ export default function StaffThread() {
           </Card>
         )}
         {detail === null && !error && (
-          <Card>
-            <Text style={{ color: tokens.color.sub }}>Loading conversation…</Text>
-          </Card>
+          <LoadingRows label="Loading conversation…" rows={4} />
         )}
         {detail?.messages.length === 0 && !error && (
-          <Card>
-            <Text style={{ color: tokens.color.sub }}>No messages in this conversation yet.</Text>
+          <Card style={{ padding: 0 }}>
+            <Empty icon="messages">No messages in this conversation yet.</Empty>
           </Card>
         )}
 

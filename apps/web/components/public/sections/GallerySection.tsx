@@ -7,9 +7,12 @@ import type { PublicSiteData } from '@/lib/public-api';
 export default function GallerySection({
   gallery,
   schoolName,
+  onOwnPage,
 }: {
   gallery: PublicSiteData['gallery'];
   schoolName: string;
+  /** True when this section IS /gallery: the masthead already introduced it. */
+  onOwnPage?: boolean;
 }) {
   // Lightbox: index of the open image, with a short closing phase so the
   // exit animation can play before unmount.
@@ -52,17 +55,30 @@ export default function GallerySection({
 
   return (
     <section id="gallery" className="max-w-6xl mx-auto px-6 py-20">
-      <div className="reveal">
-        <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
-          Gallery
+      {!onOwnPage && (
+        <div className="reveal">
+          <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--ps1)' }}>
+            Gallery
+          </div>
+          <h2 className="ps-head text-4xl font-bold mt-3">
+            <span className="ps-accent-mark">Life at {schoolName}</span>
+          </h2>
         </div>
-        <h2 className="ps-head text-4xl font-bold mt-3">Life at {schoolName}</h2>
-      </div>
+      )}
       {gallery.length === 0 ? (
-        <div className="reveal mt-10 ps-card ps-soft rounded-3xl p-10 text-center">
-          <div className="text-5xl">📷</div>
-          <h3 className="ps-head font-bold text-lg mt-4">Photos coming soon</h3>
-          <p className="text-sm text-slate-500 mt-1">Moments from campus life will appear here.</p>
+        <div className="reveal mt-10 ps-panel p-12 text-center">
+          {/* Drawn, not shrugged. An emoji says "nothing here"; this says what
+              will be here and who it is for. */}
+          <svg viewBox="0 0 120 84" className="mx-auto h-24 w-32" fill="none" aria-hidden="true">
+            <rect x="10" y="16" width="100" height="60" rx="10" stroke="var(--ps1)" strokeWidth="2.5" opacity=".35" />
+            <path d="M10 60l24-20 18 14 16-12 22 18" stroke="var(--ps1)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" opacity=".5" />
+            <circle cx="82" cy="34" r="6" fill="var(--ps2)" opacity=".45" />
+            <path d="M46 8h28l-6 8H52z" stroke="var(--ps1)" strokeWidth="2.5" strokeLinejoin="round" opacity=".35" />
+          </svg>
+          <h3 className="ps-head font-bold text-lg mt-5">No photos yet</h3>
+          <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
+            Sports days, concerts and classroom moments appear here as {schoolName} adds them.
+          </p>
         </div>
       ) : (
         <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -72,7 +88,7 @@ export default function GallerySection({
               type="button"
               onClick={() => setLb(i)}
               aria-label={`View ${img.caption ?? `photo ${i + 1}`} full size`}
-              className="reveal group relative rounded-2xl overflow-hidden ps-card ps-soft cursor-zoom-in text-left p-0"
+              className="reveal group relative overflow-hidden ps-panel ps-panel-sm cursor-zoom-in text-left p-0"
               style={{ transitionDelay: `${i * 0.05}s` }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -142,7 +158,7 @@ export default function GallerySection({
             <img
               src={open.url}
               alt={open.caption ?? `${schoolName} gallery photo`}
-              className="max-h-[82vh] max-w-full rounded-2xl object-contain shadow-2xl"
+              className="max-h-[82vh] max-w-full ps-panel-sm object-contain"
             />
             {(open.caption || gallery.length > 1) && (
               <figcaption className="mt-3 flex items-baseline justify-between gap-4 text-sm text-white/85">
