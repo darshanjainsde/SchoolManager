@@ -39,13 +39,14 @@ export function SettingsScreen({ portal }: { portal: 'staff' | 'family' }): Reac
         <AppearanceSetting />
       </Card>
 
-      {/* The accent is absent on purpose, and saying so is better than leaving
-          somebody hunting for a control that will never be there. */}
+      {/* Says what the DEFAULT means, so "My school" is understood as a real
+          choice rather than a placeholder somebody has to decode. */}
       <Text
         testID={`settings-brand-note-${portal}`}
         style={{ marginHorizontal: 6, fontSize: 11.5, color: tokens.color.sub, lineHeight: 17 }}
       >
-        The highlight colour follows your school, so the app looks like the place you actually go.
+        My school follows your school’s own colour. Pick another and it stays, in both light and
+        dark.
       </Text>
     </Screen>
   );

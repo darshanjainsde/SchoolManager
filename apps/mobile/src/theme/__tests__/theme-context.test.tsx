@@ -3,6 +3,7 @@ import * as ReactNative from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { ThemeProvider, useTheme } from '../theme-context';
 import { GROUNDS } from '../grounds';
+import { ACCENTS } from '../accents';
 
 // Spy on the hook via the module jest-expo's preset already provides
 // (the same one every other test file imports with no special setup)
@@ -210,5 +211,73 @@ describe('the paper a person opens the app on', () => {
       </ThemeProvider>,
     );
     await waitFor(() => expect(second.getByTestId('ground').props.children).toBe('sand'));
+  });
+});
+
+function AccentProbe() {
+  const { accent, tokens, setAccent } = useTheme();
+  return (
+    <>
+      <Text testID="accent">{accent}</Text>
+      <Text testID="fill">{tokens.color.indigo}</Text>
+      <Text testID="set-navy" onPress={() => setAccent('navy')}>
+        set-navy
+      </Text>
+    </>
+  );
+}
+
+describe('the highlight colour', () => {
+  it('defaults to the school, which applies no override of its own', () => {
+    mockUseColorScheme.mockReturnValue('light');
+    const { getByTestId } = render(
+      <ThemeProvider>
+        <AccentProbe />
+      </ThemeProvider>,
+    );
+    expect(getByTestId('accent').props.children).toBe('school');
+  });
+
+  it('a chosen accent beats the school brand — it was asked for', async () => {
+    mockUseColorScheme.mockReturnValue('light');
+    const { getByTestId } = render(
+      <ThemeProvider>
+        <AccentProbe />
+      </ThemeProvider>,
+    );
+    fireEvent.press(getByTestId('set-navy'));
+    await waitFor(() => expect(getByTestId('fill').props.children).toBe(ACCENTS.navy.light!.fill));
+  });
+
+  it('holds in dark mode, where a school brand deliberately does not apply', async () => {
+    // The asymmetry is the point: a brand is chosen against a white website and
+    // can fail on near-black, but an accent somebody picked here is deliberate.
+    mockUseColorScheme.mockReturnValue('dark');
+    const { getByTestId } = render(
+      <ThemeProvider>
+        <AccentProbe />
+      </ThemeProvider>,
+    );
+    fireEvent.press(getByTestId('set-navy'));
+    await waitFor(() => expect(getByTestId('fill').props.children).toBe(ACCENTS.navy.dark!.fill));
+  });
+
+  it('survives a restart', async () => {
+    mockUseColorScheme.mockReturnValue('light');
+    const first = render(
+      <ThemeProvider>
+        <AccentProbe />
+      </ThemeProvider>,
+    );
+    fireEvent.press(first.getByTestId('set-navy'));
+    await waitFor(() => expect(SecureStore.__store['sckools.accent']).toBe('navy'));
+    first.unmount();
+
+    const second = render(
+      <ThemeProvider>
+        <AccentProbe />
+      </ThemeProvider>,
+    );
+    await waitFor(() => expect(second.getByTestId('accent').props.children).toBe('navy'));
   });
 });

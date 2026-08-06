@@ -19,6 +19,7 @@ import {
   type GroundName,
   type PaperPattern,
 } from './grounds';
+import { ACCENTS, applyAccent, isAccentName, type AccentName } from './accents';
 
 export type ThemePreference = 'system' | ColorScheme;
 
@@ -28,6 +29,7 @@ export type ThemePreference = 'system' | ColorScheme;
 const PREF_KEY = 'sckools.themePreference';
 const GROUND_KEY = 'sckools.ground';
 const PATTERN_KEY = 'sckools.paperPattern';
+const ACCENT_KEY = 'sckools.accent';
 
 function isThemePreference(v: string | null): v is ThemePreference {
   return v === 'system' || v === 'light' || v === 'dark';
@@ -45,6 +47,9 @@ interface ThemeContextValue {
   /** Ruling behind the page. Grain is a separate axis, not a fourth pattern. */
   pattern: PaperPattern;
   setPattern: (next: PaperPattern) => void;
+  /** Highlight colour. 'school' defers to the school's own brand. */
+  accent: AccentName;
+  setAccent: (next: AccentName) => void;
   tokens: { color: ColorPalette; gap: number; radius: typeof RADIUS };
 }
 
@@ -65,6 +70,8 @@ const defaultThemeContext: ThemeContextValue = {
   setGround: () => undefined,
   pattern: 'plain',
   setPattern: () => undefined,
+  accent: 'school',
+  setAccent: () => undefined,
   tokens: { color: palette.light, gap: GAP, radius: RADIUS },
 };
 
@@ -80,6 +87,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   // stored value wins over these on the next tick.
   const [ground, setGroundState] = useState<GroundName>('cream');
   const [pattern, setPatternState] = useState<PaperPattern>('ruled');
+  // 'school' is the default so an app still looks like the place a person goes;
+  // choosing a named accent is an opt-out, not the starting point.
+  const [accent, setAccentState] = useState<AccentName>('school');
   // The school's own colour, for the LIGHT scheme only. Cache first so the
   // theme is right on the frame the app opens rather than one round-trip
   // later; the network refresh then updates it for the next launch.
@@ -109,6 +119,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     SecureStore.getItemAsync(PATTERN_KEY).then((stored) => {
       if (!cancelled && isPaperPattern(stored)) setPatternState(stored);
     });
+    SecureStore.getItemAsync(ACCENT_KEY).then((stored) => {
+      if (!cancelled && isAccentName(stored)) setAccentState(stored);
+    });
     return () => {
       cancelled = true;
     };
@@ -131,6 +144,11 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     SecureStore.setItemAsync(PATTERN_KEY, next).catch(() => undefined);
   }
 
+  function setAccent(next: AccentName) {
+    setAccentState(next);
+    SecureStore.setItemAsync(ACCENT_KEY, next).catch(() => undefined);
+  }
+
   const scheme: ColorScheme =
     preference === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : preference;
 
@@ -143,6 +161,8 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       setGround,
       pattern,
       setPattern,
+      accent,
+      setAccent,
       // A school picks its colours for a website on warm paper, which is what
       // the light theme is — so the colour travels there and nowhere else. The
       // dark scheme keeps its own indigo ink: a brand chosen against white can
@@ -151,9 +171,17 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       // Ground goes on LAST and touches only the neutrals, so a person's choice
       // of paper can never repaint their school's colour or the green and red
       // that mean present and absent.
+      // Order matters. The school's brand paints the accent FIRST, then an
+      // explicit choice overrides it, then the ground lays the neutrals on top
+      // — so a named accent beats the school (it was asked for), and neither
+      // can reach the neutrals. A chosen accent holds in dark too: it was
+      // picked deliberately, unlike a brand chosen against a white website.
       tokens: {
         color: applyGround(
-          scheme === 'light' ? brandedLight(palette.light, brand) : palette.dark,
+          applyAccent(
+            scheme === 'light' ? brandedLight(palette.light, brand) : palette.dark,
+            ACCENTS[accent][scheme],
+          ),
           GROUNDS[ground][scheme],
         ),
         gap: GAP,
@@ -161,7 +189,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scheme, preference, brand, ground, pattern],
+    [scheme, preference, brand, ground, pattern, accent],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

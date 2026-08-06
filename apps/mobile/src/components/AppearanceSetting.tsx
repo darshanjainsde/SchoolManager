@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTheme, type ThemePreference } from '@/theme/theme-context';
 import { GROUNDS, GROUND_NAMES, PAPER_PATTERNS } from '@/theme/grounds';
+import { ACCENTS, ACCENT_NAMES } from '@/theme/accents';
 
 const OPTIONS: Array<{ value: ThemePreference; label: string }> = [
   { value: 'system', label: 'System' },
@@ -9,20 +10,21 @@ const OPTIONS: Array<{ value: ThemePreference; label: string }> = [
 ];
 
 /**
- * "Appearance" block for the profile screens (staff + family) — the app-wide
- * equivalent of the web portal's light/dark toggle, plus the two personal
- * choices that decide what the app is printed ON.
+ * "Appearance" block for the Settings screen — light/dark, and the three
+ * choices that decide what the app looks like: highlight, paper, ruling.
  *
- * What is deliberately NOT here is the accent colour. That is the school's own
- * brand (see `brandedLight`), and letting a pupil override it would mean their
- * app stopped looking like their school. Ground and ruling are texture and are
- * personal; the accent is identity and is not.
+ * The highlight defaults to **My school**, so an app looks like the place a
+ * person actually goes unless they say otherwise. Choosing a named colour is an
+ * opt-out rather than the starting point, and it is a real one: the choice then
+ * holds in dark mode too, where a school's own brand deliberately does not
+ * apply (a colour picked against a white website can fail badly on near-black).
  *
  * Every choice persists (see ThemeProvider) and applies immediately app-wide
  * through context, not just on this screen.
  */
 export function AppearanceSetting() {
-  const { tokens, preference, setPreference, ground, setGround, pattern, setPattern } = useTheme();
+  const { tokens, preference, setPreference, ground, setGround, pattern, setPattern, accent, setAccent } =
+    useTheme();
 
   const label = { fontSize: 13, fontWeight: '600' as const, color: tokens.color.ink };
   const hint = { fontSize: 11, color: tokens.color.sub, marginTop: -4 };
@@ -69,6 +71,60 @@ export function AppearanceSetting() {
             );
           })}
         </View>
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <Text style={label}>Highlight</Text>
+        <Text style={hint}>Buttons, active tabs and the card at the top.</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 10, paddingVertical: 2, paddingRight: 10 }}
+        >
+          {ACCENT_NAMES.map((name) => {
+            const a = ACCENTS[name];
+            const on = accent === name;
+            // 'My school' has no colour of its own to show, so it wears the one
+            // currently in force — which IS the school's, and makes the option
+            // demonstrate itself rather than describe itself.
+            const swatch = a.light?.fill ?? tokens.color.indigo;
+            return (
+              <Pressable
+                key={name}
+                testID={`accent-${name}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${a.label} — ${a.hint}`}
+                accessibilityState={{ selected: on }}
+                onPress={() => setAccent(name)}
+                style={{ alignItems: 'center', gap: 5, width: 64 }}
+              >
+                <View
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 23,
+                    backgroundColor: swatch,
+                    borderWidth: on ? 3 : 1,
+                    borderColor: on ? tokens.color.ink : tokens.color.line2,
+                  }}
+                />
+                <Text
+                  numberOfLines={2}
+                  maxFontSizeMultiplier={1.3}
+                  style={{
+                    fontSize: 10,
+                    lineHeight: 12,
+                    textAlign: 'center',
+                    color: on ? tokens.color.ink : tokens.color.sub,
+                    fontWeight: on ? '700' : '500',
+                  }}
+                >
+                  {a.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <View style={{ gap: 8 }}>
