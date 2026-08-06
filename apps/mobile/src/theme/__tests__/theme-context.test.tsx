@@ -151,11 +151,10 @@ describe('ThemeProvider — manual override', () => {
 
 /** Reports the paper actually in force, so the shipped default is pinned. */
 function PaperProbe() {
-  const { ground, pattern, tokens, setGround } = useTheme();
+  const { ground, tokens, setGround } = useTheme();
   return (
     <>
       <Text testID="ground">{ground}</Text>
-      <Text testID="pattern">{pattern}</Text>
       <Text testID="appBg">{tokens.color.appBg}</Text>
       <Text testID="set-sand" onPress={() => setGround('sand')}>
         set-sand
@@ -165,7 +164,7 @@ function PaperProbe() {
 }
 
 describe('the paper a person opens the app on', () => {
-  it('defaults to warm cream with feint ruling, not the old near-white', () => {
+  it('defaults to warm cream on plain paper, not the old near-white', () => {
     // The decision, pinned. `classic` shipped first only so that ADDING grounds
     // could not restyle anyone before a shade had been judged on a real phone.
     mockUseColorScheme.mockReturnValue('light');
@@ -175,7 +174,6 @@ describe('the paper a person opens the app on', () => {
       </ThemeProvider>,
     );
     expect(getByTestId('ground').props.children).toBe('cream');
-    expect(getByTestId('pattern').props.children).toBe('ruled');
     expect(getByTestId('appBg').props.children).toBe(GROUNDS.cream.light.appBg);
   });
 

@@ -15,9 +15,7 @@ import {
   GROUNDS,
   applyGround,
   isGroundName,
-  isPaperPattern,
   type GroundName,
-  type PaperPattern,
 } from './grounds';
 import { ACCENTS, applyAccent, isAccentName, type AccentName } from './accents';
 
@@ -28,7 +26,6 @@ export type ThemePreference = 'system' | ColorScheme;
 // dependency purely for a UI preference.
 const PREF_KEY = 'sckools.themePreference';
 const GROUND_KEY = 'sckools.ground';
-const PATTERN_KEY = 'sckools.paperPattern';
 const ACCENT_KEY = 'sckools.accent';
 
 function isThemePreference(v: string | null): v is ThemePreference {
@@ -44,9 +41,6 @@ interface ThemeContextValue {
   /** The paper this person reads on. Personal; never the school's business. */
   ground: GroundName;
   setGround: (next: GroundName) => void;
-  /** Ruling behind the page. Grain is a separate axis, not a fourth pattern. */
-  pattern: PaperPattern;
-  setPattern: (next: PaperPattern) => void;
   /** Highlight colour. 'school' defers to the school's own brand. */
   accent: AccentName;
   setAccent: (next: AccentName) => void;
@@ -68,8 +62,6 @@ const defaultThemeContext: ThemeContextValue = {
   // renders precisely what it rendered before grounds existed.
   ground: 'classic',
   setGround: () => undefined,
-  pattern: 'plain',
-  setPattern: () => undefined,
   accent: 'school',
   setAccent: () => undefined,
   tokens: { color: palette.light, gap: GAP, radius: RADIUS },
@@ -86,7 +78,6 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   // with feint ruling. Anyone who had already chosen something keeps it — the
   // stored value wins over these on the next tick.
   const [ground, setGroundState] = useState<GroundName>('cream');
-  const [pattern, setPatternState] = useState<PaperPattern>('ruled');
   // 'school' is the default so an app still looks like the place a person goes;
   // choosing a named accent is an opt-out, not the starting point.
   const [accent, setAccentState] = useState<AccentName>('school');
@@ -116,9 +107,6 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     SecureStore.getItemAsync(GROUND_KEY).then((stored) => {
       if (!cancelled && isGroundName(stored)) setGroundState(stored);
     });
-    SecureStore.getItemAsync(PATTERN_KEY).then((stored) => {
-      if (!cancelled && isPaperPattern(stored)) setPatternState(stored);
-    });
     SecureStore.getItemAsync(ACCENT_KEY).then((stored) => {
       if (!cancelled && isAccentName(stored)) setAccentState(stored);
     });
@@ -139,10 +127,6 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     SecureStore.setItemAsync(GROUND_KEY, next).catch(() => undefined);
   }
 
-  function setPattern(next: PaperPattern) {
-    setPatternState(next);
-    SecureStore.setItemAsync(PATTERN_KEY, next).catch(() => undefined);
-  }
 
   function setAccent(next: AccentName) {
     setAccentState(next);
@@ -159,8 +143,6 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       setPreference,
       ground,
       setGround,
-      pattern,
-      setPattern,
       accent,
       setAccent,
       // A school picks its colours for a website on warm paper, which is what
@@ -189,7 +171,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scheme, preference, brand, ground, pattern, accent],
+    [scheme, preference, brand, ground, accent],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

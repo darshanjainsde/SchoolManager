@@ -77,10 +77,10 @@ export type MoreTone = 'indigo' | 'amber' | 'green';
 export interface MoreItem {
   label: string;
   /**
-   * An Ionicons OUTLINE glyph, not an emoji. Emoji are drawn by the operating
-   * system, so the same drawer rendered differently on iOS and Android, they
-   * arrive pre-coloured and can never take the school's brand colour, and
-   * their cartoon weight fought the serif everywhere else on the screen.
+   * A duotone glyph name from components/icons.tsx — not an emoji, and no
+   * longer an Ionicons name. Emoji were drawn by the OS (different on iOS and
+   * Android, pre-coloured, unable to take a school's colour); a single hairline
+   * Ionicon then read as faint. See the icon set for why two layers.
    */
   icon: string;
   route:
@@ -97,12 +97,12 @@ export interface MoreItem {
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
-  { label: 'Diary', icon: 'book-outline', route: '/(staff)/diary', tone: 'indigo' },
-  { label: 'Assignments', icon: 'layers-outline', route: '/(staff)/assignments', tone: 'indigo' },
-  { label: 'Messages', icon: 'chatbubble-outline', route: '/(staff)/messages', tone: 'amber' },
-  { label: 'Notes', icon: 'reader-outline', route: '/(staff)/notes', tone: 'indigo' },
-  { label: 'Tests & Results', icon: 'bar-chart-outline', route: '/(staff)/tests', tone: 'indigo' },
-  { label: 'Requests', icon: 'clipboard-outline', route: '/(staff)/requests', tone: 'amber' },
-  { label: 'Holidays', icon: 'calendar-outline', route: '/(staff)/holidays', tone: 'green' },
-  { label: 'Announcements', icon: 'megaphone-outline', route: '/(staff)/post', tone: 'amber' },
+  { label: 'Diary', icon: 'diary', route: '/(staff)/diary', tone: 'indigo' },
+  { label: 'Assignments', icon: 'assignments', route: '/(staff)/assignments', tone: 'indigo' },
+  { label: 'Messages', icon: 'messages', route: '/(staff)/messages', tone: 'amber' },
+  { label: 'Notes', icon: 'notes', route: '/(staff)/notes', tone: 'indigo' },
+  { label: 'Tests & Results', icon: 'results', route: '/(staff)/tests', tone: 'indigo' },
+  { label: 'Requests', icon: 'requests', route: '/(staff)/requests', tone: 'amber' },
+  { label: 'Holidays', icon: 'timetable', route: '/(staff)/holidays', tone: 'green' },
+  { label: 'Announcements', icon: 'notices', route: '/(staff)/post', tone: 'amber' },
 ];

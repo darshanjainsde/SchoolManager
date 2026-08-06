@@ -5,8 +5,8 @@ import type { UnreadCountResult } from '@skoolos/types';
 import { api } from '@/lib/api';
 import { signOut } from '@/lib/sign-out';
 import type { MoreTone } from '@/lib/staff-nav';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Touchable } from './Touchable';
+import { Icon, isIconName } from './icons';
 import { useTokens } from '@/theme/theme-context';
 import { brand } from '@/theme/tokens';
 
@@ -64,13 +64,9 @@ function ToolTile({ item, badge, onPress }: { item: DrawerItem; badge?: number; 
           justifyContent: 'center',
         }}
       >
-        {/* A stroked glyph inheriting the tile's own ink, so a school's colour
-            reaches the drawer. An emoji could never do either. */}
-        <Ionicons
-          name={item.icon as React.ComponentProps<typeof Ionicons>['name']}
-          size={20}
-          color={tile.fg}
-        />
+        {/* Two layers driven by one hue: the body at 20% under a 1.8px
+            stroke. A single hairline read as faint at arm's length. */}
+        {isIconName(item.icon) && <Icon name={item.icon} size={21} color={tile.fg} />}
         {showBadge && (
           <View
             testID={`tool-badge-${item.label}`}

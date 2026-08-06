@@ -2,16 +2,12 @@ import { useRef, type PropsWithChildren, type ReactNode } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { useTokens, useTheme } from '@/theme/theme-context';
-import { PaperRuling } from './PaperRuling';
+import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
 
 export function Screen({ children }: PropsWithChildren) {
   const tokens = useTokens();
-  // The person's chosen ruling, painted once here so every screen inherits it
-  // rather than each one remembering to draw its own paper.
-  const { pattern } = useTheme();
   // Top safe-area inset (Phase 5·0b): with headerShown:false the tab
   // navigator renders from the very top of the display, so without this the
   // first line of every screen ("Hi, {name}") sits under the status bar on
@@ -19,11 +15,9 @@ export function Screen({ children }: PropsWithChildren) {
   // inset is handled by the navigator's own `insets` prop.
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ flex: 1, backgroundColor: tokens.color.appBg }}>
-      <PaperRuling pattern={pattern} ink={tokens.color.ink} />
-      <ScrollView
+    <ScrollView
       testID="screen-scroll"
-      style={{ flex: 1, backgroundColor: 'transparent' }}
+      style={{ flex: 1, backgroundColor: tokens.color.appBg }}
       contentContainerStyle={{
         paddingTop: insets.top + 10,
         paddingHorizontal: 14,
@@ -32,8 +26,7 @@ export function Screen({ children }: PropsWithChildren) {
       }}
     >
       {children}
-      </ScrollView>
-    </View>
+    </ScrollView>
   );
 }
 

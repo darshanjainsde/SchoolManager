@@ -88,25 +88,6 @@ export function isGroundName(v: string | null | undefined): v is GroundName {
   return typeof v === 'string' && v in GROUNDS;
 }
 
-/**
- * The exercise-book ruling behind a screen.
- *
- * `quad` is a maths book and belongs on surfaces carrying numbers; `ruled` is
- * a text book. Grain is a SEPARATE axis, not a third pattern — welding the two
- * together makes "ruled with grain" unreachable and hides that they are two
- * decisions.
- */
-export type PaperPattern = 'plain' | 'ruled' | 'quad';
-
-export const PAPER_PATTERNS: ReadonlyArray<{ value: PaperPattern; label: string; hint: string }> = [
-  { value: 'plain', label: 'Plain', hint: 'No ruling' },
-  { value: 'ruled', label: 'Feint ruled', hint: 'Like an exercise book' },
-  { value: 'quad', label: 'Quad grid', hint: 'Like a maths book' },
-];
-
-export function isPaperPattern(v: string | null | undefined): v is PaperPattern {
-  return v === 'plain' || v === 'ruled' || v === 'quad';
-}
 
 /**
  * Lays a ground over a palette, leaving every other token — the accent, the

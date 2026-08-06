@@ -43,10 +43,10 @@ export type MoreTone = 'indigo' | 'amber' | 'green';
 export interface MoreItem {
   label: string;
   /**
-   * An Ionicons OUTLINE glyph, not an emoji. Emoji are drawn by the operating
-   * system, so the same drawer rendered differently on iOS and Android, they
-   * arrive pre-coloured and can never take the school's brand colour, and
-   * their cartoon weight fought the serif everywhere else on the screen.
+   * A duotone glyph name from components/icons.tsx — not an emoji, and no
+   * longer an Ionicons name. Emoji were drawn by the OS (different on iOS and
+   * Android, pre-coloured, unable to take a school's colour); a single hairline
+   * Ionicon then read as faint. See the icon set for why two layers.
    */
   icon: string;
   route:
@@ -61,10 +61,10 @@ export interface MoreItem {
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
-  { label: 'Diary', icon: 'book-outline', route: '/(family)/diary', tone: 'indigo' },
-  { label: 'Timetable', icon: 'calendar-outline', route: '/(family)/timetable', tone: 'indigo' },
-  { label: 'Assignments', icon: 'layers-outline', route: '/(family)/assignments', tone: 'indigo' },
-  { label: 'Messages', icon: 'chatbubble-outline', route: '/(family)/messages', tone: 'amber' },
-  { label: 'Notices', icon: 'megaphone-outline', route: '/(family)/notices', tone: 'amber' },
-  { label: 'Holidays', icon: 'sunny-outline', route: '/(family)/holidays', tone: 'green' },
+  { label: 'Diary', icon: 'diary', route: '/(family)/diary', tone: 'indigo' },
+  { label: 'Timetable', icon: 'timetable', route: '/(family)/timetable', tone: 'indigo' },
+  { label: 'Assignments', icon: 'assignments', route: '/(family)/assignments', tone: 'indigo' },
+  { label: 'Messages', icon: 'messages', route: '/(family)/messages', tone: 'amber' },
+  { label: 'Notices', icon: 'notices', route: '/(family)/notices', tone: 'amber' },
+  { label: 'Holidays', icon: 'holidays', route: '/(family)/holidays', tone: 'green' },
 ];

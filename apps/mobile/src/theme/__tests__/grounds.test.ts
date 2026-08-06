@@ -1,4 +1,4 @@
-import { GROUNDS, GROUND_NAMES, applyGround, isGroundName, isPaperPattern, PAPER_PATTERNS } from '../grounds';
+import { GROUNDS, GROUND_NAMES, applyGround, isGroundName } from '../grounds';
 import { palette } from '../tokens';
 
 /**
@@ -82,27 +82,6 @@ describe('the grounds', () => {
     expect(isGroundName('chartreuse')).toBe(false);
     expect(isGroundName(null)).toBe(false);
     expect(isGroundName(undefined)).toBe(false);
-  });
-});
-
-describe('the paper pattern', () => {
-  it('offers plain, ruled and quad — grain is a separate axis, not a fourth pattern', () => {
-    // Bundling grain into the pattern list made "ruled with grain" unreachable.
-    expect(PAPER_PATTERNS.map((p) => p.value)).toEqual(['plain', 'ruled', 'quad']);
-    expect(PAPER_PATTERNS.map((p) => p.value)).not.toContain('grain');
-  });
-
-  it('recognises its own values and refuses anything else', () => {
-    expect(isPaperPattern('quad')).toBe(true);
-    expect(isPaperPattern('grain')).toBe(false);
-    expect(isPaperPattern(null)).toBe(false);
-  });
-
-  it('labels every option, because a pattern name means nothing on its own', () => {
-    for (const p of PAPER_PATTERNS) {
-      expect(p.label.length).toBeGreaterThan(0);
-      expect(p.hint.length).toBeGreaterThan(0);
-    }
   });
 });
 

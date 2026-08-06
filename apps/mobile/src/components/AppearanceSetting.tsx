@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTheme, type ThemePreference } from '@/theme/theme-context';
-import { GROUNDS, GROUND_NAMES, PAPER_PATTERNS } from '@/theme/grounds';
+import { GROUNDS, GROUND_NAMES } from '@/theme/grounds';
 import { ACCENTS, ACCENT_NAMES } from '@/theme/accents';
 
 const OPTIONS: Array<{ value: ThemePreference; label: string }> = [
@@ -23,7 +23,7 @@ const OPTIONS: Array<{ value: ThemePreference; label: string }> = [
  * through context, not just on this screen.
  */
 export function AppearanceSetting() {
-  const { tokens, preference, setPreference, ground, setGround, pattern, setPattern, accent, setAccent } =
+  const { tokens, preference, setPreference, ground, setGround, accent, setAccent } =
     useTheme();
 
   const label = { fontSize: 13, fontWeight: '600' as const, color: tokens.color.ink };
@@ -195,50 +195,6 @@ export function AppearanceSetting() {
         </ScrollView>
       </View>
 
-      <View style={{ gap: 8 }}>
-        <Text style={label}>Ruling</Text>
-        <Text style={hint}>Faint lines behind the page, like an exercise book.</Text>
-        <View
-          style={{
-            flexDirection: 'row',
-            backgroundColor: tokens.color.surfaceMuted,
-            borderRadius: 10,
-            padding: 3,
-          }}
-        >
-          {PAPER_PATTERNS.map((p) => {
-            const on = pattern === p.value;
-            return (
-              <Pressable
-                key={p.value}
-                testID={`pattern-${p.value}`}
-                accessibilityRole="button"
-                accessibilityLabel={`${p.label} — ${p.hint}`}
-                accessibilityState={{ selected: on }}
-                onPress={() => setPattern(p.value)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 8,
-                  borderRadius: 8,
-                  backgroundColor: on ? tokens.color.indigo : 'transparent',
-                  alignItems: 'center',
-                }}
-              >
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '700',
-                    color: on ? tokens.color.onBrand : tokens.color.sub,
-                  }}
-                >
-                  {p.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
     </View>
   );
 }
