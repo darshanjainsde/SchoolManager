@@ -207,14 +207,19 @@ export default function Home() {
   const [slots, setSlots] = useState<TimetableSlot[] | null>(null);
   const [diary, setDiary] = useState<StudentDiaryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Refetch on focus: a new notice, a fresh attendance mark, a newly scheduled
-  // test/result, or simply time passing (a class ending) should all be
-  // reflected the moment the family tab regains focus, not just on cold start.
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      setError(null);
+  /**
+   * ONE definition of "load this screen", used by both the focus effect and the
+   * pull gesture — two copies of a seven-request list would drift the moment
+   * one of them gained an eighth.
+   *
+   * Resolves to a function that applies the results, so the CALLER decides
+   * whether to apply them: the focus effect drops them if it has been
+   * cancelled, the pull always applies.
+   */
+  const fetchAll = useCallback(
+    () =>
       Promise.all([
         api.request<StudentProfile>('/me/profile'),
         api.request<Announcement[]>('/me/announcements'),
@@ -225,16 +230,39 @@ export default function Home() {
         // A remark waiting for a signature is the most time-sensitive thing on
         // this screen, so the diary is part of the same load, not a lazy tab.
         api.request<StudentDiaryResult>('/me/diary'),
-      ])
-        .then(([p, a, att, ex, res, tt, d]) => {
+      ]).then(([p, a, att, ex, res, tt, d]) => () => {
+        setProfile(p);
+        setAnnouncements(a);
+        setAttendance(att);
+        setExams(ex);
+        setResults(res);
+        setSlots(tt);
+        setDiary(d);
+      }),
+    [],
+  );
+
+  /** Pull to refresh. Nothing is cleared first — see the staff twin. */
+  function refresh() {
+    setRefreshing(true);
+    setError(null);
+    fetchAll()
+      .then((apply) => apply())
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : 'Something went wrong.'))
+      .finally(() => setRefreshing(false));
+  }
+
+  // Refetch on focus: a new notice, a fresh attendance mark, a newly scheduled
+  // test/result, or simply time passing (a class ending) should all be
+  // reflected the moment the family tab regains focus, not just on cold start.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      setError(null);
+      fetchAll()
+        .then((apply) => {
           if (cancelled) return;
-          setProfile(p);
-          setAnnouncements(a);
-          setAttendance(att);
-          setExams(ex);
-          setResults(res);
-          setSlots(tt);
-          setDiary(d);
+          apply();
         })
         .catch((e: unknown) => {
           if (!cancelled) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
@@ -242,7 +270,7 @@ export default function Home() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [fetchAll]),
   );
 
   const today = todayISO();
@@ -278,7 +306,7 @@ export default function Home() {
   }
 
   return (
-    <Screen>
+    <Screen onRefresh={refresh} refreshing={refreshing}>
       <Dateline />
 
       {/* `.greet` + `.kidchip` — the greeting in the diary serif, with the
