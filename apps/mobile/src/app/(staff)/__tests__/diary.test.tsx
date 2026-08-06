@@ -122,9 +122,13 @@ it('typing a name and tapping the match turns it into a token the entry is sent 
   await settled(() => expect(getByTestId('match-stu-aarav')).toBeTruthy());
   fireEvent.press(getByTestId('match-stu-aarav'));
 
-  // The match list collapses and the child is now a removable token.
+  // The child is now a removable token — and the drawer deliberately STAYS
+  // OPEN with the row ticked (multi-pick from one drawer: "an" → Anjali,
+  // Anjana, Ankur is three taps; the query survives every one of them).
   await settled(() => expect(getByTestId('token-stu-aarav')).toBeTruthy());
-  expect(queryByTestId('diary-picker-matches')).toBeNull();
+  expect(getByTestId('diary-picker-matches')).toBeTruthy();
+  expect(getByTestId('match-picked-stu-aarav')).toBeTruthy();
+  expect(queryByTestId('diary-picker-empty')).toBeNull();
 
   fireEvent.changeText(getByTestId('diary-body'), 'Please bring the signed form.');
   fireEvent.press(getByTestId('diary-send'));

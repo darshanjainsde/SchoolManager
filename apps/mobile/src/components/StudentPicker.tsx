@@ -81,8 +81,10 @@ function Token({
  *
  * Matching is case-insensitive on any part of the name plus the roll number,
  * so "sharma", "aarav" and "12" all find Aarav Sharma. Already-chosen
- * children drop out of the suggestions rather than appearing greyed — a
- * suggestion you cannot act on is noise.
+ * children STAY in the list, ticked and tinted, and a row is a toggle — so
+ * "an" → tap Anjali, Anjana, Ankur is three taps in one open drawer. The
+ * query survives every tap (clearing it was what slammed the drawer shut
+ * after each pick); the teacher edits or clears it when they are done.
  *
  * The suggestion list is the pitch's `.drop`/`.dropit`: a lifted sheet of
  * paper, hairline-ruled between rows, with the roll number pushed to the
@@ -138,17 +140,17 @@ export function StudentPicker({
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return students
-      .filter((s) => !selected.includes(s.id))
       .filter(
         (s) =>
           s.name.toLowerCase().includes(q) || (s.rollNo ?? '').toLowerCase().includes(q),
       )
       .slice(0, 6);
-  }, [query, students, selected]);
+  }, [query, students]);
 
-  const add = (id: string) => {
-    setQuery('');
-    if (!selected.includes(id)) onChange([...selected, id]);
+  // A row is a TOGGLE, and the query deliberately survives: multi-pick from
+  // one drawer ("an" → Anjali, Anjana, Ankur) is the whole point.
+  const toggle = (id: string) => {
+    onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
   };
   const remove = (id: string) => onChange(selected.filter((x) => x !== id));
 
@@ -213,35 +215,64 @@ export function StudentPicker({
 
       {matches.length > 0 && (
         <View testID={`${testID}-matches`} style={dropSheet}>
-          {matches.map((s, i) => (
-            <Pressable
-              key={s.id}
-              testID={`match-${s.id}`}
-              accessibilityRole="button"
-              onPress={() => add(s.id)}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 9,
-                paddingVertical: 11,
-                paddingHorizontal: 12,
-                // `.dropit:hover{background:var(--indigo-tint)}` — a phone has
-                // no hover, so the tint lands on press instead.
-                backgroundColor: pressed ? tokens.color.indigo50 : tokens.color.surface,
-                borderTopWidth: i === 0 ? 0 : 1,
-                borderTopColor: tokens.color.line,
-              })}
-            >
-              <Text style={{ flex: 1, color: tokens.color.ink, fontSize: 13.5, fontWeight: '600' }}>
-                {s.name}
-              </Text>
-              {s.rollNo ? (
+          {matches.map((s, i) => {
+            const isPicked = selected.includes(s.id);
+            return (
+              <Pressable
+                key={s.id}
+                testID={`match-${s.id}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isPicked }}
+                accessibilityLabel={
+                  isPicked ? `Remove ${labelFor(s)}` : `Add ${labelFor(s)}`
+                }
+                onPress={() => toggle(s.id)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 9,
+                  paddingVertical: 11,
+                  paddingHorizontal: 12,
+                  // A picked row keeps the accent tint so the drawer shows
+                  // what has landed; press-tint otherwise (`.dropit:hover` —
+                  // a phone has no hover, so it lands on press).
+                  backgroundColor:
+                    isPicked || pressed ? tokens.color.indigo50 : tokens.color.surface,
+                  borderTopWidth: i === 0 ? 0 : 1,
+                  borderTopColor: tokens.color.line,
+                })}
+              >
+                {/* the tick column: fixed width so names align whether or not
+                    a row is picked */}
                 <Text
-                  style={{ color: tokens.color.sub, fontSize: 11, fontFamily: font.mono }}
-                >{`roll ${s.rollNo}`}</Text>
-              ) : null}
-            </Pressable>
-          ))}
+                  testID={isPicked ? `match-picked-${s.id}` : undefined}
+                  style={{
+                    width: 16,
+                    color: isPicked ? tokens.color.indigo : 'transparent',
+                    fontSize: 13,
+                    fontWeight: '800',
+                  }}
+                >
+                  ✓
+                </Text>
+                <Text
+                  style={{
+                    flex: 1,
+                    color: isPicked ? tokens.color.indigo : tokens.color.ink,
+                    fontSize: 13.5,
+                    fontWeight: isPicked ? '700' : '600',
+                  }}
+                >
+                  {s.name}
+                </Text>
+                {s.rollNo ? (
+                  <Text
+                    style={{ color: tokens.color.sub, fontSize: 11, fontFamily: font.mono }}
+                  >{`roll ${s.rollNo}`}</Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
         </View>
       )}
 
