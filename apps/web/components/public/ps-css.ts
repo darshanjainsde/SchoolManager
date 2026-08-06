@@ -324,9 +324,27 @@ export const PS_CSS = `
   .ps-navc-brand { background: color-mix(in srgb, var(--ps1) 96%, transparent); }
   /* Dark/brand bars flip text to light. */
   .ps-nav-ondark { border-color: rgba(255,255,255,.08); }
-  .ps-nav-ondark nav { color: rgba(255,255,255,.85); }
+  /* Scoped to the nav element this missed the ACTIONS — Login and the CTA sit outside the
+     <nav> element, so on a dark or brand bar every menu link went white and
+     Login alone kept the default slate, reading as disabled. It is a selector
+     that did not reach, not a colour a school configured badly. */
+  .ps-nav-ondark nav, .ps-nav-ondark .ps-nav-link { color: rgba(255,255,255,.92); }
   .ps-nav-ondark .ps-nav-link:hover { background: rgba(255,255,255,.12); }
   .ps-nav-ondark .ps-nav-name { color: #fff; }
+
+  /* ── Login button ────────────────────────────────────────────────────────
+     A school can give sign-in a real edge when a plain link disappears into
+     its bar. LINK is the default and is exactly what shipped, so choosing
+     nothing changes nothing. Both other styles derive from the CURRENT text
+     colour, so they stay legible on paper, white, dark, brand and ghost bars
+     without the school having to think about contrast at all. */
+  /* Both derive from currentColor, so neither can be configured into
+     invisibility: whatever the bar did to the text, the edge and the fill
+     follow it. Deliberately NOT the accent — that belongs to the one primary
+     action, and a second accent-coloured control competes with it. */
+  .ps-login-outline { border: 1.5px solid currentColor; border-radius: 12px; opacity: .95; }
+  .ps-login-solid { background: color-mix(in srgb, currentColor 16%, transparent); border-radius: 12px; }
+  .ps-login-solid:hover { background: color-mix(in srgb, currentColor 24%, transparent); }
 
   /* Ghost: fully transparent until scrolled, then the colour class shows. */
   .ps-nav-ghost:not(.ps-nav-scrolled) { background: transparent; }

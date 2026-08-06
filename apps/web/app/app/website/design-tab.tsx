@@ -35,6 +35,7 @@ interface SiteProfile {
   navShowCta?: boolean | null;
   navShowLogin?: boolean | null;
   navLoginLabel?: string | null;
+  navLoginStyle?: string | null;
   brandColorPrimary?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -700,7 +701,55 @@ export default function DesignTab() {
         </CardContent>
       </Card>
 
-      {/* ── Navbar ── */}
+      {/* -- Login button -- */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Sign-in button</CardTitle>
+          <p className="text-sm text-slate-500">
+            How the Login control is drawn in your navbar. All three take their colour from the bar itself, so
+            none of them can end up invisible against it.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[
+              { value: 'LINK', label: 'Plain link', hint: 'Quietest. What your site uses now.' },
+              { value: 'OUTLINE', label: 'Outlined', hint: 'A drawn edge — easiest to find on a busy bar.' },
+              { value: 'SOLID', label: 'Filled', hint: 'A soft filled chip, still behind your main button.' },
+            ].map((o) => {
+              const on = (profile?.navLoginStyle ?? 'LINK') === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => profileMutation.mutate({ navLoginStyle: o.value })}
+                  className={[
+                    'rounded-xl border p-3 text-left transition',
+                    on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300',
+                  ].join(' ')}
+                >
+                  <span className="mb-2 flex h-9 items-center justify-center rounded-lg bg-slate-800" aria-hidden="true">
+                    <span
+                      className={[
+                        'px-2.5 py-1 text-[11px] font-semibold text-white',
+                        o.value === 'OUTLINE' ? 'rounded-md border border-white' : '',
+                        o.value === 'SOLID' ? 'rounded-md bg-white/25' : '',
+                      ].join(' ')}
+                    >
+                      Login
+                    </span>
+                  </span>
+                  <span className="block text-xs font-semibold text-slate-700">{o.label}</span>
+                  <span className="block text-[11px] text-slate-400">{o.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* -- Navbar -- */}
       <Card>
         <CardHeader>
           <CardTitle>Navbar</CardTitle>

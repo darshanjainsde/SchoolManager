@@ -42,6 +42,7 @@ export interface PublicSiteData {
     navShowCta: boolean;
     navShowLogin: boolean;
     navLoginLabel: string;
+    navLoginStyle?: string;
   } | null;
   homepage: {
     headline: string;

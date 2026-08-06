@@ -396,6 +396,11 @@ model SchoolProfile {
   navShowCta          Boolean @default(true)
   navShowLogin        Boolean @default(true)
   navLoginLabel       String  @default("Login")
+  /// How the sign-in control is drawn: LINK (default, a plain nav link) |
+  /// OUTLINE (a bordered chip) | SOLID (a filled chip). Both non-default styles
+  /// derive from the bar's own text colour, so neither can be configured into
+  /// invisibility on a dark or brand bar.
+  navLoginStyle       String  @default("LINK")
   blogLayout          String  @default("HERO_GRID")
   blogHeroLimit       Int     @default(1)
   phone               String?

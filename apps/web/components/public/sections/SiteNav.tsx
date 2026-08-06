@@ -133,10 +133,15 @@ function Cta({
 function LoginLink({ data, fullWidth }: { data: PublicSiteData; fullWidth?: boolean }) {
   if (data.profile?.navShowLogin === false) return null;
   const label = data.profile?.navLoginLabel?.trim() || 'Login';
+  // LINK is what every school renders today, so it adds no class. The other two
+  // derive from the bar's own text colour, which means a school cannot pick a
+  // palette that makes sign-in invisible.
+  const style = data.profile?.navLoginStyle;
+  const styleCls = style === 'OUTLINE' ? ' ps-login-outline' : style === 'SOLID' ? ' ps-login-solid' : '';
   return (
     <a
       href="/login"
-      className={`ps-nav-link text-sm font-semibold px-3 py-2 rounded-lg hover:bg-black/5 transition whitespace-nowrap${
+      className={`ps-nav-link text-sm font-semibold px-3 py-2 rounded-lg hover:bg-black/5 transition whitespace-nowrap${styleCls}${
         fullWidth ? ' flex items-center justify-center w-full border border-black/10' : ''
       }`}
     >

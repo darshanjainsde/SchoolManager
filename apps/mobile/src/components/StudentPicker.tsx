@@ -93,6 +93,18 @@ function Token({
  * overflowing overlay is clipped on Android — a dropdown you cannot see is
  * worse than one that pushes the send button down by 40dp.
  */
+/** How a pupil is named where it matters that they are not somebody else. */
+export function labelFor(student?: { name: string; rollNo?: string | null }): string {
+  if (!student) return 'student';
+  return student.rollNo ? `${student.name}, roll ${student.rollNo}` : student.name;
+}
+
+/** The chip is tight, so the roll rides as a suffix rather than a second line. */
+export function chipLabel(student?: { name: string; rollNo?: string | null }): string {
+  if (!student) return 'Student';
+  return student.rollNo ? `${student.name} · ${student.rollNo}` : student.name;
+}
+
 export function StudentPicker({
   students,
   selected,
@@ -163,8 +175,13 @@ export function StudentPicker({
             <Token
               key={id}
               testID={`token-${id}`}
-              accessibilityLabel={`Remove ${byId.get(id)?.name ?? 'student'}`}
-              label={byId.get(id)?.name ?? 'Student'}
+              // TWO CHILDREN CAN SHARE A NAME EXACTLY. The match list always
+              // showed the roll number, but a chosen chip showed the name
+              // alone — so two pupils called the same thing became two
+              // identical chips and the teacher could not tell which remark was
+              // going to which child. Kept in step with the web twin.
+              accessibilityLabel={`Remove ${labelFor(byId.get(id))}`}
+              label={chipLabel(byId.get(id))}
               onRemove={() => remove(id)}
             />
           ))}

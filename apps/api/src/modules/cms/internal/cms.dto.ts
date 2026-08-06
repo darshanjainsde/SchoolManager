@@ -52,6 +52,7 @@ export class UpdateProfileDto {
   @IsOptional() @IsIn(['FULL', 'COMPACT']) heroHeight?: string;
   @IsOptional() @IsIn(['DRAW', 'MARKER', 'GROW', 'NONE']) headlineAccent?: string;
   /** How every band below the fold is drawn. See SECTION_SHAPES on the web. */
+  @IsOptional() @IsIn(['LINK', 'OUTLINE', 'SOLID']) navLoginStyle?: string;
   @IsOptional() @IsIn(['SOFT', 'EDITORIAL', 'CRISP']) sectionShape?: string;
   /** WHAT a section does as it arrives; animationLevel stays the volume. */
   @IsOptional() @IsIn(['RISE', 'FADE', 'DRAW']) motionGesture?: string;

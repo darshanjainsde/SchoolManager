@@ -165,3 +165,46 @@ describe('the mobile drawer', () => {
     expect(drawer.getByRole('link', { name: /All of Academics/ })).toHaveAttribute('href', '/academics');
   });
 });
+
+describe('the sign-in control stays visible whatever the school picks', () => {
+  function renderWith(over: Record<string, unknown>) {
+    const data = site('CLASSIC');
+    return render(
+      <SiteNav
+        data={{ ...data, profile: { ...data.profile!, ...over } as PublicSiteData['profile'] }}
+        flags={ALL_ON}
+        base=""
+        view="home"
+        onAcademicsPage={false}
+        enquireHref="#enquire"
+        ink="#fff"
+      />,
+    );
+  }
+
+  it('adds no style class by default — LINK is what every school already renders', () => {
+    renderWith({});
+    const login = screen.getAllByRole('link', { name: 'Login' })[0];
+    expect(login.className).not.toMatch(/ps-login-(outline|solid)/);
+  });
+
+  it('gives sign-in a drawn edge when the school asks for one', () => {
+    renderWith({ navLoginStyle: 'OUTLINE' });
+    expect(screen.getAllByRole('link', { name: 'Login' })[0].className).toContain('ps-login-outline');
+  });
+
+  it('fills it when the school asks for that instead', () => {
+    renderWith({ navLoginStyle: 'SOLID' });
+    expect(screen.getAllByRole('link', { name: 'Login' })[0].className).toContain('ps-login-solid');
+  });
+
+  it('keeps the nav-link class in every style, which is what carries the bar’s ink', () => {
+    // The fix for the dull-Login bug lives on .ps-nav-link; a style that
+    // dropped it would take the contrast fix with it.
+    for (const s of ['LINK', 'OUTLINE', 'SOLID']) {
+      const { unmount } = renderWith({ navLoginStyle: s });
+      expect(screen.getAllByRole('link', { name: 'Login' })[0].className).toContain('ps-nav-link');
+      unmount();
+    }
+  });
+});

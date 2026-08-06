@@ -110,6 +110,7 @@ export class PublicSiteService {
               navShowCta: profile.navShowCta,
               navShowLogin: profile.navShowLogin,
               navLoginLabel: profile.navLoginLabel,
+              navLoginStyle: profile.navLoginStyle,
             }
           : null,
         homepage: homepage
