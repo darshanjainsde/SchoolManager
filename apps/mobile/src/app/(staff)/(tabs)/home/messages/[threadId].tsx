@@ -8,6 +8,7 @@ import {
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { Card, Empty } from '@/components/ui';
+import { BackChipHeader } from '@/components/BackChipHeader';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -118,6 +119,10 @@ export default function StaffThread() {
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.color.appBg }}>
+      {/* This screen scaffolds its own scroll + composer instead of `Screen`,
+          so it mounts the chip header itself (it also brings the top inset
+          this screen never had). */}
+      <BackChipHeader title="Messages" />
       <ScrollView
         ref={scrollRef}
         testID="thread-scroll"

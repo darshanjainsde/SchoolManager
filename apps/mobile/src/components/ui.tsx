@@ -11,9 +11,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { useSegments } from 'expo-router';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
+import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
+import { BackChipHeader } from './BackChipHeader';
 import { Icon, type IconName } from './icons';
 
 export function Screen({
@@ -39,7 +42,14 @@ export function Screen({
   // real devices. One fix here covers every screen; the tab bar's bottom
   // inset is handled by the navigator's own `insets` prop.
   const insets = useSafeAreaInsets();
-  return (
+  // Pitch №5 §3: a pushed screen carries the back chip header, which then
+  // owns the top inset. Positional, so no screen has to ask for it — see
+  // `isPushedRoute`. Most test suites stub expo-router without `useSegments`;
+  // for them the guard resolves to "not pushed", which is also what they
+  // rendered before the chip existed.
+  const segments: string[] = typeof useSegments === 'function' ? useSegments() : [];
+  const pushed = isPushedRoute(segments);
+  const scroll = (
     <ScrollView
       testID="screen-scroll"
       style={{ flex: 1, backgroundColor: tokens.color.appBg }}
@@ -58,7 +68,7 @@ export function Screen({
         ) : undefined
       }
       contentContainerStyle={{
-        paddingTop: insets.top + 10,
+        paddingTop: pushed ? 4 : insets.top + 10,
         paddingHorizontal: 14,
         gap: tokens.gap,
         paddingBottom: 28,
@@ -66,6 +76,13 @@ export function Screen({
     >
       {children}
     </ScrollView>
+  );
+  if (!pushed) return scroll;
+  return (
+    <View style={{ flex: 1, backgroundColor: tokens.color.appBg }}>
+      <BackChipHeader title={titleForSegments(segments)} />
+      {scroll}
+    </View>
   );
 }
 
