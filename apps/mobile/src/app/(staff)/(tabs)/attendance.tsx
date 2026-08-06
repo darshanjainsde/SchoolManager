@@ -7,6 +7,7 @@ import { shiftISO, todayISO, type ClassDayStatus } from '@/lib/attendance';
 import { flush, pendingSaves, queueKey, type FlushResult } from '@/lib/offline-queue';
 import { LockedDayCard } from '@/components/LockedDayCard';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Touchable } from '@/components/Touchable';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -164,24 +165,64 @@ export default function StaffAttendance() {
     }
   };
 
-  const renderClassCard = (c: ClassDayStatus) => {
+  /**
+   * One tile on the register wall (pitch №3): the whole tile is the tap —
+   * "open this class's register" — instead of a full-width card carrying its
+   * own button. A waiting tile is RAISED (shadow + elevation, pushed back
+   * down by Touchable's press-in scale); a taken one lies flat and quiet.
+   * `fullWidth` is for the past-day list, where locked and unlocked classes
+   * interleave vertically and a half-width tile would break the column.
+   *
+   * Same testIDs as the old card (`take-` / `retake-` / `pending-sync-` /
+   * `sync-rejected-`): the behaviour under test — what a tap opens, what a
+   * queued save shows — is unchanged; only the shape is new.
+   */
+  const renderClassTile = (c: ClassDayStatus, fullWidth = false) => {
     const key = queueKey(c.classSectionId, date);
     const isPendingSync = pendingKeys.has(key);
     const rejectedMessage = rejectedByKey[key] ?? null;
     return (
-    <Card key={c.classSectionId}>
-      <View
-        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 11 }}
+      <Touchable
+        key={c.classSectionId}
+        testID={c.taken ? `retake-${c.classSectionId}` : `take-${c.classSectionId}`}
+        onPress={() => goTake(c)}
+        // Opening a taken register writes nothing (the overwrite warning
+        // lives on Save, inside the take screen), so its tap stays light.
+        haptic={c.taken ? 'light' : 'medium'}
+        accessibilityLabel={
+          c.taken
+            ? `${c.name}, taken by ${c.markedBy ?? 'a teacher'}, ${c.present} of ${c.total} present. Open register`
+            : `${c.name}, ${c.total} students, not taken yet. Take attendance`
+        }
+        style={{
+          width: fullWidth ? '100%' : '48.4%',
+          borderRadius: 16,
+          padding: 12,
+          gap: 7,
+          backgroundColor: tokens.color.surface,
+          borderWidth: 1,
+          borderColor: tokens.color.line,
+          // Waiting = raised off the page; taken = flat on it.
+          ...(c.taken
+            ? {}
+            : {
+                shadowColor: tokens.color.ink,
+                shadowOpacity: 0.16,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 5 },
+                elevation: 5,
+              }),
+        }}
       >
         {/* `.clsrow .ic` — the 34px serif-initial tile. A class is a *place*
             in a teacher's day, and a labelled tile is how a paper timetable
-            names one: the initial reads at a glance down a column of rows. */}
+            names one. Taken classes get the pale wash: spent, not urgent. */}
         <View
           style={{
             width: 34,
             height: 34,
             borderRadius: 10,
-            backgroundColor: tokens.color.indigo,
+            backgroundColor: c.taken ? tokens.color.indigo50 : tokens.color.indigo,
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -191,89 +232,54 @@ export default function StaffAttendance() {
               fontFamily: font.serif,
               fontWeight: '700',
               fontSize: 14,
-              color: tokens.color.onBrand,
+              color: c.taken ? tokens.color.indigo : tokens.color.onBrand,
             }}
           >
             {c.name.trim().charAt(0).toUpperCase()}
           </Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>
+        <View>
+          <Text numberOfLines={1} style={{ fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>
             {c.name}
           </Text>
-          <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
-            {c.taken ? `Taken by ${c.markedBy ?? '—'}` : `${c.total} students · not taken yet`}
+          <Text numberOfLines={1} style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }}>
+            {c.taken ? `By ${c.markedBy ?? '—'}` : `${c.total} students`}
           </Text>
         </View>
-        {isPendingSync ? (
-          // Deliberately not the taken (green) or not-taken (amber) pill —
-          // this class is neither: the device believes it's saved, the
-          // server doesn't know yet.
-          <View testID={`pending-sync-${c.classSectionId}`}>
-            <Pill tone="indigo">Saved on device · syncing</Pill>
-          </View>
-        ) : c.taken ? (
-          <Pill tone="green">{`✓ ${c.present}/${c.total} present`}</Pill>
-        ) : (
-          <Pill tone="amber">Pending</Pill>
-        )}
-      </View>
-      {rejectedMessage && (
-        <Text
-          testID={`sync-rejected-${c.classSectionId}`}
-          style={{ color: tokens.color.red, fontSize: 11.5, marginTop: 6 }}
-        >
-          {rejectedMessage}
-        </Text>
-      )}
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 11 }}>
-        {c.taken ? (
-          // NOT styled destructive, and no confirmation: this opens the
-          // register, and opening writes nothing. The overwrite warning fires
-          // on Save, inside that screen. Styled as a quiet secondary action so
-          // it doesn't compete with the classes still waiting to be marked.
-          <Pressable
-            onPress={() => goTake(c)}
-            testID={`retake-${c.classSectionId}`}
-            style={{
-              flex: 1,
-              backgroundColor: tokens.color.surface,
-              borderWidth: 1,
-              borderColor: tokens.color.line,
-              borderRadius: 13,
-              padding: 10,
-            }}
+        <View style={{ flexDirection: 'row' }}>
+          {isPendingSync ? (
+            // Deliberately not the taken (green) or not-taken (amber) pill —
+            // this class is neither: the device believes it's saved, the
+            // server doesn't know yet.
+            <View testID={`pending-sync-${c.classSectionId}`}>
+              <Pill tone="indigo">Saved on device · syncing</Pill>
+            </View>
+          ) : c.taken ? (
+            <Pill tone="green">{`✓ ${c.present}/${c.total} present`}</Pill>
+          ) : (
+            <Pill tone="amber">Take now</Pill>
+          )}
+        </View>
+        {rejectedMessage && (
+          <Text
+            testID={`sync-rejected-${c.classSectionId}`}
+            style={{ color: tokens.color.red, fontSize: 11, marginTop: 2 }}
           >
-            <Text style={{ color: tokens.color.ink, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
-              Open register
-            </Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={() => goTake(c)}
-            testID={`take-${c.classSectionId}`}
-            style={{ flex: 1, backgroundColor: tokens.color.indigo, borderRadius: 13, padding: 11 }}
-          >
-            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
-              Take attendance now
-            </Text>
-          </Pressable>
+            {rejectedMessage}
+          </Text>
         )}
-      </View>
-    </Card>
+      </Touchable>
     );
   };
 
   const renderRow = (c: ClassDayStatus) => {
-    if (!isPast) return renderClassCard(c);
-
     const forThisDay = (r: RegisterChangeRow) => r.classSectionId === c.classSectionId && r.date === date;
     const pendingRow = myRequests?.find((r) => forThisDay(r) && r.status === 'PENDING') ?? null;
     const unlockRow =
       myRequests?.find((r) => forThisDay(r) && r.status === 'APPROVED' && isUnexpired(r.expiresAt)) ??
       null;
 
-    if (unlockRow) return renderClassCard(c);
+    if (unlockRow) return renderClassTile(c, true);
 
     return (
       <LockedDayCard
@@ -344,9 +350,92 @@ export default function StaffAttendance() {
               </Text>
             </Card>
           )}
-          {rows?.map((c) => renderRow(c))}
+
+          {/* THE REGISTER WALL (pitch №3) — today (and any unlocked view of
+              today): the day at a glance, then waiting classes as raised
+              tiles, then the taken ones flat below a rule. Past days keep the
+              vertical list: locked classes carry the request-unlock flow and
+              interleave with any unlocked ones, which a grid would scramble. */}
+          {rows && rows.length > 0 && !isPast && (
+            <>
+              <View style={{ marginHorizontal: 2, gap: 5 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>
+                    <Text style={{ fontWeight: '800', color: tokens.color.ink }}>
+                      {`${rows.filter((c) => c.taken).length} of ${rows.length}`}
+                    </Text>
+                    {' registers taken'}
+                  </Text>
+                  {rows.some((c) => !c.taken) && (
+                    <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>
+                      {`${rows.filter((c) => !c.taken).length} waiting`}
+                    </Text>
+                  )}
+                </View>
+                {/* The ink line: how far through the day's marking we are. */}
+                <View
+                  testID="register-progress"
+                  accessibilityRole="progressbar"
+                  accessibilityValue={{
+                    min: 0,
+                    max: rows.length,
+                    now: rows.filter((c) => c.taken).length,
+                  }}
+                  style={{
+                    height: 5,
+                    borderRadius: 99,
+                    backgroundColor: tokens.color.surfaceMuted,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: `${Math.round((rows.filter((c) => c.taken).length / rows.length) * 100)}%`,
+                      height: '100%',
+                      borderRadius: 99,
+                      backgroundColor: tokens.color.indigo,
+                    }}
+                  />
+                </View>
+              </View>
+
+              {rows.some((c) => !c.taken) && (
+                <>
+                  <Text style={wallEyebrow(tokens)}>Still to take</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                    {rows.filter((c) => !c.taken).map((c) => renderClassTile(c))}
+                  </View>
+                </>
+              )}
+              {rows.some((c) => c.taken) && (
+                <>
+                  {rows.some((c) => !c.taken) && (
+                    <View style={{ borderTopWidth: 1, borderTopColor: tokens.color.line, marginHorizontal: 2, marginTop: 4 }} />
+                  )}
+                  <Text style={wallEyebrow(tokens)}>Taken</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                    {rows.filter((c) => c.taken).map((c) => renderClassTile(c))}
+                  </View>
+                </>
+              )}
+            </>
+          )}
+          {rows && rows.length > 0 && isPast && rows.map((c) => renderRow(c))}
         </>
       )}
     </Screen>
   );
+}
+
+/** The small letter-spaced label that titles a wall section. */
+function wallEyebrow(tokens: ReturnType<typeof useTokens>) {
+  return {
+    marginHorizontal: 4,
+    marginBottom: -2,
+    fontSize: 10,
+    letterSpacing: 1.3,
+    textTransform: 'uppercase' as const,
+    fontWeight: '700' as const,
+    color: tokens.color.sub,
+  };
 }
