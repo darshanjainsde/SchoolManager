@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { api } from './api';
 import { session } from './session';
 import { family } from './family-store';
+import { clearSchoolBrand } from './school-brand-client';
 
 /**
  * Signing out, in one place.
@@ -31,5 +32,8 @@ export async function signOut(): Promise<void> {
   await api.logout();
   await session.clear();
   await family.clearAll();
+  // The next person to sign in on this device must not inherit the last
+  // school's colours while their own load.
+  await clearSchoolBrand();
   router.replace('/(auth)/connect');
 }

@@ -7,6 +7,8 @@ import {
   type PropsWithChildren,
 } from 'react';
 import { useColorScheme } from 'react-native';
+import { brandedLight } from './school-brand';
+import { readCachedBrand, refreshSchoolBrand } from '@/lib/school-brand-client';
 import * as SecureStore from 'expo-secure-store';
 import { GAP, RADIUS, palette, type ColorPalette, type ColorScheme } from './tokens';
 
@@ -49,6 +51,23 @@ const ThemeContext = createContext<ThemeContextValue>(defaultThemeContext);
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme(); // 'light' | 'dark' | null | undefined
   const [preference, setPreferenceState] = useState<ThemePreference>('system');
+  // The school's own colour, for the LIGHT scheme only. Cache first so the
+  // theme is right on the frame the app opens rather than one round-trip
+  // later; the network refresh then updates it for the next launch.
+  const [brand, setBrand] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readCachedBrand().then((b) => {
+      if (!cancelled && b) setBrand(b.primary);
+    });
+    void refreshSchoolBrand().then((b) => {
+      if (!cancelled && b) setBrand(b.primary);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,10 +94,19 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       scheme,
       preference,
       setPreference,
-      tokens: { color: palette[scheme], gap: GAP, radius: RADIUS },
+      // A school picks its colours for a website on warm paper, which is what
+      // the light theme is — so the colour travels there and nowhere else. The
+      // dark scheme keeps its own indigo ink: a brand chosen against white can
+      // fail badly on a near-black surface, and no semantic colour moves in
+      // either scheme.
+      tokens: {
+        color: scheme === 'light' ? brandedLight(palette.light, brand) : palette.dark,
+        gap: GAP,
+        radius: RADIUS,
+      },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scheme, preference],
+    [scheme, preference, brand],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
