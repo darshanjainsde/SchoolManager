@@ -1,6 +1,7 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { Card, Page, PageHeader, Pill, RailRow, RailStatus, type RailState } from './ui';
+import { Touchable } from './Touchable';
 import { useTokens } from '@/theme/theme-context';
 
 export interface DayTimelineProps {
@@ -54,12 +55,14 @@ function Row({
     entry.register?.taken ? (
       <Pill tone="green">{`✓ ${entry.register.present}/${entry.register.total}`}</Pill>
     ) : entry.slot ? (
-      <Pressable
+      <Touchable
         testID={`timeline-take-${entry.slot.classSectionId}`}
+        haptic="medium"
+        accessibilityLabel={`Take the register for ${entry.slot.className}`}
         onPress={() => onTakeAttendance(entry.slot!.classSectionId)}
       >
         <Pill tone="amber">Take now</Pill>
-      </Pressable>
+      </Touchable>
     ) : (
       <Pill tone="amber">Take now</Pill>
     )

@@ -3,6 +3,12 @@ import { act, render, fireEvent, waitFor, within } from '@testing-library/react-
 import TakeAttendance from '../[classSectionId]';
 import { api, ApiError } from '@/lib/api';
 import { pendingSaves } from '@/lib/offline-queue';
+import * as Haptics from 'expo-haptics';
+
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(async () => undefined),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
+}));
 
 /**
  * The register is a GRID now: one cell per student that CYCLES
@@ -260,11 +266,63 @@ it('loads a LATE student as LATE, not as present', async () => {
 
   // The cell for a LATE student must read as Late, not Present: amber tint,
   // the clock glyph in place of the roll number, and "late" in its name.
-  const cell = await findByTestId('cell-s1');
+  // The tint lives on the cell BODY, not on the touch target wrapped around
+  // it — the press animation owns the outer transform so the two scales
+  // compose rather than one silently overwriting the other.
+  const cell = await findByTestId('cell-body-s1');
   expect(cell.props.style).toMatchObject({ backgroundColor: LATE_TINT });
   expect(cell.props.style).not.toMatchObject({ backgroundColor: PRESENT_TINT });
   expect(within(cell).getByText('⏱')).toBeTruthy();
   expect(getByLabelText('Asha Rao, roll 1, late')).toBeTruthy();
+});
+
+it('keeps the ABSENT cell scaled up, which the press animation could silently eat', async () => {
+  // An absence is the mark that costs a deliberate tap, so it is the one cell
+  // that moves — scale(1.06). That style now sits on the cell BODY because the
+  // Touchable wrapped around it owns the outer transform: RN takes the last
+  // transform in the array, so putting both on one node would drop this one
+  // with no error, no warning and no failing test. Hence this test.
+  (api.request as jest.Mock).mockImplementation((path: string) => {
+    if (path.startsWith('/manage/attendance?')) {
+      return Promise.resolve([{ studentId: 's2', status: 'ABSENT' }]);
+    }
+    if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
+    throw new Error(`unexpected path: ${path}`);
+  });
+
+  const { findByTestId, getByTestId } = render(<TakeAttendance />);
+
+  const absent = await findByTestId('cell-body-s2');
+  expect(absent.props.style.transform).toEqual([{ scale: 1.06 }]);
+  // …and a present cell is not scaled, so the emphasis means something.
+  expect(getByTestId('cell-body-s1').props.style.transform).toEqual([]);
+});
+
+it('ticks the phone harder when the tap is about to mark someone ABSENT', async () => {
+  // The haptic fires on press-IN, so it can only know the CURRENT state — the
+  // firmness is chosen from where the cycle is going, not where it has been.
+  // Present -> Absent is the mark that matters and the one a teacher makes
+  // without looking down while walking a row; Absent -> Late is a correction.
+  (api.request as jest.Mock).mockImplementation((path: string) => {
+    if (path.startsWith('/manage/attendance?')) {
+      return Promise.resolve([{ studentId: 's2', status: 'ABSENT' }]);
+    }
+    if (path.startsWith('/manage/students?')) return Promise.resolve(STUDENTS);
+    if (path.startsWith('/manage/attendance/rates')) return Promise.resolve(RATES_EMPTY);
+    throw new Error(`unexpected path: ${path}`);
+  });
+
+  const { findByTestId, getByTestId } = render(<TakeAttendance />);
+  const impact = Haptics.impactAsync as jest.Mock;
+
+  // s1 is present, so this tap marks an absence.
+  fireEvent(await findByTestId('cell-s1'), 'pressIn');
+  expect(impact).toHaveBeenLastCalledWith('medium');
+
+  // s2 is already absent, so this tap only moves it on to late.
+  fireEvent(getByTestId('cell-s2'), 'pressIn');
+  expect(impact).toHaveBeenLastCalledWith('light');
 });
 
 it('submitting a roster with a LATE student sends LATE', async () => {

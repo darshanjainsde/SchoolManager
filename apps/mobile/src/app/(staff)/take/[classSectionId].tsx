@@ -7,6 +7,7 @@ import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { enqueueSave, flush } from '@/lib/offline-queue';
 import { WhoNeedsAWord } from '@/components/WhoNeedsAWord';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Touchable } from '@/components/Touchable';
 import { LoadingGrid } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
@@ -412,7 +413,7 @@ export default function TakeAttendance() {
           </Text>
         </Card>
       )}
-      <Pressable
+      <Touchable
         onPress={markAllPresent}
         disabled={busy || rows.length === 0}
         testID="mark-all-present"
@@ -426,7 +427,7 @@ export default function TakeAttendance() {
         <Text style={{ color: tokens.color.indigo, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
           Mark all present
         </Text>
-      </Pressable>
+      </Touchable>
       {/* THE REGISTER GRID (`.rgrid`/`.rcell`) — one square cell per student,
           not a row per student with three buttons on it. A class of forty is
           one block you take in at a glance instead of forty rows and a
@@ -444,40 +445,55 @@ export default function TakeAttendance() {
             {rows.map((r) => {
               const tone = CELL[r.status];
               return (
-                <Pressable
+                <Touchable
                   key={r.studentId}
                   testID={`cell-${r.studentId}`}
-                  accessibilityRole="button"
                   accessibilityLabel={`${r.name}, roll ${r.rollNo ?? 'none'}, ${STATUS_LABEL[
                     r.status
                   ].toLowerCase()}`}
+                  // The firmer tick lands exactly when the tap MARKS someone
+                  // absent — the one mark that matters and the one a teacher
+                  // makes without looking down, walking a row.
+                  haptic={CYCLE[r.status] === 'ABSENT' ? 'medium' : 'light'}
                   onPress={() => cycle(r)}
-                  style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 9,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: tone.bg,
-                    // `.rcell[data-status="ABSENT"]{transform:scale(1.06)}` — an
-                    // absence is the mark that costs a deliberate tap, so it is
-                    // the one that moves.
-                    transform: r.status === 'ABSENT' ? [{ scale: 1.06 }] : [],
-                  }}
                 >
-                  {/* Mono, like every figure in this product that has to line
-                      up with its neighbours down a column. */}
-                  <Text
+                  {/* The cell's own size and its ABSENT emphasis live on this
+                      inner View, not on the Touchable: Touchable owns the
+                      outer transform (the press scale), and the two compose
+                      instead of the later one silently winning. */}
+                  <View
+                    // The tinted square itself. Named separately from the
+                    // Touchable so a test can assert the STATE (its tint, its
+                    // ABSENT emphasis) on the node that actually carries it,
+                    // instead of on whatever happens to be outermost today.
+                    testID={`cell-body-${r.studentId}`}
                     style={{
-                      fontFamily: font.mono,
-                      fontSize: 12,
-                      fontWeight: '700',
-                      color: tone.ink,
+                      width: 46,
+                      height: 46,
+                      borderRadius: 9,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: tone.bg,
+                      // `.rcell[data-status="ABSENT"]{transform:scale(1.06)}` —
+                      // an absence is the mark that costs a deliberate tap, so
+                      // it is the one that moves.
+                      transform: r.status === 'ABSENT' ? [{ scale: 1.06 }] : [],
                     }}
                   >
-                    {STATUS_GLYPH[r.status] ?? r.rollNo ?? '·'}
-                  </Text>
-                </Pressable>
+                    {/* Mono, like every figure in this product that has to line
+                        up with its neighbours down a column. */}
+                    <Text
+                      style={{
+                        fontFamily: font.mono,
+                        fontSize: 12,
+                        fontWeight: '700',
+                        color: tone.ink,
+                      }}
+                    >
+                      {STATUS_GLYPH[r.status] ?? r.rollNo ?? '·'}
+                    </Text>
+                  </View>
+                </Touchable>
               );
             })}
           </View>
@@ -526,16 +542,18 @@ export default function TakeAttendance() {
           )}
         </View>
       )}
-      <Pressable
+      <Touchable
         onPress={submit}
         disabled={busy || rows.length === 0}
         testID="submit-attendance"
+        // Closing the register is the firmest tap on the screen.
+        haptic="medium"
         style={{ backgroundColor: tokens.color.indigo, borderRadius: 11, padding: 14, opacity: busy || rows.length === 0 ? 0.6 : 1 }}
       >
         <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
           {busy ? 'Submitting…' : 'Submit attendance'}
         </Text>
-      </Pressable>
+      </Touchable>
 
       {/* Who is slipping in THIS class, under the register you just took —
           the same placement the web uses. It used to be a tab of its own with

@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Animated, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { StudentDiaryResult, TimetableSlot } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -21,6 +21,7 @@ import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { SettingsButton } from '@/components/SettingsButton';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
+import { Touchable } from '@/components/Touchable';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -105,10 +106,8 @@ function Notice({
 }) {
   const tokens = useTokens();
   const pin = useGesture(true, DUR.pin, { native: true });
-  return (
-    <Animated.View style={pinStyle(pin)}>
-      <Pressable testID={testID} onPress={onPress}>
-        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+  const card = (
+    <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
           <View
             style={{
               width: 34,
@@ -124,9 +123,21 @@ function Notice({
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{title}</Text>
             <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{detail}</Text>
-          </View>
-        </Card>
-      </Pressable>
+      </View>
+    </Card>
+  );
+  return (
+    <Animated.View style={pinStyle(pin)}>
+      {/* A notice with nowhere to go is a card, not a button. Wrapping it
+          anyway would give it a press animation, a haptic tick and a "button"
+          role in the accessibility tree for a tap that does nothing. */}
+      {onPress ? (
+        <Touchable testID={testID} onPress={onPress} accessibilityLabel={`${title}. ${detail}`}>
+          {card}
+        </Touchable>
+      ) : (
+        <View testID={testID}>{card}</View>
+      )}
     </Animated.View>
   );
 }
@@ -151,18 +162,16 @@ function KpiTile({
     warn: tokens.color.late,
     bad: tokens.color.red,
   };
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        flex: 1,
-        backgroundColor: tokens.color.surface,
-        borderColor: tokens.color.line,
-        borderWidth: 1,
-        borderRadius: 14,
-        padding: 12,
-      }}
-    >
+  const tile = {
+    flex: 1,
+    backgroundColor: tokens.color.surface,
+    borderColor: tokens.color.line,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+  } as const;
+  const body = (
+    <>
       <Text style={{ fontSize: 10.5, fontWeight: '600', color: tokens.color.sub }}>{label}</Text>
       {/* `.attkpi .n` — figures are set in the mono face so a percentage and a
           mark out of fifty line up as numbers, not as words. */}
@@ -182,7 +191,19 @@ function KpiTile({
           {hint}
         </Text>
       )}
-    </Pressable>
+    </>
+  );
+  // Same rule as Notice above: a figure you cannot open is a figure, not a
+  // button. Several of these tiles are read-only by design.
+  if (!onPress) return <View style={tile}>{body}</View>;
+  return (
+    <Touchable
+      onPress={onPress}
+      accessibilityLabel={hint ? `${label}, ${value}, ${hint}` : `${label}, ${value}`}
+      style={tile}
+    >
+      {body}
+    </Touchable>
   );
 }
 
@@ -389,7 +410,12 @@ export default function Home() {
               the line that says what to do about it, and nested a second
               Pressable ("Sign ›") inside the banner's own. */}
           {diary && diary.unsignedCount > 0 && (
-            <Pressable testID="diary-banner" onPress={() => router.push('/(family)/diary')}>
+            <Touchable
+              testID="diary-banner"
+              haptic="medium"
+              accessibilityLabel={`${diary.unsignedCount} diary entries to sign`}
+              onPress={() => router.push('/(family)/diary')}
+            >
               <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
                 <View
                   style={{
@@ -415,7 +441,7 @@ export default function Home() {
                 </View>
                 <Pill tone="red">Sign</Pill>
               </Card>
-            </Pressable>
+            </Touchable>
           )}
 
           {/* Next-test reminder — the thing a student should never miss.

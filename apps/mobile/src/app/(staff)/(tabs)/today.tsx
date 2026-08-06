@@ -14,6 +14,7 @@ import { Card, Page, PageHeader, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
+import { Touchable } from '@/components/Touchable';
 import { Icon, isIconName } from '@/components/icons';
 import { SettingsButton } from '@/components/SettingsButton';
 import { useTokens } from '@/theme/theme-context';
@@ -53,9 +54,13 @@ function NeedRow({
 }) {
   const tokens = useTokens();
   return (
-    <Pressable
+    <Touchable
       testID={testID}
       onPress={onPress}
+      // The live row is the one thing on Home asking to be done now, so it is
+      // the one row whose tap answers back firmly.
+      haptic={live ? 'medium' : 'light'}
+      accessibilityLabel={`${title}. ${note}`}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -91,7 +96,7 @@ function NeedRow({
         </Text>
       </View>
       {right}
-    </Pressable>
+    </Touchable>
   );
 }
 
