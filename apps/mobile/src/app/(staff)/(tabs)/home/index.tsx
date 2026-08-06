@@ -123,7 +123,7 @@ export default function Today() {
     if (e?.startTime) params.set('start', e.startTime);
     if (e?.endTime) params.set('end', e.endTime);
     if (e?.register?.markedBy) params.set('takenBy', e.register.markedBy);
-    router.push(`/(staff)/class/${classSectionId}?${params.toString()}`);
+    router.push(`/(staff)/(tabs)/home/class/${classSectionId}?${params.toString()}`);
   }
 
   function isLive(e: TeacherDayEntry): boolean {
@@ -248,9 +248,9 @@ export default function Today() {
                 badge: needsInk.length,
                 live: needsInk.some((e) => isLive(e)),
               },
-              { label: 'Messages', icon: 'messages', route: '/(staff)/messages', tone: 'amber', badge: unreadMsgs },
-              { label: 'Diary', icon: 'diary', route: '/(staff)/diary' },
-              { label: 'Requests', icon: 'requests', route: '/(staff)/requests', tone: 'amber' },
+              { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', tone: 'amber', badge: unreadMsgs },
+              { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
+              { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests', tone: 'amber' },
             ]}
           />
 
@@ -262,11 +262,11 @@ export default function Today() {
           <HomeToolGrid
             testID="grid-goto"
             tools={[
-              { label: 'Assignments', icon: 'assignments', route: '/(staff)/assignments' },
-              { label: 'Notes', icon: 'notes', route: '/(staff)/notes' },
-              { label: 'Tests & Results', icon: 'results', route: '/(staff)/tests' },
-              { label: 'Announce', icon: 'notices', route: '/(staff)/post', tone: 'amber' },
-              { label: 'Holidays', icon: 'holidays', route: '/(staff)/holidays', tone: 'green' },
+              { label: 'Assignments', icon: 'assignments', route: '/(staff)/(tabs)/home/assignments' },
+              { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
+              { label: 'Tests & Results', icon: 'results', route: '/(staff)/(tabs)/home/tests' },
+              { label: 'Announce', icon: 'notices', route: '/(staff)/(tabs)/home/post', tone: 'amber' },
+              { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays', tone: 'green' },
             ]}
           />
 

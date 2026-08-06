@@ -157,7 +157,7 @@ export default function Tests() {
   const past = examList?.past ?? [];
 
   const openResults = (exam: Exam) => {
-    router.push(`/(staff)/results/${exam.id}?classSectionId=${encodeURIComponent(classSectionId)}`);
+    router.push(`/(staff)/(tabs)/home/results/${exam.id}?classSectionId=${encodeURIComponent(classSectionId)}`);
   };
 
   const renderExamRow = (exam: Exam) => (

@@ -37,6 +37,15 @@ export interface ColorPalette {
   // Recessed control background (segmented controls, neutral pills) — one
   // step off `surface`, same direction of contrast in both schemes.
   surfaceMuted: string;
+  // THE BAR IS THE THEME'S DARK FORM in both schemes (pitch №5 follow-up):
+  // the bottom tab bar wears the dark scheme's surfaces even in light mode,
+  // so it reads as chrome against the paper, never as another card. Active
+  // tab is near-white with an amber indicator — the accent system stays out
+  // of the bar (a school's maroon on ink would be mud).
+  barBg: string;
+  barActive: string;
+  barInactive: string;
+  barIndicator: string;
   // Text/icon colour for content drawn on a solid `indigo`-filled surface
   // (primary buttons, active segmented-control pills). White works in light
   // mode; in dark mode `indigo` itself is a light lavender (#8b87ff-family —
@@ -88,6 +97,12 @@ const light: ColorPalette = {
   line2: '#D9D4C4',
   indigoDeep: '#3730A3',
   marginRed: '#E86A6A',
+  // The dark scheme's surface/sub/amber, worn in light mode — see the
+  // interface note: the bar is the theme's dark form everywhere.
+  barBg: '#1B1830',
+  barActive: '#FFFFFF',
+  barInactive: '#807DA0',
+  barIndicator: '#F5B23C',
 };
 
 // Values lifted from apps/web/app/sk-theme.css's `@media (prefers-color-scheme:
@@ -118,6 +133,12 @@ const dark: ColorPalette = {
   line2: '#37335A',
   indigoDeep: '#A5A1FF',
   marginRed: '#E86A6A',
+  // One step darker than the page (surfaceMuted family) so the bar still
+  // reads as chrome on an already-dark ground.
+  barBg: '#100E1E',
+  barActive: '#EDEBFA',
+  barInactive: '#807DA0',
+  barIndicator: '#FBBF24',
 };
 
 export const palette = { light, dark } as const;

@@ -1,5 +1,5 @@
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
-import Tests from '../tests';
+import Tests from '../(tabs)/home/tests';
 import { api, ApiError } from '@/lib/api';
 
 const flush = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
@@ -238,5 +238,5 @@ it('tapping a scheduled test navigates to its results screen with the class sect
   fireEvent.press(await findByText('Grade 5-B'));
   fireEvent.press(await findByTestId(`exam-${EXAM.id}`));
 
-  expect(mockPush).toHaveBeenCalledWith(`/(staff)/results/${EXAM.id}?classSectionId=cs1`);
+  expect(mockPush).toHaveBeenCalledWith(`/(staff)/(tabs)/home/results/${EXAM.id}?classSectionId=cs1`);
 });

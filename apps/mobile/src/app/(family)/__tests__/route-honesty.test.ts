@@ -25,7 +25,12 @@ function routeFileExists(routeName: string): boolean {
  * that drifts in silently loses its back stack.
  */
 function tabFileExists(routeName: string): boolean {
-  return fs.existsSync(path.join(FAMILY_DIR, '(tabs)', `${routeName}.tsx`));
+  // A tab is either a plain screen file or (since pitch №5) a DIRECTORY tab
+  // hosting its own Stack — 'home' is (tabs)/home/index.tsx.
+  return (
+    fs.existsSync(path.join(FAMILY_DIR, '(tabs)', `${routeName}.tsx`)) ||
+    fs.existsSync(path.join(FAMILY_DIR, '(tabs)', routeName, 'index.tsx'))
+  );
 }
 
 describe('family route honesty', () => {
@@ -35,9 +40,9 @@ describe('family route honesty', () => {
     }
   });
 
-  it('keeps detail screens out of the tab group, so back has a stack to pop', () => {
+  it('keeps every tool inside the Home stack — the frozen bar (pitch №5)', () => {
     for (const name of HIDDEN_ROUTES) {
-      expect(`${name} is a tab: ${tabFileExists(name)}`).toBe(`${name} is a tab: false`);
+      expect(`${name}: ${name.startsWith('(tabs)/home/')}`).toBe(`${name}: true`);
     }
   });
 
@@ -59,7 +64,7 @@ describe('family route honesty', () => {
 
   it('every drawer tile points at a route that exists', () => {
     for (const { route } of MORE_ITEMS) {
-      // MORE_ITEMS routes are absolute expo-router paths, e.g. '/(family)/notices'.
+      // MORE_ITEMS routes are absolute expo-router paths, e.g. '/(family)/(tabs)/home/notices'.
       const relative = route.replace('/(family)/', '');
       expect(routeFileExists(relative)).toBe(true);
     }
@@ -81,12 +86,12 @@ describe('family route honesty', () => {
 
   it('lists a Messages tile pointing at the thread-list screen, with its detail route hidden', () => {
     const messages = MORE_ITEMS.find((i) => i.label === 'Messages');
-    expect(messages?.route).toBe('/(family)/messages');
-    expect(routeFileExists('messages')).toBe(true);
+    expect(messages?.route).toBe('/(family)/(tabs)/home/messages');
+    expect(routeFileExists('(tabs)/home/messages')).toBe(true);
     // The thread-detail screen is reachable only by tapping a thread, so it is
     // hidden from the tab bar — registered via HIDDEN_ROUTES, not a drawer tile.
-    expect(HIDDEN_ROUTES).toContain('messages/[threadId]');
-    expect(routeFileExists('messages/[threadId]')).toBe(true);
+    expect(HIDDEN_ROUTES).toContain('(tabs)/home/messages/[threadId]');
+    expect(routeFileExists('(tabs)/home/messages/[threadId]')).toBe(true);
   });
 
   it('every (family) screen file is registered as a tab or a hidden route (nothing unreachable)', () => {

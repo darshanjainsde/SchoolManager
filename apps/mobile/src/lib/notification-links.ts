@@ -39,19 +39,20 @@ export const KIND_ICON: Record<string, string> = {
  * list screen for that kind.
  */
 export function routeFor(group: NotificationGroup, n: NotificationRow): Href | null {
-  if (n.linkType === 'thread' && n.linkId) return `/${group}/messages/${n.linkId}` as Href;
+  if (n.linkType === 'thread' && n.linkId)
+    return `/${group}/(tabs)/home/messages/${n.linkId}` as Href;
   if (group === '(family)') {
     switch (n.kind) {
       case 'ASSIGNMENT':
-        return '/(family)/assignments';
+        return '/(family)/(tabs)/home/assignments';
       case 'RESULT':
         return '/(family)/results';
       case 'EXAM':
-        return '/(family)/home';
+        return '/(family)/(tabs)/home';
       case 'ANNOUNCEMENT':
-        return '/(family)/notices';
+        return '/(family)/(tabs)/home/notices';
       case 'DIARY':
-        return '/(family)/diary';
+        return '/(family)/(tabs)/home/diary';
       case 'ATTENDANCE':
         return '/(family)/attendance';
       default:
@@ -59,8 +60,8 @@ export function routeFor(group: NotificationGroup, n: NotificationRow): Href | n
     }
   }
   // staff
-  if (n.kind === 'REQUEST_DECISION') return '/(staff)/requests';
-  if (n.kind === 'DIARY') return '/(staff)/diary';
+  if (n.kind === 'REQUEST_DECISION') return '/(staff)/(tabs)/home/requests';
+  if (n.kind === 'DIARY') return '/(staff)/(tabs)/home/diary';
   return null;
 }
 

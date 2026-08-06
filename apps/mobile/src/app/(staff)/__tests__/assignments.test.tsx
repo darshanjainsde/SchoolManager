@@ -1,6 +1,6 @@
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
-import Assignments from '../assignments';
+import Assignments from '../(tabs)/home/assignments';
 import { api, ApiError } from '@/lib/api';
 
 const flush = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));

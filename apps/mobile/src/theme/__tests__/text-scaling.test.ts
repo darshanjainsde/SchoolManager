@@ -38,7 +38,10 @@ describe('content is left alone', () => {
   it('does not cap the screens themselves — a remark or a name scales fully', () => {
     // If this starts failing, someone has capped body copy, which takes the
     // accessibility setting away from the people who need it.
-    for (const rel of ['app/(family)/diary.tsx', 'app/(family)/notices.tsx']) {
+    for (const rel of [
+      'app/(family)/(tabs)/home/diary.tsx',
+      'app/(family)/(tabs)/home/notices.tsx',
+    ]) {
       expect(src(rel)).not.toContain('maxFontSizeMultiplier');
     }
   });

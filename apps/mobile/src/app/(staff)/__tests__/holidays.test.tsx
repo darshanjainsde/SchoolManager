@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react-native';
-import Holidays from '../holidays';
+import Holidays from '../(tabs)/home/holidays';
 import { api, ApiError } from '@/lib/api';
 
 jest.mock('expo-router', () => ({

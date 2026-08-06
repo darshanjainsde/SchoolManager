@@ -1,6 +1,6 @@
 import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { Alert } from 'react-native';
-import Post from '../post';
+import Post from '../(tabs)/home/post';
 import { api, ApiError } from '@/lib/api';
 
 jest.mock('expo-router', () => ({

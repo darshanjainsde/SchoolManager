@@ -65,7 +65,7 @@ it('tapping an unread thread notification marks it read and deep-links (family r
     '/me/notifications/read',
     expect.objectContaining({ method: 'POST', body: { ids: ['n1'] } }),
   );
-  expect(mockPush).toHaveBeenCalledWith('/(family)/messages/th-1');
+  expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/home/messages/th-1');
 });
 
 it('resolves the SAME thread link to the staff route for a teacher', async () => {
@@ -75,7 +75,7 @@ it('resolves the SAME thread link to the staff route for a teacher', async () =>
 
   fireEvent.press(getByTestId('notification-n1'));
 
-  expect(mockPush).toHaveBeenCalledWith('/(staff)/messages/th-1');
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/home/messages/th-1');
 });
 
 it('"Mark all read" clears every unread row (the New group disappears)', async () => {

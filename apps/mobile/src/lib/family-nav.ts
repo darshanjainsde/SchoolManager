@@ -25,15 +25,15 @@ export const VISIBLE_TABS = [
 
 /** Detail/utility routes — reachable via navigation (drawer tiles, row taps), hidden from the tab bar. */
 export const HIDDEN_ROUTES = [
-  'timetable',
-  'diary',
-  'assignments',
-  'messages',
-  'messages/[threadId]',
-  'notices',
-  'holidays',
-  'notifications',
-  'shelf',
+  '(tabs)/home/timetable',
+  '(tabs)/home/diary',
+  '(tabs)/home/assignments',
+  '(tabs)/home/messages',
+  '(tabs)/home/messages/[threadId]',
+  '(tabs)/home/notices',
+  '(tabs)/home/holidays',
+  '(tabs)/home/notifications',
+  '(tabs)/home/shelf',
 ];
 
 /** Icon-tile colour family for a drawer tool — mirrors staff-nav's `MoreTone`. */
@@ -49,21 +49,21 @@ export interface MoreItem {
    */
   icon: string;
   route:
-    | '/(family)/diary'
-    | '/(family)/timetable'
-    | '/(family)/assignments'
-    | '/(family)/messages'
-    | '/(family)/notices'
-    | '/(family)/holidays';
+    | '/(family)/(tabs)/home/diary'
+    | '/(family)/(tabs)/home/timetable'
+    | '/(family)/(tabs)/home/assignments'
+    | '/(family)/(tabs)/home/messages'
+    | '/(family)/(tabs)/home/notices'
+    | '/(family)/(tabs)/home/holidays';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
-  { label: 'Diary', icon: 'diary', route: '/(family)/diary', tone: 'indigo' },
-  { label: 'Timetable', icon: 'timetable', route: '/(family)/timetable', tone: 'indigo' },
-  { label: 'Assignments', icon: 'assignments', route: '/(family)/assignments', tone: 'indigo' },
-  { label: 'Messages', icon: 'messages', route: '/(family)/messages', tone: 'amber' },
-  { label: 'Notices', icon: 'notices', route: '/(family)/notices', tone: 'amber' },
-  { label: 'Holidays', icon: 'holidays', route: '/(family)/holidays', tone: 'green' },
+  { label: 'Diary', icon: 'diary', route: '/(family)/(tabs)/home/diary', tone: 'indigo' },
+  { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable', tone: 'indigo' },
+  { label: 'Assignments', icon: 'assignments', route: '/(family)/(tabs)/home/assignments', tone: 'indigo' },
+  { label: 'Messages', icon: 'messages', route: '/(family)/(tabs)/home/messages', tone: 'amber' },
+  { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices', tone: 'amber' },
+  { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays', tone: 'green' },
 ];

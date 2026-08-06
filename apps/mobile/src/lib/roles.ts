@@ -1,10 +1,15 @@
 import type { Role, Session } from './session';
 
-export function portalForRole(role: Role): '/(family)/home' | '/(staff)/today' | '/(worker)/today' {
+export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(tabs)/home' | '/(worker)/today' {
   switch (role) {
-    case 'STUDENT': return '/(family)/home';
-    case 'TEACHER':
-    case 'SCHOOL_ADMIN': return '/(staff)/today';
+    case 'STUDENT': return '/(family)/(tabs)/home';
+    case 'TEACHER': return '/(staff)/(tabs)/home';
+    // The app is for teachers and families. A school admin runs the school
+    // from the web console — the mobile (staff) portal is teacher-shaped
+    // (my day, my registers), and an admin landing in it just saw their own
+    // empty timetable. Same refusal shape as OWNER below; the login screen
+    // surfaces the message and clears the persisted session.
+    case 'SCHOOL_ADMIN': throw new Error('School admin accounts use the web console.');
     // Non-teaching staff get their own minimal group — they used to land in
     // (staff), the TEACHER/SCHOOL_ADMIN group (a misleadingly-named folder:
     // it's the teacher+admin portal, not a "staff" one), which is exactly

@@ -1,5 +1,5 @@
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
-import StaffDiary from '../diary';
+import StaffDiary from '../(tabs)/home/diary';
 import { api } from '@/lib/api';
 
 const flush = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));

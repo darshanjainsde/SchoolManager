@@ -438,13 +438,13 @@ export default function Home() {
               {
                 label: 'Diary',
                 icon: 'diary',
-                route: '/(family)/diary',
+                route: '/(family)/(tabs)/home/diary',
                 tone: 'amber',
                 badge: diary?.unsignedCount ?? 0,
                 live: (diary?.unsignedCount ?? 0) > 0,
               },
-              { label: 'Messages', icon: 'messages', route: '/(family)/messages', tone: 'amber', badge: unreadMsgs },
-              { label: 'Assignments', icon: 'assignments', route: '/(family)/assignments' },
+              { label: 'Messages', icon: 'messages', route: '/(family)/(tabs)/home/messages', tone: 'amber', badge: unreadMsgs },
+              { label: 'Assignments', icon: 'assignments', route: '/(family)/(tabs)/home/assignments' },
               { label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 },
             ]}
           />
@@ -478,7 +478,7 @@ export default function Home() {
                 <PageHeader
                   title="Today's classes"
                   actionLabel="Full week"
-                  onAction={() => router.push('/(family)/timetable')}
+                  onAction={() => router.push('/(family)/(tabs)/home/timetable')}
                 />
                 {todaySlots.map((s, i) => {
                   const state = railState(s);
@@ -512,9 +512,9 @@ export default function Home() {
           <HomeToolGrid
             testID="grid-goto"
             tools={[
-              { label: 'Timetable', icon: 'timetable', route: '/(family)/timetable' },
-              { label: 'Notices', icon: 'notices', route: '/(family)/notices', tone: 'amber' },
-              { label: 'Holidays', icon: 'holidays', route: '/(family)/holidays', tone: 'green' },
+              { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
+              { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices', tone: 'amber' },
+              { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays', tone: 'green' },
             ]}
           />
 
@@ -532,7 +532,7 @@ export default function Home() {
                 tint={tokens.color.indigo50}
                 title={a.title}
                 detail={`${a.classSectionId ? 'Your class' : 'Whole school'} · ${relativeTime(a.createdAt)}`}
-                onPress={() => router.push('/(family)/notices')}
+                onPress={() => router.push('/(family)/(tabs)/home/notices')}
               />
             ))
           )}

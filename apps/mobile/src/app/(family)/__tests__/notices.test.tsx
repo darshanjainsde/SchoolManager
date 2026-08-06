@@ -1,5 +1,5 @@
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import Notices from '../notices';
+import Notices from '../(tabs)/home/notices';
 import { api, ApiError } from '@/lib/api';
 
 jest.mock('expo-router', () => ({

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import type { AttendanceStatusValue } from '@skoolos/types';
-import ClassScreen from '../class/[classSectionId]';
+import ClassScreen from '../(tabs)/home/class/[classSectionId]';
 import { api, ApiError } from '@/lib/api';
 
 const mockPush = jest.fn();
@@ -150,7 +150,7 @@ it('carries the class and subject through to the notes screen', async () => {
 
   fireEvent.press(await screen.findByTestId('class-notes'));
   expect(mockPush).toHaveBeenCalledWith(
-    '/(staff)/notes/sec-8a?className=8-A&subjectName=Mathematics',
+    '/(staff)/(tabs)/home/notes/sec-8a?className=8-A&subjectName=Mathematics',
   );
 });
 

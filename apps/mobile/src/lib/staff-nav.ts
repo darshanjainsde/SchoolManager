@@ -35,7 +35,9 @@
  * belongs — it is something a teacher does occasionally, not a place they live.
  */
 export const VISIBLE_TABS = [
-  { name: 'today', title: 'Home', icon: 'today-outline' as const },
+  // 'home' is a DIRECTORY tab (its own Stack) since pitch №5 — the
+  // route file moved from (tabs)/today.tsx to (tabs)/home/index.tsx.
+  { name: 'home', title: 'Home', icon: 'today-outline' as const },
   { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
   { name: 'timetable', title: 'Timetable', icon: 'calendar-outline' as const },
   { name: 'profile', title: 'Profile', icon: 'person-outline' as const },
@@ -43,22 +45,27 @@ export const VISIBLE_TABS = [
 
 /** Detail/utility routes — reachable via navigation (More rows, row taps), hidden from the tab bar. */
 export const HIDDEN_ROUTES = [
-  'holidays',
-  'diary',
-  'requests',
-  'post',
+  // Pitch №5 (the frozen bar): every browsing tool lives INSIDE the Home
+  // tab's own Stack, so the bottom bar stays while the screen keeps a real
+  // back-stack. The one full-screen exception is the register (take/…): a
+  // stray thumb on an always-there bar mid-register would discard a class's
+  // unsaved marks, so it pushes over everything from the portal root.
+  '(tabs)/home/holidays',
+  '(tabs)/home/diary',
+  '(tabs)/home/requests',
+  '(tabs)/home/post',
   'take/[classSectionId]',
   // Reached by tapping the "right now" hero on Home — the LOOKING half of the
   // pair whose MARKING half is take/[classSectionId] above.
-  'class/[classSectionId]',
-  'tests',
-  'results/[examId]',
-  'assignments',
-  'messages',
-  'messages/[threadId]',
-  'notes',
-  'notes/[classSectionId]',
-  'notifications',
+  '(tabs)/home/class/[classSectionId]',
+  '(tabs)/home/tests',
+  '(tabs)/home/results/[examId]',
+  '(tabs)/home/assignments',
+  '(tabs)/home/messages',
+  '(tabs)/home/messages/[threadId]',
+  '(tabs)/home/notes',
+  '(tabs)/home/notes/[classSectionId]',
+  '(tabs)/home/notifications',
 ];
 
 /**
@@ -86,25 +93,25 @@ export interface MoreItem {
    */
   icon: string;
   route:
-    | '/(staff)/assignments'
-    | '/(staff)/messages'
-    | '/(staff)/notes'
-    | '/(staff)/diary'
-    | '/(staff)/tests'
-    | '/(staff)/requests'
-    | '/(staff)/holidays'
-    | '/(staff)/post';
+    | '/(staff)/(tabs)/home/assignments'
+    | '/(staff)/(tabs)/home/messages'
+    | '/(staff)/(tabs)/home/notes'
+    | '/(staff)/(tabs)/home/diary'
+    | '/(staff)/(tabs)/home/tests'
+    | '/(staff)/(tabs)/home/requests'
+    | '/(staff)/(tabs)/home/holidays'
+    | '/(staff)/(tabs)/home/post';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
-  { label: 'Diary', icon: 'diary', route: '/(staff)/diary', tone: 'indigo' },
-  { label: 'Assignments', icon: 'assignments', route: '/(staff)/assignments', tone: 'indigo' },
-  { label: 'Messages', icon: 'messages', route: '/(staff)/messages', tone: 'amber' },
-  { label: 'Notes', icon: 'notes', route: '/(staff)/notes', tone: 'indigo' },
-  { label: 'Tests & Results', icon: 'results', route: '/(staff)/tests', tone: 'indigo' },
-  { label: 'Requests', icon: 'requests', route: '/(staff)/requests', tone: 'amber' },
-  { label: 'Holidays', icon: 'timetable', route: '/(staff)/holidays', tone: 'green' },
-  { label: 'Announcements', icon: 'notices', route: '/(staff)/post', tone: 'amber' },
+  { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary', tone: 'indigo' },
+  { label: 'Assignments', icon: 'assignments', route: '/(staff)/(tabs)/home/assignments', tone: 'indigo' },
+  { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', tone: 'amber' },
+  { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes', tone: 'indigo' },
+  { label: 'Tests & Results', icon: 'results', route: '/(staff)/(tabs)/home/tests', tone: 'indigo' },
+  { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests', tone: 'amber' },
+  { label: 'Holidays', icon: 'timetable', route: '/(staff)/(tabs)/home/holidays', tone: 'green' },
+  { label: 'Announcements', icon: 'notices', route: '/(staff)/(tabs)/home/post', tone: 'amber' },
 ];

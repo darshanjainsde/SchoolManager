@@ -123,7 +123,7 @@ export default function Messages() {
       });
       resetAsk();
       await fetchThreads();
-      router.push(`/(family)/messages/${detail.thread.id}`);
+      router.push(`/(family)/(tabs)/home/messages/${detail.thread.id}`);
     } catch (e) {
       setSendError(e instanceof ApiError ? e.message : 'Could not send — try again.');
     } finally {
@@ -287,7 +287,7 @@ export default function Messages() {
               key={t.id}
               testID={`thread-${t.id}`}
               accessibilityRole="button"
-              onPress={() => router.push(`/(family)/messages/${t.id}`)}
+              onPress={() => router.push(`/(family)/(tabs)/home/messages/${t.id}`)}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',

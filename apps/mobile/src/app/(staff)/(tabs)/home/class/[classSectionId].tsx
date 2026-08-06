@@ -148,7 +148,7 @@ export default function ClassScreen() {
     const params = new URLSearchParams();
     if (className) params.set('className', className);
     if (subject) params.set('subjectName', subject);
-    router.push(`/(staff)/notes/${classSectionId}?${params.toString()}`);
+    router.push(`/(staff)/(tabs)/home/notes/${classSectionId}?${params.toString()}`);
   }
 
   return (

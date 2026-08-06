@@ -20,7 +20,7 @@ function makeProps(overrides: Partial<StaffTabBarProps> = {}): StaffTabBarProps 
     state: {
       index: 0,
       routes: [
-        { key: 'today-1', name: 'today' },
+        { key: 'home-1', name: 'home' },
         { key: 'attendance-1', name: 'attendance' },
         { key: 'timetable-1', name: 'timetable' },
         { key: 'post-1', name: 'post' },
@@ -60,7 +60,7 @@ it('does not re-navigate to the already-focused tab', () => {
   const { getByTestId } = render(
     <StaffTabBar {...makeProps({ navigation: { navigate, emit } as never })} />,
   );
-  fireEvent.press(getByTestId('tab-today')); // index 0 is focused
+  fireEvent.press(getByTestId('tab-home')); // index 0 is focused
   expect(navigate).not.toHaveBeenCalled();
 });
 

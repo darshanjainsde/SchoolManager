@@ -71,7 +71,10 @@ function TabButton({
   onPress: () => void;
 }) {
   const tokens = useTokens();
-  const color = focused ? tokens.color.indigo : tokens.color.sub;
+  // On the dark bar the accent system stays out (a school's maroon on ink
+  // would be mud): active = near-white, and the amber indicator above the
+  // icon is what says "you are here".
+  const color = focused ? tokens.color.barActive : tokens.color.barInactive;
   return (
     <Pressable
       testID={`tab-${name}`}
@@ -81,6 +84,17 @@ function TabButton({
       onPress={onPress}
       style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 6 }}
     >
+      <View
+        testID={focused ? `tab-indicator-${name}` : undefined}
+        style={{
+          position: 'absolute',
+          top: 0,
+          width: 26,
+          height: 3,
+          borderRadius: 3,
+          backgroundColor: focused ? tokens.color.barIndicator : 'transparent',
+        }}
+      />
       <Ionicons name={icon} size={22} color={color} />
       {/* Capped: this label lives under an icon in a fixed-height bar. Content
           elsewhere scales freely — see theme/__tests__/text-scaling.test.ts. */}
@@ -112,8 +126,10 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-around',
-        backgroundColor: tokens.color.surface,
-        borderTopColor: tokens.color.line,
+        // THE BAR IS THE THEME'S DARK FORM in both schemes — chrome, not
+        // another card on the paper (see tokens.ts barBg note).
+        backgroundColor: tokens.color.barBg,
+        borderTopColor: tokens.color.barBg,
         borderTopWidth: 1,
         paddingHorizontal: 8,
         paddingTop: 6,

@@ -92,7 +92,7 @@ it('still routes a valid role to its portal', async () => {
   fireEvent.press(getByTestId('login-btn'));
 
   await waitFor(() => {
-    expect(mockReplace).toHaveBeenCalledWith('/(staff)/today');
+    expect(mockReplace).toHaveBeenCalledWith('/(staff)/(tabs)/home');
   });
   expect(await session.get()).not.toBeNull();
 });
@@ -111,7 +111,7 @@ it('with no stored host, resolves the school from the identifier and logs in the
   fireEvent.press(getByTestId('login-btn'));
 
   await waitFor(() => {
-    expect(mockReplace).toHaveBeenCalledWith('/(family)/home');
+    expect(mockReplace).toHaveBeenCalledWith('/(family)/(tabs)/home');
   });
   expect(api.resolveSchool).toHaveBeenCalledWith('RAF-00042');
   expect(api.login).toHaveBeenCalledWith('raffles.sckools.com', 'RAF-00042', 'password');
@@ -133,7 +133,7 @@ it('falls through a stale stored host to the resolved school', async () => {
   fireEvent.press(getByTestId('login-btn'));
 
   await waitFor(() => {
-    expect(mockReplace).toHaveBeenCalledWith('/(staff)/today');
+    expect(mockReplace).toHaveBeenCalledWith('/(staff)/(tabs)/home');
   });
   // Cache first (offline-friendly), then the resolved candidate.
   expect(api.login).toHaveBeenNthCalledWith(1, 'raffles.sckools.com', 'teacher@acme.edu', 'password');

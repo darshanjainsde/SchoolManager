@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Touchable } from './Touchable';
 import { Icon, isIconName } from './icons';
@@ -63,6 +64,9 @@ export function HomeToolGrid({
               }
               // A filled tile is the urgent one, so its tap gets the firmer tick.
               haptic={tool.live ? 'medium' : 'light'}
+              // The raised dome presses DOWN (pitch's translateY), not just
+              // smaller — the artifact's `:active` made this the whole feel.
+              pressTranslateY={2.5}
               onPress={() => router.push(tool.route as never)}
               style={{ alignItems: 'center', gap: 8, paddingVertical: 2 }}
             >
@@ -88,8 +92,31 @@ export function HomeToolGrid({
                     shadowRadius: tool.live ? 10 : 8,
                     shadowOffset: { width: 0, height: 5 },
                     elevation: tool.live ? 7 : 5,
+                    overflow: 'hidden',
                   }}
                 >
+                  {/* The dome shading from the approved artifact: light top →
+                      the theme's darker shade at the bottom (`--g-hi`→`--g-lo`).
+                      A flat fill read as a sticker; this reads as a dome. The
+                      live tile keeps its solid amber — its fill IS the signal.
+                      (overflow hidden clips the gradient to the circle; the
+                      drop shadow lives on this same View so it survives.) */}
+                  {!tool.live && (
+                    <Svg
+                      width={56}
+                      height={56}
+                      style={{ position: 'absolute', top: 0, left: 0 }}
+                      pointerEvents="none"
+                    >
+                      <Defs>
+                        <LinearGradient id={`dome-${tool.label}`} x1="0" y1="0" x2="0" y2="1">
+                          <Stop offset="0" stopColor={tokens.color.surface} />
+                          <Stop offset="1" stopColor={tokens.color.surfaceMuted} />
+                        </LinearGradient>
+                      </Defs>
+                      <Circle cx={28} cy={28} r={28} fill={`url(#dome-${tool.label})`} />
+                    </Svg>
+                  )}
                   {isIconName(tool.icon) && (
                     <Icon
                       name={tool.icon}

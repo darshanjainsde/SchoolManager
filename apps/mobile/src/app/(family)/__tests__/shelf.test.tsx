@@ -1,5 +1,5 @@
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import Shelf from '../shelf';
+import Shelf from '../(tabs)/home/shelf';
 import { family } from '@/lib/family-store';
 import { session } from '@/lib/session';
 
@@ -65,7 +65,7 @@ it('tapping a spine switches the active child and opens their home', async () =>
   const { findByTestId } = render(<Shelf />);
   fireEvent.press(await findByTestId('spine-raffles.sckools.com::Aarav Sharma'));
 
-  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(family)/home'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(family)/(tabs)/home'));
   expect((await session.get())?.displayName).toBe('Aarav Sharma');
   expect(await session.getSchoolHost()).toBe('raffles.sckools.com');
 });

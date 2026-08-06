@@ -44,7 +44,7 @@ export default function Notes() {
 
   const open = (c: NoteClass) => {
     router.push(
-      `/(staff)/notes/${encodeURIComponent(c.classSectionId)}?subjectId=${encodeURIComponent(c.subjectId)}&className=${encodeURIComponent(c.className)}&subjectName=${encodeURIComponent(c.subjectName)}`,
+      `/(staff)/(tabs)/home/notes/${encodeURIComponent(c.classSectionId)}?subjectId=${encodeURIComponent(c.subjectId)}&className=${encodeURIComponent(c.className)}&subjectName=${encodeURIComponent(c.subjectName)}`,
     );
   };
 

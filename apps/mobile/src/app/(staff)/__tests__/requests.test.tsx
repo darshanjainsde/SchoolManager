@@ -1,7 +1,7 @@
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import type { LeaveApplication, RegisterChangeRow } from '@skoolos/types';
-import Requests from '../requests';
+import Requests from '../(tabs)/home/requests';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 

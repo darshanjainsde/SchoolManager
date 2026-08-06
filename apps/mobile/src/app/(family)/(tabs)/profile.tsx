@@ -209,7 +209,7 @@ export default function Profile() {
           first
           icon="📚"
           label="Switch diary / add a child"
-          onPress={() => router.push('/(family)/shelf')}
+          onPress={() => router.push('/(family)/(tabs)/home/shelf')}
         />
       </Page>
 

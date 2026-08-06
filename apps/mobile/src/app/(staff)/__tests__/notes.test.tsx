@@ -1,5 +1,5 @@
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import Notes from '../notes';
+import Notes from '../(tabs)/home/notes';
 import { api, ApiError } from '@/lib/api';
 
 const mockPush = jest.fn();
@@ -68,7 +68,7 @@ it('opens the detail with subjectId, className and subjectName params on tap', a
 
   await waitFor(() =>
     expect(mockPush).toHaveBeenCalledWith(
-      '/(staff)/notes/sec-1?subjectId=subj-maths&className=8-A&subjectName=Mathematics',
+      '/(staff)/(tabs)/home/notes/sec-1?subjectId=subj-maths&className=8-A&subjectName=Mathematics',
     ),
   );
 });

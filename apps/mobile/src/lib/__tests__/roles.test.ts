@@ -2,12 +2,11 @@ import { portalForRole, resolveStartRoute } from '../roles';
 import type { Session } from '../session';
 
 it.each([
-  ['STUDENT', '/(family)/home'],
-  ['TEACHER', '/(staff)/today'],
-  ['SCHOOL_ADMIN', '/(staff)/today'],
-  // STAFF gets its OWN group now — (staff) is actually the teacher/admin
-  // portal (misleadingly named), which a non-teaching staff login must
-  // never land in. See roles.ts's portalForRole doc.
+  ['STUDENT', '/(family)/(tabs)/home'],
+  ['TEACHER', '/(staff)/(tabs)/home'],
+  // STAFF gets its OWN group now — (staff) is actually the teacher portal
+  // (misleadingly named), which a non-teaching staff login must never land
+  // in. See roles.ts's portalForRole doc.
   ['STAFF', '/(worker)/today'],
 ] as const)('%s → %s', (role, path) => {
   expect(portalForRole(role)).toBe(path);
@@ -15,6 +14,13 @@ it.each([
 
 it('rejects OWNER (web-only)', () => {
   expect(() => portalForRole('OWNER')).toThrow(/web/i);
+});
+
+// The app is for teachers and families — a school admin runs the school from
+// the web console, and the mobile staff portal is teacher-shaped (their own
+// day, their own registers). Same refusal contract as OWNER.
+it('rejects SCHOOL_ADMIN (web-only)', () => {
+  expect(() => portalForRole('SCHOOL_ADMIN')).toThrow(/web console/i);
 });
 
 describe('resolveStartRoute', () => {
@@ -31,8 +37,8 @@ describe('resolveStartRoute', () => {
   });
 
   it('routes a valid session straight to its portal', () => {
-    expect(resolveStartRoute(sessionFor('STUDENT'))).toBe('/(family)/home');
-    expect(resolveStartRoute(sessionFor('TEACHER'))).toBe('/(staff)/today');
+    expect(resolveStartRoute(sessionFor('STUDENT'))).toBe('/(family)/(tabs)/home');
+    expect(resolveStartRoute(sessionFor('TEACHER'))).toBe('/(staff)/(tabs)/home');
   });
 
   // The connect (school-code) screen is gone: signed out always means the

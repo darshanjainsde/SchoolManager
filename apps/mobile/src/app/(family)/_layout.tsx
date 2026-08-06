@@ -12,7 +12,7 @@ import { registerForPush } from '@/lib/push';
  * edge-swipe gesture works, and screens slide in rather than appearing.
  *
  * Route paths are unchanged: `(tabs)` is a group, so it is transparent in the
- * URL and every existing `router.push('/(family)/messages/…')` still resolves.
+ * URL and every existing `router.push('/(family)/(tabs)/home/messages/…')` still resolves.
  */
 export const unstable_settings = {
   // A push notification can land someone straight on a thread with no history

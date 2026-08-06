@@ -1,5 +1,5 @@
 import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
-import StaffMessages from '../messages';
+import StaffMessages from '../(tabs)/home/messages';
 import { api, ApiError } from '@/lib/api';
 
 const mockPush = jest.fn();
@@ -71,7 +71,7 @@ it('opens a thread when a row is tapped', async () => {
   });
   const { findByTestId } = render(<StaffMessages />);
   fireEvent.press(await findByTestId('thread-th-new'));
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/(staff)/messages/th-new'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/home/messages/th-new'));
 });
 
 it('shows an empty state when the teacher has no threads', async () => {

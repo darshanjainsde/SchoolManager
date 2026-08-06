@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, within, act } from '@testing-library/react-native';
 import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
-import Today from '../(tabs)/today';
+import Today from '../(tabs)/home/index';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
 
@@ -366,7 +366,7 @@ it('tapping the live hero opens the class, carrying everything Home already knew
 
   fireEvent.press(await screen.findByTestId('now-card-press'));
   expect(mockPush).toHaveBeenCalledWith(
-    '/(staff)/class/sec-8a?name=8-A&subject=Mathematics&period=P1&start=08%3A00&end=08%3A45&takenBy=Mr.+Rao',
+    '/(staff)/(tabs)/home/class/sec-8a?name=8-A&subject=Mathematics&period=P1&start=08%3A00&end=08%3A45&takenBy=Mr.+Rao',
   );
 });
 

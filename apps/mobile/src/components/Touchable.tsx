@@ -39,6 +39,7 @@ export function Touchable({
    */
   accessible,
   hitSlop,
+  pressTranslateY = 0,
 }: {
   children: React.ReactNode;
   onPress: () => void;
@@ -50,8 +51,16 @@ export function Touchable({
   accessibilityRole?: 'button' | 'link';
   accessible?: boolean;
   hitSlop?: number;
+  /**
+   * The pitch's raised-dome press (`:active{transform:translateY(2.5px)}`):
+   * a control that is drawn LIFTED off the page travels DOWN under the
+   * finger, not just smaller. 0 (default) keeps the plain scale-only press.
+   * Honours Reduce Motion like the scale does.
+   */
+  pressTranslateY?: number;
 }): React.JSX.Element {
   const scale = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
   const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
@@ -72,6 +81,14 @@ export function Touchable({
       speed: 40,
       bounciness: 0,
     }).start();
+    if (pressTranslateY > 0) {
+      Animated.spring(translateY, {
+        toValue: value === 1 ? 0 : pressTranslateY,
+        useNativeDriver: true,
+        speed: 40,
+        bounciness: 0,
+      }).start();
+    }
   }
 
   return (
@@ -97,7 +114,7 @@ export function Touchable({
       onPressOut={() => to(1)}
       onPress={onPress}
     >
-      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+      <Animated.View style={[style, { transform: [{ scale }, { translateY }] }]}>{children}</Animated.View>
     </Pressable>
   );
 }

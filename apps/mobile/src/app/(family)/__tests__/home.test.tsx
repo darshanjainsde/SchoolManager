@@ -1,5 +1,5 @@
 import { render, fireEvent, act } from '@testing-library/react-native';
-import Home from '../(tabs)/home';
+import Home from '../(tabs)/home/index';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 
@@ -237,7 +237,7 @@ describe('navigation', () => {
     const { findByText } = render(<Home />);
 
     fireEvent.press(await findByText('Full week'));
-    expect(mockPush).toHaveBeenCalledWith('/(family)/timetable');
+    expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/home/timetable');
   });
 
   // Pitch №3: the slip is gone — it unfolded over the status bar and showed
@@ -249,7 +249,7 @@ describe('navigation', () => {
 
     fireEvent.press(await findByTestId('notification-bell'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(family)/notifications');
+    expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/home/notifications');
   });
 });
 
@@ -319,7 +319,7 @@ describe('diary remarks', () => {
     const { findByTestId } = render(<Home />);
 
     fireEvent.press(await findByTestId('hometool-Diary'));
-    expect(mockPush).toHaveBeenCalledWith('/(family)/diary');
+    expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/home/diary');
   });
 
   it('unread messages badge the Messages dome', async () => {

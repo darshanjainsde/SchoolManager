@@ -82,7 +82,7 @@ export default function StaffMessages() {
         <Pressable
           key={t.id}
           testID={`thread-${t.id}`}
-          onPress={() => router.push(`/(staff)/messages/${t.id}`)}
+          onPress={() => router.push(`/(staff)/(tabs)/home/messages/${t.id}`)}
         >
           {/* `.mrow` — an initials disc, the thread, and the unread count. A
               conversation is with a PERSON, and a disc bearing their initials

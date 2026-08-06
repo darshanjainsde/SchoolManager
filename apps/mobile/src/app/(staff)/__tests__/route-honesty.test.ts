@@ -26,7 +26,12 @@ function routeFileExists(routeName: string): boolean {
  * used to close the app.
  */
 function tabFileExists(routeName: string): boolean {
-  return fs.existsSync(path.join(STAFF_DIR, '(tabs)', `${routeName}.tsx`));
+  // A tab is either a plain screen file or (since pitch №5) a DIRECTORY tab
+  // hosting its own Stack — 'home' is (tabs)/home/index.tsx.
+  return (
+    fs.existsSync(path.join(STAFF_DIR, '(tabs)', `${routeName}.tsx`)) ||
+    fs.existsSync(path.join(STAFF_DIR, '(tabs)', routeName, 'index.tsx'))
+  );
 }
 
 describe('staff route honesty', () => {
@@ -36,9 +41,13 @@ describe('staff route honesty', () => {
     }
   });
 
-  it('keeps detail screens out of the tab group, so back has a stack to pop', () => {
+  it('keeps every browsing tool inside the Home stack — the frozen bar (pitch №5)', () => {
+    // The bar stays because tools push WITHIN the home tab's own Stack. The
+    // ONE full-screen exception is the register: a stray thumb on an
+    // always-there bar mid-register would discard a class's unsaved marks.
     for (const name of HIDDEN_ROUTES) {
-      expect(`${name} is a tab: ${tabFileExists(name)}`).toBe(`${name} is a tab: false`);
+      const carvedOut = name === 'take/[classSectionId]';
+      expect(`${name}: ${name.startsWith('(tabs)/home/') || carvedOut}`).toBe(`${name}: true`);
     }
   });
 
@@ -49,7 +58,7 @@ describe('staff route honesty', () => {
     // quarter-width tab and wrapped to two lines on narrower phones, dropping
     // that label off the bar's shared baseline. The family bar hit the same
     // problem and fixed it the same way on 2026-08-02.
-    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['today', 'attendance', 'timetable', 'profile']);
+    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['home', 'attendance', 'timetable', 'profile']);
     expect(VISIBLE_TABS.some((t) => t.name === 'more')).toBe(false);
     expect(routeFileExists('more')).toBe(false);
   });
@@ -62,7 +71,7 @@ describe('staff route honesty', () => {
 
   it('every More row points at a route that exists', () => {
     for (const { route } of MORE_ITEMS) {
-      // MORE_ITEMS routes are absolute expo-router paths, e.g. '/(staff)/tests'.
+      // MORE_ITEMS routes are absolute expo-router paths, e.g. '/(staff)/(tabs)/home/tests'.
       const relative = route.replace('/(staff)/', '');
       expect(routeFileExists(relative)).toBe(true);
     }
@@ -81,22 +90,22 @@ describe('staff route honesty', () => {
 
   it('lists a Messages row pointing at the thread-list screen, with its detail route hidden', () => {
     const messages = MORE_ITEMS.find((i) => i.label === 'Messages');
-    expect(messages?.route).toBe('/(staff)/messages');
-    expect(routeFileExists('messages')).toBe(true);
+    expect(messages?.route).toBe('/(staff)/(tabs)/home/messages');
+    expect(routeFileExists('(tabs)/home/messages')).toBe(true);
     // The thread-detail screen is reachable only by tapping a thread, so it is
     // hidden from the tab bar — registered via HIDDEN_ROUTES, not a More row.
-    expect(HIDDEN_ROUTES).toContain('messages/[threadId]');
-    expect(routeFileExists('messages/[threadId]')).toBe(true);
+    expect(HIDDEN_ROUTES).toContain('(tabs)/home/messages/[threadId]');
+    expect(routeFileExists('(tabs)/home/messages/[threadId]')).toBe(true);
   });
 
   it('lists a Notes row pointing at the class-list screen, with its detail route hidden', () => {
     const notes = MORE_ITEMS.find((i) => i.label === 'Notes');
-    expect(notes?.route).toBe('/(staff)/notes');
-    expect(routeFileExists('notes')).toBe(true);
+    expect(notes?.route).toBe('/(staff)/(tabs)/home/notes');
+    expect(routeFileExists('(tabs)/home/notes')).toBe(true);
     // The per-class history is reachable only by tapping a class, so it is
     // hidden from the tab bar — registered via HIDDEN_ROUTES, not a More row.
-    expect(HIDDEN_ROUTES).toContain('notes/[classSectionId]');
-    expect(routeFileExists('notes/[classSectionId]')).toBe(true);
+    expect(HIDDEN_ROUTES).toContain('(tabs)/home/notes/[classSectionId]');
+    expect(routeFileExists('(tabs)/home/notes/[classSectionId]')).toBe(true);
   });
 
   it('names the first tab "Home", and every tab label is short enough not to wrap', () => {
@@ -104,7 +113,7 @@ describe('staff route honesty', () => {
     // rather than its job — which left the day's actual work with no name of
     // its own. The screen keeps the `today` route (nothing linking to it has to
     // move); the word "Today" now belongs to the section that carries the work.
-    expect(VISIBLE_TABS.find((t) => t.name === 'today')?.title).toBe('Home');
+    expect(VISIBLE_TABS.find((t) => t.name === 'home')?.title).toBe('Home');
     expect(VISIBLE_TABS.find((t) => t.name === 'profile')?.title).toBe('Profile');
     // The actual constraint, asserted rather than assumed: a quarter-width tab
     // on a 360dp phone fits about ten characters at this type size. This is

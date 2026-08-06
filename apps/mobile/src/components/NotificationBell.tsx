@@ -48,7 +48,7 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
       testID="notification-bell"
       accessibilityRole="button"
       accessibilityLabel={count > 0 ? `Notifications, ${count} unread` : 'Notifications'}
-      onPress={() => router.push(`/${group}/notifications`)}
+      onPress={() => router.push(`/${group}/(tabs)/home/notifications`)}
       hitSlop={8}
       style={({ pressed }) => ({
         width: 38,

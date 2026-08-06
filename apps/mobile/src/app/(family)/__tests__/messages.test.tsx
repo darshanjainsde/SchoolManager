@@ -1,5 +1,5 @@
 import { render, fireEvent, waitFor, within } from '@testing-library/react-native';
-import Messages from '../messages';
+import Messages from '../(tabs)/home/messages';
 import { api, ApiError } from '@/lib/api';
 
 const mockPush = jest.fn();
@@ -132,7 +132,7 @@ it('ask-a-teacher: picks a teacher+subject, POSTs the exact body, and opens the 
       body: { teacherId: 't2', subjectId: 's2', body: 'What is on the test?' },
     });
   });
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/(family)/messages/th-created'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/home/messages/th-created'));
 });
 
 it('ask-a-teacher: shows an empty state when no subject teachers are assigned', async () => {

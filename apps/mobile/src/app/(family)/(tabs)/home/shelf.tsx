@@ -128,7 +128,7 @@ export default function Shelf() {
     if (busy) return;
     setBusy(true);
     await family.setActive(child.key);
-    router.replace('/(family)/home');
+    router.replace('/(family)/(tabs)/home');
   }
 
   async function addChild() {

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within, act } from '@testing-library/react-native';
 import type { TimetableSlot } from '@skoolos/types';
-import Timetable from '../timetable';
+import Timetable from '../(tabs)/home/timetable';
 import { api, ApiError } from '@/lib/api';
 
 let capturedFocusEffect: (() => void) | undefined;
