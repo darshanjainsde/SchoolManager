@@ -343,6 +343,29 @@ it('tapping Take attendance in the hero navigates to the take screen with the cl
   expect(mockPush).toHaveBeenCalledWith('/(staff)/take/sec-8a?name=8-A');
 });
 
+it('tapping the live hero opens the class, carrying everything Home already knew', async () => {
+  // The class screen's header — subject, period, clock times, who marked it —
+  // is all sitting in the entry Home is holding. Passing it through means the
+  // next screen renders complete on arrival instead of flashing a bare title
+  // while it refetches something we just threw away.
+  setNow(8, 20);
+  mockDay({
+    date: '2026-07-30',
+    dayOfWeek: 4,
+    entries: [
+      classEntry({ register: { taken: true, present: 26, total: 28, markedBy: 'Mr. Rao' } }),
+      breakEntry,
+      p2,
+    ],
+  });
+  render(<Today />);
+
+  fireEvent.press(await screen.findByTestId('now-card-press'));
+  expect(mockPush).toHaveBeenCalledWith(
+    '/(staff)/class/sec-8a?name=8-A&subject=Mathematics&period=P1&start=08%3A00&end=08%3A45&takenBy=Mr.+Rao',
+  );
+});
+
 it('flips at the bell while the teacher is still looking at it', async () => {
   // 08:44 — P1 (08:00–08:45) has one minute left. Home used to read the clock
   // once, at render, so a teacher who opened the app during first period and

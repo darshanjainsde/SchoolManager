@@ -28,6 +28,16 @@ export function Touchable({
   testID,
   accessibilityLabel,
   accessibilityRole = 'button',
+  /**
+   * `false` when this is a large convenience target wrapped AROUND content
+   * that already contains its own buttons — the "right now" hero on Home is
+   * tappable as a whole, but Pressable defaults to `accessible: true`, which
+   * on iOS collapses everything inside into one element and would hide the
+   * "Take attendance" button from VoiceOver. Setting it false keeps the big
+   * target for anyone touching the screen and leaves the real buttons
+   * individually reachable for anyone who is not.
+   */
+  accessible,
   hitSlop,
 }: {
   children: React.ReactNode;
@@ -38,6 +48,7 @@ export function Touchable({
   testID?: string;
   accessibilityLabel?: string;
   accessibilityRole?: 'button' | 'link';
+  accessible?: boolean;
   hitSlop?: number;
 }): React.JSX.Element {
   const scale = useRef(new Animated.Value(1)).current;
@@ -66,6 +77,7 @@ export function Touchable({
   return (
     <Pressable
       testID={testID}
+      accessible={accessible}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: !!disabled }}

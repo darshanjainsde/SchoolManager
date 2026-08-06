@@ -48,6 +48,9 @@ export const HIDDEN_ROUTES = [
   'requests',
   'post',
   'take/[classSectionId]',
+  // Reached by tapping the "right now" hero on Home — the LOOKING half of the
+  // pair whose MARKING half is take/[classSectionId] above.
+  'class/[classSectionId]',
   'tests',
   'results/[examId]',
   'assignments',

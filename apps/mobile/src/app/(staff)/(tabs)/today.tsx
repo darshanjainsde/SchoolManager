@@ -174,6 +174,24 @@ export default function Today() {
     router.push(`/(staff)/take/${classSectionId}${nameParam}`);
   }
 
+  /**
+   * Open the class itself. Everything the class screen shows in its header —
+   * the subject, the period, its clock times, who marked the register — is
+   * already on the entry Home is holding, so it travels as params rather than
+   * being refetched from an endpoint that would have to be invented.
+   */
+  function goToClass(classSectionId: string) {
+    const e = entries.find((x) => x.slot?.classSectionId === classSectionId);
+    const params = new URLSearchParams();
+    if (e?.slot?.className) params.set('name', e.slot.className);
+    if (e?.slot?.subjectName) params.set('subject', e.slot.subjectName);
+    if (e?.label) params.set('period', e.label);
+    if (e?.startTime) params.set('start', e.startTime);
+    if (e?.endTime) params.set('end', e.endTime);
+    if (e?.register?.markedBy) params.set('takenBy', e.register.markedBy);
+    router.push(`/(staff)/class/${classSectionId}?${params.toString()}`);
+  }
+
   function isLive(e: TeacherDayEntry): boolean {
     return entry?.periodId === e.periodId;
   }
@@ -251,6 +269,7 @@ export default function Today() {
             total={total}
             nextEntry={nextEntry}
             onTakeAttendance={goToAttendance}
+            onOpenClass={goToClass}
             summary={{ classesTaught: classes.length, studentsMarked }}
           />
 
