@@ -12,3 +12,14 @@ export class MarkNotificationsReadDto {
   @IsUUID('4', { each: true })
   ids?: string[];
 }
+
+/**
+ * Body for `POST /me/notifications/clear` — same shape and same scoping rule
+ * as marking read: omit `ids` for "Clear all", pass a set for the per-row ✕.
+ */
+export class ClearNotificationsDto {
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  ids?: string[];
+}

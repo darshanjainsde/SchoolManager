@@ -58,7 +58,7 @@ describe('NotificationsService', () => {
     expect(out.notifications[1].readAt).toBe('2026-08-01T09:00:00.000Z');
     // Scoped to the caller's own userId — never another user's rows.
     expect(txMock.notification.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: USER }, orderBy: { createdAt: 'desc' } }),
+      expect.objectContaining({ where: { userId: USER, clearedAt: null }, orderBy: { createdAt: 'desc' } }),
     );
   });
 
@@ -66,7 +66,9 @@ describe('NotificationsService', () => {
     txMock.notification.count.mockResolvedValue(4);
     const out = await svc.unreadCount(USER);
     expect(out.count).toBe(4);
-    expect(txMock.notification.count).toHaveBeenCalledWith({ where: { userId: USER, readAt: null } });
+    expect(txMock.notification.count).toHaveBeenCalledWith({
+      where: { userId: USER, readAt: null, clearedAt: null },
+    });
   });
 
   it('mark-all-read updates only the caller unread rows and returns the remaining count', async () => {
@@ -74,7 +76,7 @@ describe('NotificationsService', () => {
     const out = await svc.markRead(USER);
     expect(out.count).toBe(0);
     expect(txMock.notification.updateMany).toHaveBeenCalledWith({
-      where: { userId: USER, readAt: null },
+      where: { userId: USER, readAt: null, clearedAt: null },
       data: { readAt: expect.any(Date) },
     });
   });
@@ -82,7 +84,7 @@ describe('NotificationsService', () => {
   it('mark-read with ids scopes to those ids AND the caller', async () => {
     await svc.markRead(USER, ['id-1', 'id-2']);
     expect(txMock.notification.updateMany).toHaveBeenCalledWith({
-      where: { userId: USER, readAt: null, id: { in: ['id-1', 'id-2'] } },
+      where: { userId: USER, readAt: null, clearedAt: null, id: { in: ['id-1', 'id-2'] } },
       data: { readAt: expect.any(Date) },
     });
   });
@@ -90,8 +92,37 @@ describe('NotificationsService', () => {
   it('mark-read with an empty id list is treated as mark-all (no id filter)', async () => {
     await svc.markRead(USER, []);
     expect(txMock.notification.updateMany).toHaveBeenCalledWith({
-      where: { userId: USER, readAt: null },
+      where: { userId: USER, readAt: null, clearedAt: null },
       data: { readAt: expect.any(Date) },
+    });
+  });
+
+  it('clear-all stamps readAt on unread rows, clearedAt on every row, and returns the remaining count', async () => {
+    txMock.notification.count.mockResolvedValue(0);
+    const out = await svc.clear(USER);
+    expect(out.count).toBe(0);
+    // First pass: reading the still-unread rows (a dismissed unread row must
+    // not keep inflating the badge)…
+    expect(txMock.notification.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { userId: USER, clearedAt: null, readAt: null },
+      data: { readAt: expect.any(Date) },
+    });
+    // …second pass: clearing every still-visible row.
+    expect(txMock.notification.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { userId: USER, clearedAt: null },
+      data: { clearedAt: expect.any(Date) },
+    });
+  });
+
+  it('clear with ids (the per-row ✕) scopes both passes to those ids AND the caller', async () => {
+    await svc.clear(USER, ['id-9']);
+    expect(txMock.notification.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { userId: USER, clearedAt: null, readAt: null, id: { in: ['id-9'] } },
+      data: { readAt: expect.any(Date) },
+    });
+    expect(txMock.notification.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { userId: USER, clearedAt: null, id: { in: ['id-9'] } },
+      data: { clearedAt: expect.any(Date) },
     });
   });
 

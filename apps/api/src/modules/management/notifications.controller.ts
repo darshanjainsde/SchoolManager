@@ -5,7 +5,7 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { NotificationsService } from './notifications.service';
-import { MarkNotificationsReadDto } from './notifications.dto';
+import { ClearNotificationsDto, MarkNotificationsReadDto } from './notifications.dto';
 
 /**
  * The notification bell, for EVERY logged-in school user — student, teacher, or
@@ -35,5 +35,12 @@ export class NotificationsController {
   @Post('read')
   markRead(@CurrentUser() u: SchoolJwtPayload, @Body() dto: MarkNotificationsReadDto) {
     return this.notifications.markRead(u.sub, dto.ids);
+  }
+
+  /** Soft clear — the notification screen's per-row ✕ (with ids) and its
+   *  "Clear all" (without). Returns the remaining unread total, like `read`. */
+  @Post('clear')
+  clear(@CurrentUser() u: SchoolJwtPayload, @Body() dto: ClearNotificationsDto) {
+    return this.notifications.clear(u.sub, dto.ids);
   }
 }

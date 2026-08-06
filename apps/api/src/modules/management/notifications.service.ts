@@ -50,17 +50,18 @@ function toRow(n: NotificationRecord): NotificationRow {
 export class NotificationsService {
   constructor(private readonly tenant: TenantContextService) {}
 
-  /** Newest-first list + the exact unread total (GET /me/notifications). */
+  /** Newest-first list + the exact unread total (GET /me/notifications).
+   *  Cleared (dismissed) rows are invisible to every read path here. */
   async list(userId: string): Promise<NotificationListResult> {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
       const [rows, unreadCount] = await Promise.all([
         tx.notification.findMany({
-          where: { userId },
+          where: { userId, clearedAt: null },
           orderBy: { createdAt: 'desc' },
           take: LIST_CAP,
         }),
-        tx.notification.count({ where: { userId, readAt: null } }),
+        tx.notification.count({ where: { userId, readAt: null, clearedAt: null } }),
       ]);
       return { notifications: rows.map(toRow), unreadCount };
     });
@@ -70,7 +71,7 @@ export class NotificationsService {
   async unreadCount(userId: string): Promise<UnreadCountResult> {
     const { schoolId } = this.tenant.requireTenant();
     const count = await withTenant(schoolId, (tx) =>
-      tx.notification.count({ where: { userId, readAt: null } }),
+      tx.notification.count({ where: { userId, readAt: null, clearedAt: null } }),
     );
     return { count };
   }
@@ -88,11 +89,44 @@ export class NotificationsService {
         where: {
           userId,
           readAt: null,
+          clearedAt: null,
           ...(ids && ids.length > 0 ? { id: { in: ids } } : {}),
         },
         data: { readAt: new Date() },
       });
-      const count = await tx.notification.count({ where: { userId, readAt: null } });
+      const count = await tx.notification.count({
+        where: { userId, readAt: null, clearedAt: null },
+      });
+      return { count };
+    });
+  }
+
+  /**
+   * Soft-clears ("dismisses") the caller's notifications and returns the
+   * remaining unread total. With `ids` → only those (the per-row ✕); without →
+   * clear everything (the footer's "Clear all"). Clearing implies reading: an
+   * unread row that is dismissed must not keep inflating the badge, so
+   * `readAt` is stamped alongside `clearedAt` where it was still null.
+   * Idempotent via the `clearedAt: null` filter.
+   */
+  async clear(userId: string, ids?: string[]): Promise<UnreadCountResult> {
+    const { schoolId } = this.tenant.requireTenant();
+    return withTenant(schoolId, async (tx) => {
+      const now = new Date();
+      const scope = ids && ids.length > 0 ? { id: { in: ids } } : {};
+      // Two updates, not one: readAt must only be stamped where it is null,
+      // while clearedAt applies to every targeted row.
+      await tx.notification.updateMany({
+        where: { userId, clearedAt: null, readAt: null, ...scope },
+        data: { readAt: now },
+      });
+      await tx.notification.updateMany({
+        where: { userId, clearedAt: null, ...scope },
+        data: { clearedAt: now },
+      });
+      const count = await tx.notification.count({
+        where: { userId, readAt: null, clearedAt: null },
+      });
       return { count };
     });
   }
