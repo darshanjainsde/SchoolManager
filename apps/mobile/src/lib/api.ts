@@ -166,6 +166,27 @@ export const api = {
     return res.json() as Promise<{ ok: true; emailMasked: string | null }>;
   },
 
+  /**
+   * The gate's replacement for the deleted school-code screen: asks the
+   * platform which school(s) a login identifier belongs to (student code by
+   * its full value, staff by email). Tenant-free by design — it runs before
+   * the app knows which school it is talking to, so no X-Skoolos-Host header.
+   * Returns candidate hosts in server order (possibly empty, rarely >1).
+   */
+  async resolveSchool(identifier: string): Promise<string[]> {
+    const res = await safeFetch(`${BASE}/auth/resolve-school`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body.message ?? 'Login failed — check your details.');
+    }
+    const data = (await res.json()) as { hosts: string[] };
+    return data.hosts;
+  },
+
   async login(host: string, identifier: string, password: string): Promise<Session> {
     const loginRes = await safeFetch(`${BASE}/auth/login`, {
       method: 'POST',

@@ -12,7 +12,6 @@ export default function Index() {
       // switch-diary and add-a-child work right after the update.
       await family.migrateLegacy();
       const s = await session.get();
-      const host = await session.getSchoolHost();
       // A persisted session whose role can't be routed on mobile (OWNER —
       // web-only) must not brick the bootstrap forever. resolveStartRoute
       // never throws; if the role was unroutable, clear the bad session as a
@@ -24,7 +23,7 @@ export default function Index() {
           await session.clear();
         }
       }
-      setTarget(resolveStartRoute(s, host));
+      setTarget(resolveStartRoute(s));
     })();
   }, []);
   if (!target) return null;

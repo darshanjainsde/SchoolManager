@@ -70,11 +70,14 @@ it('tapping a spine switches the active child and opens their home', async () =>
   expect(await session.getSchoolHost()).toBe('raffles.sckools.com');
 });
 
-it('the add tile routes through the normal front door (connect)', async () => {
+it('the add tile routes through the normal front door (the gate)', async () => {
   await family.add(aarav);
 
   const { findByTestId } = render(<Shelf />);
   fireEvent.press(await findByTestId('shelf-add'));
 
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/(auth)/connect'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/(auth)/login'));
+  // The cached host must be cleared so the gate resolves the NEW child's
+  // school from their code instead of trying this family's school first.
+  expect(await session.getSchoolHost()).toBe('');
 });

@@ -132,10 +132,12 @@ export default function Shelf() {
   }
 
   async function addChild() {
-    // The connect → login flow signs the new child in; login() registers any
-    // STUDENT session onto the shelf, so "add" is just the normal front door.
-    await session.setSchoolHost(''); // force the school picker for the new child's school
-    router.push('/(auth)/connect');
+    // The gate signs the new child in; login() registers any STUDENT session
+    // onto the shelf, so "add" is just the normal front door. Clearing the
+    // cached host makes the gate resolve the new child's school from their
+    // code instead of trying this family's current school first.
+    await session.setSchoolHost('');
+    router.push('/(auth)/login');
   }
 
   const shown = useMemo(() => {

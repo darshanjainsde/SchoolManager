@@ -26,24 +26,18 @@ describe('resolveStartRoute', () => {
   // Regression: a persisted OWNER session (web-only role) must never brick the
   // bootstrap — resolveStartRoute must fall back to a real route instead of
   // letting portalForRole's throw propagate.
-  it('falls back to login for a persisted OWNER session with a stored host', () => {
-    expect(resolveStartRoute(sessionFor('OWNER'), 'raffles.sckools.com')).toBe('/(auth)/login');
-  });
-
-  it('falls back to connect for a persisted OWNER session with no stored host', () => {
-    expect(resolveStartRoute(sessionFor('OWNER'), null)).toBe('/(auth)/connect');
+  it('falls back to the gate for a persisted OWNER session', () => {
+    expect(resolveStartRoute(sessionFor('OWNER'))).toBe('/(auth)/login');
   });
 
   it('routes a valid session straight to its portal', () => {
-    expect(resolveStartRoute(sessionFor('STUDENT'), 'raffles.sckools.com')).toBe('/(family)/home');
-    expect(resolveStartRoute(sessionFor('TEACHER'), 'raffles.sckools.com')).toBe('/(staff)/today');
+    expect(resolveStartRoute(sessionFor('STUDENT'))).toBe('/(family)/home');
+    expect(resolveStartRoute(sessionFor('TEACHER'))).toBe('/(staff)/today');
   });
 
-  it('routes to login when there is no session but a host is stored', () => {
-    expect(resolveStartRoute(null, 'raffles.sckools.com')).toBe('/(auth)/login');
-  });
-
-  it('routes to connect when there is no session and no stored host', () => {
-    expect(resolveStartRoute(null, null)).toBe('/(auth)/connect');
+  // The connect (school-code) screen is gone: signed out always means the
+  // gate, host cache or not — the identifier resolves the school by itself.
+  it('routes to the gate when there is no session', () => {
+    expect(resolveStartRoute(null)).toBe('/(auth)/login');
   });
 });

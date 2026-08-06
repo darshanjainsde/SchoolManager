@@ -24,9 +24,10 @@ import { clearSchoolBrand } from './school-brand-client';
  *     child, not just the active one — leaving siblings behind would let the
  *     next person on the device see who else is in the family. A harmless
  *     no-op for staff, which never populates it.
- *  4. Return to CONNECT, not login: someone signing out may be switching
- *     school as well as account, and dropping them on a login form for the
- *     school they just left is a dead end.
+ *  4. Return to the gate. It is the only signed-out screen now — switching
+ *     school is no longer a dead end there, because the login identifier
+ *     resolves the school by itself (/auth/resolve-school), and the scene is
+ *     already playing when the person lands back on it.
  */
 export async function signOut(): Promise<void> {
   await api.logout();
@@ -35,5 +36,5 @@ export async function signOut(): Promise<void> {
   // The next person to sign in on this device must not inherit the last
   // school's colours while their own load.
   await clearSchoolBrand();
-  router.replace('/(auth)/connect');
+  router.replace('/(auth)/login');
 }

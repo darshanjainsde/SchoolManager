@@ -42,9 +42,27 @@ export default function ResetByCode() {
     setBusy(true);
     setError(null);
     try {
-      const host = (await session.getSchoolHost())!;
-      const res = await api.resetByCode(host, normalised);
-      setSentTo(res.emailMasked);
+      // The school-code screen is gone, so the stored host can no longer be
+      // assumed: resolve the school from the code itself, exactly like the
+      // gate does at login. The cached host stays as a fallback so a family
+      // already attached to their school can reset even if the resolver has
+      // nothing (e.g. the code was retired but the login still exists).
+      const resolved = await api.resolveSchool(normalised);
+      const stored = await session.getSchoolHost();
+      const candidates = resolved.length > 0 ? resolved : stored ? [stored] : [];
+
+      // Prefix collisions can (rarely) put one code in two schools: the first
+      // school with an email on file for it wins; all-null falls through to
+      // the honest "ask the office" copy.
+      let mask: string | null = null;
+      for (const host of candidates) {
+        const res = await api.resetByCode(host, normalised);
+        if (res.emailMasked !== null) {
+          mask = res.emailMasked;
+          break;
+        }
+      }
+      setSentTo(mask);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not reach the school server.');
     } finally {

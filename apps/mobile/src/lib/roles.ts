@@ -21,13 +21,17 @@ export function portalForRole(role: Role): '/(family)/home' | '/(staff)/today' |
 // would leave the bootstrap screen stuck rendering null forever. Instead we
 // fall back to a real route, exactly like having no session at all. Callers
 // are responsible for clearing the unroutable session as a side effect.
-export function resolveStartRoute(session: Session | null, storedHost: string | null): string {
+//
+// Signed out always means the gate: the school-code (connect) screen is gone —
+// the login identifier resolves the school by itself (/auth/resolve-school),
+// so a stored host is now only a login-order optimisation, never a route.
+export function resolveStartRoute(session: Session | null): string {
   if (session) {
     try {
       return portalForRole(session.role);
     } catch {
-      // fall through to the host-based fallback below
+      // fall through to the gate below
     }
   }
-  return storedHost ? '/(auth)/login' : '/(auth)/connect';
+  return '/(auth)/login';
 }

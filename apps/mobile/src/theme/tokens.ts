@@ -185,7 +185,57 @@ export const brand = {
     ctaInkGreen: '#047857',
     shadow: '#181648',
   },
+  /**
+   * The entry gate ("Open Doors", pitch №2 final): the endless door-to-door
+   * walk behind the login sheet. Like `hero` above these are fixed pitch hues,
+   * but the gate is a whole environment rather than one card, so it carries a
+   * light and a dark room explicitly (chosen pairs from the two approved
+   * pitches — daylight №2, night №1) instead of flipping through the theme
+   * palette. Feature accents are scheme-invariant: they sit on the door's own
+   * translucent fill, which is what adapts.
+   */
+  gate: {
+    accents: {
+      attendance: '#16A34A',
+      diary: '#D97706',
+      results: '#4F46E5',
+      timetable: '#0284C7',
+      notices: '#DB2777',
+      messages: '#0D9488',
+    },
+    light: {
+      bgTop: '#F2F4FE',
+      bgMid: '#E9EDFD',
+      bgBottom: '#DDE3FC',
+      glow: '#F59E0B',
+      glowOpacity: 0.16,
+      doorFill: 'rgba(255,255,255,0.86)',
+      doorBorder: '#4F46E5',
+      name: '#171C3F',
+      line: '#5B6188',
+      roomTag: '#A6ABCF',
+      sheetFill: 'rgba(255,255,255,0.94)',
+      sheetBorder: 'rgba(79,70,229,0.16)',
+    },
+    dark: {
+      bgTop: '#232A6B',
+      bgMid: '#171C50',
+      bgBottom: '#0C0F30',
+      glow: '#818CF8',
+      glowOpacity: 0.14,
+      doorFill: 'rgba(19,23,55,0.88)',
+      doorBorder: '#818CF8',
+      name: '#EEF0FF',
+      line: '#A7ADD6',
+      roomTag: '#8B92D3',
+      sheetFill: 'rgba(16,19,48,0.94)',
+      sheetBorder: 'rgba(139,146,211,0.28)',
+    },
+  },
 } as const;
+
+/** The gate's per-scheme room — see `brand.gate`. */
+export type GatePalette = (typeof brand.gate)['light'] | (typeof brand.gate)['dark'];
 
 /**
  * Emergency/error-boundary palette. `ErrorBoundary` in `app/_layout.tsx`

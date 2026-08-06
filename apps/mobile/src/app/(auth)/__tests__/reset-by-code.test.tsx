@@ -34,11 +34,14 @@ jest.mock('expo-secure-store', () => {
 
 jest.mock('@/lib/api', () => {
   const actual = jest.requireActual('@/lib/api');
-  return { ...actual, api: { ...actual.api, resetByCode: jest.fn() } };
+  return { ...actual, api: { ...actual.api, resetByCode: jest.fn(), resolveSchool: jest.fn() } };
 });
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  // The screen resolves the school from the code itself now (the connect
+  // screen is gone); the stored host is only a fallback.
+  (api.resolveSchool as jest.Mock).mockResolvedValue(['raffles.sckools.com']);
   await session.setSchoolHost('raffles.sckools.com');
 });
 
