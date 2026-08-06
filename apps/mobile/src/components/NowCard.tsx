@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, Text, View, type TextStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { Card } from './ui';
@@ -45,35 +45,40 @@ function entryLabel(e: TeacherDayEntry): string {
   return e.kind === 'CLASS' && e.slot ? `${e.slot.className} · ${e.slot.subjectName}` : e.label;
 }
 
-// Hero text always sits on a saturated gradient, so its colours are fixed
-// white (theme-independent), exactly like AuthScaffold's on-hero text.
-// Numbers are the pitch's `.nowcard` (`.eye` / `.big` / `.met`): the eyebrow
-// is small, wide-tracked and shouty; the headline is the diary SERIF, because
-// even the one saturated card in the teacher's day is still a page of the
-// same book.
-const hero = StyleSheet.create({
-  eyebrow: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 1.33, // .14em at 9.5px
-    textTransform: 'uppercase',
-    color: 'rgba(255,255,255,0.9)',
-  },
-  title: {
-    fontFamily: font.serif,
-    fontSize: 20,
-    fontWeight: '600',
-    color: brand.onHero,
-    marginTop: 5,
-    marginBottom: 1,
-  },
-  meta: {
-    // 12.5, not the repaint's 11: this line carries the class, the subject and
-    // who is being covered for, on the one card a teacher reads mid-corridor.
-    fontSize: 12.5,
-    color: 'rgba(255,255,255,0.93)',
-  },
-});
+// Hero text sits on a saturated gradient. Since pitch №3 that gradient is the
+// CHOSEN accent (see `useHeroStyles`), whose `onBrand` token is guaranteed
+// legible on its own fill in both schemes — so hero text is `onBrand`, not
+// hardcoded white. Numbers are the pitch's `.nowcard` (`.eye` / `.big` /
+// `.met`): the eyebrow is small, wide-tracked and shouty; the headline is the
+// diary SERIF, because even the one saturated card in the teacher's day is
+// still a page of the same book.
+function heroStyles(on: string): { eyebrow: TextStyle; title: TextStyle; meta: TextStyle } {
+  return {
+    eyebrow: {
+      fontSize: 9.5,
+      fontWeight: '800',
+      letterSpacing: 1.33, // .14em at 9.5px
+      textTransform: 'uppercase',
+      color: on,
+      opacity: 0.9,
+    },
+    title: {
+      fontFamily: font.serif,
+      fontSize: 20,
+      fontWeight: '600',
+      color: on,
+      marginTop: 5,
+      marginBottom: 1,
+    },
+    meta: {
+      // 12.5, not the repaint's 11: this line carries the class, the subject and
+      // who is being covered for, on the one card a teacher reads mid-corridor.
+      fontSize: 12.5,
+      color: on,
+      opacity: 0.93,
+    },
+  };
+}
 
 /**
  * A rounded card whose background is a static SVG linear gradient (mirrors
@@ -143,21 +148,24 @@ function GradientHero({
   );
 }
 
-/** Translucent white chip used for counts / hints on top of a hero. */
-function HeroChip({ children }: { children: ReactNode }) {
+/** Translucent on-hero chip used for counts / hints on top of a hero. `on` is
+ *  the hero's own on-fill ink (accent `onBrand`, or fixed white on the green
+ *  free hero), alpha-suffixed for the wash so the chip belongs to whichever
+ *  gradient it sits on. */
+function HeroChip({ on, children }: { on: string; children: ReactNode }) {
   return (
     <View
       style={{
-        backgroundColor: 'rgba(255,255,255,0.18)',
+        backgroundColor: `${on}2E`,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.32)',
+        borderColor: `${on}52`,
         borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 8,
         alignSelf: 'flex-start',
       }}
     >
-      <Text style={{ color: brand.onHero, fontSize: 12.5, fontWeight: '700' }}>{children}</Text>
+      <Text style={{ color: on, fontSize: 12.5, fontWeight: '700' }}>{children}</Text>
     </View>
   );
 }
@@ -169,25 +177,31 @@ function HeroChip({ children }: { children: ReactNode }) {
  * right: the day is over, nothing here will change again, and the number is
  * the point of the card rather than a side effect of what you are doing.
  */
-function SummaryCell({ value, label, testID }: { value: number; label: string; testID?: string }) {
+function SummaryCell({
+  on,
+  value,
+  label,
+  testID,
+}: {
+  on: string;
+  value: number;
+  label: string;
+  testID?: string;
+}) {
   return (
     <View
       style={{
         flex: 1,
-        backgroundColor: 'rgba(255,255,255,0.16)',
+        backgroundColor: `${on}29`,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.24)',
+        borderColor: `${on}3D`,
         borderRadius: 13,
         paddingHorizontal: 10,
         paddingVertical: 9,
       }}
     >
-      <CountUp
-        testID={testID}
-        value={value}
-        style={{ color: brand.onHero, fontSize: 19, fontWeight: '800' }}
-      />
-      <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 10.5, fontWeight: '600', marginTop: 1 }}>
+      <CountUp testID={testID} value={value} style={{ color: on, fontSize: 19, fontWeight: '800' }} />
+      <Text style={{ color: on, opacity: 0.9, fontSize: 10.5, fontWeight: '600', marginTop: 1 }}>
         {label}
       </Text>
     </View>
@@ -210,7 +224,7 @@ function SummaryCell({ value, label, testID }: { value: number; label: string; t
  * Reduce-motion leaves the plain dot: the word "live now" is next to it, so
  * nothing is lost.
  */
-function LiveDot() {
+function LiveDot({ on }: { on: string }) {
   const pulse = useRef(new Animated.Value(0)).current;
   const reduced = useReduceMotion();
   useEffect(() => {
@@ -236,7 +250,7 @@ function LiveDot() {
           width: 7,
           height: 7,
           borderRadius: 3.5,
-          backgroundColor: brand.onHero,
+          backgroundColor: on,
           // The ring reaches 0 opacity at 70% of the beat and then rests, so
           // the pulse is a beat followed by a pause — a pulse, not a strobe.
           opacity: pulse.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.6, 0, 0] }),
@@ -245,7 +259,7 @@ function LiveDot() {
           ],
         }}
       />
-      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: brand.onHero }} />
+      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: on }} />
     </View>
   );
 }
@@ -259,7 +273,7 @@ function LiveDot() {
  * fact; a rule that draws itself to 58% says the lesson has been running,
  * which is the thing a teacher glancing at this card actually wants to feel.
  */
-function NowProgress({ percent }: { percent: number }) {
+function NowProgress({ on, percent }: { on: string; percent: number }) {
   const ink = useGesture(true, DUR.ink, { native: false, delay: 300 });
   return (
     <View
@@ -269,13 +283,13 @@ function NowProgress({ percent }: { percent: number }) {
       style={{
         height: 5,
         borderRadius: 99,
-        backgroundColor: 'rgba(255,255,255,0.25)',
+        backgroundColor: `${on}40`,
         marginTop: 10,
         overflow: 'hidden',
       }}
     >
       <Animated.View
-        style={{ width: inkWidth(ink, percent), height: '100%', borderRadius: 99, backgroundColor: brand.onHero }}
+        style={{ width: inkWidth(ink, percent), height: '100%', borderRadius: 99, backgroundColor: on }}
       />
     </View>
   );
@@ -310,6 +324,13 @@ export function NowCard({
   summary,
 }: NowCardProps) {
   const tokens = useTokens();
+  // Pitch №3: the wrap and live heroes paint with the CHOSEN accent — the
+  // fill→deep gradient and its own on-fill ink — so they follow the person's
+  // Profile choice, the school brand and the colour scheme. The free hero
+  // stays the fixed green below: there, green MEANS "you're free".
+  const accentColors = [tokens.color.indigo, tokens.color.indigoDeep] as const;
+  const on = tokens.color.onBrand;
+  const hero = heroStyles(on);
 
   // Nothing is current: either the day is over (a wrap-up hero) or we're before
   // school / in a gap (a plain "nothing on" card that names the next class).
@@ -317,15 +338,15 @@ export function NowCard({
     if (!nextEntry) {
       const s = summary ?? { classesTaught: 0, studentsMarked: 0 };
       return (
-        <GradientHero id="hero-done" colors={brand.hero.done} testID="now-card">
+        <GradientHero id="hero-done" colors={accentColors} testID="now-card">
           <Text style={hero.eyebrow}>🎉 That&apos;s a wrap</Text>
           <Text style={hero.title}>Day complete</Text>
           <Text style={hero.meta}>
             {`${s.classesTaught} ${s.classesTaught === 1 ? 'class' : 'classes'} taught`}
           </Text>
           <View testID="now-summary" style={{ flexDirection: 'row', gap: 8, marginTop: 13 }}>
-            <SummaryCell testID="summary-classes" value={s.classesTaught} label="classes taught" />
-            <SummaryCell testID="summary-marked" value={s.studentsMarked} label="students marked" />
+            <SummaryCell on={on} testID="summary-classes" value={s.classesTaught} label="classes taught" />
+            <SummaryCell on={on} testID="summary-marked" value={s.studentsMarked} label="students marked" />
           </View>
         </GradientHero>
       );
@@ -369,17 +390,20 @@ export function NowCard({
 
   if (entry.kind === 'FREE') {
     const remaining = Math.max(0, total - elapsed);
+    // Fixed white on the fixed green — deliberately NOT the accent's onBrand,
+    // which can be dark ink and would vanish on this gradient.
+    const freeHero = heroStyles(brand.onHero);
     return (
       <GradientHero id="hero-green" colors={brand.hero.green} testID="now-card">
-        <Text style={hero.eyebrow}>{`${entry.label} · Free period`}</Text>
-        <Text style={hero.title}>{`You're free — ${remaining} min`}</Text>
-        <Text style={hero.meta}>
+        <Text style={freeHero.eyebrow}>{`${entry.label} · Free period`}</Text>
+        <Text style={freeHero.title}>{`You're free — ${remaining} min`}</Text>
+        <Text style={freeHero.meta}>
           {nextEntry
             ? `${entry.startTime}–${entry.endTime} · Next: ${entryLabel(nextEntry)} at ${nextEntry.startTime}`
             : `${entry.startTime}–${entry.endTime}`}
         </Text>
         <View style={{ marginTop: 12 }}>
-          <HeroChip>☕ Use it to prep or catch up</HeroChip>
+          <HeroChip on={brand.onHero}>☕ Use it to prep or catch up</HeroChip>
         </View>
       </GradientHero>
     );
@@ -395,9 +419,9 @@ export function NowCard({
   const openable = onOpenClass && slot ? () => onOpenClass(slot.classSectionId) : null;
 
   const card = (
-    <GradientHero id="hero-indigo" colors={brand.hero.now} testID="now-card" padding={16}>
+    <GradientHero id="hero-indigo" colors={accentColors} testID="now-card" padding={16}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-        <LiveDot />
+        <LiveDot on={on} />
         <Text style={hero.eyebrow}>{`${entry.label} · Live now`}</Text>
       </View>
       <Text style={hero.title}>{slot ? `${slot.className} · ${slot.subjectName}` : entry.label}</Text>
@@ -406,12 +430,12 @@ export function NowCard({
         <Text style={[hero.meta, { fontWeight: '700' }]}>{`Covering for ${slot.coveringFor}`}</Text>
       )}
 
-      <NowProgress percent={pct} />
+      <NowProgress on={on} percent={pct} />
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 10, flexWrap: 'wrap' }}>
         {register?.taken ? (
           <>
-            <HeroChip>{`✓ ${register.present}/${register.total} present`}</HeroChip>
+            <HeroChip on={on}>{`✓ ${register.present}/${register.total} present`}</HeroChip>
             {register.markedBy && (
               <Text style={hero.meta}>{`Marked by ${register.markedBy}`}</Text>
             )}
@@ -428,14 +452,14 @@ export function NowCard({
               // 9x14 padding — this is the card's ONE call to action, and the
               // hardest tap in the app to land while walking.
               style={{
-                backgroundColor: brand.onHero,
+                backgroundColor: on,
                 borderRadius: 12,
                 paddingVertical: 11,
                 paddingHorizontal: 16,
                 alignSelf: 'flex-start',
               }}
             >
-              <Text style={{ color: brand.hero.ctaInk, fontWeight: '800', fontSize: 13 }}>
+              <Text style={{ color: tokens.color.indigoDeep, fontWeight: '800', fontSize: 13 }}>
                 Take attendance →
               </Text>
             </Pressable>
@@ -462,13 +486,13 @@ export function NowCard({
             marginTop: 13,
             paddingTop: 11,
             borderTopWidth: 1,
-            borderTopColor: 'rgba(255,255,255,0.24)',
+            borderTopColor: `${on}3D`,
           }}
         >
-          <Text style={{ color: 'rgba(255,255,255,0.93)', fontSize: 12, fontWeight: '700' }}>
+          <Text style={{ color: on, opacity: 0.93, fontSize: 12, fontWeight: '700' }}>
             See who&apos;s in the room
           </Text>
-          <Text style={{ color: brand.onHero, fontSize: 15, fontWeight: '800' }}>›</Text>
+          <Text style={{ color: on, fontSize: 15, fontWeight: '800' }}>›</Text>
         </Pressable>
       )}
     </GradientHero>

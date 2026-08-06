@@ -67,17 +67,27 @@ export function HomeToolGrid({
               style={{ alignItems: 'center', gap: 8, paddingVertical: 2 }}
             >
               <View>
+                {/* Pitch №3: the raised dome. A real drop shadow + elevation
+                    lifts every tile off the page; Touchable's press-in scale
+                    is what pushes it back down under the thumb. The live tile
+                    keeps the amber fill and throws a warmer shadow, so "act
+                    now" is lit AND raised highest. */}
                 <View
                   testID={tool.live ? `hometool-live-${tool.label}` : undefined}
                   style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 26,
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderWidth: tool.live ? 0 : 1,
-                    borderColor: tokens.color.line2,
-                    backgroundColor: tool.live ? tokens.color.amber : 'transparent',
+                    borderWidth: 1,
+                    borderColor: tool.live ? tokens.color.amber : tokens.color.line,
+                    backgroundColor: tool.live ? tokens.color.amber : tokens.color.surface,
+                    shadowColor: tool.live ? tokens.color.amber : tokens.color.ink,
+                    shadowOpacity: tool.live ? 0.45 : 0.16,
+                    shadowRadius: tool.live ? 10 : 8,
+                    shadowOffset: { width: 0, height: 5 },
+                    elevation: tool.live ? 7 : 5,
                   }}
                 >
                   {isIconName(tool.icon) && (
@@ -95,13 +105,17 @@ export function HomeToolGrid({
                     testID={`hometool-badge-${tool.label}`}
                     style={{
                       position: 'absolute',
-                      top: -2,
-                      right: -4,
+                      top: -3,
+                      right: -3,
                       minWidth: 18,
                       height: 18,
                       borderRadius: 9,
                       paddingHorizontal: 5,
                       backgroundColor: tokens.color.red,
+                      // Page-coloured cut-out, same as the bell's badge — the
+                      // badge sits on the page, not inside the dome's rim.
+                      borderWidth: 2,
+                      borderColor: tokens.color.appBg,
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}

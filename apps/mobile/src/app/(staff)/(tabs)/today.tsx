@@ -1,5 +1,5 @@
-import { useCallback, useState, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -10,95 +10,13 @@ import { useNowMinutes } from '@/lib/use-now-minutes';
 import { NowCard } from '@/components/NowCard';
 import { DayTimeline } from '@/components/DayTimeline';
 import { ClassNotesPanel } from '@/components/ClassNotesPanel';
-import { Card, Page, PageHeader, Screen } from '@/components/ui';
+import { Card, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
-import { Touchable } from '@/components/Touchable';
-import { Icon, isIconName } from '@/components/icons';
-import { SettingsButton } from '@/components/SettingsButton';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { salutation } from '@/lib/greeting';
-
-/**
- * `.needrow` — one line of the "Needs your ink" queue: an amber icon tile, the
- * thing that is outstanding, what it will cost to do it, and how loudly it is
- * asking (a live register says "now" in amber; everything else says "›").
- *
- * The queue exists because a teacher's day has exactly one kind of debt —
- * something that should have been written down and hasn't been — and a list of
- * those is more useful than any dashboard. Every row here is a register that
- * is still open; nothing is invented, and the row disappears the moment the
- * register is taken.
- */
-function NeedRow({
-  icon,
-  title,
-  note,
-  right,
-  onPress,
-  testID,
-  first,
-  live,
-}: {
-  icon: string;
-  title: string;
-  note: string;
-  right: ReactNode;
-  onPress: () => void;
-  testID?: string;
-  first?: boolean;
-  /** The period running right now. At most one row per screen sets this. */
-  live?: boolean;
-}) {
-  const tokens = useTokens();
-  return (
-    <Touchable
-      testID={testID}
-      onPress={onPress}
-      // The live row is the one thing on Home asking to be done now, so it is
-      // the one row whose tap answers back firmly.
-      haptic={live ? 'medium' : 'light'}
-      accessibilityLabel={`${title}. ${note}`}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        borderTopWidth: first || live ? 0 : 1,
-        borderTopColor: tokens.color.line,
-        // The single filled thing on Home. A wash rather than a solid fill:
-        // the row still has to read as a row of text, not as a button.
-        backgroundColor: live ? tokens.color.amber50 : undefined,
-        borderRadius: live ? 12 : 0,
-      }}
-    >
-      <View
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: 9,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: live ? tokens.color.amber : tokens.color.amber50,
-        }}
-      >
-        {isIconName(icon) && (
-          <Icon name={icon} size={16} color={live ? tokens.color.ink : tokens.color.late} />
-        )}
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{title}</Text>
-        <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }} numberOfLines={1}>
-          {note}
-        </Text>
-      </View>
-      {right}
-    </Touchable>
-  );
-}
 
 export default function Today() {
   const tokens = useTokens();
@@ -106,6 +24,9 @@ export default function Today() {
   const [day, setDay] = useState<TeacherDay | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Unread message count for the "Needs you today" badge. Best-effort like the
+  // bell's own count: a badge must never surface an error, so failures leave 0.
+  const [unreadMsgs, setUnreadMsgs] = useState(0);
   const date = todayISO();
 
   /**
@@ -130,6 +51,14 @@ export default function Today() {
       session.get().then((s) => {
         if (!cancelled) setName(s?.displayName ?? null);
       });
+      api
+        .request<{ count: number }>('/manage/messages/unread-count')
+        .then((r) => {
+          if (!cancelled) setUnreadMsgs(r.count);
+        })
+        .catch(() => {
+          /* a badge must never surface an error */
+        });
       api
         .request<TeacherDay>(`/manage/timetable/my-day?date=${encodeURIComponent(date)}`)
         .then((data) => {
@@ -233,8 +162,10 @@ export default function Today() {
             {name ?? 'Today'}
           </Text>
         </View>
+        {/* One bell, no gear (pitch №3): appearance lives in Profile, and the
+            gear pointed at a settings screen that held nothing else. The bell
+            centres itself on this two-line block via its own alignSelf. */}
         <NotificationBell group="(staff)" />
-        <SettingsButton group="(staff)" />
       </View>
 
       {/* The day in one line, in the pitch's `.gatesub` voice — a note under
@@ -287,46 +218,43 @@ export default function Today() {
             />
           )}
 
-          {needsInk.length > 0 && (
-            <Page>
-              <PageHeader title="Needs your ink" />
-              {needsInk.map((e, i) => (
-                <NeedRow
-                  key={e.periodId}
-                  testID={`need-take-${e.slot!.classSectionId}`}
-                  first={i === 0}
-                  live={isLive(e)}
-                  icon="take"
-                  title={`${e.slot!.className} register — not taken`}
-                  note={`${e.label} · ${e.startTime}–${e.endTime} · ${e.register?.total ?? 0} students`}
-                  right={
-                    isLive(e) ? (
-                      <Text style={{ color: tokens.color.late, fontWeight: '800', fontSize: 11 }}>now</Text>
-                    ) : (
-                      <Text style={{ color: tokens.color.sub, fontSize: 13 }}>›</Text>
-                    )
-                  }
-                  onPress={() => goToAttendance(e.slot!.classSectionId)}
-                />
-              ))}
-            </Page>
-          )}
+          {/* NEEDS YOU TODAY (pitch №3) — the tools carrying today's asks, as
+              badged domes instead of the old five-row "Needs your ink" list
+              (which said "register — not taken" five different ways). The
+              Registers dome carries the open-register count and lights amber
+              while a register is live RIGHT NOW — still the only filled thing
+              on this screen. Nothing is lost with the list: Registers lands on
+              the Attendance tab (the full class list), and the day timeline
+              below still shows every period's register state in place. */}
+          <Text style={eyebrow(tokens)}>Needs you today</Text>
+          <HomeToolGrid
+            testID="grid-needs"
+            tools={[
+              {
+                label: 'Registers',
+                icon: 'take',
+                route: '/(staff)/(tabs)/attendance',
+                tone: 'amber',
+                badge: needsInk.length,
+                live: needsInk.some((e) => isLive(e)),
+              },
+              { label: 'Messages', icon: 'messages', route: '/(staff)/messages', tone: 'amber', badge: unreadMsgs },
+              { label: 'Diary', icon: 'diary', route: '/(staff)/diary' },
+              { label: 'Requests', icon: 'requests', route: '/(staff)/requests', tone: 'amber' },
+            ]}
+          />
 
-          {/* GO TO — navigation, and nothing else. No tile here is ever filled:
-              the one lit thing on this screen is the live ROW above, which is
-              what makes amber mean "act now" rather than "this exists".
-              Registers is deliberately absent — it is a task, and tasks live in
-              the queue where they carry a class name and a time. */}
+          {/* The rule between "asked of you" and "merely available". */}
+          <View style={{ borderTopWidth: 1, borderTopColor: tokens.color.line, marginHorizontal: 2 }} />
+
+          {/* GO TO — every remaining tab as an icon; navigation, nothing else. */}
           <Text style={eyebrow(tokens)}>Go to</Text>
           <HomeToolGrid
             testID="grid-goto"
             tools={[
-              { label: 'Messages', icon: 'messages', route: '/(staff)/messages', tone: 'amber' },
-              { label: 'Diary', icon: 'diary', route: '/(staff)/diary' },
               { label: 'Assignments', icon: 'assignments', route: '/(staff)/assignments' },
               { label: 'Notes', icon: 'notes', route: '/(staff)/notes' },
               { label: 'Tests & Results', icon: 'results', route: '/(staff)/tests' },
-              { label: 'Requests', icon: 'requests', route: '/(staff)/requests', tone: 'amber' },
               { label: 'Announce', icon: 'notices', route: '/(staff)/post', tone: 'amber' },
               { label: 'Holidays', icon: 'holidays', route: '/(staff)/holidays', tone: 'green' },
             ]}

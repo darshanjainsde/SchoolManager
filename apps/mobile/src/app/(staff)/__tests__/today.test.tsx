@@ -104,6 +104,10 @@ function mockDay(day: TeacherDay | Error, notesGet?: unknown) {
       // The header NotificationBell fetches this on focus; keep it quiet.
       return Promise.resolve({ count: 0 });
     }
+    if (path === '/manage/messages/unread-count') {
+      // The "Needs you today" Messages dome badge (pitch №3); keep it quiet.
+      return Promise.resolve({ count: 0 });
+    }
     throw new Error(`unexpected call: ${path} ${JSON.stringify(opts)}`);
   });
 }
@@ -377,8 +381,9 @@ it('flips at the bell while the teacher is still looking at it', async () => {
 
   const before = await screen.findByTestId('now-card');
   expect(within(before).getByText('8-A · Mathematics')).toBeTruthy();
-  // The queue says this register is the one being missed RIGHT NOW.
-  expect(within(screen.getByTestId('need-take-sec-8a')).getByText('now')).toBeTruthy();
+  // The Registers dome says a register is being missed RIGHT NOW (pitch №3:
+  // the amber-lit live dome replaced the old queue row's "now").
+  expect(screen.getByTestId('hometool-live-Registers')).toBeTruthy();
 
   await act(async () => {
     jest.advanceTimersByTime(60_000);
@@ -389,10 +394,10 @@ it('flips at the bell while the teacher is still looking at it', async () => {
   const after = screen.getByTestId('now-card');
   expect(within(after).getByText('Break')).toBeTruthy();
   expect(within(after).queryByText('8-A · Mathematics')).toBeNull();
-  // 8-A's register is still open, so the row stays — but it is no longer the
-  // live one, so it stops shouting.
-  expect(screen.getByTestId('need-take-sec-8a')).toBeTruthy();
-  expect(within(screen.getByTestId('need-take-sec-8a')).queryByText('now')).toBeNull();
+  // 8-A's register is still open, so the dome keeps its count — but nothing is
+  // live any more, so it stops being the lit one.
+  expect(screen.getByTestId('hometool-badge-Registers')).toBeTruthy();
+  expect(screen.queryByTestId('hometool-live-Registers')).toBeNull();
 });
 
 it('refetches on focus so a colleague marking the register elsewhere shows up without a manual reload', async () => {
