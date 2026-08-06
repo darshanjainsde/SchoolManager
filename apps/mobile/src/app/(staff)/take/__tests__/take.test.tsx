@@ -27,18 +27,46 @@ const RATES_EMPTY = {
 };
 
 const CYCLE_ORDER = ['PRESENT', 'ABSENT', 'LATE'] as const;
+/**
+ * Cycles a cell until it holds `want`.
+ *
+ * Two details, both of which this helper got wrong and which made the register
+ * suite fail perhaps half the time under `pnpm preflight` — never under
+ * `pnpm test` in this package alone, because the difference is CPU contention:
+ * preflight runs this suite concurrently with the api and web suites.
+ *
+ * THE PRESS MUST COMMIT BEFORE THE NEXT READ. A cell's onPress closes over the
+ * status from the render that produced it, so the loop re-queries every time.
+ * But a bare `fireEvent.press` leaves React free to defer the commit, and on a
+ * loaded machine it did: the next read saw the OLD label, decided the cell had
+ * not moved, and pressed the same transition again. Wrapping the press in
+ * `act` forces the commit to land first.
+ *
+ * A BOUND OF THREE WAS EXACTLY THE CYCLE LENGTH, so one deferred commit was
+ * enough to run out of attempts — and then the loop returned the cell anyway,
+ * silently, and the failure surfaced several assertions later as a confusing
+ * mismatch about absentee counts. It now allows two full cycles and THROWS
+ * naming the student and the state it is stuck in.
+ */
 async function setTo(
   findByTestId: (id: string) => Promise<{ props: { accessibilityLabel?: string } }>,
   studentId: string,
   want: (typeof CYCLE_ORDER)[number],
 ) {
-  for (let i = 0; i < CYCLE_ORDER.length; i++) {
+  for (let i = 0; i < CYCLE_ORDER.length * 2; i++) {
     const cell = await findByTestId(`cell-${studentId}`);
     const label = String(cell.props.accessibilityLabel ?? '').toLowerCase();
     if (label.includes(want.toLowerCase())) return cell;
-    fireEvent.press(cell as never);
+    await act(async () => {
+      fireEvent.press(cell as never);
+    });
   }
-  return findByTestId(`cell-${studentId}`);
+  const stuck = await findByTestId(`cell-${studentId}`);
+  throw new Error(
+    `setTo: could not cycle ${studentId} to ${want} — it is "${String(
+      stuck.props.accessibilityLabel,
+    )}"`,
+  );
 }
 
 // The offline queue's default storage goes through expo-secure-store — an
@@ -370,6 +398,14 @@ it('a save with zero absentees says nobody was absent, not "0 absent … guardia
 
   const { findByTestId, getByText, queryByText } = render(<TakeAttendance />);
 
+  // WAIT FOR THE ROSTER, NOT JUST FOR THE BUTTON. Submit renders unconditionally
+  // and is `disabled` until students arrive, and `submit()` returns early on an
+  // empty roster — so a press that lands before the fetch resolves is swallowed
+  // and NO PUT is ever issued, which no amount of waiting afterwards can fix.
+  // In isolation the roster always won that race; under `pnpm preflight`, which
+  // runs this suite alongside the api and web suites, it did not. A cell only
+  // exists once the roster is on screen, so awaiting one is the honest gate.
+  await findByTestId('cell-s1');
   const submit = await findByTestId('submit-attendance');
   fireEvent.press(submit);
   await settled(() => expect(getByText('Attendance saved — 2 students, nobody absent.')).toBeTruthy());
@@ -414,10 +450,18 @@ describe('replacing a register someone else already took', () => {
     await act(async () => {
       buttons?.find((b: { text?: string }) => b.text === 'Replace')?.onPress?.();
     });
-    await waitFor(() =>
-      expect(
-        (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
-      ).toHaveLength(1),
+    await waitFor(
+      () =>
+        expect(
+          (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
+        ).toHaveLength(1),
+      // The same 30s budget `settled` above explains and for the same reason:
+      // `submit` awaits an offline-queue flush BEFORE it issues the PUT, so
+      // this assertion is two async hops from the press. RNTL's default is one
+      // second, which is ample alone and not ample when preflight runs this
+      // suite concurrently with the api and web suites on an oversubscribed
+      // machine — which is exactly where it kept failing and nowhere else.
+      { timeout: 30000 },
     );
 
     alertSpy.mockRestore();
@@ -429,6 +473,14 @@ describe('replacing a register someone else already took', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const { findByTestId, queryByText } = render(<TakeAttendance />);
 
+    // WAIT FOR THE ROSTER, NOT JUST FOR THE BUTTON. Submit renders unconditionally
+      // and is `disabled` until students arrive, and `submit()` returns early on an
+      // empty roster — so a press that lands before the fetch resolves is swallowed
+      // and NO PUT is ever issued, which no amount of waiting afterwards can fix.
+      // In isolation the roster always won that race; under `pnpm preflight`, which
+      // runs this suite alongside the api and web suites, it did not. A cell only
+      // exists once the roster is on screen, so awaiting one is the honest gate.
+    await findByTestId('cell-s1');
     fireEvent.press(await findByTestId('submit-attendance'));
 
     // Asserted on the dialog and the PUT, NOT on the save toast: the toast is
@@ -437,10 +489,18 @@ describe('replacing a register someone else already took', () => {
     // red suite for a timing reason that has nothing to do with the subject.
     // The confirmation branch is decided synchronously, so this is the whole
     // behaviour. (The save toast itself is covered by the tests above.)
-    await waitFor(() =>
-      expect(
-        (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
-      ).toHaveLength(1),
+    await waitFor(
+      () =>
+        expect(
+          (api.request as jest.Mock).mock.calls.filter((c) => c[0] === '/manage/attendance'),
+        ).toHaveLength(1),
+      // The same 30s budget `settled` above explains and for the same reason:
+      // `submit` awaits an offline-queue flush BEFORE it issues the PUT, so
+      // this assertion is two async hops from the press. RNTL's default is one
+      // second, which is ample alone and not ample when preflight runs this
+      // suite concurrently with the api and web suites on an oversubscribed
+      // machine — which is exactly where it kept failing and nowhere else.
+      { timeout: 30000 },
     );
     expect(alertSpy).not.toHaveBeenCalled();
     expect(queryByText(/Saving replaces that record/)).toBeNull();
