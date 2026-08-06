@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import { Text } from 'react-native';
 import { Card, Pill, Screen, SectionTitle } from '../ui';
 
@@ -36,4 +36,30 @@ it('SectionTitle shows title', () => {
 it('Card renders children', () => {
   const { getByText } = render(<Card><Text>inside</Text></Card>);
   expect(getByText('inside')).toBeTruthy();
+});
+
+describe('pull to refresh', () => {
+  it('offers no spinner at all on a screen that cannot reload', () => {
+    // Better than a spinner that pulls and does nothing — which is what every
+    // screen did before this existed.
+    const { queryByTestId } = render(
+      <Screen>
+        <Text>plain</Text>
+      </Screen>,
+    );
+    // RefreshControl is a PROP on the ScrollView, not a node in the tree, so
+    // its absence is asserted where it actually lives.
+    expect(queryByTestId('screen-scroll')?.props.refreshControl).toBeUndefined();
+  });
+
+  it('runs the reload when a screen provides one', () => {
+    const onRefresh = jest.fn();
+    const { getByTestId } = render(
+      <Screen onRefresh={onRefresh}>
+        <Text>reloadable</Text>
+      </Screen>,
+    );
+    fireEvent(getByTestId('screen-scroll'), 'refresh');
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
 });

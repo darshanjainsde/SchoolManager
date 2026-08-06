@@ -104,7 +104,23 @@ export default function Today() {
   const [name, setName] = useState<string | null>(null);
   const [day, setDay] = useState<TeacherDay | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const date = todayISO();
+
+  /**
+   * The pull gesture reloads the day. Deliberately does NOT clear `day` first:
+   * blanking the screen to reload it is how a refresh comes to feel slower than
+   * doing nothing, so the old day stays on screen until the new one lands.
+   */
+  function refresh() {
+    setRefreshing(true);
+    setError(null);
+    api
+      .request<TeacherDay>(`/manage/timetable/my-day?date=${encodeURIComponent(date)}`)
+      .then(setDay)
+      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : 'Something went wrong.'))
+      .finally(() => setRefreshing(false));
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -163,7 +179,7 @@ export default function Today() {
   }
 
   return (
-    <Screen>
+    <Screen onRefresh={refresh} refreshing={refreshing}>
       {/* `.greet` + `.kidchip` — the teacher's name in the diary serif, the
           bell out in the right margin.
 

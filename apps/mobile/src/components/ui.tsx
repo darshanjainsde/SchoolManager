@@ -1,12 +1,36 @@
 import { useRef, type PropsWithChildren, type ReactNode } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import {
+  Animated,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
 
-export function Screen({ children }: PropsWithChildren) {
+export function Screen({
+  children,
+  onRefresh,
+  refreshing = false,
+}: PropsWithChildren<{
+  /**
+   * Pull-to-refresh. The gesture everyone tries first, which until now did
+   * nothing — a screen that reloads on focus still looks stuck when you are
+   * staring at it waiting for a colleague's mark to appear.
+   *
+   * Optional: a screen with no cheap way to reload simply omits it, and gets
+   * no spinner to pull rather than one that lies.
+   */
+  onRefresh?: () => void;
+  refreshing?: boolean;
+}>) {
   const tokens = useTokens();
   // Top safe-area inset (Phase 5·0b): with headerShown:false the tab
   // navigator renders from the very top of the display, so without this the
@@ -18,6 +42,20 @@ export function Screen({ children }: PropsWithChildren) {
     <ScrollView
       testID="screen-scroll"
       style={{ flex: 1, backgroundColor: tokens.color.appBg }}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            testID="screen-refresh"
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            // The school's own colour on the spinner, so even the reload
+            // belongs to the school rather than to the platform.
+            tintColor={tokens.color.indigo}
+            colors={[tokens.color.indigo]}
+            progressBackgroundColor={tokens.color.surface}
+          />
+        ) : undefined
+      }
       contentContainerStyle={{
         paddingTop: insets.top + 10,
         paddingHorizontal: 14,
