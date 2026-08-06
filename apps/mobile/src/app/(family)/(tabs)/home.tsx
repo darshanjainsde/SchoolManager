@@ -18,6 +18,7 @@ import {
 import { Card, Page, PageHeader, Pill, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
 import { NotificationBell } from '@/components/NotificationBell';
 import { SettingsButton } from '@/components/SettingsButton';
+import { HomeToolGrid } from '@/components/HomeToolGrid';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -462,6 +463,23 @@ export default function Home() {
             </>
           )}
 
+          {/* GO TO — the family twin of the staff block. Six tools, three
+              across. Family KEEPS a live tile where staff does not: "homework
+              due tomorrow" is a number with no useful list behind it, so the
+              tile is the only place that fact can live. */}
+          <Text style={familyEyebrow(tokens)}>Go to</Text>
+          <HomeToolGrid
+            testID="grid-goto"
+            tools={[
+              { label: 'Messages', icon: 'messages', route: '/(family)/messages', tone: 'amber' },
+              { label: 'Diary', icon: 'diary', route: '/(family)/diary' },
+              { label: 'Assignments', icon: 'assignments', route: '/(family)/assignments' },
+              { label: 'Timetable', icon: 'timetable', route: '/(family)/timetable' },
+              { label: 'Notices', icon: 'notices', route: '/(family)/notices', tone: 'amber' },
+              { label: 'Holidays', icon: 'holidays', route: '/(family)/holidays', tone: 'green' },
+            ]}
+          />
+
           <SectionTitle title="Latest announcements" />
           {latestAnnouncements.length === 0 ? (
             <Card>
@@ -483,4 +501,17 @@ export default function Home() {
       )}
     </Screen>
   );
+}
+
+/** The small letter-spaced label that titles a block on Home. */
+function familyEyebrow(tokens: ReturnType<typeof useTokens>) {
+  return {
+    marginHorizontal: 4,
+    marginBottom: -2,
+    fontSize: 10,
+    letterSpacing: 1.3,
+    textTransform: 'uppercase' as const,
+    fontWeight: '700' as const,
+    color: tokens.color.sub,
+  };
 }

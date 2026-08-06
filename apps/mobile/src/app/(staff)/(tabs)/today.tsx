@@ -43,6 +43,7 @@ function NeedRow({
   onPress,
   testID,
   first,
+  live,
 }: {
   icon: string;
   title: string;
@@ -51,6 +52,8 @@ function NeedRow({
   onPress: () => void;
   testID?: string;
   first?: boolean;
+  /** The period running right now. At most one row per screen sets this. */
+  live?: boolean;
 }) {
   const tokens = useTokens();
   return (
@@ -63,8 +66,12 @@ function NeedRow({
         gap: 10,
         paddingVertical: 10,
         paddingHorizontal: 12,
-        borderTopWidth: first ? 0 : 1,
+        borderTopWidth: first || live ? 0 : 1,
         borderTopColor: tokens.color.line,
+        // The single filled thing on Home. A wash rather than a solid fill:
+        // the row still has to read as a row of text, not as a button.
+        backgroundColor: live ? tokens.color.amber50 : undefined,
+        borderRadius: live ? 12 : 0,
       }}
     >
       <View
@@ -74,10 +81,12 @@ function NeedRow({
           borderRadius: 9,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: tokens.color.amber50,
+          backgroundColor: live ? tokens.color.amber : tokens.color.amber50,
         }}
       >
-        {isIconName(icon) && <Icon name={icon} size={16} color={tokens.color.late} />}
+        {isIconName(icon) && (
+          <Icon name={icon} size={16} color={live ? tokens.color.ink : tokens.color.late} />
+        )}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{title}</Text>
@@ -239,6 +248,7 @@ export default function Today() {
                   key={e.periodId}
                   testID={`need-take-${e.slot!.classSectionId}`}
                   first={i === 0}
+                  live={isLive(e)}
                   icon="take"
                   title={`${e.slot!.className} register — not taken`}
                   note={`${e.label} · ${e.startTime}–${e.endTime} · ${e.register?.total ?? 0} students`}
@@ -255,35 +265,22 @@ export default function Today() {
             </Page>
           )}
 
-          {/* THE TOOLS COME TO HOME. Two grids, and at most one filled tile —
-              the register, and only while one is actually open. The drawer
-              still exists this release so nothing is unreachable mid-move; it
-              goes once the family portal has its grid too. */}
-          <Text style={eyebrow(tokens)}>Needs you today</Text>
+          {/* GO TO — navigation, and nothing else. No tile here is ever filled:
+              the one lit thing on this screen is the live ROW above, which is
+              what makes amber mean "act now" rather than "this exists".
+              Registers is deliberately absent — it is a task, and tasks live in
+              the queue where they carry a class name and a time. */}
+          <Text style={eyebrow(tokens)}>Go to</Text>
           <HomeToolGrid
-            testID="grid-needs"
+            testID="grid-goto"
             tools={[
-              {
-                label: 'Registers',
-                icon: 'take',
-                route: '/(staff)/attendance',
-                tone: 'amber',
-                badge: pending,
-                live: pending > 0,
-              },
               { label: 'Messages', icon: 'messages', route: '/(staff)/messages', tone: 'amber' },
               { label: 'Diary', icon: 'diary', route: '/(staff)/diary' },
-              { label: 'Requests', icon: 'requests', route: '/(staff)/requests', tone: 'amber' },
-            ]}
-          />
-
-          <Text style={eyebrow(tokens)}>Your classes</Text>
-          <HomeToolGrid
-            testID="grid-classes"
-            tools={[
               { label: 'Assignments', icon: 'assignments', route: '/(staff)/assignments' },
               { label: 'Notes', icon: 'notes', route: '/(staff)/notes' },
-              { label: 'Results', icon: 'results', route: '/(staff)/tests' },
+              { label: 'Tests & Results', icon: 'results', route: '/(staff)/tests' },
+              { label: 'Requests', icon: 'requests', route: '/(staff)/requests', tone: 'amber' },
+              { label: 'Announce', icon: 'notices', route: '/(staff)/post', tone: 'amber' },
               { label: 'Holidays', icon: 'holidays', route: '/(staff)/holidays', tone: 'green' },
             ]}
           />
