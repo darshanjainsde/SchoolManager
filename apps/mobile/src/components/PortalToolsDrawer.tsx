@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { signOut } from '@/lib/sign-out';
 import type { MoreTone } from '@/lib/staff-nav';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Touchable } from './Touchable';
 import { useTokens } from '@/theme/theme-context';
 import { brand } from '@/theme/tokens';
 
@@ -36,12 +37,11 @@ function ToolTile({ item, badge, onPress }: { item: DrawerItem; badge?: number; 
   const tile = toneTile(tokens, item.tone);
   const showBadge = typeof badge === 'number' && badge > 0;
   return (
-    <Pressable
+    <Touchable
       testID={`tool-${item.label}`}
-      accessibilityRole="button"
       accessibilityLabel={showBadge ? `${item.label}, ${badge} new` : item.label}
       onPress={onPress}
-      style={({ pressed }) => ({
+      style={{
         width: '30%',
         alignItems: 'center',
         justifyContent: 'center',
@@ -52,8 +52,7 @@ function ToolTile({ item, badge, onPress }: { item: DrawerItem; badge?: number; 
         borderRadius: 16,
         paddingVertical: 14,
         paddingHorizontal: 6,
-        opacity: pressed ? 0.7 : 1,
-      })}
+      }}
     >
       <View
         style={{
@@ -98,7 +97,7 @@ function ToolTile({ item, badge, onPress }: { item: DrawerItem; badge?: number; 
       >
         {item.label}
       </Text>
-    </Pressable>
+    </Touchable>
   );
 }
 
