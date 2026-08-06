@@ -5,6 +5,7 @@ import type { TeacherProfile } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { signOut } from '@/lib/sign-out';
 import { AppearanceSetting } from '@/components/AppearanceSetting';
+import { ChangePasswordCard } from '@/components/ChangePasswordCard';
 import { EditableAvatar } from '@/components/EditableAvatar';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
@@ -192,9 +193,8 @@ export default function Profile() {
         <AppearanceSetting />
       </Card>
 
-      <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4 }}>
-        Change your password on the web portal.
-      </Text>
+      {/* On the device in hand, not "on the web portal" — the old dead end. */}
+      <ChangePasswordCard />
 
       {/* SIGN OUT LIVES HERE.
           It was reachable only from the tools drawer, behind a chevron FAB —

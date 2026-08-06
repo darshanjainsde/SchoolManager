@@ -127,12 +127,13 @@ it('shows the API error message when the fetch fails', async () => {
 });
 
 /**
- * v1 scope decision (task-10-brief.md): password change is web-only for
- * now. The screen must say so rather than silently omitting the control —
- * the same "every screen handles ... honestly" bar as everything else in
- * this app.
+ * The v1 "change it on the web portal" dead end is gone: Profile now carries
+ * the real change-password card (POST /auth/change-password works for every
+ * school role). The card's own behaviour is covered in
+ * components/__tests__/ChangePasswordCard.test.tsx — this pins its presence
+ * on the teacher's profile.
  */
-it('points a teacher at the web portal for password changes, not a broken control', async () => {
+it('offers a real change-password control, not a pointer at the web portal', async () => {
   (api.request as jest.Mock).mockResolvedValue({
     id: 't1',
     firstName: 'Asha',
@@ -143,7 +144,8 @@ it('points a teacher at the web portal for password changes, not a broken contro
     classTeacherOf: [],
   });
 
-  const { findByText } = render(<Profile />);
+  const { findByTestId, queryByText } = render(<Profile />);
 
-  expect(await findByText('Change your password on the web portal.')).toBeTruthy();
+  expect(await findByTestId('pw-submit')).toBeTruthy();
+  expect(queryByText('Change your password on the web portal.')).toBeNull();
 });

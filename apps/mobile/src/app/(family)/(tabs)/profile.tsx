@@ -5,6 +5,7 @@ import { api, ApiError } from '@/lib/api';
 import type { StudentProfile } from '@/lib/portal';
 import { signOut } from '@/lib/sign-out';
 import { AppearanceSetting } from '@/components/AppearanceSetting';
+import { ChangePasswordCard } from '@/components/ChangePasswordCard';
 import { EditableAvatar } from '@/components/EditableAvatar';
 import { Card, Page, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
@@ -216,6 +217,8 @@ export default function Profile() {
       <Card style={{ paddingVertical: 2 }}>
         <AppearanceSetting />
       </Card>
+
+      <ChangePasswordCard />
 
       {/* SIGN OUT LIVES HERE.
           It was reachable only from the tools drawer, behind a chevron FAB —

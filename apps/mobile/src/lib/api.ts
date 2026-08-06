@@ -167,6 +167,19 @@ export const api = {
   },
 
   /**
+   * Change the signed-in account's password (POST /auth/change-password —
+   * throttled 5/min server-side, any school role). The server verifies the
+   * current password; a wrong one surfaces as its own message, never as a
+   * silent success.
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>('/auth/change-password', {
+      method: 'POST',
+      body: { currentPassword, newPassword },
+    });
+  },
+
+  /**
    * The gate's replacement for the deleted school-code screen: asks the
    * platform which school(s) a login identifier belongs to (student code by
    * its full value, staff by email). Tenant-free by design — it runs before
