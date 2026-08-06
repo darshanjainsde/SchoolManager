@@ -1,5 +1,5 @@
 import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
-import Attendance from '../attendance';
+import Attendance from '../(tabs)/attendance';
 import { api, ApiError } from '@/lib/api';
 
 let capturedFocusEffect: (() => void) | undefined;

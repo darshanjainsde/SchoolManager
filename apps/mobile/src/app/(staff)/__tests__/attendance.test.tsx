@@ -1,7 +1,7 @@
 import { Alert } from 'react-native';
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import type { RegisterChangeRow } from '@skoolos/types';
-import StaffAttendance from '../attendance';
+import StaffAttendance from '../(tabs)/attendance';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { enqueueSave } from '@/lib/offline-queue';

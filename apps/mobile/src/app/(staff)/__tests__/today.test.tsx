@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, within, act } from '@testing-library/react-native';
 import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
-import Today from '../today';
+import Today from '../(tabs)/today';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
 

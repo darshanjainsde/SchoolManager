@@ -1,5 +1,5 @@
 import { render, act, within } from '@testing-library/react-native';
-import Results from '../results';
+import Results from '../(tabs)/results';
 import { api, ApiError } from '@/lib/api';
 
 let capturedFocusEffect: (() => void) | undefined;

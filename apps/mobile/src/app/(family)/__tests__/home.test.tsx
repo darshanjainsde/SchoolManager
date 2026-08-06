@@ -1,5 +1,5 @@
 import { render, fireEvent, act } from '@testing-library/react-native';
-import Home from '../home';
+import Home from '../(tabs)/home';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 

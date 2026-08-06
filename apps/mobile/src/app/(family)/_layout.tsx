@@ -1,47 +1,27 @@
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
-import { Tabs } from 'expo-router';
+import { useEffect } from 'react';
+import { Stack } from 'expo-router';
 import { registerForPush } from '@/lib/push';
-import { FamilyTabBar, type FamilyTabBarProps } from '@/components/FamilyTabBar';
-import { FamilyToolsDrawer } from '@/components/FamilyToolsDrawer';
-import { VISIBLE_TABS, HIDDEN_ROUTES } from '@/lib/family-nav';
 
-export default function FamilyTabs() {
-  const [toolsOpen, setToolsOpen] = useState(false);
+/**
+ * A MESSAGE THREAD IS A PLACE YOU GO, NOT A TAB YOU SWITCH TO.
+ *
+ * Same change as the staff portal: messages/[threadId], the diary, notices,
+ * assignments, the shelf and the rest were hidden Tabs.Screen entries
+ * (`href: null`), so the hardware back button had no stack to pop and closed
+ * the app instead of walking home. They are stack screens now — back pops, the
+ * edge-swipe gesture works, and screens slide in rather than appearing.
+ *
+ * Route paths are unchanged: `(tabs)` is a group, so it is transparent in the
+ * URL and every existing `router.push('/(family)/messages/…')` still resolves.
+ */
+export const unstable_settings = {
+  // A push notification can land someone straight on a thread with no history
+  // behind it. Anchoring the stack means back still walks them into the app.
+  initialRouteName: '(tabs)',
+};
+
+export default function FamilyLayout() {
   useEffect(() => { void registerForPush(); }, []);
 
-  return (
-    <View style={{ flex: 1 }}>
-      <Tabs
-      // Every detail screen here is a HIDDEN TAB, not a pushed stack screen, so
-      // there is no stack for back to pop. "history" makes the hardware back
-      // button retrace the route actually taken — Home, Attendance, Take, then
-      // back out the same way — instead of closing the app mid-register.
-      backBehavior="history"
-        screenOptions={{ headerShown: false }}
-        tabBar={(props) => (
-          <FamilyTabBar
-            state={props.state}
-            // react-navigation types `emit`'s `canPreventDefault` as the
-            // literal `true`; our narrowed local nav type accepts `boolean`.
-            // Runtime shape is identical — cast bridges the variance only.
-            navigation={props.navigation as unknown as FamilyTabBarProps['navigation']}
-            insets={props.insets}
-            toolsOpen={toolsOpen}
-            onToolsPress={() => setToolsOpen((o) => !o)}
-          />
-        )}
-      >
-        {VISIBLE_TABS.map(({ name, title }) => (
-          <Tabs.Screen key={name} name={name} options={{ title }} />
-        ))}
-        {HIDDEN_ROUTES.map((name) => (
-          <Tabs.Screen key={name} name={name} options={{ href: null }} />
-        ))}
-      </Tabs>
-
-      {/* Overlay above the tab bar; renders nothing while closed. */}
-      <FamilyToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} />
-    </View>
-  );
+  return <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />;
 }

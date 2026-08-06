@@ -17,10 +17,28 @@ function routeFileExists(routeName: string): boolean {
   return fs.existsSync(path.join(STAFF_DIR, `${routeName}.tsx`));
 }
 
+/**
+ * Tabs live one level down in the `(tabs)` group; detail screens sit at the
+ * group root and are PUSHED over them by the Stack in `_layout.tsx`. The
+ * directory layout is the mechanism, so it is what these tests check: a tab
+ * that drifts out of `(tabs)` silently loses its tab bar, and a detail screen
+ * that drifts in silently loses its back stack — which is how taking a register
+ * used to close the app.
+ */
+function tabFileExists(routeName: string): boolean {
+  return fs.existsSync(path.join(STAFF_DIR, '(tabs)', `${routeName}.tsx`));
+}
+
 describe('staff route honesty', () => {
   it('every visible tab points at a screen file that exists', () => {
     for (const { name } of VISIBLE_TABS) {
-      expect(routeFileExists(name)).toBe(true);
+      expect(`${name}: ${tabFileExists(name)}`).toBe(`${name}: true`);
+    }
+  });
+
+  it('keeps detail screens out of the tab group, so back has a stack to pop', () => {
+    for (const name of HIDDEN_ROUTES) {
+      expect(`${name} is a tab: ${tabFileExists(name)}`).toBe(`${name} is a tab: false`);
     }
   });
 

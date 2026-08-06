@@ -1,5 +1,5 @@
 import { render, act, fireEvent } from '@testing-library/react-native';
-import Profile from '../profile';
+import Profile from '../(tabs)/profile';
 import { api, ApiError } from '@/lib/api';
 
 let capturedFocusEffect: (() => void) | undefined;

@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react-native';
-import Profile from '../profile';
+import Profile from '../(tabs)/profile';
 import { api, ApiError } from '@/lib/api';
 
 jest.mock('expo-router', () => ({

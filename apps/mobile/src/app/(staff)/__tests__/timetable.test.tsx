@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import type { TimetableSlot } from '@skoolos/types';
-import Timetable from '../timetable';
+import Timetable from '../(tabs)/timetable';
 import { api, ApiError } from '@/lib/api';
 
 jest.mock('expo-router', () => ({
