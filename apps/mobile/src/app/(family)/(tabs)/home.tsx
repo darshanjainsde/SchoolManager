@@ -17,6 +17,7 @@ import {
 } from '@/lib/portal';
 import { Card, Page, PageHeader, Pill, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
 import { NotificationBell } from '@/components/NotificationBell';
+import { SettingsButton } from '@/components/SettingsButton';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -286,6 +287,7 @@ export default function Home() {
           {profile ? `Hi, ${profile.firstName} 👋` : 'Home'}
         </Text>
         <NotificationBell group="(family)" />
+        <SettingsButton group="(family)" />
         {profile && (
           <View
             style={{

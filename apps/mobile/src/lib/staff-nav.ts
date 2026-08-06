@@ -35,7 +35,7 @@
  * belongs — it is something a teacher does occasionally, not a place they live.
  */
 export const VISIBLE_TABS = [
-  { name: 'today', title: 'Today', icon: 'today-outline' as const },
+  { name: 'today', title: 'Home', icon: 'today-outline' as const },
   { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
   { name: 'timetable', title: 'Timetable', icon: 'calendar-outline' as const },
   { name: 'profile', title: 'Profile', icon: 'person-outline' as const },
@@ -56,6 +56,7 @@ export const HIDDEN_ROUTES = [
   'notes',
   'notes/[classSectionId]',
   'notifications',
+  'settings',
 ];
 
 /**
@@ -75,6 +76,12 @@ export type MoreTone = 'indigo' | 'amber' | 'green';
 
 export interface MoreItem {
   label: string;
+  /**
+   * An Ionicons OUTLINE glyph, not an emoji. Emoji are drawn by the operating
+   * system, so the same drawer rendered differently on iOS and Android, they
+   * arrive pre-coloured and can never take the school's brand colour, and
+   * their cartoon weight fought the serif everywhere else on the screen.
+   */
   icon: string;
   route:
     | '/(staff)/assignments'
@@ -90,12 +97,12 @@ export interface MoreItem {
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
-  { label: 'Diary', icon: '📔', route: '/(staff)/diary', tone: 'indigo' },
-  { label: 'Assignments', icon: '📚', route: '/(staff)/assignments', tone: 'indigo' },
-  { label: 'Messages', icon: '💬', route: '/(staff)/messages', tone: 'amber' },
-  { label: 'Notes', icon: '📒', route: '/(staff)/notes', tone: 'indigo' },
-  { label: 'Tests & Results', icon: '📊', route: '/(staff)/tests', tone: 'indigo' },
-  { label: 'Requests', icon: '📝', route: '/(staff)/requests', tone: 'amber' },
-  { label: 'Holidays', icon: '📅', route: '/(staff)/holidays', tone: 'green' },
-  { label: 'Announcements', icon: '📣', route: '/(staff)/post', tone: 'amber' },
+  { label: 'Diary', icon: 'book-outline', route: '/(staff)/diary', tone: 'indigo' },
+  { label: 'Assignments', icon: 'layers-outline', route: '/(staff)/assignments', tone: 'indigo' },
+  { label: 'Messages', icon: 'chatbubble-outline', route: '/(staff)/messages', tone: 'amber' },
+  { label: 'Notes', icon: 'reader-outline', route: '/(staff)/notes', tone: 'indigo' },
+  { label: 'Tests & Results', icon: 'bar-chart-outline', route: '/(staff)/tests', tone: 'indigo' },
+  { label: 'Requests', icon: 'clipboard-outline', route: '/(staff)/requests', tone: 'amber' },
+  { label: 'Holidays', icon: 'calendar-outline', route: '/(staff)/holidays', tone: 'green' },
+  { label: 'Announcements', icon: 'megaphone-outline', route: '/(staff)/post', tone: 'amber' },
 ];

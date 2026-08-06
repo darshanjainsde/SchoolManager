@@ -5,6 +5,7 @@ import type { UnreadCountResult } from '@skoolos/types';
 import { api } from '@/lib/api';
 import { signOut } from '@/lib/sign-out';
 import type { MoreTone } from '@/lib/staff-nav';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTokens } from '@/theme/theme-context';
 import { brand } from '@/theme/tokens';
 
@@ -64,7 +65,13 @@ function ToolTile({ item, badge, onPress }: { item: DrawerItem; badge?: number; 
           justifyContent: 'center',
         }}
       >
-        <Text style={{ fontSize: 19 }}>{item.icon}</Text>
+        {/* A stroked glyph inheriting the tile's own ink, so a school's colour
+            reaches the drawer. An emoji could never do either. */}
+        <Ionicons
+          name={item.icon as React.ComponentProps<typeof Ionicons>['name']}
+          size={20}
+          color={tile.fg}
+        />
         {showBadge && (
           <View
             testID={`tool-badge-${item.label}`}

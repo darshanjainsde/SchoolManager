@@ -11,6 +11,7 @@ import { DayTimeline } from '@/components/DayTimeline';
 import { ClassNotesPanel } from '@/components/ClassNotesPanel';
 import { Card, Page, PageHeader, Screen } from '@/components/ui';
 import { NotificationBell } from '@/components/NotificationBell';
+import { SettingsButton } from '@/components/SettingsButton';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { salutation } from '@/lib/greeting';
@@ -183,6 +184,7 @@ export default function Today() {
           </Text>
         </View>
         <NotificationBell group="(staff)" />
+        <SettingsButton group="(staff)" />
       </View>
 
       {/* The day in one line, in the pitch's `.gatesub` voice — a note under

@@ -99,8 +99,12 @@ describe('staff route honesty', () => {
     expect(routeFileExists('notes/[classSectionId]')).toBe(true);
   });
 
-  it('names the "Today" tab, and every tab label is short enough not to wrap', () => {
-    expect(VISIBLE_TABS.find((t) => t.name === 'today')?.title).toBe('Today');
+  it('names the first tab "Home", and every tab label is short enough not to wrap', () => {
+    // The tab is the place a teacher LANDS, and "Today" described its contents
+    // rather than its job — which left the day's actual work with no name of
+    // its own. The screen keeps the `today` route (nothing linking to it has to
+    // move); the word "Today" now belongs to the section that carries the work.
+    expect(VISIBLE_TABS.find((t) => t.name === 'today')?.title).toBe('Home');
     expect(VISIBLE_TABS.find((t) => t.name === 'profile')?.title).toBe('Profile');
     // The actual constraint, asserted rather than assumed: a quarter-width tab
     // on a 360dp phone fits about ten characters at this type size. This is

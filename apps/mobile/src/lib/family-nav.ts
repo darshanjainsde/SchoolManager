@@ -34,6 +34,7 @@ export const HIDDEN_ROUTES = [
   'holidays',
   'notifications',
   'shelf',
+  'settings',
 ];
 
 /** Icon-tile colour family for a drawer tool — mirrors staff-nav's `MoreTone`. */
@@ -41,6 +42,12 @@ export type MoreTone = 'indigo' | 'amber' | 'green';
 
 export interface MoreItem {
   label: string;
+  /**
+   * An Ionicons OUTLINE glyph, not an emoji. Emoji are drawn by the operating
+   * system, so the same drawer rendered differently on iOS and Android, they
+   * arrive pre-coloured and can never take the school's brand colour, and
+   * their cartoon weight fought the serif everywhere else on the screen.
+   */
   icon: string;
   route:
     | '/(family)/diary'
@@ -54,10 +61,10 @@ export interface MoreItem {
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
-  { label: 'Diary', icon: '📔', route: '/(family)/diary', tone: 'indigo' },
-  { label: 'Timetable', icon: '📅', route: '/(family)/timetable', tone: 'indigo' },
-  { label: 'Assignments', icon: '📚', route: '/(family)/assignments', tone: 'indigo' },
-  { label: 'Messages', icon: '💬', route: '/(family)/messages', tone: 'amber' },
-  { label: 'Notices', icon: '📣', route: '/(family)/notices', tone: 'amber' },
-  { label: 'Holidays', icon: '🌴', route: '/(family)/holidays', tone: 'green' },
+  { label: 'Diary', icon: 'book-outline', route: '/(family)/diary', tone: 'indigo' },
+  { label: 'Timetable', icon: 'calendar-outline', route: '/(family)/timetable', tone: 'indigo' },
+  { label: 'Assignments', icon: 'layers-outline', route: '/(family)/assignments', tone: 'indigo' },
+  { label: 'Messages', icon: 'chatbubble-outline', route: '/(family)/messages', tone: 'amber' },
+  { label: 'Notices', icon: 'megaphone-outline', route: '/(family)/notices', tone: 'amber' },
+  { label: 'Holidays', icon: 'sunny-outline', route: '/(family)/holidays', tone: 'green' },
 ];
