@@ -157,7 +157,17 @@ export default function Today() {
           <Text
             maxFontSizeMultiplier={1.4}
             numberOfLines={1}
-            style={{ fontFamily: font.serif, fontSize: 26, lineHeight: 31, color: tokens.color.ink }}
+            // Bold serif with a touch of negative tracking: the NAME is the
+            // one personal thing on this screen, so it is set like a book
+            // title, not a form value.
+            style={{
+              fontFamily: font.serif,
+              fontSize: 26,
+              lineHeight: 31,
+              fontWeight: '700',
+              letterSpacing: -0.4,
+              color: tokens.color.ink,
+            }}
           >
             {name ?? 'Today'}
           </Text>

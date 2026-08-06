@@ -330,7 +330,18 @@ export default function Home() {
       {/* `.greet` + `.kidchip` — the greeting in the diary serif, with the
           bell and the student's initial pushed to the right margin. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 2 }}>
-        <Text style={{ fontFamily: font.serif, fontSize: 20, color: tokens.color.ink, flex: 1 }}>
+        {/* Same bold-serif treatment as the staff greeting: the name is set
+            like a title, not a form value. */}
+        <Text
+          style={{
+            fontFamily: font.serif,
+            fontSize: 20,
+            fontWeight: '700',
+            letterSpacing: -0.3,
+            color: tokens.color.ink,
+            flex: 1,
+          }}
+        >
           {profile ? `Hi, ${profile.firstName} 👋` : 'Home'}
         </Text>
         <NotificationBell group="(family)" />
