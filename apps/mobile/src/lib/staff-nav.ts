@@ -7,7 +7,7 @@
  * Menu-drawer revision (2026-08-01): the tab bar now shows FOUR core tabs
  * (Today, Attendance, Timetable, Announcements) with a central chevron FAB
  * between them that lifts a bottom-sheet tools drawer (see
- * `src/components/ToolsDrawer.tsx`) over whatever screen you're on. There is
+ * `components/HomeToolGrid.tsx`) as the 'Go to' block on Home. There is
  * no "More" tab any more — everything the web nav additionally lists (Tests,
  * Results, Requests, Holidays) plus Assignments, Messages, Notes and the
  * web's sidebar-foot profile link lives in that drawer instead. `MORE_ITEMS`

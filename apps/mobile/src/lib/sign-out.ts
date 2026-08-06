@@ -7,7 +7,7 @@ import { clearSchoolBrand } from './school-brand-client';
 /**
  * Signing out, in one place.
  *
- * It used to live inline in `PortalToolsDrawer`, which made the tools drawer —
+ * It used to live inline in the tools drawer (since deleted), which made it —
  * behind a chevron FAB — the ONLY way to sign out. Sign-out belongs on the
  * profile screen, where every other app on the phone has taught people to look
  * for it, so it is now called from both and the sequence exists once.

@@ -5,7 +5,7 @@
  * Menu-drawer revision (2026-08-02): the family tab bar drops the stock
  * expo-router Tabs for the same pattern the staff portal ships — FOUR core
  * tabs (Home, Attendance, Results, Profile) with a central chevron FAB that
- * lifts a bottom-sheet tools drawer (`src/components/FamilyToolsDrawer.tsx`)
+ * are rendered as the 'Go to' grid on Home (`components/HomeToolGrid.tsx`)
  * over whatever screen you're on. Profile replaces Notices in the bar (the
  * old fifth "More" tab is gone, and the two-line "Notices/Announcements"
  * label bug goes with it); Notices lives in the drawer with the rest of the
