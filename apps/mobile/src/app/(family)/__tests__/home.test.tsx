@@ -70,6 +70,8 @@ function mockEndpoints(overrides: Partial<Record<string, unknown>> = {}) {
     '/me/timetable': [],
     '/me/notifications/unread-count': { count: 0 },
     '/me/diary': { entries: [], unsignedCount: 0 },
+    // The Messages dome's badge (pitch №4); quiet by default.
+    '/me/messages/unread-count': { count: 0 },
     ...overrides,
   };
   (api.request as jest.Mock).mockImplementation((path: string) => {
@@ -117,8 +119,11 @@ describe('identity card — role-neutral copy', () => {
   });
 });
 
-describe('next-test banner', () => {
-  it('renders the next exam when one is scheduled', async () => {
+describe('next test', () => {
+  // Pitch №4: the pinned notice row became the Results dome's badge — the
+  // fact stays tappable, the full detail (date, syllabus, marks) lives one
+  // tap away on Results where it always did.
+  it('a scheduled exam badges the Results dome', async () => {
     mockEndpoints({
       '/me/exams': [
         {
@@ -131,21 +136,18 @@ describe('next-test banner', () => {
         },
       ],
     });
-    const { findByText } = render(<Home />);
-    expect(await findByText(/Mathematics/)).toBeTruthy();
-    expect(await findByText(/Unit Test 2/)).toBeTruthy();
+    const { findByTestId } = render(<Home />);
+    expect(await findByTestId('hometool-badge-Results')).toBeTruthy();
   });
 
-  it('is absent when there are no upcoming exams', async () => {
+  it('the badge is absent when there are no upcoming exams', async () => {
     mockEndpoints();
-    const { findByText, queryByText } = render(<Home />);
+    const { findByText, queryByTestId } = render(<Home />);
     await findByText('Hi, Aarav 👋');
-    expect(queryByText(/out of/)).toBeNull();
+    expect(queryByTestId('hometool-badge-Results')).toBeNull();
   });
 
-  // S6/S7: tapping the banner opens the full next-test detail (syllabus,
-  // max marks, date) on the Results screen.
-  it('tapping the banner navigates to the Results screen', async () => {
+  it('tapping the Results dome navigates to the Results screen', async () => {
     mockEndpoints({
       '/me/exams': [
         {
@@ -160,7 +162,7 @@ describe('next-test banner', () => {
     });
     const { findByTestId } = render(<Home />);
 
-    fireEvent.press(await findByTestId('next-exam-banner'));
+    fireEvent.press(await findByTestId('hometool-Results'));
     expect(mockPush).toHaveBeenCalledWith('/(family)/results');
   });
 });
@@ -292,27 +294,37 @@ describe('fetch states', () => {
 });
 
 describe('diary remarks', () => {
-  it('an unsigned remark is banner-worthy — it is the one thing here to DO', async () => {
+  // Pitch №4: the banner card became the Diary dome in "Needs you today" —
+  // lit amber (the one lit thing on this screen) with the waiting count as
+  // its badge.
+  it('unsigned remarks light the Diary dome and badge it with the count', async () => {
     mockEndpoints({ '/me/diary': { entries: [], unsignedCount: 2 } });
-    const { findByTestId, getByText } = render(<Home />);
+    const { findByTestId, getByTestId } = render(<Home />);
 
-    expect(await findByTestId('diary-banner')).toBeTruthy();
-    expect(getByText('2 diary remarks to sign')).toBeTruthy();
+    expect(await findByTestId('hometool-live-Diary')).toBeTruthy();
+    expect(getByTestId('hometool-badge-Diary')).toBeTruthy();
   });
 
-  it('is absent when nothing is waiting to be signed', async () => {
+  it('the dome is quiet when nothing is waiting to be signed', async () => {
     mockEndpoints();
     const { queryByTestId, findByTestId } = render(<Home />);
 
     await findByTestId('screen-scroll');
-    expect(queryByTestId('diary-banner')).toBeNull();
+    expect(queryByTestId('hometool-live-Diary')).toBeNull();
+    expect(queryByTestId('hometool-badge-Diary')).toBeNull();
   });
 
-  it('tapping it opens the diary', async () => {
+  it('tapping the Diary dome opens the diary', async () => {
     mockEndpoints({ '/me/diary': { entries: [], unsignedCount: 1 } });
     const { findByTestId } = render(<Home />);
 
-    fireEvent.press(await findByTestId('diary-banner'));
+    fireEvent.press(await findByTestId('hometool-Diary'));
     expect(mockPush).toHaveBeenCalledWith('/(family)/diary');
+  });
+
+  it('unread messages badge the Messages dome', async () => {
+    mockEndpoints({ '/me/messages/unread-count': { count: 3 } });
+    const { findByTestId } = render(<Home />);
+    expect(await findByTestId('hometool-badge-Messages')).toBeTruthy();
   });
 });

@@ -7,8 +7,6 @@ import { todayISO } from '@/lib/attendance';
 import { minutesOfDay } from '@/lib/teacher-day';
 import { useNowMinutes } from '@/lib/use-now-minutes';
 import {
-  daysUntilLabel,
-  formatDate,
   relativeTime,
   type Announcement,
   type AttendanceSummary,
@@ -16,11 +14,12 @@ import {
   type StudentProfile,
   type UpcomingExam,
 } from '@/lib/portal';
-import { Card, Page, PageHeader, Pill, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
+import { Card, Page, PageHeader, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
 import { Touchable } from '@/components/Touchable';
+import { Icon, isIconName } from '@/components/icons';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -90,13 +89,16 @@ function Dateline() {
  */
 function Notice({
   icon,
+  iconColor,
   tint,
   title,
   detail,
   onPress,
   testID,
 }: {
+  /** A duotone glyph name from components/icons.tsx — drawn, never an emoji. */
   icon: string;
+  iconColor: string;
   tint: string;
   title: string;
   detail: string;
@@ -117,7 +119,7 @@ function Notice({
               justifyContent: 'center',
             }}
           >
-            <Text style={{ fontSize: 16 }}>{icon}</Text>
+            {isIconName(icon) && <Icon name={icon} size={17} color={iconColor} />}
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{title}</Text>
@@ -222,6 +224,7 @@ export default function Home() {
   const [results, setResults] = useState<PublishedResult[] | null>(null);
   const [slots, setSlots] = useState<TimetableSlot[] | null>(null);
   const [diary, setDiary] = useState<StudentDiaryResult | null>(null);
+  const [unreadMsgs, setUnreadMsgs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -246,7 +249,10 @@ export default function Home() {
         // A remark waiting for a signature is the most time-sensitive thing on
         // this screen, so the diary is part of the same load, not a lazy tab.
         api.request<StudentDiaryResult>('/me/diary'),
-      ]).then(([p, a, att, ex, res, tt, d]) => () => {
+        // The Messages dome's badge (pitch №4). catch → 0: a badge must never
+        // fail the whole home load.
+        api.request<{ count: number }>('/me/messages/unread-count').catch(() => ({ count: 0 })),
+      ]).then(([p, a, att, ex, res, tt, d, um]) => () => {
         setProfile(p);
         setAnnouncements(a);
         setAttendance(att);
@@ -254,6 +260,7 @@ export default function Home() {
         setResults(res);
         setSlots(tt);
         setDiary(d);
+        setUnreadMsgs(um.count);
       }),
     [],
   );
@@ -411,62 +418,33 @@ export default function Home() {
             monthPercent={attendanceMarked > 0 ? (attendance?.percent ?? null) : null}
           />
 
-          {/* An unsigned remark outranks everything else here: it is the one
-              thing on this screen someone at home has to DO, and it came with
-              an email that has already landed.
-              It is a CARD, not a `Page` + `PageHeader`: a page heading has
-              room for a title and nothing else, so the repaint's version lost
-              the line that says what to do about it, and nested a second
-              Pressable ("Sign ›") inside the banner's own. */}
-          {diary && diary.unsignedCount > 0 && (
-            <Touchable
-              testID="diary-banner"
-              haptic="medium"
-              accessibilityLabel={`${diary.unsignedCount} diary entries to sign`}
-              onPress={() => router.push('/(family)/diary')}
-            >
-              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
-                <View
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 10,
-                    backgroundColor: tokens.color.red50,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 17 }}>📔</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>
-                    {diary.unsignedCount === 1
-                      ? 'A diary remark to sign'
-                      : `${diary.unsignedCount} diary remarks to sign`}
-                  </Text>
-                  <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
-                    Open the diary to read and sign.
-                  </Text>
-                </View>
-                <Pill tone="red">Sign</Pill>
-              </Card>
-            </Touchable>
-          )}
+          {/* NEEDS YOU TODAY (pitch №4) — the family's asks as badged domes,
+              replacing the old diary banner card + next-test notice row. An
+              unsigned remark still outranks everything: the Diary dome is the
+              one LIT thing on this screen while any wait, and its badge is the
+              count. Next test rides as the Results badge — the fact stays
+              tappable, the full detail (date, syllabus, marks) lives one tap
+              away on Results where it always did. */}
+          <Text style={familyEyebrow(tokens)}>Needs you today</Text>
+          <HomeToolGrid
+            testID="grid-needs"
+            tools={[
+              {
+                label: 'Diary',
+                icon: 'diary',
+                route: '/(family)/diary',
+                tone: 'amber',
+                badge: diary?.unsignedCount ?? 0,
+                live: (diary?.unsignedCount ?? 0) > 0,
+              },
+              { label: 'Messages', icon: 'messages', route: '/(family)/messages', tone: 'amber', badge: unreadMsgs },
+              { label: 'Assignments', icon: 'assignments', route: '/(family)/assignments' },
+              { label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 },
+            ]}
+          />
 
-          {/* Next-test reminder — the thing a student should never miss.
-              A test that has been SCHEDULED is something that arrived, so it
-              is a pinned notice. Tapping it opens the full detail (syllabus,
-              max marks, date) on Results. */}
-          {nextExam && (
-            <Notice
-              testID="next-exam-banner"
-              icon="🔔"
-              tint={tokens.color.amber50}
-              title={`${nextExam.subjectName} · ${nextExam.title} — ${daysUntilLabel(nextExam.scheduledAt).toLowerCase()}`}
-              detail={`${formatDate(nextExam.scheduledAt)}${nextExam.syllabus ? ` · ${nextExam.syllabus}` : ''} · out of ${nextExam.maxMarks}`}
-              onPress={() => router.push('/(family)/results')}
-            />
-          )}
+          {/* The rule between "asked of you" and "merely available". */}
+          <View style={{ borderTopWidth: 1, borderTopColor: tokens.color.line, marginHorizontal: 2 }} />
 
           {/* At-a-glance KPIs. Only two — "today" is already the hero's status
               chip and "next test" is the notice above, so repeating them would
@@ -522,17 +500,12 @@ export default function Home() {
             </>
           )}
 
-          {/* GO TO — the family twin of the staff block. Six tools, three
-              across. Family KEEPS a live tile where staff does not: "homework
-              due tomorrow" is a number with no useful list behind it, so the
-              tile is the only place that fact can live. */}
+          {/* GO TO — everything merely available, the family twin of the
+              staff block. The four tools with asks moved up to Needs-you-today. */}
           <Text style={familyEyebrow(tokens)}>Go to</Text>
           <HomeToolGrid
             testID="grid-goto"
             tools={[
-              { label: 'Messages', icon: 'messages', route: '/(family)/messages', tone: 'amber' },
-              { label: 'Diary', icon: 'diary', route: '/(family)/diary' },
-              { label: 'Assignments', icon: 'assignments', route: '/(family)/assignments' },
               { label: 'Timetable', icon: 'timetable', route: '/(family)/timetable' },
               { label: 'Notices', icon: 'notices', route: '/(family)/notices', tone: 'amber' },
               { label: 'Holidays', icon: 'holidays', route: '/(family)/holidays', tone: 'green' },
@@ -548,7 +521,8 @@ export default function Home() {
             latestAnnouncements.map((a) => (
               <Notice
                 key={a.id}
-                icon="📣"
+                icon="notices"
+                iconColor={tokens.color.indigo}
                 tint={tokens.color.indigo50}
                 title={a.title}
                 detail={`${a.classSectionId ? 'Your class' : 'Whole school'} · ${relativeTime(a.createdAt)}`}
