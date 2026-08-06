@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { relativeTime, type Announcement } from '@/lib/portal';
 import { Card, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
 
@@ -120,9 +121,7 @@ export default function Notices() {
         </Card>
       )}
       {items === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading notices…</Text>
-        </Card>
+        <LoadingRows label="Loading notices…" rows={3} />
       )}
       {items?.length === 0 && !error && (
         <Card>

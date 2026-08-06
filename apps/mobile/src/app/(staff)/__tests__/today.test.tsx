@@ -131,7 +131,7 @@ it('shows a loading state before the day arrives', async () => {
   (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
   render(<Today />);
 
-  expect(await screen.findByText('Loading your day…')).toBeTruthy();
+  expect(await screen.findByLabelText('Loading your day…')).toBeTruthy();
 });
 
 it('shows the server error message verbatim when the fetch fails', async () => {

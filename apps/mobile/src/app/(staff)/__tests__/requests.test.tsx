@@ -107,9 +107,9 @@ beforeEach(() => {
 
 it('shows a loading state before either fetch settles', async () => {
   mockApi({ leave: new Promise<never>(() => {}) as unknown as LeaveApplication[], register: [] });
-  const { findByText } = render(<Requests />);
+  const { findByLabelText } = render(<Requests />);
 
-  expect(await findByText('Loading your requests…')).toBeTruthy();
+  expect(await findByLabelText('Loading your requests…')).toBeTruthy();
 });
 
 it('shows an empty state once both sources have settled with nothing', async () => {

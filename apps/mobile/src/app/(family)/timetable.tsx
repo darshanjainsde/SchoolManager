@@ -9,6 +9,7 @@ import { buildGrid, cellKey, toGridSlot, type GridPeriodRow } from '@/lib/timeta
 import { DaySelector } from '@/components/DaySelector';
 import { TimetableList, type TimetableRow } from '@/components/TimetableList';
 import { Card, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 
 // The student's own weekly timetable. `GET /me/timetable`
@@ -92,9 +93,7 @@ export default function Timetable() {
       </Text>
 
       {slots === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading your timetable…</Text>
-        </Card>
+        <LoadingRows label="Loading your timetable…" rows={6} />
       )}
 
       {error && (

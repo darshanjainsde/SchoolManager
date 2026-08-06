@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import type { MyClassSection } from '@/lib/attendance';
 import { ClassChips } from '@/components/ClassChips';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
@@ -201,9 +202,7 @@ export default function Post() {
         </Card>
       )}
       {classes === null && !loadError && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading your classes…</Text>
-        </Card>
+        <LoadingRows label="Loading your classes…" rows={5} />
       )}
       {classes?.length === 0 && !loadError && (
         <Card>
@@ -313,9 +312,7 @@ export default function Post() {
         </Card>
       )}
       {mine === null && !mineError && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading your posts…</Text>
-        </Card>
+        <LoadingRows label="Loading your posts…" rows={3} />
       )}
       {mine?.length === 0 && !mineError && (
         <Card>

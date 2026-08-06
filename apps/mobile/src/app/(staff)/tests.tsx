@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { DEFAULT_SCHEDULE_TIME, isValidMaxMarks, shiftTime, toScheduledAtISO } from '@/lib/exams';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 
@@ -196,9 +197,7 @@ export default function Tests() {
         </Card>
       )}
       {classes === null && !classesError && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading your classes…</Text>
-        </Card>
+        <LoadingRows label="Loading your classes…" rows={5} />
       )}
       {classes?.length === 0 && !classesError && (
         <Card>
@@ -363,9 +362,7 @@ export default function Tests() {
       {classSectionId && (
         <Card>
           <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Scheduled tests</Text>
-          {examsLoading && (
-            <Text style={{ color: tokens.color.sub, marginTop: 6 }}>Loading tests…</Text>
-          )}
+          {examsLoading && <LoadingRows label="Loading tests…" rows={3} bare />}
           {examsError && (
             <Text testID="exams-error" style={{ color: tokens.color.red, marginTop: 6 }}>
               {examsError}

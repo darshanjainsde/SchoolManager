@@ -17,6 +17,7 @@ import {
   type UpcomingExam,
 } from '@/lib/portal';
 import { Card, Page, PageHeader, Pill, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { SettingsButton } from '@/components/SettingsButton';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
@@ -338,9 +339,7 @@ export default function Home() {
         </Card>
       )}
       {profile === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading…</Text>
-        </Card>
+        <LoadingRows label="Loading your details…" rows={3} />
       )}
 
       {profile && (

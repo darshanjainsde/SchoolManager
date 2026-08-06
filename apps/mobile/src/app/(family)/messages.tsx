@@ -9,6 +9,7 @@ import {
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { Card, Empty, Page, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -165,9 +166,7 @@ export default function Messages() {
             </Pressable>
           </View>
 
-          {!picked && teachers === null && (
-            <Text style={{ color: tokens.color.sub, fontSize: 12.5 }}>Loading your teachers…</Text>
-          )}
+          {!picked && teachers === null && <LoadingRows label="Loading your teachers…" rows={4} bare />}
           {!picked && teachers?.length === 0 && (
             <Text testID="no-teachers" style={{ color: tokens.color.sub, fontSize: 12.5 }}>
               You have no subject teachers assigned this week yet.
@@ -274,9 +273,7 @@ export default function Messages() {
         </Card>
       )}
       {threads === null && !threadsError && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading messages…</Text>
-        </Card>
+        <LoadingRows label="Loading messages…" rows={5} />
       )}
       {threads?.length === 0 && !threadsError && (
         <Page>

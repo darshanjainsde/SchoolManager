@@ -7,6 +7,7 @@ import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { enqueueSave, flush } from '@/lib/offline-queue';
 import { WhoNeedsAWord } from '@/components/WhoNeedsAWord';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { LoadingGrid } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DUR, stampStyle, useGesture } from '@/theme/motion';
@@ -371,9 +372,7 @@ export default function TakeAttendance() {
         </Card>
       )}
       {roster === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading roster…</Text>
-        </Card>
+        <LoadingGrid label="Loading roster…" cells={30} />
       )}
       {/* `.regstats` — the running count, mono numerals on paper. Kept as ONE
           text run (rather than the pitch's three separate tiles) because that

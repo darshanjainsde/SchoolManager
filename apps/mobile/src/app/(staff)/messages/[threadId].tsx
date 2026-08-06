@@ -8,6 +8,7 @@ import {
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { Card } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, useGesture } from '@/theme/motion';
@@ -142,9 +143,7 @@ export default function StaffThread() {
           </Card>
         )}
         {detail === null && !error && (
-          <Card>
-            <Text style={{ color: tokens.color.sub }}>Loading conversation…</Text>
-          </Card>
+          <LoadingRows label="Loading conversation…" rows={4} />
         )}
         {detail?.messages.length === 0 && !error && (
           <Card>

@@ -11,6 +11,7 @@ import { NowCard } from '@/components/NowCard';
 import { DayTimeline } from '@/components/DayTimeline';
 import { ClassNotesPanel } from '@/components/ClassNotesPanel';
 import { Card, Page, PageHeader, Screen } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
 import { Icon, isIconName } from '@/components/icons';
@@ -226,6 +227,13 @@ export default function Today() {
           <Text style={{ color: tokens.color.red }}>{error}</Text>
         </Card>
       )}
+
+      {/* The caption above still carries the sentence, because it IS a sentence
+          — it becomes "3 classes today · 1 taken · 2 pending", not a list. What
+          was missing is the shape of everything below it: the hero, then the
+          day. Home is the screen a teacher opens on a corridor connection, so
+          it is the one where an empty page for two seconds reads as broken. */}
+      {day === null && !error && <LoadingRows label="Loading your day…" rows={4} />}
 
       {day !== null && !error && entries.length === 0 && (
         <Card>

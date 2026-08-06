@@ -7,6 +7,7 @@ import { shiftISO, todayISO, type ClassDayStatus } from '@/lib/attendance';
 import { flush, pendingSaves, queueKey, type FlushResult } from '@/lib/offline-queue';
 import { LockedDayCard } from '@/components/LockedDayCard';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -334,9 +335,7 @@ export default function StaffAttendance() {
             </Card>
           )}
           {rows === null && !error && (
-            <Card>
-              <Text style={{ color: tokens.color.sub }}>Loading your classes…</Text>
-            </Card>
+            <LoadingRows label="Loading your classes…" rows={5} />
           )}
           {rows?.length === 0 && (
             <Card>

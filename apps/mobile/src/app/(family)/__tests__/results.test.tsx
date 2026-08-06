@@ -103,8 +103,8 @@ describe('next test detail', () => {
 describe('fetch states', () => {
   it('shows a loading state before the fetch resolves', () => {
     (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
-    const { getByText } = render(<Results />);
-    expect(getByText('Loading results…')).toBeTruthy();
+    const { getByLabelText } = render(<Results />);
+    expect(getByLabelText('Loading results…')).toBeTruthy();
   });
 
   it('shows the API error message verbatim when the fetch fails', async () => {

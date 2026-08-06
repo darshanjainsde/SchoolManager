@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { Card, Empty, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -159,9 +160,7 @@ export default function Today() {
         </Card>
       )}
       {data === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading your attendance…</Text>
-        </Card>
+        <LoadingRows label="Loading your attendance…" rows={3} />
       )}
 
       {summary && !error && marked === 0 && (

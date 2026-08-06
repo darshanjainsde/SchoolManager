@@ -5,6 +5,7 @@ import { api, ApiError } from '@/lib/api';
 import type { AttendanceSummary } from '@/lib/portal';
 import { buildAttendanceGrid, currentMonthKey, monthKeyLabel, shiftMonthKey } from '@/lib/attendance-grid';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
@@ -269,9 +270,7 @@ export default function Attendance() {
         </Card>
       )}
       {summary === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading attendance…</Text>
-        </Card>
+        <LoadingRows label="Loading attendance…" rows={3} />
       )}
       {summary && month && (
         <>

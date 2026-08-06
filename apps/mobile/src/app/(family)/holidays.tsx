@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { holidayDateParts, type Holiday } from '@/lib/portal';
 import { Card, Empty, Page, Pill, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -65,9 +66,7 @@ export default function Holidays() {
         </Card>
       )}
       {items === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading holidays…</Text>
-        </Card>
+        <LoadingRows label="Loading holidays…" rows={4} />
       )}
       {items?.length === 0 && !error && (
         <Page>

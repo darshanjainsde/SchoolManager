@@ -101,7 +101,7 @@ it('shows a loading state while the week is in flight', async () => {
   setNow(2026, 6, 29, 8, 20);
   (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
   render(<Timetable />);
-  expect(await screen.findByText('Loading your timetable…')).toBeTruthy();
+  expect(await screen.findByLabelText('Loading your timetable…')).toBeTruthy();
 });
 
 it('shows an explicit empty state when there are no slots', async () => {

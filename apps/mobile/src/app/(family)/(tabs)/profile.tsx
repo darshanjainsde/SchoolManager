@@ -7,6 +7,7 @@ import { signOut } from '@/lib/sign-out';
 import { AppearanceSetting } from '@/components/AppearanceSetting';
 import { EditableAvatar } from '@/components/EditableAvatar';
 import { Card, Page, Screen } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -133,9 +134,7 @@ export default function Profile() {
         </Card>
       )}
       {profile === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading profile…</Text>
-        </Card>
+        <LoadingRows label="Loading profile…" rows={4} />
       )}
 
       {profile && (

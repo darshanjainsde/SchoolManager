@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentAssignment, StudentAssignmentList } from '@/lib/portal';
 import { Card, Page, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -159,9 +160,7 @@ export default function Assignments() {
         </Card>
       )}
       {list === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading assignments…</Text>
-        </Card>
+        <LoadingRows label="Loading assignments…" rows={4} />
       )}
       {list !== null && !error && upcoming.length === 0 && past.length === 0 && (
         <Card>

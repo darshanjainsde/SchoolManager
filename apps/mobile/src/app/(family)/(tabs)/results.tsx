@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { formatDate, type PublishedResult, type UpcomingExam } from '@/lib/portal';
 import { Card, Page, Pill, Screen, SectionTitle } from '@/components/ui';
+import { LoadingRows } from '@/components/Loading';
 import { DUR, inkWidth, play, useReduceMotion } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -227,9 +228,7 @@ export default function Results() {
         </Card>
       )}
       {results === null && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>Loading results…</Text>
-        </Card>
+        <LoadingRows label="Loading results…" rows={4} />
       )}
 
       {results !== null && !error && (
