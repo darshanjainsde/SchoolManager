@@ -182,8 +182,13 @@ export default function StaffAttendance() {
     const isPendingSync = pendingKeys.has(key);
     const rejectedMessage = rejectedByKey[key] ?? null;
     return (
+      // LAYOUT LIVES HERE, on a plain View — never on Touchable's style, which
+      // lands on an INNER Animated.View (the flex row then lays out a
+      // content-sized Pressable and 48% resolves against nothing; on-device
+      // this rendered skinny full-height towers). Same wrapper pattern as
+      // HomeToolGrid. Ledger: wrapper-style-prop-lands-on-inner-node.
+      <View key={c.classSectionId} style={{ width: fullWidth ? '100%' : '48.4%' }}>
       <Touchable
-        key={c.classSectionId}
         testID={c.taken ? `retake-${c.classSectionId}` : `take-${c.classSectionId}`}
         onPress={() => goTake(c)}
         // Opening a taken register writes nothing (the overwrite warning
@@ -195,7 +200,6 @@ export default function StaffAttendance() {
             : `${c.name}, ${c.total} students, not taken yet. Take attendance`
         }
         style={{
-          width: fullWidth ? '100%' : '48.4%',
           borderRadius: 16,
           padding: 12,
           gap: 7,
@@ -269,6 +273,7 @@ export default function StaffAttendance() {
           </Text>
         )}
       </Touchable>
+      </View>
     );
   };
 

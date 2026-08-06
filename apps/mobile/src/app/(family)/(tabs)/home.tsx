@@ -197,14 +197,20 @@ function KpiTile({
   // Same rule as Notice above: a figure you cannot open is a figure, not a
   // button. Several of these tiles are read-only by design.
   if (!onPress) return <View style={tile}>{body}</View>;
+  // LAYOUT (`flex: 1`) on a plain wrapper, PAINT on the Touchable — its style
+  // prop lands on an inner view, where flex would leave the row laying out a
+  // content-sized Pressable (ledger: wrapper-style-prop-lands-on-inner-node).
+  const { flex, ...paint } = tile;
   return (
-    <Touchable
-      onPress={onPress}
-      accessibilityLabel={hint ? `${label}, ${value}, ${hint}` : `${label}, ${value}`}
-      style={tile}
-    >
-      {body}
-    </Touchable>
+    <View style={{ flex }}>
+      <Touchable
+        onPress={onPress}
+        accessibilityLabel={hint ? `${label}, ${value}, ${hint}` : `${label}, ${value}`}
+        style={paint}
+      >
+        {body}
+      </Touchable>
+    </View>
   );
 }
 

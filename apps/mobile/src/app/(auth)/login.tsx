@@ -134,18 +134,10 @@ export default function Login() {
             elevation: 12,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {/* The logo's `full` variant draws its own wordmark — a second
+              "Sckools" Text here rendered the name twice (caught on-device). */}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <SckoolsLogo size={22} theme={dark ? 'dark' : 'light'} />
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: '800',
-                letterSpacing: -0.4,
-                color: tokens.color.ink,
-              }}
-            >
-              Sckools
-            </Text>
           </View>
           <View style={{ gap: 3 }}>
             <Text
