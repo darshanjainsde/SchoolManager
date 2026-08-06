@@ -59,7 +59,6 @@ export const HIDDEN_ROUTES = [
   'notes',
   'notes/[classSectionId]',
   'notifications',
-  'settings',
 ];
 
 /**

@@ -19,7 +19,6 @@ import {
 import { Card, Page, PageHeader, Pill, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
-import { SettingsButton } from '@/components/SettingsButton';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
 import { Touchable } from '@/components/Touchable';
 import { StudentHero } from '@/components/StudentHero';
@@ -335,7 +334,6 @@ export default function Home() {
           {profile ? `Hi, ${profile.firstName} 👋` : 'Home'}
         </Text>
         <NotificationBell group="(family)" />
-        <SettingsButton group="(family)" />
         {profile && (
           <View
             style={{
