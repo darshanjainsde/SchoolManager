@@ -4,6 +4,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { Card } from './ui';
 import { Touchable } from './Touchable';
+import { CountUp } from './CountUp';
 import { useTokens } from '@/theme/theme-context';
 import { brand, font } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture, useReduceMotion } from '@/theme/motion';
@@ -161,8 +162,14 @@ function HeroChip({ children }: { children: ReactNode }) {
   );
 }
 
-/** A single "5 / classes taught" figure cell in the day-complete summary row. */
-function SummaryCell({ value, label }: { value: string; label: string }) {
+/**
+ * A single "5 / classes taught" figure cell in the day-complete summary row.
+ *
+ * The figure counts up, and this is the one card in the app where that is
+ * right: the day is over, nothing here will change again, and the number is
+ * the point of the card rather than a side effect of what you are doing.
+ */
+function SummaryCell({ value, label, testID }: { value: number; label: string; testID?: string }) {
   return (
     <View
       style={{
@@ -175,7 +182,11 @@ function SummaryCell({ value, label }: { value: string; label: string }) {
         paddingVertical: 9,
       }}
     >
-      <Text style={{ color: brand.onHero, fontSize: 19, fontWeight: '800' }}>{value}</Text>
+      <CountUp
+        testID={testID}
+        value={value}
+        style={{ color: brand.onHero, fontSize: 19, fontWeight: '800' }}
+      />
       <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 10.5, fontWeight: '600', marginTop: 1 }}>
         {label}
       </Text>
@@ -313,8 +324,8 @@ export function NowCard({
             {`${s.classesTaught} ${s.classesTaught === 1 ? 'class' : 'classes'} taught`}
           </Text>
           <View testID="now-summary" style={{ flexDirection: 'row', gap: 8, marginTop: 13 }}>
-            <SummaryCell value={String(s.classesTaught)} label="classes taught" />
-            <SummaryCell value={String(s.studentsMarked)} label="students marked" />
+            <SummaryCell testID="summary-classes" value={s.classesTaught} label="classes taught" />
+            <SummaryCell testID="summary-marked" value={s.studentsMarked} label="students marked" />
           </View>
         </GradientHero>
       );
