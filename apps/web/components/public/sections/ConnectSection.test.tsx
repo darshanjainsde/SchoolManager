@@ -159,7 +159,7 @@ describe('joining', () => {
     renderConnect([event({ id: 'e1', title: 'Open Day' })]);
     await user.click(screen.getByRole('button', { name: /join/i }));
     const sheet = within(screen.getByRole('dialog'));
-    expect(sheet.getByLabelText(/your name/i)).toBeInTheDocument();
+    expect(await sheet.findByLabelText(/your name/i)).toBeInTheDocument();
     expect(sheet.getByLabelText(/email/i)).toBeInTheDocument();
     expect(sheet.getByLabelText(/phone/i)).toBeInTheDocument();
   });
@@ -169,7 +169,7 @@ describe('joining', () => {
     renderConnect([event({ id: 'e1', title: 'Open Day' })]);
     await user.click(screen.getByRole('button', { name: /join/i }));
     const sheet = within(screen.getByRole('dialog'));
-    await user.type(sheet.getByLabelText(/your name/i), 'Priya Nair');
+    await user.type(await sheet.findByLabelText(/your name/i), 'Priya Nair');
     await user.type(sheet.getByLabelText(/email/i), 'priya@example.com');
     await user.click(sheet.getByRole('button', { name: /confirm/i }));
 
@@ -193,7 +193,7 @@ describe('joining', () => {
     renderConnect([event({ id: 'e1', title: 'Open Day' })]);
     await user.click(screen.getByRole('button', { name: /join/i }));
     const sheet = within(screen.getByRole('dialog'));
-    await user.type(sheet.getByLabelText(/your name/i), 'Priya Nair');
+    await user.type(await sheet.findByLabelText(/your name/i), 'Priya Nair');
     await user.type(sheet.getByLabelText(/email/i), 'priya@example.com');
     await user.click(sheet.getByRole('button', { name: /confirm/i }));
 
@@ -201,13 +201,20 @@ describe('joining', () => {
     expect(banner.textContent).not.toMatch(/emailed|we’ll email|we will email/i);
   });
 
+  // `findByLabelText`, not `getByLabelText`, for the FIRST field read out of the
+  // sheet. The sheet opens immediately but its guest fields render only once the
+  // signed-in probe (registration-client.ts fetching the refresh cookie) has
+  // answered, so a synchronous read races that probe: it wins on an idle machine
+  // and lost in CI, where this file failed on `/your name/i` while passing 21/21
+  // locally. Later fields stay synchronous — by then the await has proved the
+  // sheet's contents are on screen.
   it('says a place was kept in the queue when the event was already full', async () => {
     submitRegistration.mockResolvedValue({ ok: true, status: 'WAITLISTED', waitlistPos: 4 });
     const user = userEvent.setup({ delay: null });
     renderConnect([event({ id: 'e1', title: 'Open Day', seatsLeft: 0 })]);
     await user.click(screen.getByRole('button', { name: /waitlist/i }));
     const sheet = within(screen.getByRole('dialog'));
-    await user.type(sheet.getByLabelText(/your name/i), 'Priya Nair');
+    await user.type(await sheet.findByLabelText(/your name/i), 'Priya Nair');
     await user.type(sheet.getByLabelText(/email/i), 'priya@example.com');
     await user.click(sheet.getByRole('button', { name: /confirm/i }));
 
@@ -220,7 +227,7 @@ describe('joining', () => {
     renderConnect([event({ id: 'e1', title: 'Open Day' })]);
     await user.click(screen.getByRole('button', { name: /join/i }));
     const sheet = within(screen.getByRole('dialog'));
-    await user.type(sheet.getByLabelText(/your name/i), 'Priya Nair');
+    await user.type(await sheet.findByLabelText(/your name/i), 'Priya Nair');
     await user.type(sheet.getByLabelText(/email/i), 'priya@example.com');
     await user.click(sheet.getByRole('button', { name: /confirm/i }));
 
