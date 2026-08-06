@@ -11,6 +11,14 @@ import { brandedLight } from './school-brand';
 import { readCachedBrand, refreshSchoolBrand } from '@/lib/school-brand-client';
 import * as SecureStore from 'expo-secure-store';
 import { GAP, RADIUS, palette, type ColorPalette, type ColorScheme } from './tokens';
+import {
+  GROUNDS,
+  applyGround,
+  isGroundName,
+  isPaperPattern,
+  type GroundName,
+  type PaperPattern,
+} from './grounds';
 
 export type ThemePreference = 'system' | ColorScheme;
 
@@ -18,6 +26,8 @@ export type ThemePreference = 'system' | ColorScheme;
 // `src/lib/session.ts`) rather than adding an AsyncStorage-equivalent
 // dependency purely for a UI preference.
 const PREF_KEY = 'sckools.themePreference';
+const GROUND_KEY = 'sckools.ground';
+const PATTERN_KEY = 'sckools.paperPattern';
 
 function isThemePreference(v: string | null): v is ThemePreference {
   return v === 'system' || v === 'light' || v === 'dark';
@@ -29,6 +39,12 @@ interface ThemeContextValue {
   /** The user's stated choice — 'system' means "follow the OS". */
   preference: ThemePreference;
   setPreference: (next: ThemePreference) => void;
+  /** The paper this person reads on. Personal; never the school's business. */
+  ground: GroundName;
+  setGround: (next: GroundName) => void;
+  /** Ruling behind the page. Grain is a separate axis, not a fourth pattern. */
+  pattern: PaperPattern;
+  setPattern: (next: PaperPattern) => void;
   tokens: { color: ColorPalette; gap: number; radius: typeof RADIUS };
 }
 
@@ -43,6 +59,12 @@ const defaultThemeContext: ThemeContextValue = {
   scheme: 'light',
   preference: 'system',
   setPreference: () => undefined,
+  // 'classic' reproduces today's palette exactly, so a tree without a provider
+  // renders precisely what it rendered before grounds existed.
+  ground: 'classic',
+  setGround: () => undefined,
+  pattern: 'plain',
+  setPattern: () => undefined,
   tokens: { color: palette.light, gap: GAP, radius: RADIUS },
 };
 
@@ -51,6 +73,8 @@ const ThemeContext = createContext<ThemeContextValue>(defaultThemeContext);
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme(); // 'light' | 'dark' | null | undefined
   const [preference, setPreferenceState] = useState<ThemePreference>('system');
+  const [ground, setGroundState] = useState<GroundName>('classic');
+  const [pattern, setPatternState] = useState<PaperPattern>('plain');
   // The school's own colour, for the LIGHT scheme only. Cache first so the
   // theme is right on the frame the app opens rather than one round-trip
   // later; the network refresh then updates it for the next launch.
@@ -74,6 +98,12 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     SecureStore.getItemAsync(PREF_KEY).then((stored) => {
       if (!cancelled && isThemePreference(stored)) setPreferenceState(stored);
     });
+    SecureStore.getItemAsync(GROUND_KEY).then((stored) => {
+      if (!cancelled && isGroundName(stored)) setGroundState(stored);
+    });
+    SecureStore.getItemAsync(PATTERN_KEY).then((stored) => {
+      if (!cancelled && isPaperPattern(stored)) setPatternState(stored);
+    });
     return () => {
       cancelled = true;
     };
@@ -86,6 +116,16 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     SecureStore.setItemAsync(PREF_KEY, next).catch(() => undefined);
   }
 
+  function setGround(next: GroundName) {
+    setGroundState(next);
+    SecureStore.setItemAsync(GROUND_KEY, next).catch(() => undefined);
+  }
+
+  function setPattern(next: PaperPattern) {
+    setPatternState(next);
+    SecureStore.setItemAsync(PATTERN_KEY, next).catch(() => undefined);
+  }
+
   const scheme: ColorScheme =
     preference === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : preference;
 
@@ -94,19 +134,29 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       scheme,
       preference,
       setPreference,
+      ground,
+      setGround,
+      pattern,
+      setPattern,
       // A school picks its colours for a website on warm paper, which is what
       // the light theme is — so the colour travels there and nowhere else. The
       // dark scheme keeps its own indigo ink: a brand chosen against white can
       // fail badly on a near-black surface, and no semantic colour moves in
       // either scheme.
+      // Ground goes on LAST and touches only the neutrals, so a person's choice
+      // of paper can never repaint their school's colour or the green and red
+      // that mean present and absent.
       tokens: {
-        color: scheme === 'light' ? brandedLight(palette.light, brand) : palette.dark,
+        color: applyGround(
+          scheme === 'light' ? brandedLight(palette.light, brand) : palette.dark,
+          GROUNDS[ground][scheme],
+        ),
         gap: GAP,
         radius: RADIUS,
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scheme, preference, brand],
+    [scheme, preference, brand, ground, pattern],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
