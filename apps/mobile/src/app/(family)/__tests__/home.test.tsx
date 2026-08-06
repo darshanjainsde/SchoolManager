@@ -238,20 +238,16 @@ describe('navigation', () => {
     expect(mockPush).toHaveBeenCalledWith('/(family)/timetable');
   });
 
-  // Paper-slip repaint: the bell does NOT navigate any more. A notification is
-  // a note about the page you are on, so it unfolds a slip in place over this
-  // screen — losing your place to read one was the thing being fixed. The
-  // standalone /(family)/notifications screen is still a route (it is where a
-  // tapped push lands, and where the slip's "See all notifications" goes).
-  it('the notification bell unfolds the slip in place instead of navigating', async () => {
-    mockEndpoints({ '/me/notifications': { notifications: [], unreadCount: 0 } });
-    const { findByTestId, queryByTestId } = render(<Home />);
+  // Pitch №3: the slip is gone — it unfolded over the status bar and showed
+  // one row. The bell navigates to the full notifications screen, the same
+  // route a tapped push notification lands on: one screen, reached one way.
+  it('the notification bell navigates to the notifications screen', async () => {
+    mockEndpoints({});
+    const { findByTestId } = render(<Home />);
 
-    expect(queryByTestId('notification-slip')).toBeNull();
     fireEvent.press(await findByTestId('notification-bell'));
 
-    expect(await findByTestId('notification-slip')).toBeTruthy();
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/(family)/notifications');
   });
 });
 

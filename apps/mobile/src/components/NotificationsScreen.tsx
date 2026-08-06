@@ -3,7 +3,7 @@ import { Pressable, Text, View, type TextStyle } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { NotificationRow } from '@skoolos/types';
 import { ApiError } from '@/lib/api';
-import { fetchNotifications, markNotificationsRead } from '@/lib/notifications';
+import { clearNotifications, fetchNotifications, markNotificationsRead } from '@/lib/notifications';
 import { KIND_ICON, formatWhen, routeFor, type NotificationGroup } from '@/lib/notification-links';
 import { Animated } from 'react-native';
 import { Card, Empty, Page, Screen, SectionTitle } from '@/components/ui';
@@ -40,7 +40,18 @@ function groupLabel(tokens: { color: ColorPalette }): TextStyle {
  * `NotificationSlip` exactly — the slip and this screen are two views of one
  * board, so they must not move differently.
  */
-function Row({ n, index, onPress }: { n: NotificationRow; index: number; onPress: () => void }) {
+function Row({
+  n,
+  index,
+  onPress,
+  onDismiss,
+}: {
+  n: NotificationRow;
+  index: number;
+  onPress: () => void;
+  /** The per-row ✕ (pitch №3): soft-clears just this row. */
+  onDismiss: () => void;
+}) {
   const tokens = useTokens();
   const unread = !n.readAt;
   // A remark is the one kind that carries a consequence at home, so its tile
@@ -106,6 +117,19 @@ function Row({ n, index, onPress }: { n: NotificationRow; index: number; onPress
             }}
           />
         )}
+        {/* Its own Pressable, not decoration on the row: dismissing must
+            never also open the deep-link, and a screen reader needs a named
+            button. hitSlop keeps the 22px glyph a thumb-sized target. */}
+        <Pressable
+          testID={`notification-dismiss-${n.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Dismiss: ${n.title}`}
+          onPress={onDismiss}
+          hitSlop={10}
+          style={({ pressed }) => ({ marginTop: 1, opacity: pressed ? 0.5 : 1 })}
+        >
+          <Text style={{ fontSize: 13, color: tokens.color.sub, fontWeight: '700' }}>✕</Text>
+        </Pressable>
       </Card>
     </Pressable>
   );
@@ -123,12 +147,14 @@ function Row({ n, index, onPress }: { n: NotificationRow; index: number; onPress
  * with the server call fire-and-forget (a failure just leaves the row unread on
  * the next focus refetch).
  *
- * Since the paper-slip repaint the BELL no longer opens this screen — it
- * unfolds `NotificationSlip` in place over whatever you were reading. This
- * screen stays the full-page surface behind the slip's "See all
- * notifications", and remains the landing route for a tapped push
- * notification; both surfaces share `lib/notification-links.ts` so a row goes
- * to the same place from either.
+ * Dismissing (pitch №3): the ✕ on a row soft-clears just it; "Clear all" at
+ * the foot empties the list. Both apply optimistically and fire-and-forget,
+ * matching the read path — a failed call simply resurfaces the row on the
+ * next focus refetch, which is the honest recovery.
+ *
+ * The bell navigates HERE (the popup slip is gone), and this is also the
+ * landing route for a tapped push notification — one screen, reached one way,
+ * with `lib/notification-links.ts` deciding where a tapped row deep-links.
  */
 export function NotificationsScreen({ group }: { group: Group }) {
   const tokens = useTokens();
@@ -156,6 +182,16 @@ export function NotificationsScreen({ group }: { group: Group }) {
     const now = new Date().toISOString();
     setRows((prev) => prev?.map((n) => ({ ...n, readAt: n.readAt ?? now })) ?? prev);
     markNotificationsRead().catch(() => {});
+  };
+
+  const dismiss = (n: NotificationRow) => {
+    setRows((prev) => prev?.filter((x) => x.id !== n.id) ?? prev);
+    clearNotifications([n.id]).catch(() => {});
+  };
+
+  const clearAll = () => {
+    setRows([]);
+    clearNotifications().catch(() => {});
   };
 
   const open = (n: NotificationRow) => {
@@ -212,12 +248,37 @@ export function NotificationsScreen({ group }: { group: Group }) {
 
       {unread.length > 0 && <Text style={groupLabel(tokens)}>New</Text>}
       {unread.map((n, i) => (
-        <Row key={n.id} n={n} index={i} onPress={() => open(n)} />
+        <Row key={n.id} n={n} index={i} onPress={() => open(n)} onDismiss={() => dismiss(n)} />
       ))}
       {earlier.length > 0 && <Text style={groupLabel(tokens)}>Earlier</Text>}
       {earlier.map((n, i) => (
-        <Row key={n.id} n={n} index={i} onPress={() => open(n)} />
+        <Row key={n.id} n={n} index={i} onPress={() => open(n)} onDismiss={() => dismiss(n)} />
       ))}
+
+      {/* Clear all — quiet, at the very foot, in the red family: it removes
+          things. Kept OFF the header so "Mark all read" (recoverable) and
+          "clear everything" (a bigger gesture) can never be mistaken for one
+          another in a hurry. */}
+      {(rows?.length ?? 0) > 0 && (
+        <Pressable
+          testID="notifications-clear-all"
+          accessibilityRole="button"
+          onPress={clearAll}
+          style={({ pressed }) => ({
+            marginTop: 6,
+            paddingVertical: 12,
+            borderRadius: 13,
+            borderWidth: 1,
+            borderColor: tokens.color.line,
+            backgroundColor: tokens.color.surface,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Text style={{ textAlign: 'center', color: tokens.color.red, fontWeight: '700', fontSize: 13 }}>
+            Clear all
+          </Text>
+        </Pressable>
+      )}
     </Screen>
   );
 }

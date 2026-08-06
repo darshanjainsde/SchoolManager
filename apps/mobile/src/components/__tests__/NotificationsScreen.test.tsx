@@ -88,3 +88,37 @@ it('"Mark all read" clears every unread row (the New group disappears)', async (
   expect(request).toHaveBeenCalledWith('/me/notifications/read', expect.objectContaining({ method: 'POST' }));
   await waitFor(() => expect(queryByText('New')).toBeNull());
 });
+
+it('the ✕ dismisses just that row — it leaves the screen and /clear gets its id', async () => {
+  withNotifications([UNREAD, READ]);
+  const { getByTestId, queryByTestId } = render(<NotificationsScreen group="(family)" />);
+  await waitFor(() => expect(getByTestId('notification-n1')).toBeTruthy());
+
+  fireEvent.press(getByTestId('notification-dismiss-n1'));
+
+  // Outcome first: the row is gone, its sibling survives.
+  await waitFor(() => expect(queryByTestId('notification-n1')).toBeNull());
+  expect(getByTestId('notification-n2')).toBeTruthy();
+  expect(request).toHaveBeenCalledWith(
+    '/me/notifications/clear',
+    expect.objectContaining({ method: 'POST', body: { ids: ['n1'] } }),
+  );
+  // Dismiss must never also deep-link.
+  expect(mockPush).not.toHaveBeenCalled();
+});
+
+it('"Clear all" empties the list into the caught-up state', async () => {
+  withNotifications([UNREAD, READ]);
+  const { getByTestId, queryByTestId } = render(<NotificationsScreen group="(family)" />);
+  await waitFor(() => expect(getByTestId('notifications-clear-all')).toBeTruthy());
+
+  fireEvent.press(getByTestId('notifications-clear-all'));
+
+  await waitFor(() => expect(getByTestId('notifications-empty')).toBeTruthy());
+  expect(queryByTestId('notification-n1')).toBeNull();
+  expect(queryByTestId('notifications-clear-all')).toBeNull();
+  expect(request).toHaveBeenCalledWith(
+    '/me/notifications/clear',
+    expect.objectContaining({ method: 'POST', body: {} }),
+  );
+});

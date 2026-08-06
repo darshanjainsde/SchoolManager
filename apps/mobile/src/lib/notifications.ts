@@ -23,3 +23,13 @@ export function markNotificationsRead(ids?: string[]): Promise<UnreadCountResult
     body: ids && ids.length > 0 ? { ids } : {},
   });
 }
+
+/** Soft-clear ("dismiss") specific notifications, or (no ids) clear the lot —
+ *  the notification screen's per-row ✕ and its "Clear all". Cleared rows leave
+ *  the list and the badge but are never destroyed server-side. */
+export function clearNotifications(ids?: string[]): Promise<UnreadCountResult> {
+  return api.request<UnreadCountResult>('/me/notifications/clear', {
+    method: 'POST',
+    body: ids && ids.length > 0 ? { ids } : {},
+  });
+}
