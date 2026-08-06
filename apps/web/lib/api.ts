@@ -55,9 +55,24 @@ function isAuthEntryPath(path: string): boolean {
   return AUTH_ENTRY_PATHS.some((p) => clean === p || clean.startsWith(`${p}/`));
 }
 
+/**
+ * The in-flight refresh, SHARED BY EVERY CLIENT IN THE TAB.
+ *
+ * It cannot live on the instance. `useApi()` builds an ApiClient per component
+ * and 78 files call it, so a layout and its page each hold their own — while
+ * they all share ONE rotating refresh cookie. Two instances refreshing at once
+ * meant the first rotated the token and revoked it, and the second presented a
+ * revoked token, got a 401 and signed the user out. That is why the console
+ * asked for a password on every reload but never during navigation: a warm
+ * navigation already has an access token, so nothing 401s.
+ *
+ * Keyed by audience: a school session and an owner session are different
+ * cookies on different endpoints and must never wait on each other.
+ */
+const inFlightRefresh = new Map<string, Promise<void>>();
+
 export class ApiClient {
   private opts: ApiClientOptions;
-  private refreshing: Promise<void> | null = null;
 
   constructor(opts: ApiClientOptions = {}) {
     this.opts = opts;
@@ -140,12 +155,17 @@ export class ApiClient {
    * being upgraded; either way it is sent in the body as a fallback.
    */
   private async refresh(): Promise<void> {
-    if (this.refreshing) return this.refreshing;
     const refreshToken = this.opts.getRefreshToken?.();
     const audience = this.opts.audience ?? 'school';
     const path = audience === 'platform' ? '/owner/auth/refresh' : '/auth/refresh';
 
-    this.refreshing = (async () => {
+    // Whoever asked first is already spending the cookie; everybody else waits
+    // on that same promise rather than racing it with a token about to be
+    // revoked.
+    const existing = inFlightRefresh.get(audience);
+    if (existing) return existing;
+
+    const run = (async () => {
       try {
         const baseUrl = this.opts.baseUrl ?? DEFAULT_BASE;
         const headers = new Headers({ 'Content-Type': 'application/json' });
@@ -170,10 +190,11 @@ export class ApiClient {
         const body = (await res.json()) as { accessToken: string; refreshToken: string };
         this.opts.setTokens?.({ accessToken: body.accessToken, refreshToken: body.refreshToken });
       } finally {
-        this.refreshing = null;
+        inFlightRefresh.delete(audience);
       }
     })();
-    return this.refreshing;
+    inFlightRefresh.set(audience, run);
+    return run;
   }
 }
 
