@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
 import { todayISO } from '@/lib/attendance';
 import { currentEntry, minutesOfDay } from '@/lib/teacher-day';
+import { useNowMinutes } from '@/lib/use-now-minutes';
 import { NowCard } from '@/components/NowCard';
 import { DayTimeline } from '@/components/DayTimeline';
 import { ClassNotesPanel } from '@/components/ClassNotesPanel';
@@ -17,12 +18,6 @@ import { SettingsButton } from '@/components/SettingsButton';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { salutation } from '@/lib/greeting';
-
-/** Minutes past midnight on the device's own clock, for `currentEntry`. */
-function nowMinutes(): number {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
-}
 
 /**
  * `.needrow` — one line of the "Needs your ink" queue: an amber icon tile, the
@@ -150,7 +145,11 @@ export default function Today() {
   );
 
   const entries = day?.entries ?? [];
-  const now = nowMinutes();
+  // Ticks on the minute (see lib/use-now-minutes.ts). Everything derived below
+  // — which period is live, how far through it we are, which register is still
+  // open, what the timeline highlights — recomputes with it, so the screen
+  // stays honest without the teacher having to leave it and come back.
+  const now = useNowMinutes();
   const { index, entry, elapsed, total } = currentEntry(entries, now);
   // The first entry (chronologically) that hasn't started yet — this works
   // uniformly whether nothing is current (before school / a gap) or a class

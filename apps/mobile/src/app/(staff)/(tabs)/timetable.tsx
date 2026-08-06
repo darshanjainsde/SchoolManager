@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import type { TimetableSlot } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { minutesOfDay } from '@/lib/teacher-day';
+import { useNowMinutes } from '@/lib/use-now-minutes';
 import { buildGrid, cellKey, toGridSlot, type GridPeriodRow } from '@/lib/timetable-grid';
 import { DaySelector } from '@/components/DaySelector';
 import { TimetableList, type TimetableRow } from '@/components/TimetableList';
@@ -30,11 +31,6 @@ import { useTokens } from '@/theme/theme-context';
 function todayDayOfWeek(): number {
   const js = new Date().getDay(); // 0 = Sun … 6 = Sat
   return js === 0 ? 7 : js;
-}
-
-function nowMinutes(): number {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
 }
 
 /**
@@ -94,7 +90,9 @@ export default function Timetable() {
   const defaultDay = shape.days.includes(todayDow) ? todayDow : (shape.days[0] ?? null);
   const selectedDay = pickedDay !== null && shape.days.includes(pickedDay) ? pickedDay : defaultDay;
   const isViewingToday = selectedDay !== null && selectedDay === todayDow;
-  const now = nowMinutes();
+  // Ticks on the minute — the "now" rule moves down the day on its own
+  // rather than freezing wherever the screen happened to be opened.
+  const now = useNowMinutes();
   const currentPeriodId = isViewingToday ? findCurrentPeriodId(shape.periods, now) : null;
 
   const rows: TimetableRow[] = shape.periods.map((period) => ({

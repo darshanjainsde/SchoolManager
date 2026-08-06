@@ -5,6 +5,7 @@ import type { StudentDiaryResult, TimetableSlot } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 import { minutesOfDay } from '@/lib/teacher-day';
+import { useNowMinutes } from '@/lib/use-now-minutes';
 import {
   daysUntilLabel,
   formatDate,
@@ -26,12 +27,6 @@ import { DUR, pinStyle, useGesture } from '@/theme/motion';
 
 /** How many of the most recent announcements the home screen surfaces (the full list lives on Notices). */
 const LATEST_ANNOUNCEMENTS_COUNT = 3;
-
-/** Minutes past midnight on the device's own clock. */
-function nowMinutes(): number {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
-}
 
 /** JS `getDay()` (0=Sun) → ISO weekday (1=Mon … 7=Sun) matching TimetableSlot.dayOfWeek. */
 function isoWeekday(): number {
@@ -282,7 +277,9 @@ export default function Home() {
 
   // Today's schedule, derived client-side from the weekly timetable (there is
   // no per-day endpoint — the whole week comes from /me/timetable).
-  const now = nowMinutes();
+  // Ticks on the minute — the "now" rule moves down the day on its own
+  // rather than freezing wherever the screen happened to be opened.
+  const now = useNowMinutes();
   const isoDay = isoWeekday();
   const todaySlots = (slots ?? [])
     .filter((s) => s.dayOfWeek === isoDay)

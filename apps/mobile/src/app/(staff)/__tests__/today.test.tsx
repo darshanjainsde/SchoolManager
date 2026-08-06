@@ -343,6 +343,35 @@ it('tapping Take attendance in the hero navigates to the take screen with the cl
   expect(mockPush).toHaveBeenCalledWith('/(staff)/take/sec-8a?name=8-A');
 });
 
+it('flips at the bell while the teacher is still looking at it', async () => {
+  // 08:44 — P1 (08:00–08:45) has one minute left. Home used to read the clock
+  // once, at render, so a teacher who opened the app during first period and
+  // glanced at it again after break was still being told P1 was live, and the
+  // only cure was to leave the tab and come back.
+  setNow(8, 44);
+  mockDay(DAY);
+  render(<Today />);
+
+  const before = await screen.findByTestId('now-card');
+  expect(within(before).getByText('8-A · Mathematics')).toBeTruthy();
+  // The queue says this register is the one being missed RIGHT NOW.
+  expect(within(screen.getByTestId('need-take-sec-8a')).getByText('now')).toBeTruthy();
+
+  await act(async () => {
+    jest.advanceTimersByTime(60_000);
+  });
+
+  // 08:45. Nothing refetched, nobody navigated — the clock moved and the whole
+  // derived day moved with it.
+  const after = screen.getByTestId('now-card');
+  expect(within(after).getByText('Break')).toBeTruthy();
+  expect(within(after).queryByText('8-A · Mathematics')).toBeNull();
+  // 8-A's register is still open, so the row stays — but it is no longer the
+  // live one, so it stops shouting.
+  expect(screen.getByTestId('need-take-sec-8a')).toBeTruthy();
+  expect(within(screen.getByTestId('need-take-sec-8a')).queryByText('now')).toBeNull();
+});
+
 it('refetches on focus so a colleague marking the register elsewhere shows up without a manual reload', async () => {
   setNow(8, 20);
   mockDay({
