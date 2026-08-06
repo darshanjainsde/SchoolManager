@@ -73,8 +73,13 @@ const ThemeContext = createContext<ThemeContextValue>(defaultThemeContext);
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme(); // 'light' | 'dark' | null | undefined
   const [preference, setPreferenceState] = useState<ThemePreference>('system');
-  const [ground, setGroundState] = useState<GroundName>('classic');
-  const [pattern, setPatternState] = useState<PaperPattern>('plain');
+  // THE DEFAULTS A REAL PERSON GETS. `classic` shipped first so that adding
+  // grounds could not restyle anyone before the shade had been seen on an
+  // actual phone; that has now been decided, so the app opens on warm cream
+  // with feint ruling. Anyone who had already chosen something keeps it — the
+  // stored value wins over these on the next tick.
+  const [ground, setGroundState] = useState<GroundName>('cream');
+  const [pattern, setPatternState] = useState<PaperPattern>('ruled');
   // The school's own colour, for the LIGHT scheme only. Cache first so the
   // theme is right on the frame the app opens rather than one round-trip
   // later; the network refresh then updates it for the next launch.
