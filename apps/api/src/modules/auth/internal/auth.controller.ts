@@ -5,7 +5,8 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
-import { ForgotPasswordDto, ImpersonateDto, LoginDto, RefreshDto, ResetByCodeDto, ResetPasswordDto } from './dto';
+import { ForgotPasswordDto, ImpersonateDto, LoginDto, RefreshDto, ResetByCodeDto, ResetPasswordDto, ResolveSchoolDto } from './dto';
+import { SchoolResolveService } from './school-resolve.service';
 import { TenantContextService } from '../../tenancy';
 import { FeatureResolverService } from '../../features';
 import { Public } from '../../../common/auth/public.decorator';
@@ -29,7 +30,22 @@ export class AuthController {
     private readonly passwordReset: PasswordResetService,
     private readonly tenantCtx: TenantContextService,
     private readonly features: FeatureResolverService,
+    private readonly schoolResolve: SchoolResolveService,
   ) {}
+
+  /**
+   * App entry gate — the identifier field's replacement for the deleted
+   * "enter your school code" screen. Deliberately does NOT touch tenant
+   * context: it runs before the app knows which school it is talking to.
+   * Same neutral shape whether or not the identifier exists (an empty list),
+   * throttled like login.
+   */
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('resolve-school')
+  async resolveSchool(@Body() dto: ResolveSchoolDto) {
+    return { hosts: await this.schoolResolve.resolve(dto.identifier) };
+  }
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

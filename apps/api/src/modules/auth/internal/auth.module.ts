@@ -5,10 +5,11 @@ import { AuthController } from './auth.controller';
 import { AcceptInviteController } from './accept-invite.controller';
 import { PasswordService } from './password.service';
 import { PasswordResetService } from './password-reset.service';
+import { SchoolResolveService } from './school-resolve.service';
 
 @Module({
   imports: [FeaturesModule],
-  providers: [AuthService, PasswordService, PasswordResetService],
+  providers: [AuthService, PasswordService, PasswordResetService, SchoolResolveService],
   controllers: [AuthController, AcceptInviteController],
   exports: [PasswordService],
 })

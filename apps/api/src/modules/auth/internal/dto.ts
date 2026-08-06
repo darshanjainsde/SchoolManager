@@ -91,3 +91,14 @@ export class ResetByCodeDto {
   @Matches(/^[A-Za-z]{3}-\d{5,}$/, { message: 'The code looks like AAA-00001 — three letters, then digits' })
   code!: string;
 }
+
+/**
+ * App entry gate — resolve a login identifier (student code or email) to the
+ * school host(s) it could belong to, before any tenant context exists.
+ */
+export class ResolveSchoolDto {
+  @ApiProperty({ example: 'RAF-00042' })
+  @IsString()
+  @Length(3, 160)
+  identifier!: string;
+}
