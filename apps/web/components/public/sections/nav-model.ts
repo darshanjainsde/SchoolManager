@@ -94,9 +94,15 @@ function fromConfig(config: NavConfig, input: NavModelInput): NavNode[] {
       kind: 'group',
       key: item.key,
       label: item.label,
-      // `page` and `overview` both give the group somewhere to land; `menu`
-      // deliberately navigates nowhere.
-      href: item.behaviour === 'menu' ? undefined : own?.href,
+      // `menu` deliberately navigates nowhere. `page` lands on the group's own
+      // page. `overview` lands on the GENERATED page at /overview/<slug> — the
+      // slug is frozen at creation, so this URL survives every rename.
+      href:
+        item.behaviour === 'menu'
+          ? undefined
+          : item.behaviour === 'overview'
+            ? `/overview/${item.slug}`
+            : own?.href,
       children,
     });
   });

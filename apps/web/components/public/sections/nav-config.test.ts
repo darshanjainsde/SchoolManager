@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NAV_CAP } from './nav-model';
+import { NAV_CAP, navModel } from './nav-model';
 import { defaultNavConfig, validateNavConfig, slugify, type NavConfig } from './nav-config';
 
 /**
@@ -153,5 +153,62 @@ describe('a school that has published less', () => {
       { key: 'contact', slug: 'contact', label: 'Contact', behaviour: 'page' as const, children: [] },
     ];
     expect(validateNavConfig(config({ items }), few).ok).toBe(true);
+  });
+});
+
+describe('the overview behaviour actually goes somewhere', () => {
+  it('was offered by the editor while doing nothing at all, and must not be again', () => {
+    // Shipped as a selectable option with no page behind it: the editor showed
+    // "Has an overview page", the model treated it as a plain menu, and no such
+    // page existed. §3 calls overview "the only option that gives search
+    // engines somewhere to land", so a no-op is worse than not offering it.
+    const nodes = navModel({
+      flags: {
+        hasAbout: true, hasAcademics: true, hasAdmissions: true, hasHof: true,
+        hasGallery: true, hasEvents: true, hasBlog: true, hasContact: true, hasEnquiry: true,
+      },
+      base: '',
+      courses: [],
+      config: {
+        items: [
+          {
+            key: 'ours',
+            slug: 'our-school',
+            label: 'Our school',
+            behaviour: 'overview',
+            children: [
+              { key: 'about', label: 'About' },
+              { key: 'gallery', label: 'Gallery' },
+            ],
+          },
+        ],
+      },
+    });
+    const group = nodes[0];
+    if (group.kind !== 'group') throw new Error('expected a group');
+    // The FROZEN slug, not the label — renaming the group must not move the page.
+    expect(group.href).toBe('/overview/our-school');
+  });
+
+  it('leaves a menu group with nowhere to land, which is what menu means', () => {
+    const nodes = navModel({
+      flags: {
+        hasAbout: true, hasAcademics: true, hasAdmissions: true, hasHof: true,
+        hasGallery: true, hasEvents: true, hasBlog: true, hasContact: true, hasEnquiry: true,
+      },
+      base: '',
+      courses: [],
+      config: {
+        items: [
+          {
+            key: 'ours', slug: 'our-school', label: 'Our school', behaviour: 'menu',
+            children: [{ key: 'about', label: 'About' }, { key: 'gallery', label: 'Gallery' }],
+          },
+        ],
+      },
+    });
+    const group = nodes[0];
+    if (group.kind !== 'group') throw new Error('expected a group');
+    expect(group.href).toBeUndefined();
   });
 });

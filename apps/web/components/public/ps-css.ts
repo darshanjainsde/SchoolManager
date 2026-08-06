@@ -94,7 +94,14 @@ export const PS_CSS = `
 
   /* gentle lift on hover */
   .ps-lift { transition: transform .35s cubic-bezier(.2,.7,.2,1), box-shadow .35s; }
-  .ps-lift:hover { transform: translateY(-6px); box-shadow: 0 30px 60px -28px rgba(28,45,36,.45); }
+  /* The lift's shadow is a TOKEN, not a constant. Hardcoded, it grew a floating
+     white panel on hover on an Editorial card — which has no fill and no shadow
+     by definition — so the one control that is meant to reach everything below
+     the fold visibly did not reach hover. */
+  .ps-lift:hover { transform: translateY(-6px); box-shadow: var(--ps-lift-shadow); }
+  .ps-root { --ps-lift-shadow: 0 30px 60px -28px rgba(28,45,36,.45); }
+  .ps-shape-editorial { --ps-lift-shadow: none; }
+  .ps-shape-crisp { --ps-lift-shadow: none; }
 
   /* glow button */
   .btn-glow { position: relative; overflow: hidden; }
@@ -126,11 +133,14 @@ export const PS_CSS = `
   .ps-texture-dots { background-image:
       radial-gradient(color-mix(in srgb, var(--ps1) 12%, transparent) 1px, transparent 1px);
     background-size: 20px 20px; }
+  /* ONE wash across the page, never a tile. At background-size 900px these
+     gradients repeated, and because they are not seamless at the edges the
+     repeat showed as a hard vertical seam down the middle of every page. */
   .ps-texture-paper { background-image:
       radial-gradient(circle at 20% 15%, color-mix(in srgb, var(--ps1) 6%, transparent), transparent 45%),
       radial-gradient(circle at 78% 60%, color-mix(in srgb, var(--ps2) 6%, transparent), transparent 40%),
       radial-gradient(circle at 45% 88%, color-mix(in srgb, var(--ps1) 5%, transparent), transparent 42%);
-    background-size: 900px 900px; }
+    background-repeat: no-repeat; background-size: 100% 100%; background-attachment: scroll; }
 
   /* ── The headline motif, off the headline ────────────────────────────────
      A band heading wears the SAME motif the hero headline does, so the page

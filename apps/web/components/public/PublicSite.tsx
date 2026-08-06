@@ -221,6 +221,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
               courses={data.courses}
               variant="rail"
               showFeeTable
+              onOwnPage
             />
           )}
           {view === 'gallery' && <GallerySection gallery={data.gallery} schoolName={schoolName} onOwnPage />}
