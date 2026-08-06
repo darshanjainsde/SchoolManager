@@ -619,7 +619,7 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
               {config.contactPhone ? <> · 📞 <a href={`tel:${config.contactPhone.replace(/\s/g, '')}`}>{config.contactPhone}</a></> : null}
             </div>
             <div style={{ marginTop: 6 }}>
-              <a href="/pricing">Pricing</a> · <a href="#events">Events Network</a> · <Link href="/jobs">Jobs</Link> · <a href="/owner">Owner login</a>
+              <a href="/pricing">Pricing</a> · <a href="#events">Events Network</a> · <Link href="/jobs">Jobs</Link>
             </div>
           </div>
         </div>
