@@ -126,11 +126,20 @@ export class AuthController {
   @UseGuards(SchoolJwtGuard)
   @Get('me')
   async me(@CurrentUser() user: SchoolJwtPayload) {
-    const features = await this.features.getFeatures(user.schoolId);
+    const [features, name] = await Promise.all([
+      this.features.getFeatures(user.schoolId),
+      // The clients have nowhere else to learn the signed-in person's NAME:
+      // the login response carries none, and `User` has no name column. Without
+      // it the mobile app fell back to the login identifier and greeted
+      // teachers with their own email address. Null when no role record claims
+      // the user yet — the client decides what to show instead.
+      this.auth.displayNameFor(user.schoolId, user.sub, user.role),
+    ]);
     return {
       userId: user.sub,
       schoolId: user.schoolId,
       role: user.role,
+      name,
       features: [...features],
     };
   }

@@ -155,8 +155,23 @@ it('greets the teacher by name and shows the classes/taken/pending summary', asy
   mockDay(DAY);
   render(<Today />);
 
-  expect(await screen.findByText('Good day, Priya Sharma')).toBeTruthy();
+  // The NAME stands alone on the serif line — the salutation is a separate
+  // eyebrow above it, so the name is a title rather than the tail of a
+  // sentence. Asserted as its own text node for exactly that reason.
+  expect(await screen.findByText('Priya Sharma')).toBeTruthy();
+  expect(await screen.findByText('Good morning')).toBeTruthy();
   expect(await screen.findByText('2 classes today · 0 taken · 2 pending')).toBeTruthy();
+});
+
+it('never greets the teacher with the email address they signed in with', async () => {
+  // `displayName` used to be the login identifier, so this line read
+  // "Good day, rao@raffles.sckools.com" across the top of the home screen.
+  setNow(8, 20);
+  mockDay(DAY);
+  render(<Today />);
+
+  await screen.findByText('Priya Sharma');
+  expect(screen.queryByText(/@/)).toBeNull();
 });
 
 it('during a current CLASS period, renders the hero with class/subject/progress and mounts the notes panel', async () => {

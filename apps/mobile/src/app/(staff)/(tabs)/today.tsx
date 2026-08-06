@@ -13,6 +13,7 @@ import { Card, Page, PageHeader, Screen } from '@/components/ui';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
+import { salutation } from '@/lib/greeting';
 
 /** Minutes past midnight on the device's own clock, for `currentEntry`. */
 function nowMinutes(): number {
@@ -152,11 +153,35 @@ export default function Today() {
   return (
     <Screen>
       {/* `.greet` + `.kidchip` — the teacher's name in the diary serif, the
-          bell out in the right margin. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 2 }}>
-        <Text style={{ fontFamily: font.serif, fontSize: 20, color: tokens.color.ink, flex: 1 }}>
-          {name ? `Good day, ${name}` : 'Today'}
-        </Text>
+          bell out in the right margin.
+
+          Two lines, not one: the greeting is the same every morning, the NAME
+          is the part that is theirs. Setting the salutation as a small
+          letter-spaced eyebrow lets the name take the full serif line at a size
+          that reads as a title, instead of both sharing one 20px run where the
+          name is just the tail of a sentence. */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 2 }}>
+        <View style={{ flex: 1 }}>
+          <Text
+            maxFontSizeMultiplier={1.4}
+            style={{
+              fontSize: 11,
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+              color: tokens.color.sub,
+              marginBottom: 1,
+            }}
+          >
+            {salutation()}
+          </Text>
+          <Text
+            maxFontSizeMultiplier={1.4}
+            numberOfLines={1}
+            style={{ fontFamily: font.serif, fontSize: 26, lineHeight: 31, color: tokens.color.ink }}
+          >
+            {name ?? 'Today'}
+          </Text>
+        </View>
         <NotificationBell group="(staff)" />
       </View>
 

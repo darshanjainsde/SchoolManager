@@ -146,11 +146,14 @@ describe('api.upload()', () => {
 
 // The real POST /auth/login response is `{ accessToken, refreshToken, expiresIn }`
 // with no embedded user object (see apps/api/src/modules/auth/internal/auth.service.ts
-// `IssuedTokens` and auth.controller.ts `login`/`refresh`). Role is only available via
-// GET /auth/me (`{ userId, schoolId, role, features }`), which also has no display name,
-// so api.login must chain a login call with a /auth/me call and fall back to the
-// identifier for displayName.
-it('login() exchanges credentials, fetches role from /auth/me, and stores the session', async () => {
+// `IssuedTokens` and auth.controller.ts `login`/`refresh`). Role and NAME come from
+// GET /auth/me (`{ userId, schoolId, role, name, features }`), so api.login must chain
+// a login call with a /auth/me call.
+//
+// `name` is null for an account no Teacher/Student/Staff row claims yet, and only then
+// does the login identifier stand in — greeting someone by the email they typed is a
+// poor last resort, not the normal case, which is what it used to be.
+it('login() falls back to the identifier only when nobody has a name on file', async () => {
   mockFetch
     .mockResolvedValueOnce({
       ok: true, status: 200,
@@ -182,6 +185,43 @@ it('login() exchanges credentials, fetches role from /auth/me, and stores the se
   expect(meInit.headers['Authorization']).toBe('Bearer at1');
 
   expect(await session.get()).toEqual(s);
+});
+
+it('login() greets the teacher by their NAME, never by the email they signed in with', async () => {
+  // The bug this pins: `displayName` was the login identifier, so the top of
+  // the home screen read "Good day, rao@raffles.sckools.com".
+  mockFetch
+    .mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ accessToken: 'at1', refreshToken: 'rt1', expiresIn: 900 }),
+    })
+    .mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ userId: 'u1', schoolId: 's1', role: 'TEACHER', name: 'Priya Sharma', features: [] }),
+    });
+
+  const s = await api.login('raffles.sckools.com', 'rao@raffles.sckools.com', 'hunter2');
+
+  expect(s.displayName).toBe('Priya Sharma');
+  expect(s.displayName).not.toContain('@');
+});
+
+it('login() ignores a blank name rather than greeting an empty space', async () => {
+  // firstName/lastName are required columns but can both be whitespace, which
+  // would otherwise render "Good day, " with nothing after it.
+  mockFetch
+    .mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ accessToken: 'at1', refreshToken: 'rt1', expiresIn: 900 }),
+    })
+    .mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ userId: 'u1', schoolId: 's1', role: 'TEACHER', name: '   ', features: [] }),
+    });
+
+  const s = await api.login('raffles.sckools.com', 'rao@raffles.sckools.com', 'hunter2');
+
+  expect(s.displayName).toBe('rao@raffles.sckools.com');
 });
 
 it('login() throws ApiError on invalid credentials without touching /auth/me', async () => {
