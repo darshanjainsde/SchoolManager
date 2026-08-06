@@ -83,7 +83,11 @@ function TabButton({
       style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 6 }}
     >
       <Ionicons name={icon} size={22} color={color} />
-      <Text style={{ fontSize: 10, fontWeight: '700', color }}>{title}</Text>
+      {/* Capped: this label lives under an icon in a fixed-height bar. Content
+          elsewhere scales freely — see theme/__tests__/text-scaling.test.ts. */}
+      <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 10, fontWeight: '700', color }}>
+        {title}
+      </Text>
     </Pressable>
   );
 }
@@ -165,7 +169,12 @@ export function PortalTabBar({ tabs, state, navigation, insets, onToolsPress, to
             <Ionicons name="chevron-up" size={24} color={tokens.color.onBrand} />
           </Animated.View>
         </Pressable>
-        <Text style={{ fontSize: 10, fontWeight: '700', color: tokens.color.sub, marginTop: 2 }}>Tools</Text>
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={{ fontSize: 10, fontWeight: '700', color: tokens.color.sub, marginTop: 2 }}
+        >
+          Tools
+        </Text>
       </View>
 
       {right.map((t) => (
