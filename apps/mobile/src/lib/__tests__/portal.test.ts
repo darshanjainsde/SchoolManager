@@ -1,6 +1,19 @@
 import { daysUntilLabel, formatDate } from '../portal';
 
 describe('daysUntilLabel', () => {
+  // These tests build their inputs relative to "now", so the real clock made
+  // them time-of-day flaky: at 23:xx local, "+1 hour" crosses midnight and
+  // "Today" legitimately reads "Tomorrow" (and "-1 hour" breaks at 00:xx).
+  // Freeze mid-morning LOCAL time — set once; never re-frozen (modern fake
+  // timers share one clock between timers and Date.now()).
+  beforeAll(() => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    jest.setSystemTime(new Date(2026, 7, 6, 10, 0, 0));
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   it('reads "Today" for a timestamp later today', () => {
     const later = new Date();
     later.setHours(later.getHours() + 1);
