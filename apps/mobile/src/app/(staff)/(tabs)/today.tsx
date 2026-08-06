@@ -11,6 +11,8 @@ import { DayTimeline } from '@/components/DayTimeline';
 import { ClassNotesPanel } from '@/components/ClassNotesPanel';
 import { Card, Page, PageHeader, Screen } from '@/components/ui';
 import { NotificationBell } from '@/components/NotificationBell';
+import { HomeToolGrid } from '@/components/HomeToolGrid';
+import { Icon, isIconName } from '@/components/icons';
 import { SettingsButton } from '@/components/SettingsButton';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -75,7 +77,7 @@ function NeedRow({
           backgroundColor: tokens.color.amber50,
         }}
       >
-        <Text style={{ fontSize: 14 }}>{icon}</Text>
+        {isIconName(icon) && <Icon name={icon} size={16} color={tokens.color.late} />}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{title}</Text>
@@ -237,7 +239,7 @@ export default function Today() {
                   key={e.periodId}
                   testID={`need-take-${e.slot!.classSectionId}`}
                   first={i === 0}
-                  icon="📋"
+                  icon="take"
                   title={`${e.slot!.className} register — not taken`}
                   note={`${e.label} · ${e.startTime}–${e.endTime} · ${e.register?.total ?? 0} students`}
                   right={
@@ -253,9 +255,55 @@ export default function Today() {
             </Page>
           )}
 
+          {/* THE TOOLS COME TO HOME. Two grids, and at most one filled tile —
+              the register, and only while one is actually open. The drawer
+              still exists this release so nothing is unreachable mid-move; it
+              goes once the family portal has its grid too. */}
+          <Text style={eyebrow(tokens)}>Needs you today</Text>
+          <HomeToolGrid
+            testID="grid-needs"
+            tools={[
+              {
+                label: 'Registers',
+                icon: 'take',
+                route: '/(staff)/attendance',
+                tone: 'amber',
+                badge: pending,
+                live: pending > 0,
+              },
+              { label: 'Messages', icon: 'messages', route: '/(staff)/messages', tone: 'amber' },
+              { label: 'Diary', icon: 'diary', route: '/(staff)/diary' },
+              { label: 'Requests', icon: 'requests', route: '/(staff)/requests', tone: 'amber' },
+            ]}
+          />
+
+          <Text style={eyebrow(tokens)}>Your classes</Text>
+          <HomeToolGrid
+            testID="grid-classes"
+            tools={[
+              { label: 'Assignments', icon: 'assignments', route: '/(staff)/assignments' },
+              { label: 'Notes', icon: 'notes', route: '/(staff)/notes' },
+              { label: 'Results', icon: 'results', route: '/(staff)/tests' },
+              { label: 'Holidays', icon: 'holidays', route: '/(staff)/holidays', tone: 'green' },
+            ]}
+          />
+
           <DayTimeline entries={entries} currentIndex={index} onTakeAttendance={goToAttendance} />
         </>
       )}
     </Screen>
   );
+}
+
+/** The small letter-spaced label that titles a block on Home. */
+function eyebrow(tokens: ReturnType<typeof useTokens>) {
+  return {
+    marginHorizontal: 4,
+    marginBottom: -2,
+    fontSize: 10,
+    letterSpacing: 1.3,
+    textTransform: 'uppercase' as const,
+    fontWeight: '700' as const,
+    color: tokens.color.sub,
+  };
 }
