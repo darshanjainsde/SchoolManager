@@ -5,6 +5,7 @@ import type { NotificationRow } from '@skoolos/types';
 import { ApiError } from '@/lib/api';
 import { clearNotifications, fetchNotifications, markNotificationsRead } from '@/lib/notifications';
 import { KIND_ICON, formatWhen, routeFor, type NotificationGroup } from '@/lib/notification-links';
+import { Icon, isIconName } from '@/components/icons';
 import { Animated } from 'react-native';
 import { Card, Empty, Page, Screen, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
@@ -84,7 +85,12 @@ function Row({
             justifyContent: 'center',
           }}
         >
-          <Text style={{ fontSize: 16 }}>{KIND_ICON[n.kind] ?? '🔔'}</Text>
+          {(() => {
+            const glyph = KIND_ICON[n.kind] ?? 'notices';
+            return isIconName(glyph) ? (
+              <Icon name={glyph} size={16} color={isRemark ? tokens.color.red : tokens.color.ink2} />
+            ) : null;
+          })()}
         </View>
         <View style={{ flex: 1 }}>
           <Text

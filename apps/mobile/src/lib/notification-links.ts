@@ -7,23 +7,28 @@ import type { NotificationRow } from '@skoolos/types';
  *
  * There are two surfaces now — the standalone notification centre
  * (`components/NotificationsScreen.tsx`, still a registered route in both
- * portals) and the paper slip the bell unfolds in place
- * (`components/NotificationSlip.tsx`). They must never disagree about where a
- * tapped row goes, so the mapping lives here rather than being duplicated (a
+ * portals) and a tapped push notification. They must never disagree about
+ * where a row goes, so the mapping lives here rather than being duplicated (a
  * copy would drift the first time a new `kind` shipped).
  */
 
 export type NotificationGroup = '(family)' | '(staff)';
 
+/**
+ * Drawn duotone glyph (components/icons.tsx) per notification kind — pitch №4
+ * replaced the emoji map: emoji render differently on every Android vendor
+ * and cannot take the theme's ink colour. Callers fall back to 'notices' for
+ * a kind shipped after this map.
+ */
 export const KIND_ICON: Record<string, string> = {
-  MESSAGE: '💬',
-  EXAM: '📝',
-  RESULT: '📊',
-  ASSIGNMENT: '📚',
-  ANNOUNCEMENT: '📣',
-  REQUEST_DECISION: '✅',
-  DIARY: '📔',
-  ATTENDANCE: '📉',
+  MESSAGE: 'messages',
+  EXAM: 'results',
+  RESULT: 'results',
+  ASSIGNMENT: 'assignments',
+  ANNOUNCEMENT: 'notices',
+  REQUEST_DECISION: 'requests',
+  DIARY: 'diary',
+  ATTENDANCE: 'take',
 };
 
 /**
