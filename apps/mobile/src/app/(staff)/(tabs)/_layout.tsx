@@ -1,8 +1,5 @@
-import { useState } from 'react';
-import { View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { StaffTabBar, type StaffTabBarProps } from '@/components/StaffTabBar';
-import { ToolsDrawer } from '@/components/ToolsDrawer';
 import { VISIBLE_TABS } from '@/lib/staff-nav';
 
 /**
@@ -15,11 +12,9 @@ import { VISIBLE_TABS } from '@/lib/staff-nav';
  * tabs (Today, Attendance, back → Today), which no stack is involved in.
  */
 export default function StaffTabsLayout() {
-  const [toolsOpen, setToolsOpen] = useState(false);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Tabs
+    <Tabs
         backBehavior="history"
         screenOptions={{ headerShown: false }}
         tabBar={(props) => (
@@ -30,19 +25,12 @@ export default function StaffTabsLayout() {
             // Runtime shape is identical — cast bridges the variance only.
             navigation={props.navigation as unknown as StaffTabBarProps['navigation']}
             insets={props.insets}
-            toolsOpen={toolsOpen}
-            onToolsPress={() => setToolsOpen((o) => !o)}
           />
         )}
       >
         {VISIBLE_TABS.map(({ name, title }) => (
           <Tabs.Screen key={name} name={name} options={{ title }} />
         ))}
-      </Tabs>
-
-      {/* Overlay above the tab bar; renders nothing while closed. Lives here
-          rather than on the Stack so it cannot appear over a detail screen. */}
-      <ToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} />
-    </View>
+    </Tabs>
   );
 }

@@ -22,9 +22,11 @@ function src(rel: string): string {
 describe('chrome in fixed geometry is capped', () => {
   it('caps the tab bar labels', () => {
     const bar = src('components/PortalTabBar.tsx');
-    // Both the tab title and the Tools label sit under an icon in a fixed row.
+    // One capped label now, not two: the "Tools" caption went with the FAB it
+    // sat under. The tab title remains — it is a word under an icon in a row of
+    // fixed height, which is exactly where unbounded scaling breaks the chrome.
     const caps = bar.match(/maxFontSizeMultiplier/g) ?? [];
-    expect(caps.length).toBeGreaterThanOrEqual(2);
+    expect(caps.length).toBeGreaterThanOrEqual(1);
   });
 
   it('caps the unread badge, which is a circle with a number in it', () => {
