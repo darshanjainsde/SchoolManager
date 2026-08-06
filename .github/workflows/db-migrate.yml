@@ -32,6 +32,16 @@ on:
         required: false
         type: boolean
         default: false
+      resolve_applied:
+        description: >-
+          RECOVERY ONLY — a migration name to record as already applied,
+          WITHOUT running its SQL. For a database whose schema has the objects
+          but whose _prisma_migrations lost (or never got) the row, which is
+          what hand-applied migrations leave behind. Also clears a failed row,
+          which otherwise blocks every later migration.
+        required: false
+        type: string
+        default: ''
 
   # Auto-apply to staging whenever a migration lands on the staging branch, so
   # code and schema can never drift apart there again. Production stays manual
@@ -73,6 +83,22 @@ jobs:
         run: |
           echo "::error::Seeding writes demo schools and known-password logins. Never production."
           exit 1
+
+      # Runs BEFORE the status/deploy below, because a failed or missing row is
+      # exactly what stops those two from being able to say anything useful.
+      # `migrate resolve --applied` writes the bookkeeping row and nothing else:
+      # it never touches the schema, so it can only ever be wrong about history,
+      # never destructive. Verify the objects really exist before using it —
+      # marking a migration applied that did NOT run leaves a database that
+      # passes `migrate status` and fails at runtime on the first query.
+      - name: Record ${{ github.event.inputs.resolve_applied }} as already applied
+        if: ${{ github.event.inputs.resolve_applied != '' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          pnpm --filter @skoolos/db exec prisma migrate resolve \
+            --applied "${{ github.event.inputs.resolve_applied }}"
 
       - name: Show what will be applied
         env:
