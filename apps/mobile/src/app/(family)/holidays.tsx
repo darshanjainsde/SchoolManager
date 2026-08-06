@@ -70,7 +70,7 @@ export default function Holidays() {
       )}
       {items?.length === 0 && !error && (
         <Page>
-          <Empty>No upcoming holidays.</Empty>
+          <Empty icon="holidays">No upcoming holidays.</Empty>
         </Page>
       )}
       {items && items.length > 0 && (

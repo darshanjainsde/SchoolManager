@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { MessageThreadRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Card, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -74,8 +74,8 @@ export default function StaffMessages() {
         <LoadingRows label="Loading messages…" rows={5} />
       )}
       {threads?.length === 0 && !error && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>No student questions yet.</Text>
+        <Card style={{ padding: 0 }}>
+          <Empty icon="messages">No student questions yet.</Empty>
         </Card>
       )}
       {sorted.map((t) => (

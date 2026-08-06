@@ -14,6 +14,7 @@ import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
+import { Icon, type IconName } from './icons';
 
 export function Screen({
   children,
@@ -127,10 +128,26 @@ export function SectionTitle({ title, actionLabel, onAction, right }:
  * still reads as a page and not as a failure. Meant to sit inside a `Page`
  * (or a zero-padded `Card`), exactly as the pitch nests `.empty` in `.page`.
  */
-export function Empty({ children, testID }: PropsWithChildren<{ testID?: string }>) {
+export function Empty({
+  children,
+  testID,
+  /**
+   * A duotone glyph drawn faintly above the line. Not decoration: an empty
+   * screen is the one screen with nothing on it to say WHICH screen it is, so
+   * a page reached by mistake reads as "no messages" rather than as a page
+   * that failed to load. Left off where the surrounding page already names
+   * itself unmistakably.
+   */
+  icon,
+}: PropsWithChildren<{ testID?: string; icon?: IconName }>) {
   const tokens = useTokens();
   return (
-    <View testID={testID} style={{ paddingVertical: 20, paddingHorizontal: 14, alignItems: 'center' }}>
+    <View testID={testID} style={{ paddingVertical: 20, paddingHorizontal: 14, alignItems: 'center', gap: 9 }}>
+      {icon && (
+        // Faint on purpose — it sits behind the sentence in the reading order,
+        // and an empty state that shouts is worse than one that waits.
+        <Icon name={icon} size={26} color={tokens.color.line2} fillOpacity={0.5} />
+      )}
       <Text
         style={{
           color: tokens.color.sub,

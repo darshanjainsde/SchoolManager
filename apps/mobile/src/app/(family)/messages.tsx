@@ -277,7 +277,7 @@ export default function Messages() {
       )}
       {threads?.length === 0 && !threadsError && (
         <Page>
-          <Empty>No messages yet. Tap “Ask a teacher” to start a conversation.</Empty>
+          <Empty icon="messages">No messages yet. Tap “Ask a teacher” to start a conversation.</Empty>
         </Page>
       )}
       {sorted.length > 0 && (

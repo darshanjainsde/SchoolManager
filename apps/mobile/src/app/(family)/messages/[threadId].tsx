@@ -203,7 +203,7 @@ export default function StudentThread() {
         )}
         {detail?.messages.length === 0 && !error && (
           <Page>
-            <Empty>No messages in this conversation yet.</Empty>
+            <Empty icon="messages">No messages in this conversation yet.</Empty>
           </Page>
         )}
 

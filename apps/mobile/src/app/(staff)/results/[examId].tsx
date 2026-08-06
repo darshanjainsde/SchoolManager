@@ -11,7 +11,7 @@ import type {
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { buildResultsPayload, markOutOfRange, marksValid } from '@/lib/exams';
-import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Card, Empty, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -325,8 +325,8 @@ export default function ExamResults() {
       )}
 
       {exam && students.length === 0 && roster !== null && !rosterError && (
-        <Card>
-          <Text style={{ color: tokens.color.sub }}>No students in this class yet.</Text>
+        <Card style={{ padding: 0 }}>
+          <Empty icon="results">No students in this class yet.</Empty>
         </Card>
       )}
 

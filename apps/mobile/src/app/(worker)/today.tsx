@@ -168,7 +168,7 @@ export default function Today() {
         // is said in the diary's own italic hand rather than in system grey.
         <Page>
           <PageHeader title="This month" icon="🗓" />
-          <Empty>No attendance has been recorded for you yet this month.</Empty>
+          <Empty icon="take">No attendance has been recorded for you yet this month.</Empty>
         </Page>
       )}
 

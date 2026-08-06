@@ -77,7 +77,7 @@ export function TimetableList({ rows, currentPeriodId, nowMinutes, lead = 'class
   if (rows.length === 0) {
     return (
       <Page testID="timetable-list-empty">
-        <Empty>No periods scheduled this day.</Empty>
+        <Empty icon="timetable">No periods scheduled this day.</Empty>
       </Page>
     );
   }

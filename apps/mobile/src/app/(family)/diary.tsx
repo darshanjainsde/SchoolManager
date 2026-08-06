@@ -266,7 +266,7 @@ export default function FamilyDiary() {
 
       {data?.entries.length === 0 && (
         <Page>
-          <Empty>Nothing in the diary this month. Anything a teacher writes turns up here.</Empty>
+          <Empty icon="diary">Nothing in the diary this month. Anything a teacher writes turns up here.</Empty>
         </Page>
       )}
 
