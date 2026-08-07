@@ -302,6 +302,21 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 .sk-row .meta { font-size: 11.5px; color: var(--sk-ink-3); }
 .sk-row .sp { flex: 1; }
 
+/* ---- coverage gap rows (leave page): fixed shared columns so every row lines up ---- */
+.sk-covrow {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(200px, 240px) max-content minmax(150px, 1fr);
+  gap: 8px 14px;
+  align-items: center;
+}
+.sk-covrow .cov-status { display: flex; align-items: center; gap: 8px; justify-self: end; }
+@media (max-width: 760px) {
+  .sk-covrow { grid-template-columns: 1fr max-content; }
+  .sk-covrow .cov-info { grid-column: 1; grid-row: 1; }
+  .sk-covrow .cov-status { grid-column: 2; grid-row: 1; }
+  .sk-covrow > select, .sk-covrow > .sk-btn { grid-column: 1 / -1; }
+}
+
 /* ---- status pill ---- */
 .sk-pill { font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .sk-pill[data-tone="good"] { background: var(--sk-good-tint); color: var(--sk-good); }

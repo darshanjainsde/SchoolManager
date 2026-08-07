@@ -1,6 +1,7 @@
 'use client';
-import { useState, useMemo, type CSSProperties, type FocusEvent } from 'react';
+import { Suspense, useState, useMemo, type CSSProperties, type FocusEvent } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { X, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -275,12 +276,23 @@ interface PendingCell {
 }
 
 export default function TimetablePage() {
+  return (
+    <Suspense fallback={<p className="sk-state">Loading…</p>}>
+      <TimetableInner />
+    </Suspense>
+  );
+}
+
+function TimetableInner() {
   const host = useHost();
+  const params = useSearchParams();
   const api = useApi({ audience: 'school', hostHeader: host });
   const queryClient = useQueryClient();
 
   // ── Local state ──────────────────────────────────────────────────────────
-  const [classSectionId, setClassSectionId] = useState('');
+  // Deep links (e.g. "Open class timetable" on a leave coverage gap) pass the
+  // class to land on as ?classSectionId=…
+  const [classSectionId, setClassSectionId] = useState(params.get('classSectionId') ?? '');
   const [pendingCell, setPendingCell] = useState<PendingCell | null>(null);
   // 0 = the week containing today; -1 = last week; +1 = next week, etc.
   const [weekOffset, setWeekOffset] = useState(0);

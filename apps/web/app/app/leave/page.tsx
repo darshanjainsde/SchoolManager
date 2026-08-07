@@ -447,50 +447,43 @@ export default function AdminLeavePage() {
             }
 
             return (
-              <div className="sk-row" key={gap.id} style={{ alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 10 }}>
-                <div style={{ minWidth: 170 }}>
-                  <div className="nm">{formatDate(gap.date)}</div>
-                  <div className="meta">
+              <div className="sk-row sk-covrow" key={gap.id}>
+                <div className="cov-info">
+                  <div className="nm">
                     {gap.classSectionName} · {gap.periodLabel}
                   </div>
+                  <div className="meta">{formatDate(gap.date)}</div>
                   <div className="meta">{gap.originalTeacherName} (on leave)</div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200 }}>
-                  <label className="sk-lab" htmlFor={`cov-assign-${gap.id}`}>
-                    Substitute
-                  </label>
-                  <select
-                    id={`cov-assign-${gap.id}`}
-                    style={fieldStyle}
-                    onFocus={ringFocus}
-                    onBlur={ringBlur}
-                    value={gap.substituteTeacherId ?? ''}
-                    disabled={assign.isPending}
-                    onChange={(e) => {
-                      const substituteTeacherId = e.target.value;
-                      if (!substituteTeacherId) return;
-                      assign.mutate({ gapId: gap.id, substituteTeacherId });
-                    }}
-                  >
-                    <option value="">
-                      {availability.isLoading ? 'Loading…' : 'Pick a free teacher…'}
+                <select
+                  aria-label={`Substitute for ${gap.classSectionName}, ${gap.periodLabel}, ${formatDate(gap.date)}`}
+                  style={fieldStyle}
+                  onFocus={ringFocus}
+                  onBlur={ringBlur}
+                  value={gap.substituteTeacherId ?? ''}
+                  disabled={assign.isPending}
+                  onChange={(e) => {
+                    const substituteTeacherId = e.target.value;
+                    if (!substituteTeacherId) return;
+                    assign.mutate({ gapId: gap.id, substituteTeacherId });
+                  }}
+                >
+                  <option value="">
+                    {availability.isLoading ? 'Loading…' : 'Pick a free teacher…'}
+                  </option>
+                  {options.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.firstName} {t.lastName}
                     </option>
-                    {options.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.firstName} {t.lastName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  ))}
+                </select>
 
                 <Link href={`/app/timetable?classSectionId=${gap.classSectionId}`} className="sk-btn sk-press">
                   Open class timetable
                 </Link>
 
-                <span className="sp" />
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="cov-status">
                   <span className="sk-pill" data-tone={covered ? 'good' : 'warn'}>
                     {covered ? 'Covered' : 'Needs cover'}
                   </span>

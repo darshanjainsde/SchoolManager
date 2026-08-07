@@ -340,7 +340,10 @@ export class LeaveService {
       ];
 
       const [sections, periods, teachers] = await Promise.all([
-        tx.classSection.findMany({ where: { id: { in: classSectionIds } }, select: { id: true, name: true } }),
+        tx.classSection.findMany({
+          where: { id: { in: classSectionIds } },
+          select: { id: true, name: true, grade: { select: { name: true } } },
+        }),
         tx.period.findMany({ where: { id: { in: periodIds } }, select: { id: true, label: true, order: true } }),
         tx.teacher.findMany({
           where: { id: { in: teacherIds } },
@@ -355,13 +358,19 @@ export class LeaveService {
         const t = teacherById.get(teacherId);
         return t ? `${t.firstName} ${t.lastName}` : 'Unknown teacher';
       };
+      // "Grade 6 — A", matching how the timetable page's class picker labels
+      // a section — the bare section name ("A") identifies nothing on its own.
+      const sectionName = (sectionId: string): string => {
+        const s = sectionById.get(sectionId);
+        return s ? `${s.grade.name} — ${s.name}` : 'Unknown class';
+      };
 
       return rows
         .map((r) => ({
           id: r.id,
           date: r.date,
           classSectionId: r.classSectionId,
-          classSectionName: sectionById.get(r.classSectionId)?.name ?? 'Unknown class',
+          classSectionName: sectionName(r.classSectionId),
           periodId: r.periodId,
           periodLabel: periodById.get(r.periodId)?.label ?? 'Unknown period',
           _periodOrder: periodById.get(r.periodId)?.order ?? 0,
