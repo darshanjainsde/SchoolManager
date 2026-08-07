@@ -433,6 +433,10 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 
 /* ---- page header ---- */
 .sk-pagehead { margin-bottom: 20px; }
+/* Pages set the pagehead as `flex justify-between` (title left, action
+   right). On a phone the pair doesn't fit one line — wrap with a small gap
+   instead of squeezing the action button into a sliver. */
+.sk-pagehead { flex-wrap: wrap; row-gap: 10px; column-gap: 12px; }
 .sk-pagehead h1 { font-family: var(--sk-serif); font-size: clamp(22px, 2.8vw, 28px); font-weight: 650; letter-spacing: -0.01em; }
 .sk-pagehead p { color: var(--sk-ink-3); font-size: 13.5px; margin-top: 4px; }
 
@@ -453,6 +457,8 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 650; font-size: 13px;
   padding: 9px 15px; border-radius: 11px; border: 1px solid var(--sk-line-2); background: var(--sk-card);
   color: var(--sk-ink); cursor: pointer; transition: border-color 0.12s, filter 0.12s;
+  /* A label never wraps inside its button — squeezed rows wrap AROUND it. */
+  white-space: nowrap; flex: none;
 }
 .sk-btn:hover { border-color: var(--sk-brand); }
 .sk-btn[data-variant="primary"] { background: var(--sk-brand); color: #fff; border-color: transparent; }

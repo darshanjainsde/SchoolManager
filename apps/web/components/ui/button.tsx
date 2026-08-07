@@ -10,7 +10,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const base =
-  'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400 disabled:opacity-50 disabled:pointer-events-none';
+  // whitespace-nowrap: a button label must never wrap — in a compressed flex
+  // row a wrapped label overflows the button's fixed height and clips (the
+  // "Save as draft" squash on phones). Rows make room by wrapping around the
+  // button, not inside it.
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-400 disabled:opacity-50 disabled:pointer-events-none';
 
 const variants: Record<Variant, string> = {
   primary: 'bg-slate-900 text-white hover:bg-slate-800',

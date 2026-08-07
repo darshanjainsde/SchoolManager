@@ -92,7 +92,7 @@ export default function JobsPage() {
           <div className="space-y-3">
             {(jobs ?? []).map((job) => (
               <Card key={job.id}>
-                <CardHeader className="flex-row items-start justify-between gap-4">
+                <CardHeader className="flex-row flex-wrap items-start justify-between gap-4">
                   <div>
                     <CardTitle>{job.title}</CardTitle>
                     <p className="text-sm text-slate-500">{job.summary}</p>
@@ -104,7 +104,7 @@ export default function JobsPage() {
                       <p className="mt-1 text-xs text-amber-700">Reason: {job.rejectedReason}</p>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex shrink-0 gap-2">
                     {(job.status === 'DRAFT' || job.status === 'REJECTED') && (
                       <Button size="sm" disabled={submit.isPending} onClick={() => submit.mutate(job.id)}>
                         Send for review
@@ -198,7 +198,7 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
 
   return (
     <Card>
-      <CardHeader className="flex-row items-start justify-between gap-4">
+      <CardHeader className="flex-row flex-wrap items-start justify-between gap-4">
         <div>
           <CardTitle>{picked.value === 'BLANK' ? 'New vacancy' : picked.label}</CardTitle>
           <p className="text-sm text-slate-500">Everything here is editable — the template is only a head start.</p>
@@ -352,7 +352,7 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
           </Button>
         </section>
 
-        <div className="flex items-center gap-2 border-t border-slate-100 pt-4">
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
           <Button
             disabled={busy || !title.trim() || !summary.trim() || !description.trim()}
             onClick={() =>

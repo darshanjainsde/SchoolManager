@@ -367,12 +367,17 @@ export default function EventsPage() {
             // so a new event drops into the middle of it. The gesture points
             // at where it landed; reduced motion shows it already in place.
             <Card key={event.id} className={event.id === justAddedId ? 'sk-pinin sk-in' : undefined}>
-              <CardContent className="flex items-start justify-between gap-4 pt-4">
+              {/* flex-wrap + min-w on the text: on a phone the cover image,
+                  the details and the actions cannot share one 390px row — the
+                  actions drop to their own line instead of crushing the text
+                  into a one-word-per-line column and pushing Delete off the
+                  screen edge. */}
+              <CardContent className="flex flex-wrap items-start gap-4 pt-4">
                 {event.coverUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={event.coverUrl} alt="" className="h-20 w-32 shrink-0 rounded-lg border object-cover" style={{ borderColor: 'var(--sk-line)' }} loading="lazy" decoding="async" />
                 )}
-                <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex-1 min-w-[14rem] space-y-1">
                   <p className="font-semibold truncate" style={{ color: 'var(--sk-ink)' }}>{event.title}</p>
                   <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>
                     {formatDateRange(event.startAt, event.endAt)}
@@ -392,7 +397,7 @@ export default function EventsPage() {
                     poster with a delete button — the only thing you could do to
                     an event was destroy it, because there was nothing behind it
                     to look at. */}
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="ml-auto flex shrink-0 items-center gap-1">
                   <Link
                     href={`/app/events/${event.id}`}
                     className="sk-btn sk-press"
