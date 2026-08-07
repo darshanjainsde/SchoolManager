@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
+import type { ClassNoteRow, ClassTodoRow, TeacherDay, TeacherDayEntry } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
 import { todayISO } from '@/lib/attendance';
@@ -9,7 +9,7 @@ import { currentEntry, minutesOfDay } from '@/lib/teacher-day';
 import { useNowMinutes } from '@/lib/use-now-minutes';
 import { NowCard } from '@/components/NowCard';
 import { DayTimeline } from '@/components/DayTimeline';
-import { ClassNotesPanel } from '@/components/ClassNotesPanel';
+import { PeriodSheet } from '@/components/PeriodSheet';
 import { Card, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -86,6 +86,41 @@ export default function Today() {
   // stays honest without the teacher having to leave it and come back.
   const now = useNowMinutes();
   const { index, entry, elapsed, total } = currentEntry(entries, now);
+  const liveSlot = entry?.kind === 'CLASS' ? entry.slot : null;
+
+  // THE PERIOD KIT's counts (pitch №6). Same endpoint the sheet's panel uses,
+  // fetched thin here just to badge the tiles: notes = today's count, to-dos =
+  // the REMAINING count. Best-effort like every badge — failures leave 0.
+  const [periodCounts, setPeriodCounts] = useState({ notes: 0, todosLeft: 0 });
+  const [sheet, setSheet] = useState<null | 'notes' | 'todos'>(null);
+  const liveClassSectionId = liveSlot?.classSectionId ?? null;
+  const liveSubjectId = liveSlot?.subjectId ?? null;
+  const refreshPeriodCounts = useCallback(() => {
+    if (!liveClassSectionId || !liveSubjectId) return;
+    api
+      .request<{ notes: ClassNoteRow[]; todos: ClassTodoRow[] }>(
+        `/manage/class-notes?classSectionId=${encodeURIComponent(liveClassSectionId)}&date=${encodeURIComponent(date)}&subjectId=${encodeURIComponent(liveSubjectId)}`,
+      )
+      .then((d) =>
+        setPeriodCounts({ notes: d.notes.length, todosLeft: d.todos.filter((t) => !t.done).length }),
+      )
+      .catch(() => {
+        /* a badge must never surface an error */
+      });
+    // `date` is always "today" here — see the note on the focus effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveClassSectionId, liveSubjectId]);
+  // Refetch when the bell flips the live period, and on every focus (a note
+  // added from the Notes tool elsewhere must show up on the badge).
+  useEffect(() => {
+    setPeriodCounts({ notes: 0, todosLeft: 0 });
+    refreshPeriodCounts();
+  }, [refreshPeriodCounts]);
+  useFocusEffect(
+    useCallback(() => {
+      refreshPeriodCounts();
+    }, [refreshPeriodCounts]),
+  );
   // The first entry (chronologically) that hasn't started yet — this works
   // uniformly whether nothing is current (before school / a gap) or a class
   // or break is current right now (its own start is <= now, so it's skipped).
@@ -209,6 +244,9 @@ export default function Today() {
 
       {day !== null && !error && entries.length > 0 && (
         <>
+          {/* Pitch №6: the period's notes and to-dos live ON the hero as the
+              kit row, and open as a bottom sheet — not as two cards of their
+              own pushing the day's asks below the fold. */}
           <NowCard
             entry={entry}
             elapsed={elapsed}
@@ -217,14 +255,25 @@ export default function Today() {
             onTakeAttendance={goToAttendance}
             onOpenClass={goToClass}
             summary={{ classesTaught: classes.length, studentsMarked }}
+            notesCount={periodCounts.notes}
+            todosLeft={periodCounts.todosLeft}
+            onOpenNotes={liveSlot ? () => setSheet('notes') : undefined}
+            onOpenTodos={liveSlot ? () => setSheet('todos') : undefined}
           />
 
-          {entry?.kind === 'CLASS' && entry.slot && (
-            <ClassNotesPanel
-              classSectionId={entry.slot.classSectionId}
+          {liveSlot && (
+            <PeriodSheet
+              open={sheet !== null}
+              focus={sheet ?? 'notes'}
+              classSectionId={liveSlot.classSectionId}
               date={date}
-              subjectId={entry.slot.subjectId}
-              subjectName={entry.slot.subjectName}
+              subjectId={liveSlot.subjectId}
+              className={liveSlot.className}
+              subjectName={liveSlot.subjectName}
+              onClose={() => {
+                setSheet(null);
+                refreshPeriodCounts();
+              }}
             />
           )}
 

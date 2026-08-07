@@ -193,6 +193,65 @@ describe('NowCard', () => {
       expect(open).toHaveBeenCalledWith('sec-8a');
     });
 
+    it('the period kit: Notes/To-dos tiles render only with handlers, badge their counts, and fire', () => {
+      const openNotes = jest.fn();
+      const openTodos = jest.fn();
+      render(
+        <NowCard
+          entry={classEntry()}
+          elapsed={20}
+          total={45}
+          nextEntry={null}
+          onTakeAttendance={jest.fn()}
+          onOpenClass={jest.fn()}
+          notesCount={2}
+          todosLeft={1}
+          onOpenNotes={openNotes}
+          onOpenTodos={openTodos}
+        />,
+      );
+      fireEvent.press(screen.getByTestId('now-kit-notes'));
+      expect(openNotes).toHaveBeenCalledTimes(1);
+      fireEvent.press(screen.getByTestId('now-kit-todos'));
+      expect(openTodos).toHaveBeenCalledTimes(1);
+      expect(within(screen.getByTestId('now-kit-notes-badge')).getByText('2')).toBeTruthy();
+      expect(within(screen.getByTestId('now-kit-todos-badge')).getByText('1')).toBeTruthy();
+    });
+
+    it('without kit handlers the tiles are not drawn — never drawn-and-inert', () => {
+      render(
+        <NowCard
+          entry={classEntry()}
+          elapsed={20}
+          total={45}
+          nextEntry={null}
+          onTakeAttendance={jest.fn()}
+          onOpenClass={jest.fn()}
+        />,
+      );
+      expect(screen.queryByTestId('now-kit-notes')).toBeNull();
+      expect(screen.queryByTestId('now-kit-todos')).toBeNull();
+    });
+
+    it('a zero count leaves the tile unbadged — a "0" nags about nothing', () => {
+      render(
+        <NowCard
+          entry={classEntry()}
+          elapsed={20}
+          total={45}
+          nextEntry={null}
+          onTakeAttendance={jest.fn()}
+          onOpenClass={jest.fn()}
+          notesCount={0}
+          todosLeft={0}
+          onOpenNotes={jest.fn()}
+          onOpenTodos={jest.fn()}
+        />,
+      );
+      expect(screen.queryByTestId('now-kit-notes-badge')).toBeNull();
+      expect(screen.queryByTestId('now-kit-todos-badge')).toBeNull();
+    });
+
     it('also gives the foot of the card its own named button', () => {
       // Not decoration on a tappable card: a screen reader needs something it
       // can land on and activate, and "See who's in the room" is not that

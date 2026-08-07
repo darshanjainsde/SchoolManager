@@ -178,17 +178,41 @@ it('never greets the teacher with the email address they signed in with', async 
   expect(screen.queryByText(/@/)).toBeNull();
 });
 
-it('during a current CLASS period, renders the hero with class/subject/progress and mounts the notes panel', async () => {
+it('during a current CLASS period, renders the hero with class/subject/progress and the period kit', async () => {
   setNow(8, 20); // 20 minutes into P1 (08:00-08:45)
-  mockDay(DAY);
+  mockDay(DAY, {
+    notes: [
+      { id: 'n-1', body: 'Chapter 4 finished', createdAt: '2026-07-30T08:10:00.000Z' },
+      { id: 'n-2', body: 'Collect diaries', createdAt: '2026-07-30T08:12:00.000Z' },
+    ],
+    todos: [
+      { id: 't-1', body: 'Hand back copies', done: false },
+      { id: 't-2', body: 'Signed diaries', done: true },
+    ],
+  });
   render(<Today />);
 
   const hero = await screen.findByTestId('now-card');
   expect(within(hero).getByText('8-A · Mathematics')).toBeTruthy();
   expect(screen.getByTestId('now-progress').props.accessibilityValue.now).toBe(44); // 20/45
 
-  // Notes are scoped to the CURRENT period's subject.
+  // Pitch №6: notes/to-dos are PERIOD controls, so they ride the period card
+  // as kit tiles — the Notes badge carries today's count, the To-dos badge
+  // only the REMAINING count (done ones don't nag).
+  expect(within(await screen.findByTestId('now-kit-notes-badge')).getByText('2')).toBeTruthy();
+  expect(within(screen.getByTestId('now-kit-todos-badge')).getByText('1')).toBeTruthy();
+
+  // Tapping a tile raises the period sheet, with the same panel the Notes
+  // tool mounts — scoped to the CURRENT period's class + subject.
+  fireEvent.press(screen.getByTestId('now-kit-notes'));
+  expect(await screen.findByTestId('period-sheet')).toBeTruthy();
+  expect(screen.getByText('This period · 8-A · Mathematics')).toBeTruthy();
   expect(await screen.findByText('Notes · Mathematics')).toBeTruthy();
+  expect(screen.getByText('Chapter 4 finished')).toBeTruthy();
+
+  // The backdrop puts the desk away.
+  fireEvent.press(screen.getByTestId('period-sheet-backdrop'));
+  expect(screen.queryByTestId('period-sheet')).toBeNull();
 });
 
 it('once the register is taken, the hero shows counts and no Take button', async () => {

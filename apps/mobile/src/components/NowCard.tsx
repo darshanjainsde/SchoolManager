@@ -3,6 +3,7 @@ import { Animated, Easing, Pressable, Text, View, type TextStyle } from 'react-n
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { Card } from './ui';
+import { Icon, type IconName } from './icons';
 import { Touchable } from './Touchable';
 import { CountUp } from './CountUp';
 import { useTokens } from '@/theme/theme-context';
@@ -38,6 +39,18 @@ export interface NowCardProps {
    * stay callable without it.
    */
   summary?: NowCardSummary;
+  /**
+   * Pitch №6 — the period kit. Notes/to-dos are PERIOD-scoped controls, so
+   * they live on the period card rather than as cards of their own below it.
+   * Counts badge the tiles (to-dos badge the REMAINING count — done ones
+   * don't nag); the handlers raise the period sheet. All optional, same
+   * contract as `onOpenClass`: without a handler the tile isn't drawn at
+   * all, never drawn-and-inert.
+   */
+  notesCount?: number;
+  todosLeft?: number;
+  onOpenNotes?: () => void;
+  onOpenTodos?: () => void;
 }
 
 /** "8-A · Mathematics" for a class, or the period's own label ("Break") otherwise. */
@@ -167,6 +180,81 @@ function HeroChip({ on, children }: { on: string; children: ReactNode }) {
     >
       <Text style={{ color: on, fontSize: 12.5, fontWeight: '700' }}>{children}</Text>
     </View>
+  );
+}
+
+/**
+ * One tile of the period kit (pitch №6): the hero's own dark glass (same
+ * alpha-wash recipe as `HeroChip`), a duotone glyph, a small bold label, and
+ * — for Notes/To-dos — a count badge in the bell's badge language. The badge
+ * border is the hero's DEEP gradient stop rather than the page colour: the
+ * cut-out trick only works when the border matches what the badge sits on.
+ */
+function KitTile({
+  on,
+  deep,
+  icon,
+  label,
+  badge = 0,
+  onPress,
+  testID,
+  accessibilityLabel,
+}: {
+  on: string;
+  deep: string;
+  icon: IconName;
+  label: string;
+  badge?: number;
+  onPress: () => void;
+  testID?: string;
+  accessibilityLabel: string;
+}) {
+  const tokens = useTokens();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        backgroundColor: `${on}1F`,
+        borderWidth: 1,
+        borderColor: `${on}3D`,
+        borderRadius: 12,
+        paddingVertical: 9,
+        alignItems: 'center',
+        gap: 3,
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      <Icon name={icon} size={17} color={on} fillOpacity={0.3} />
+      <Text style={{ color: on, fontSize: 10.5, fontWeight: '700' }}>{label}</Text>
+      {badge > 0 && (
+        <View
+          testID={testID ? `${testID}-badge` : undefined}
+          style={{
+            position: 'absolute',
+            top: -6,
+            right: -5,
+            minWidth: 18,
+            height: 18,
+            borderRadius: 99,
+            paddingHorizontal: 4,
+            backgroundColor: tokens.color.marginRed,
+            borderWidth: 2,
+            borderColor: deep,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {/* A number in an 18px circle — capped, like the bell's. */}
+          <Text maxFontSizeMultiplier={1.2} style={{ color: brand.onHero, fontSize: 10, fontWeight: '800' }}>
+            {badge > 99 ? '99+' : badge}
+          </Text>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -322,6 +410,10 @@ export function NowCard({
   onTakeAttendance,
   onOpenClass,
   summary,
+  notesCount = 0,
+  todosLeft = 0,
+  onOpenNotes,
+  onOpenTodos,
 }: NowCardProps) {
   const tokens = useTokens();
   // Pitch №3: the wrap and live heroes paint with the CHOSEN accent — the
@@ -467,33 +559,59 @@ export function NowCard({
         )}
       </View>
 
-      {/* THE WAY INTO THE ROOM. A rule and a line of text rather than a second
-          button competing with the one above it: taking the register is the
-          action, looking at who is in the room is the follow-on. It is its own
-          Pressable (not just decoration on the tappable card) so a screen
-          reader gets a real, named button rather than a sentence it cannot
-          act on. */}
-      {openable && (
-        <Pressable
-          testID={`now-open-${slot!.classSectionId}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${slot!.className}, see who is in the room`}
-          onPress={openable}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginTop: 13,
-            paddingTop: 11,
-            borderTopWidth: 1,
-            borderTopColor: `${on}3D`,
-          }}
-        >
-          <Text style={{ color: on, opacity: 0.93, fontSize: 12, fontWeight: '700' }}>
-            See who&apos;s in the room
-          </Text>
-          <Text style={{ color: on, fontSize: 15, fontWeight: '800' }}>›</Text>
-        </Pressable>
+      {/* THE PERIOD KIT (pitch №6). What used to be a footer link ("See
+          who's in the room") plus two whole cards below the hero is now one
+          row of tiles on the card itself: the room, the notes, the to-dos —
+          everything scoped to THIS period lives on the period object, and
+          scope is visible as shape. Each tile is its own Pressable (not
+          decoration on the tappable card) so a screen reader gets real,
+          named buttons. */}
+      {(openable || onOpenNotes || onOpenTodos) && (
+        <View style={{ flexDirection: 'row', gap: 7, marginTop: 13 }}>
+          {openable && (
+            <KitTile
+              on={on}
+              deep={tokens.color.indigoDeep}
+              icon="person"
+              label="Who's in"
+              onPress={openable}
+              testID={`now-open-${slot!.classSectionId}`}
+              accessibilityLabel={`Open ${slot!.className}, see who is in the room`}
+            />
+          )}
+          {onOpenNotes && (
+            <KitTile
+              on={on}
+              deep={tokens.color.indigoDeep}
+              icon="notes"
+              label="Notes"
+              badge={notesCount}
+              onPress={onOpenNotes}
+              testID="now-kit-notes"
+              accessibilityLabel={
+                notesCount > 0
+                  ? `Notes for this period, ${notesCount} today`
+                  : 'Notes for this period'
+              }
+            />
+          )}
+          {onOpenTodos && (
+            <KitTile
+              on={on}
+              deep={tokens.color.indigoDeep}
+              icon="take"
+              label="To-dos"
+              badge={todosLeft}
+              onPress={onOpenTodos}
+              testID="now-kit-todos"
+              accessibilityLabel={
+                todosLeft > 0
+                  ? `To-dos for this period, ${todosLeft} remaining`
+                  : 'To-dos for this period'
+              }
+            />
+          )}
+        </View>
       )}
     </GradientHero>
   );
