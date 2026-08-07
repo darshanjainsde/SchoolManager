@@ -7,10 +7,11 @@ import { loadEnv } from '@skoolos/config';
  * agree, or an identifier could resolve a school here and then take the
  * username path at login (or vice versa).
  */
-// 4+ digits, not 5+: the platform GENERATOR pads to five (RAF-00042), but
-// prod carries seeded/imported codes with four (RPS-0021) — the validator
-// must accept every code that exists, not just the ones we would mint today.
-const STUDENT_CODE_RE = /^[A-Za-z]{3}-\d{4,}$/;
+// AAA-00000 is THE format — five digits minimum, matching the generator
+// (students.service.ts). When stored data disagreed (the 2026-08-07 seed
+// carried RPS-0021), the DATA was migrated to this format, not the other
+// way round: one canonical shape, printed on cards and shown on the gate.
+const STUDENT_CODE_RE = /^[A-Za-z]{3}-\d{5,}$/;
 
 /** A code or email resolving to more than this many schools is returned
  *  truncated — the client tries candidates in order, so a pathological

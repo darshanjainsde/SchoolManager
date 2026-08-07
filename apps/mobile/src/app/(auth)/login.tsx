@@ -152,7 +152,8 @@ export default function Login() {
               Welcome back
             </Text>
             <Text style={{ fontSize: 12, lineHeight: 17, color: tokens.color.sub }}>
-              Your student code or email is all it takes — no school code.
+              Your student code (like RAF-00042) or email is all it takes — no
+              school code.
             </Text>
           </View>
           {/* One field for a code, an email or an admission number — so NOT

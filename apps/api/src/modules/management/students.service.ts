@@ -21,11 +21,12 @@ export interface LoginInviteResult {
   emailSent: boolean;
 }
 
-/** RAF-00042 — 3 letters + a zero-padded counter. The generator pads to 5
- *  digits, but VALIDATION accepts 4+: prod carries seeded/imported 4-digit
- *  codes (RPS-0021), and a validator stricter than the data locks those
- *  students out (it did — see the resolve-school gate bug, 2026-08-07). */
-export const STUDENT_CODE_REGEX = /^[A-Za-z]{3}-\d{4,}$/;
+/** RAF-00042 — 3 letters + a zero-padded counter (5 digits, growing past
+ *  99999). This is THE canonical shape: when the 2026-08-07 seed shipped
+ *  4-digit codes and locked students out of the gate, the decision was to
+ *  migrate the DATA to this format (RPS-0021 → RPS-00021), never to widen
+ *  the validators. Fixtures must round-trip this regex. */
+export const STUDENT_CODE_REGEX = /^[A-Za-z]{3}-\d{5,}$/;
 
 /**
  * How much of a Student row the caller is allowed to see.
