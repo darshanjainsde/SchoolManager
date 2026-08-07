@@ -88,7 +88,7 @@ export class ImpersonateDto {
 export class ResetByCodeDto {
   @ApiProperty({ example: 'RAF-00042' })
   @IsString()
-  @Matches(/^[A-Za-z]{3}-\d{5,}$/, { message: 'The code looks like AAA-00001 — three letters, then digits' })
+  @Matches(/^[A-Za-z]{3}-\d{4,}$/, { message: 'The code looks like AAA-00001 — three letters, then digits' })
   code!: string;
 }
 

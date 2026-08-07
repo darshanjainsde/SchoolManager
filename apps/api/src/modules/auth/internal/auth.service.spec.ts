@@ -88,15 +88,20 @@ describe('AuthService.login', () => {
     prismaMock.user.findUnique.mockResolvedValue(userRow());
     passwords.verify.mockResolvedValue(true);
 
-    const res = await svc.login(SCHOOL, 'SUN-2231', 'correct-password');
+    // '2231/A', not 'SUN-2231': since the student-code regex accepts 4-digit
+    // codes (RPS-0021 prod fix), a letters-dash-digits identifier takes the
+    // CODE path first. This test is about the admission-number path, so its
+    // identifier must look like a real admission number, which is not
+    // code-shaped.
+    const res = await svc.login(SCHOOL, '2231/A', 'correct-password');
 
     expect(res.accessToken).toBeTruthy();
     expect(res.refreshToken).toBeTruthy();
     expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
-      where: { schoolId: SCHOOL, username: { equals: 'SUN-2231', mode: 'insensitive' } },
+      where: { schoolId: SCHOOL, username: { equals: '2231/A', mode: 'insensitive' } },
     });
     expect(prismaMock.student.findFirst).toHaveBeenCalledWith({
-      where: { schoolId: SCHOOL, admissionNo: { equals: 'SUN-2231', mode: 'insensitive' } },
+      where: { schoolId: SCHOOL, admissionNo: { equals: '2231/A', mode: 'insensitive' } },
     });
     expect(prismaMock.user.findUnique).toHaveBeenCalledWith({ where: { id: 'user-1' } });
   });

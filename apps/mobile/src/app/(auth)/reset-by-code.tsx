@@ -16,7 +16,9 @@ import { session } from '@/lib/session';
 import { useTokens } from '@/theme/theme-context';
 
 /** The shape the school prints on the letter: three letters, a dash, digits. */
-const CODE_RE = /^[A-Za-z]{3}-\d{5,}$/;
+// 4+ digits — must mirror the api's STUDENT_CODE_RE (school-resolve.service):
+// prod carries 4-digit seeded codes (RPS-0021) alongside generated 5-digit ones.
+const CODE_RE = /^[A-Za-z]{3}-\d{4,}$/;
 
 /**
  * "I have the code, not the email" (Phase 5·1's `POST /auth/reset-by-code`).

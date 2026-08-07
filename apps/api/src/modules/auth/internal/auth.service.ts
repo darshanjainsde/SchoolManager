@@ -254,7 +254,7 @@ export class AuthService {
     // student code first — then falls through to the older paths, so a
     // username that merely LOOKS like a code still works. Same
     // null-not-throw contract as the other resolvers: no enumeration.
-    if (/^[A-Za-z]{3}-\d{5,}$/.test(identifier)) {
+    if (/^[A-Za-z]{3}-\d{4,}$/.test(identifier)) {
       const byCode = await this.resolveUserByStudentCode(platform, schoolId, identifier);
       if (byCode) return byCode;
     }

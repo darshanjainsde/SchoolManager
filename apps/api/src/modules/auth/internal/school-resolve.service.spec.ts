@@ -35,6 +35,18 @@ describe('SchoolResolveService', () => {
     expect(hosts).toEqual(['raffles.localhost']);
   });
 
+  it('resolves a FOUR-digit code too — prod carries seeded RPS-0021-style codes (2026-08-07 gate bug)', async () => {
+    studentFindMany.mockResolvedValue([{ school: { slug: 'raffles' } }]);
+    const hosts = await service.resolve('RPS-0021');
+
+    expect(studentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ code: 'RPS-0021' }),
+      }),
+    );
+    expect(hosts).toEqual(['raffles.localhost']);
+  });
+
   it('resolves an email to its school host, excluding platform-owner accounts', async () => {
     userFindMany.mockResolvedValue([{ school: { slug: 'acme' } }]);
     const hosts = await service.resolve('Teacher@Acme.edu');
