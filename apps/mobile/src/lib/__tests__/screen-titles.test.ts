@@ -32,10 +32,12 @@ function pushedRouteFiles(stackDir: string): string[][] {
   return out;
 }
 
-it('every screen in both home stacks is pushed and has a chip title', () => {
+it('every screen in the tab stacks (home + profile) is pushed and has a chip title', () => {
   const files = [
     ...pushedRouteFiles('(staff)/(tabs)/home'),
     ...pushedRouteFiles('(family)/(tabs)/home'),
+    ...pushedRouteFiles('(staff)/(tabs)/profile'),
+    ...pushedRouteFiles('(family)/(tabs)/profile'),
   ];
   expect(files.length).toBeGreaterThan(0);
   for (const segments of files) {

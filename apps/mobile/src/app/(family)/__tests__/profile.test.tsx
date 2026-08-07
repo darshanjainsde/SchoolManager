@@ -1,9 +1,13 @@
 import { render, act, fireEvent } from '@testing-library/react-native';
-import Profile from '../(tabs)/profile';
+import Profile from '../(tabs)/profile/index';
+import FamilyAppearance from '../(tabs)/profile/appearance';
+import FamilyPassword from '../(tabs)/profile/password';
 import { api, ApiError } from '@/lib/api';
 
 let capturedFocusEffect: (() => void) | undefined;
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
+  router: { push: (...args: unknown[]) => mockPush(...args) },
   useFocusEffect: (effect: () => void) => {
     capturedFocusEffect = effect;
     const React = jest.requireActual('react');
@@ -66,12 +70,22 @@ it('shows a dash, not "null", for a missing roll number or class', async () => {
   expect(getAllByText('—').length).toBeGreaterThanOrEqual(2);
 });
 
-it('seats the Appearance (theme) setting on this screen since the drawer replaced More', async () => {
+it('Appearance and Change password live behind their own doors now (pitch №7)', async () => {
   (api.request as jest.Mock).mockResolvedValue(FULL_PROFILE);
-  const { findByText, findByTestId } = render(<Profile />);
+  const { findByTestId, getByTestId, queryByTestId } = render(<Profile />);
 
-  expect(await findByText('Appearance')).toBeTruthy();
-  expect(await findByTestId('appearance-system')).toBeTruthy();
+  fireEvent.press(await findByTestId('profile-menu-appearance'));
+  expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/profile/appearance');
+  fireEvent.press(getByTestId('profile-menu-password'));
+  expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/profile/password');
+  // Neither control surface sits unfolded on this page any more.
+  expect(queryByTestId('appearance-system')).toBeNull();
+  expect(queryByTestId('pw-submit')).toBeNull();
+});
+
+it('the door screens re-house the same setting card and form unchanged', () => {
+  expect(render(<FamilyAppearance />).getByTestId('appearance-system')).toBeTruthy();
+  expect(render(<FamilyPassword />).getByTestId('pw-submit')).toBeTruthy();
 });
 
 describe('fetch states', () => {

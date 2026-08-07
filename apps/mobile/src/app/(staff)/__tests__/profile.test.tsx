@@ -1,8 +1,12 @@
-import { render } from '@testing-library/react-native';
-import Profile from '../(tabs)/profile';
+import { render, fireEvent } from '@testing-library/react-native';
+import Profile from '../(tabs)/profile/index';
+import StaffAppearance from '../(tabs)/profile/appearance';
+import StaffPassword from '../(tabs)/profile/password';
 import { api, ApiError } from '@/lib/api';
 
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
+  router: { push: (...args: unknown[]) => mockPush(...args) },
   useFocusEffect: (effect: () => void) => {
     const React = jest.requireActual('react');
     React.useEffect(effect, []);
@@ -102,7 +106,7 @@ it('falls back to initials — never the literal string "null" — when photoUrl
   expect(queryByText(/null/i)).toBeNull();
 });
 
-it('seats the Appearance (theme) setting on this screen since the drawer replaced More', async () => {
+it('Appearance lives behind its own door now (pitch №7) — a menu row that pushes, not an unfolded panel', async () => {
   (api.request as jest.Mock).mockResolvedValue({
     id: 't1',
     firstName: 'Asha',
@@ -114,10 +118,17 @@ it('seats the Appearance (theme) setting on this screen since the drawer replace
     photoUrl: null,
   });
 
-  const { findByText, findByTestId } = render(<Profile />);
+  const { findByTestId, queryByTestId } = render(<Profile />);
 
-  expect(await findByText('Appearance')).toBeTruthy();
-  expect(await findByTestId('appearance-system')).toBeTruthy();
+  fireEvent.press(await findByTestId('profile-menu-appearance'));
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/profile/appearance');
+  // The control surface itself no longer sits unfolded on this page.
+  expect(queryByTestId('appearance-system')).toBeNull();
+});
+
+it('the Appearance door screen re-houses the same setting card unchanged', () => {
+  const { getByTestId } = render(<StaffAppearance />);
+  expect(getByTestId('appearance-system')).toBeTruthy();
 });
 
 it('shows the API error message when the fetch fails', async () => {
@@ -133,7 +144,7 @@ it('shows the API error message when the fetch fails', async () => {
  * components/__tests__/ChangePasswordCard.test.tsx — this pins its presence
  * on the teacher's profile.
  */
-it('offers a real change-password control, not a pointer at the web portal', async () => {
+it('offers the change-password door, not a pointer at the web portal — the form lives one push away', async () => {
   (api.request as jest.Mock).mockResolvedValue({
     id: 't1',
     firstName: 'Asha',
@@ -144,8 +155,15 @@ it('offers a real change-password control, not a pointer at the web portal', asy
     classTeacherOf: [],
   });
 
-  const { findByTestId, queryByText } = render(<Profile />);
+  const { findByTestId, queryByTestId, queryByText } = render(<Profile />);
 
-  expect(await findByTestId('pw-submit')).toBeTruthy();
+  fireEvent.press(await findByTestId('profile-menu-password'));
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/profile/password');
+  expect(queryByTestId('pw-submit')).toBeNull();
   expect(queryByText('Change your password on the web portal.')).toBeNull();
+});
+
+it('the Change-password door screen re-houses the real form', () => {
+  const { getByTestId } = render(<StaffPassword />);
+  expect(getByTestId('pw-submit')).toBeTruthy();
 });

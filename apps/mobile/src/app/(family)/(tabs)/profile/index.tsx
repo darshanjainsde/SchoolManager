@@ -4,8 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentProfile } from '@/lib/portal';
 import { signOut } from '@/lib/sign-out';
-import { AppearanceSetting } from '@/components/AppearanceSetting';
-import { ChangePasswordCard } from '@/components/ChangePasswordCard';
+import { ProfileMenu } from '@/components/ProfileMenu';
 import { EditableAvatar } from '@/components/EditableAvatar';
 import { Card, Page, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
@@ -213,12 +212,14 @@ export default function Profile() {
         />
       </Page>
 
-      {/* Appearance lives here since the drawer replaced the More screen. */}
-      <Card style={{ paddingVertical: 2 }}>
-        <AppearanceSetting />
-      </Card>
-
-      <ChangePasswordCard />
+      {/* THE DOORS (pitch №7): Appearance and Change password each open
+          their own pushed screen instead of sitting fully unfolded here. */}
+      <ProfileMenu
+        rows={[
+          { icon: '🎨', label: 'Appearance', route: '/(family)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
+          { icon: '🔑', label: 'Change password', route: '/(family)/(tabs)/profile/password', testID: 'profile-menu-password' },
+        ]}
+      />
 
       {/* SIGN OUT LIVES HERE.
           It was reachable only from the tools drawer, behind a chevron FAB —

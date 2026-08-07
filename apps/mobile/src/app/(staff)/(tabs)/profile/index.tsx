@@ -4,8 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import type { TeacherProfile } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { signOut } from '@/lib/sign-out';
-import { AppearanceSetting } from '@/components/AppearanceSetting';
-import { ChangePasswordCard } from '@/components/ChangePasswordCard';
+import { ProfileMenu } from '@/components/ProfileMenu';
 import { EditableAvatar } from '@/components/EditableAvatar';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
@@ -188,13 +187,15 @@ export default function Profile() {
         </>
       )}
 
-      {/* Appearance lives here since the drawer replaced the More screen. */}
-      <Card style={{ paddingVertical: 2 }}>
-        <AppearanceSetting />
-      </Card>
-
-      {/* On the device in hand, not "on the web portal" — the old dead end. */}
-      <ChangePasswordCard />
+      {/* THE DOORS (pitch №7): Appearance and Change password each open
+          their own pushed screen instead of sitting fully unfolded here —
+          which is what finally fits Sign out above the fold. */}
+      <ProfileMenu
+        rows={[
+          { icon: '🎨', label: 'Appearance', route: '/(staff)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
+          { icon: '🔑', label: 'Change password', route: '/(staff)/(tabs)/profile/password', testID: 'profile-menu-password' },
+        ]}
+      />
 
       {/* SIGN OUT LIVES HERE.
           It was reachable only from the tools drawer, behind a chevron FAB —
