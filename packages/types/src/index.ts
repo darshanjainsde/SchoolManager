@@ -327,6 +327,62 @@ export interface LeaveApplication {
   createdAt: string;
 }
 
+// ── Leave policy (types, allocations, balances) ──────────────────────────────
+
+/** Mirrors LeavePolicyService.types — `GET /manage/leave-policy/types`. */
+export interface LeaveTypeDefRow {
+  id: string;
+  name: string;
+  /** The built-in enum value this row mirrors; null for a school's custom type. */
+  builtin: LeaveTypeValue | null;
+  isPaid: boolean;
+  /** Days/year that "apply defaults" grants. 0 = no standing quota. */
+  defaultAnnual: number;
+  /** Max unused days that survive a year close. 0 = lapse. */
+  carryForwardCap: number;
+  isActive: boolean;
+}
+
+/** One cell of the admin allotment grid. `allotted: null` = no grant (untracked). */
+export interface LeaveAllocationCell {
+  typeDefId: string;
+  allotted: number | null;
+  carriedIn: number;
+  /** Working days of APPROVED leave this year — derived, never stored. */
+  used: number;
+  remaining: number | null;
+}
+
+/** Mirrors LeavePolicyService.grid — `GET /manage/leave-policy/allocations`. */
+export interface LeaveAllocationGrid {
+  academicYear: { id: string; name: string };
+  types: Pick<LeaveTypeDefRow, 'id' | 'name' | 'isPaid' | 'defaultAnnual' | 'carryForwardCap'>[];
+  teachers: { id: string; name: string; cells: LeaveAllocationCell[] }[];
+}
+
+/** One row of a teacher's own balances — `GET /manage/leave-policy/my-balance`. */
+export interface LeaveBalanceRow {
+  typeDefId: string;
+  name: string;
+  builtin: LeaveTypeValue | null;
+  isPaid: boolean;
+  allotted: number | null;
+  carriedIn: number;
+  used: number;
+  remaining: number | null;
+}
+
+export interface LeaveBalanceResponse {
+  academicYear: { id: string; name: string };
+  balances: LeaveBalanceRow[];
+}
+
+/** Per-PENDING-application approve context — `GET /manage/leave-policy/pending-context`. */
+export type LeavePendingContext = Record<
+  string,
+  { requestedDays: number; remaining: number | null; typeName: string | null }
+>;
+
 // ── Exams and results ────────────────────────────────────────────────────────
 
 /** Mirrors ExamsService's Exam row — `GET/POST /manage/exams`. */

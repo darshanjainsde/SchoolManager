@@ -3,6 +3,7 @@ import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type {
   LeaveApplication,
+  LeaveBalanceResponse,
   LeaveStatusValue,
   LeaveTypeValue,
   RegisterChangeRow,
@@ -192,10 +193,21 @@ export default function Requests() {
       .finally(() => setRegisterLoading(false));
   }, []);
 
+  // Balances are decoration on this screen — a failure (no policy set up,
+  // an older API) hides the chips and never joins the error rail.
+  const [balances, setBalances] = useState<LeaveBalanceResponse | null>(null);
+  const fetchBalances = useCallback(() => {
+    return api
+      .request<LeaveBalanceResponse>('/manage/leave-policy/my-balance')
+      .then((data) => setBalances(data))
+      .catch(() => setBalances(null));
+  }, []);
+
   const fetchAll = useCallback(() => {
     void fetchLeave();
     void fetchRegister();
-  }, [fetchLeave, fetchRegister]);
+    void fetchBalances();
+  }, [fetchLeave, fetchRegister, fetchBalances]);
 
   useFocusEffect(useCallback(() => fetchAll(), [fetchAll]));
 
@@ -320,6 +332,23 @@ export default function Requests() {
               );
             })}
           </View>
+          {(() => {
+            const bal = balances?.balances.find((b) => b.builtin === type);
+            if (!bal || bal.remaining === null) return null;
+            return (
+              <Text
+                testID="apply-balance"
+                style={{
+                  fontSize: 11.5,
+                  marginTop: 6,
+                  color: bal.remaining <= 0 ? tokens.color.red : tokens.color.sub,
+                }}
+              >
+                {bal.remaining} {bal.remaining === 1 ? 'day' : 'days'} left this year
+                {bal.carriedIn > 0 ? ` (${bal.carriedIn} carried over)` : ''}
+              </Text>
+            );
+          })()}
         </View>
 
         {/* Tapping either date opens a month calendar — the old ‹ › steppers

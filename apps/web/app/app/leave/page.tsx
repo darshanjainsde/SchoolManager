@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CalendarClock } from 'lucide-react';
+import type { LeavePendingContext } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -152,6 +153,14 @@ export default function AdminLeavePage() {
     queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=APPROVED'),
   });
 
+  // {requestedDays, remaining} per pending application — the overshoot
+  // warning an admin sees BEFORE approving into a negative balance.
+  const pendingContext = useQuery({
+    queryKey: ['a-leave-pending-context'],
+    enabled: !!host,
+    queryFn: () => api.get<LeavePendingContext>('/manage/leave-policy/pending-context'),
+  });
+
   const coverage = useQuery({
     queryKey: ['a-leave-coverage', range.from, range.to],
     enabled: !!host && !!range.from && !!range.to,
@@ -193,6 +202,7 @@ export default function AdminLeavePage() {
       );
       void qc.invalidateQueries({ queryKey: ['a-leave-pending'] });
       void qc.invalidateQueries({ queryKey: ['a-leave-approved'] });
+      void qc.invalidateQueries({ queryKey: ['a-leave-pending-context'] });
       setRange({ from: toDateStr(app.startDate), to: toDateStr(app.endDate) });
       void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
     },
@@ -251,8 +261,13 @@ export default function AdminLeavePage() {
   return (
     <>
       <header className="sk-pagehead">
-        <h1>Leave</h1>
-        <p>Review teacher leave requests and cover the classes they leave behind.</p>
+        <div>
+          <h1>Leave</h1>
+          <p>Review teacher leave requests and cover the classes they leave behind.</p>
+        </div>
+        <Link href="/app/leave/policy" className="sk-btn">
+          Leave policy
+        </Link>
       </header>
 
       {/* Pending applications */}
@@ -287,6 +302,18 @@ export default function AdminLeavePage() {
                     {LEAVE_TYPE_LABEL[a.type]} · {formatDate(a.startDate)} – {formatDate(a.endDate)}
                     {a.reason ? ` · ${a.reason}` : ''}
                   </div>
+                  {(() => {
+                    const ctx = pendingContext.data?.[a.id];
+                    if (!ctx) return null;
+                    const over = ctx.remaining !== null && ctx.requestedDays > ctx.remaining;
+                    return (
+                      <div className="meta" style={over ? { color: 'var(--sk-bad)' } : undefined}>
+                        Asks {ctx.requestedDays} working {ctx.requestedDays === 1 ? 'day' : 'days'}
+                        {ctx.remaining !== null &&
+                          ` · ${ctx.remaining} left${over ? ` — ${ctx.requestedDays - ctx.remaining} over` : ''}`}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <span className="sp" />
                 {/* Same stamp, same meaning as the Requests desk — an admin
@@ -306,7 +333,26 @@ export default function AdminLeavePage() {
                     className="sk-btn sk-press"
                     data-variant="primary"
                     disabled={approve.isPending}
-                    onClick={() => approve.mutate(a)}
+                    onClick={() => {
+                      // Warn, never block — the admin may knowingly approve
+                      // into the negative (e.g. treat the excess as unpaid).
+                      const ctx = pendingContext.data?.[a.id];
+                      if (
+                        ctx &&
+                        ctx.remaining !== null &&
+                        ctx.requestedDays > ctx.remaining &&
+                        !window.confirm(
+                          `${a.teacherName} has ${ctx.remaining} ${ctx.typeName ?? LEAVE_TYPE_LABEL[a.type]} ${
+                            ctx.remaining === 1 ? 'day' : 'days'
+                          } left and this asks ${ctx.requestedDays} — approve anyway, ${
+                            ctx.requestedDays - ctx.remaining
+                          } ${ctx.requestedDays - ctx.remaining === 1 ? 'day' : 'days'} over?`,
+                        )
+                      ) {
+                        return;
+                      }
+                      approve.mutate(a);
+                    }}
                   >
                     Approve
                   </button>

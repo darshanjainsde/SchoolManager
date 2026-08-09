@@ -55,11 +55,19 @@ export class LeaveService {
         throw new ApiError('NOT_A_TEACHER', 'Only teachers can apply for leave', 403);
       }
 
+      // Link the application to the school's own leave-type row (if the
+      // policy has been set up) so it counts against the right balance.
+      const typeDef = await tx.leaveTypeDef.findFirst({
+        where: { schoolId, builtin: dto.type },
+        select: { id: true },
+      });
+
       const created = await tx.leaveApplication.create({
         data: {
           schoolId,
           teacherId: teacher.id,
           type: dto.type,
+          typeDefId: typeDef?.id ?? null,
           startDate: new Date(dto.startDate),
           endDate: new Date(dto.endDate),
           reason: dto.reason,

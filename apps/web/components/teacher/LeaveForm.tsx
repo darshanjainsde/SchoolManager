@@ -21,6 +21,9 @@ const fieldCls =
 
 export interface LeaveFormProps {
   isSubmitting: boolean;
+  /** Remaining days by built-in type — shown under the Type picker so the
+      teacher knows the balance BEFORE submitting. Absent = no policy set up. */
+  remainingByType?: Partial<Record<LeaveType, number | null>>;
   onSubmit: (v: { type: string; startDate: string; endDate: string; reason?: string }) => void;
 }
 
@@ -30,8 +33,9 @@ export interface LeaveFormProps {
  * a changing `key` (the page bumps one on a successful apply) to clear the
  * form, since it has no imperative reset handle of its own.
  */
-export function LeaveForm({ isSubmitting, onSubmit }: LeaveFormProps): React.JSX.Element {
+export function LeaveForm({ isSubmitting, remainingByType, onSubmit }: LeaveFormProps): React.JSX.Element {
   const [form, setForm] = useState(EMPTY_FORM);
+  const remaining = remainingByType?.[form.type];
 
   const dateOrderInvalid = !!form.startDate && !!form.endDate && form.endDate < form.startDate;
   const canSubmit = !!form.startDate && !!form.endDate && !dateOrderInvalid && !isSubmitting;
@@ -64,6 +68,11 @@ export function LeaveForm({ isSubmitting, onSubmit }: LeaveFormProps): React.JSX
             </option>
           ))}
         </Select>
+        {remaining !== undefined && remaining !== null && (
+          <p className="sk-muted" style={{ fontSize: 12, ...(remaining <= 0 ? { color: 'var(--sk-bad)' } : {}) }}>
+            {remaining} {remaining === 1 ? 'day' : 'days'} left this year
+          </p>
+        )}
       </div>
       <div aria-hidden="true" className="hidden sm:block" />
       <div className="space-y-1.5">

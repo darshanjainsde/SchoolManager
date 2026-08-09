@@ -638,6 +638,93 @@ export class AssignSubstitutionDto {
   substituteTeacherId!: string;
 }
 
+// ── Leave policy (types, allocations, carry-forward) ─────────────────────────
+
+export class CreateLeaveTypeDefDto {
+  @IsString()
+  @Length(1, 60)
+  name!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPaid?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  defaultAnnual?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  carryForwardCap?: number;
+}
+
+export class UpdateLeaveTypeDefDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 60)
+  name?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPaid?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  defaultAnnual?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  carryForwardCap?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class SetLeaveAllocationDto {
+  @IsUUID()
+  teacherId!: string;
+
+  @IsUUID()
+  typeDefId!: string;
+
+  @IsUUID()
+  academicYearId!: string;
+
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  allotted!: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  carriedIn?: number;
+}
+
+export class ApplyLeaveDefaultsDto {
+  @IsOptional()
+  @IsUUID()
+  academicYearId?: string;
+}
+
+export class CloseLeaveYearDto {
+  @IsUUID()
+  fromAcademicYearId!: string;
+
+  @IsUUID()
+  toAcademicYearId!: string;
+}
+
 // ── Holidays ─────────────────────────────────────────────────────────────────
 // HOLIDAY_TYPES/HolidayType come from @skoolos/types — the same union the
 // web/mobile Holiday screens render against, so a new type can't be added on

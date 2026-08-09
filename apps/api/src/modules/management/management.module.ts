@@ -31,6 +31,8 @@ import { CronSecretGuard } from './cron-secret.guard';
 import { LoginInviteService } from './internal/login-invite.service';
 import { LeaveService } from './leave.service';
 import { LeaveController, SubstitutionController } from './leave.controller';
+import { LeavePolicyService } from './leave-policy.service';
+import { LeavePolicyController } from './leave-policy.controller';
 import { HolidaysService } from './holidays.service';
 import { HolidaysController } from './holidays.controller';
 import { ClassNotesService } from './class-notes.service';
@@ -53,7 +55,7 @@ import { AttendanceBarService } from './attendance-bar.service';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService],
+  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -68,6 +70,7 @@ import { AttendanceBarService } from './attendance-bar.service';
     ExamRemindersController,
     NotificationOutboxController,
     LeaveController,
+    LeavePolicyController,
     SubstitutionController,
     HolidaysController,
     ClassNotesController,
