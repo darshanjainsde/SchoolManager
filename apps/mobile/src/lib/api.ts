@@ -114,6 +114,9 @@ export const api = {
       const body = await res.json().catch(() => ({}));
       throw new ApiError(res.status, body.message ?? `Request failed (${res.status})`);
     }
+    // DELETEs answer 204 No Content — parsing the empty body would throw a
+    // false failure after the server already committed the write.
+    if (res.status === 204) return undefined as T;
     return res.json() as Promise<T>;
   },
 
@@ -138,6 +141,9 @@ export const api = {
       const body = await res.json().catch(() => ({}));
       throw new ApiError(res.status, body.message ?? `Request failed (${res.status})`);
     }
+    // DELETEs answer 204 No Content — parsing the empty body would throw a
+    // false failure after the server already committed the write.
+    if (res.status === 204) return undefined as T;
     return res.json() as Promise<T>;
   },
 
