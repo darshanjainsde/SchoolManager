@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["bom1"],
+  "installCommand": "cd ../.. && NODE_ENV=development pnpm install --frozen-lockfile=false && pnpm --filter @library/db generate",
+  "buildCommand": "pnpm run bundle",
+  "functions": { "api/index.js": { "maxDuration": 60 } },
+  "routes": [{ "src": "/(.*)", "dest": "/api/index.js" }],
+  "crons": [{ "path": "/internal/cron/notification-outbox", "schedule": "0 2 * * *" }]
+}
