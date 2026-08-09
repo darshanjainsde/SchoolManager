@@ -21,7 +21,7 @@ New workspaces:
 packages/library-db/     own schema.prisma, own PrismaClient, own migrations
 apps/library-api/        NestJS 11, mirrors apps/api conventions
 apps/library-web/        Next 15 / React 19 console + member portal
-apps/testboard/          test.trackyour.in — run and observe every test, any target
+apps/testboard/          library.trackyour.in/test — run and observe every test, any target
 packages/testboard-db/   own schema for run history
 ```
 
@@ -37,7 +37,7 @@ packages/testboard-db/   own schema for run history
 5. Be stateless and horizontally scalable from the first commit — nothing in process
    memory, every scaling constraint from the Sckools baseline designed around, not
    retrofitted.
-6. Ship a hosted test dashboard at `test.trackyour.in` that shows functional **and**
+6. Ship a hosted test dashboard at `library.trackyour.in/test` that shows functional **and**
    non-functional results and can dispatch a run against any target machine or server.
 
 ### Non-goals (explicitly deferred)
@@ -105,12 +105,17 @@ We adopt the shape and the gate points; prices are a column, set later.
 | Vercel project | Domain(s) | Contents |
 |---|---|---|
 | `library-api` | `api.library.trackyour.in` | NestJS 11, ncc-bundled into one catch-all function, `maxDuration: 60`, region `bom1` |
-| `library-web` | `library.trackyour.in`, `*.library.trackyour.in` | Next 15 App Router. One deployment, tenant by Host header: console (`/console`), member portal (`/me`), public catalogue (`/`) |
-| `testboard` | `test.trackyour.in` | Test control plane and results dashboard |
+| `library-web` | `app.library.trackyour.in`, `*.library.trackyour.in` | Next 15 App Router. One deployment, tenant by Host header: console (`/console`), member portal (`/me`), public catalogue (`/`) |
+| `library-testboard` | `library.trackyour.in` | Test control plane and results dashboard, served at `/test` |
 
 Wildcard `*.library.trackyour.in` gives the same onboarding property Sckools has:
 `raffles.library.trackyour.in` starts working the moment an `Org` + `Domain` row
-exists. Explicit domains (`api.…`) resolve before the wildcard, so they never collide.
+exists. Explicit domains (`api.…`, `app.…`) resolve before the wildcard, so they never
+collide — the same rule `api.sckools.com` already relies on.
+
+`test.trackyour.in` is deliberately **not** used: it already serves the Sckools test
+dashboard (verified — `/` 307s to `/sckools/`), and taking that domain over would put a
+working dashboard at risk for no gain. The library testboard gets its own front door.
 
 **Region is `bom1` (Mumbai) for every project, matching the ap-south-1 database.**
 Non-negotiable: a cross-region hop costs ~150 ms, more than ~100 same-region queries.
@@ -802,10 +807,16 @@ cloud-gate is why deploys fail after green tests.
 
 ---
 
-## 12. The testboard (`test.trackyour.in`)
+## 12. The testboard (`library.trackyour.in/test`)
 
 `apps/testboard` — its own Vercel project, its own `testboard` Postgres schema, its
 own auth. Three responsibilities: **see**, **run**, **guard**.
+
+It is deliberately a separate deployment from `library-web`, not a route inside it: a
+dashboard whose job includes reporting "library-web is down" cannot be served by
+library-web, and it carries its own login and its own database. Routes are namespaced
+by project (`/test/library`, `/test/<project>`) so the second project is a row and a
+workflow file, per the project-agnostic decision.
 
 ### 12.1 Data model (`testboard` schema)
 
@@ -908,7 +919,7 @@ decides the schema and boundaries once; each phase gets its own implementation p
 
 | # | Phase | Deliverables | Done when |
 |---|---|---|---|
-| **0** | **Foundation** | Worktree + branch, `packages/library-db` (full schema, RLS, roles, first migration), `apps/library-api` skeleton, tenancy, auth, plan/quota resolver, Redis throttler, idempotency, `/ready`, Sentry, CI workflow, `preflight:library`, **`apps/testboard` live on test.trackyour.in showing a green run** | Testboard shows a passing run against staging, including the RLS-coverage audit |
+| **0** | **Foundation** | Worktree + branch, `packages/library-db` (full schema, RLS, roles, first migration), `apps/library-api` skeleton, tenancy, auth, plan/quota resolver, Redis throttler, idempotency, `/ready`, Sentry, CI workflow, `preflight:library`, **`apps/testboard` live on library.trackyour.in/test showing a green run** | Testboard shows a passing run against staging, including the RLS-coverage audit |
 | **0.5** | **Agent** | `packages/testboard-agent`, agent tokens, job polling, streamed ingest | A run dispatched from the dashboard executes on a laptop and reports back |
 | **1** | **Catalogue + circulation** | Titles/authors/categories/copies, full-text search, ISBN lookup, CSV import, issue/return/renew, holds, fines, policy engine, audit log | Full issue→return→fine and hold→promote→collect→expire flows green in integration tests |
 | **2** | **Reading room** | Branches, zones, seats, shifts, subscriptions, seat-map API, room attendance, check-in (QR/manual/app) | Subscribe→attend→expire flow green; seat double-booking provably impossible |
@@ -930,13 +941,27 @@ decides the schema and boundaries once; each phase gets its own implementation p
 | Destructive test run against prod | Server-side dispatch guard + runner-side re-check, with its own test |
 | Scope creep into a rebuild | Phases are independently shippable; acquisitions, MARC, ILL and payment gateways are explicit non-goals |
 
-### Open items for the user
+### Decisions closed 2026-08-09
 
-1. **Domain confirmation** — spec assumes `library.trackyour.in`,
-   `*.library.trackyour.in`, `api.library.trackyour.in`, `test.trackyour.in`. Say the
-   word if you want different hostnames.
-2. **Staging database** — spec assumes the existing staging Supabase project
-   (`pnczxkyteaocpdoufwyz`) with new `library` and `testboard` schemas. A separate
-   Supabase project is a one-line change if preferred.
-3. **Product name in the UI** — "Sckools Library" with the Tassel-S mark, per the
+| Question | Decision | Reasoning |
+|---|---|---|
+| Which database | **Existing staging project, new schemas** | Connections are not binding at test scale (2 conns/warm instance of a ~200 ceiling). The decisive factor is reversibility: with zero foreign keys crossing into `public`, splitting out later is `pg_dump -n library` + three env vars. Merging *into* Sckools is the stated goal, so the shared direction is the cheap one. Split triggers: combined pooler clients past ~60% of `max_clients`; paying tenants whose restore/RPO needs differ from a school's (one PITR covers both today); library queries measurably moving Sckools' p95. |
+| Redis | **Its own Upstash database**, ap-south-1 | Verified: Sckools' throttler is `ThrottlerModule.forRoot` with **default in-memory storage** (`apps/api/src/app.module.ts:46`), so it spends zero Redis commands today. The library is the first system here where Redis sits on the *security* path — a Redis-backed limiter guarding a public unauthenticated write (QR self-registration). Sharing a quota would couple that control to Sckools' traffic. Pattern: bulkhead. Fallback if the account allows only one free database: share with a `lib:` prefix **plus** a command-budget probe on the dashboard. |
+| Seed data | **A Raffles library + a second org** | Familiar tenant so the data reads as real. Two orgs is a hard requirement regardless — a single-tenant seed cannot prove tenant isolation, and that suite is the most valuable one in the build. |
+| Testboard scope | **Project-agnostic, only `/test/library` wired** | Runs already carry a `projectKey`; keeping the UI generic costs an afternoon and makes adding a second project a row plus a workflow file. |
+| Testboard host | **`library.trackyour.in/test`** | User's call. Leaves the working Sckools dashboard on `test.trackyour.in` entirely untouched — verified live, `/` 307s to `/sckools/`. |
+
+### Still open
+
+1. **Product name in the UI** — "Sckools Library" with the Tassel-S mark, per the
    standing brand rule. Change it here if the library is to be its own brand.
+2. **Pooler host for staging** — prod is `aws-1-ap-south-1`; the staging note says
+   `aws-0`. Confirm from the Supabase connect dialog before the URLs are written.
+
+### Noted, not acted on
+
+Pinning `connection_limit=1` on **Sckools'** own pooled URLs would cut it from ~6 to
+~2 connections per warm instance and roughly triple its warm-instance headroom. It is
+an environment-variable change with no code change. Out of scope here by instruction —
+the library is not to touch Sckools — but it is the cheapest capacity win available in
+the whole system and should be picked up separately.
