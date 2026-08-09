@@ -17,7 +17,7 @@ const lookup = new OrgLookupService(
     findDomain: (hostname) =>
       getLibraryPlatformPrisma().libraryDomain.findFirst({
         where: { hostname, status: 'LIVE' },
-        select: { orgId: true, org: { select: { slug: true } } },
+        select: { orgId: true, org: { select: { slug: true, status: true } } },
       }),
     findBySlug: (slug) =>
       getLibraryPlatformPrisma().libraryOrg.findFirst({
@@ -44,7 +44,10 @@ const lookup = new OrgLookupService(
  * consistently emitted at runtime, and these services have no Nest dependencies.
  */
 export function orgMiddleware(req: Request, _res: Response, next: NextFunction): void {
-  const explicit = (req.headers['x-library-host'] ?? '').toString().trim();
+  // A repeated header arrives as string[] — Array.isArray guards against
+  // `.toString()` silently comma-joining it into a garbage host.
+  const rawHeader = req.headers['x-library-host'];
+  const explicit = (Array.isArray(rawHeader) ? rawHeader[0] ?? '' : rawHeader ?? '').toString().trim();
   const host = explicit || req.hostname || (req.headers.host ?? '').toString();
   void lookup
     .resolveByHostname(host)

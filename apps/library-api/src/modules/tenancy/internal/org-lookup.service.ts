@@ -3,7 +3,7 @@ export type OrgContext =
   | { kind: 'unknown'; hostname: string };
 
 export interface OrgStore {
-  findDomain(hostname: string): Promise<{ orgId: string; org: { slug: string } } | null>;
+  findDomain(hostname: string): Promise<{ orgId: string; org: { slug: string; status: string } } | null>;
   findBySlug(slug: string): Promise<{ id: string; slug: string } | null>;
 }
 
@@ -22,7 +22,11 @@ export class OrgLookupService {
   ) {}
 
   async resolveByHostname(hostname: string): Promise<OrgContext> {
-    const host = hostname.trim().toLowerCase().split(':')[0];
+    // A trailing dot denotes a fully-qualified DNS name (e.g. from a strict
+    // resolver or a client that normalises to FQDN form) and is not part of
+    // the host's identity — strip it so "raffles.x.in" and "raffles.x.in."
+    // resolve to the same org and the same cache key.
+    const host = hostname.trim().toLowerCase().split(':')[0].replace(/\.$/, '');
     if (!host) return { kind: 'unknown', hostname };
 
     const key = `libhost:${host}`;
@@ -35,7 +39,14 @@ export class OrgLookupService {
     } catch { /* cache is never a source of truth — fall through to the database */ }
 
     const domain = await this.store.findDomain(host);
-    if (domain) return this.remember(key, domain.orgId, domain.org.slug, host);
+    if (domain) {
+      // A suspended org must be unreachable through every path uniformly —
+      // the <slug>.<platformHost> path already enforces this at the query
+      // level (findBySlug filters status != SUSPENDED); a custom domain
+      // whose LibraryDomain row is still LIVE must not bypass it.
+      if (domain.org.status === 'SUSPENDED') return { kind: 'unknown', hostname: host };
+      return this.remember(key, domain.orgId, domain.org.slug, host);
+    }
 
     const suffix = `.${this.platformHost}`;
     if (host.endsWith(suffix)) {
