@@ -1,0 +1,47 @@
+# Local stack for the library microservice ONLY.
+#
+# Deliberately separate from docker-compose.yml: different container names and
+# different host ports, so bringing this up can never disturb the Sckools
+# containers (skoolos-postgres on 5432, skoolos-redis) that may already be
+# running. Same isolation rule the services themselves follow.
+#
+#   docker compose -f docker-compose.library.yml up -d
+#
+# Postgres 17 to match Supabase (the Sckools compose pins 16).
+services:
+  library-postgres:
+    image: postgres:17-alpine
+    container_name: library-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: library
+    ports:
+      - "55432:5432"
+    volumes:
+      - library_postgres_data:/var/lib/postgresql/data
+      - ./scripts/library-db-init.sql:/docker-entrypoint-initdb.d/00-library-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d library"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  library-redis:
+    image: redis:7-alpine
+    container_name: library-redis
+    restart: unless-stopped
+    ports:
+      - "56379:6379"
+    volumes:
+      - library_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  library_postgres_data:
+  library_redis_data:
