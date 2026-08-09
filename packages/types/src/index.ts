@@ -255,6 +255,13 @@ export interface AttendanceDay {
 export interface AttendanceSummary {
   /** `YYYY-MM` — echoes back the month actually queried. */
   month: string;
+  /**
+   * `YYYY-MM` — the earliest month worth walking back to: the earlier of the
+   * student's first attendance mark and their registration month (IST).
+   * Clients disable "previous month" at this floor. Optional so an older API
+   * (which omits it) keeps newer app builds working — no floor, old behaviour.
+   */
+  earliestMonth?: string;
   /** present / (present + absent + late) * 100, rounded. 0 with no records. */
   percent: number;
   present: number;

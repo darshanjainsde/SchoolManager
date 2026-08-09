@@ -1,6 +1,6 @@
 const txMock = {
   student: { findFirst: jest.fn() },
-  attendance: { findMany: jest.fn() },
+  attendance: { findMany: jest.fn(), aggregate: jest.fn() },
   exam: { findMany: jest.fn() },
   result: { findMany: jest.fn(), groupBy: jest.fn() },
   subject: { findMany: jest.fn() },
@@ -92,13 +92,17 @@ describe('PortalService', () => {
       hostname: 'green.sckools.com',
       schoolSlug: 'green',
     });
-    // The default caller: a real student, in a class section.
+    // The default caller: a real student, in a class section, registered in
+    // April (drives `earliestMonth` — the month floor for attendance).
     txMock.student.findFirst.mockResolvedValue({
       id: STUDENT,
       userId: USER,
       classSectionId: CLASS_SECTION,
       classSection: { id: CLASS_SECTION, name: '8-A' },
+      createdAt: day('2026-04-05'),
     });
+    // Default: no marks anywhere → the floor falls back to registration month.
+    txMock.attendance.aggregate.mockResolvedValue({ _min: { date: null } });
     txMock.subject.findMany.mockResolvedValue([{ id: SUBJECT, name: 'Mathematics' }]);
   });
 
@@ -117,6 +121,7 @@ describe('PortalService', () => {
 
       expect(result).toEqual({
         month: '2026-07',
+        earliestMonth: '2026-04',
         // 2 present of 4 marked days.
         percent: 50,
         present: 2,
@@ -151,6 +156,7 @@ describe('PortalService', () => {
 
       expect(result).toEqual({
         month: '2026-07',
+        earliestMonth: '2026-04',
         percent: 0,
         present: 0,
         absent: 0,
@@ -158,6 +164,22 @@ describe('PortalService', () => {
         days: [],
       });
       expect(Number.isNaN(result.percent)).toBe(false);
+    });
+
+    it('floors earliestMonth at the first recorded mark when it predates registration', async () => {
+      // Imported history: marks from February, though the row was created in April.
+      txMock.attendance.findMany.mockResolvedValue([]);
+      txMock.attendance.aggregate.mockResolvedValue({ _min: { date: day('2026-02-10') } });
+
+      const result = await svc.attendance(USER, '2026-07');
+
+      expect(result.earliestMonth).toBe('2026-02');
+      // The aggregate must be scoped like every other query here: the
+      // caller's own row, this school only.
+      expect(txMock.attendance.aggregate).toHaveBeenCalledWith({
+        where: { schoolId: SCHOOL, studentId: STUDENT },
+        _min: { date: true },
+      });
     });
 
     it('scopes the query to the CALLER\'S OWN studentId and the requested month only', async () => {

@@ -146,6 +146,31 @@ describe('month navigation', () => {
     expect(nextBtn.props.accessibilityState).toEqual({ disabled: true });
     jest.useRealTimers();
   });
+
+  it('disables Prev at the server\'s earliestMonth floor — no months before the student existed', async () => {
+    (api.request as jest.Mock).mockResolvedValue({
+      ...summaryFor('2026-07'),
+      earliestMonth: '2026-07',
+    });
+    const { findByTestId } = render(<Attendance />);
+
+    const prevBtn = await findByTestId('attendance-prev-month');
+    expect(prevBtn.props.accessibilityState).toEqual({ disabled: true });
+    fireEvent.press(prevBtn);
+    // The press must not fetch June — only the initial load happened.
+    const juneCalls = (api.request as jest.Mock).mock.calls.filter((c) =>
+      String(c[0]).includes('month=2026-06'),
+    );
+    expect(juneCalls).toHaveLength(0);
+  });
+
+  it('keeps Prev enabled with no earliestMonth in the payload (an older API)', async () => {
+    (api.request as jest.Mock).mockResolvedValue(summaryFor('2026-07'));
+    const { findByTestId } = render(<Attendance />);
+
+    const prevBtn = await findByTestId('attendance-prev-month');
+    expect(prevBtn.props.accessibilityState).toEqual({ disabled: false });
+  });
 });
 
 it('names the month in the empty state rather than saying "this month"', async () => {
