@@ -9,3 +9,237 @@ datasource db {
   url       = env("LIBRARY_DATABASE_URL")
   directUrl = env("LIBRARY_DIRECT_URL")
 }
+
+enum Plan {
+  FREE
+  MINI
+  PRO
+}
+
+enum OrgStatus {
+  SETUP
+  LIVE
+  SUSPENDED
+}
+
+enum LibDomainType {
+  SUBDOMAIN
+  CUSTOM
+}
+
+enum LibDomainStatus {
+  PENDING
+  LIVE
+  ERROR
+}
+
+/// Library logins. MemberType drives circulation policy and is deliberately a
+/// separate axis — a TEACHER member has no administrative reach.
+enum LibRole {
+  ORG_OWNER
+  LIBRARIAN
+  ASSISTANT
+  MEMBER
+}
+
+enum MemberType {
+  STUDENT
+  TEACHER
+  EXTERNAL
+}
+
+enum MemberStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+model LibraryOrg {
+  id           String    @id @default(uuid()) @db.Uuid
+  slug         String    @unique
+  name         String
+  plan         Plan      @default(FREE)
+  status       OrgStatus @default(SETUP)
+  currency     String    @default("INR")
+  timezone     String    @default("Asia/Kolkata")
+  locale       String    @default("en-IN")
+  contactEmail String?
+  contactPhone String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  domains   LibraryDomain[]
+  theme     OrgTheme?
+  branches  Branch[]
+  users     LibUser[]
+  members   Member[]
+  overrides PlanOverride[]
+}
+
+model LibraryDomain {
+  id        String          @id @default(uuid()) @db.Uuid
+  orgId     String          @db.Uuid
+  hostname  String          @unique
+  type      LibDomainType   @default(SUBDOMAIN)
+  status    LibDomainStatus @default(PENDING)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model OrgTheme {
+  id               String   @id @default(uuid()) @db.Uuid
+  orgId            String   @unique @db.Uuid
+  logoUrl          String?
+  primaryColor     String   @default("#2E3A87")
+  accentColor      String   @default("#8F671D")
+  receiptHeader    String?
+  receiptFooter    String?
+  /// Per-org display labels for the fixed MemberType enum, e.g.
+  /// {"EXTERNAL":"Alumni"}. The enum stays fixed because CirculationPolicy is
+  /// keyed on it; only the label is configurable.
+  memberTypeLabels Json     @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+model PlanOverride {
+  id      String  @id @default(uuid()) @db.Uuid
+  orgId   String  @db.Uuid
+  key     String
+  enabled Boolean
+
+  org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, key])
+  @@index([orgId])
+}
+
+model Branch {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @db.Uuid
+  name      String
+  code      String
+  address   String?
+  phone     String?
+  openTime  String?
+  closeTime String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org     LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members Member[]
+
+  @@unique([orgId, code])
+  @@index([orgId])
+}
+
+model LibUser {
+  id             String    @id @default(uuid()) @db.Uuid
+  orgId          String    @db.Uuid
+  email          String?
+  phone          String?
+  passwordHash   String
+  role           LibRole
+  branchIds      String[]  @db.Uuid
+  memberId       String?   @unique @db.Uuid
+  active         Boolean   @default(true)
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  org     LibraryOrg     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  member  Member?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  refresh RefreshToken[]
+
+  @@unique([orgId, email])
+  @@unique([orgId, phone])
+  @@index([orgId])
+}
+
+model Member {
+  id               String       @id @default(uuid()) @db.Uuid
+  orgId            String       @db.Uuid
+  homeBranchId     String?      @db.Uuid
+  code             String
+  memberType       MemberType   @default(STUDENT)
+  firstName        String
+  lastName         String
+  phone            String?
+  email            String?
+  photoUrl         String?
+  address          String?
+  customFields     Json         @default("{}")
+  status           MemberStatus @default(PENDING)
+  joinedAt         DateTime     @default(now())
+  /// null = no expiry. Membership expiry is computed from this at read time,
+  /// never stored as a status — see the no-scheduler rule in the spec (§6.3).
+  membershipEndsAt DateTime?
+  /// Holds the Sckools Student.id / Teacher.id when the services merge.
+  /// Present from the first migration so the merge needs no schema change.
+  externalRef      String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  org        LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  homeBranch Branch?    @relation(fields: [homeBranchId], references: [id], onDelete: SetNull)
+  login      LibUser?
+
+  @@unique([orgId, code])
+  @@index([orgId, status])
+  @@index([orgId, externalRef])
+}
+
+/// Hash-keyed and single-use. Deliberately has no RLS policy — see the
+/// allow-list in the RLS coverage audit (Task 3).
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  familyId  String    @db.Uuid
+  revokedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  user LibUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  orgId       String   @db.Uuid
+  actorUserId String?  @db.Uuid
+  action      String
+  entity      String
+  entityId    String?
+  before      Json?
+  after       Json?
+  ip          String?
+  at          DateTime @default(now())
+
+  @@index([orgId, at])
+}
+
+model IdempotencyKey {
+  id             String   @id @default(uuid()) @db.Uuid
+  orgId          String   @db.Uuid
+  key            String
+  endpoint       String
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
+
+  @@unique([orgId, key])
+  @@index([createdAt])
+}
