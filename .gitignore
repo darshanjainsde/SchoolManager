@@ -19,3 +19,6 @@ test-results
 
 # local test dashboard results
 tools/test-dashboard/.cache/
+
+# generated Prisma clients must never be committed
+packages/library-db/generated/

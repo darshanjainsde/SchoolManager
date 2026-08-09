@@ -1,0 +1,11 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../generated/client"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("LIBRARY_DATABASE_URL")
+  directUrl = env("LIBRARY_DIRECT_URL")
+}
