@@ -22,3 +22,6 @@ tools/test-dashboard/.cache/
 
 # generated Prisma clients must never be committed
 packages/library-db/generated/
+
+# ncc bundle output (apps/*/vercel.json "bundle" script builds into api/)
+apps/library-api/api/
