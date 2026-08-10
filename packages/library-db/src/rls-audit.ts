@@ -36,7 +36,19 @@ export async function auditRlsCoverage(client: PrismaClient): Promise<RlsAuditRe
       (
         c.relrowsecurity
         AND c.relforcerowsecurity
-        AND EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid)
+        AND EXISTS (
+          -- A policy existing is not enough: CREATE POLICY p ON "Loan"
+          -- USING (true) is forced, policied, and leaks every tenant. The
+          -- USING expression must actually reference app.current_org, and a
+          -- WITH CHECK clause must be present (NULL polwithcheck means
+          -- writes are unconstrained even if reads are scoped).
+          -- pg_get_expr(polqual, polrelid) renders the policy's USING
+          -- clause back to SQL text so it can be pattern-matched.
+          SELECT 1 FROM pg_policy p
+          WHERE p.polrelid = c.oid
+            AND p.polwithcheck IS NOT NULL
+            AND pg_get_expr(p.polqual, p.polrelid) LIKE '%app.current_org%'
+        )
       ) AS protected
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace

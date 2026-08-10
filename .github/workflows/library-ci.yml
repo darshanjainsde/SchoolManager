@@ -269,6 +269,11 @@ jobs:
         env:
           LIBRARY_DATABASE_URL_APP: postgresql://library_app:library_app@localhost:5432/library?schema=library
           LIBRARY_DATABASE_URL_PLATFORM: postgresql://library_platform:library_platform@localhost:5432/library?schema=library
+          # Superuser — rls-audit.spec.ts's permissive-policy regression test
+          # (Group B finding 1) needs CREATE on schema library to stand up a
+          # scratch table; neither library_app nor library_platform has that
+          # grant (see scripts/library-db-init.sql), by design.
+          LIBRARY_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/library?schema=library
         run: >-
           pnpm --filter @library/db run test
           --json --outputFile=${{ github.workspace }}/unit-db-report.json
