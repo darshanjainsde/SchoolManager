@@ -1,0 +1,333 @@
+name: library-ci
+
+# CI for the library microservice only (apps/library-api + packages/library-db).
+# Deliberately its own workflow, not folded into `ci.yml`: that workflow gates
+# the Sckools app, this one gates a service with its own database, its own
+# roles, and its own RLS — mixing them would mean every library change waits
+# on (and can be blocked by) an unrelated Sckools build, and vice versa.
+#
+# Two failure modes already cost this project real time before this workflow
+# existed, so both are handled explicitly rather than left to chance:
+#
+#   1. `pnpm --filter <pkg> exec/run ...` sets cwd to the package directory,
+#      and the Prisma CLI does not walk up looking for a root `.env` from
+#      there. Every env var these steps need is therefore passed explicitly
+#      via `env:` on the step (or GitHub Environment secrets) — never assumed
+#      to come from a dotenv file that only exists on a developer's laptop.
+#
+#   2. `apps/library-api/test/quota-race.e2e.spec.ts` opens two genuinely
+#      concurrent transactions on a barrier — it needs at least two
+#      simultaneous database connections to prove the advisory-lock fix does
+#      anything at all. The deploy config pins `connection_limit=1` on the
+#      pooled staging app URL as a deliberate capacity measure; running e2e
+#      against that URL would not fail, it would HANG (the second transaction
+#      blocks forever waiting for a pool slot). So the e2e job below never
+#      touches the staging pooler — it stands up its own ephemeral Postgres
+#      as a GitHub Actions service container (default max_connections, no
+#      connection_limit query param) and runs entirely against that.
+
+on:
+  push:
+    paths:
+      - 'apps/library-api/**'
+      - 'packages/library-db/**'
+      - '.github/workflows/library-ci.yml'
+  pull_request:
+    paths:
+      - 'apps/library-api/**'
+      - 'packages/library-db/**'
+      - '.github/workflows/library-ci.yml'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: >-
+          Where to run the suites. Only "ci" is implemented — an ephemeral
+          service-container Postgres/Redis, the same thing every push/PR run
+          uses. "staging" is reserved for Plan B (the testboard's future
+          dispatch, spec §12.3) and is refused below: no migration-superuser
+          credentials are available to this repo yet, and there is no
+          prod/staging read-only guard in front of it. Every run here — no
+          matter which target is selected — executes against the CI service
+          container only.
+        required: false
+        type: choice
+        options: [ci, staging]
+        default: ci
+      suites:
+        description: >-
+          Reserved for Plan B's per-suite dispatch (unit, e2e, all). This
+          workflow always runs the full gate today; the input exists now so
+          Plan B's dispatch call (spec §12.3: POST /api/runs/dispatch →
+          workflow_dispatch with target + suites) matches this workflow's
+          shape when that endpoint is built.
+        required: false
+        type: string
+        default: all
+
+concurrency:
+  group: library-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 9.15.4
+  NODE_VERSION: 20
+
+jobs:
+  gate:
+    name: lint, typecheck, boundary, build, unit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse target=staging (not wired up — see workflow header)
+        if: ${{ github.event.inputs.target == 'staging' }}
+        run: |
+          echo "::error::target=staging is reserved for Plan B and is not implemented in this workflow. No migration-superuser credentials are available and staging deploy/migrate is out of scope here. Re-run with target=ci (the default), which is the only thing this workflow does regardless."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      # Both library packages talk to Postgres through generated Prisma
+      # types even at typecheck time (packages/library-db/src/index.ts
+      # imports from ../generated/client) — every later step needs this.
+      - name: Generate Prisma client (library-db)
+        run: pnpm --filter @library/db run generate
+
+      - name: Lint
+        run: pnpm --filter "@library/*" run lint
+
+      # This is the step that actually catches a type error. See the
+      # workflow header: packages/library-db's `build` script is
+      # `tsc -p tsconfig.json || true` and swallows failures by design (it
+      # tolerates the generated-client d.ts noise `tsc -p` alone doesn't),
+      # so `typecheck` (no `|| true`) must run as its own gated step.
+      - name: Typecheck
+        run: pnpm --filter "@library/*" run typecheck
+
+      - name: Module boundary (no cross-module reach-in, no Sckools imports)
+        run: >-
+          pnpm exec depcruise apps/library-api/src packages/library-db/src
+          --config .dependency-cruiser.library.cjs
+
+      - name: Build
+        run: pnpm --filter "@library/*" run build
+
+      # Two separate steps, not one `--filter "@library/*"` command: both
+      # packages' jest processes would otherwise run concurrently and race
+      # to write the SAME --outputFile, silently discarding one package's
+      # report.
+      - name: Unit tests (library-db)
+        # env.setup.js (apps/library-api/test/env.setup.js) supplies fallback
+        # dummy DATABASE_URL/REDIS_URL/JWT secrets for anything the unit
+        # suite touches, so this step needs no real database or Redis.
+        # No `--` before the extra flags: pnpm (9.x) forwards trailing args to
+        # the underlying script directly, unlike npm — a `--` here is passed
+        # through LITERALLY as an argument instead of being stripped. Verified
+        # locally: WITH `--`, pnpm's echoed command showed
+        # `jest --passWithNoTests "--" "--json" "--outputFile=..."`, jest
+        # never wrote the output file at all and exited via passWithNoTests
+        # having matched no tests. WITHOUT `--` (this form), the same command
+        # runs the real suite and writes a real report.
+        run: >-
+          pnpm --filter @library/db run test
+          --json --outputFile=${{ github.workspace }}/unit-db-report.json
+
+      - name: Unit tests (library-api)
+        if: always()
+        run: >-
+          pnpm --filter @library/api run test
+          --json --outputFile=${{ github.workspace }}/unit-api-report.json
+
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-unit-report
+          path: |
+            unit-db-report.json
+            unit-api-report.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  e2e:
+    name: e2e (ephemeral Postgres — see header, note 2)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: library
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d library"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    # Declared for secrets consistency with the rest of the repo's
+    # environment-gated workflows (db-migrate.yml, db-drift.yml) and so any
+    # future real e2e need (a staging-only secret) has somewhere to live —
+    # NOT because e2e talks to staging. The URLs below always point at the
+    # `postgres`/`redis` service containers defined above, which live only
+    # for the duration of this job. See header note 2 for why that matters.
+    environment: library-staging
+    steps:
+      - name: Refuse target=staging (not wired up — see workflow header)
+        if: ${{ github.event.inputs.target == 'staging' }}
+        run: |
+          echo "::error::target=staging is reserved for Plan B and is not implemented in this workflow. This job always runs against its own ephemeral Postgres/Redis service containers regardless of this input."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Generate Prisma client (library-db)
+        run: pnpm --filter @library/db run generate
+
+      # Local mirror of scripts/library-db-init.sql (schema + non-superuser
+      # roles): the service container above starts as a bare `postgres:17`
+      # image with no `library`/`library_app`/`library_platform` setup, same
+      # gap docker-compose.library.yml's init script fills locally.
+      - name: Create schema + non-superuser roles
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d library -f scripts/library-db-init.sql
+
+      - name: Apply migrations
+        env:
+          # Superuser connection — migrations run as `postgres`, matching
+          # local dev and db-migrate.yml. No connection_limit param: this is
+          # a single short-lived job talking to a container only it uses.
+          LIBRARY_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/library?schema=library
+          LIBRARY_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/library?schema=library
+        run: pnpm --filter @library/db exec prisma migrate deploy
+
+      - name: e2e tests
+        env:
+          NODE_ENV: test
+          # library_app / library_platform: the non-superuser roles created
+          # above by library-db-init.sql. No connection_limit query param —
+          # see header note 2. This is what actually prevents the hang.
+          LIBRARY_DATABASE_URL_APP: postgresql://library_app:library_app@localhost:5432/library?schema=library
+          LIBRARY_DATABASE_URL_PLATFORM: postgresql://library_platform:library_platform@localhost:5432/library?schema=library
+          LIBRARY_REDIS_URL: redis://localhost:6379
+          LIBRARY_PLATFORM_HOST: library.trackyour.in
+          # e2e (test/*.e2e.spec.ts) exercises Postgres/RLS/advisory-lock
+          # behaviour directly and never boots the Nest app or signs a real
+          # JWT, so these never need to be real secrets — only ≥32 chars, to
+          # satisfy apps/library-api/src/config/env.ts's zod schema on the
+          # off chance a step here ever does boot the app.
+          LIBRARY_JWT_SECRET: ${{ secrets.LIBRARY_JWT_SECRET || 'ci-e2e-placeholder-jwt-secret-32-chars-min' }}
+          LIBRARY_REFRESH_SECRET: ${{ secrets.LIBRARY_REFRESH_SECRET || 'ci-e2e-placeholder-refresh-secret-32-chars' }}
+        # No `--` — see the "Unit tests (library-db)" step above for why.
+        run: >-
+          pnpm --filter @library/api run test:e2e
+          --json --outputFile=${{ github.workspace }}/e2e-report.json
+
+      - name: Upload e2e test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-e2e-report
+          path: e2e-report.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  report:
+    name: emit library-report.json
+    needs: [gate, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: library-*-report
+          path: reports
+          merge-multiple: true
+
+      # Best-effort summary for now: commit/branch/trigger, each job's
+      # overall result, and — when the corresponding step got far enough to
+      # write one — jest's own summary counts. This is deliberately NOT the
+      # signed POST to Plan B's `/api/runs/ingest` (spec §12.3): that
+      # endpoint doesn't exist yet (testboard is Plan B, out of scope here).
+      # Until it does, this step just leaves the artifact for a human — or a
+      # later Plan B step added to this same job — to pick up.
+      - name: Build library-report.json
+        run: |
+          node -e '
+            const fs = require("fs");
+            function jestSummary(path) {
+              try {
+                const j = JSON.parse(fs.readFileSync(path, "utf8"));
+                return {
+                  numPassedTests: j.numPassedTests,
+                  numFailedTests: j.numFailedTests,
+                  numTotalTests: j.numTotalTests,
+                  success: j.success,
+                };
+              } catch {
+                return null;
+              }
+            }
+            const report = {
+              commitSha: process.env.GITHUB_SHA,
+              branch: process.env.GITHUB_REF_NAME,
+              trigger: process.env.GITHUB_EVENT_NAME,
+              runId: process.env.GITHUB_RUN_ID,
+              generatedAt: new Date().toISOString(),
+              jobs: {
+                gate: process.env.GATE_RESULT,
+                e2e: process.env.E2E_RESULT,
+              },
+              suites: {
+                "unit-db": jestSummary("reports/unit-db-report.json"),
+                "unit-api": jestSummary("reports/unit-api-report.json"),
+                e2e: jestSummary("reports/e2e-report.json"),
+              },
+              status: (process.env.GATE_RESULT === "success" && process.env.E2E_RESULT === "success")
+                ? "passed" : "failed",
+            };
+            fs.writeFileSync("library-report.json", JSON.stringify(report, null, 2));
+            console.log(JSON.stringify(report, null, 2));
+          '
+        env:
+          GATE_RESULT: ${{ needs.gate.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: library-report
+          path: library-report.json
+          retention-days: 30
+
+      - name: Fail the workflow if either job failed
+        if: ${{ needs.gate.result != 'success' || needs.e2e.result != 'success' }}
+        run: |
+          echo "::error::gate=${{ needs.gate.result }} e2e=${{ needs.e2e.result }}"
+          exit 1
