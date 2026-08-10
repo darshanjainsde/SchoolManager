@@ -1,5 +1,6 @@
 import Redis from 'ioredis';
 import type { ThrottlerStorage } from '@nestjs/throttler';
+import { Logger } from '@nestjs/common';
 import { loadLibraryEnv } from '../../config/env';
 
 /**
@@ -71,9 +72,29 @@ function makeDefaultClient(): RedisLike {
  * request," not "serve a slightly stale answer" — a different, but still
  * deliberately chosen, trade-off from those two services' cache-aside
  * pattern.
+ *
+ * Fail-open is silent to the request path by design (it must not throw),
+ * but it is not silent to operators: every fail-open hit logs a warning —
+ * see `warnFailOpen` — because "rate limiting is off" for a public,
+ * unauthenticated route is exactly the kind of fact a 3am on-call engineer
+ * needs surfaced, not buried in a source comment nobody reads at request time.
  */
 export class RedisThrottlerStorage implements ThrottlerStorage {
   private readonly client: RedisLike;
+  private readonly logger = new Logger(RedisThrottlerStorage.name);
+
+  /**
+   * Single timestamp, not a per-key or per-request structure — this is a
+   * log-suppression knob, not rate-limiting state, and it does not grow
+   * with traffic or key cardinality. It never influences whether a request
+   * is allowed (that decision stays 100% Redis-backed); it only decides
+   * whether *this instance* has warned recently. That is why it does not
+   * fall under this task's "nothing in process memory" constraint, which
+   * is about not reintroducing an in-process counter that the limiter
+   * itself relies on — this counts log lines, not hits.
+   */
+  private lastFailOpenWarnAt = 0;
+  private static readonly WARN_INTERVAL_MS = 30_000;
 
   constructor(client?: RedisLike) {
     this.client = client ?? makeDefaultClient();
@@ -98,12 +119,35 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
       const isBlocked = totalHits > limit;
       const timeToBlockExpire = isBlocked ? timeToExpire : 0;
       return { totalHits, timeToExpire, isBlocked, timeToBlockExpire };
-    } catch {
+    } catch (err) {
       // Fail open — see class doc. Reported as "just started, not blocked"
       // so ThrottlerGuard lets the request through uncounted rather than
       // throwing a 5xx that would take the whole API down with it.
+      this.warnFailOpen(err);
       return { totalHits: 1, timeToExpire: Math.ceil(ttl / 1000), isBlocked: false, timeToBlockExpire: 0 };
     }
+  }
+
+  /**
+   * Time-based suppression, not state-transition-based: logs at most once
+   * per `WARN_INTERVAL_MS` regardless of whether this is the first failure
+   * in a new outage or the thousandth request into an ongoing one. Chosen
+   * over "log once on the way down, once on the way up" because it needs
+   * no extra state beyond a single timestamp, gives an operator a
+   * heartbeat for the entire duration of a sustained outage (not just its
+   * edges), and degrades the same way under either a single Redis blip or
+   * a prolonged one — one clear signal every 30s, never a flood.
+   */
+  private warnFailOpen(err: unknown): void {
+    const now = Date.now();
+    if (now - this.lastFailOpenWarnAt < RedisThrottlerStorage.WARN_INTERVAL_MS) return;
+    this.lastFailOpenWarnAt = now;
+    const reason = err instanceof Error ? err.message : String(err);
+    this.logger.warn(
+      `Redis unavailable (${reason}) — failing open: rate limiting is DISABLED for this request and will stay ` +
+        `disabled for any request hitting this failure until Redis recovers. Suppressing repeats of this warning ` +
+        `for ${RedisThrottlerStorage.WARN_INTERVAL_MS / 1000}s.`,
+    );
   }
 
   private async connect(): Promise<void> {

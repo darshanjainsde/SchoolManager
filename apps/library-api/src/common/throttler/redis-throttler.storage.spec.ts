@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { RedisThrottlerStorage } from './redis-throttler.storage';
 
 function fakeRedis() {
@@ -59,5 +60,61 @@ describe('RedisThrottlerStorage', () => {
     const storage = new RedisThrottlerStorage(client);
     const result = await storage.increment('ip:4', 60_000, 5, 0, 'default');
     expect(result.isBlocked).toBe(false);
+  });
+
+  describe('fail-open logging', () => {
+    let warnSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
+
+    function brokenClient() {
+      return {
+        status: 'ready',
+        connect: async () => {},
+        incr: async () => { throw new Error('ECONNREFUSED'); },
+        pexpire: async () => 1,
+        pttl: async () => 30_000,
+      } as never;
+    }
+
+    it('logs a warning naming the failure and its consequence when it fails open', async () => {
+      const storage = new RedisThrottlerStorage(brokenClient());
+      await storage.increment('ip:5', 60_000, 5, 0, 'default');
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const message = warnSpy.mock.calls[0][0] as string;
+      expect(message).toMatch(/ECONNREFUSED/);
+      expect(message).toMatch(/rate limiting is DISABLED/i);
+    });
+
+    it('suppresses repeat warnings within the suppression window instead of flooding the log', async () => {
+      const storage = new RedisThrottlerStorage(brokenClient());
+      await storage.increment('ip:6', 60_000, 5, 0, 'default');
+      await storage.increment('ip:6', 60_000, 5, 0, 'default');
+      await storage.increment('ip:6', 60_000, 5, 0, 'default');
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('warns again once the suppression window has elapsed', async () => {
+      const nowSpy = jest.spyOn(Date, 'now');
+      const storage = new RedisThrottlerStorage(brokenClient());
+
+      nowSpy.mockReturnValue(1_000_000);
+      await storage.increment('ip:7', 60_000, 5, 0, 'default');
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+
+      nowSpy.mockReturnValue(1_000_000 + 30_000); // exactly the suppression window later
+      await storage.increment('ip:7', 60_000, 5, 0, 'default');
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+
+      nowSpy.mockRestore();
+    });
   });
 });
