@@ -25,6 +25,26 @@ import type { LibraryTx } from '@library/db';
  * PlanOverride only carries a boolean `enabled`, so a capability override
  * (e.g. MULTI_BRANCH) can never widen a quota on its own — only
  * PlanResolverService's `quotas` may raise this limit.
+ *
+ * Before you add a second `assertQuota` call inside the same transaction:
+ * the advisory lock above is keyed on `(orgId, what)` and held until the
+ * transaction commits or rolls back — it does not release between calls.
+ * If one transaction checks `branches` then `adminSeats`, while a concurrent
+ * transaction checks the same two resources in the opposite order, each can
+ * end up holding the lock the other wants next: a classic AB-BA deadlock.
+ * Postgres will detect it and abort one side, but an unexplained abort in a
+ * foundational primitive is a bad surprise to leave for whoever hits it
+ * first. So: if a transaction ever needs to call `assertQuota` more than
+ * once, every call site doing so must acquire in the same order — sort by
+ * `what` (e.g. always `adminSeats` before `branches`, alphabetically) — so
+ * two concurrent transactions can never be holding what the other needs
+ * next. Nothing in this codebase calls `assertQuota` twice in one
+ * transaction today, which is why this has never manifested. If
+ * multi-resource quota checks become common, don't paper over it with
+ * ad-hoc ordering at each call site — add a single call that takes all the
+ * resources being checked and locks them in canonical order itself, the
+ * same way a `SELECT ... FOR UPDATE` over multiple rows should always lock
+ * in a fixed order to stay deadlock-free.
  */
 export async function assertQuota(
   tx: LibraryTx,
