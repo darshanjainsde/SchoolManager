@@ -1,5 +1,4 @@
-import { randomUUID, createHash } from 'node:crypto';
-import { Inject, Injectable, Module } from '@nestjs/common';
+import { Inject, Injectable, Module, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { getLibraryPlatformPrisma } from '@library/db';
 import { loadLibraryEnv } from '../../../config/env';
@@ -7,6 +6,7 @@ import { TenancyModule } from '../../tenancy';
 import { AuthController } from './auth.controller';
 import { AuthService, type AuthStore, type AuthUserRow, type TokenIssuer } from './auth.service';
 import { PasswordService } from './password.service';
+import { RefreshService, type AccessSigner, type RefreshRow, type RefreshStore } from './refresh.service';
 import type { LibJwtPayload } from './lib-jwt.guard';
 
 /**
@@ -76,70 +76,135 @@ class PrismaAuthStore implements AuthStore {
 }
 
 /**
- * Mints access tokens directly and issues the *first* refresh token for a
- * session. This is deliberately minimal: it creates one `RefreshToken` row
- * (family root) so login has something to hand back, but rotation, reuse
- * detection and family-wide revocation on refresh belong to Task 8's
- * `RefreshService`. Do not extend this class with that behaviour — add a
- * `POST /auth/refresh` endpoint backed by its own service instead.
+ * Shared by both `JwtTokenIssuer.signAccess` (login) and `JwtAccessSigner`
+ * (refresh rotation) so a rotated access token is byte-for-byte the same
+ * shape as one minted at login — one payload-building code path, not two
+ * that could drift apart.
  *
- * @Inject(JwtService) is explicit, not a bare typed param: tsx does not
- * reliably emit design:paramtypes decorator metadata (confirmed at
- * runtime), so a `useClass` provider relying on implicit type-based DI gets
- * `jwt: undefined` here instead of a bootstrap error.
+ * No `audience` sign option here: jsonwebtoken rejects signing when the
+ * payload already carries an `aud` key AND options.audience is also set
+ * ("Bad options.audience option. The payload already has an aud
+ * property.") — confirmed at runtime. LibJwtGuard's verify() still checks
+ * it via its own `audience: 'library'` option, which reads payload.aud
+ * regardless of how it got there.
+ */
+function signAccessToken(
+  jwt: JwtService,
+  user: { id: string; orgId: string; role: string; branchIds: string[] },
+): string {
+  const env = loadLibraryEnv();
+  const payload: Omit<LibJwtPayload, never> = {
+    sub: user.id,
+    org: user.orgId,
+    role: user.role as LibJwtPayload['role'],
+    branches: user.branchIds,
+    aud: 'library',
+  };
+  return jwt.sign(payload, {
+    secret: env.LIBRARY_JWT_SECRET,
+    expiresIn: env.LIBRARY_ACCESS_TTL,
+  });
+}
+
+/**
+ * Mints access tokens and delegates all refresh-token issuance to
+ * `RefreshService` (Task 8) — this class no longer touches `RefreshToken`
+ * rows itself. Task 7 built this as a deliberately minimal seam; rotation,
+ * reuse detection and family-wide revocation now live in `RefreshService`.
+ *
+ * @Inject(...) explicit, not bare typed params: tsx does not reliably emit
+ * design:paramtypes decorator metadata (confirmed at runtime), so a
+ * `useClass` provider relying on implicit type-based DI silently gets
+ * `undefined` deps here instead of a bootstrap error.
  */
 @Injectable()
 class JwtTokenIssuer implements TokenIssuer {
-  constructor(@Inject(JwtService) private readonly jwt: JwtService) {}
+  constructor(
+    @Inject(JwtService) private readonly jwt: JwtService,
+    @Inject(RefreshService) private readonly refresh: RefreshService,
+  ) {}
 
   signAccess(user: AuthUserRow): string {
-    const env = loadLibraryEnv();
-    const payload: Omit<LibJwtPayload, never> = {
-      sub: user.id,
-      org: user.orgId,
-      role: user.role as LibJwtPayload['role'],
-      branches: user.branchIds,
-      aud: 'library',
-    };
-    // No `audience` sign option here: jsonwebtoken rejects signing when the
-    // payload already carries an `aud` key AND options.audience is also set
-    // ("Bad options.audience option. The payload already has an aud
-    // property.") — confirmed at runtime. LibJwtGuard's verify() still checks
-    // it via its own `audience: 'library'` option, which reads payload.aud
-    // regardless of how it got there.
-    return this.jwt.sign(payload, {
-      secret: env.LIBRARY_JWT_SECRET,
-      expiresIn: env.LIBRARY_ACCESS_TTL,
-    });
+    return signAccessToken(this.jwt, user);
   }
 
-  async issueRefresh(user: AuthUserRow): Promise<string> {
-    const env = loadLibraryEnv();
-    const familyId = randomUUID();
-    const jti = randomUUID();
-    const expiresAt = new Date(Date.now() + env.LIBRARY_REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000);
-    const refreshToken = this.jwt.sign(
-      { sub: user.id, org: user.orgId, jti, fam: familyId },
-      {
-        secret: env.LIBRARY_REFRESH_SECRET,
-        audience: 'library-refresh',
-        expiresIn: `${env.LIBRARY_REFRESH_TTL_DAYS}d`,
-      },
-    );
-    await getLibraryPlatformPrisma().refreshToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: sha256(refreshToken),
-        familyId,
-        expiresAt,
-      },
-    });
-    return refreshToken;
+  issueRefresh(user: AuthUserRow): Promise<string> {
+    return this.refresh.issue(user);
   }
 }
 
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
+/** Thin adapter so `RefreshService` can sign access tokens without knowing about Nest's `JwtService`. */
+@Injectable()
+class JwtAccessSigner implements AccessSigner {
+  constructor(@Inject(JwtService) private readonly jwt: JwtService) {}
+
+  signAccess(user: { id: string; orgId: string; role: string; branchIds: string[] }): string {
+    return signAccessToken(this.jwt, user);
+  }
+}
+
+/**
+ * Refresh-token lookups run on the BYPASSRLS platform client for the same
+ * reason `PrismaAuthStore` does: a refresh request carries no authenticated
+ * tenant scope to bind an RLS session to. Every query here is still
+ * reasoned about for cross-tenant safety even though none of them takes an
+ * explicit `orgId`:
+ *
+ *   - `findByHash` looks up by `tokenHash`, which is `@unique` in the schema
+ *     — the hash is itself the scope. Producing it at all requires having
+ *     possessed the raw 384-bit token, so this is a point lookup that can
+ *     resolve to at most one org's row, never a cross-org listing.
+ *   - `markUsed` / `revokeFamily` / `loadUser` never take caller-supplied
+ *     ids. They're only ever called with an `id` / `familyId` / `userId`
+ *     read off the row `findByHash` already matched — same pattern
+ *     `PrismaAuthStore.recordFailure/recordSuccess` documents above.
+ *   - `create` performs no query at all.
+ *
+ * `markUsed` additionally guards `revokedAt: null` in its WHERE clause
+ * (not just its SET) and checks the affected row count: without that, two
+ * concurrent `rotate()` calls racing on the same still-valid raw token would
+ * both pass `RefreshService`'s revoked/expired checks (both read the row
+ * before either write lands) and both mint a fresh child token — silently
+ * doubling the family instead of the intended one-child-per-parent rotation.
+ * The conditional update makes the *first* writer's consumption authoritative;
+ * the loser's `count` comes back 0 and it throws before ever calling `create`.
+ *
+ * `loadUser` also checks `active`: a deactivated account's stolen refresh
+ * token otherwise keeps minting valid access tokens forever, even though
+ * `AuthService.login` already refuses `active: false` at the password gate.
+ */
+class PrismaRefreshStore implements RefreshStore {
+  async findByHash(hash: string): Promise<RefreshRow | null> {
+    const row = await getLibraryPlatformPrisma().refreshToken.findUnique({ where: { tokenHash: hash } });
+    return row
+      ? { id: row.id, userId: row.userId, familyId: row.familyId, revokedAt: row.revokedAt, expiresAt: row.expiresAt }
+      : null;
+  }
+
+  async create(row: { userId: string; tokenHash: string; familyId: string; expiresAt: Date }): Promise<void> {
+    await getLibraryPlatformPrisma().refreshToken.create({ data: row });
+  }
+
+  async revokeFamily(familyId: string): Promise<void> {
+    await getLibraryPlatformPrisma().refreshToken.updateMany({
+      where: { familyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async markUsed(id: string): Promise<void> {
+    const { count } = await getLibraryPlatformPrisma().refreshToken.updateMany({
+      where: { id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (count === 0) throw new UnauthorizedException();
+  }
+
+  async loadUser(userId: string): Promise<{ id: string; orgId: string; role: string; branchIds: string[] }> {
+    const user = await getLibraryPlatformPrisma().libUser.findUnique({ where: { id: userId } });
+    if (!user || !user.active) throw new UnauthorizedException();
+    return { id: user.id, orgId: user.orgId, role: user.role, branchIds: user.branchIds };
+  }
 }
 
 @Module({
@@ -149,6 +214,14 @@ function sha256(value: string): string {
     PasswordService,
     JwtService,
     { provide: 'AUTH_STORE', useClass: PrismaAuthStore },
+    { provide: 'REFRESH_STORE', useClass: PrismaRefreshStore },
+    { provide: 'ACCESS_SIGNER', useClass: JwtAccessSigner },
+    {
+      provide: RefreshService,
+      useFactory: (store: RefreshStore, signer: AccessSigner) =>
+        new RefreshService(store, signer, loadLibraryEnv().LIBRARY_REFRESH_TTL_DAYS),
+      inject: ['REFRESH_STORE', 'ACCESS_SIGNER'],
+    },
     { provide: 'TOKEN_ISSUER', useClass: JwtTokenIssuer },
     {
       provide: AuthService,

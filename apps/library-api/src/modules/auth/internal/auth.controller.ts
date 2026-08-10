@@ -2,7 +2,8 @@ import { Body, Controller, Inject, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { OrgContextService } from '../../tenancy';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto';
+import { LoginDto, RefreshDto } from './dto';
+import { RefreshService } from './refresh.service';
 
 /**
  * Explicit @Inject() tokens, not bare typed constructor params: tsx does not
@@ -17,11 +18,20 @@ export class AuthController {
   constructor(
     @Inject(AuthService) private readonly auth: AuthService,
     @Inject(OrgContextService) private readonly orgs: OrgContextService,
+    @Inject(RefreshService) private readonly refreshService: RefreshService,
   ) {}
 
   @Throttle({ default: { limit: 5, ttl: 900_000 } })
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.auth.login(this.orgs.requireOrgId(), dto.identifier, dto.password);
+  }
+
+  // No @Throttle here: the secret being checked is a 384-bit random token,
+  // not a guessable password — rate-limiting login guards against credential
+  // stuffing, but there is no equivalent brute-force surface on this route.
+  @Post('refresh')
+  refresh(@Body() dto: RefreshDto) {
+    return this.refreshService.rotate(dto.refreshToken);
   }
 }
