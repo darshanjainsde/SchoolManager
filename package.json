@@ -14,10 +14,13 @@
     "test": "turbo run test",
     "boundary": "depcruise apps/api/src --config .dependency-cruiser.cjs",
     "preflight": "bash scripts/preflight.sh",
+    "preflight:library": "bash scripts/preflight-library.sh",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "db:generate": "pnpm --filter @skoolos/db generate",
     "db:migrate": "pnpm --filter @skoolos/db migrate:dev",
     "db:seed": "pnpm --filter @skoolos/db seed",
+    "library:migrate": "pnpm --filter @library/db migrate:deploy",
+    "library:seed": "pnpm --filter @library/db seed",
     "dash": "node tools/test-dashboard/server.mjs"
   },
   "pnpm": {
