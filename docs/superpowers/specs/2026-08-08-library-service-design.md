@@ -209,14 +209,37 @@ Identical to the Sckools spine, which is verified-correct and must survive:
 `SET LOCAL` is **transaction-scoped**, so pgbouncer connection reuse cannot leak a
 tenant — this is why the transaction wrapper is mandatory, not stylistic.
 
-Policies read `current_setting('app.current_org', true)`. Unset GUC → NULL → zero
-rows. **Fail closed.**
+Policies read `NULLIF(current_setting('app.current_org', true), '')::uuid`. The
+`NULLIF` matters: `current_setting(..., true)` returns NULL only for a session
+that has *never* touched the GUC. Once `SET LOCAL app.current_org` has run once
+on a pooled connection, Postgres gives that custom GUC a reset value of the
+empty string `''`, not "unset" — so a later unscoped query on that same reused
+connection would otherwise see `''::uuid`, a hard Postgres error, instead of
+the intended zero-rows comparison. `NULLIF` collapses both the never-set case
+(NULL) and the reset-after-`SET LOCAL` case (`''`) to NULL before the cast, so
+an unscoped query reliably returns zero rows rather than every row or an
+error. **Fail closed.**
 
-`ENABLE ROW LEVEL SECURITY` **and** `FORCE ROW LEVEL SECURITY` on **every** table
-carrying `orgId`, with **no exceptions**. Sckools has a known gap here (`BlogPost`,
-`SchoolBlogSelection` are tenant-scoped with no policies); we do not repeat it, and
-the testboard runs an **RLS coverage audit** that fails if any `orgId`-bearing table
-lacks a forced policy (§11.2).
+`ENABLE ROW LEVEL SECURITY` on **every** table carrying `orgId`, with **no
+exceptions** — this, not `FORCE ROW LEVEL SECURITY`, is the control that
+actually protects us. `FORCE` only extends RLS enforcement to the table
+*owner*; our tables are owned by `postgres` (migrations run as that role),
+while the app connects as `library_app`, which is not the owner, not a
+superuser, and not `BYPASSRLS`. Plain `relrowsecurity` (`ENABLE`) already
+applies to `library_app` regardless of `FORCE`, because `library_app` is
+exactly the kind of non-owner, non-superuser role RLS was designed to
+restrict — `FORCE` changes nothing for it. We still set `FORCE` on every
+table as defence-in-depth: if a future migration or a manual `ALTER TABLE
+... OWNER TO` ever makes `library_app` the owner (or a bug grants it
+elevated rights), `FORCE` is what would keep RLS applying even then. But it
+is not the mechanism that protects us today — do not reason about isolation
+as "protected because FORCE is set." Sckools has a known gap here
+(`BlogPost`, `SchoolBlogSelection` are tenant-scoped with no policies); we do
+not repeat it, and the testboard runs an **RLS coverage audit** that fails
+if any `orgId`-bearing table lacks `ENABLE`+`FORCE`+a policy whose `USING`
+expression actually scopes by `app.current_org` (§11.2) — a policy created
+with `USING (true)` is forced and policied but scopes nothing, so the audit
+checks the policy's expression text, not just its existence.
 
 Token tables (`RefreshToken`, `PasswordResetToken`, `RegistrationToken`) hold hashed
 single-use values and are keyed by hash lookup, so they are exempt by design — the
@@ -791,7 +814,7 @@ Run against a selected target, reported in their own dashboard panel:
 | Health | `/ready` returns `{status:ok, db:ok, redis:ok}` |
 | Latency | p50 / p95 / p99 per endpoint under thresholds; cold vs warm reported separately |
 | Load smoke | k6/autocannon short run: rps, p95, error rate < 1% |
-| **RLS coverage audit** | Every `library` table with an `orgId` column has `rowsecurity` **and** `forcerowsecurity` true and ≥1 policy. Allow-list: `RefreshToken`, `PasswordResetToken`, `RegistrationToken` |
+| **RLS coverage audit** | Every `library` table with an `orgId` column has `rowsecurity` **and** `forcerowsecurity` true, ≥1 policy, and that policy's `USING` expression actually references `app.current_org` (not e.g. `USING (true)`) with `WITH CHECK` present. Allow-list: `RefreshToken`, `PasswordResetToken`, `RegistrationToken` |
 | Migration drift | `prisma migrate diff` between schema and target DB is empty |
 | Security headers | nosniff, referrer-policy, permissions-policy, frame-ancestors, CSP on console routes |
 | Cache behaviour | Public catalogue returns `s-maxage`; authenticated routes return `no-store` |
