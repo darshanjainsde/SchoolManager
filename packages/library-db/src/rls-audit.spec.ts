@@ -1,9 +1,7 @@
 import type { PrismaClient } from '../generated/client';
 import { auditRlsCoverage } from './rls-audit';
 import { getLibraryPlatformPrisma, disconnectLibrary } from './index';
-
-const live = Boolean(process.env.LIBRARY_DATABASE_URL_PLATFORM);
-const describeLive = live ? describe : describe.skip;
+import { describeLive } from './test-live';
 
 describeLive('RLS coverage audit', () => {
   afterAll(async () => { await disconnectLibrary(); });

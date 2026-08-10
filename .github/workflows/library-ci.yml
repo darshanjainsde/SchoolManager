@@ -122,40 +122,38 @@ jobs:
       - name: Build
         run: pnpm --filter "@library/*" run build
 
-      # Two separate steps, not one `--filter "@library/*"` command: both
-      # packages' jest processes would otherwise run concurrently and race
-      # to write the SAME --outputFile, silently discarding one package's
-      # report.
-      - name: Unit tests (library-db)
-        # env.setup.js (apps/library-api/test/env.setup.js) supplies fallback
-        # dummy DATABASE_URL/REDIS_URL/JWT secrets for anything the unit
-        # suite touches, so this step needs no real database or Redis.
-        # No `--` before the extra flags: pnpm (9.x) forwards trailing args to
-        # the underlying script directly, unlike npm — a `--` here is passed
-        # through LITERALLY as an argument instead of being stripped. Verified
-        # locally: WITH `--`, pnpm's echoed command showed
-        # `jest --passWithNoTests "--" "--json" "--outputFile=..."`, jest
-        # never wrote the output file at all and exited via passWithNoTests
-        # having matched no tests. WITHOUT `--` (this form), the same command
-        # runs the real suite and writes a real report.
-        run: >-
-          pnpm --filter @library/db run test
-          --json --outputFile=${{ github.workspace }}/unit-db-report.json
-
+      # @library/db's unit tests do NOT run here — see the workflow header
+      # (trap/finding note below) and the `e2e` job's "Unit tests
+      # (library-db)" step. rls-audit.spec.ts's three live tests need a real
+      # Postgres (LIBRARY_DATABASE_URL_PLATFORM); this job has neither. Prior
+      # to the Task 12 review this ran here anyway with no DB set, which
+      # meant those three tests silently degraded to `describe.skip` — a
+      # false green, not a real pass. `packages/library-db/src/test-live.ts`
+      # now makes that combination (CI + no DB) a hard failure instead of a
+      # skip, so running @library/db's tests in a DB-less job like this one
+      # would fail loudly rather than quietly — which is exactly why the
+      # step lives in `e2e` instead, where a real Postgres already exists.
+      # No `--` before the extra flags below: pnpm (9.x) forwards trailing
+      # args to the underlying script directly, unlike npm — a `--` here is
+      # passed through LITERALLY as an argument instead of being stripped.
+      # Verified locally: WITH `--`, pnpm's echoed command showed
+      # `jest --passWithNoTests "--" "--json" "--outputFile=..."`, jest never
+      # wrote the output file at all. WITHOUT `--` (this form), the same
+      # command runs the real suite and writes a real report.
       - name: Unit tests (library-api)
-        if: always()
+        # env.setup.js (apps/library-api/test/env.setup.js) supplies fallback
+        # dummy DATABASE_URL/REDIS_URL/JWT secrets for anything this suite
+        # touches, so this step needs no real database or Redis.
         run: >-
           pnpm --filter @library/api run test
           --json --outputFile=${{ github.workspace }}/unit-api-report.json
 
-      - name: Upload unit test reports
+      - name: Upload unit test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: library-unit-report
-          path: |
-            unit-db-report.json
-            unit-api-report.json
+          name: library-unit-api-report
+          path: unit-api-report.json
           if-no-files-found: ignore
           retention-days: 14
 
@@ -227,6 +225,34 @@ jobs:
           LIBRARY_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/library?schema=library
           LIBRARY_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/library?schema=library
         run: pnpm --filter @library/db exec prisma migrate deploy
+
+      # Lives here, not in `gate`, specifically so it runs against a real
+      # Postgres instead of silently skipping. rls-audit.spec.ts's three live
+      # tests (the whole-schema RLS-forced-and-policied audit — Task 12
+      # review, finding 2) need LIBRARY_DATABASE_URL_PLATFORM; `gate` has no
+      # database at all. This job already stands one up for e2e, so running
+      # @library/db's unit tests here — rather than adding a second,
+      # redundant Postgres service to `gate` — means one job owns "needs a
+      # real database", not two. With packages/library-db/src/test-live.ts's
+      # CI-context guard in place, running this step in a job with no
+      # database would now fail loudly instead of quietly skipping — which
+      # is itself a check that this step is in the right place.
+      - name: Unit tests (library-db)
+        env:
+          LIBRARY_DATABASE_URL_APP: postgresql://library_app:library_app@localhost:5432/library?schema=library
+          LIBRARY_DATABASE_URL_PLATFORM: postgresql://library_platform:library_platform@localhost:5432/library?schema=library
+        run: >-
+          pnpm --filter @library/db run test
+          --json --outputFile=${{ github.workspace }}/unit-db-report.json
+
+      - name: Upload library-db unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-unit-db-report
+          path: unit-db-report.json
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: e2e tests
         env:

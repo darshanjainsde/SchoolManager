@@ -4,6 +4,23 @@ export interface SeededOrg { id: string; slug: string; branchId: string; memberI
 
 export const LIVE = Boolean(process.env.LIBRARY_DATABASE_URL_PLATFORM?.includes('postgres'));
 
+// A skip is fine on a laptop with no docker stack running. In CI it is a
+// FALSE GREEN — the suite reports nothing and nobody notices the thing it
+// was meant to catch (Task 12 review, finding 2, made this exact mistake
+// once already for packages/library-db's RLS audit). So: outside CI, a
+// missing/non-postgres LIBRARY_DATABASE_URL_PLATFORM means skip, unchanged.
+// Inside CI (`process.env.CI`, set by GitHub Actions and effectively every
+// other runner), the same condition throws at import time instead — every
+// e2e spec that imports LIVE from here fails loudly rather than silently
+// reporting zero tests.
+if (!LIVE && process.env.CI) {
+  throw new Error(
+    'LIBRARY_DATABASE_URL_PLATFORM is not set to a postgres URL while process.env.CI is set. ' +
+      'A live-only e2e suite must not silently skip in CI — provision a database for this job ' +
+      'and set LIBRARY_DATABASE_URL_PLATFORM, or this file should not be running in this job at all.',
+  );
+}
+
 /** Two orgs, because a single-tenant seed cannot prove tenant isolation. */
 export async function seedTwoOrgs(suffix: string): Promise<{ orgA: SeededOrg; orgB: SeededOrg }> {
   const prisma = getLibraryPlatformPrisma();
