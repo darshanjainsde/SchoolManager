@@ -172,8 +172,14 @@ class JwtAccessSigner implements AccessSigner {
  * `loadUser` also checks `active`: a deactivated account's stolen refresh
  * token otherwise keeps minting valid access tokens forever, even though
  * `AuthService.login` already refuses `active: false` at the password gate.
+ *
+ * Exported (unlike `PrismaAuthStore`) so `test/refresh-store.e2e.spec.ts`
+ * can exercise `markUsed`'s conditional update directly against real
+ * Postgres — the double-mint race it closes is a database guarantee
+ * (concurrent UPDATE ... WHERE re-evaluation under READ COMMITTED), not
+ * something a mocked `RefreshStore` in a unit test could ever prove.
  */
-class PrismaRefreshStore implements RefreshStore {
+export class PrismaRefreshStore implements RefreshStore {
   async findByHash(hash: string): Promise<RefreshRow | null> {
     const row = await getLibraryPlatformPrisma().refreshToken.findUnique({ where: { tokenHash: hash } });
     return row
