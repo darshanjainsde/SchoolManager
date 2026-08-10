@@ -32,11 +32,21 @@ on:
       - 'apps/library-api/**'
       - 'packages/library-db/**'
       - '.github/workflows/library-ci.yml'
+      - '.dependency-cruiser.library.cjs'
+      - 'scripts/library-db-init.sql'
+      - 'scripts/preflight-library.sh'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
   pull_request:
     paths:
       - 'apps/library-api/**'
       - 'packages/library-db/**'
       - '.github/workflows/library-ci.yml'
+      - '.dependency-cruiser.library.cjs'
+      - 'scripts/library-db-init.sql'
+      - 'scripts/preflight-library.sh'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
   workflow_dispatch:
     inputs:
       target:
@@ -114,13 +124,31 @@ jobs:
       - name: Typecheck
         run: pnpm --filter "@library/*" run typecheck
 
+      # Directory roots, not `/src`: `apps/library-api/src packages/library-db/src`
+      # never scanned `apps/library-api/server.ts` (the ncc entry point — what
+      # actually runs in production) or `packages/library-db/prisma/seed.ts`.
+      # `no-sckools-imports` is the permanent enforcement of this project's core
+      # constraint (never import Sckools code), so it must cover every shipped
+      # file, not just `src/`. `doNotFollow`/`exclude` in
+      # .dependency-cruiser.library.cjs keep node_modules/generated/dist/api out
+      # of the scan.
       - name: Module boundary (no cross-module reach-in, no Sckools imports)
         run: >-
-          pnpm exec depcruise apps/library-api/src packages/library-db/src
+          pnpm exec depcruise apps/library-api packages/library-db
           --config .dependency-cruiser.library.cjs
 
       - name: Build
         run: pnpm --filter "@library/*" run build
+
+      # Regression guard for the artifact that actually deploys: Vercel's
+      # buildCommand is `pnpm run bundle` (ncc build server.ts -o api), NOT
+      # `tsc`. A tsc-clean tree can still fail ncc (Task 4 found the bundle
+      # never built at all — TS6059 on a cross-package import — with nothing
+      # here to catch it). `api/` is gitignored (apps/library-api/api/) and
+      # deliberately not uploaded as a build artifact below; this step only
+      # needs to prove the command succeeds.
+      - name: Bundle (ncc — the artifact Vercel actually deploys)
+        run: pnpm --filter @library/api run bundle
 
       # @library/db's unit tests do NOT run here — see the workflow header
       # (trap/finding note below) and the `e2e` job's "Unit tests

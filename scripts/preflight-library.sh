@@ -60,9 +60,19 @@ LIB_FILTER=(--filter "@library/*")
 step "prisma generate (library-db)" pnpm --filter @library/db run generate
 step "lint"                         pnpm "${LIB_FILTER[@]}" run lint
 step "typecheck"                    pnpm "${LIB_FILTER[@]}" run typecheck
-step "module boundary"              pnpm exec depcruise apps/library-api/src packages/library-db/src \
+# Directory roots, not `/src`: this must also cover apps/library-api/server.ts
+# (the ncc entry point) and packages/library-db/prisma/seed.ts. See
+# .dependency-cruiser.library.cjs's doNotFollow/exclude for what stays out of
+# the scan (node_modules, generated, dist, api).
+step "module boundary"              pnpm exec depcruise apps/library-api packages/library-db \
                                        --config .dependency-cruiser.library.cjs
 step "build"                        pnpm "${LIB_FILTER[@]}" run build
+# Regression guard for the artifact that actually deploys: Vercel's
+# buildCommand is `pnpm run bundle` (ncc build server.ts -o api), not `tsc`.
+# A tsc-clean tree can still fail ncc — see library-ci.yml's "Bundle" step
+# for the incident this replays. api/ is gitignored and never committed.
+step "bundle (ncc — the artifact Vercel actually deploys)" \
+                                     pnpm --filter @library/api run bundle
 step "unit tests"                   pnpm "${LIB_FILTER[@]}" run test
 
 # e2e talks to a real Postgres (RLS/advisory-lock/unique-constraint races

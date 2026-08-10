@@ -34,5 +34,17 @@ module.exports = {
       to: { path: '^(apps/api|packages/(db|config|types))/|^@skoolos/' },
     },
   ],
-  options: { doNotFollow: { path: 'node_modules' }, tsPreCompilationDeps: true },
+  options: {
+    // Scan targets are the directory roots (`apps/library-api`,
+    // `packages/library-db`), not `.../src` — that used to leave
+    // `apps/library-api/server.ts` (the file ncc bundles, i.e. what actually
+    // runs in production) and `packages/library-db/prisma/seed.ts` unscanned,
+    // so `no-sckools-imports` never covered them. Excluding these paths keeps
+    // the wider scan from following generated/build output that was never the
+    // point: `generated` (the Prisma client, regenerated per-checkout, never
+    // hand-written), `dist` (tsc output), and `api` (the ncc bundle output).
+    doNotFollow: { path: 'node_modules' },
+    exclude: { path: '(^|/)(node_modules|generated|dist|api)(/|$)' },
+    tsPreCompilationDeps: true,
+  },
 };
