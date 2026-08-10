@@ -75,6 +75,21 @@ export function hashRequest(method: string, path: string, body: unknown): string
   return createHash('sha256').update(canonical).digest('hex');
 }
 
+/**
+ * The concrete identity of a request for idempotency hashing: the actual URL
+ * that was requested (path + query string), NOT `req.route?.path` (the
+ * Express route *pattern*, e.g. `/loans/:id`). Using the pattern means
+ * `POST /loans/1` and `POST /loans/2` — two different resources — hash
+ * identically for the same `Idempotency-Key` and body, so the second request
+ * would silently replay the first's response instead of either running or
+ * correctly 409ing. `req.originalUrl` is Express's untouched original
+ * request target (falls back to `req.url`/`req.path` for anything that
+ * doesn't set it, e.g. this file's own unit-test fixtures).
+ */
+export function concreteRequestPath(req: Request): string {
+  return req.originalUrl ?? req.url ?? req.path;
+}
+
 function getHeader(req: Request, name: string): string | undefined {
   const raw = req.headers[name];
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -156,8 +171,11 @@ export class IdempotencyInterceptor implements NestInterceptor {
     if (!key) return next.handle(); // no header -> do nothing at all, never invent one
 
     const orgId = this.orgs.requireOrgId();
+    // `endpoint` (the route *pattern*) is stored/displayed only — a
+    // human-readable label for which handler this key belongs to. Hashing
+    // must use the concrete request path instead; see concreteRequestPath.
     const endpoint = `${req.method} ${req.route?.path ?? req.path}`;
-    const requestHash = hashRequest(req.method, endpoint, req.body);
+    const requestHash = hashRequest(req.method, concreteRequestPath(req), req.body);
 
     const existing = await this.store.find(orgId, key);
     if (existing) {

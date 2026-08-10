@@ -1,6 +1,13 @@
 import { BadRequestException, ConflictException, type CallHandler, type ExecutionContext } from '@nestjs/common';
 import { firstValueFrom, of, throwError, type Observable } from 'rxjs';
-import { IdempotencyInterceptor, hashRequest, type CreateResult, type IdempotencyRecord, type IdempotencyStore } from './idempotency.interceptor';
+import {
+  IdempotencyInterceptor,
+  hashRequest,
+  concreteRequestPath,
+  type CreateResult,
+  type IdempotencyRecord,
+  type IdempotencyStore,
+} from './idempotency.interceptor';
 import { OrgContextService } from '../../modules/tenancy';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -84,7 +91,7 @@ describe('IdempotencyInterceptor', () => {
 
   it('hit, same requestHash: replays the stored response without running the handler', async () => {
     const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
-    const requestHash = hashRequest(req.method, `${req.method} ${req.path}`, req.body);
+    const requestHash = hashRequest(req.method, concreteRequestPath(req as never), req.body);
     const store = fakeStore({
       find: async () => ({ requestHash, responseStatus: 201, responseBody: { loanId: 'L1' } }),
     });
@@ -142,7 +149,7 @@ describe('IdempotencyInterceptor', () => {
   describe('decision 2: concurrent duplicates racing store.create', () => {
     it('same requestHash lost the race: returns the winner\'s stored response, not a crash', async () => {
       const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
-      const requestHash = hashRequest(req.method, `${req.method} ${req.path}`, req.body);
+      const requestHash = hashRequest(req.method, concreteRequestPath(req as never), req.body);
       const winner: IdempotencyRecord = { requestHash, responseStatus: 201, responseBody: { loanId: 'WINNER' } };
       const store = fakeStore({ create: async (): Promise<CreateResult> => ({ won: false, existing: winner }) });
       const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
@@ -170,6 +177,95 @@ describe('IdempotencyInterceptor', () => {
     const { handler, res } = handlerReturning({}, 201);
 
     await expect(interceptor.intercept(makeContext(req, res), handler)).rejects.toThrow('No tenant resolved');
+  });
+
+  describe('requestHash uses the concrete request URL, not the route pattern (Group B, finding 2)', () => {
+    // Production shape: Express has matched the route by the time this
+    // interceptor runs, so req.route.path is the *pattern* ('/loans/:id'),
+    // req.params holds the matched segment, and req.originalUrl is the real
+    // request target. The old bug used req.route?.path for hashing, so
+    // POST /loans/1 and POST /loans/2 — two different resources — with the
+    // same Idempotency-Key and the same body hashed identically.
+    function productionShapeRequest(id: string, key = 'key-1') {
+      return {
+        method: 'POST',
+        path: `/loans/${id}`,
+        originalUrl: `/loans/${id}`,
+        route: { path: '/loans/:id' },
+        params: { id },
+        headers: { 'idempotency-key': key },
+        body: { action: 'return' }, // deliberately identical across both requests
+      };
+    }
+
+    // A real in-memory store (not a single canned `find` response) so both
+    // requests go through the interceptor's own hashing end to end — the
+    // second request's outcome depends entirely on what the interceptor
+    // itself computed and stored for the first, exactly like the real
+    // PrismaIdempotencyStore keyed by (orgId, key). A test that instead
+    // hand-computes the "expected" hash independently would only prove the
+    // test's own math, not the interceptor's behaviour.
+    function statefulStore(): IdempotencyStore {
+      const records = new Map<string, IdempotencyRecord>();
+      return {
+        find: async (orgId, key) => records.get(`${orgId}:${key}`) ?? null,
+        create: async (row) => {
+          const mapKey = `${row.orgId}:${row.key}`;
+          const existing = records.get(mapKey);
+          if (existing) return { won: false, existing };
+          records.set(mapKey, {
+            requestHash: row.requestHash,
+            responseStatus: row.responseStatus,
+            responseBody: row.responseBody,
+          });
+          return { won: true };
+        },
+      };
+    }
+
+    it('two different concrete paths under the same route pattern + key: second request gets 409, not the first resource\'s response replayed', async () => {
+      const store = statefulStore();
+      const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
+
+      const first = productionShapeRequest('1');
+      const { handler: handler1, res: res1 } = handlerReturning({ loanId: '1' }, 200);
+      const result1 = await interceptor.intercept(makeContext(first, res1), handler1);
+      await expect(firstValue(result1)).resolves.toEqual({ loanId: '1' });
+
+      // Same Idempotency-Key, same route pattern, same body — only the
+      // concrete resource id differs. Bug (pre-fix): hashing the route
+      // pattern instead of the concrete URL made this indistinguishable
+      // from a retry of the FIRST request, so it would silently resolve to
+      // { loanId: '1' } — the wrong resource's response — for a POST to
+      // /loans/2, without ever running its own handler or surfacing an
+      // error to the caller.
+      const second = productionShapeRequest('2');
+      let handler2Ran = false;
+      const handler2: CallHandler = { handle: () => { handler2Ran = true; return of({ loanId: '2' }); } };
+
+      await expect(
+        interceptor.intercept(makeContext(second, fakeResponse()), handler2),
+      ).rejects.toThrow(ConflictException);
+      expect(handler2Ran).toBe(false);
+    });
+
+    it('sanity check: a genuine retry of the same concrete path still replays cleanly, end to end', async () => {
+      const store = statefulStore();
+      const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
+
+      const req = productionShapeRequest('1');
+      const { handler: firstHandler, res: firstRes } = handlerReturning({ loanId: '1' }, 200);
+      await interceptor.intercept(makeContext(req, firstRes), firstHandler);
+
+      let retryHandlerRan = false;
+      const retryHandler: CallHandler = { handle: () => { retryHandlerRan = true; return of('should not run'); } };
+      const retryRes = fakeResponse();
+      const result = await interceptor.intercept(makeContext(productionShapeRequest('1'), retryRes), retryHandler);
+
+      await expect(firstValue(result)).resolves.toEqual({ loanId: '1' });
+      expect(retryHandlerRan).toBe(false);
+      expect(retryRes.statusCode).toBe(200);
+    });
   });
 });
 
