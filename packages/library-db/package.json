@@ -9,6 +9,7 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "migrate:status": "prisma migrate status",
+    "reconcile:init-identity-rename": "prisma db execute --file prisma/reconcile-init-identity-rename.sql --schema prisma/schema.prisma",
     "seed": "tsx prisma/seed.ts",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",

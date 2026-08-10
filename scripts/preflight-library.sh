@@ -21,6 +21,13 @@
 #      exactly that reason: it is what actually fails this script on a type
 #      error, `build` failing is not load-bearing here.
 #
+# If `prisma generate`/`migrate status` below ever reports the
+# `20260809190637_init_identity` migration as pending on a database that
+# actually already has its tables (i.e. it was applied under its old,
+# pre-rename name), run
+# `pnpm --filter @library/db run reconcile:init-identity-rename` once first
+# — see packages/library-db/prisma/reconcile-init-identity-rename.sql for why.
+#
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
