@@ -4,7 +4,9 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { HealthModule } from './health/health.module';
 import { TenancyModule } from './modules/tenancy';
 import { AuthModule } from './modules/auth';
+import { PlansModule } from './modules/plans';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
+import { IdempotencyModule } from './common/idempotency/idempotency.module';
 
 @Module({
   imports: [
@@ -26,6 +28,17 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     TenancyModule,
     HealthModule,
     AuthModule,
+    // Group B, finding 4: neither of these was wired in — PlanResolverService
+    // (what RequireFeatureGuard needs) and the 'IDEMPOTENCY_STORE' token
+    // (what IdempotencyInterceptor needs) resolved from nowhere, a DI trap
+    // waiting for the first Phase 1 controller to use either. Importing them
+    // here makes both providers resolvable app-wide without registering
+    // either the guard or the interceptor globally — both stay opt-in,
+    // applied per-route by whichever future controller needs them, the same
+    // way ThrottlerGuard above is the only guard actually registered
+    // app-wide today.
+    PlansModule,
+    IdempotencyModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
