@@ -48,8 +48,14 @@ function makeDefaultClient(): RedisLike {
  * product sharing the same Redis instance/keyspace.
  *
  * Algorithm: INCR the key; on the first hit (result === 1) PEXPIRE it to
- * the throttler's `ttl` so the window resets itself. `isBlocked` is simply
- * "hits this window have exceeded `limit`" — there is no separate
+ * the throttler's `ttl` so the window resets itself. If a later read of the
+ * key's TTL ever comes back -1 (key exists but carries no expiry — only
+ * possible here if an earlier PEXPIRE threw or this instance died between
+ * the INCR and the PEXPIRE), the TTL is re-applied on the spot rather than
+ * left missing: a key with no TTL would otherwise climb forever and block
+ * the caller until someone deletes it by hand, which a dropped PEXPIRE must
+ * never be able to cause. `isBlocked` is simply "hits this window have
+ * exceeded `limit`" — there is no separate
  * block-state key, so unlike the in-memory default's `blockDuration`
  * (which can outlive the counting window), the block here clears itself
  * exactly when the counting window's TTL lapses and the next INCR starts a
@@ -114,7 +120,22 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
       if (totalHits === 1) {
         await this.client.pexpire(redisKey, ttl);
       }
-      const pttl = await this.client.pttl(redisKey);
+      let pttl = await this.client.pttl(redisKey);
+      // Self-heal a dropped PEXPIRE: if the PEXPIRE above threw, or this
+      // instance died between the INCR and the PEXPIRE on some earlier
+      // request, the key persists with no TTL forever — every later INCR
+      // just keeps climbing, pttl() keeps returning -1, and isBlocked stays
+      // true until someone deletes the key by hand. `pttl === -1` means
+      // "key exists but carries no TTL", which — for a key this class ever
+      // creates — can only mean a missing/failed PEXPIRE, never a
+      // deliberate choice. Re-apply it right here so the key inherits a
+      // fresh window instead of blocking indefinitely. This only costs an
+      // extra Redis round trip in that broken case; the healthy path (TTL
+      // already present) costs exactly what it did before.
+      if (pttl === -1) {
+        await this.client.pexpire(redisKey, ttl);
+        pttl = ttl;
+      }
       const timeToExpire = Math.ceil(Math.max(pttl, 0) / 1000);
       const isBlocked = totalHits > limit;
       const timeToBlockExpire = isBlocked ? timeToExpire : 0;

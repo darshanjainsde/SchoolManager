@@ -49,6 +49,68 @@ describe('RedisThrottlerStorage', () => {
     expect(result.isBlocked).toBe(false);
   });
 
+  describe('self-healing a dropped TTL (Group B, finding 3)', () => {
+    it('a key with hits but no TTL (pttl === -1) gets one re-applied instead of blocking forever', async () => {
+      const pexpireCalls: { key: string; ms: number }[] = [];
+      let pttlCallCount = 0;
+      // Simulates the bug's aftermath: an earlier PEXPIRE was dropped (threw,
+      // or the instance died between INCR and PEXPIRE), so the key already
+      // carries hits from before but has never had a TTL applied. incr()
+      // returning 5 (not 1) means the `totalHits === 1` branch does NOT fire
+      // this time — the only thing that can still repair the key is the
+      // pttl === -1 self-heal.
+      const client = {
+        status: 'ready',
+        connect: async () => {},
+        incr: async () => 5,
+        pexpire: async (key: string, ms: number) => {
+          pexpireCalls.push({ key, ms });
+          return 1;
+        },
+        pttl: async () => {
+          pttlCallCount += 1;
+          return -1; // no TTL — the exact symptom of a dropped PEXPIRE
+        },
+      } as never;
+      const storage = new RedisThrottlerStorage(client);
+
+      const result = await storage.increment('ip:8', 60_000, 3, 0, 'default');
+
+      // Repaired: PEXPIRE was called with the throttler's own ttl, and the
+      // returned window reflects a real TTL instead of staying stuck at 0
+      // (which would mean "already expired" forever, i.e. permanently
+      // blocked with no way to recover without deleting the key by hand).
+      expect(pexpireCalls).toEqual([{ key: 'lib:throttle:default:ip:8', ms: 60_000 }]);
+      expect(result.timeToExpire).toBe(60);
+      expect(result.isBlocked).toBe(true); // 5 hits > limit 3 — still correctly blocked, just no longer stuck
+      expect(result.timeToBlockExpire).toBe(60);
+      // Single round trip for the repair itself: pttl is read once, then
+      // (once -1 is seen) the TTL value is known locally — no second pttl
+      // read to confirm what was just set.
+      expect(pttlCallCount).toBe(1);
+    });
+
+    it('does not re-apply PEXPIRE when a real TTL is already present', async () => {
+      const { client } = fakeRedis(); // pttl() always returns 30_000 (healthy)
+      let pexpireCalls = 0;
+      const wrapped = {
+        ...(client as object),
+        pexpire: async (...args: unknown[]) => {
+          pexpireCalls += 1;
+          return ((client as { pexpire: (...a: unknown[]) => Promise<number> }).pexpire)(...args);
+        },
+      };
+      const storage = new RedisThrottlerStorage(wrapped as never);
+
+      await storage.increment('ip:9', 60_000, 5, 0, 'default');
+      await storage.increment('ip:9', 60_000, 5, 0, 'default');
+
+      // Only the first hit's `totalHits === 1` PEXPIRE — the self-heal path
+      // never fires because pttl() never reports -1.
+      expect(pexpireCalls).toBe(1);
+    });
+  });
+
   it('fails open (does not throw, does not block) when Redis errors', async () => {
     const client = {
       status: 'ready',
