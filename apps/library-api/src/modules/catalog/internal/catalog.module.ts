@@ -5,6 +5,8 @@ import { PlansModule } from '../../plans';
 import { CatalogController } from './catalog.controller';
 import { CategoriesService } from './categories.service';
 import { CopiesService } from './copies.service';
+import { ImportService } from './import.service';
+import { IsbnLookupService } from './isbn-lookup.service';
 import { SearchService } from './search.service';
 import { TitlesService } from './titles.service';
 
@@ -32,6 +34,6 @@ import { TitlesService } from './titles.service';
 @Module({
   imports: [TenancyModule, PlansModule],
   controllers: [CatalogController],
-  providers: [JwtService, TitlesService, CopiesService, CategoriesService, SearchService],
+  providers: [JwtService, TitlesService, CopiesService, CategoriesService, SearchService, ImportService, IsbnLookupService],
 })
 export class CatalogModule {}

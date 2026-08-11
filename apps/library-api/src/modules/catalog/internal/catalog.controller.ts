@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,8 +10,12 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { withOrg } from '@library/db';
 import { LibJwtGuard, type LibJwtPayload } from '../../auth';
 import { RequireFeature, RequireFeatureGuard } from '../../plans';
@@ -20,6 +25,7 @@ import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { CategoriesService } from './categories.service';
 import { CopiesService } from './copies.service';
+import { parseCsvRecords } from './csv-parse';
 import {
   AddCopyDto,
   CreateCategoryDto,
@@ -28,8 +34,13 @@ import {
   UpdateCopyDto,
   UpdateTitleDto,
 } from './dto';
+import { ImportService } from './import.service';
+import { IsbnLookupService } from './isbn-lookup.service';
 import { SearchService } from './search.service';
 import { TitlesService } from './titles.service';
+
+/** 10 MiB is generous for a text CSV within the 2,000-row cap; this only guards against an absurd upload before it's even parsed. */
+const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
 
 /**
  * Guard order mirrors the chain documented on LibJwtGuard/RolesGuard/
@@ -58,6 +69,8 @@ export class CatalogController {
     @Inject(CopiesService) private readonly copies: CopiesService,
     @Inject(CategoriesService) private readonly categories: CategoriesService,
     @Inject(SearchService) private readonly search: SearchService,
+    @Inject(ImportService) private readonly importService: ImportService,
+    @Inject(IsbnLookupService) private readonly isbnLookup: IsbnLookupService,
   ) {}
 
   @Get('titles')
@@ -133,5 +146,30 @@ export class CatalogController {
   createCategory(@Body() dto: CreateCategoryDto) {
     const orgId = this.orgs.requireOrgId();
     return withOrg(orgId, (tx) => this.categories.create(tx, orgId, dto));
+  }
+
+  /**
+   * `memoryStorage()` rather than the default disk storage: the file only
+   * needs to become a UTF-8 string for `parseCsvRecords`, and a serverless
+   * function's tmp filesystem is not somewhere this handler wants to manage
+   * cleanup for. `?dryRun=true` is read as a raw query string (not a
+   * class-validator DTO with `@Type(() => Boolean)`) on purpose —
+   * class-transformer's `Boolean('false')` is `true` (any non-empty string
+   * is truthy), which is exactly the footgun a dry-run flag cannot afford.
+   */
+  @Post('import/titles')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_IMPORT_FILE_BYTES } }))
+  importTitles(@UploadedFile() file: Express.Multer.File | undefined, @Query('dryRun') dryRun?: string) {
+    if (!file?.buffer?.length) throw new BadRequestException('CSV file is required (multipart field "file")');
+    const orgId = this.orgs.requireOrgId();
+    const { records } = parseCsvRecords(file.buffer.toString('utf8'));
+    return this.importService.importTitles(orgId, records, { dryRun: dryRun === 'true' });
+  }
+
+  @Get('isbn/:isbn')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  lookupIsbn(@Param('isbn') isbn: string) {
+    return this.isbnLookup.lookup(isbn);
   }
 }

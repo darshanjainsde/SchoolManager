@@ -38,4 +38,14 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/catalog/copies/by-barcode/:barcode', roles: READERS },
   { method: 'GET', path: '/catalog/categories', roles: READERS },
   { method: 'POST', path: '/catalog/categories', roles: WRITERS, body: { name: 'Authz Matrix Probe Category' } },
+
+  // Task 7 — bulk import + ISBN lookup. POST is multipart (a CSV file), not
+  // JSON, so the generic per-role loop's `.send(ep.body ?? {})` sends an
+  // empty JSON body rather than a real file; that is fine for authz
+  // purposes — guards run before the handler body, so a denied role still
+  // gets 401/403, and an allowed role reaching the handler with no file
+  // attached gets a 400 from the controller's own validation, which is a
+  // non-401/403 response same as any other allowed row.
+  { method: 'POST', path: '/catalog/import/titles', roles: WRITERS },
+  { method: 'GET', path: '/catalog/isbn/:isbn', roles: READERS },
 ];
