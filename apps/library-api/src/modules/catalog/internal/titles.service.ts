@@ -34,6 +34,23 @@ export class TitlesService {
         )
       : [];
 
+    // Client-supplied foreign keys: `dto.categoryIds` is passed straight from
+    // the DTO. An FK constraint alone is satisfied by a row RLS would never
+    // let this caller see (referential-integrity checks bypass RLS by
+    // design), so without this lookup a LIBRARIAN could hand another org's
+    // category UUID and get a TitleCategory join row that structurally
+    // references it. Looked up on `tx` — inside the same withOrg transaction
+    // as the create below — so it is RLS-scoped to this org and race-free (a
+    // lookup on a separate connection would be a TOCTOU).
+    if (dto.categoryIds?.length) {
+      const uniqueIds = [...new Set(dto.categoryIds)];
+      const found = await tx.category.findMany({
+        where: { id: { in: uniqueIds } },
+        select: { id: true },
+      });
+      if (found.length !== uniqueIds.length) throw new NotFoundException('Category not found');
+    }
+
     try {
       return await tx.title.create({
         data: {

@@ -12,11 +12,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { withOrg } from '@library/db';
-import { LibJwtGuard } from '../../auth';
+import { LibJwtGuard, type LibJwtPayload } from '../../auth';
 import { RequireFeature, RequireFeatureGuard } from '../../plans';
 import { OrgContextService } from '../../tenancy';
 import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { CategoriesService } from './categories.service';
 import { CopiesService } from './copies.service';
 import {
@@ -38,6 +39,14 @@ import { TitlesService } from './titles.service';
  * access differs by role (ASSISTANT read-only, LIBRARIAN/ORG_OWNER write,
  * MEMBER search + title detail only — see test/endpoints.ts for the exact
  * matrix this is proven against).
+ *
+ * BranchScopeGuard only enforces branch scope for a `branchId` the request
+ * carries directly (a param, a query string, or — since `AddCopyDto` puts it
+ * there — the body of `POST /catalog/titles/:id/copies`). Two routes act on
+ * an existing Copy whose branch is a property of that row, not of the
+ * request, so the guard cannot see it: `PATCH /catalog/copies/:id` and
+ * `GET /catalog/copies/by-barcode/:barcode` enforce branch scope themselves,
+ * in CopiesService, after loading the row.
  */
 @Controller('catalog')
 @UseGuards(LibJwtGuard, RequireFeatureGuard, RolesGuard, BranchScopeGuard)
@@ -96,16 +105,20 @@ export class CatalogController {
 
   @Patch('copies/:id')
   @Roles('ORG_OWNER', 'LIBRARIAN')
-  updateCopy(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdateCopyDto) {
+  updateCopy(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateCopyDto,
+    @CurrentUser() user: LibJwtPayload,
+  ) {
     const orgId = this.orgs.requireOrgId();
-    return withOrg(orgId, (tx) => this.copies.update(tx, id, dto));
+    return withOrg(orgId, (tx) => this.copies.update(tx, id, dto, user.branches));
   }
 
   @Get('copies/by-barcode/:barcode')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
-  getCopyByBarcode(@Param('barcode') barcode: string) {
+  getCopyByBarcode(@Param('barcode') barcode: string, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
-    return withOrg(orgId, (tx) => this.copies.getByBarcode(tx, orgId, barcode));
+    return withOrg(orgId, (tx) => this.copies.getByBarcode(tx, orgId, barcode, user.branches));
   }
 
   @Get('categories')
