@@ -1,12 +1,36 @@
 import type { PrismaClient } from '../generated/client';
 
 /**
- * Tables that legitimately carry no RLS policy. Each is keyed by a hash of a
- * single-use secret, so possession of the token IS the authorisation and there
- * is no tenant column to scope by. Adding a fourth entry requires editing this
- * list, which is visible in review — that is the point.
+ * Tables that legitimately fail this audit's literal `app.current_org` text
+ * match, for two different reasons:
+ *
+ *  - RefreshToken / PasswordResetToken / RegistrationToken: keyed by a hash
+ *    of a single-use secret, so possession of the token IS the authorisation
+ *    and there is no tenant column to scope by. They carry no RLS policy at
+ *    all.
+ *
+ *  - TitleAuthor / TitleCategory: join tables with no `orgId` column of
+ *    their own. Each IS forced+policied (see the catalogue_rls migration),
+ *    but the policy scopes indirectly — `EXISTS (SELECT 1 FROM "Title" t
+ *    WHERE t.id = "titleId")` — because the `Title`/`Category` rows it
+ *    joins are themselves already RLS-scoped, so a row from another org's
+ *    Title is invisible to the subquery and the join row is unreachable.
+ *    That EXISTS clause never mentions `app.current_org` literally, so the
+ *    audit's pattern match cannot see the indirection and would otherwise
+ *    report these as unprotected. Proven, not just asserted: see
+ *    isolation.e2e.spec.ts's "TitleAuthor" block for the live cross-org
+ *    invisibility test.
+ *
+ * Adding a fifth entry requires editing this list, which is visible in
+ * review — that is the point.
  */
-export const RLS_ALLOW_LIST = ['RefreshToken', 'PasswordResetToken', 'RegistrationToken'];
+export const RLS_ALLOW_LIST = [
+  'RefreshToken',
+  'PasswordResetToken',
+  'RegistrationToken',
+  'TitleAuthor',
+  'TitleCategory',
+];
 
 export interface RlsAuditResult {
   /**

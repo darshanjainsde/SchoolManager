@@ -68,12 +68,16 @@ model LibraryOrg {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  domains   LibraryDomain[]
-  theme     OrgTheme?
-  branches  Branch[]
-  users     LibUser[]
-  members   Member[]
-  overrides PlanOverride[]
+  domains    LibraryDomain[]
+  theme      OrgTheme?
+  branches   Branch[]
+  users      LibUser[]
+  members    Member[]
+  overrides  PlanOverride[]
+  titles     Title[]
+  authors    Author[]
+  categories Category[]
+  copies     Copy[]
 }
 
 model LibraryDomain {
@@ -135,6 +139,7 @@ model Branch {
 
   org     LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
   members Member[]
+  copies  Copy[]
 
   @@unique([orgId, code])
   @@index([orgId])
@@ -278,4 +283,146 @@ model IdempotencyKey {
 
   @@unique([orgId, key])
   @@index([createdAt])
+}
+
+enum AuthorRole {
+  AUTHOR
+  EDITOR
+  TRANSLATOR
+}
+
+enum CopyCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+}
+
+enum CopyStatus {
+  AVAILABLE
+  ON_LOAN
+  ON_HOLD_SHELF
+  IN_TRANSIT
+  LOST
+  DAMAGED
+  WITHDRAWN
+}
+
+model Title {
+  id            String   @id @default(uuid()) @db.Uuid
+  orgId         String   @db.Uuid
+  isbn13        String?
+  isbn10        String?
+  title         String
+  subtitle      String?
+  publisher     String?
+  publishedYear Int?
+  edition       String?
+  language      String   @default("en")
+  callNumber    String?
+  coverUrl      String?
+  description   String?
+  pageCount     Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  /// Generated column, added by hand in the catalogue migration (Prisma
+  /// cannot express `GENERATED ALWAYS AS (...) STORED`). `Unsupported` here
+  /// only tells Prisma to tolerate the column's existence in introspection;
+  /// no application code writes to it.
+  searchVector Unsupported("tsvector")?
+
+  org        LibraryOrg      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  authors    TitleAuthor[]
+  categories TitleCategory[]
+  copies     Copy[]
+
+  @@index([orgId])
+  @@index([orgId, callNumber])
+}
+
+model Author {
+  id       String @id @default(uuid()) @db.Uuid
+  orgId    String @db.Uuid
+  name     String
+  sortName String
+
+  org    LibraryOrg    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  titles TitleAuthor[]
+
+  @@unique([orgId, sortName])
+  @@index([orgId])
+}
+
+/// Carries no orgId of its own — reachable only through Title (RLS-scoped)
+/// and Author (RLS-scoped), whose foreign keys both cascade from here. See
+/// the org_isolation policy comment in the catalogue_rls migration and the
+/// RLS_ALLOW_LIST comment in rls-audit.ts for why this is allow-listed
+/// rather than unprotected.
+model TitleAuthor {
+  titleId  String     @db.Uuid
+  authorId String     @db.Uuid
+  role     AuthorRole @default(AUTHOR)
+
+  title  Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, authorId, role])
+  @@index([authorId])
+}
+
+model Category {
+  id       String  @id @default(uuid()) @db.Uuid
+  orgId    String  @db.Uuid
+  name     String
+  parentId String? @db.Uuid
+
+  org      LibraryOrg      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  parent   Category?       @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[]      @relation("CategoryTree")
+  titles   TitleCategory[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+/// Carries no orgId of its own — see TitleAuthor's comment above; same
+/// indirection through Title and Category.
+model TitleCategory {
+  titleId    String @db.Uuid
+  categoryId String @db.Uuid
+
+  title    Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, categoryId])
+  @@index([categoryId])
+}
+
+model Copy {
+  id              String        @id @default(uuid()) @db.Uuid
+  orgId           String        @db.Uuid
+  titleId         String        @db.Uuid
+  branchId        String        @db.Uuid
+  barcode         String
+  accessionNumber String?
+  shelf           String?
+  condition       CopyCondition @default(GOOD)
+  acquiredAt      DateTime?
+  acquisitionCost Decimal?      @db.Decimal(10, 2)
+  status          CopyStatus    @default(AVAILABLE)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  org    LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// Restrict, not Cascade: deleting a title that still has physical copies
+  /// is a data-loss bug and must fail loudly, not silently vanish stock.
+  title  Title      @relation(fields: [titleId], references: [id], onDelete: Restrict)
+  /// Restrict, not Cascade: same reasoning for a branch that still holds
+  /// stock.
+  branch Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@unique([orgId, barcode])
+  @@index([titleId, status])
+  @@index([orgId, branchId, status])
 }

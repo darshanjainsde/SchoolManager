@@ -13,10 +13,10 @@ describeLive('RLS coverage audit', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('allow-lists exactly the three hash-keyed token tables', async () => {
+  it('allow-lists exactly the three hash-keyed token tables plus the two indirectly-scoped join tables', async () => {
     const result = await auditRlsCoverage(getLibraryPlatformPrisma());
     expect(result.allowListed.sort()).toEqual(
-      ['PasswordResetToken', 'RefreshToken', 'RegistrationToken'].sort(),
+      ['PasswordResetToken', 'RefreshToken', 'RegistrationToken', 'TitleAuthor', 'TitleCategory'].sort(),
     );
   });
 

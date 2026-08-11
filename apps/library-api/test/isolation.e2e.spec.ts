@@ -1,4 +1,4 @@
-import { withOrg } from '@library/db';
+import { getLibraryPlatformPrisma, withOrg } from '@library/db';
 import { LIVE, cleanupOrgs, seedTwoOrgs, type SeededOrg } from './helpers/live-db';
 
 const describeLive = LIVE ? describe : describe.skip;
@@ -40,5 +40,127 @@ describeLive('cross-org isolation is enforced by Postgres, not by where clauses'
     const { getLibraryTenantPrisma } = await import('@library/db');
     const rows = await getLibraryTenantPrisma().member.findMany();
     expect(rows).toEqual([]);
+  });
+});
+
+describeLive('catalogue cross-org isolation (Title, Copy, TitleAuthor)', () => {
+  let orgA: SeededOrg;
+  let orgB: SeededOrg;
+  // Seeded directly via the platform (BYPASSRLS) client, the same way
+  // seedTwoOrgs seeds org/branch/member — these fixtures exist purely to be
+  // read back through the RLS-bound tenant client under withOrg.
+  let titleA: { id: string };
+  let titleB: { id: string };
+  let copyA: { id: string };
+  let authorB: { id: string };
+  let titleAuthorB: { titleId: string; authorId: string };
+
+  beforeAll(async () => {
+    ({ orgA, orgB } = await seedTwoOrgs(`cat-${Date.now().toString(36)}`));
+    const prisma = getLibraryPlatformPrisma();
+
+    titleA = await prisma.title.create({ data: { orgId: orgA.id, title: 'Org A Title' } });
+    titleB = await prisma.title.create({ data: { orgId: orgB.id, title: 'Org B Title' } });
+    copyA = await prisma.copy.create({
+      data: { orgId: orgA.id, titleId: titleA.id, branchId: orgA.branchId, barcode: 'A-0001' },
+    });
+
+    authorB = await prisma.author.create({ data: { orgId: orgB.id, name: 'B Author', sortName: 'author, b' } });
+    // TitleAuthor carries no orgId — its own tenancy comes entirely from the
+    // Title/Author rows it joins, both belonging to orgB here.
+    const joinRow = await prisma.titleAuthor.create({
+      data: { titleId: titleB.id, authorId: authorB.id },
+    });
+    titleAuthorB = { titleId: joinRow.titleId, authorId: joinRow.authorId };
+  });
+
+  afterAll(async () => { await cleanupOrgs([orgA.id, orgB.id]); });
+
+  describe('Title', () => {
+    it("cannot read another org's title even when asked for it by id", async () => {
+      const found = await withOrg(orgA.id, (tx) => tx.title.findUnique({ where: { id: titleB.id } }));
+      expect(found).toBeNull();
+    });
+
+    it("cannot list another org's titles", async () => {
+      const titles = await withOrg(orgA.id, (tx) => tx.title.findMany());
+      expect(titles.map((t) => t.id)).not.toContain(titleB.id);
+    });
+
+    it("cannot update another org's title", async () => {
+      await expect(
+        withOrg(orgA.id, (tx) => tx.title.update({ where: { id: titleB.id }, data: { title: 'Hacked' } })),
+      ).rejects.toThrow();
+      const untouched = await withOrg(orgB.id, (tx) => tx.title.findUnique({ where: { id: titleB.id } }));
+      expect(untouched?.title).toBe('Org B Title');
+    });
+
+    it('cannot insert a title belonging to another org', async () => {
+      await expect(
+        withOrg(orgA.id, (tx) => tx.title.create({ data: { orgId: orgB.id, title: 'Smuggled' } })),
+      ).rejects.toThrow();
+    });
+
+    it('returns zero rows when no org is scoped at all', async () => {
+      const { getLibraryTenantPrisma } = await import('@library/db');
+      const rows = await getLibraryTenantPrisma().title.findMany();
+      expect(rows).toEqual([]);
+    });
+  });
+
+  describe('Copy', () => {
+    it("cannot read another org's copy even when asked for it by id", async () => {
+      const found = await withOrg(orgB.id, (tx) => tx.copy.findUnique({ where: { id: copyA.id } }));
+      expect(found).toBeNull();
+    });
+
+    it("cannot list another org's copies", async () => {
+      const copies = await withOrg(orgB.id, (tx) => tx.copy.findMany());
+      expect(copies.map((c) => c.id)).not.toContain(copyA.id);
+    });
+
+    it("cannot update another org's copy", async () => {
+      await expect(
+        withOrg(orgB.id, (tx) => tx.copy.update({ where: { id: copyA.id }, data: { shelf: 'Hacked' } })),
+      ).rejects.toThrow();
+      const untouched = await withOrg(orgA.id, (tx) => tx.copy.findUnique({ where: { id: copyA.id } }));
+      expect(untouched?.shelf).toBeNull();
+    });
+
+    it('cannot insert a copy belonging to another org', async () => {
+      await expect(
+        withOrg(orgB.id, (tx) =>
+          tx.copy.create({ data: { orgId: orgA.id, titleId: titleA.id, branchId: orgA.branchId, barcode: 'SMUG' } })),
+      ).rejects.toThrow();
+    });
+
+    it('returns zero rows when no org is scoped at all', async () => {
+      const { getLibraryTenantPrisma } = await import('@library/db');
+      const rows = await getLibraryTenantPrisma().copy.findMany();
+      expect(rows).toEqual([]);
+    });
+  });
+
+  describe('TitleAuthor (no orgId of its own — scoped indirectly through Title)', () => {
+    it("cannot read another org's TitleAuthor row even when asked for it by its composite key", async () => {
+      const found = await withOrg(orgA.id, (tx) =>
+        tx.titleAuthor.findUnique({
+          where: {
+            titleId_authorId_role: { titleId: titleAuthorB.titleId, authorId: titleAuthorB.authorId, role: 'AUTHOR' },
+          },
+        }));
+      expect(found).toBeNull();
+    });
+
+    it("cannot list another org's TitleAuthor rows", async () => {
+      const rows = await withOrg(orgA.id, (tx) => tx.titleAuthor.findMany());
+      expect(rows.map((r) => r.titleId)).not.toContain(titleAuthorB.titleId);
+    });
+
+    it('returns zero rows when no org is scoped at all', async () => {
+      const { getLibraryTenantPrisma } = await import('@library/db');
+      const rows = await getLibraryTenantPrisma().titleAuthor.findMany();
+      expect(rows).toEqual([]);
+    });
   });
 });
