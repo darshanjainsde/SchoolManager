@@ -1,4 +1,8 @@
+import * as argon2 from 'argon2';
+import { JwtService } from '@nestjs/jwt';
 import { getLibraryPlatformPrisma, disconnectLibrary } from '@library/db';
+import { signAccessToken } from '../../src/modules/auth/internal/auth.module';
+import type { Role } from '../endpoints';
 
 export interface SeededOrg { id: string; slug: string; branchId: string; memberId: string }
 
@@ -46,4 +50,44 @@ export async function cleanupOrgs(ids: string[]): Promise<void> {
   const prisma = getLibraryPlatformPrisma();
   await prisma.libraryOrg.deleteMany({ where: { id: { in: ids } } });
   await disconnectLibrary();
+}
+
+const ALL_ROLES: Role[] = ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT', 'MEMBER'];
+
+/** Never used to log in over HTTP — only ever hashed and signed directly. */
+const SEED_LOGIN_PASSWORD = 'authz-matrix-seed-Pw1!';
+
+/**
+ * One `LibUser` per role in `orgId`, and an access token for each — minted
+ * with the auth module's own `signAccessToken` (not a reimplementation of
+ * JWT signing here), so a token handed to the authz matrix suite is
+ * byte-for-byte what a real login would produce. `LibUser` rows are cleaned
+ * up automatically by `cleanupOrgs`'s cascading delete on `LibraryOrg`.
+ */
+export async function seedLogins(orgId: string): Promise<Record<Role, string>> {
+  const prisma = getLibraryPlatformPrisma();
+  const jwt = new JwtService(); // no Nest DI needed — see lib-jwt.guard.spec.ts for the same standalone pattern
+  const passwordHash = await argon2.hash(SEED_LOGIN_PASSWORD, { type: argon2.argon2id });
+  const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const tokens = {} as Record<Role, string>;
+  for (const role of ALL_ROLES) {
+    const user = await prisma.libUser.create({
+      data: {
+        orgId,
+        email: `${role.toLowerCase()}-${suffix}@matrix.test`,
+        passwordHash,
+        role,
+        branchIds: [],
+        active: true,
+      },
+    });
+    tokens[role] = signAccessToken(jwt, {
+      id: user.id,
+      orgId: user.orgId,
+      role: user.role,
+      branchIds: user.branchIds,
+    });
+  }
+  return tokens;
 }

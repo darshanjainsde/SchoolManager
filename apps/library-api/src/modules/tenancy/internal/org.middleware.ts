@@ -60,6 +60,22 @@ const lookup = new OrgLookupService(
  * `X-Skoolos-Host` header already relies on and that system's architecture baseline
  * records as correct.
  */
+/**
+ * Test-only escape hatch. Nothing in the request path calls this — in a real
+ * deployment the module-scope `redis` connection above lives for the whole
+ * process. But it is the one dangling handle an e2e suite that boots
+ * `AppModule` over real HTTP picks up (org resolution connects it on the
+ * very first request), and a jest `--runInBand` process never exits on its
+ * own afterward without it. Exported so such a suite can close it in
+ * `afterAll`, the same way `disconnectLibrary()` closes the Prisma
+ * connection those suites already tear down. Safe to call even if the
+ * connection was never opened (`status` stays `'wait'`, and ioredis's
+ * `quit()` resolves without error either way).
+ */
+export async function closeOrgLookupRedis(): Promise<void> {
+  if (redis.status !== 'end') await redis.quit();
+}
+
 export function orgMiddleware(req: Request, _res: Response, next: NextFunction): void {
   // A repeated header arrives as string[] — Array.isArray guards against
   // `.toString()` silently comma-joining it into a garbage host.

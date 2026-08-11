@@ -94,7 +94,13 @@ class PrismaAuthStore implements AuthStore {
  * it via its own `audience: 'library'` option, which reads payload.aud
  * regardless of how it got there.
  */
-function signAccessToken(
+/**
+ * Exported (unlike most of this file's internals) so test helpers can mint
+ * tokens shaped byte-for-byte like a real login response instead of
+ * reimplementing the payload/sign call from memory — see
+ * `test/helpers/live-db.ts`'s `seedLogins`.
+ */
+export function signAccessToken(
   jwt: JwtService,
   user: { id: string; orgId: string; role: string; branchIds: string[] },
 ): string {
