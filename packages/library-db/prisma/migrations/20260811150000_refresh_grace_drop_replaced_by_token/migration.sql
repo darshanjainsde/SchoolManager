@@ -1,0 +1,11 @@
+-- Review finding on the refresh-grace-window feature (20260811120000): storing
+-- the raw replacement token in `replacedByToken` traded away the one property
+-- hashing `tokenHash` exists to provide — a database-read compromise would
+-- yield a directly usable bearer token, live for the row's full multi-day
+-- TTL, for every ordinary rotation (not just the rare theft case). The
+-- service now mints a FRESH child on a grace-window replay instead of
+-- returning a stored one, so this column is no longer written or read.
+-- Dropping it keeps `RefreshToken` hash-only again, exactly like every other
+-- column on this row. `supersededAt` (added in the same prior migration) is
+-- kept — the grace-window decision still needs it.
+ALTER TABLE "RefreshToken" DROP COLUMN "replacedByToken";

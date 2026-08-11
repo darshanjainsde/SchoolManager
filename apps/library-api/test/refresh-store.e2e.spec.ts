@@ -59,24 +59,22 @@ describeLive('PrismaRefreshStore.markUsed is atomic against duplicate consumptio
       },
     });
 
-    const replacement = { supersededAt: new Date(), replacedByToken: `child-${Date.now().toString(36)}` };
+    const supersededAt = new Date();
 
     // First consumption: the row is currently revokedAt: null, so this succeeds.
-    await expect(store.markUsed(row.id, replacement)).resolves.toBeUndefined();
+    await expect(store.markUsed(row.id, supersededAt)).resolves.toBeUndefined();
 
     // Second consumption of the SAME id: the row is no longer revokedAt: null
     // (the first call already set it), so a correct, atomic implementation
     // must reject this rather than mark it "used" a second time — that second
     // "success" is exactly what would let a race double-mint a child token.
-    await expect(
-      store.markUsed(row.id, { supersededAt: new Date(), replacedByToken: 'should-not-land' }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(store.markUsed(row.id, new Date())).rejects.toBeInstanceOf(UnauthorizedException);
 
     const after = await getLibraryPlatformPrisma().refreshToken.findUnique({ where: { id: row.id } });
     expect(after?.revokedAt).not.toBeNull();
-    // The loser's write must not have clobbered the winner's replacement —
+    // The loser's write must not have clobbered the winner's timestamp —
     // the WHERE clause guards the whole SET, not just `revokedAt`.
-    expect(after?.replacedByToken).toBe(replacement.replacedByToken);
+    expect(after?.supersededAt?.getTime()).toBe(supersededAt.getTime());
   });
 });
 
@@ -86,17 +84,21 @@ describeLive('PrismaRefreshStore.markUsed is atomic against duplicate consumptio
  * exists to fix: a client double-tap, a duplicate tab, or a mobile
  * retry-on-timeout fires TWO concurrent `rotate()` calls on the SAME
  * still-valid token. Phase 0a's `markUsed` already stops the loser from
- * double-minting a child (proven above); the property this suite proves is
- * the NEXT layer — that the loser doesn't get treated as a thief and doesn't
- * revoke the family out from under the winner.
+ * double-minting a child on the SAME markUsed write (proven above); the
+ * property this suite proves is the NEXT layer — that the loser doesn't get
+ * treated as a thief and doesn't revoke the family out from under the
+ * winner, and instead gets its own fresh, independently valid child (see
+ * Finding-1 fix: nothing is stored/reused across replayers, so each grace
+ * hit mints its own).
  *
- * Verified by deliberately breaking the fix: see the second test, which
+ * Verified by deliberately breaking the fix: see the third test, which
  * forces `graceMs: 0` on the SAME race and shows the loser gets rejected and
  * the family gets revoked — i.e. this suite doesn't just test that things
  * pass, it proves the grace window is *why* they pass.
  */
 describeLive('RefreshService.rotate — grace window under real concurrency', () => {
   let userId: string;
+  let orgId: string;
   let orgIds: string[];
 
   beforeAll(async () => {
@@ -105,6 +107,7 @@ describeLive('RefreshService.rotate — grace window under real concurrency', ()
     const org = await prisma.libraryOrg.create({
       data: { slug: `refresh-race-e2e-${suffix}`, name: 'Refresh Race E2E', status: 'LIVE' },
     });
+    orgId = org.id;
     orgIds = [org.id];
     const user = await prisma.libUser.create({
       data: {
@@ -152,8 +155,9 @@ describeLive('RefreshService.rotate — grace window under real concurrency', ()
         },
         create: (row) => inner.create(row),
         revokeFamily: (familyId) => inner.revokeFamily(familyId),
-        markUsed: (id, replacement) => inner.markUsed(id, replacement),
+        markUsed: (id, supersededAt) => inner.markUsed(id, supersededAt),
         loadUser: (uid) => inner.loadUser(uid),
+        recordGraceReplay: (event) => inner.recordGraceReplay(event),
       };
     };
   }
@@ -182,58 +186,66 @@ describeLive('RefreshService.rotate — grace window under real concurrency', ()
     expect(b.status).toBe('fulfilled');
     const tokenA = a.status === 'fulfilled' ? a.value.refreshToken : undefined;
     const tokenB = b.status === 'fulfilled' ? b.value.refreshToken : undefined;
-    // The loser doesn't mint its own second child — it gets handed back the
-    // SAME replacement the winner already minted.
     expect(tokenA).toBeDefined();
-    expect(tokenA).toBe(tokenB);
+    expect(tokenB).toBeDefined();
+    // The loser is NOT handed a copy of the winner's child — it mints its
+    // OWN fresh, independent child (Finding-1 fix: nothing reusable is
+    // persisted for a replayer to be handed back).
+    expect(tokenA).not.toBe(tokenB);
 
     const rows = await getLibraryPlatformPrisma().refreshToken.findMany({ where: { familyId } });
-    expect(rows).toHaveLength(2); // parent + exactly one child — no double-mint
+    expect(rows).toHaveLength(3); // parent + two independently-minted children
     const active = rows.filter((r) => r.revokedAt === null);
-    // The family was NOT revoked: exactly one live token remains, and it's
-    // the one both callers were handed.
-    expect(active).toHaveLength(1);
-    expect(active[0].tokenHash).toBe(sha256(tokenA!));
+    // The family was NOT revoked: both children are live, and both callers'
+    // tokens correspond to a real, active row.
+    expect(active).toHaveLength(2);
+    const activeHashes = active.map((r) => r.tokenHash).sort();
+    expect(activeHashes).toEqual([sha256(tokenA!), sha256(tokenB!)].sort());
   });
 
   /**
-   * No concurrency, no graceMs override — the DEFAULT `REFRESH_GRACE_MS`
-   * (15s) against real Postgres, replaying a token that was superseded long
-   * enough ago that grace cannot apply. This is the property the whole
-   * feature exists alongside: a genuine offline theft replay (not a
-   * same-second retry) must still take the family down.
+   * Finding 2 (review): a grace hit must be investigable after the fact.
+   * This proves the audit signal actually lands in Postgres, through the
+   * real `RefreshService.rotate` → `PrismaRefreshStore.recordGraceReplay`
+   * path, with the right ids/duration and nothing token-shaped in it.
    */
-  it('a replay well outside the default grace window still revokes the family, via real RefreshService.rotate', async () => {
+  it('a grace-window replay writes an AuditLog row with ids and elapsed time, and no token or hash anywhere in it', async () => {
     const prisma = getLibraryPlatformPrisma();
     const familyId = randomUUID();
     const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-    const raw = `stale-parent-${suffix}`;
-    await prisma.refreshToken.create({
+    const raw = `audited-parent-${suffix}`;
+    const supersededAt = new Date(Date.now() - 2_000);
+    const parent = await prisma.refreshToken.create({
       data: {
         userId, tokenHash: sha256(raw), familyId,
         expiresAt: new Date(Date.now() + 86_400_000),
-        revokedAt: new Date(Date.now() - 600_000),
-        supersededAt: new Date(Date.now() - 600_000), // 10 minutes ago — 40x the 15s grace window
-        replacedByToken: `child-of-stale-parent-${suffix}`,
+        revokedAt: supersededAt,
+        supersededAt,
       },
-    });
-    // The live child descended from that old rotation, exactly like a real session.
-    const child = await prisma.refreshToken.create({
-      data: { userId, tokenHash: sha256(`child-of-stale-parent-${suffix}`), familyId, expiresAt: new Date(Date.now() + 86_400_000) },
     });
 
     const service = new RefreshService(new PrismaRefreshStore(), { signAccess: () => 'access-token' }, 30);
-    await expect(service.rotate(raw)).rejects.toBeInstanceOf(UnauthorizedException);
+    const result = await service.rotate(raw);
+    expect(result.refreshToken).toBeTruthy();
 
-    const rows = await prisma.refreshToken.findMany({ where: { familyId } });
-    expect(rows).toHaveLength(2);
-    // The family — including the still-live child the legitimate owner is
-    // presumably still using — is revoked. This is the correct, intended
-    // consequence of a stale-token replay: it looks like theft because,
-    // this far outside the grace window, it is.
-    expect(rows.every((r) => r.revokedAt !== null)).toBe(true);
-    const childAfter = rows.find((r) => r.id === child.id);
-    expect(childAfter?.revokedAt).not.toBeNull();
+    const events = await prisma.auditLog.findMany({
+      where: { orgId, action: 'auth.refresh.grace_replay', entityId: parent.id },
+    });
+    expect(events).toHaveLength(1);
+    const event = events[0];
+    expect(event.actorUserId).toBe(userId);
+    expect(event.entity).toBe('RefreshToken');
+    const after = event.after as { familyId: string; replayedAfterMs: number };
+    expect(after.familyId).toBe(familyId);
+    expect(after.replayedAfterMs).toBeGreaterThanOrEqual(2_000);
+
+    // Nothing token-shaped anywhere in the row: not the raw token, not its
+    // hash, not the minted child's raw value or hash.
+    const serialized = JSON.stringify(event);
+    expect(serialized).not.toContain(raw);
+    expect(serialized).not.toContain(sha256(raw));
+    expect(serialized).not.toContain(result.refreshToken);
+    expect(serialized).not.toContain(sha256(result.refreshToken));
   });
 
   it('deliberately broken: with graceMs forced to 0 on the SAME race, the loser is rejected and the family IS revoked', async () => {
@@ -270,7 +282,7 @@ describeLive('RefreshService.rotate — grace window under real concurrency', ()
     // (In production this ambiguity does not arise: the grace window is
     // seconds long, so by the time anything is far enough past it to be
     // treated as theft, the winner's single fast INSERT finished it long
-    // ago — see the follow-up note below.)
+    // ago.)
     const parentAfter = await getLibraryPlatformPrisma().refreshToken.findUniqueOrThrow({
       where: { id: parentBefore.id },
     });
@@ -278,49 +290,49 @@ describeLive('RefreshService.rotate — grace window under real concurrency', ()
   });
 
   /**
-   * The clearing decision from Task 1's brief: `replacedByToken` is a live
-   * bearer secret once written (see refresh.service.ts doc comment on
-   * `RefreshRow.replacedByToken`), so once a family is declared compromised
-   * — the one moment this code is unambiguously done needing the value —
-   * `revokeFamily` sweeps it from every row in the family, not just the one
-   * that triggered the revoke. This is deterministic (no concurrency), so
-   * it belongs in its own test rather than riding on the racy scenario
-   * above.
+   * No concurrency, no graceMs override — the DEFAULT `REFRESH_GRACE_MS`
+   * (15s) against real Postgres, replaying a token that was superseded long
+   * enough ago that grace cannot apply. This is the property the whole
+   * feature exists alongside: a genuine offline theft replay (not a
+   * same-second retry) must still take the family down.
    */
-  it('revokeFamily also clears any lingering replacedByToken across the whole family', async () => {
+  it('a replay well outside the default grace window still revokes the family, via real RefreshService.rotate', async () => {
     const prisma = getLibraryPlatformPrisma();
-    const store = new PrismaRefreshStore();
     const familyId = randomUUID();
     const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-
-    // A parent already revoked by an ordinary rotation minutes ago (grace
-    // long expired) — still carrying its replacedByToken, exactly like a
-    // rotated-and-never-replayed-again row would in production.
-    const parent = await prisma.refreshToken.create({
+    const raw = `stale-parent-${suffix}`;
+    await prisma.refreshToken.create({
       data: {
-        userId, tokenHash: `revoked-parent-${suffix}`, familyId,
+        userId, tokenHash: sha256(raw), familyId,
         expiresAt: new Date(Date.now() + 86_400_000),
         revokedAt: new Date(Date.now() - 600_000),
-        supersededAt: new Date(Date.now() - 600_000),
-        replacedByToken: `live-child-raw-${suffix}`,
+        supersededAt: new Date(Date.now() - 600_000), // 10 minutes ago — 40x the 15s grace window
       },
     });
-    // The still-active child descended from it.
+    // The live child descended from that old rotation, exactly like a real session.
+    const childRaw = `child-of-stale-parent-${suffix}`;
     const child = await prisma.refreshToken.create({
-      data: { userId, tokenHash: `active-child-${suffix}`, familyId, expiresAt: new Date(Date.now() + 86_400_000) },
+      data: { userId, tokenHash: sha256(childRaw), familyId, expiresAt: new Date(Date.now() + 86_400_000) },
     });
 
-    await store.revokeFamily(familyId);
+    const service = new RefreshService(new PrismaRefreshStore(), { signAccess: () => 'access-token' }, 30);
+    await expect(service.rotate(raw)).rejects.toBeInstanceOf(UnauthorizedException);
 
-    const rows = await prisma.refreshToken.findMany({ where: { familyId }, orderBy: { createdAt: 'asc' } });
+    const rows = await prisma.refreshToken.findMany({ where: { familyId } });
     expect(rows).toHaveLength(2);
-    // Both rows are now revoked (the child was the active one revokeFamily
-    // targets; the parent was already revoked before the call).
+    // The family — including the still-live child the legitimate owner is
+    // presumably still using — is revoked. This is the correct, intended
+    // consequence of a stale-token replay: it looks like theft because,
+    // this far outside the grace window, it is.
     expect(rows.every((r) => r.revokedAt !== null)).toBe(true);
-    // And the parent's lingering raw secret is gone.
-    const parentAfter = rows.find((r) => r.id === parent.id);
-    expect(parentAfter?.replacedByToken).toBeNull();
     const childAfter = rows.find((r) => r.id === child.id);
     expect(childAfter?.revokedAt).not.toBeNull();
+
+    // And no audit event was written for it — outside the grace window this
+    // is theft-handling, not a grace hit, and should not be recorded as one.
+    const events = await prisma.auditLog.findMany({
+      where: { orgId, action: 'auth.refresh.grace_replay', after: { path: ['familyId'], equals: familyId } },
+    });
+    expect(events).toEqual([]);
   });
 });

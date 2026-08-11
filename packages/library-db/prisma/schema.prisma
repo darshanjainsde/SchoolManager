@@ -212,21 +212,21 @@ model RefreshToken {
   /// Set when this token was rotated normally. Within the service's grace
   /// window of this timestamp, a replay of this (now-revoked) token is
   /// treated as a duplicate request — a client retry racing the winner of a
-  /// concurrent rotation — rather than theft, and `replacedByToken` is
-  /// handed back again instead of revoking the family.
+  /// concurrent rotation — rather than theft, and a FRESH child is minted
+  /// and returned rather than revoking the family.
+  ///
+  /// Deliberately holds no reference to what this token was replaced
+  /// BY: an earlier revision of this column (`replacedByToken`) stored the
+  /// raw replacement token itself, so that a grace-window replay could hand
+  /// back the exact same child. Review found that traded away the one
+  /// property hashing `tokenHash` exists to provide — a database-read
+  /// compromise (backup leak, injection, insider) would yield a directly
+  /// usable bearer token, live for the row's full multi-day TTL, for every
+  /// ordinary (non-replayed) rotation, not just the rare theft case. Minting
+  /// a fresh child per grace-window replay instead keeps this table
+  /// hash-only again: nothing derived from a live secret is ever persisted
+  /// here in reversible form.
   supersededAt DateTime?
-
-  /// The RAW replacement refresh token minted at rotation time (NOT a hash
-  /// — `tokenHash` is one-way, so the raw value can never be recovered from
-  /// it, and a client replaying the parent needs a token it can actually
-  /// authenticate with). This column is therefore itself a live, single-use
-  /// bearer secret — it is the exact token the legitimate rotation winner is
-  /// holding — and is protected the same way `tokenHash` is: no RLS policy,
-  /// by design (this table is on the RLS audit's allow-list, see
-  /// `packages/library-db/src/rls-audit.ts` RLS_ALLOW_LIST), reachable only
-  /// through the platform (BYPASSRLS) client, never exposed to a tenant-
-  /// scoped connection.
-  replacedByToken String?
 
   user LibUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 

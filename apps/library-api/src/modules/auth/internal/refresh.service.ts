@@ -8,20 +8,16 @@ export interface RefreshRow {
    * after the fact). `null` until the first successful rotation.
    */
   supersededAt: Date | null;
-  /**
-   * The RAW replacement refresh token minted when this row was superseded —
-   * NOT a hash. `tokenHash` is one-way (SHA-256), so the raw value can never
-   * be recovered from it, and a client legitimately replaying this parent
-   * within the grace window needs a token it can actually authenticate
-   * with. This field is therefore itself a live, single-use bearer secret —
-   * the exact token the rotation winner already holds — and must be handled
-   * with the same care as a raw refresh token anywhere else in this file:
-   * never logged, and reachable only through the platform (BYPASSRLS)
-   * store. See `RefreshToken.replacedByToken` in schema.prisma and
-   * `RLS_ALLOW_LIST` in packages/library-db/src/rls-audit.ts for why this
-   * table carries no RLS policy by design.
-   */
-  replacedByToken: string | null;
+}
+
+/** Emitted on every grace-window replay so the event is investigable after the fact — see `RefreshService`'s grace-hit doc comment for why this exists and what it deliberately omits. */
+export interface GraceReplayEvent {
+  userId: string;
+  orgId: string;
+  refreshTokenId: string;
+  familyId: string;
+  /** Milliseconds between the row's `supersededAt` and this replay. */
+  replayedAfterMs: number;
 }
 
 export interface RefreshStore {
@@ -29,16 +25,23 @@ export interface RefreshStore {
   create(row: { userId: string; tokenHash: string; familyId: string; expiresAt: Date }): Promise<void>;
   revokeFamily(familyId: string): Promise<void>;
   /**
-   * Atomically marks the parent row used AND records what it was superseded
-   * by, in the same conditional write (`WHERE id, revokedAt: null`) that
-   * already arbitrates concurrent rotations — the grace-window bookkeeping
-   * rides along with the existing atomicity guarantee rather than adding a
-   * second, non-atomic write. Throws `UnauthorizedException` (count === 0)
-   * when a concurrent rotation already consumed this row first; the caller
-   * is expected to re-read and treat that exactly like any other replay.
+   * Atomically marks the parent row used AND records when it was
+   * superseded, in the same conditional write (`WHERE id, revokedAt: null`)
+   * that already arbitrates concurrent rotations — the grace-window
+   * bookkeeping rides along with the existing atomicity guarantee rather
+   * than adding a second, non-atomic write. Throws `UnauthorizedException`
+   * (count === 0) when a concurrent rotation already consumed this row
+   * first; the caller is expected to re-read and treat that exactly like
+   * any other replay.
    */
-  markUsed(id: string, replacement: { supersededAt: Date; replacedByToken: string }): Promise<void>;
+  markUsed(id: string, supersededAt: Date): Promise<void>;
   loadUser(userId: string): Promise<{ id: string; orgId: string; role: string; branchIds: string[] }>;
+  /**
+   * Best-effort audit signal for a grace-window replay (see
+   * `RefreshService.recordGraceReplay`). Never carries a token or a hash —
+   * only ids and a duration.
+   */
+  recordGraceReplay(event: GraceReplayEvent): Promise<void>;
 }
 
 export interface AccessSigner { signAccess(user: { id: string; orgId: string; role: string; branchIds: string[] }): string }
@@ -88,6 +91,25 @@ export class RefreshService {
   }
 
   /**
+   * Best-effort: a failure recording the audit event must never turn a
+   * legitimate grace-window reply into a 401 for the caller, but silently
+   * losing the signal entirely defeats the point of emitting it, so a
+   * failure is at minimum surfaced structurally.
+   */
+  private async recordGraceReplay(event: GraceReplayEvent): Promise<void> {
+    try {
+      await this.store.recordGraceReplay(event);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[RefreshService] failed to record grace-replay audit event', {
+        familyId: event.familyId,
+        refreshTokenId: event.refreshTokenId,
+        err,
+      });
+    }
+  }
+
+  /**
    * Replay of an already-revoked token normally means the token was stolen:
    * the thief and the owner now both hold tokens in the same family.
    * Revoking the family — in its own committed write, BEFORE the 401 — logs
@@ -96,16 +118,43 @@ export class RefreshService {
    * The exception is a row revoked by a NORMAL rotation within the last
    * `graceMs`: that is not theft, it's a concurrent retry (the loser of a
    * double-tap / duplicate-tab / mobile-retry race) reading or writing after
-   * the winner already rotated. In that narrow window we hand back the same
-   * replacement the winner already minted instead of revoking the family —
-   * revoking here would log the legitimate winner out for retrying.
+   * the winner already rotated. In that narrow window we mint and return a
+   * FRESH child in the same family rather than revoking it — revoking here
+   * would log the legitimate winner out for retrying.
+   *
+   * Deliberately a FRESH child, not the winner's own child handed back
+   * again: an earlier version of this stored the winner's raw child token
+   * on the row so every replayer could be given the identical value, but
+   * that meant a live, directly-usable bearer secret sat in the database
+   * for the row's entire life on every ordinary (non-replayed) rotation —
+   * trading away the one property hashing `tokenHash` exists to provide.
+   * Minting fresh needs nothing extra stored: N concurrent duplicate
+   * callers (the "5-way contention" scenario from Phase 0a) each get their
+   * own distinct, independently valid child, all in the same family, all
+   * legitimate, all superseded by whichever one the client's next normal
+   * rotation actually uses.
+   *
+   * Every hit through this branch is expected occasionally — that's the
+   * feature working as designed, not an anomaly — so it is recorded as a
+   * plain audit event (queryable/thresholdable) rather than a warn-level
+   * log that would train operators to ignore it.
    */
   private async handleReplay(row: RefreshRow): Promise<{ accessToken: string; refreshToken: string }> {
     const superseded = row.supersededAt?.getTime();
     const withinGrace = superseded !== undefined && Date.now() - superseded <= this.graceMs;
-    if (withinGrace && row.replacedByToken) {
+    if (withinGrace) {
       const user = await this.store.loadUser(row.userId);
-      return { accessToken: this.signer.signAccess(user), refreshToken: row.replacedByToken };
+      await this.recordGraceReplay({
+        userId: user.id,
+        orgId: user.orgId,
+        refreshTokenId: row.id,
+        familyId: row.familyId,
+        replayedAfterMs: Date.now() - superseded!,
+      });
+      return {
+        accessToken: this.signer.signAccess(user),
+        refreshToken: await this.issue(user, row.familyId),
+      };
     }
     await this.store.revokeFamily(row.familyId);
     throw new UnauthorizedException();
@@ -118,21 +167,14 @@ export class RefreshService {
     if (row.revokedAt) return this.handleReplay(row);
     if (row.expiresAt.getTime() <= Date.now()) throw new UnauthorizedException();
 
-    // Generated up front (not inside `issue()`) because `markUsed` must
-    // persist it as `replacedByToken` in the very same atomic write that
-    // marks the parent used — otherwise a concurrent loser reading between
-    // "parent marked used" and "child recorded" would find a revoked row
-    // with no replacement to hand back, and get treated as theft anyway.
-    const childRaw = randomBytes(48).toString('base64url');
     try {
-      await this.store.markUsed(row.id, { supersededAt: new Date(), replacedByToken: childRaw });
+      await this.store.markUsed(row.id, new Date());
     } catch (err) {
       if (err instanceof UnauthorizedException) {
         // Lost the race: a concurrent sibling call already consumed this
         // row first. Re-read what the winner wrote and treat this exactly
-        // like any other replay of a revoked token — within grace, hand
-        // back the WINNER's child (never this call's own discarded
-        // `childRaw`); outside it, revoke the family.
+        // like any other replay of a revoked token — within grace, mint a
+        // fresh child of our own; outside it, revoke the family.
         const fresh = await this.store.findByHash(sha256(raw));
         if (fresh?.revokedAt) return this.handleReplay(fresh);
       }
@@ -140,7 +182,9 @@ export class RefreshService {
     }
 
     const user = await this.store.loadUser(row.userId);
-    await this.persistChild(user.id, row.familyId, childRaw);
-    return { accessToken: this.signer.signAccess(user), refreshToken: childRaw };
+    return {
+      accessToken: this.signer.signAccess(user),
+      refreshToken: await this.issue(user, row.familyId),
+    };
   }
 }

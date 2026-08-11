@@ -6,7 +6,13 @@ import { TenancyModule } from '../../tenancy';
 import { AuthController } from './auth.controller';
 import { AuthService, type AuthStore, type AuthUserRow, type TokenIssuer } from './auth.service';
 import { PasswordService } from './password.service';
-import { RefreshService, type AccessSigner, type RefreshRow, type RefreshStore } from './refresh.service';
+import {
+  RefreshService,
+  type AccessSigner,
+  type GraceReplayEvent,
+  type RefreshRow,
+  type RefreshStore,
+} from './refresh.service';
 import type { LibJwtPayload } from './lib-jwt.guard';
 
 /**
@@ -169,10 +175,9 @@ class JwtAccessSigner implements AccessSigner {
  * The conditional update makes the *first* writer's consumption authoritative;
  * the loser's `count` comes back 0 and it throws — `RefreshService.rotate`
  * catches that and re-reads the row, which now carries the WINNER's
- * `supersededAt`/`replacedByToken` (set in this same UPDATE's SET clause,
- * so there is no window where the row is marked used without yet recording
- * what it was replaced by), and treats it as an ordinary grace-window replay
- * rather than theft.
+ * `supersededAt` (set in this same UPDATE's SET clause, so there is no
+ * window where the row is marked used without yet recording when), and
+ * treats it as an ordinary grace-window replay rather than theft.
  *
  * `loadUser` also checks `active`: a deactivated account's stolen refresh
  * token otherwise keeps minting valid access tokens forever, even though
@@ -190,7 +195,7 @@ export class PrismaRefreshStore implements RefreshStore {
     return row
       ? {
           id: row.id, userId: row.userId, familyId: row.familyId, revokedAt: row.revokedAt, expiresAt: row.expiresAt,
-          supersededAt: row.supersededAt, replacedByToken: row.replacedByToken,
+          supersededAt: row.supersededAt,
         }
       : null;
   }
@@ -200,37 +205,16 @@ export class PrismaRefreshStore implements RefreshStore {
   }
 
   async revokeFamily(familyId: string): Promise<void> {
-    const platform = getLibraryPlatformPrisma();
-    await platform.refreshToken.updateMany({
+    await getLibraryPlatformPrisma().refreshToken.updateMany({
       where: { familyId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    // The family has just been declared compromised (theft, or a replay far
-    // outside the grace window), so grace-window bookkeeping is now moot for
-    // every row in it — including rows revoked earlier by an ordinary
-    // rotation, which can still carry a live `replacedByToken` bearer
-    // secret. Null those out here rather than leaving them to sit in the
-    // table: this is the one place that already knows, authoritatively,
-    // that no legitimate replay of any row in this family will ever again
-    // need that value. (This does NOT cover the common, non-theft path —
-    // a family that is simply never replayed again keeps its last
-    // `replacedByToken` until it's independently swept; see
-    // refresh.service.ts's `REFRESH_GRACE_MS` doc for why that gap is
-    // accepted for now.)
-    await platform.refreshToken.updateMany({
-      where: { familyId, replacedByToken: { not: null } },
-      data: { replacedByToken: null },
-    });
   }
 
-  async markUsed(id: string, replacement: { supersededAt: Date; replacedByToken: string }): Promise<void> {
+  async markUsed(id: string, supersededAt: Date): Promise<void> {
     const { count } = await getLibraryPlatformPrisma().refreshToken.updateMany({
       where: { id, revokedAt: null },
-      data: {
-        revokedAt: new Date(),
-        supersededAt: replacement.supersededAt,
-        replacedByToken: replacement.replacedByToken,
-      },
+      data: { revokedAt: new Date(), supersededAt },
     });
     if (count === 0) throw new UnauthorizedException();
   }
@@ -239,6 +223,27 @@ export class PrismaRefreshStore implements RefreshStore {
     const user = await getLibraryPlatformPrisma().libUser.findUnique({ where: { id: userId } });
     if (!user || !user.active) throw new UnauthorizedException();
     return { id: user.id, orgId: user.orgId, role: user.role, branchIds: user.branchIds };
+  }
+
+  /**
+   * A grace-window replay is expected occasionally by design — that's the
+   * feature working, not an anomaly — so this writes a plain `AuditLog` row
+   * (queryable, org-scoped, countable per family/user over a window) rather
+   * than a warn-level log line, which would either spam on every legitimate
+   * double-tap or get filtered out and stop meaning anything either way.
+   * Carries only ids and a duration — never the token or its hash.
+   */
+  async recordGraceReplay(event: GraceReplayEvent): Promise<void> {
+    await getLibraryPlatformPrisma().auditLog.create({
+      data: {
+        orgId: event.orgId,
+        actorUserId: event.userId,
+        action: 'auth.refresh.grace_replay',
+        entity: 'RefreshToken',
+        entityId: event.refreshTokenId,
+        after: { familyId: event.familyId, replayedAfterMs: event.replayedAfterMs },
+      },
+    });
   }
 }
 
