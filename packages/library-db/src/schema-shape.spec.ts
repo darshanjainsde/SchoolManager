@@ -109,4 +109,50 @@ describe('library schema invariants', () => {
     expect(schema).toMatch(/^model LibUser \{/m);
     expect(schema).toMatch(/^model Member \{/m);
   });
+
+  /**
+   * Permanent guard for the four onDelete: Restrict rules review required
+   * (Batch B carry-forward): a live psql reproduction proves nothing ongoing
+   * — it never runs in CI — and `onDelete:` is a single keyword with no
+   * compiler signal, exactly the shape that silently reverts (e.g. someone
+   * regenerating a relation line from a stale draft schema). Restrict here
+   * means "deleting the parent while this child row exists must fail
+   * loudly", never silently cascade away physical stock or a live financial
+   * record. Each entry names the exact relation field line so a change to
+   * any one of these four is a one-line, reviewable diff against this file,
+   * not a silent schema regression.
+   */
+  const RESTRICT_RELATIONS: Array<{ model: string; field: string }> = [
+    { model: 'Fine', field: 'member' },
+    { model: 'Loan', field: 'member' },
+    { model: 'Copy', field: 'title' },
+    { model: 'Copy', field: 'branch' },
+  ];
+
+  function findModelBody(source: string, model: string): string {
+    const match = source.match(new RegExp(`model ${model} \\{([\\s\\S]*?)\\n\\}`));
+    if (!match) throw new Error(`model ${model} not found in schema`);
+    return match[1];
+  }
+
+  it.each(RESTRICT_RELATIONS)('$model.$field is onDelete: Restrict', ({ model, field }) => {
+    const body = findModelBody(schema, model);
+    const fieldLine = body.split('\n').find((line) => new RegExp(`^\\s*${field}\\s+\\w`).test(line));
+    expect(fieldLine).toBeDefined();
+    expect(fieldLine).toMatch(/onDelete:\s*Restrict/);
+  });
+
+  it('regression: a Restrict relation flipped to Cascade is caught (proves the check discriminates)', () => {
+    // Poison ONLY Copy.title's relation line, the same in-memory-string
+    // technique the enum guard above uses — never touches the real file.
+    const poisoned = schema.replace(
+      'title  Title      @relation(fields: [titleId], references: [id], onDelete: Restrict)',
+      'title  Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)',
+    );
+    expect(poisoned).not.toBe(schema); // the replace actually matched something
+    const body = findModelBody(poisoned, 'Copy');
+    const fieldLine = body.split('\n').find((line) => /^\s*title\s+\w/.test(line));
+    expect(fieldLine).toMatch(/onDelete:\s*Cascade/);
+    expect(fieldLine).not.toMatch(/onDelete:\s*Restrict/);
+  });
 });
