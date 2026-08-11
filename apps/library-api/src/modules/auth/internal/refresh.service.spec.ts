@@ -3,7 +3,12 @@ import { RefreshService, type GraceReplayEvent } from './refresh.service';
 
 const FAMILY = '44444444-4444-4444-8444-444444444444';
 
-function make(row: unknown, overrides: { recordGraceReplay?: (event: GraceReplayEvent) => Promise<void> } = {}) {
+interface StoreOverrides {
+  recordGraceReplay?: (event: GraceReplayEvent) => Promise<void>;
+  incrementGraceReplay?: (id: string, cap: number) => Promise<boolean>;
+}
+
+function make(row: unknown, overrides: StoreOverrides = {}) {
   const state = { revokedFamilies: [] as string[], created: 0, graceReplays: [] as GraceReplayEvent[] };
   const service = new RefreshService(
     {
@@ -14,6 +19,9 @@ function make(row: unknown, overrides: { recordGraceReplay?: (event: GraceReplay
       loadUser: async () => ({ id: 'u1', orgId: 'o1', role: 'LIBRARIAN', branchIds: [] }),
       recordGraceReplay: overrides.recordGraceReplay
         ?? (async (event: GraceReplayEvent) => { state.graceReplays.push(event); }),
+      // Default: cap never bites, so every existing test that doesn't care
+      // about the cap keeps testing exactly what it did before.
+      incrementGraceReplay: overrides.incrementGraceReplay ?? (async () => true),
     } as never,
     { signAccess: () => 'access' } as never,
     30,
@@ -68,6 +76,30 @@ describe('RefreshService.rotate — grace window', () => {
     const { service, state } = make({ ...base, revokedAt: new Date() });
     await expect(service.rotate('raw')).rejects.toBeInstanceOf(UnauthorizedException);
     expect(state.revokedFamilies).toEqual([FAMILY]);
+    expect(state.graceReplays).toEqual([]);
+  });
+
+  it('within the replay cap, mints a fresh child and does not revoke', async () => {
+    const { service, state } = make(
+      { ...base, revokedAt: new Date(), supersededAt: new Date(Date.now() - 1_000) },
+      { incrementGraceReplay: async () => true },
+    );
+    await expect(service.rotate('raw')).resolves.toMatchObject({ accessToken: 'access' });
+    expect(state.revokedFamilies).toEqual([]);
+    expect(state.created).toBe(1);
+    expect(state.graceReplays).toHaveLength(1);
+  });
+
+  it('past the replay cap, a replay inside the time window is still treated as theft: family revoked, nothing minted, no audit event', async () => {
+    const { service, state } = make(
+      { ...base, revokedAt: new Date(), supersededAt: new Date(Date.now() - 1_000) },
+      { incrementGraceReplay: async () => false },
+    );
+    await expect(service.rotate('raw')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(state.revokedFamilies).toEqual([FAMILY]);
+    expect(state.created).toBe(0);
+    // Crossing the cap records the family revoke, not a grace replay — the
+    // audit trail should reflect what actually happened.
     expect(state.graceReplays).toEqual([]);
   });
 });

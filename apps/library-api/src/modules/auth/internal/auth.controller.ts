@@ -27,9 +27,20 @@ export class AuthController {
     return this.auth.login(this.orgs.requireOrgId(), dto.identifier, dto.password);
   }
 
-  // No @Throttle here: the secret being checked is a 384-bit random token,
-  // not a guessable password — rate-limiting login guards against credential
-  // stuffing, but there is no equivalent brute-force surface on this route.
+  // @Throttle here (added on review): the earlier reasoning that a 384-bit
+  // token isn't guessable is still true, but it assumes the caller doesn't
+  // already hold a valid one. The grace-window replay cap
+  // (REFRESH_GRACE_REPLAY_CAP in refresh.service.ts) is the real defence
+  // against someone who DOES hold a valid parent token firing rapid
+  // replays — this throttle is a second, coarser layer bounding overall
+  // request volume against this route regardless of which token is being
+  // presented. 30/min per IP: a legitimate client refreshes roughly once
+  // per LIBRARY_ACCESS_TTL (15m default), so even a shared-IP school with
+  // several dozen concurrently-active devices each occasionally bursting a
+  // retry sits well under this, while it still meaningfully tightens the
+  // app-wide 100/min default for a route with no equivalent credential-
+  // stuffing surface to justify that looser number.
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
   refresh(@Body() dto: RefreshDto) {
     return this.refreshService.rotate(dto.refreshToken);

@@ -1,0 +1,11 @@
+-- Second review finding on the refresh-grace-window feature: after
+-- 20260811150000 switched to minting a FRESH child on every grace-window
+-- replay (rather than handing back one stored value), the number of
+-- replays a client could make inside the window became unbounded — anyone
+-- holding the raw parent token could fire rapid replays inside the ~15s
+-- window and mint an arbitrary number of independent, full-TTL bearer
+-- tokens, undetected. `graceReplayCount` bounds that: past a small cap,
+-- a further replay is treated as theft (family revoked) instead of another
+-- grace mint. See `RefreshService.REFRESH_GRACE_REPLAY_CAP` and the column
+-- comment in schema.prisma for the full reasoning.
+ALTER TABLE "RefreshToken" ADD COLUMN     "graceReplayCount" INTEGER NOT NULL DEFAULT 0;

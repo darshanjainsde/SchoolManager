@@ -245,6 +245,27 @@ export class PrismaRefreshStore implements RefreshStore {
       },
     });
   }
+
+  /**
+   * Same conditional-update shape as `markUsed`: the cap is enforced in the
+   * WHERE clause of a single UPDATE, not read in one query and checked in
+   * application code before a second write. That matters exactly the way it
+   * matters for `markUsed` — under concurrent callers, Postgres serializes
+   * writers to the same row (each UPDATE takes the row lock, and the next
+   * waiting writer re-evaluates its WHERE clause against the value the
+   * previous one just committed, not a stale value read before either
+   * wrote). A read-then-write version (`SELECT graceReplayCount` then `if
+   * (count < cap) UPDATE`) would let two concurrent replays both read the
+   * same pre-increment count and both pass, silently letting the family
+   * exceed the cap — exactly the bug this shape exists to prevent.
+   */
+  async incrementGraceReplay(id: string, cap: number): Promise<boolean> {
+    const { count } = await getLibraryPlatformPrisma().refreshToken.updateMany({
+      where: { id, graceReplayCount: { lt: cap } },
+      data: { graceReplayCount: { increment: 1 } },
+    });
+    return count > 0;
+  }
 }
 
 @Module({

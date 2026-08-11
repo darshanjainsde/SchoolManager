@@ -3,7 +3,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { disconnectLibrary, getLibraryPlatformPrisma } from '@library/db';
 import { PrismaRefreshStore } from '../src/modules/auth/internal/auth.module';
-import { RefreshService, type RefreshStore } from '../src/modules/auth/internal/refresh.service';
+import { REFRESH_GRACE_REPLAY_CAP, RefreshService, type RefreshStore } from '../src/modules/auth/internal/refresh.service';
 import { LIVE } from './helpers/live-db';
 
 const sha256 = (raw: string): string => createHash('sha256').update(raw).digest('hex');
@@ -158,8 +158,77 @@ describeLive('RefreshService.rotate — grace window under real concurrency', ()
         markUsed: (id, supersededAt) => inner.markUsed(id, supersededAt),
         loadUser: (uid) => inner.loadUser(uid),
         recordGraceReplay: (event) => inner.recordGraceReplay(event),
+        incrementGraceReplay: (id, cap) => inner.incrementGraceReplay(id, cap),
       };
     };
+  }
+
+  /**
+   * Same barrier idea as `barrieredStore`, but forces overlap on
+   * `incrementGraceReplay` instead of `findByHash` — every party reads the
+   * SAME already-revoked-and-superseded row (seeded directly, not raced
+   * into existence), so the property under test is purely "can concurrent
+   * increments exceed the cap," isolated from the markUsed race already
+   * proven above. `broken: true` swaps in a deliberately non-atomic
+   * read-then-write increment to prove the barrier and assertions actually
+   * discriminate — see the "deliberately broken" cap test below.
+   */
+  function capRaceStore(parties: number, options: { broken?: boolean } = {}): () => RefreshStore {
+    let arrived = 0;
+    let release!: () => void;
+    const everyoneArrived = new Promise<void>((resolve) => { release = resolve; });
+    return () => {
+      const inner = new PrismaRefreshStore();
+      const incrementGraceReplay = options.broken
+        ? async (id: string, cap: number): Promise<boolean> => {
+            // Deliberately broken: read, decide, THEN write — two concurrent
+            // calls can both read the same pre-increment count, both decide
+            // "under cap," and both write, letting the count exceed the cap.
+            // This is exactly the shape `PrismaRefreshStore.incrementGraceReplay`'s
+            // doc comment warns against; it exists only to prove the real,
+            // atomic version's test actually discriminates.
+            const prisma = getLibraryPlatformPrisma();
+            const row = await prisma.refreshToken.findUniqueOrThrow({ where: { id } });
+            if (row.graceReplayCount >= cap) return false;
+            await prisma.refreshToken.update({
+              where: { id },
+              data: { graceReplayCount: row.graceReplayCount + 1 },
+            });
+            return true;
+          }
+        : (id: string, cap: number) => inner.incrementGraceReplay(id, cap);
+      return {
+        findByHash: (hash) => inner.findByHash(hash),
+        create: (row) => inner.create(row),
+        revokeFamily: (familyId) => inner.revokeFamily(familyId),
+        markUsed: (id, supersededAt) => inner.markUsed(id, supersededAt),
+        loadUser: (uid) => inner.loadUser(uid),
+        recordGraceReplay: (event) => inner.recordGraceReplay(event),
+        incrementGraceReplay: async (id, cap) => {
+          arrived += 1;
+          if (arrived >= parties) release();
+          await everyoneArrived;
+          return incrementGraceReplay(id, cap);
+        },
+      };
+    };
+  }
+
+  async function seedSupersededParent(overrides: { graceReplayCount?: number } = {}): Promise<{ raw: string; familyId: string; id: string }> {
+    const familyId = randomUUID();
+    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const raw = `cap-${suffix}`;
+    const supersededAt = new Date(Date.now() - 500); // well within the 15s default grace window
+    const row = await getLibraryPlatformPrisma().refreshToken.create({
+      data: {
+        userId, tokenHash: sha256(raw), familyId,
+        expiresAt: new Date(Date.now() + 86_400_000),
+        revokedAt: supersededAt,
+        supersededAt,
+        graceReplayCount: overrides.graceReplayCount ?? 0,
+      },
+    });
+    return { raw, familyId, id: row.id };
   }
 
   async function seedParent(): Promise<{ raw: string; familyId: string }> {
@@ -246,6 +315,106 @@ describeLive('RefreshService.rotate — grace window under real concurrency', ()
     expect(serialized).not.toContain(sha256(raw));
     expect(serialized).not.toContain(result.refreshToken);
     expect(serialized).not.toContain(sha256(result.refreshToken));
+  });
+
+  /**
+   * Second review finding: minting fresh on every grace-window replay
+   * (Finding 1's fix) made the NUMBER of replays unbounded — anyone holding
+   * the raw parent could fire rapid replays inside the window and mint an
+   * arbitrary number of independent tokens. `REFRESH_GRACE_REPLAY_CAP`
+   * bounds it: the replay that reaches the cap still mints; the next one
+   * is treated as theft.
+   */
+  it('a replay that reaches the cap mints; the next replay of the SAME parent is treated as theft', async () => {
+    const prisma = getLibraryPlatformPrisma();
+    const { raw, familyId, id } = await seedSupersededParent({ graceReplayCount: REFRESH_GRACE_REPLAY_CAP - 1 });
+    const service = new RefreshService(new PrismaRefreshStore(), { signAccess: () => 'access-token' }, 30);
+
+    // This replay pushes graceReplayCount from cap-1 to cap — still allowed.
+    const atCap = await service.rotate(raw);
+    expect(atCap.refreshToken).toBeTruthy();
+    const afterAtCap = await prisma.refreshToken.findUniqueOrThrow({ where: { id } });
+    expect(afterAtCap.graceReplayCount).toBe(REFRESH_GRACE_REPLAY_CAP);
+
+    // The SAME parent, replayed again: graceReplayCount is now at the cap,
+    // so this one is theft, not another retry.
+    await expect(service.rotate(raw)).rejects.toBeInstanceOf(UnauthorizedException);
+    const rows = await prisma.refreshToken.findMany({ where: { familyId } });
+    expect(rows.every((r) => r.revokedAt !== null)).toBe(true);
+
+    // Crossing the cap records the family revoke, not a second grace
+    // replay — exactly one audit row exists (from the in-cap mint above).
+    const events = await prisma.auditLog.findMany({
+      where: { orgId, action: 'auth.refresh.grace_replay', entityId: id },
+    });
+    expect(events).toHaveLength(1);
+  });
+
+  it('the counter is per parent: a fresh child from an ordinary rotation starts at 0', async () => {
+    const prisma = getLibraryPlatformPrisma();
+    const { raw } = await seedParent();
+    const service = new RefreshService(new PrismaRefreshStore(), { signAccess: () => 'access-token' }, 30);
+    const result = await service.rotate(raw);
+    const child = await prisma.refreshToken.findUniqueOrThrow({ where: { tokenHash: sha256(result.refreshToken) } });
+    expect(child.graceReplayCount).toBe(0);
+  });
+
+  it('concurrent replays of the SAME parent cannot exceed the cap', async () => {
+    const prisma = getLibraryPlatformPrisma();
+    const parties = REFRESH_GRACE_REPLAY_CAP + 2; // more attempts than the cap allows
+    const { raw, id } = await seedSupersededParent();
+    const makeStore = capRaceStore(parties);
+    const signer = { signAccess: () => 'access-token' };
+    const services = Array.from({ length: parties }, () => new RefreshService(makeStore(), signer, 30));
+
+    const outcomes = await Promise.allSettled(services.map((s) => s.rotate(raw)));
+    const fulfilled = outcomes.filter((r) => r.status === 'fulfilled');
+    const rejected = outcomes.filter((r) => r.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(REFRESH_GRACE_REPLAY_CAP);
+    expect(rejected).toHaveLength(parties - REFRESH_GRACE_REPLAY_CAP);
+    for (const r of rejected) expect((r as PromiseRejectedResult).reason).toBeInstanceOf(UnauthorizedException);
+
+    const after = await prisma.refreshToken.findUniqueOrThrow({ where: { id } });
+    // The atomic guard held: exactly at the cap, never past it, regardless
+    // of how many concurrent attempts raced it.
+    expect(after.graceReplayCount).toBe(REFRESH_GRACE_REPLAY_CAP);
+  });
+
+  /**
+   * Deliberately broken: swaps in a non-atomic read-then-write increment
+   * (see `capRaceStore`'s `broken` option) for the SAME race as the test
+   * above, and shows the cap gets exceeded — proving the previous test's
+   * green result comes from `incrementGraceReplay`'s atomicity, not from
+   * the barrier or from the cap simply being generous enough not to matter.
+   */
+  it('deliberately broken: a non-atomic increment lets concurrent replays exceed the cap', async () => {
+    const prisma = getLibraryPlatformPrisma();
+    const parties = REFRESH_GRACE_REPLAY_CAP + 2;
+    const { raw, id } = await seedSupersededParent();
+    const makeStore = capRaceStore(parties, { broken: true });
+    const signer = { signAccess: () => 'access-token' };
+    const services = Array.from({ length: parties }, () => new RefreshService(makeStore(), signer, 30));
+
+    const outcomes = await Promise.allSettled(services.map((s) => s.rotate(raw)));
+    const fulfilled = outcomes.filter((r) => r.status === 'fulfilled');
+
+    // With the broken, non-atomic increment, more than `cap` concurrent
+    // replays can all read the same pre-increment count and all pass —
+    // this is the exact bug the atomic `updateMany` guard prevents, and the
+    // property that actually matters (how many tokens got minted).
+    expect(fulfilled.length).toBeGreaterThan(REFRESH_GRACE_REPLAY_CAP);
+
+    // The stored counter itself is NOT a reliable witness of this failure
+    // mode, and deliberately not asserted on here: each racing writer
+    // computes `staleRead + 1` and does a plain SET rather than a DB-side
+    // increment, so concurrent writers produce a classic lost update — the
+    // column ends up holding whichever writer committed LAST (often just
+    // 1), not a sum of every successful replay. The counter can silently
+    // UNDER-report while `fulfilled.length` above proves the real harm:
+    // strictly more requests were let through than the cap allows.
+    const after = await prisma.refreshToken.findUniqueOrThrow({ where: { id } });
+    expect(after.graceReplayCount).toBeLessThanOrEqual(fulfilled.length);
   });
 
   it('deliberately broken: with graceMs forced to 0 on the SAME race, the loser is rejected and the family IS revoked', async () => {

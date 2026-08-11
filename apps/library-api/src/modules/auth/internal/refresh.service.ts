@@ -42,6 +42,16 @@ export interface RefreshStore {
    * only ids and a duration.
    */
   recordGraceReplay(event: GraceReplayEvent): Promise<void>;
+  /**
+   * Atomically increments `graceReplayCount` on row `id` IFF it is
+   * currently below `cap`, and reports whether it did — the same
+   * conditional-update pattern `markUsed` uses (`WHERE id AND
+   * graceReplayCount < cap`, not just the SET), so two concurrent replays
+   * cannot both read the same pre-increment count and both pass. Returns
+   * `false` when the cap was already reached (or the row no longer
+   * matches), which the caller treats as theft.
+   */
+  incrementGraceReplay(id: string, cap: number): Promise<boolean>;
 }
 
 export interface AccessSigner { signAccess(user: { id: string; orgId: string; role: string; branchIds: string[] }): string }
@@ -66,6 +76,26 @@ const sha256 = (raw: string): string => createHash('sha256').update(raw).digest(
  */
 export const REFRESH_GRACE_MS = 15_000;
 
+/**
+ * How many grace-window replays of the SAME parent are allowed before a
+ * further replay is treated as theft instead of another retry.
+ *
+ * This is not a rate limit bolted on after the time window — it IS a theft
+ * signal in its own right, on the same footing as `REFRESH_GRACE_MS`. A
+ * genuine double-tap or duplicate tab produces one or two replays of the
+ * same parent; a mobile retry chain might produce three. Meaningfully more
+ * than that inside the same few seconds is not a client retrying — it's
+ * someone (anyone who obtained the raw parent token, which without this cap
+ * is also all a legitimate concurrent-rotation loser needs) working the
+ * window to mint an unbounded number of independent, full-TTL bearer
+ * tokens. The correct response to THAT is the same theft response as any
+ * other replay outside the window: revoke the family. 3 is chosen to
+ * comfortably cover the legitimate cases named above with one to spare,
+ * while making a working-the-window pattern (e.g. 10 rapid replays) fail
+ * fast rather than exhaust some larger budget first.
+ */
+export const REFRESH_GRACE_REPLAY_CAP = 3;
+
 @Injectable()
 export class RefreshService {
   constructor(
@@ -73,6 +103,7 @@ export class RefreshService {
     private readonly signer: AccessSigner,
     private readonly ttlDays: number,
     private readonly graceMs: number = REFRESH_GRACE_MS,
+    private readonly graceReplayCap: number = REFRESH_GRACE_REPLAY_CAP,
   ) {}
 
   async issue(user: { id: string }, familyId: string = randomUUID()): Promise<string> {
@@ -138,11 +169,22 @@ export class RefreshService {
    * feature working as designed, not an anomaly — so it is recorded as a
    * plain audit event (queryable/thresholdable) rather than a warn-level
    * log that would train operators to ignore it.
+   *
+   * Being inside the time window is necessary but not sufficient: this row
+   * must ALSO still be under `graceReplayCap`, checked and incremented
+   * atomically by `incrementGraceReplay` (same conditional-update pattern
+   * as `markUsed`, so concurrent replays cannot all read the same
+   * pre-increment count and all pass — see `REFRESH_GRACE_REPLAY_CAP`'s doc
+   * for why the cap exists at all, not just how it's enforced). Crossing
+   * it falls through to the exact same theft response as being outside the
+   * time window — no separate branch, no separate audit action — because
+   * that's what it is: a second, count-based theft signal alongside the
+   * time-based one.
    */
   private async handleReplay(row: RefreshRow): Promise<{ accessToken: string; refreshToken: string }> {
     const superseded = row.supersededAt?.getTime();
     const withinGrace = superseded !== undefined && Date.now() - superseded <= this.graceMs;
-    if (withinGrace) {
+    if (withinGrace && await this.store.incrementGraceReplay(row.id, this.graceReplayCap)) {
       const user = await this.store.loadUser(row.userId);
       await this.recordGraceReplay({
         userId: user.id,

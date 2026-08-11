@@ -228,6 +228,23 @@ model RefreshToken {
   /// here in reversible form.
   supersededAt DateTime?
 
+  /// Count of grace-window replays of THIS parent that have already been
+  /// allowed through (minted a fresh child). Incremented atomically —
+  /// `UPDATE ... SET graceReplayCount = graceReplayCount + 1 WHERE id = ?
+  /// AND graceReplayCount < cap` — by the same conditional-update pattern
+  /// `markUsed` already uses, so concurrent replays cannot all read the
+  /// same pre-increment value and all pass.
+  ///
+  /// This is not a rate limit bolted on after the fact — it IS the theft
+  /// signal, on the same footing as the time window: a genuine double-tap
+  /// or duplicate tab produces one or two replays, a mobile retry chain
+  /// maybe three. Someone firing far more than that inside the same few
+  /// seconds isn't retrying, they're working the window — and the correct
+  /// response to that is exactly the theft response (family revoke), not a
+  /// 429. See `RefreshService.REFRESH_GRACE_REPLAY_CAP` for the chosen cap
+  /// and the reasoning above stated in full.
+  graceReplayCount Int @default(0)
+
   user LibUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
