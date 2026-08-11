@@ -164,3 +164,69 @@ describeLive('catalogue cross-org isolation (Title, Copy, TitleAuthor)', () => {
     });
   });
 });
+
+describeLive('circulation cross-org isolation (Loan)', () => {
+  let orgA: SeededOrg;
+  let orgB: SeededOrg;
+  let titleB: { id: string };
+  let copyB: { id: string };
+  let loanB: { id: string };
+
+  beforeAll(async () => {
+    ({ orgA, orgB } = await seedTwoOrgs(`circ-${Date.now().toString(36)}`));
+    const prisma = getLibraryPlatformPrisma();
+
+    titleB = await prisma.title.create({ data: { orgId: orgB.id, title: 'Org B Circulation Title' } });
+    copyB = await prisma.copy.create({
+      data: { orgId: orgB.id, titleId: titleB.id, branchId: orgB.branchId, barcode: 'B-0001' },
+    });
+    loanB = await prisma.loan.create({
+      data: {
+        orgId: orgB.id,
+        copyId: copyB.id,
+        memberId: orgB.memberId,
+        dueAt: new Date(Date.now() + 14 * 86_400_000),
+      },
+    });
+  });
+
+  afterAll(async () => { await cleanupOrgs([orgA.id, orgB.id]); });
+
+  it("cannot read another org's loan even when asked for it by id", async () => {
+    const found = await withOrg(orgA.id, (tx) => tx.loan.findUnique({ where: { id: loanB.id } }));
+    expect(found).toBeNull();
+  });
+
+  it("cannot list another org's loans", async () => {
+    const loans = await withOrg(orgA.id, (tx) => tx.loan.findMany());
+    expect(loans.map((l) => l.id)).not.toContain(loanB.id);
+  });
+
+  it("cannot update another org's loan", async () => {
+    await expect(
+      withOrg(orgA.id, (tx) => tx.loan.update({ where: { id: loanB.id }, data: { renewCount: 99 } })),
+    ).rejects.toThrow();
+    const untouched = await withOrg(orgB.id, (tx) => tx.loan.findUnique({ where: { id: loanB.id } }));
+    expect(untouched?.renewCount).toBe(0);
+  });
+
+  it('cannot insert a loan belonging to another org', async () => {
+    await expect(
+      withOrg(orgA.id, (tx) =>
+        tx.loan.create({
+          data: {
+            orgId: orgB.id,
+            copyId: copyB.id,
+            memberId: orgB.memberId,
+            dueAt: new Date(Date.now() + 14 * 86_400_000),
+          },
+        })),
+    ).rejects.toThrow();
+  });
+
+  it('returns zero rows when no org is scoped at all', async () => {
+    const { getLibraryTenantPrisma } = await import('@library/db');
+    const rows = await getLibraryTenantPrisma().loan.findMany();
+    expect(rows).toEqual([]);
+  });
+});

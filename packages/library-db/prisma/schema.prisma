@@ -74,10 +74,14 @@ model LibraryOrg {
   users      LibUser[]
   members    Member[]
   overrides  PlanOverride[]
-  titles     Title[]
-  authors    Author[]
-  categories Category[]
-  copies     Copy[]
+  titles      Title[]
+  authors     Author[]
+  categories  Category[]
+  copies      Copy[]
+  policies    CirculationPolicy[]
+  loans       Loan[]
+  holds       Hold[]
+  fines       Fine[]
 }
 
 model LibraryDomain {
@@ -161,9 +165,11 @@ model LibUser {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  org     LibraryOrg     @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  member  Member?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
-  refresh RefreshToken[]
+  org           LibraryOrg     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  member        Member?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  refresh       RefreshToken[]
+  loansIssued   Loan[]         @relation("LoanIssuedBy")
+  loansReturned Loan[]         @relation("LoanReturnedBy")
 
   @@unique([orgId, email])
   @@unique([orgId, phone])
@@ -197,6 +203,9 @@ model Member {
   org        LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
   homeBranch Branch?    @relation(fields: [homeBranchId], references: [id], onDelete: SetNull)
   login      LibUser?
+  loans      Loan[]
+  holds      Hold[]
+  fines      Fine[]
 
   @@unique([orgId, code])
   @@index([orgId, status])
@@ -336,6 +345,7 @@ model Title {
   authors    TitleAuthor[]
   categories TitleCategory[]
   copies     Copy[]
+  holds      Hold[]
 
   @@index([orgId])
   @@index([orgId, callNumber])
@@ -421,8 +431,152 @@ model Copy {
   /// Restrict, not Cascade: same reasoning for a branch that still holds
   /// stock.
   branch Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  loans  Loan[]
+  holds  Hold[]     @relation("HoldReadyCopy")
 
   @@unique([orgId, barcode])
   @@index([titleId, status])
   @@index([orgId, branchId, status])
+}
+
+enum LoanStatus {
+  ACTIVE
+  RETURNED
+  LOST
+}
+
+/// Deliberately NO `EXPIRED` value, even though the task brief's interface
+/// sketch listed one: a hold's shelf deadline (`expiresAt`) is a stored
+/// timestamp, and "has this hold expired" is computed at read time by
+/// comparing it to `now` — exactly like `Loan`'s missing `OVERDUE` is
+/// computed from `dueAt`. Storing `EXPIRED` would make it a clock-driven
+/// status a scheduler has to flip, which is exactly what trap 7
+/// (docs/superpowers/LIBRARY-TRAPS.md) and this file's own guard test
+/// forbid. A GC sweep that reclaims an uncollected shelf hold is free to
+/// transition it to CANCELLED (a real, non-time-derived state a human/job
+/// action produced) — that is cleanup, not a new status value.
+enum HoldStatus {
+  PENDING
+  READY
+  COLLECTED
+  CANCELLED
+}
+
+enum FineKind {
+  OVERDUE
+  DAMAGE
+  LOST
+  OTHER
+}
+
+enum FineStatus {
+  OPEN
+  PAID
+  WAIVED
+  PARTIAL
+}
+
+/// Keyed on (orgId, memberType) — MemberType stays a fixed enum (see
+/// OrgTheme.memberTypeLabels) precisely so a policy can be looked up by it
+/// without a join. Field names mirror apps/library-api's pure policy engine
+/// (`modules/circulation/internal/policy.ts`'s `Policy` interface) so a
+/// future Prisma-backed caller needs no translation layer.
+model CirculationPolicy {
+  id                 String     @id @default(uuid()) @db.Uuid
+  orgId              String     @db.Uuid
+  memberType         MemberType
+  maxBooks           Int
+  loanDays           Int
+  renewLimit         Int
+  renewDays          Int
+  finePerDay         Decimal    @db.Decimal(10, 2)
+  /// Days past dueAt with zero fine before billing starts.
+  graceDays          Int
+  /// null = uncapped.
+  maxFine            Decimal?   @db.Decimal(10, 2)
+  maxHolds           Int
+  holdShelfDays      Int
+  /// null = no outstanding-fine gate on new issues.
+  maxOutstandingFine Decimal?   @db.Decimal(10, 2)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, memberType])
+  @@index([orgId])
+}
+
+model Loan {
+  id               String     @id @default(uuid()) @db.Uuid
+  orgId            String     @db.Uuid
+  copyId           String     @db.Uuid
+  memberId         String     @db.Uuid
+  issuedAt         DateTime   @default(now())
+  dueAt            DateTime
+  /// null while the loan is open. OVERDUE is never stored — see LoanStatus.
+  returnedAt       DateTime?
+  renewCount       Int        @default(0)
+  issuedByUserId   String?    @db.Uuid
+  returnedByUserId String?    @db.Uuid
+  status           LoanStatus @default(ACTIVE)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  org        LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// Restrict: a copy with loan history must not vanish out from under it.
+  copy       Copy       @relation(fields: [copyId], references: [id], onDelete: Restrict)
+  member     Member     @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  issuedBy   LibUser?   @relation("LoanIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
+  returnedBy LibUser?   @relation("LoanReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
+  fines      Fine[]
+
+  @@index([orgId])
+}
+
+/// Keyed on titleId, not copyId: a member holds a place in line for a TITLE
+/// (any available copy will do), and only gets tied to a specific copy
+/// (readyCopyId) once one is pulled for them.
+model Hold {
+  id            String     @id @default(uuid()) @db.Uuid
+  orgId         String     @db.Uuid
+  titleId       String     @db.Uuid
+  memberId      String     @db.Uuid
+  /// Lower = earlier in the queue.
+  queuePosition Int
+  status        HoldStatus @default(PENDING)
+  readyCopyId   String?    @db.Uuid
+  readyAt       DateTime?
+  /// The hold-shelf deadline. Past this (and still READY), the hold is
+  /// expired at read time — see the HoldStatus comment above.
+  expiresAt     DateTime
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  org       LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  title     Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  member    Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  readyCopy Copy?      @relation("HoldReadyCopy", fields: [readyCopyId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+}
+
+model Fine {
+  id         String     @id @default(uuid()) @db.Uuid
+  orgId      String     @db.Uuid
+  memberId   String     @db.Uuid
+  loanId     String?    @db.Uuid
+  kind       FineKind
+  status     FineStatus @default(OPEN)
+  amount     Decimal    @db.Decimal(10, 2)
+  paidAmount Decimal    @default(0) @db.Decimal(10, 2)
+  reason     String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  org    LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  member Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  loan   Loan?      @relation(fields: [loanId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
 }
