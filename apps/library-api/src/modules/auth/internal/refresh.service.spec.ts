@@ -19,6 +19,39 @@ function make(row: unknown) {
   return { service, state };
 }
 
+describe('RefreshService.rotate — grace window', () => {
+  const base = {
+    id: 'r1', userId: 'u1', familyId: FAMILY, revokedAt: null,
+    expiresAt: new Date(Date.now() + 86_400_000),
+    supersededAt: null as Date | null, replacedByToken: null as string | null,
+  };
+
+  it('replaying a JUST-rotated token returns the same replacement, not a family revoke', async () => {
+    const { service, state } = make({
+      ...base, revokedAt: new Date(), supersededAt: new Date(Date.now() - 1_000),
+      replacedByToken: 'RAW_OF_CHILD',
+    });
+    await expect(service.rotate('raw')).resolves.toMatchObject({ accessToken: 'access', refreshToken: 'RAW_OF_CHILD' });
+    expect(state.revokedFamilies).toEqual([]);
+    expect(state.created).toBe(0); // reuses the existing child, mints nothing new
+  });
+
+  it('replaying a token superseded LONG ago still revokes the family', async () => {
+    const { service, state } = make({
+      ...base, revokedAt: new Date(), supersededAt: new Date(Date.now() - 600_000),
+      replacedByToken: 'RAW_OF_CHILD',
+    });
+    await expect(service.rotate('raw')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(state.revokedFamilies).toEqual([FAMILY]);
+  });
+
+  it('a revoked token that was never superseded revokes the family immediately', async () => {
+    const { service, state } = make({ ...base, revokedAt: new Date() });
+    await expect(service.rotate('raw')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(state.revokedFamilies).toEqual([FAMILY]);
+  });
+});
+
 describe('RefreshService.rotate', () => {
   const valid = { id: 'r1', userId: 'u1', familyId: FAMILY, revokedAt: null, expiresAt: new Date(Date.now() + 86_400_000) };
 

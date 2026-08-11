@@ -1,8 +1,12 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { UnauthorizedException } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { disconnectLibrary, getLibraryPlatformPrisma } from '@library/db';
 import { PrismaRefreshStore } from '../src/modules/auth/internal/auth.module';
+import { RefreshService, type RefreshStore } from '../src/modules/auth/internal/refresh.service';
 import { LIVE } from './helpers/live-db';
+
+const sha256 = (raw: string): string => createHash('sha256').update(raw).digest('hex');
 
 const describeLive = LIVE ? describe : describe.skip;
 
@@ -55,16 +59,268 @@ describeLive('PrismaRefreshStore.markUsed is atomic against duplicate consumptio
       },
     });
 
+    const replacement = { supersededAt: new Date(), replacedByToken: `child-${Date.now().toString(36)}` };
+
     // First consumption: the row is currently revokedAt: null, so this succeeds.
-    await expect(store.markUsed(row.id)).resolves.toBeUndefined();
+    await expect(store.markUsed(row.id, replacement)).resolves.toBeUndefined();
 
     // Second consumption of the SAME id: the row is no longer revokedAt: null
     // (the first call already set it), so a correct, atomic implementation
     // must reject this rather than mark it "used" a second time — that second
     // "success" is exactly what would let a race double-mint a child token.
-    await expect(store.markUsed(row.id)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      store.markUsed(row.id, { supersededAt: new Date(), replacedByToken: 'should-not-land' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
 
     const after = await getLibraryPlatformPrisma().refreshToken.findUnique({ where: { id: row.id } });
     expect(after?.revokedAt).not.toBeNull();
+    // The loser's write must not have clobbered the winner's replacement —
+    // the WHERE clause guards the whole SET, not just `revokedAt`.
+    expect(after?.replacedByToken).toBe(replacement.replacedByToken);
+  });
+});
+
+/**
+ * `RefreshService.rotate` end-to-end, through a real `PrismaRefreshStore`
+ * against real Postgres, for the false-positive-logout race this task
+ * exists to fix: a client double-tap, a duplicate tab, or a mobile
+ * retry-on-timeout fires TWO concurrent `rotate()` calls on the SAME
+ * still-valid token. Phase 0a's `markUsed` already stops the loser from
+ * double-minting a child (proven above); the property this suite proves is
+ * the NEXT layer — that the loser doesn't get treated as a thief and doesn't
+ * revoke the family out from under the winner.
+ *
+ * Verified by deliberately breaking the fix: see the second test, which
+ * forces `graceMs: 0` on the SAME race and shows the loser gets rejected and
+ * the family gets revoked — i.e. this suite doesn't just test that things
+ * pass, it proves the grace window is *why* they pass.
+ */
+describeLive('RefreshService.rotate — grace window under real concurrency', () => {
+  let userId: string;
+  let orgIds: string[];
+
+  beforeAll(async () => {
+    const prisma = getLibraryPlatformPrisma();
+    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const org = await prisma.libraryOrg.create({
+      data: { slug: `refresh-race-e2e-${suffix}`, name: 'Refresh Race E2E', status: 'LIVE' },
+    });
+    orgIds = [org.id];
+    const user = await prisma.libUser.create({
+      data: {
+        orgId: org.id,
+        email: `refresh-race-e2e-${suffix}@test.local`,
+        passwordHash: await argon2.hash('irrelevant', { type: argon2.argon2id }),
+        role: 'LIBRARIAN',
+        branchIds: [],
+        active: true,
+      },
+    });
+    userId = user.id;
+  });
+
+  afterAll(async () => {
+    await getLibraryPlatformPrisma().libraryOrg.deleteMany({ where: { id: { in: orgIds } } });
+    await disconnectLibrary();
+  });
+
+  /**
+   * Wraps a real `PrismaRefreshStore` so BOTH callers' `findByHash` reads
+   * are held at a barrier until both have arrived, then released together.
+   * Without this, two `rotate()` calls fired via `Promise.allSettled` could
+   * — depending on scheduling — have the second call's read land after the
+   * first has already committed its write, which would "pass" even a
+   * broken implementation (the second call would just see a normal,
+   * long-ago-superseded-looking row) and prove nothing about the race this
+   * task fixes. The barrier forces genuine overlap deterministically:
+   * both calls read `revokedAt: null` before either has had a chance to
+   * write, exactly like a real double-tap.
+   */
+  function barrieredStore(parties: number): () => RefreshStore {
+    let arrived = 0;
+    let release!: () => void;
+    const everyoneArrived = new Promise<void>((resolve) => { release = resolve; });
+    return () => {
+      const inner = new PrismaRefreshStore();
+      return {
+        findByHash: async (hash) => {
+          const row = await inner.findByHash(hash);
+          arrived += 1;
+          if (arrived >= parties) release();
+          await everyoneArrived;
+          return row;
+        },
+        create: (row) => inner.create(row),
+        revokeFamily: (familyId) => inner.revokeFamily(familyId),
+        markUsed: (id, replacement) => inner.markUsed(id, replacement),
+        loadUser: (uid) => inner.loadUser(uid),
+      };
+    };
+  }
+
+  async function seedParent(): Promise<{ raw: string; familyId: string }> {
+    const familyId = randomUUID();
+    const raw = `race-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    await getLibraryPlatformPrisma().refreshToken.create({
+      data: { userId, tokenHash: sha256(raw), familyId, expiresAt: new Date(Date.now() + 86_400_000) },
+    });
+    return { raw, familyId };
+  }
+
+  it('two concurrent rotate() calls on one valid token both resolve, and the family stays unrevoked', async () => {
+    const { raw, familyId } = await seedParent();
+    const makeStore = barrieredStore(2);
+    const signer = { signAccess: () => 'access-token' };
+    const serviceA = new RefreshService(makeStore(), signer, 30);
+    const serviceB = new RefreshService(makeStore(), signer, 30);
+
+    // Fire concurrently — sequential awaits would trivially serialize the
+    // two calls and prove nothing about the race.
+    const [a, b] = await Promise.allSettled([serviceA.rotate(raw), serviceB.rotate(raw)]);
+
+    expect(a.status).toBe('fulfilled');
+    expect(b.status).toBe('fulfilled');
+    const tokenA = a.status === 'fulfilled' ? a.value.refreshToken : undefined;
+    const tokenB = b.status === 'fulfilled' ? b.value.refreshToken : undefined;
+    // The loser doesn't mint its own second child — it gets handed back the
+    // SAME replacement the winner already minted.
+    expect(tokenA).toBeDefined();
+    expect(tokenA).toBe(tokenB);
+
+    const rows = await getLibraryPlatformPrisma().refreshToken.findMany({ where: { familyId } });
+    expect(rows).toHaveLength(2); // parent + exactly one child — no double-mint
+    const active = rows.filter((r) => r.revokedAt === null);
+    // The family was NOT revoked: exactly one live token remains, and it's
+    // the one both callers were handed.
+    expect(active).toHaveLength(1);
+    expect(active[0].tokenHash).toBe(sha256(tokenA!));
+  });
+
+  /**
+   * No concurrency, no graceMs override — the DEFAULT `REFRESH_GRACE_MS`
+   * (15s) against real Postgres, replaying a token that was superseded long
+   * enough ago that grace cannot apply. This is the property the whole
+   * feature exists alongside: a genuine offline theft replay (not a
+   * same-second retry) must still take the family down.
+   */
+  it('a replay well outside the default grace window still revokes the family, via real RefreshService.rotate', async () => {
+    const prisma = getLibraryPlatformPrisma();
+    const familyId = randomUUID();
+    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const raw = `stale-parent-${suffix}`;
+    await prisma.refreshToken.create({
+      data: {
+        userId, tokenHash: sha256(raw), familyId,
+        expiresAt: new Date(Date.now() + 86_400_000),
+        revokedAt: new Date(Date.now() - 600_000),
+        supersededAt: new Date(Date.now() - 600_000), // 10 minutes ago — 40x the 15s grace window
+        replacedByToken: `child-of-stale-parent-${suffix}`,
+      },
+    });
+    // The live child descended from that old rotation, exactly like a real session.
+    const child = await prisma.refreshToken.create({
+      data: { userId, tokenHash: sha256(`child-of-stale-parent-${suffix}`), familyId, expiresAt: new Date(Date.now() + 86_400_000) },
+    });
+
+    const service = new RefreshService(new PrismaRefreshStore(), { signAccess: () => 'access-token' }, 30);
+    await expect(service.rotate(raw)).rejects.toBeInstanceOf(UnauthorizedException);
+
+    const rows = await prisma.refreshToken.findMany({ where: { familyId } });
+    expect(rows).toHaveLength(2);
+    // The family — including the still-live child the legitimate owner is
+    // presumably still using — is revoked. This is the correct, intended
+    // consequence of a stale-token replay: it looks like theft because,
+    // this far outside the grace window, it is.
+    expect(rows.every((r) => r.revokedAt !== null)).toBe(true);
+    const childAfter = rows.find((r) => r.id === child.id);
+    expect(childAfter?.revokedAt).not.toBeNull();
+  });
+
+  it('deliberately broken: with graceMs forced to 0 on the SAME race, the loser is rejected and the family IS revoked', async () => {
+    const { raw } = await seedParent();
+    const parentBefore = await getLibraryPlatformPrisma().refreshToken.findUniqueOrThrow({
+      where: { tokenHash: sha256(raw) },
+    });
+    const makeStore = barrieredStore(2);
+    const signer = { signAccess: () => 'access-token' };
+    // graceMs: 0 removes the tolerance this task adds — this proves the
+    // PREVIOUS test's green result comes from the grace window, not from
+    // some other accidental effect of the barrier or the atomic markUsed.
+    const serviceA = new RefreshService(makeStore(), signer, 30, 0);
+    const serviceB = new RefreshService(makeStore(), signer, 30, 0);
+
+    const [a, b] = await Promise.allSettled([serviceA.rotate(raw), serviceB.rotate(raw)]);
+    const outcomes = [a, b];
+    const fulfilled = outcomes.filter((r) => r.status === 'fulfilled');
+    const rejected = outcomes.filter((r) => r.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(UnauthorizedException);
+
+    // With no grace window, the loser's replay of the just-superseded parent
+    // reads as theft and revokes the family — logging the legitimate winner
+    // out. This is the exact bug Task 1 fixes; forcing graceMs to 0
+    // reintroduces it on demand. We only assert on the PARENT row here
+    // (identified by id, not swept by familyId): whether the winner's
+    // brand-new child has committed by the time the loser's revokeFamily
+    // query runs is a genuine, unordered race between two independent
+    // async chains once both pass the barrier — the barrier only forces the
+    // two *reads* to overlap, which is all the property under test needs.
+    // (In production this ambiguity does not arise: the grace window is
+    // seconds long, so by the time anything is far enough past it to be
+    // treated as theft, the winner's single fast INSERT finished it long
+    // ago — see the follow-up note below.)
+    const parentAfter = await getLibraryPlatformPrisma().refreshToken.findUniqueOrThrow({
+      where: { id: parentBefore.id },
+    });
+    expect(parentAfter.revokedAt).not.toBeNull();
+  });
+
+  /**
+   * The clearing decision from Task 1's brief: `replacedByToken` is a live
+   * bearer secret once written (see refresh.service.ts doc comment on
+   * `RefreshRow.replacedByToken`), so once a family is declared compromised
+   * — the one moment this code is unambiguously done needing the value —
+   * `revokeFamily` sweeps it from every row in the family, not just the one
+   * that triggered the revoke. This is deterministic (no concurrency), so
+   * it belongs in its own test rather than riding on the racy scenario
+   * above.
+   */
+  it('revokeFamily also clears any lingering replacedByToken across the whole family', async () => {
+    const prisma = getLibraryPlatformPrisma();
+    const store = new PrismaRefreshStore();
+    const familyId = randomUUID();
+    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+    // A parent already revoked by an ordinary rotation minutes ago (grace
+    // long expired) — still carrying its replacedByToken, exactly like a
+    // rotated-and-never-replayed-again row would in production.
+    const parent = await prisma.refreshToken.create({
+      data: {
+        userId, tokenHash: `revoked-parent-${suffix}`, familyId,
+        expiresAt: new Date(Date.now() + 86_400_000),
+        revokedAt: new Date(Date.now() - 600_000),
+        supersededAt: new Date(Date.now() - 600_000),
+        replacedByToken: `live-child-raw-${suffix}`,
+      },
+    });
+    // The still-active child descended from it.
+    const child = await prisma.refreshToken.create({
+      data: { userId, tokenHash: `active-child-${suffix}`, familyId, expiresAt: new Date(Date.now() + 86_400_000) },
+    });
+
+    await store.revokeFamily(familyId);
+
+    const rows = await prisma.refreshToken.findMany({ where: { familyId }, orderBy: { createdAt: 'asc' } });
+    expect(rows).toHaveLength(2);
+    // Both rows are now revoked (the child was the active one revokeFamily
+    // targets; the parent was already revoked before the call).
+    expect(rows.every((r) => r.revokedAt !== null)).toBe(true);
+    // And the parent's lingering raw secret is gone.
+    const parentAfter = rows.find((r) => r.id === parent.id);
+    expect(parentAfter?.replacedByToken).toBeNull();
+    const childAfter = rows.find((r) => r.id === child.id);
+    expect(childAfter?.revokedAt).not.toBeNull();
   });
 });
