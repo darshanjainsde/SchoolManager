@@ -11,9 +11,31 @@ export interface EndpointSpec {
   body?: Record<string, unknown>;
 }
 
+const ALL_STAFF: Role[] = ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT', 'MEMBER'];
+const WRITERS: Role[] = ['ORG_OWNER', 'LIBRARIAN'];
+const READERS: Role[] = ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'];
+
 export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/live', roles: [], anonymous: true },
   { method: 'GET', path: '/ready', roles: [], anonymous: true },
   { method: 'POST', path: '/auth/login', roles: [], anonymous: true, body: { identifier: 'x@y.z', password: 'nope' } },
   { method: 'POST', path: '/auth/refresh', roles: [], anonymous: true, body: { refreshToken: 'nope' } },
+
+  // Catalog — ASSISTANT is read-only (GET only), LIBRARIAN/ORG_OWNER read+write,
+  // MEMBER gets search + title detail only. See task-6-brief.md.
+  { method: 'GET', path: '/catalog/titles', roles: ALL_STAFF },
+  { method: 'POST', path: '/catalog/titles', roles: WRITERS, body: { title: 'Authz Matrix Probe Title' } },
+  { method: 'GET', path: '/catalog/titles/:id', roles: ALL_STAFF },
+  { method: 'PATCH', path: '/catalog/titles/:id', roles: WRITERS, body: { title: 'Updated Probe Title' } },
+  { method: 'DELETE', path: '/catalog/titles/:id', roles: WRITERS },
+  {
+    method: 'POST',
+    path: '/catalog/titles/:id/copies',
+    roles: WRITERS,
+    body: { branchId: '11111111-1111-4111-8111-111111111111', barcode: 'AUTHZ-MATRIX-PROBE-0001' },
+  },
+  { method: 'PATCH', path: '/catalog/copies/:id', roles: WRITERS, body: { shelf: 'A1' } },
+  { method: 'GET', path: '/catalog/copies/by-barcode/:barcode', roles: READERS },
+  { method: 'GET', path: '/catalog/categories', roles: READERS },
+  { method: 'POST', path: '/catalog/categories', roles: WRITERS, body: { name: 'Authz Matrix Probe Category' } },
 ];

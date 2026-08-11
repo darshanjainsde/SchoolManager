@@ -5,6 +5,7 @@ import { HealthModule } from './health/health.module';
 import { TenancyModule } from './modules/tenancy';
 import { AuthModule } from './modules/auth';
 import { PlansModule } from './modules/plans';
+import { CatalogModule } from './modules/catalog';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
 
@@ -56,6 +57,7 @@ import { IdempotencyModule } from './common/idempotency/idempotency.module';
     // app-wide today.
     PlansModule,
     IdempotencyModule,
+    CatalogModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
