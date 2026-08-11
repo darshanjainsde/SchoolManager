@@ -1,0 +1,18 @@
+-- Fix (review finding 2): restore HoldStatus.EXPIRED, removed by an
+-- over-application of trap 7 in the original circulation migration. Trap 7
+-- forbids a status only a SCHEDULER can flip (a missed cron then corrupts
+-- state) — it does not forbid a terminal status set by a user-triggered
+-- action, which this is: the sweep that reclaims a lapsed, uncollected
+-- shelf hold runs when the NEXT return for that title happens, not on a
+-- timer. Without a distinct EXPIRED value, a lapsed-and-swept hold and a
+-- member-cancelled hold both collapse into CANCELLED, making "how many
+-- holds went unclaimed" unanswerable from stored data — a real reporting
+-- regression the reviewer caught.
+--
+-- Added after CANCELLED (Postgres appends by default); explicitly placed
+-- BEFORE CANCELLED to match the task brief's original ordering
+-- (PENDING|READY|COLLECTED|EXPIRED|CANCELLED). Enum value order carries no
+-- semantic meaning in this schema (nothing compares HoldStatus with </>),
+-- this is purely for readability in tooling that lists enum values in
+-- declaration order.
+ALTER TYPE "HoldStatus" ADD VALUE 'EXPIRED' BEFORE 'CANCELLED';

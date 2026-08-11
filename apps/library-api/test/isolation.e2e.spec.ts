@@ -157,6 +157,28 @@ describeLive('catalogue cross-org isolation (Title, Copy, TitleAuthor)', () => {
       expect(rows.map((r) => r.titleId)).not.toContain(titleAuthorB.titleId);
     });
 
+    // Regression test for review finding 1 (CRITICAL): the original policy
+    // was `EXISTS (SELECT 1 FROM "Title" t WHERE t.id = "titleId")` — it
+    // never referenced authorId at all, so joining THIS org's own title to
+    // ANOTHER org's author passed WITH CHECK (the EXISTS only asked "does
+    // some Title with this id exist and is it mine," never anything about
+    // the Author side). Reproduced live against the real database before
+    // the fix (20260811200000_join_table_rls_both_sides/migration.sql):
+    // `INSERT INTO "TitleAuthor" (titleId, authorId, role) VALUES (<org A's
+    // title>, <org B's author>, 'AUTHOR')` succeeded under org A's scope.
+    // Because TitleAuthor.author is ON DELETE CASCADE, that smuggled row
+    // meant org B deleting their own Author would silently delete an org-A
+    // row — a covert cross-tenant side channel. The policy now requires
+    // BOTH EXISTS clauses to hold.
+    it("cannot insert a TitleAuthor row joining this org's own title to another org's author", async () => {
+      await expect(
+        withOrg(orgA.id, (tx) =>
+          tx.titleAuthor.create({ data: { titleId: titleA.id, authorId: authorB.id } })),
+      ).rejects.toThrow();
+      const rows = await withOrg(orgB.id, (tx) => tx.titleAuthor.findMany({ where: { titleId: titleA.id } }));
+      expect(rows).toEqual([]);
+    });
+
     it('returns zero rows when no org is scoped at all', async () => {
       const { getLibraryTenantPrisma } = await import('@library/db');
       const rows = await getLibraryTenantPrisma().titleAuthor.findMany();

@@ -445,20 +445,26 @@ enum LoanStatus {
   LOST
 }
 
-/// Deliberately NO `EXPIRED` value, even though the task brief's interface
-/// sketch listed one: a hold's shelf deadline (`expiresAt`) is a stored
-/// timestamp, and "has this hold expired" is computed at read time by
-/// comparing it to `now` — exactly like `Loan`'s missing `OVERDUE` is
-/// computed from `dueAt`. Storing `EXPIRED` would make it a clock-driven
-/// status a scheduler has to flip, which is exactly what trap 7
-/// (docs/superpowers/LIBRARY-TRAPS.md) and this file's own guard test
-/// forbid. A GC sweep that reclaims an uncollected shelf hold is free to
-/// transition it to CANCELLED (a real, non-time-derived state a human/job
-/// action produced) — that is cleanup, not a new status value.
+/// Includes `EXPIRED` — restored after review correction (batch report,
+/// review finding 2). Trap 7 (docs/superpowers/LIBRARY-TRAPS.md) forbids a
+/// status only a SCHEDULER can flip, because a missed cron then corrupts
+/// state. `EXPIRED` here is not that: it is set by the next user-triggered
+/// action that touches this title's holds (the sweep that runs when the
+/// next copy is returned, promoting/lapsing the queue), never by a clock in
+/// the absence of any request. `expiresAt` stays the source of truth for
+/// "has this hold lapsed yet" before that sweep runs — a hold can be
+/// PAST expiresAt and still show status READY until something touches it.
+/// Storing the terminal outcome distinctly from CANCELLED matters for
+/// reporting: without it, "how many holds went unclaimed" (EXPIRED) is
+/// indistinguishable from "how many holds a member cancelled" (CANCELLED)
+/// once both collapse into the same value. See
+/// packages/library-db/src/schema-shape.spec.ts's `FORBIDDEN_VALUE_EXCEPTIONS`
+/// for the reviewable, by-name exception this value is allow-listed under.
 enum HoldStatus {
   PENDING
   READY
   COLLECTED
+  EXPIRED
   CANCELLED
 }
 
@@ -574,9 +580,15 @@ model Fine {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
-  org    LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  member Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  loan   Loan?      @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// Restrict, not Cascade (fixed per review finding 4): loanId is nullable
+  /// and kind includes DAMAGE/OTHER, so a member can carry an OPEN fine with
+  /// no Loan behind it at all. Cascade would let deleting that member
+  /// silently destroy a real financial record — money genuinely owed —
+  /// exactly the "fails quietly" failure mode Copy.title's Restrict already
+  /// exists to prevent for physical stock.
+  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  loan   Loan?  @relation(fields: [loanId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
 }
