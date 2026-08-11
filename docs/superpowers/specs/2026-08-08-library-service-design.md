@@ -937,18 +937,25 @@ shape as `.skosx`.
 
 ## 14. Phasing
 
-Each phase is independently deployable to staging and independently testable. One spec
-decides the schema and boundaries once; each phase gets its own implementation plan.
+**Revised 2026-08-11 to vertical slices.** The original plan built all five API phases
+before any UI, which meant nothing was clickable until Phase 5. Since the stated goal is
+to *test this thoroughly by hand before merging into Sckools*, and untested-by-hand is
+the main risk, every phase from here ships **API and the screens that use it together**.
+Each phase therefore ends with something you can log into and operate.
+
+The cost, stated plainly: the API surface grows in slices rather than arriving complete,
+so a later phase occasionally revisits an earlier screen. That is a smaller cost than
+four phases with nothing to look at.
 
 | # | Phase | Deliverables | Done when |
 |---|---|---|---|
-| **0** | **Foundation** | Worktree + branch, `packages/library-db` (full schema, RLS, roles, first migration), `apps/library-api` skeleton, tenancy, auth, plan/quota resolver, Redis throttler, idempotency, `/ready`, Sentry, CI workflow, `preflight:library`, **`apps/testboard` live on library.trackyour.in/test showing a green run** | Testboard shows a passing run against staging, including the RLS-coverage audit |
-| **0.5** | **Agent** | `packages/testboard-agent`, agent tokens, job polling, streamed ingest | A run dispatched from the dashboard executes on a laptop and reports back |
-| **1** | **Catalogue + circulation** | Titles/authors/categories/copies, full-text search, ISBN lookup, CSV import, issue/return/renew, holds, fines, policy engine, audit log | Full issue→return→fine and hold→promote→collect→expire flows green in integration tests |
-| **2** | **Reading room** | Branches, zones, seats, shifts, subscriptions, seat-map API, room attendance, check-in (QR/manual/app) | Subscribe→attend→expire flow green; seat double-booking provably impossible |
-| **3** | **Money** | Invoices, payments, receipts, expenses, revenue dashboard, reports, CSV/PDF export | Revenue and expense figures reconcile against seeded fixtures to the rupee |
-| **4** | **Members & self-serve** | QR self-registration + custom forms + approval, member portal, notification outbox + templates + WhatsApp adapter (console driver) | Register→approve→login→borrow works end to end; outbox drains on the daily cron |
-| **5** | **Web console + polish** | Full `library-web` console and member portal with the motion system, a11y, mobile-ready API surface, SSO adapter for the merge | axe clean, preflight green, non-functional panel all-green on staging |
+| **0a** | **Foundation** ✅ *shipped 2026-08-11* | `packages/library-db` (schema, forced RLS, roles, migrations), `apps/library-api` (tenancy, auth, refresh rotation, plan/quota resolver, four guards, Redis throttler, idempotency, `/ready`), seed, module-boundary rule, CI, `preflight:library` incl. the ncc bundle | 113 unit + 9 e2e green; preflight green end to end; cross-org isolation proven against real RLS |
+| **1** | **Shelf & desk** — catalogue + circulation, **with UI** | *API:* titles/authors/categories/copies, full-text search, ISBN lookup, CSV import, issue/return/renew, holds, fines, policy engine, audit log. *Web:* the `.lbx` design system built once, console shell, login, catalogue screens, the circulation desk. *Testboard:* `library.trackyour.in/test` live, built in parallel | You can log in, search a book, issue it to a member, take a return, and see the fine — in a browser, on staging |
+| **2** | **Reading room**, with UI | Branches, zones, seats, shifts, subscriptions, room attendance, check-in (QR/manual/app) + the live seat map and attendance screens | Subscribe→attend→expire works in the UI; seat double-booking provably impossible |
+| **3** | **Money**, with UI | Invoices, payments, receipts, expenses + revenue dashboard, transaction list, expense tracker, CSV/PDF export | Revenue and expense figures reconcile against seeded fixtures to the rupee, on screen |
+| **4** | **Members & self-serve** | QR self-registration + custom forms + approval queue, the member portal, notification outbox + templates + WhatsApp adapter (console driver) | Register→approve→login→borrow works end to end from a phone; outbox drains on the daily cron |
+| **5** | **Polish & merge-ready** | Motion system completed, a11y pass, mobile-ready API surface, SSO adapter for the Sckools merge, non-functional probes all green | axe clean, preflight green, testboard's non-functional panel all-green on staging |
+| **+** | **Testboard agent** *(parallel, any time after Phase 1)* | `packages/testboard-agent`, agent tokens, job polling, streamed ingest | A run dispatched from the dashboard executes on a laptop and reports back |
 
 ---
 
