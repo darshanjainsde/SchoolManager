@@ -21,7 +21,24 @@ import { IdempotencyModule } from './common/idempotency/idempotency.module';
     // redis-throttler.storage.ts for the full reasoning (including why it
     // fails open on Redis errors rather than failing closed).
     ThrottlerModule.forRoot({
-      throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
+      throttlers: [
+        { name: 'default', ttl: 60_000, limit: 100 },
+        // Identity-keyed second throttler, used by /auth/login and
+        // /auth/refresh (see auth.controller.ts, throttle-trackers.ts) via
+        // a per-route @Throttle({ identity: {...} }) override of the
+        // limit/ttl/getTracker below. The 100/60_000 here is a harmless,
+        // never-hit default: ThrottlerGuard evaluates every registered
+        // throttler against every route regardless of whether that route's
+        // @Throttle mentions it, so an unrelated route (health checks, any
+        // future controller that never opts in) still pays one extra
+        // Redis round trip per request against this name, keyed by IP
+        // (the same default tracker 'default' uses) at a limit generous
+        // enough to never realistically engage. Accepted rather than
+        // annotating every other controller with
+        // @SkipThrottle({ identity: true }) — revisit if per-request Redis
+        // cost ever actually matters.
+        { name: 'identity', ttl: 60_000, limit: 100 },
+      ],
       storage: new RedisThrottlerStorage(),
       skipIf: () => process.env.DISABLE_THROTTLER === 'true',
     }),

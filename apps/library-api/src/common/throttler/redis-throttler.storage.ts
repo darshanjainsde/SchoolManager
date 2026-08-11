@@ -1,13 +1,16 @@
 import Redis from 'ioredis';
 import type { ThrottlerStorage } from '@nestjs/throttler';
-import { Logger } from '@nestjs/common';
+import { Logger, type OnModuleDestroy } from '@nestjs/common';
 import { loadLibraryEnv } from '../../config/env';
 
 /**
  * The subset of ioredis's client surface this class needs — narrow enough
  * that `redis-throttler.storage.spec.ts` can pass a plain object instead of
  * a real connection, and explicit enough that a real `Redis` instance
- * satisfies it with no adapter.
+ * satisfies it with no adapter. `quit`/`disconnect` are optional: only
+ * `onModuleDestroy` (real shutdown, real ioredis client) needs them —
+ * existing fake clients in tests that never exercise shutdown don't have to
+ * grow methods they'd never call.
  */
 export interface RedisLike {
   status: string;
@@ -15,6 +18,8 @@ export interface RedisLike {
   incr(key: string): Promise<number>;
   pexpire(key: string, milliseconds: number): Promise<number>;
   pttl(key: string): Promise<number>;
+  quit?(): Promise<unknown>;
+  disconnect?(): void;
 }
 
 interface ThrottlerRecord {
@@ -85,7 +90,7 @@ function makeDefaultClient(): RedisLike {
  * unauthenticated route is exactly the kind of fact a 3am on-call engineer
  * needs surfaced, not buried in a source comment nobody reads at request time.
  */
-export class RedisThrottlerStorage implements ThrottlerStorage {
+export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy {
   private readonly client: RedisLike;
   private readonly logger = new Logger(RedisThrottlerStorage.name);
 
@@ -174,6 +179,27 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
   private async connect(): Promise<void> {
     if (this.client.status === 'wait' || this.client.status === 'end') {
       await this.client.connect();
+    }
+  }
+
+  /**
+   * `ThrottlerModule.forRoot({ storage: new RedisThrottlerStorage() })`
+   * hands this exact instance to `@nestjs/throttler`'s own `useFactory`
+   * provider (`ThrottlerStorageProvider`), so — unlike `org.middleware.ts`'s
+   * bare module-scope client, which Nest's DI never sees at all — this one
+   * IS a real resolved provider instance, and Nest's shutdown lifecycle
+   * calls `onModuleDestroy` on it automatically when `app.close()` runs. No
+   * test needs to reach in and call this directly (unlike
+   * `closeOrgLookupRedis`); it exists purely so that closing the app
+   * actually closes this connection too, the same dangling-handle class of
+   * bug the health module's REDIS_PROBE had (see health.module.ts).
+   */
+  async onModuleDestroy(): Promise<void> {
+    if (this.client.status === 'end') return;
+    try {
+      await this.client.quit?.();
+    } catch {
+      this.client.disconnect?.();
     }
   }
 }
