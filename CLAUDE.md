@@ -86,6 +86,13 @@ commented out behind a probe marker.
   runs.
 - **`pnpm preflight:library` before any push.** It runs the real `ncc` bundle,
   which is the gate `tsc` does not cover.
+- **The e2e suite takes ~17s and exits cleanly.** If it ever appears to hang
+  again, that is a defect, not the environment: run
+  `pnpm --filter @library/api exec jest --config test/jest-e2e.config.js --detectOpenHandles`
+  and find the long-lived client nobody closes. A Nest *value* provider cannot
+  carry `onModuleDestroy` — it needs a small class provider whose only job is
+  shutdown (see `PlanCacheLifecycle` in `modules/plans/internal/plans.module.ts`,
+  which cost roughly half this build's wall clock before it was found).
 
 ## Never
 
