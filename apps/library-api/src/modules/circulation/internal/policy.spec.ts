@@ -4,10 +4,12 @@ import {
   evaluateIssue,
   evaluateRenew,
   holdShelfExpiry,
+  holdState,
   loanState,
   nextHoldToPromote,
   type Copy,
   type Hold,
+  type HoldStatusValue,
   type Loan,
   type Member,
   type Policy,
@@ -289,4 +291,32 @@ describe('holdShelfExpiry', () => {
   it('zero holdShelfDays returns now unchanged', () => {
     expect(holdShelfExpiry({ ...POLICY, holdShelfDays: 0 }, NOW)).toEqual(NOW);
   });
+});
+
+describe('holdState', () => {
+  const notExpired = new Date(NOW.getTime() + MS_PER_DAY);
+  const expired = new Date(NOW.getTime() - 1);
+
+  it('a READY hold not yet past its shelf deadline stays READY', () => {
+    expect(holdState({ status: 'READY', expiresAt: notExpired }, NOW)).toBe('READY');
+  });
+
+  it('a READY hold past its shelf deadline reads as EXPIRED, even though nothing wrote that', () => {
+    expect(holdState({ status: 'READY', expiresAt: expired }, NOW)).toBe('EXPIRED');
+  });
+
+  it('a READY hold expiring at exactly now reads as EXPIRED (same boundary as nextHoldToPromote)', () => {
+    expect(holdState({ status: 'READY', expiresAt: NOW }, NOW)).toBe('EXPIRED');
+  });
+
+  it('a PENDING hold is never reinterpreted by expiresAt, however far in the past', () => {
+    expect(holdState({ status: 'PENDING', expiresAt: expired }, NOW)).toBe('PENDING');
+  });
+
+  const terminal: HoldStatusValue[] = ['COLLECTED', 'EXPIRED', 'CANCELLED'];
+  for (const status of terminal) {
+    it(`a terminal ${status} hold passes through unchanged regardless of expiresAt`, () => {
+      expect(holdState({ status, expiresAt: expired }, NOW)).toBe(status);
+    });
+  }
 });

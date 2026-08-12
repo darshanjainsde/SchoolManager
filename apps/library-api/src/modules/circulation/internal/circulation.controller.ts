@@ -1,4 +1,4 @@
-import { Body, Controller, Inject, Post, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, ParseUUIDPipe, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { withOrg } from '@library/db';
 import { LibJwtGuard, type LibJwtPayload } from '../../auth';
 import { RequireFeature, RequireFeatureGuard } from '../../plans';
@@ -6,7 +6,8 @@ import { OrgContextService } from '../../tenancy';
 import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { IssueLoanDto, ReturnLoanDto } from './dto';
+import { CreateHoldDto, IssueLoanDto, ListHoldsQueryDto, RenewLoanDto, ReturnLoanDto } from './dto';
+import { HoldsService } from './holds.service';
 import { LoansService } from './loans.service';
 
 /**
@@ -31,6 +32,7 @@ export class CirculationController {
   constructor(
     @Inject(OrgContextService) private readonly orgs: OrgContextService,
     @Inject(LoansService) private readonly loans: LoansService,
+    @Inject(HoldsService) private readonly holds: HoldsService,
   ) {}
 
   @Post('issue')
@@ -52,5 +54,38 @@ export class CirculationController {
     const orgId = this.orgs.requireOrgId();
     const now = new Date();
     return withOrg(orgId, (tx) => this.loans.returnLoan(tx, orgId, dto, user.sub, now));
+  }
+
+  @Post('renew')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  @UseInterceptors(IdempotencyInterceptor)
+  renew(@Body() dto: RenewLoanDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(orgId, (tx) => this.holds.renew(tx, orgId, dto, user.sub, now));
+  }
+
+  @Post('holds')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  @UseInterceptors(IdempotencyInterceptor)
+  createHold(@Body() dto: CreateHoldDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(orgId, (tx) => this.holds.createHold(tx, orgId, dto, user.sub, now));
+  }
+
+  @Delete('holds/:id')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  cancelHold(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.holds.cancelHold(tx, orgId, id, user.sub));
+  }
+
+  @Get('holds')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  listHolds(@Query() query: ListHoldsQueryDto) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(orgId, (tx) => this.holds.listHolds(tx, orgId, query, now));
   }
 }

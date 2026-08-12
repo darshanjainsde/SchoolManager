@@ -246,9 +246,57 @@ export class LoansService {
       },
     });
 
-    const promotion = await this.promoteOrRelease(tx, orgId, copy.id, copy.titleId, now);
+    const promotion = await this.promoteOrRelease(tx, orgId, copy.id, copy.titleId, actorUserId, now);
 
     return { loan: returnedLoan, fine, promotedHoldId: promotion.promotedHoldId, copyStatus: promotion.copyStatus };
+  }
+
+  /**
+   * Task 9: before considering which PENDING hold to promote, sweeps this
+   * title's stale `READY` holds — ones whose shelf window (`holdShelfDays`
+   * from promotion) has lapsed with nobody collecting them. Locked with
+   * `SELECT ... FOR UPDATE` for the same reason `promoteOrRelease`'s PENDING
+   * lock below is: two simultaneous returns for the same title must not
+   * both decide the same stale hold needs expiring. A swept hold's copy
+   * reverts to `AVAILABLE` — it is NOT re-promoted onto a PENDING hold in
+   * this same pass; `promoteOrRelease`'s own promotion below is scoped to
+   * the copy actually being returned right now (see that method's doc).
+   *
+   * This is a state-transition write (`READY` -> `EXPIRED`), but it is NOT
+   * trap 7 (LIBRARY-TRAPS.md #7): it never runs on a timer. It runs only
+   * inside a RETURN, a user-triggered action, for the title that return
+   * concerns — exactly the exception `HoldStatus.EXPIRED`'s own schema doc
+   * carves out (a GC-style sweep triggered by real traffic is fine; a
+   * scheduler deciding state on its own is not).
+   */
+  private async sweepExpiredReadyHolds(tx: LibraryTx, orgId: string, titleId: string, actorUserId: string, now: Date): Promise<void> {
+    const readyRows = await tx.$queryRaw<Array<{ id: string; readyCopyId: string | null; expiresAt: Date }>>`
+      SELECT "id", "readyCopyId", "expiresAt"
+      FROM "Hold"
+      WHERE "orgId" = ${orgId}::uuid AND "titleId" = ${titleId}::uuid AND "status" = 'READY'
+      FOR UPDATE
+    `;
+
+    for (const row of readyRows) {
+      // Same boundary as policy.ts's holdState: expiring AT expiresAt, not only strictly past it.
+      if (row.expiresAt.getTime() > now.getTime()) continue;
+
+      await tx.hold.update({ where: { id: row.id }, data: { status: 'EXPIRED' } });
+      if (row.readyCopyId) {
+        await tx.copy.update({ where: { id: row.readyCopyId }, data: { status: 'AVAILABLE' } });
+      }
+      await tx.auditLog.create({
+        data: {
+          orgId,
+          actorUserId,
+          action: 'circulation.hold.expire',
+          entity: 'Hold',
+          entityId: row.id,
+          before: { status: 'READY', expiresAt: row.expiresAt.toISOString() },
+          after: { status: 'EXPIRED', releasedCopyId: row.readyCopyId },
+        },
+      });
+    }
   }
 
   /**
@@ -270,8 +318,11 @@ export class LoansService {
     orgId: string,
     copyId: string,
     titleId: string,
+    actorUserId: string,
     now: Date,
   ): Promise<{ promotedHoldId: string | null; copyStatus: CopyStatus }> {
+    await this.sweepExpiredReadyHolds(tx, orgId, titleId, actorUserId, now);
+
     const rows = await tx.$queryRaw<Array<{ id: string; memberId: string; queuePosition: number; expiresAt: Date }>>`
       SELECT "id", "memberId", "queuePosition", "expiresAt"
       FROM "Hold"

@@ -59,4 +59,27 @@ export const ENDPOINTS: EndpointSpec[] = [
   // gets a 404, which is a non-401/403 response same as any other allowed row.
   { method: 'POST', path: '/circulation/issue', roles: READERS, body: { barcode: 'AUTHZ-MATRIX-PROBE-ISSUE', memberId: '11111111-1111-4111-8111-111111111111' } },
   { method: 'POST', path: '/circulation/return', roles: READERS, body: { barcode: 'AUTHZ-MATRIX-PROBE-RETURN' } },
+
+  // Task 9 — renew and holds. Same desk-role split as issue/return: ORG_OWNER/
+  // LIBRARIAN/ASSISTANT work the desk, MEMBER is denied. Ids in bodies are
+  // well-formed UUIDs that legitimately won't resolve to a real row for most
+  // roles under test — guards run before the handler, so that's a 404 for an
+  // allowed role, not a 401/403, same reasoning as circulation/issue above.
+  { method: 'POST', path: '/circulation/renew', roles: READERS, body: { barcode: 'AUTHZ-MATRIX-PROBE-RENEW' } },
+  {
+    method: 'POST',
+    path: '/circulation/holds',
+    roles: READERS,
+    body: { titleId: '11111111-1111-4111-8111-111111111111', memberId: '11111111-1111-4111-8111-111111111111' },
+  },
+  { method: 'DELETE', path: '/circulation/holds/:id', roles: READERS },
+  { method: 'GET', path: '/circulation/holds', roles: READERS },
+
+  // Task 10 — fines, waivers, day-end report. Waiver is a WRITERS-only action
+  // (ASSISTANT must be denied — see fines.service.ts's `waive`); the rest are
+  // desk reads.
+  { method: 'GET', path: '/circulation/fines', roles: READERS },
+  { method: 'POST', path: '/circulation/fines/:id/waive', roles: WRITERS, body: { reason: 'Authz matrix probe' } },
+  { method: 'GET', path: '/circulation/overdue', roles: READERS },
+  { method: 'GET', path: '/circulation/day-report', roles: READERS },
 ];

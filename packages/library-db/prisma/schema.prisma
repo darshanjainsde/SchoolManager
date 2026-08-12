@@ -554,8 +554,28 @@ model Hold {
   status        HoldStatus @default(PENDING)
   readyCopyId   String?    @db.Uuid
   readyAt       DateTime?
-  /// The hold-shelf deadline. Past this (and still READY), the hold is
-  /// expired at read time — see the HoldStatus comment above.
+  /// Meaningful ONLY when status is READY: the hold-shelf deadline, set at
+  /// promotion time to `holdShelfExpiry(policy, promotedAt)`
+  /// (apps/library-api's policy.ts) — computed from the promoted member's
+  /// own CirculationPolicy, not the returning member's. Past this deadline
+  /// (still READY in the stored row), the hold reads as EXPIRED at query
+  /// time via `policy.ts`'s `holdState` — never written by a scheduler
+  /// (trap 7): the terminal EXPIRED row write happens only inside the next
+  /// RETURN for this title's `promoteOrRelease` sweep (loans.service.ts), a
+  /// user-triggered action, never a timer.
+  ///
+  /// A PENDING hold has no real deadline yet (nothing has been promoted for
+  /// it, so there is nothing to expire), but this column is NOT NULL — no
+  /// natural "no deadline" value exists for a DateTime, and adding a
+  /// nullable column (or a queue-timeout feature this phase doesn't have)
+  /// for a value nothing reads is not worth the complexity. Task 8 already
+  /// established the convention informally (see its e2e's `FAR_FUTURE`
+  /// fixture); Task 9 formalizes it here and in code:
+  /// `holds.service.ts`'s `PENDING_HOLD_SENTINEL_YEARS`/
+  /// `pendingHoldSentinel()` is the ONE place that value is produced, kept
+  /// far enough out it can never be mistaken for "expiring soon" by a naive
+  /// read, and `holdState` never reinterprets a PENDING hold by `expiresAt`
+  /// regardless of its value — only READY ever is.
   expiresAt     DateTime
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt

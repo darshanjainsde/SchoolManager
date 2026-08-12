@@ -82,6 +82,14 @@ export interface Hold {
   expiresAt: Date;
 }
 
+/**
+ * Matches `HoldStatus` in the Prisma schema exactly (`PENDING | READY |
+ * COLLECTED | EXPIRED | CANCELLED`) — same "fixed to the real enum" shape as
+ * `Copy['status']` above, so a Prisma-backed caller needs no translation
+ * layer.
+ */
+export type HoldStatusValue = 'PENDING' | 'READY' | 'COLLECTED' | 'EXPIRED' | 'CANCELLED';
+
 const MS_PER_DAY = 86_400_000;
 
 function addDays(date: Date, days: number): Date {
@@ -217,4 +225,30 @@ export function nextHoldToPromote(holds: Hold[], now: Date): Hold | null {
  */
 export function holdShelfExpiry(p: Policy, now: Date): Date {
   return addDays(now, p.holdShelfDays);
+}
+
+/**
+ * The EFFECTIVE status of a hold `at` a point in time — never mutates
+ * anything, purely a read-time projection (Task 9; trap 7's "no state
+ * transition may depend on a scheduler" applies here: a stale `READY` hold
+ * is reported as `EXPIRED` on every read from the moment its shelf window
+ * lapses, but the STORED row keeps saying `READY` until a user-triggered
+ * action — the next return for that title — actually writes `EXPIRED`; see
+ * `loans.service.ts`'s `promoteOrRelease`).
+ *
+ * Only `READY` is ever reinterpreted. `PENDING` never is: a pending hold's
+ * `expiresAt` is a placeholder with no real deadline in this phase (nothing
+ * has been promoted for it yet, so there is nothing to expire) — see
+ * `holds.service.ts`'s `PENDING_HOLD_SENTINEL_YEARS` for the placeholder
+ * itself and the schema's own doc on `Hold.expiresAt` for the full
+ * PENDING-vs-READY convention. `COLLECTED`/`EXPIRED`/`CANCELLED` are
+ * terminal and pass through unchanged regardless of `expiresAt`.
+ *
+ * Boundary matches `nextHoldToPromote`'s "live" test above (`expiresAt >
+ * now` is live): a hold expiring at exactly `now` is already expired here
+ * too, not on the next tick.
+ */
+export function holdState(hold: { status: HoldStatusValue; expiresAt: Date }, now: Date): HoldStatusValue {
+  if (hold.status === 'READY' && hold.expiresAt.getTime() <= now.getTime()) return 'EXPIRED';
+  return hold.status;
 }
