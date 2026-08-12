@@ -12,7 +12,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "boundary": "depcruise apps/api/src --config .dependency-cruiser.cjs",
+    "boundary": "node scripts/check-tsconfig-scope.mjs && depcruise apps/api/src --config .dependency-cruiser.cjs",
     "preflight": "bash scripts/preflight.sh",
     "preflight:library": "bash scripts/preflight-library.sh",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",

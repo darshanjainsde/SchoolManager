@@ -12,6 +12,12 @@
       "@skoolos/config": ["../../packages/config/src"]
     }
   },
-  "include": ["src/**/*", "../../packages/*/src/**/*"],
+  "//": "Workspace packages are listed literally, never as packages/*. Same reasoning as apps/api/tsconfig.json, which was fixed first — this file was missed, so the wildcard kept sweeping in every package in the monorepo. It pulled packages/library-db/src/test-live.ts (a jest helper this worker never imports) into the worker's own typecheck and build, failing both with TS2503 'Cannot find namespace jest'. Adding a package to the monorepo must not be able to break this app's build.",
+  "include": [
+    "src/**/*",
+    "../../packages/db/src/**/*",
+    "../../packages/types/src/**/*",
+    "../../packages/config/src/**/*"
+  ],
   "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts", "../../packages/*/src/**/*.spec.ts", "../../packages/*/src/**/*.test.ts"]
 }
