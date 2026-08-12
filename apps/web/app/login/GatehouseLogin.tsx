@@ -36,10 +36,20 @@ const DESTINATION: Record<string, string> = {
  * server-render.
  */
 function Crest({ theme, size = 44 }: { theme: LoginTheme; size?: number }) {
-  if (theme.logoUrl) {
+  // A school logo that 404s (moved bucket, dead URL) must degrade to the
+  // generated shield, never to a broken-image glyph on the identity panel.
+  const [logoFailed, setLogoFailed] = useState(false);
+  if (theme.logoUrl && !logoFailed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={theme.logoUrl} alt="" width={size} height={size} className="gh-crest-img" />
+      <img
+        src={theme.logoUrl}
+        alt=""
+        width={size}
+        height={size}
+        className="gh-crest-img"
+        onError={() => setLogoFailed(true)}
+      />
     );
   }
   if (!theme.branded) return <SckoolsLogo variant="symbol" theme="dark" size={size} />;
