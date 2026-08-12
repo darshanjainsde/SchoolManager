@@ -72,6 +72,54 @@ function parseJsonc(text) {
   return JSON.parse(stripComments(text).replace(/,(\s*[}\]])/g, '$1'));
 }
 
+
+/**
+ * Second check, same script, same reason: a config-level fault that no local
+ * build catches and that fails the ENTIRE deployment.
+ *
+ * Vercel validates vercel.json at deploy-creation time and rejects the whole
+ * deployment when it fails — not the offending route, everything. This repo
+ * has lost 15 preview deploys to one config fault already, and a sub-daily
+ * cron once rejected a whole deployment on its own. So: the file must parse as
+ * strict JSON (no comments — unlike tsconfig, this one is not JSONC), and any
+ * cron must be daily or slower, because a Hobby plan rejects the deployment
+ * outright rather than just disabling the cron.
+ */
+function checkVercelConfigs() {
+  const problems = [];
+  let seen = 0;
+
+  for (const app of readdirSync(appsDir)) {
+    const file = join(appsDir, app, 'vercel.json');
+    if (!existsSync(file)) continue;
+    seen += 1;
+
+    const text = readFileSync(file, 'utf8');
+    let config;
+    try {
+      config = JSON.parse(text); // strict: comments are NOT valid here
+    } catch (err) {
+      problems.push(`${relative(root, file)} — not strict JSON: ${err.message}`);
+      continue;
+    }
+
+    for (const cron of config.crons ?? []) {
+      // "m h ..." — anything with a step or a list in the first two fields runs
+      // more than once a day.
+      const [minute = '', hour = ''] = String(cron.schedule ?? '').split(/\s+/);
+      const subDaily = hour.includes('*') || hour.includes('/') || hour.includes(',') || minute.includes('/');
+      if (subDaily) {
+        problems.push(
+          `${relative(root, file)} — cron "${cron.schedule}" runs more than daily. ` +
+            `A Hobby plan rejects the ENTIRE deployment for this, not just the cron.`,
+        );
+      }
+    }
+  }
+
+  return { problems, seen };
+}
+
 const offenders = [];
 let checked = 0;
 
@@ -113,4 +161,13 @@ if (offenders.length > 0) {
   process.exit(1);
 }
 
+const vercel = checkVercelConfigs();
+if (vercel.problems.length > 0) {
+  console.error('✗ vercel.json: a config fault here fails the WHOLE deployment.\n');
+  for (const p of vercel.problems) console.error(`  ${p}`);
+  console.error('');
+  process.exit(1);
+}
+
 console.log(`✓ tsconfig scope: ${checked} app tsconfig(s), no packages/* wildcards.`);
+console.log(`✓ vercel.json: ${vercel.seen} config(s), strict JSON, no sub-daily crons.`);
