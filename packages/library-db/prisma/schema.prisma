@@ -142,9 +142,12 @@ model Branch {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  org     LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  members Member[]
-  copies  Copy[]
+  org      LibraryOrg          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members  Member[]
+  copies   Copy[]
+  loans    Loan[]
+  holds    Hold[]
+  policies CirculationPolicy[]
 
   @@unique([orgId, code])
   @@index([orgId])
@@ -492,6 +495,22 @@ enum FineStatus {
 model CirculationPolicy {
   id                 String     @id @default(uuid()) @db.Uuid
   orgId              String     @db.Uuid
+  /// null = org default, used when no row exists for the caller's specific
+  /// branch. `circulation/internal/policy-loader.ts`'s `loadPolicy` always
+  /// tries the branch-specific row first, falling back to this one.
+  ///
+  /// True uniqueness — "at most one branch-specific row per (orgId,
+  /// branchId, memberType), AND at most one org-default row per (orgId,
+  /// memberType)" — is NOT expressible as a single Prisma `@@unique` here:
+  /// Postgres unique indexes treat NULL as distinct from NULL, so a naive
+  /// `@@unique([orgId, branchId, memberType])` would silently permit two
+  /// org-default (branchId NULL) rows to coexist for the same memberType —
+  /// the same NULL-is-not-equal-to-NULL gotcha this project already works
+  /// around for RLS (NULLIF, LIBRARY-TRAPS.md #1). Enforced instead by two
+  /// partial unique indexes in the branch-scope migration — the same
+  /// technique `loan_one_active_per_copy` already uses for a different
+  /// NULL-bearing column (see that migration's own comment).
+  branchId           String?    @db.Uuid
   memberType         MemberType
   maxBooks           Int
   loanDays           Int
@@ -510,8 +529,14 @@ model CirculationPolicy {
   updatedAt          DateTime   @updatedAt
 
   org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  /// Restrict, not SetNull: a branch deletion that silently demoted a
+  /// branch-specific policy to an org default would also risk colliding with
+  /// the partial unique index enforcing "one org default per memberType" —
+  /// confusing either way. A branch with a configured policy must not vanish
+  /// out from under it (same reasoning as Copy.branchId's Restrict).
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
-  @@unique([orgId, memberType])
+  @@index([orgId, branchId, memberType])
   @@index([orgId])
 }
 
@@ -519,6 +544,13 @@ model Loan {
   id               String     @id @default(uuid()) @db.Uuid
   orgId            String     @db.Uuid
   copyId           String     @db.Uuid
+  /// Denormalized from `Copy.branchId` at issue time (LoansService.issue) so
+  /// "which branch is this loan at" is answerable directly, without a join
+  /// through Copy, on every branch-scoped read (BranchScopeGuard,
+  /// listOverdue, dayReport). NOT NULL: unlike Hold.branchId, a Loan always
+  /// has a copy from the moment it exists, so there is no "not yet known"
+  /// state to represent.
+  branchId         String     @db.Uuid
   memberId         String     @db.Uuid
   issuedAt         DateTime   @default(now())
   dueAt            DateTime
@@ -534,12 +566,16 @@ model Loan {
   org        LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
   /// Restrict: a copy with loan history must not vanish out from under it.
   copy       Copy       @relation(fields: [copyId], references: [id], onDelete: Restrict)
+  /// Restrict, same reasoning as `copy` above — a branch with loan history
+  /// must not vanish out from under it.
+  branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
   member     Member     @relation(fields: [memberId], references: [id], onDelete: Restrict)
   issuedBy   LibUser?   @relation("LoanIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
   returnedBy LibUser?   @relation("LoanReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
   fines      Fine[]
 
   @@index([orgId])
+  @@index([orgId, branchId])
 }
 
 /// Keyed on titleId, not copyId: a member holds a place in line for a TITLE
@@ -549,6 +585,13 @@ model Hold {
   id            String     @id @default(uuid()) @db.Uuid
   orgId         String     @db.Uuid
   titleId       String     @db.Uuid
+  /// Set only when this hold is promoted — the branch of the copy pulled for
+  /// it (mirrors readyCopyId/readyAt, set together in
+  /// LoansService.promoteOrRelease). A still-PENDING hold has no branch: it
+  /// is a place in line for a Title, fillable by any branch's copy, so this
+  /// stays null until promotion — unlike Loan.branchId, which is set at
+  /// issue and therefore NOT NULL.
+  branchId      String?    @db.Uuid
   memberId      String     @db.Uuid
   /// Lower = earlier in the queue.
   queuePosition Int
@@ -585,8 +628,12 @@ model Hold {
   title     Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)
   member    Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
   readyCopy Copy?      @relation("HoldReadyCopy", fields: [readyCopyId], references: [id], onDelete: SetNull)
+  /// Restrict, same reasoning as Loan.branch — a branch a hold was ever
+  /// promoted onto must not vanish out from under that history.
+  branch    Branch?    @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   @@index([orgId])
+  @@index([orgId, branchId])
 }
 
 model Fine {
