@@ -5,6 +5,7 @@ import {
   applyChunk,
   mapImportRow,
   resolvePrepass,
+  validateRowsForTest,
 } from './import.service';
 
 describe('mapImportRow', () => {
@@ -123,7 +124,6 @@ describe('validateRows — in-file ISBN duplicates', () => {
 
     // Reaching withOrg at all proves the duplicate did not throw earlier; the
     // dedupe itself is asserted through the pure path below.
-    const { validateRowsForTest } = await import('./import.service');
     const result = validateRowsForTest(rows);
     expect(result.valid.map((r) => r.rowNum)).toEqual([2, 3]); // row 1 dropped, row 3 kept
     expect(result.errors).toEqual([
@@ -132,7 +132,6 @@ describe('validateRows — in-file ISBN duplicates', () => {
   });
 
   it('does not deduplicate rows with no ISBN — they are distinct items by policy', () => {
-    const { validateRowsForTest } = require('./import.service');
     const result = validateRowsForTest([
       { title: 'Untitled Pamphlet' },
       { title: 'Untitled Pamphlet' },
