@@ -230,7 +230,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
     });
   });
 
-  describe('GET /circulation/overdue — uses the loan_due index (proven with EXPLAIN)', () => {
+  describe('GET /circulation/overdue — index-shaped, proven with EXPLAIN plus the catalog', () => {
     let org: FinesOrg;
 
     beforeAll(async () => {
@@ -272,7 +272,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
      * deliberate-break proof (dropping `loan_due` and re-running this exact
      * assertion to watch it fail, then restoring the index).
      */
-    it('EXPLAIN shows an Index Scan on loan_due, never a Seq Scan', async () => {
+    it('the overdue query is index-shaped, and loan_due still exists and is valid', async () => {
       // A 1-2 row fixture is NOT a valid proof here: Postgres's cost-based
       // optimizer correctly prefers a Seq Scan over an Index Scan on a tiny
       // table (confirmed live while writing this test — see
@@ -314,8 +314,48 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
       // eslint-disable-next-line no-console -- captured deliberately for the task report
       console.log('[overdue EXPLAIN]\n' + planText);
 
-      expect(planText).toMatch(/Index.*loan_due/);
+      /*
+       * Two assertions, both deterministic, replacing one that was not.
+       *
+       * The original asserted `/Index.*loan_due/` — the specific index by
+       * name — and flaked roughly half the time on a long-lived local
+       * database: identical code, alternating pass/fail. The cause is not the
+       * query. `Loan` holds every org ever created by every e2e run, so
+       * `orgId = X` gets less selective as the table accumulates; the planner
+       * eventually estimates ~1 matching row (it printed `rows=1`, cost 4.16)
+       * and picks `loan_one_active_per_copy` instead. Both are partial indexes
+       * with the same `WHERE "returnedAt" IS NULL`, both are Index Scans, and
+       * at that estimated size both are correct choices. The test was
+       * asserting a planner preference, which is not a property of this code.
+       *
+       * So the two real risks are asserted separately and directly:
+       *
+       *   1. The query stays index-shaped. If someone wraps `dueAt` in a
+       *      function or adds an OR that defeats indexing, this query falls
+       *      back to reading every loan the org ever made — caught by the
+       *      Seq Scan assertion plus requiring an Index Scan on Loan.
+       *   2. `loan_due` still exists and is valid. Deleting the migration or
+       *      leaving the index INVALID after a failed concurrent build is
+       *      caught by reading the catalog, which no planner decision can
+       *      make flaky. (This is the risk the deliberate-break proof in
+       *      task-9-10-report.md exercised by dropping the index.)
+       */
       expect(planText).not.toMatch(/Seq Scan on "?Loan"?/);
+      expect(planText).toMatch(/Index (Only )?Scan using \w+ on "?Loan"?/);
+
+      const [idx] = await prisma.$queryRaw<Array<{ indexdef: string; indisvalid: boolean }>>`
+        SELECT i.indexdef, x.indisvalid
+        FROM pg_indexes i
+        JOIN pg_class c ON c.relname = i.indexname
+        JOIN pg_index x ON x.indexrelid = c.oid
+        WHERE i.schemaname = 'library' AND i.indexname = 'loan_due'
+      `;
+      // Missing here means the migration is gone and GET /circulation/overdue
+      // would read every loan the org has ever made.
+      expect(idx).toBeDefined();
+      expect(idx.indisvalid).toBe(true);
+      expect(idx.indexdef).toMatch(/"?dueAt"?/);
+      expect(idx.indexdef).toMatch(/WHERE .*"?returnedAt"? IS NULL/);
     });
   });
 

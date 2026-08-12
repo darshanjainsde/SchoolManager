@@ -491,3 +491,77 @@ a { color: var(--lb-brand); }
   color: var(--lb-ink-3);
   font-size: 0.88rem;
 }
+
+/* ============================================================
+   Dashboard — the day's figures, and whose books are late
+   ============================================================ */
+
+.lbx-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.7rem;
+}
+
+/* Every tile is a link: a number that tells you there is a problem should
+   take you to the list of what the problem is. */
+.lbx-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-sm);
+  background: var(--lb-surface);
+  box-shadow: var(--lb-shadow-sm);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.lbx-tile:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--lb-shadow);
+  border-color: var(--lb-line-2);
+}
+.lbx-tile:focus-visible { outline: 2px solid var(--lb-brand); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .lbx-tile { transition: none; }
+  .lbx-tile:hover { transform: none; }
+}
+
+.lbx-tile-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--lb-ink-3);
+  font-weight: 600;
+}
+.lbx-tile-value {
+  font-family: var(--lb-serif);
+  font-size: 1.75rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.lbx-tile-hint { font-size: 0.74rem; color: var(--lb-ink-3); }
+
+/* Tone marks the tile that wants attention, with a rule down its edge rather
+   than a wash of colour — the number stays the loudest thing on the card. */
+.lbx-tile.warn { border-left: 3px solid var(--lb-accent); }
+.lbx-tile.warn .lbx-tile-value { color: var(--lb-accent); }
+.lbx-tile.stop { border-left: 3px solid var(--lb-bad); }
+.lbx-tile.stop .lbx-tile-value { color: var(--lb-bad); }
+
+.lbx-h3 {
+  font-family: var(--lb-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 0.6rem;
+}
+
+.lbx-more {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--lb-brand);
+  text-decoration: none;
+}
+.lbx-more:hover { text-decoration: underline; }

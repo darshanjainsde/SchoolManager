@@ -206,3 +206,18 @@ export function waiveFine(ctx: Ctx, fineId: string, reason: string): Promise<{ f
 export function outstanding(f: Pick<FineRow, 'amount' | 'paidAmount' | 'waivedAmount'>): number {
   return rupees(f.amount) - rupees(f.paidAmount) - rupees(f.waivedAmount);
 }
+
+export interface DayReport {
+  date: string;
+  issued: number;
+  returned: number;
+  overdue: number;
+  /** `amount` is a decimal string on this path — see the API's `decimalToMoneyString`. */
+  finesAccrued: { count: number; amount: Money };
+}
+
+export function dayReport(ctx: Ctx, date?: string): Promise<DayReport> {
+  const q = new URLSearchParams();
+  if (date) q.set('date', date);
+  return apiFetch<DayReport>(`/circulation/day-report?${q}`, { host: ctx.host, token: ctx.token });
+}
