@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { Prisma, type Fine, type LibraryTx } from '@library/db';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import type { DayReportQueryDto, ListFinesQueryDto, WaiveFineDto } from './dto';
+import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
 
 const MS_PER_DAY = 86_400_000;
 
@@ -29,6 +30,12 @@ export interface WaiveResult {
   fine: Fine;
 }
 
+export interface FineListItem extends Fine {
+  member: MemberCard;
+  /** Null for a fine raised without a loan behind it (damage, lost item). */
+  loan: { copy: { title: { id: string; title: string } } } | null;
+}
+
 export interface OverdueLoanItem {
   id: string;
   copyId: string;
@@ -38,6 +45,9 @@ export interface OverdueLoanItem {
   renewCount: number;
   /** Whole days past `dueAt` as of the query's `now` — display only, not `computeFine`'s billable-days figure (no grace subtracted here). */
   daysOverdue: number;
+  member: MemberCard;
+  title: { id: string; title: string };
+  barcode: string;
 }
 
 export interface DayReport {
@@ -120,7 +130,7 @@ export class FinesService {
    * "unknown branch passes through" convention `listHolds` uses for a still-
    * PENDING hold.
    */
-  async listFines(tx: LibraryTx, orgId: string, query: ListFinesQueryDto, allowedBranches: string[]): Promise<Fine[]> {
+  async listFines(tx: LibraryTx, orgId: string, query: ListFinesQueryDto, allowedBranches: string[]): Promise<FineListItem[]> {
     return tx.fine.findMany({
       where: {
         orgId,
@@ -132,6 +142,13 @@ export class FinesService {
       },
       orderBy: { createdAt: 'desc' },
       take: query.limit ?? 50,
+      // Who owes it, and for which book. A fine with no loan (a damage or
+      // lost-item charge raised directly) legitimately has no title, which is
+      // why `title` is nullable here rather than assumed present.
+      include: {
+        member: { select: MEMBER_CARD_SELECT },
+        loan: { select: { copy: { select: { title: { select: { id: true, title: true } } } } } },
+      },
     });
   }
 
@@ -196,15 +213,55 @@ export class FinesService {
     return { fine: updated };
   }
 
-  /** See `overdueLoansQuery`'s own doc for why this delegates its SQL shape to that exported function rather than building it inline. */
+  /**
+   * See `overdueLoansQuery`'s own doc for why this delegates its SQL shape to
+   * that exported function rather than building it inline.
+   *
+   * The member and title are fetched by TWO follow-up lookups rather than by
+   * joining them into that SQL, and the choice is deliberate. `overdueLoansQuery`
+   * is shaped column-for-column to the `loan_due` partial index, with an e2e
+   * test that EXPLAINs it and fails on a Seq Scan; adding joins would put that
+   * plan back in play for a screen that lists at most 500 rows. Instead the
+   * tuned query stays byte-identical, and the hydration is two primary-key
+   * `IN` lookups over the distinct ids — three indexed queries in total, no
+   * N+1, and nothing that can regress the plan the test protects.
+   */
   async listOverdue(tx: LibraryTx, orgId: string, now: Date, allowedBranches: string[]): Promise<OverdueLoanItem[]> {
     const rows = await tx.$queryRaw<Array<{ id: string; copyId: string; memberId: string; issuedAt: Date; dueAt: Date; renewCount: number }>>(
       overdueLoansQuery(orgId, now, allowedBranches),
     );
-    return rows.map((r) => ({
-      ...r,
-      daysOverdue: Math.floor((now.getTime() - r.dueAt.getTime()) / MS_PER_DAY),
-    }));
+    if (rows.length === 0) return [];
+
+    const [members, copies] = await Promise.all([
+      tx.member.findMany({
+        where: { id: { in: [...new Set(rows.map((r) => r.memberId))] } },
+        select: MEMBER_CARD_SELECT,
+      }),
+      tx.copy.findMany({
+        where: { id: { in: [...new Set(rows.map((r) => r.copyId))] } },
+        select: { id: true, barcode: true, title: { select: { id: true, title: true } } },
+      }),
+    ]);
+
+    const memberById = new Map(members.map((m) => [m.id, m]));
+    const copyById = new Map(copies.map((c) => [c.id, c]));
+
+    return rows.flatMap((r) => {
+      const member = memberById.get(r.memberId);
+      const copy = copyById.get(r.copyId);
+      // Both are FK-guaranteed to exist, so a miss means RLS hid a row that
+      // the loan still points at — a real tenancy fault. Dropping the row is
+      // the safe read: it is better to under-report an overdue book than to
+      // render half a record from another org.
+      if (!member || !copy) return [];
+      return [{
+        ...r,
+        daysOverdue: Math.floor((now.getTime() - r.dueAt.getTime()) / MS_PER_DAY),
+        member,
+        title: copy.title,
+        barcode: copy.barcode,
+      }];
+    });
   }
 
   /**

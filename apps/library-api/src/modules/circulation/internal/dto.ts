@@ -75,3 +75,28 @@ export class DayReportQueryDto {
   /** `YYYY-MM-DD`, interpreted as a UTC day. Omitted = today (UTC). */
   @IsOptional() @Matches(DATE_ONLY, { message: 'date must be YYYY-MM-DD' }) date?: string;
 }
+
+export class SearchMembersQueryDto {
+  /**
+   * Free text: a member code (`RAF-00042`, and the forgiving variants
+   * `codeGuesses` accepts), a first or last name, or a full name. Omitted or
+   * blank lists the roll alphabetically — the same fallback the catalogue
+   * search makes for an empty query.
+   *
+   * Length-capped because it becomes an ILIKE pattern; a name nobody has is
+   * still a scan nobody should be able to ask for repeatedly.
+   */
+  @IsOptional() @IsString() @MaxLength(100) q?: string;
+
+  /**
+   * Max 50, not the 200 the other list DTOs allow: this feeds a typeahead
+   * under a desk input, where a librarian picks from the first few or types
+   * more. A bigger page would only ship more children's names to a browser.
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit?: number;
+}

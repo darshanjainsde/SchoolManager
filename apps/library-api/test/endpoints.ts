@@ -82,4 +82,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/circulation/fines/:id/waive', roles: WRITERS, body: { reason: 'Authz matrix probe' } },
   { method: 'GET', path: '/circulation/overdue', roles: READERS },
   { method: 'GET', path: '/circulation/day-report', roles: READERS },
+
+  // Member lookup for the desk. READERS, so `MEMBER` is denied — a borrower
+  // must not be able to enumerate the school roll, which for a school library
+  // is a list of children's names.
+  { method: 'GET', path: '/circulation/members', roles: READERS },
 ];

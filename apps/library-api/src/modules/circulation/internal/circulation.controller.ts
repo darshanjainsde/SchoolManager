@@ -7,10 +7,11 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { CreateHoldDto, DayReportQueryDto, IssueLoanDto, ListFinesQueryDto, ListHoldsQueryDto, RenewLoanDto, ReturnLoanDto, WaiveFineDto } from './dto';
+import { CreateHoldDto, DayReportQueryDto, IssueLoanDto, ListFinesQueryDto, ListHoldsQueryDto, RenewLoanDto, ReturnLoanDto, SearchMembersQueryDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { HoldsService } from './holds.service';
 import { LoansService } from './loans.service';
+import { MembersService } from './members.service';
 
 /**
  * Guard order mirrors `CatalogController`: JWT identity, then the plan
@@ -48,6 +49,7 @@ export class CirculationController {
     @Inject(LoansService) private readonly loans: LoansService,
     @Inject(HoldsService) private readonly holds: HoldsService,
     @Inject(FinesService) private readonly fines: FinesService,
+    @Inject(MembersService) private readonly members: MembersService,
   ) {}
 
   @Post('issue')
@@ -94,6 +96,27 @@ export class CirculationController {
   cancelHold(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
     return withOrg(orgId, (tx) => this.holds.cancelHold(tx, orgId, id, user.sub, user.branches));
+  }
+
+  /**
+   * Ranked member lookup for the desk — the only way to turn "Ravi Menon" or
+   * "RAF-00042" into the member id every write on this controller needs.
+   * Read-only and deliberately narrow (see `MEMBER_CARD_SELECT` for what it
+   * withholds and why).
+   *
+   * It lives here rather than in a members module because a full members
+   * module — enrolment, membership lifecycle, self-serve — is a later phase,
+   * and a half-built one standing in its way is worse than none. The desk
+   * needs to find people; this finds people.
+   *
+   * Same roles as the rest of the desk: `MEMBER` is denied, so a borrower
+   * cannot enumerate the school roll.
+   */
+  @Get('members')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  searchMembers(@Query() query: SearchMembersQueryDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.members.search(tx, orgId, query, user.branches));
   }
 
   @Get('holds')

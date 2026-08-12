@@ -5,6 +5,7 @@ import { assertBranchInScope } from '../../../common/guards/assert-branch-in-sco
 import { loadPolicy } from './policy-loader';
 import { evaluateRenew, holdState, type HoldStatusValue, type RenewDenial } from './policy';
 import type { CreateHoldDto, ListHoldsQueryDto, RenewLoanDto } from './dto';
+import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
 
 /**
  * PENDING holds have no real deadline yet — nothing has been promoted for
@@ -49,6 +50,9 @@ export interface CreateHoldResult {
 export interface HoldListItem extends Omit<Hold, 'status'> {
   /** The EFFECTIVE status (`policy.ts`'s `holdState`), not necessarily the stored column — see that function's doc. */
   status: HoldStatusValue;
+  /** Hydrated so the queue is readable by a person — see `MEMBER_CARD_SELECT`. */
+  member: MemberCard;
+  title: { id: string; title: string };
 }
 
 @Injectable()
@@ -294,6 +298,13 @@ export class HoldsService {
       },
       orderBy: [{ titleId: 'asc' }, { queuePosition: 'asc' }],
       take: query.limit ?? 50,
+      // Hydrated in the same query rather than by the client: a holds queue
+      // showing bare UUIDs cannot be acted on, and one call per row would be
+      // an N+1 on a screen that lists 50 by default.
+      include: {
+        member: { select: MEMBER_CARD_SELECT },
+        title: { select: { id: true, title: true } },
+      },
     });
 
     const projected: HoldListItem[] = rows.map((h) => ({ ...h, status: holdState(h, now) }));
