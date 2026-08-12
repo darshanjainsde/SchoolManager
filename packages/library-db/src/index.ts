@@ -49,16 +49,29 @@ const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0
  *
  * `orgId` is untrusted input → UUID-validated before interpolation.
  */
+export interface WithOrgOptions {
+  /** Forwarded to `$transaction`'s interactive-transaction options. Prisma 5
+   *  defaults `timeout` to 5000ms and `maxWait` to 2000ms — fine for the
+   *  handful of round trips most call sites make, but nowhere near enough
+   *  for a call site that does many sequential writes in one transaction
+   *  (e.g. a bulk import). Pass an explicit `timeout` there so the failure
+   *  mode, if the budget is still exceeded, is a clear Prisma error instead
+   *  of a silent 5s cutoff. */
+  maxWait?: number;
+  timeout?: number;
+}
+
 export async function withOrg<T>(
   orgId: string,
   fn: (tx: LibraryTx) => Promise<T>,
   client: PrismaClient = getLibraryTenantPrisma(),
+  options?: WithOrgOptions,
 ): Promise<T> {
   if (!UUID_RE.test(orgId)) throw new Error('withOrg: orgId must be a UUID');
   return client.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`SET LOCAL app.current_org = '${orgId}'`);
     return fn(tx);
-  });
+  }, options);
 }
 
 export async function disconnectLibrary(): Promise<void> {
