@@ -54,7 +54,15 @@ export interface Member {
 }
 
 export interface Copy {
-  status: 'AVAILABLE' | 'ON_LOAN' | 'ON_HOLD_SHELF' | 'LOST' | 'WITHDRAWN' | 'IN_REPAIR';
+  /**
+   * Matches `CopyStatus` (`AVAILABLE | ON_LOAN | ON_HOLD_SHELF | IN_TRANSIT |
+   * LOST | DAMAGED | WITHDRAWN`) in the Prisma schema — fixed to that exact
+   * set, not "IN_REPAIR" (a value that was never in the real enum; caught
+   * while wiring Task 8's Prisma-backed caller, see LIBRARY-TRAPS.md's
+   * verification-from-memory trap), so a Prisma-backed caller needs no
+   * translation layer.
+   */
+  status: 'AVAILABLE' | 'ON_LOAN' | 'ON_HOLD_SHELF' | 'IN_TRANSIT' | 'LOST' | 'DAMAGED' | 'WITHDRAWN';
   branchId: string;
   /** Set only when `status` is `ON_HOLD_SHELF`: which member the shelf hold is reserved for. */
   heldForMemberId?: string | null;
@@ -196,4 +204,17 @@ export function nextHoldToPromote(holds: Hold[], now: Date): Hold | null {
   const live = holds.filter((h) => h.expiresAt.getTime() > now.getTime());
   if (live.length === 0) return null;
   return live.reduce((best, h) => (h.queuePosition < best.queuePosition ? h : best));
+}
+
+/**
+ * The hold-shelf deadline for a hold promoted to `READY` right now — the
+ * window a member has to collect a copy pulled for them before it lapses
+ * back to the next person in the queue. `policy.holdShelfDays` is the single
+ * configured source for this; a caller (`loans.service.ts`'s return flow)
+ * must compute it here rather than re-adding days inline, so this and
+ * `evaluateIssue`'s `dueAt` math never drift apart on how "N days from now"
+ * is rounded.
+ */
+export function holdShelfExpiry(p: Policy, now: Date): Date {
+  return addDays(now, p.holdShelfDays);
 }

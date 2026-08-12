@@ -3,6 +3,7 @@ import {
   DUE_SOON_WINDOW_DAYS,
   evaluateIssue,
   evaluateRenew,
+  holdShelfExpiry,
   loanState,
   nextHoldToPromote,
   type Copy,
@@ -277,5 +278,15 @@ describe('nextHoldToPromote', () => {
   it('a hold expiring at exactly now is treated as expired', () => {
     const holds: Hold[] = [{ memberId: 'm1', queuePosition: 1, expiresAt: NOW }];
     expect(nextHoldToPromote(holds, NOW)).toBeNull();
+  });
+});
+
+describe('holdShelfExpiry', () => {
+  it('is exactly policy.holdShelfDays after now', () => {
+    expect(holdShelfExpiry(POLICY, NOW)).toEqual(new Date(NOW.getTime() + POLICY.holdShelfDays * MS_PER_DAY));
+  });
+
+  it('zero holdShelfDays returns now unchanged', () => {
+    expect(holdShelfExpiry({ ...POLICY, holdShelfDays: 0 }, NOW)).toEqual(NOW);
   });
 });
