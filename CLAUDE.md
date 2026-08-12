@@ -49,9 +49,12 @@ Full rules in `.claude/skills/long-build-dispatch/SKILL.md`.
 
 - **At most two pieces per dispatch, smallest first.** Dispatches that died
   averaged 44 minutes; ones that shipped averaged 6.
-- **Never let an agent wait on the e2e suite.** Say so explicitly in the prompt
-  and run the gate yourself afterwards. This single instruction was the highest-
-  value change in the whole build.
+- **Never let an agent wait on the full `preflight:library`** (it runs lint,
+  typecheck, boundary, build and the ncc bundle). Say so explicitly and run it
+  yourself afterwards. The e2e suite itself is fine to run — it takes ~17s since
+  the handle leak was fixed. It was banned for most of this build because it
+  hung forever, which is a bug that no longer exists; keep the ban scoped to
+  what is actually slow rather than to what was once broken.
 - **Tell it to commit each increment the moment it is green**, and give the
   count of prior deaths — concrete beats polite.
 - **Point at the traps file; don't restate traps inline.** Rediscovery is most
