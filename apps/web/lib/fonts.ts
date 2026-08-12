@@ -44,10 +44,6 @@ const nunito = Nunito({
 /** Put this on a wrapper element to make all four CSS variables available below it. */
 export const fontVars = `${inter.variable} ${fraunces.variable} ${poppins.variable} ${nunito.variable}`;
 
-/** `SiteProfile.headingFont` → the CSS font stack to apply. */
-export const FONT_STACK: Record<string, string> = {
-  INTER: `var(--f-inter), sans-serif`,
-  FRAUNCES: `var(--f-fraunces), serif`,
-  POPPINS: `var(--f-poppins), sans-serif`,
-  NUNITO: `var(--f-nunito), sans-serif`,
-};
+// Re-exported from its own pure module so unit-testable code can read the
+// mapping without importing this file's next/font side effects.
+export { FONT_STACK } from './font-stack';
