@@ -82,6 +82,7 @@ model LibraryOrg {
   loans       Loan[]
   holds       Hold[]
   fines       Fine[]
+  outbox      NotificationOutbox[]
 }
 
 model LibraryDomain {
@@ -591,4 +592,48 @@ model Fine {
   loan   Loan?  @relation(fields: [loanId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+  INAPP
+}
+
+/// The durable record of an outbound notification. Task 8's return flow
+/// writes a `HOLD_READY` row here on hold promotion — nothing drains this
+/// table until Phase 4's outbox drain cron exists (see the no-scheduler rule,
+/// §6.3 of the design doc: a missed drain delays a message, it can never
+/// corrupt a Loan/Hold/Fine, because none of THEIR state depends on this
+/// table ever being read). `templateKey` is a plain string, not an enum,
+/// because `NotificationTemplate` (the model that would own that
+/// enumeration) is itself a Phase 4 table — pinning the key values into this
+/// schema before that model exists would be premature.
+model NotificationOutbox {
+  id           String              @id @default(uuid()) @db.Uuid
+  orgId        String              @db.Uuid
+  channel      NotificationChannel
+  templateKey  String
+  /// Recipient identifier — a memberId, phone, or email depending on
+  /// `channel`; Phase 4's channel adapters decide how to resolve it.
+  to           String
+  payload      Json                @default("{}")
+  scheduledFor DateTime            @default(now())
+  sentAt       DateTime?
+  attempts     Int                 @default(0)
+  lastError    String?
+  providerRef  String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, sentAt])
+  /// A partial index on `scheduledFor WHERE sentAt IS NULL` — the actual hot
+  /// read path for a future drain worker (Phase 4) — is added by hand in the
+  /// migration, not declared here: Prisma's schema DSL cannot express a
+  /// partial index. Mirrors the `loan_one_active_per_copy` / `hold_title_queue`
+  /// partial indexes already hand-added in the circulation migration, which
+  /// are likewise absent from their models' `@@index` lists above.
 }
