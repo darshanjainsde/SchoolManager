@@ -25,3 +25,6 @@ packages/library-db/generated/
 
 # ncc bundle output (apps/*/vercel.json "bundle" script builds into api/)
 apps/library-api/api/
+
+# dispatch metrics data (per-machine; the tool and skill are committed, the log is not)
+.superpowers/dispatch-metrics.jsonl
