@@ -1,0 +1,228 @@
+/* ============================================================================
+   Sckools Library — the .lbx theme, "reading room"
+   Warm paper ground, deep ink indigo, brass accent, with traffic-light
+   semantics for available / due / overdue.
+
+   Deliberately the same TOKEN SHAPE as the Sckools console's .skosx
+   (--lb-paper/--lb-ink/--lb-brand/--lb-good/--lb-bad, matching radius and
+   shadow scale, dark mode in the same media block) but its own skin. Same
+   skeleton, different clothes: merging the two design systems when the
+   services merge is then a variable swap, not a restyle.
+
+   Scoped to .lbx so nothing here can leak into a future public catalogue
+   route that wants its own treatment.
+   ========================================================================= */
+
+:root {
+  --lb-paper: #efebe3;
+  --lb-surface: #faf8f4;
+  --lb-sunk: #e5e0d6;
+  --lb-ink: #1b1e2b;
+  --lb-ink-2: #545a69;
+  --lb-ink-3: #868c99;
+  --lb-line: #ddd7cb;
+  --lb-line-2: #c8c1b1;
+  --lb-brand: #2e3a87;
+  --lb-brand-2: #4553a8;
+  --lb-brand-tint: #e4e6f4;
+  --lb-accent: #8f671d;
+  --lb-accent-tint: #f6ecd9;
+  --lb-good: #3f6446;
+  --lb-good-tint: #e3eee5;
+  --lb-bad: #8a3733;
+  --lb-bad-tint: #f7e6e3;
+  --lb-shadow: 0 1px 2px rgba(27, 30, 43, 0.05), 0 10px 30px -14px rgba(27, 30, 43, 0.2);
+  --lb-shadow-sm: 0 1px 2px rgba(27, 30, 43, 0.07);
+  --lb-r: 14px;
+  --lb-r-sm: 9px;
+  --lb-serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --lb-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --lb-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* The viewer has three states, not two: an explicit choice stamps data-theme,
+   and the default "system" setting stamps nothing — so the media query needs
+   the :not() guard for an explicit light choice to beat a dark OS. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --lb-paper: #15171e;
+    --lb-surface: #1d2029;
+    --lb-sunk: #101218;
+    --lb-ink: #e9e7e2;
+    --lb-ink-2: #a5a9b4;
+    --lb-ink-3: #787d89;
+    --lb-line: #2c303b;
+    --lb-line-2: #3b4150;
+    --lb-brand: #93a0ec;
+    --lb-brand-2: #a8b3f0;
+    --lb-brand-tint: #1e2334;
+    --lb-accent: #d4a65a;
+    --lb-accent-tint: #2a2114;
+    --lb-good: #7fb187;
+    --lb-good-tint: #16251a;
+    --lb-bad: #e59087;
+    --lb-bad-tint: #2b1715;
+    --lb-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -16px rgba(0, 0, 0, 0.65);
+    --lb-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  }
+}
+:root[data-theme='dark'] {
+  --lb-paper: #15171e;
+  --lb-surface: #1d2029;
+  --lb-sunk: #101218;
+  --lb-ink: #e9e7e2;
+  --lb-ink-2: #a5a9b4;
+  --lb-ink-3: #787d89;
+  --lb-line: #2c303b;
+  --lb-line-2: #3b4150;
+  --lb-brand: #93a0ec;
+  --lb-brand-2: #a8b3f0;
+  --lb-brand-tint: #1e2334;
+  --lb-accent: #d4a65a;
+  --lb-accent-tint: #2a2114;
+  --lb-good: #7fb187;
+  --lb-good-tint: #16251a;
+  --lb-bad: #e59087;
+  --lb-bad-tint: #2b1715;
+  --lb-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -16px rgba(0, 0, 0, 0.65);
+  --lb-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+* { box-sizing: border-box; }
+html, body { padding: 0; margin: 0; }
+body {
+  background: var(--lb-paper);
+  color: var(--lb-ink);
+  font-family: var(--lb-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+a { color: var(--lb-brand); }
+:focus-visible { outline: 2px solid var(--lb-brand); outline-offset: 2px; }
+
+/* ── app shell ─────────────────────────────────────────────────────────── */
+.lbx-shell { min-height: 100vh; display: grid; grid-template-columns: 13.5rem 1fr; }
+@media (max-width: 54rem) { .lbx-shell { grid-template-columns: 1fr; } }
+
+.lbx-rail {
+  background: var(--lb-sunk);
+  border-right: 1px solid var(--lb-line);
+  padding: 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+@media (max-width: 54rem) {
+  .lbx-rail { border-right: 0; border-bottom: 1px solid var(--lb-line); }
+}
+
+.lbx-brand { display: flex; align-items: center; gap: 0.6rem; padding: 0.25rem 0.5rem; }
+.lbx-tassel {
+  width: 1.9rem; height: 1.9rem; border-radius: 7px; flex: none;
+  background: var(--lb-brand); color: var(--lb-paper);
+  display: grid; place-items: center;
+  font-family: var(--lb-serif); font-weight: 700; font-size: 1.05rem;
+}
+.lbx-brand b { font-size: 0.92rem; font-weight: 650; display: block; line-height: 1.2; }
+.lbx-brand span { font-size: 0.72rem; color: var(--lb-ink-3); }
+
+.lbx-navgroup { display: flex; flex-direction: column; gap: 1px; }
+.lbx-navgroup .lbx-lbl {
+  font-family: var(--lb-mono); font-size: 0.6rem; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--lb-ink-3); padding: 0.35rem 0.6rem;
+}
+.lbx-nav {
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.45rem 0.6rem; border-radius: var(--lb-r-sm);
+  font-size: 0.87rem; color: var(--lb-ink-2); text-decoration: none;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+.lbx-nav:hover { background: var(--lb-line); color: var(--lb-ink); }
+.lbx-nav[aria-current='page'] { background: var(--lb-brand-tint); color: var(--lb-brand); font-weight: 600; }
+.lbx-nav .lbx-ico { width: 1.05rem; text-align: center; flex: none; opacity: 0.85; }
+.lbx-nav .lbx-count {
+  margin-left: auto; font-family: var(--lb-mono); font-size: 0.68rem;
+  color: var(--lb-ink-3); background: var(--lb-surface);
+  border: 1px solid var(--lb-line); border-radius: 999px; padding: 0 0.35rem;
+}
+
+.lbx-railfoot { margin-top: auto; padding: 0.5rem; border-top: 1px solid var(--lb-line); }
+.lbx-who { display: flex; align-items: center; gap: 0.55rem; font-size: 0.8rem; }
+.lbx-av {
+  width: 1.6rem; height: 1.6rem; border-radius: 50%; flex: none;
+  background: var(--lb-accent-tint); color: var(--lb-accent);
+  display: grid; place-items: center; font-size: 0.68rem; font-weight: 700;
+}
+.lbx-who b { display: block; font-weight: 600; font-size: 0.8rem; line-height: 1.25; }
+.lbx-who span { color: var(--lb-ink-3); font-size: 0.7rem; }
+
+.lbx-main { padding: 1.25rem 1.4rem 1.75rem; min-width: 0; }
+.lbx-pagehead {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--lb-line); margin-bottom: 1.15rem;
+}
+.lbx-pagehead h2 {
+  font-family: var(--lb-serif); font-size: 1.4rem; font-weight: 600;
+  margin: 0; letter-spacing: -0.01em;
+}
+.lbx-pagehead p { margin: 0.15rem 0 0; color: var(--lb-ink-2); font-size: 0.86rem; }
+
+/* ── controls ──────────────────────────────────────────────────────────── */
+.lbx-btn {
+  font-family: inherit; font-size: 0.82rem; font-weight: 600;
+  padding: 0.42rem 0.8rem; border-radius: var(--lb-r-sm);
+  border: 1px solid var(--lb-brand); background: var(--lb-brand); color: var(--lb-paper);
+  cursor: pointer; transition: transform 0.12s ease, filter 0.12s ease;
+}
+.lbx-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.lbx-btn:active:not(:disabled) { transform: translateY(1px); }
+.lbx-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.lbx-btn.ghost { background: none; color: var(--lb-ink-2); border-color: var(--lb-line-2); }
+.lbx-btn.ghost:hover:not(:disabled) { color: var(--lb-ink); background: var(--lb-sunk); }
+
+.lbx-field { display: flex; flex-direction: column; gap: 0.3rem; }
+.lbx-field label {
+  font-family: var(--lb-mono); font-size: 0.62rem; letter-spacing: 0.11em;
+  text-transform: uppercase; color: var(--lb-ink-3);
+}
+.lbx-field input {
+  font-family: inherit; font-size: 0.95rem; color: var(--lb-ink);
+  background: var(--lb-paper); border: 1px solid var(--lb-line-2);
+  border-radius: var(--lb-r-sm); padding: 0.5rem 0.7rem; width: 100%;
+}
+.lbx-field input:focus { outline: 2px solid var(--lb-brand); outline-offset: 1px; border-color: var(--lb-brand); }
+
+/* Errors carry a role and an icon, never colour alone. */
+.lbx-error {
+  display: flex; gap: 0.5rem; align-items: flex-start;
+  background: var(--lb-bad-tint); color: var(--lb-bad);
+  border: 1px solid currentColor; border-radius: var(--lb-r-sm);
+  padding: 0.5rem 0.7rem; font-size: 0.84rem;
+}
+
+/* ── login ─────────────────────────────────────────────────────────────── */
+.lbx-login {
+  min-height: 100vh; display: grid; place-items: center; padding: 1.5rem;
+}
+.lbx-login-card {
+  width: 100%; max-width: 22rem;
+  background: var(--lb-surface); border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r); box-shadow: var(--lb-shadow);
+  padding: 1.5rem 1.4rem;
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.lbx-login-card h1 {
+  font-family: var(--lb-serif); font-size: 1.3rem; font-weight: 600;
+  margin: 0; letter-spacing: -0.01em;
+}
+.lbx-login-card .lbx-sub { margin: 0; color: var(--lb-ink-2); font-size: 0.85rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

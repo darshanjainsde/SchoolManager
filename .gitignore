@@ -28,3 +28,5 @@ apps/library-api/api/
 
 # dispatch metrics data (per-machine; the tool and skill are committed, the log is not)
 .superpowers/dispatch-metrics.jsonl
+apps/library-web/.next/
+apps/library-web/next-env.d.ts

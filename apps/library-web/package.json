@@ -1,0 +1,31 @@
+{
+  "name": "@library/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p ${LIBRARY_WEB_PORT:-3100}",
+    "build": "next build",
+    "start": "next start -p ${LIBRARY_WEB_PORT:-3100}",
+    "lint": "next lint --dir app --dir components --dir lib",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "15.5.21",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.4.8",
+    "@testing-library/react": "^16.0.1",
+    "@types/node": "^20.11.30",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "15.5.21",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.4.5",
+    "vitest": "^2.1.8"
+  }
+}
