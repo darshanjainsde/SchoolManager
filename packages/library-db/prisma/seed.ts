@@ -79,6 +79,124 @@ function memberBatch(orgId: string, branchId: string, count: number): Prisma.Mem
  * Numbers are ordinary Indian-school defaults, not placeholders: two weeks,
  * one renewal, a rupee a day after three days' grace.
  */
+/**
+ * A small real shelf.
+ *
+ * The seed produced 305 members and a lending policy but not one book, so a
+ * freshly seeded library had nothing to lend and nothing to search — the
+ * catalogue, the desk and every list screen were empty on a working install.
+ * Found by driving staging, the same way the missing CirculationPolicy was.
+ *
+ * Real titles with real ISBNs and Dewey numbers, weighted towards an Indian
+ * school library, because a demo full of "Test Book 1" tells you nothing about
+ * whether search ranking, spine rendering or call-number sorting actually work.
+ */
+const SHELF: Array<{
+  title: string;
+  author: string;
+  sortName: string;
+  isbn13: string;
+  publisher: string;
+  year: number;
+  dewey: string;
+  category: string;
+  copies: number;
+}> = [
+  { title: 'The Hungry Tide', author: 'Amitav Ghosh', sortName: 'Ghosh, Amitav', isbn13: '9780007216147', publisher: 'HarperCollins', year: 2004, dewey: '823.914', category: 'Fiction', copies: 3 },
+  { title: 'The Shadow Lines', author: 'Amitav Ghosh', sortName: 'Ghosh, Amitav', isbn13: '9780618329960', publisher: 'Penguin India', year: 1988, dewey: '823.914', category: 'Fiction', copies: 2 },
+  { title: 'Midnight’s Children', author: 'Salman Rushdie', sortName: 'Rushdie, Salman', isbn13: '9780099578512', publisher: 'Vintage', year: 1981, dewey: '823.914', category: 'Fiction', copies: 2 },
+  { title: 'The God of Small Things', author: 'Arundhati Roy', sortName: 'Roy, Arundhati', isbn13: '9780679457312', publisher: 'Random House', year: 1997, dewey: '823.914', category: 'Fiction', copies: 3 },
+  { title: 'Train to Pakistan', author: 'Khushwant Singh', sortName: 'Singh, Khushwant', isbn13: '9780143065883', publisher: 'Penguin India', year: 1956, dewey: '823.912', category: 'Fiction', copies: 2 },
+  { title: 'Swami and Friends', author: 'R. K. Narayan', sortName: 'Narayan, R. K.', isbn13: '9780226568355', publisher: 'Indian Thought', year: 1935, dewey: '823.912', category: 'Fiction', copies: 4 },
+  { title: 'The Guide', author: 'R. K. Narayan', sortName: 'Narayan, R. K.', isbn13: '9780143039648', publisher: 'Penguin', year: 1958, dewey: '823.912', category: 'Fiction', copies: 2 },
+  { title: 'Gitanjali', author: 'Rabindranath Tagore', sortName: 'Tagore, Rabindranath', isbn13: '9780684839349', publisher: 'Scribner', year: 1912, dewey: '891.44', category: 'Poetry', copies: 2 },
+  { title: 'Wings of Fire', author: 'A. P. J. Abdul Kalam', sortName: 'Kalam, A. P. J. Abdul', isbn13: '9788173711466', publisher: 'Universities Press', year: 1999, dewey: '621.4092', category: 'Biography', copies: 5 },
+  { title: 'The Discovery of India', author: 'Jawaharlal Nehru', sortName: 'Nehru, Jawaharlal', isbn13: '9780143031031', publisher: 'Penguin India', year: 1946, dewey: '954', category: 'History', copies: 2 },
+  { title: 'India After Gandhi', author: 'Ramachandra Guha', sortName: 'Guha, Ramachandra', isbn13: '9780330396103', publisher: 'Picador', year: 2007, dewey: '954.04', category: 'History', copies: 2 },
+  { title: 'A Brief History of Time', author: 'Stephen Hawking', sortName: 'Hawking, Stephen', isbn13: '9780553380163', publisher: 'Bantam', year: 1988, dewey: '523.1', category: 'Science', copies: 3 },
+  { title: 'Cosmos', author: 'Carl Sagan', sortName: 'Sagan, Carl', isbn13: '9780345539434', publisher: 'Ballantine', year: 1980, dewey: '520', category: 'Science', copies: 2 },
+  { title: 'The Selfish Gene', author: 'Richard Dawkins', sortName: 'Dawkins, Richard', isbn13: '9780198788607', publisher: 'Oxford', year: 1976, dewey: '576.5', category: 'Science', copies: 2 },
+  { title: 'Sapiens', author: 'Yuval Noah Harari', sortName: 'Harari, Yuval Noah', isbn13: '9780062316097', publisher: 'Harper', year: 2011, dewey: '909', category: 'History', copies: 3 },
+  { title: 'To Kill a Mockingbird', author: 'Harper Lee', sortName: 'Lee, Harper', isbn13: '9780061120084', publisher: 'Harper Perennial', year: 1960, dewey: '813.54', category: 'Fiction', copies: 4 },
+  { title: 'Nineteen Eighty-Four', author: 'George Orwell', sortName: 'Orwell, George', isbn13: '9780451524935', publisher: 'Signet', year: 1949, dewey: '823.912', category: 'Fiction', copies: 3 },
+  { title: 'Animal Farm', author: 'George Orwell', sortName: 'Orwell, George', isbn13: '9780451526342', publisher: 'Signet', year: 1945, dewey: '823.912', category: 'Fiction', copies: 4 },
+  { title: 'The Diary of a Young Girl', author: 'Anne Frank', sortName: 'Frank, Anne', isbn13: '9780553296983', publisher: 'Bantam', year: 1947, dewey: '940.5318', category: 'Biography', copies: 3 },
+  { title: 'Harry Potter and the Philosopher’s Stone', author: 'J. K. Rowling', sortName: 'Rowling, J. K.', isbn13: '9780747532699', publisher: 'Bloomsbury', year: 1997, dewey: '823.914', category: 'Children', copies: 6 },
+  { title: 'The Hobbit', author: 'J. R. R. Tolkien', sortName: 'Tolkien, J. R. R.', isbn13: '9780547928227', publisher: 'Houghton Mifflin', year: 1937, dewey: '823.912', category: 'Children', copies: 4 },
+  { title: 'Panchatantra', author: 'Vishnu Sharma', sortName: 'Sharma, Vishnu', isbn13: '9788175994072', publisher: 'Rupa', year: 1993, dewey: '398.209', category: 'Children', copies: 5 },
+  { title: 'Malgudi Days', author: 'R. K. Narayan', sortName: 'Narayan, R. K.', isbn13: '9780143039655', publisher: 'Penguin', year: 1943, dewey: '823.912', category: 'Fiction', copies: 4 },
+  { title: 'NCERT Mathematics Class X', author: 'NCERT', sortName: 'NCERT', isbn13: '9788174506542', publisher: 'NCERT', year: 2023, dewey: '510.712', category: 'Textbook', copies: 8 },
+];
+
+/**
+ * Builds the shelf for one org: categories, authors, titles, and physical
+ * copies with accession-style barcodes.
+ *
+ * Idempotent by (orgId, isbn13) for titles and (orgId, barcode) for copies, so
+ * re-running the seed against an existing database tops it up rather than
+ * duplicating it or failing on a unique constraint.
+ */
+async function seedShelf(
+  prisma: ReturnType<typeof getLibraryPlatformPrisma>,
+  orgId: string,
+  branchId: string,
+): Promise<{ titles: number; copies: number }> {
+  const categoryIds = new Map<string, string>();
+  for (const name of [...new Set(SHELF.map((b) => b.category))]) {
+    const existing = await prisma.category.findFirst({ where: { orgId, name }, select: { id: true } });
+    const row = existing ?? (await prisma.category.create({ data: { orgId, name }, select: { id: true } }));
+    categoryIds.set(name, row.id);
+  }
+
+  const authorIds = new Map<string, string>();
+  for (const b of SHELF) {
+    if (authorIds.has(b.sortName)) continue;
+    const existing = await prisma.author.findFirst({ where: { orgId, sortName: b.sortName }, select: { id: true } });
+    const row = existing ?? (await prisma.author.create({ data: { orgId, name: b.author, sortName: b.sortName }, select: { id: true } }));
+    authorIds.set(b.sortName, row.id);
+  }
+
+  let titles = 0;
+  let copies = 0;
+  let accession = 1;
+
+  for (const b of SHELF) {
+    let title = await prisma.title.findFirst({ where: { orgId, isbn13: b.isbn13 }, select: { id: true } });
+    if (!title) {
+      title = await prisma.title.create({
+        data: {
+          orgId,
+          title: b.title,
+          isbn13: b.isbn13,
+          publisher: b.publisher,
+          publishedYear: b.year,
+          callNumber: b.dewey,
+          language: 'en',
+        },
+        select: { id: true },
+      });
+      titles += 1;
+
+      await prisma.titleAuthor.create({ data: { titleId: title.id, authorId: authorIds.get(b.sortName)! } });
+      await prisma.titleCategory.create({ data: { titleId: title.id, categoryId: categoryIds.get(b.category)! } });
+    }
+
+    for (let i = 0; i < b.copies; i += 1) {
+      // ACC-00001 style: what a school actually stamps inside the cover, and
+      // what the desk's barcode field expects to be scanned.
+      const barcode = `ACC-${String(accession++).padStart(5, '0')}`;
+      const has = await prisma.copy.findFirst({ where: { orgId, barcode }, select: { id: true } });
+      if (has) continue;
+      await prisma.copy.create({
+        data: { orgId, titleId: title.id, branchId, barcode, shelf: b.dewey.slice(0, 3), condition: 'GOOD' },
+      });
+      copies += 1;
+    }
+  }
+
+  return { titles, copies };
+}
+
 async function seedCirculationPolicies(
   prisma: ReturnType<typeof getLibraryPlatformPrisma>,
   orgId: string,
@@ -192,7 +310,9 @@ async function seedRaffles(prisma: ReturnType<typeof getLibraryPlatformPrisma>, 
     skipDuplicates: true, // rerun-safe: codes LIB-00001..LIB-00300 are stable
   });
 
-  return { org, branch, membersCreated: result.count };
+  const shelf = await seedShelf(prisma, org.id, branch.id);
+
+  return { org, branch, membersCreated: result.count, ...shelf };
 }
 
 async function seedNorthgate(prisma: ReturnType<typeof getLibraryPlatformPrisma>, platformHost: string) {
@@ -231,7 +351,9 @@ async function seedNorthgate(prisma: ReturnType<typeof getLibraryPlatformPrisma>
     skipDuplicates: true,
   });
 
-  return { org, branch, membersCreated: result.count };
+  const shelf = await seedShelf(prisma, org.id, branch.id);
+
+  return { org, branch, membersCreated: result.count, ...shelf };
 }
 
 async function main() {
@@ -250,10 +372,10 @@ async function main() {
 
   console.log('Seed complete:');
   console.log(
-    `  raffles   org=${raffles.org.id} branch=${raffles.branch.id} membersCreated=${raffles.membersCreated}`,
+    `  raffles   org=${raffles.org.id} branch=${raffles.branch.id} members=${raffles.membersCreated} titles=${raffles.titles} copies=${raffles.copies}`,
   );
   console.log(
-    `  northgate org=${northgate.org.id} branch=${northgate.branch.id} membersCreated=${northgate.membersCreated}`,
+    `  northgate org=${northgate.org.id} branch=${northgate.branch.id} members=${northgate.membersCreated} titles=${northgate.titles} copies=${northgate.copies}`,
   );
   console.log('  logins: owner@raffles.test / librarian@raffles.test (password: $LIBRARY_SEED_PASSWORD)');
 }
