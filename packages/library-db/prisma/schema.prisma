@@ -74,15 +74,15 @@ model LibraryOrg {
   users      LibUser[]
   members    Member[]
   overrides  PlanOverride[]
-  titles      Title[]
-  authors     Author[]
-  categories  Category[]
-  copies      Copy[]
-  policies    CirculationPolicy[]
-  loans       Loan[]
-  holds       Hold[]
-  fines       Fine[]
-  outbox      NotificationOutbox[]
+  titles     Title[]
+  authors    Author[]
+  categories Category[]
+  copies     Copy[]
+  policies   CirculationPolicy[]
+  loans      Loan[]
+  holds      Hold[]
+  fines      Fine[]
+  outbox     NotificationOutbox[]
 }
 
 model LibraryDomain {
@@ -171,6 +171,7 @@ model LibUser {
   refresh       RefreshToken[]
   loansIssued   Loan[]         @relation("LoanIssuedBy")
   loansReturned Loan[]         @relation("LoanReturnedBy")
+  finesWaived   Fine[]         @relation("FineWaivedBy")
 
   @@unique([orgId, email])
   @@unique([orgId, phone])
@@ -589,27 +590,41 @@ model Hold {
 }
 
 model Fine {
-  id         String     @id @default(uuid()) @db.Uuid
-  orgId      String     @db.Uuid
-  memberId   String     @db.Uuid
-  loanId     String?    @db.Uuid
-  kind       FineKind
-  status     FineStatus @default(OPEN)
-  amount     Decimal    @db.Decimal(10, 2)
-  paidAmount Decimal    @default(0) @db.Decimal(10, 2)
-  reason     String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id             String     @id @default(uuid()) @db.Uuid
+  orgId          String     @db.Uuid
+  memberId       String     @db.Uuid
+  loanId         String?    @db.Uuid
+  kind           FineKind
+  status         FineStatus @default(OPEN)
+  amount         Decimal    @db.Decimal(10, 2)
+  paidAmount     Decimal    @default(0) @db.Decimal(10, 2)
+  reason         String?
+  /// Task 10: set together, only when `status` becomes WAIVED. `waivedAmount`
+  /// is the amount actually forgiven (may be less than `amount -
+  /// paidAmount` for a partial waiver — see fines.service.ts's `waive`);
+  /// never re-derived from `amount`/`paidAmount` after the fact, since
+  /// those can still be read independently for "what was originally owed"
+  /// reporting.
+  waivedByUserId String?    @db.Uuid
+  waivedAmount   Decimal?   @db.Decimal(10, 2)
+  waivedReason   String?
+  waivedAt       DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  org      LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
   /// Restrict, not Cascade (fixed per review finding 4): loanId is nullable
   /// and kind includes DAMAGE/OTHER, so a member can carry an OPEN fine with
   /// no Loan behind it at all. Cascade would let deleting that member
   /// silently destroy a real financial record — money genuinely owed —
   /// exactly the "fails quietly" failure mode Copy.title's Restrict already
   /// exists to prevent for physical stock.
-  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  loan   Loan?  @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  member   Member     @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  loan     Loan?      @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  /// SetNull, not Restrict: the waiving LibUser leaving/being deleted must
+  /// not block user deletion, and losing "who waived it" is acceptable —
+  /// the money itself (waivedAmount/waivedReason) stays on the row either way.
+  waivedBy LibUser?   @relation("FineWaivedBy", fields: [waivedByUserId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
 }
@@ -648,12 +663,12 @@ model NotificationOutbox {
   updatedAt    DateTime            @updatedAt
 
   org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, sentAt])
   /// A partial index on `scheduledFor WHERE sentAt IS NULL` — the actual hot
   /// read path for a future drain worker (Phase 4) — is added by hand in the
   /// migration, not declared here: Prisma's schema DSL cannot express a
   /// partial index. Mirrors the `loan_one_active_per_copy` / `hold_title_queue`
   /// partial indexes already hand-added in the circulation migration, which
   /// are likewise absent from their models' `@@index` lists above.
+
+  @@index([orgId, sentAt])
 }

@@ -6,7 +6,8 @@ import { OrgContextService } from '../../tenancy';
 import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { CreateHoldDto, IssueLoanDto, ListHoldsQueryDto, RenewLoanDto, ReturnLoanDto } from './dto';
+import { CreateHoldDto, DayReportQueryDto, IssueLoanDto, ListFinesQueryDto, ListHoldsQueryDto, RenewLoanDto, ReturnLoanDto, WaiveFineDto } from './dto';
+import { FinesService } from './fines.service';
 import { HoldsService } from './holds.service';
 import { LoansService } from './loans.service';
 
@@ -33,6 +34,7 @@ export class CirculationController {
     @Inject(OrgContextService) private readonly orgs: OrgContextService,
     @Inject(LoansService) private readonly loans: LoansService,
     @Inject(HoldsService) private readonly holds: HoldsService,
+    @Inject(FinesService) private readonly fines: FinesService,
   ) {}
 
   @Post('issue')
@@ -87,5 +89,37 @@ export class CirculationController {
     const orgId = this.orgs.requireOrgId();
     const now = new Date();
     return withOrg(orgId, (tx) => this.holds.listHolds(tx, orgId, query, now));
+  }
+
+  @Get('fines')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  listFines(@Query() query: ListFinesQueryDto) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.fines.listFines(tx, orgId, query));
+  }
+
+  /** Waiver is WRITERS-only (`ORG_OWNER`/`LIBRARIAN`) — `ASSISTANT` is deliberately denied here, asserted in the authz matrix (`test/endpoints.ts`). */
+  @Post('fines/:id/waive')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  @UseInterceptors(IdempotencyInterceptor)
+  waiveFine(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: WaiveFineDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(orgId, (tx) => this.fines.waive(tx, orgId, id, dto, user.sub, now));
+  }
+
+  @Get('overdue')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  listOverdue() {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(orgId, (tx) => this.fines.listOverdue(tx, orgId, now));
+  }
+
+  @Get('day-report')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  dayReport(@Query() query: DayReportQueryDto) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.fines.dayReport(tx, orgId, query));
   }
 }

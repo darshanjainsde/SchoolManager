@@ -1,0 +1,374 @@
+import request from 'supertest';
+import { Test } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as argon2 from 'argon2';
+import { getLibraryPlatformPrisma, disconnectLibrary, withOrg, type LibraryTx } from '@library/db';
+import { AppModule } from '../src/app.module';
+import { configureApp } from '../src/configure-app';
+import { closeOrgLookupRedis } from '../src/modules/tenancy';
+import { signAccessToken } from '../src/modules/auth/internal/auth.module';
+import type { Policy } from '../src/modules/circulation';
+import { overdueLoansQuery } from '../src/modules/circulation/internal/fines.service';
+import { LIVE } from './helpers/live-db';
+
+const describeLive = LIVE ? describe : describe.skip;
+
+const MS_PER_DAY = 86_400_000;
+
+const POLICY: Policy = {
+  maxBooks: 5,
+  loanDays: 14,
+  renewLimit: 2,
+  renewDays: 14,
+  finePerDay: 5,
+  graceDays: 1,
+  maxFine: 500,
+  maxHolds: 3,
+  holdShelfDays: 3,
+  maxOutstandingFine: 1000,
+};
+
+interface FinesOrg {
+  orgId: string;
+  slug: string;
+  branchId: string;
+  librarianToken: string;
+  assistantToken: string;
+}
+
+const host = (org: Pick<FinesOrg, 'slug'>) => `${org.slug}.library.trackyour.in`;
+
+async function seedOrg(suffix: string): Promise<FinesOrg> {
+  const prisma = getLibraryPlatformPrisma();
+  const org = await prisma.libraryOrg.create({ data: { slug: `fines-${suffix}`, name: 'Fines E2E', status: 'LIVE' } });
+  const branch = await prisma.branch.create({ data: { orgId: org.id, name: 'Main', code: 'MAIN' } });
+  await prisma.circulationPolicy.create({ data: { orgId: org.id, memberType: 'STUDENT', ...POLICY } });
+
+  const passwordHash = await argon2.hash('fines-e2e-Pw1!', { type: argon2.argon2id });
+  const jwt = new JwtService(); // standalone, no Nest DI — same pattern as test/helpers/live-db.ts
+
+  const librarian = await prisma.libUser.create({
+    data: { orgId: org.id, email: `librarian-${suffix}@fines.test`, passwordHash, role: 'LIBRARIAN', branchIds: [], active: true },
+  });
+  const assistant = await prisma.libUser.create({
+    data: { orgId: org.id, email: `assistant-${suffix}@fines.test`, passwordHash, role: 'ASSISTANT', branchIds: [], active: true },
+  });
+
+  return {
+    orgId: org.id,
+    slug: org.slug,
+    branchId: branch.id,
+    librarianToken: signAccessToken(jwt, { id: librarian.id, orgId: librarian.orgId, role: librarian.role, branchIds: librarian.branchIds }),
+    assistantToken: signAccessToken(jwt, { id: assistant.id, orgId: assistant.orgId, role: assistant.role, branchIds: assistant.branchIds }),
+  };
+}
+
+function seedMember(orgId: string, branchId: string, code: string) {
+  return getLibraryPlatformPrisma().member.create({
+    data: { orgId, homeBranchId: branchId, code, firstName: 'Fines', lastName: code, status: 'ACTIVE', memberType: 'STUDENT' },
+  });
+}
+
+function seedTitle(orgId: string, label: string) {
+  return getLibraryPlatformPrisma().title.create({ data: { orgId, title: `Fines E2E — ${label}` } });
+}
+
+function seedCopy(orgId: string, branchId: string, titleId: string, barcode: string) {
+  return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, barcode } });
+}
+
+async function cleanup(orgId: string): Promise<void> {
+  await getLibraryPlatformPrisma().libraryOrg.deleteMany({ where: { id: orgId } });
+}
+
+describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    process.env.DISABLE_THROTTLER = 'true';
+    const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = mod.createNestApplication();
+    configureApp(app);
+    await app.init();
+  });
+
+  afterAll(async () => {
+    delete process.env.DISABLE_THROTTLER;
+    await app?.close();
+    await closeOrgLookupRedis();
+    await disconnectLibrary();
+  });
+
+  describe('waive', () => {
+    let org: FinesOrg;
+
+    beforeAll(async () => {
+      org = await seedOrg(`waive-${Date.now().toString(36)}`);
+    });
+    afterAll(() => cleanup(org.orgId));
+
+    async function seedFine(amount: number, paidAmount = 0) {
+      const member = await seedMember(org.orgId, org.branchId, `WV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+      return getLibraryPlatformPrisma().fine.create({
+        data: { orgId: org.orgId, memberId: member.id, kind: 'OVERDUE', status: 'OPEN', amount, paidAmount, reason: 'test fixture' },
+      });
+    }
+
+    it('waives the full outstanding balance: writes waivedByUserId/waivedAmount/waivedReason, status -> WAIVED, and an AuditLog row', async () => {
+      const fine = await seedFine(45.5);
+
+      const res = await request(app.getHttpServer())
+        .post(`/circulation/fines/${fine.id}/waive`)
+        .set('X-Library-Host', host(org))
+        .set('Authorization', `Bearer ${org.librarianToken}`)
+        .send({ reason: 'Goodwill waiver — first offense' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.fine.status).toBe('WAIVED');
+      expect(Number(res.body.fine.waivedAmount)).toBe(45.5);
+      expect(res.body.fine.waivedReason).toBe('Goodwill waiver — first offense');
+      expect(res.body.fine.waivedByUserId).toBeTruthy();
+
+      const dbFine = await getLibraryPlatformPrisma().fine.findUnique({ where: { id: fine.id } });
+      expect(dbFine?.status).toBe('WAIVED');
+      expect(Number(dbFine?.waivedAmount)).toBe(45.5);
+      expect(dbFine?.waivedReason).toBe('Goodwill waiver — first offense');
+      expect(dbFine?.waivedAt).not.toBeNull();
+
+      const audit = await getLibraryPlatformPrisma().auditLog.findFirst({
+        where: { orgId: org.orgId, action: 'circulation.fine.waive', entityId: fine.id },
+      });
+      expect(audit).not.toBeNull();
+    });
+
+    it('waives only the outstanding remainder when the fine is PARTIALly paid', async () => {
+      const fine = await seedFine(100, 30);
+      const res = await request(app.getHttpServer())
+        .post(`/circulation/fines/${fine.id}/waive`)
+        .set('X-Library-Host', host(org))
+        .set('Authorization', `Bearer ${org.librarianToken}`)
+        .send({ reason: 'Waive the rest' });
+      expect(res.status).toBe(201);
+      expect(Number(res.body.fine.waivedAmount)).toBe(70);
+    });
+
+    it('waiving an already-waived fine is a 409, not silently accepted', async () => {
+      const fine = await seedFine(10);
+      const waiveOnce = () =>
+        request(app.getHttpServer())
+          .post(`/circulation/fines/${fine.id}/waive`)
+          .set('X-Library-Host', host(org))
+          .set('Authorization', `Bearer ${org.librarianToken}`)
+          .send({ reason: 'x' });
+
+      const first = await waiveOnce();
+      expect(first.status).toBe(201);
+      const second = await waiveOnce();
+      expect(second.status).toBe(409);
+      expect(second.body.reason).toBe('ALREADY_WAIVED');
+    });
+
+    it('waiving a fine with nothing outstanding (fully paid) is a 409', async () => {
+      const fine = await seedFine(20, 20);
+      const res = await request(app.getHttpServer())
+        .post(`/circulation/fines/${fine.id}/waive`)
+        .set('X-Library-Host', host(org))
+        .set('Authorization', `Bearer ${org.librarianToken}`)
+        .send({ reason: 'x' });
+      expect(res.status).toBe(409);
+      expect(res.body.reason).toBe('NOTHING_OUTSTANDING');
+    });
+
+    it('ASSISTANT is denied — the structural authz-matrix row is the primary proof; this exercises the SAME route directly', async () => {
+      const fine = await seedFine(10);
+      const res = await request(app.getHttpServer())
+        .post(`/circulation/fines/${fine.id}/waive`)
+        .set('X-Library-Host', host(org))
+        .set('Authorization', `Bearer ${org.assistantToken}`)
+        .send({ reason: 'x' });
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('GET /circulation/fines', () => {
+    let org: FinesOrg;
+
+    beforeAll(async () => {
+      org = await seedOrg(`list-${Date.now().toString(36)}`);
+    });
+    afterAll(() => cleanup(org.orgId));
+
+    it('filters by memberId and status', async () => {
+      const memberA = await seedMember(org.orgId, org.branchId, `LIST-A-${Date.now()}`);
+      const memberB = await seedMember(org.orgId, org.branchId, `LIST-B-${Date.now()}`);
+      const prisma = getLibraryPlatformPrisma();
+      await prisma.fine.create({ data: { orgId: org.orgId, memberId: memberA.id, kind: 'OVERDUE', status: 'OPEN', amount: 5 } });
+      await prisma.fine.create({ data: { orgId: org.orgId, memberId: memberA.id, kind: 'OVERDUE', status: 'PAID', amount: 5, paidAmount: 5 } });
+      await prisma.fine.create({ data: { orgId: org.orgId, memberId: memberB.id, kind: 'OVERDUE', status: 'OPEN', amount: 5 } });
+
+      const res = await request(app.getHttpServer())
+        .get('/circulation/fines')
+        .query({ memberId: memberA.id, status: 'OPEN' })
+        .set('X-Library-Host', host(org))
+        .set('Authorization', `Bearer ${org.librarianToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].memberId).toBe(memberA.id);
+      expect(res.body[0].status).toBe('OPEN');
+    });
+  });
+
+  describe('GET /circulation/overdue — uses the loan_due index (proven with EXPLAIN)', () => {
+    let org: FinesOrg;
+
+    beforeAll(async () => {
+      org = await seedOrg(`overdue-${Date.now().toString(36)}`);
+    });
+    afterAll(() => cleanup(org.orgId));
+
+    it('lists only OPEN loans past dueAt, with daysOverdue computed at read time (never stored)', async () => {
+      const member = await seedMember(org.orgId, org.branchId, `OD-${Date.now()}`);
+      const title = await seedTitle(org.orgId, 'overdue-list');
+      const overdueCopy = await seedCopy(org.orgId, org.branchId, title.id, `OD-OVERDUE-${Date.now()}`);
+      const futureCopy = await seedCopy(org.orgId, org.branchId, title.id, `OD-FUTURE-${Date.now()}`);
+      const prisma = getLibraryPlatformPrisma();
+      const overdueLoan = await prisma.loan.create({
+        data: { orgId: org.orgId, copyId: overdueCopy.id, memberId: member.id, dueAt: new Date(Date.now() - 3 * MS_PER_DAY) },
+      });
+      await prisma.loan.create({
+        data: { orgId: org.orgId, copyId: futureCopy.id, memberId: member.id, dueAt: new Date(Date.now() + 3 * MS_PER_DAY) },
+      });
+
+      const res = await request(app.getHttpServer())
+        .get('/circulation/overdue')
+        .set('X-Library-Host', host(org))
+        .set('Authorization', `Bearer ${org.librarianToken}`);
+
+      expect(res.status).toBe(200);
+      const ids = res.body.map((r: { id: string }) => r.id);
+      expect(ids).toContain(overdueLoan.id);
+      expect(ids).not.toContain(undefined);
+      const found = res.body.find((r: { id: string }) => r.id === overdueLoan.id);
+      expect(found.daysOverdue).toBeGreaterThanOrEqual(3);
+    });
+
+    /**
+     * The actual guard: `overdueLoansQuery` (fines.service.ts) is the SAME
+     * SQL the route runs — this test `EXPLAIN`s that exact query, not a
+     * hand-retyped copy of it (LIBRARY-TRAPS.md #15). Asserts an Index Scan
+     * on `loan_due`, never a Seq Scan. See task-9-10-report.md for the
+     * deliberate-break proof (dropping `loan_due` and re-running this exact
+     * assertion to watch it fail, then restoring the index).
+     */
+    it('EXPLAIN shows an Index Scan on loan_due, never a Seq Scan', async () => {
+      // A 1-2 row fixture is NOT a valid proof here: Postgres's cost-based
+      // optimizer correctly prefers a Seq Scan over an Index Scan on a tiny
+      // table (confirmed live while writing this test — see
+      // mistakes/log.mjs's `explain-plan-needs-realistic-row-count`). This
+      // seeds a realistic row count, and ANALYZEs afterward so the planner's
+      // statistics reflect the bulk insert rather than a stale/empty
+      // estimate, so the assertion below is a genuine proof, not an
+      // artifact of an empty table.
+      const prisma = getLibraryPlatformPrisma();
+      const title = await seedTitle(org.orgId, 'explain-fixture');
+      const member = await seedMember(org.orgId, org.branchId, `EXPLAIN-${Date.now()}`);
+
+      const N = 3000;
+      const stamp = Date.now();
+      await prisma.copy.createMany({
+        data: Array.from({ length: N }, (_, i) => ({
+          orgId: org.orgId, titleId: title.id, branchId: org.branchId, barcode: `EXPLAIN-BULK-${stamp}-${i}`,
+        })),
+      });
+      const copies = await prisma.copy.findMany({ where: { orgId: org.orgId, titleId: title.id }, select: { id: true } });
+      const nowMs = Date.now();
+      await prisma.loan.createMany({
+        data: copies.map((c, i) => ({
+          orgId: org.orgId,
+          copyId: c.id,
+          memberId: member.id,
+          // Spread ± N/2 hours around now: roughly half overdue, half not — realistic selectivity for the `dueAt < now` predicate.
+          dueAt: new Date(nowMs + (i - N / 2) * 3_600_000),
+        })),
+      });
+      await prisma.$executeRawUnsafe('ANALYZE "Loan"');
+      await prisma.$executeRawUnsafe('ANALYZE "Copy"');
+
+      const sql = overdueLoansQuery(org.orgId, new Date());
+      const plan = await withOrg(org.orgId, (tx: LibraryTx) => tx.$queryRaw<Array<{ 'QUERY PLAN': string }>>`EXPLAIN ${sql}`);
+      const planText = plan.map((r) => r['QUERY PLAN']).join('\n');
+
+      // eslint-disable-next-line no-console -- captured deliberately for the task report
+      console.log('[overdue EXPLAIN]\n' + planText);
+
+      expect(planText).toMatch(/Index.*loan_due/);
+      expect(planText).not.toMatch(/Seq Scan on "?Loan"?/);
+    });
+  });
+
+  describe('GET /circulation/day-report — reconciles to the rupee against seeded fixtures', () => {
+    let org: FinesOrg;
+    const DAY = '2020-06-15';
+    const dayStart = new Date(`${DAY}T00:00:00.000Z`);
+    const hoursIn = (h: number) => new Date(dayStart.getTime() + h * 3_600_000);
+
+    beforeAll(async () => {
+      org = await seedOrg(`report-${Date.now().toString(36)}`);
+      const branchId = org.branchId;
+      const prisma = getLibraryPlatformPrisma();
+      const title = await seedTitle(org.orgId, 'day-report');
+      const member = await seedMember(org.orgId, branchId, `DR-${Date.now()}`);
+
+      // L1: issued IN the day, due far in the future, still open -> issued+1, NOT overdue at day end.
+      const c1 = await seedCopy(org.orgId, branchId, title.id, `DR-1-${Date.now()}`);
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c1.id, memberId: member.id, issuedAt: hoursIn(1), dueAt: new Date(dayStart.getTime() + 14 * MS_PER_DAY) } });
+
+      // L2: issued IN the day, due IN the day, never returned -> issued+1, overdue+1 (still outstanding, past due by day end).
+      const c2 = await seedCopy(org.orgId, branchId, title.id, `DR-2-${Date.now()}`);
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c2.id, memberId: member.id, issuedAt: hoursIn(2), dueAt: hoursIn(3) } });
+
+      // L3: issued IN the day, due IN the day, returned IN the day BEFORE its own dueAt -> issued+1, returned+1, NOT overdue (resolved before day end).
+      const c3 = await seedCopy(org.orgId, branchId, title.id, `DR-3-${Date.now()}`);
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c3.id, memberId: member.id, issuedAt: hoursIn(3), dueAt: hoursIn(5), returnedAt: hoursIn(4), status: 'RETURNED' } });
+
+      // L4: issued the day BEFORE, due IN the day, never returned -> NOT counted as issued (wrong day), but overdue+1 by this day's end.
+      const c4 = await seedCopy(org.orgId, branchId, title.id, `DR-4-${Date.now()}`);
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c4.id, memberId: member.id, issuedAt: new Date(dayStart.getTime() - MS_PER_DAY), dueAt: hoursIn(1) } });
+
+      // L5: issued long before, was overdue, but returned IN the day -> returned+1, NOT counted as issued, NOT overdue (resolved before day end).
+      const c5 = await seedCopy(org.orgId, branchId, title.id, `DR-5-${Date.now()}`);
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c5.id, memberId: member.id, issuedAt: new Date(dayStart.getTime() - 20 * MS_PER_DAY), dueAt: new Date(dayStart.getTime() - 10 * MS_PER_DAY), returnedAt: hoursIn(6), status: 'RETURNED' } });
+
+      // L6: outside the window entirely (issued/due/returned all the day after) -> must not appear in any count.
+      const c6 = await seedCopy(org.orgId, branchId, title.id, `DR-6-${Date.now()}`);
+      await prisma.loan.create({
+        data: { orgId: org.orgId, copyId: c6.id, memberId: member.id, issuedAt: new Date(dayStart.getTime() + MS_PER_DAY + 3_600_000), dueAt: new Date(dayStart.getTime() + 15 * MS_PER_DAY) },
+      });
+
+      // Fines: two accrued IN the day (45.50 + 12.25 = 57.75), one OUTSIDE the day (999, must be excluded).
+      await prisma.fine.create({ data: { orgId: org.orgId, memberId: member.id, kind: 'OVERDUE', status: 'OPEN', amount: 45.5, createdAt: hoursIn(2) } });
+      await prisma.fine.create({ data: { orgId: org.orgId, memberId: member.id, kind: 'OVERDUE', status: 'OPEN', amount: 12.25, createdAt: hoursIn(7) } });
+      await prisma.fine.create({ data: { orgId: org.orgId, memberId: member.id, kind: 'OVERDUE', status: 'OPEN', amount: 999, createdAt: new Date(dayStart.getTime() - MS_PER_DAY) } });
+    });
+    afterAll(() => cleanup(org.orgId));
+
+    it('reconciles issued/returned/overdue counts and fines-accrued amount exactly, against hand-computed fixtures', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/circulation/day-report')
+        .query({ date: DAY })
+        .set('X-Library-Host', host(org))
+        .set('Authorization', `Bearer ${org.librarianToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        date: DAY,
+        issued: 3, // L1, L2, L3
+        returned: 2, // L3, L5
+        overdue: 2, // L2, L4
+        finesAccrued: { count: 2, amount: 57.75 },
+      });
+    });
+  });
+});

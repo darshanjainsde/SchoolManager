@@ -4,6 +4,7 @@ import { TenancyModule } from '../../tenancy';
 import { PlansModule } from '../../plans';
 import { IdempotencyModule } from '../../../common/idempotency/idempotency.module';
 import { CirculationController } from './circulation.controller';
+import { FinesService } from './fines.service';
 import { HoldsService } from './holds.service';
 import { LoansService } from './loans.service';
 
@@ -24,6 +25,6 @@ import { LoansService } from './loans.service';
 @Module({
   imports: [TenancyModule, PlansModule, IdempotencyModule],
   controllers: [CirculationController],
-  providers: [JwtService, LoansService, HoldsService],
+  providers: [JwtService, LoansService, HoldsService, FinesService],
 })
 export class CirculationModule {}

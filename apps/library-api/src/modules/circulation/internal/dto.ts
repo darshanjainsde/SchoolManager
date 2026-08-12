@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class IssueLoanDto {
   @IsString() @MinLength(1) @MaxLength(100) barcode!: string;
@@ -52,11 +52,26 @@ export class ListHoldsQueryDto {
 
 export class WaiveFineDto {
   @IsString() @MinLength(1) @MaxLength(500) reason!: string;
+}
 
-  /** Omitted = waive the full outstanding balance (`amount - paidAmount`). */
+export const FINE_STATUSES = ['OPEN', 'PAID', 'WAIVED', 'PARTIAL'] as const;
+export type FineStatusInput = (typeof FINE_STATUSES)[number];
+
+export class ListFinesQueryDto {
+  @IsOptional() @IsUUID('4') memberId?: string;
+  @IsOptional() @IsIn(FINE_STATUSES) status?: FineStatusInput;
+
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
-  @Min(0.01)
-  amount?: number;
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+}
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+export class DayReportQueryDto {
+  /** `YYYY-MM-DD`, interpreted as a UTC day. Omitted = today (UTC). */
+  @IsOptional() @Matches(DATE_ONLY, { message: 'date must be YYYY-MM-DD' }) date?: string;
 }
