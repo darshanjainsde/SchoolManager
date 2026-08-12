@@ -128,13 +128,14 @@ describeLive('ImportService.importTitles — live', () => {
    * to a Category it cannot see or own).
    *
    * Deliberate-break-and-restore (LIBRARY-TRAPS #16), performed manually
-   * during development and reported in import-report.md rather than left
-   * as a toggle in this file: `applyRows`'s category lookup/create was
-   * temporarily changed to use `getLibraryPlatformPrisma()` (an unscoped,
-   * BYPASSRLS client) instead of `tx`. With that change, this test failed —
-   * orgA's title ended up linked to orgB's pre-existing "Shared Category
-   * Name" row (same id, cross-org). The lookup was restored to `tx` and the
-   * test passed again; see import-report.md for the before/after output.
+   * during development rather than left as a toggle in this file:
+   * `resolvePrepass`'s category lookup/create was temporarily changed to use
+   * `getLibraryPlatformPrisma()` (an unscoped, BYPASSRLS client) instead of
+   * `tx`. With that change, this test failed — orgA's title ended up linked
+   * to orgB's pre-existing "Shared Category Name" row (same id, cross-org).
+   * The lookup was restored to `tx` and this test passed again. No separate
+   * transcript file exists for that break/restore cycle — this test itself,
+   * run red-then-green, is the record.
    */
   it("a CSV category name never resolves to another org's Category row", async () => {
     const prisma = getLibraryPlatformPrisma();

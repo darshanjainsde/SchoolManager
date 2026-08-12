@@ -11,6 +11,7 @@ import {
   Post,
   Query,
   UploadedFile,
+  UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -36,6 +37,7 @@ import {
 } from './dto';
 import { ImportService } from './import.service';
 import { IsbnLookupService } from './isbn-lookup.service';
+import { MulterExceptionFilter } from './multer-exception.filter';
 import { SearchService } from './search.service';
 import { TitlesService } from './titles.service';
 
@@ -159,6 +161,7 @@ export class CatalogController {
    */
   @Post('import/titles')
   @Roles('ORG_OWNER', 'LIBRARIAN')
+  @UseFilters(MulterExceptionFilter)
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_IMPORT_FILE_BYTES } }))
   importTitles(@UploadedFile() file: Express.Multer.File | undefined, @Query('dryRun') dryRun?: string) {
     if (!file?.buffer?.length) throw new BadRequestException('CSV file is required (multipart field "file")');
