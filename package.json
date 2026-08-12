@@ -21,7 +21,10 @@
     "db:seed": "pnpm --filter @skoolos/db seed",
     "library:migrate": "pnpm --filter @library/db migrate:deploy",
     "library:seed": "pnpm --filter @library/db seed",
-    "dash": "node tools/test-dashboard/server.mjs"
+    "dash": "node tools/test-dashboard/server.mjs",
+    "dispatch:log": "node scripts/dispatch-metrics.mjs log",
+    "dispatch:report": "node scripts/dispatch-metrics.mjs report",
+    "dispatch:ui": "node scripts/dispatch-ui.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
