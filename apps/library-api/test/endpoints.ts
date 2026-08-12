@@ -48,4 +48,15 @@ export const ENDPOINTS: EndpointSpec[] = [
   // non-401/403 response same as any other allowed row.
   { method: 'POST', path: '/catalog/import/titles', roles: WRITERS },
   { method: 'GET', path: '/catalog/isbn/:isbn', roles: READERS },
+
+  // Task 8 — circulation desk. ORG_OWNER/LIBRARIAN/ASSISTANT all work the
+  // desk; MEMBER is denied (a member cannot issue/return their own or
+  // anyone else's loan through this route). Bodies name a barcode that
+  // legitimately won't resolve to a real Copy for most roles under test —
+  // that's fine for authz purposes, same reasoning as catalog/import/titles
+  // above: guards run before the handler body, so a denied role still gets
+  // 401/403, and an allowed role reaching the handler with no matching copy
+  // gets a 404, which is a non-401/403 response same as any other allowed row.
+  { method: 'POST', path: '/circulation/issue', roles: READERS, body: { barcode: 'AUTHZ-MATRIX-PROBE-ISSUE', memberId: '11111111-1111-4111-8111-111111111111' } },
+  { method: 'POST', path: '/circulation/return', roles: READERS, body: { barcode: 'AUTHZ-MATRIX-PROBE-RETURN' } },
 ];

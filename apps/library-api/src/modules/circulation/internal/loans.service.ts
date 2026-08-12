@@ -1,0 +1,341 @@
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, type CopyStatus, type Loan, type Fine, type LibraryTx } from '@library/db';
+import { loadPolicy } from './policy-loader';
+import {
+  computeFine,
+  evaluateIssue,
+  holdShelfExpiry,
+  nextHoldToPromote,
+  type IssueDenial,
+  type Hold as PolicyHold,
+} from './policy';
+import type { IssueLoanDto, ReturnLoanDto } from './dto';
+
+/**
+ * `IssueDenial` -> the HTTP exception a circulation-desk caller should see.
+ * Split the same way `assertQuota` (policy/quota limit -> 403) and the
+ * catalogue's `mapPrismaError` (state conflict -> 409) already split their
+ * own error surfaces, rather than inventing a third shape here:
+ *   - MEMBER_NOT_ACTIVE / MEMBER_LIMIT_REACHED / OUTSTANDING_FINES_EXCEED_LIMIT
+ *     / BRANCH_MISMATCH are all "this member/policy forbids it" -> 403.
+ *   - COPY_ON_HOLD_FOR_OTHER / COPY_NOT_AVAILABLE are "the copy's current
+ *     state conflicts with this request" -> 409.
+ * The machine-readable `reason` rides in the response body alongside the
+ * message, so a real desk UI can branch on it without parsing English.
+ */
+function issueDenialToException(reason: IssueDenial): ConflictException | ForbiddenException {
+  const body = { reason, message: issueDenialMessage(reason) };
+  switch (reason) {
+    case 'COPY_ON_HOLD_FOR_OTHER':
+    case 'COPY_NOT_AVAILABLE':
+      return new ConflictException(body);
+    default:
+      return new ForbiddenException(body);
+  }
+}
+
+function issueDenialMessage(reason: IssueDenial): string {
+  switch (reason) {
+    case 'MEMBER_NOT_ACTIVE':
+      return 'This member is not active and cannot borrow';
+    case 'MEMBER_LIMIT_REACHED':
+      return "This member has reached their plan's borrowing limit";
+    case 'OUTSTANDING_FINES_EXCEED_LIMIT':
+      return 'This member owes fines above the outstanding limit';
+    case 'BRANCH_MISMATCH':
+      return "This copy belongs to a branch other than the member's home branch";
+    case 'COPY_ON_HOLD_FOR_OTHER':
+      return 'This copy is on the hold shelf for a different member';
+    case 'COPY_NOT_AVAILABLE':
+      return 'This copy is not available to issue';
+  }
+}
+
+/** `Prisma.Decimal | number | null | undefined` -> plain `number`, defaulting a missing aggregate to 0. */
+function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  return typeof value === 'number' ? value : value.toNumber();
+}
+
+export interface IssueResult {
+  loan: Loan;
+  collectedHoldId: string | null;
+}
+
+export interface ReturnResult {
+  loan: Loan;
+  fine: Fine | null;
+  /** Non-null when this return promoted the next hold onto the returned copy. */
+  promotedHoldId: string | null;
+  copyStatus: CopyStatus;
+}
+
+@Injectable()
+export class LoansService {
+  /**
+   * One transaction (the caller supplies `tx` via `withOrg`): resolve copy
+   * by barcode -> load member/policy/open loans/open fine total ->
+   * `evaluateIssue` -> create `Loan`, set `Copy.status = ON_LOAN`, write an
+   * `AuditLog` row. If the copy was on the hold shelf for THIS member, that
+   * hold is marked `COLLECTED` in the same transaction.
+   *
+   * `dto.memberId` is a client-supplied foreign key — looked up on `tx`
+   * (this org's RLS-scoped transaction), never trusted at face value.
+   * Postgres FK checks bypass RLS by design, so `tx.loan.create`'s own FK
+   * constraint would happily accept another org's member id and produce a
+   * Loan that structurally references a row this caller can never see
+   * (LIBRARY-TRAPS.md, client-supplied-fk-not-org-checked). Doing the
+   * lookup here, on `tx`, closes that and is race-free — a lookup on a
+   * separate connection would be a TOCTOU against the write below.
+   *
+   * Concurrency: this method does NOT itself serialize two callers issuing
+   * the same barcode — under READ COMMITTED, two transactions that both
+   * `BEGIN` before either commits can both read the same "copy is
+   * AVAILABLE" snapshot and both reach `tx.loan.create` (trap 3,
+   * LIBRARY-TRAPS.md). What actually makes a double-issue impossible is the
+   * `loan_one_active_per_copy` partial unique index on `Loan(copyId) WHERE
+   * "returnedAt" IS NULL` (Task 4): the loser's `create` raises P2002, which
+   * this method turns into a 409 rather than an unhandled 500. An
+   * `Idempotency-Key` on the route converges the *response* for retried
+   * duplicates, but two genuinely concurrent requests still both reach this
+   * method — the index, not the interceptor, is the actual guarantee (see
+   * loan-constraints.e2e.spec.ts for the proof, and this module's own
+   * circulation-issue-return.e2e.spec.ts for the same proof against the
+   * real /circulation/issue route).
+   */
+  async issue(tx: LibraryTx, orgId: string, dto: IssueLoanDto, actorUserId: string, now: Date): Promise<IssueResult> {
+    const copy = await tx.copy.findUnique({ where: { orgId_barcode: { orgId, barcode: dto.barcode } } });
+    if (!copy) throw new NotFoundException('Copy not found');
+
+    const member = await tx.member.findUnique({ where: { id: dto.memberId } });
+    if (!member) throw new NotFoundException('Member not found');
+
+    const policy = await loadPolicy(tx, orgId, member.memberType);
+
+    // Only relevant when the copy is currently ON_HOLD_SHELF — the READY
+    // hold that put it there is what decides whether THIS member may take
+    // it (evaluateIssue's COPY_ON_HOLD_FOR_OTHER / "the hold IS for them"
+    // branch).
+    const readyHold =
+      copy.status === 'ON_HOLD_SHELF'
+        ? await tx.hold.findFirst({ where: { readyCopyId: copy.id, status: 'READY' } })
+        : null;
+
+    const [openLoans, fineAgg] = await Promise.all([
+      tx.loan.count({ where: { memberId: member.id, returnedAt: null } }),
+      tx.fine.aggregate({
+        where: { memberId: member.id, status: { in: ['OPEN', 'PARTIAL'] } },
+        _sum: { amount: true, paidAmount: true },
+      }),
+    ]);
+    const openFineTotal = decimalToNumber(fineAgg._sum.amount) - decimalToNumber(fineAgg._sum.paidAmount);
+
+    const decision = evaluateIssue(
+      policy,
+      {
+        id: member.id,
+        status: member.status,
+        // A member with no home branch can never satisfy the branch check
+        // below (BRANCH_MISMATCH denies correctly) — '' never equals a real
+        // branch id, so this is a safe sentinel rather than a special case.
+        homeBranchId: member.homeBranchId ?? '',
+      },
+      { status: copy.status, branchId: copy.branchId, heldForMemberId: readyHold?.memberId ?? null },
+      openLoans,
+      openFineTotal,
+      now,
+    );
+    if (!decision.allowed) throw issueDenialToException(decision.reason);
+
+    let loan: Loan;
+    try {
+      loan = await tx.loan.create({
+        data: {
+          orgId,
+          copyId: copy.id,
+          memberId: member.id,
+          dueAt: decision.dueAt,
+          issuedByUserId: actorUserId,
+          status: 'ACTIVE',
+        },
+      });
+    } catch (err) {
+      // loan_one_active_per_copy — see this method's own concurrency doc
+      // above. A P2002 here means a concurrent issue on this exact copy won
+      // the race between our read and our write.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException({ reason: 'ALREADY_ON_LOAN', message: 'This copy already has an active loan' });
+      }
+      throw err;
+    }
+
+    await tx.copy.update({ where: { id: copy.id }, data: { status: 'ON_LOAN' } });
+
+    let collectedHoldId: string | null = null;
+    if (readyHold && readyHold.memberId === member.id) {
+      await tx.hold.update({ where: { id: readyHold.id }, data: { status: 'COLLECTED' } });
+      collectedHoldId = readyHold.id;
+    }
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.issue',
+        entity: 'Loan',
+        entityId: loan.id,
+        after: { copyId: copy.id, barcode: dto.barcode, memberId: member.id, dueAt: decision.dueAt.toISOString() },
+      },
+    });
+
+    return { loan, collectedHoldId };
+  }
+
+  /**
+   * One transaction: resolve the active loan for the scanned barcode -> set
+   * `returnedAt` -> `computeFine` (creating a `Fine` row only when the
+   * amount is > 0) -> promote the title's next pending hold onto this copy,
+   * or set `Copy.status = AVAILABLE` if there is none.
+   */
+  async returnLoan(tx: LibraryTx, orgId: string, dto: ReturnLoanDto, actorUserId: string, now: Date): Promise<ReturnResult> {
+    const copy = await tx.copy.findUnique({ where: { orgId_barcode: { orgId, barcode: dto.barcode } } });
+    if (!copy) throw new NotFoundException('Copy not found');
+
+    const loan = await tx.loan.findFirst({ where: { copyId: copy.id, returnedAt: null } });
+    if (!loan) throw new NotFoundException('No active loan for this copy');
+
+    // Loan.member is onDelete: Restrict, so this row is guaranteed to exist
+    // for any real Loan — this findUnique is for memberType (the fine
+    // policy lookup key), not an FK-safety check the way IssueLoanDto's
+    // memberId lookup above is (that one is client-supplied; this one is
+    // read off an already-org-scoped row on the same `tx`).
+    const member = await tx.member.findUnique({ where: { id: loan.memberId } });
+    if (!member) throw new NotFoundException('Member not found');
+
+    const policy = await loadPolicy(tx, orgId, member.memberType);
+    const { days, amount } = computeFine(policy, loan.dueAt, now);
+
+    const returnedLoan = await tx.loan.update({
+      where: { id: loan.id },
+      data: { returnedAt: now, returnedByUserId: actorUserId, status: 'RETURNED' },
+    });
+
+    let fine: Fine | null = null;
+    if (amount > 0) {
+      fine = await tx.fine.create({
+        data: {
+          orgId,
+          memberId: member.id,
+          loanId: loan.id,
+          kind: 'OVERDUE',
+          status: 'OPEN',
+          amount: new Prisma.Decimal(amount),
+          reason: `${days} day(s) overdue`,
+        },
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.return',
+        entity: 'Loan',
+        entityId: loan.id,
+        after: { copyId: copy.id, barcode: dto.barcode, memberId: member.id, overdueDays: days, fineAmount: amount },
+      },
+    });
+
+    const promotion = await this.promoteOrRelease(tx, orgId, copy.id, copy.titleId, now);
+
+    return { loan: returnedLoan, fine, promotedHoldId: promotion.promotedHoldId, copyStatus: promotion.copyStatus };
+  }
+
+  /**
+   * Locks the title's PENDING holds with `SELECT ... FOR UPDATE` so two
+   * simultaneous returns for two different copies of the same title cannot
+   * both read "hold X is next" and both promote it (trap 3 — a transaction
+   * alone gives atomicity, not mutual exclusion). Whichever transaction's
+   * `FOR UPDATE` wins the row lock proceeds; the other blocks until the
+   * first commits, then re-reads the now-updated (PENDING -> READY) rows
+   * and correctly finds a different hold, or none.
+   *
+   * Uses raw SQL because Prisma's query builder has no `FOR UPDATE` clause.
+   * Runs on `tx` — the same `withOrg`-scoped transaction as every other read
+   * in this method — so RLS still applies to it exactly as it would to a
+   * generated query.
+   */
+  private async promoteOrRelease(
+    tx: LibraryTx,
+    orgId: string,
+    copyId: string,
+    titleId: string,
+    now: Date,
+  ): Promise<{ promotedHoldId: string | null; copyStatus: CopyStatus }> {
+    const rows = await tx.$queryRaw<Array<{ id: string; memberId: string; queuePosition: number; expiresAt: Date }>>`
+      SELECT "id", "memberId", "queuePosition", "expiresAt"
+      FROM "Hold"
+      WHERE "orgId" = ${orgId}::uuid AND "titleId" = ${titleId}::uuid AND "status" = 'PENDING'
+      ORDER BY "queuePosition" ASC
+      FOR UPDATE
+    `;
+
+    const candidates: PolicyHold[] = rows.map((r) => ({
+      memberId: r.memberId,
+      queuePosition: r.queuePosition,
+      expiresAt: r.expiresAt,
+    }));
+    const winner = nextHoldToPromote(candidates, now);
+
+    if (!winner) {
+      await tx.copy.update({ where: { id: copyId }, data: { status: 'AVAILABLE' } });
+      return { promotedHoldId: null, copyStatus: 'AVAILABLE' };
+    }
+
+    const winnerRow = rows.find((r) => r.memberId === winner.memberId && r.queuePosition === winner.queuePosition);
+    if (!winnerRow) {
+      // Defensive only — `winner` is derived from `candidates`, which is a
+      // 1:1 map of `rows`, so this can never actually happen. Kept instead
+      // of a non-null assertion so a future refactor that breaks that
+      // invariant fails loudly here instead of producing `undefined.id`.
+      throw new Error('promoteOrRelease: winning hold not found among locked rows');
+    }
+
+    // The hold-shelf deadline is a function of the WINNING member's own
+    // policy (memberType), not the returning member's — a hold can be
+    // promoted for any member type, and holdShelfDays is a per-memberType
+    // tunable (see CirculationPolicy).
+    const holdMember = await tx.member.findUnique({ where: { id: winnerRow.memberId }, select: { memberType: true } });
+    if (!holdMember) throw new NotFoundException('Hold member not found');
+    const holdPolicy = await loadPolicy(tx, orgId, holdMember.memberType);
+    const expiresAt = holdShelfExpiry(holdPolicy, now);
+
+    await tx.copy.update({ where: { id: copyId }, data: { status: 'ON_HOLD_SHELF' } });
+    await tx.hold.update({
+      where: { id: winnerRow.id },
+      data: { status: 'READY', readyCopyId: copyId, readyAt: now, expiresAt },
+    });
+
+    // Durable record only — nothing drains this table until Phase 4 (see
+    // the NotificationOutbox model doc in schema.prisma and the design
+    // doc's no-scheduler rule, §6.3). Asserted by the e2e suite as a row,
+    // never as "a message was sent".
+    await tx.notificationOutbox.create({
+      data: {
+        orgId,
+        channel: 'INAPP',
+        templateKey: 'HOLD_READY',
+        to: winnerRow.memberId,
+        payload: {
+          holdId: winnerRow.id,
+          titleId,
+          copyId,
+          memberId: winnerRow.memberId,
+          expiresAt: expiresAt.toISOString(),
+        },
+      },
+    });
+
+    return { promotedHoldId: winnerRow.id, copyStatus: 'ON_HOLD_SHELF' };
+  }
+}

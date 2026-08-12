@@ -6,6 +6,7 @@ import { TenancyModule } from './modules/tenancy';
 import { AuthModule } from './modules/auth';
 import { PlansModule } from './modules/plans';
 import { CatalogModule } from './modules/catalog';
+import { CirculationModule } from './modules/circulation';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
 
@@ -58,6 +59,7 @@ import { IdempotencyModule } from './common/idempotency/idempotency.module';
     PlansModule,
     IdempotencyModule,
     CatalogModule,
+    CirculationModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
