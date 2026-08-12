@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "bundle": "ncc build server.ts -o api --external argon2 --external @prisma/client",
+    "bundle": "rm -rf api && ncc build server.ts -o api --external argon2 --external @prisma/client && node scripts/copy-prisma-engine.mjs",
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",

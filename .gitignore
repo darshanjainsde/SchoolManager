@@ -30,3 +30,7 @@ apps/library-api/api/
 .superpowers/dispatch-metrics.jsonl
 apps/library-web/.next/
 apps/library-web/next-env.d.ts
+
+# Vercel CLI link + the ncc bundle output (rebuilt by `pnpm bundle` on deploy)
+.vercel
+apps/library-api/api/
