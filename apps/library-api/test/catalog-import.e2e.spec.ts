@@ -51,7 +51,7 @@ describeLive('ImportService.importTitles — live', () => {
     ];
 
     const dryRunResult = await importService.importTitles(orgA.id, rows, { dryRun: true });
-    expect(dryRunResult).toEqual({ created: 2, updated: 0, skipped: 0, errors: [] });
+    expect(dryRunResult).toEqual({ status: 'completed', created: 2, createdNoIsbn: 0, updated: 0, skipped: 0, errors: [] });
 
     const afterDryRun = await withOrg(orgA.id, (tx: LibraryTx) =>
       tx.title.findMany({ where: { isbn13: { in: [isbnOne, isbnTwo] } } }),
@@ -72,10 +72,10 @@ describeLive('ImportService.importTitles — live', () => {
     const rows = [{ isbn, title: 'Idempotency Probe v1' }];
 
     const first = await importService.importTitles(orgA.id, rows, {});
-    expect(first).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
+    expect(first).toEqual({ status: 'completed', created: 1, createdNoIsbn: 0, updated: 0, skipped: 0, errors: [] });
 
     const second = await importService.importTitles(orgA.id, [{ isbn, title: 'Idempotency Probe v2' }], {});
-    expect(second).toEqual({ created: 0, updated: 1, skipped: 0, errors: [] });
+    expect(second).toEqual({ status: 'completed', created: 0, createdNoIsbn: 0, updated: 1, skipped: 0, errors: [] });
 
     const rows_in_db = await withOrg(orgA.id, (tx: LibraryTx) => tx.title.findMany({ where: { isbn13: isbn } }));
     expect(rows_in_db).toHaveLength(1); // not 2
@@ -87,17 +87,23 @@ describeLive('ImportService.importTitles — live', () => {
     const isbnGood2 = uniqueIsbn('5');
     const rows = [
       { isbn: isbnGood1, title: 'Bad Row Probe — Good Row 1' },
-      { isbn: '', title: 'Bad Row Probe — Missing ISBN' }, // row 2: invalid
+      // Row 2 is invalid because the ISBN is PRESENT but malformed — a typo.
+      // A *blank* isbn cell is deliberately valid (see the no-ISBN policy in
+      // mapImportRow), so this fixture uses a bad value rather than an empty
+      // one; an empty one would now create a row and prove nothing.
+      { isbn: '12345', title: 'Bad Row Probe — Malformed ISBN' },
       { isbn: isbnGood2, title: 'Bad Row Probe — Good Row 2' },
     ];
 
     const result = await importService.importTitles(orgA.id, rows, {});
 
     expect(result).toEqual({
+      status: 'completed_with_errors',
       created: 2,
+      createdNoIsbn: 0,
       updated: 0,
       skipped: 1,
-      errors: [{ row: 2, field: 'isbn', message: 'isbn is required' }],
+      errors: [{ row: 2, field: 'isbn', message: 'isbn must be 10 or 13 characters' }],
     });
 
     const created = await withOrg(orgA.id, (tx: LibraryTx) =>
@@ -144,7 +150,7 @@ describeLive('ImportService.importTitles — live', () => {
 
     const isbn = uniqueIsbn('6');
     const result = await importService.importTitles(orgA.id, [{ isbn, title: 'Category FK Guard Probe', category: sharedName }], {});
-    expect(result).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
+    expect(result).toEqual({ status: 'completed', created: 1, createdNoIsbn: 0, updated: 0, skipped: 0, errors: [] });
 
     const [titleInOrgA] = await withOrg(orgA.id, (tx: LibraryTx) =>
       tx.title.findMany({ where: { isbn13: isbn }, include: { categories: { include: { category: true } } } }),
@@ -193,7 +199,14 @@ describeLive('POST /catalog/import/titles — live HTTP', () => {
       .attach('file', Buffer.from(csv, 'utf8'), 'titles.csv');
 
     expect(res.status).toBe(201);
-    expect(res.body).toEqual({ created: 1, updated: 0, skipped: 0, errors: [] });
+    expect(res.body).toEqual({
+      status: 'completed',
+      created: 1,
+      createdNoIsbn: 0,
+      updated: 0,
+      skipped: 0,
+      errors: [],
+    });
   });
 
   it('400s when no file is attached, instead of hitting the parser with nothing', async () => {
