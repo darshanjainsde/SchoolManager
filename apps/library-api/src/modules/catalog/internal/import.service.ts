@@ -1,5 +1,5 @@
 import { Injectable, PayloadTooLargeException } from '@nestjs/common';
-import { Prisma, withOrg, type LibraryTx } from '@library/db';
+import { withOrg, type LibraryTx } from '@library/db';
 
 export interface RowError {
   /** 1-indexed position among DATA rows — i.e. the row directly below the header is row 1. */
@@ -97,8 +97,7 @@ const PREPASS_TX_OPTIONS = { timeout: 20_000, maxWait: 10_000 };
 
 /**
  * `withOrg`'s $transaction options for a single chunk. A chunk is
- * CHUNK_SIZE rows, each one write (occasionally two, for the rare isbn13
- * create-create race recovery below) — comfortably inside Prisma's 5000ms
+ * CHUNK_SIZE rows, each exactly one write — comfortably inside Prisma's 5000ms
  * default in the common case, but padded to leave headroom under a slow or
  * contended database, which is a database problem, not an algorithmic one,
  * and should surface as a clear timeout rather than a mystery P2028.
@@ -108,15 +107,12 @@ const CHUNK_TX_OPTIONS = { timeout: 15_000, maxWait: 10_000 };
 const ISBN_13_RE = /^\d{13}$/;
 const ISBN_10_RE = /^\d{9}[\dX]$/;
 
-function isUniqueConstraintError(err: unknown): err is Prisma.PrismaClientKnownRequestError {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
-}
-
 /**
  * Thrown out of a chunk's `withOrg` callback to abort+rollback that ONE
- * chunk's transaction when a row hits a database error `applyChunk` cannot
- * recover from (unlike the isbn13 create-create race, which recovers
- * in-place — see `applyChunk`). Carries the offending row's `RowError` so
+ * chunk's transaction when a row hits a database error. There is no
+ * in-transaction recovery: a failed statement aborts the whole Postgres
+ * transaction (25P02), so nothing after it can run — see `applyChunk`.
+ * Carries the offending row's `RowError` so
  * `importTitles` can report exactly which row caused the chunk to roll
  * back, rather than a generic "chunk 4 failed" with no row number a
  * librarian could act on.
@@ -225,19 +221,62 @@ function validateRows(rows: Record<string, string>[]): {
   errors: RowError[];
   skipped: number;
 } {
-  const valid: ValidRow[] = [];
+  const mapped: ValidRow[] = [];
   const errors: RowError[] = [];
   for (let i = 0; i < rows.length; i++) {
     const rowNum = i + 1;
-    const mapped = mapImportRow(rows[i], rowNum);
-    if ('error' in mapped) {
-      errors.push(mapped.error);
+    const result = mapImportRow(rows[i], rowNum);
+    if ('error' in result) {
+      errors.push(result.error);
       continue;
     }
-    valid.push({ rowNum, data: mapped.data });
+    mapped.push({ rowNum, data: result.data });
   }
+
+  // Deduplicate by ISBN WITHIN the file, keeping the last occurrence.
+  //
+  // This is not a nicety — without it the import is broken for a common input.
+  // `resolvePrepass` builds its existing-title map ONCE, before any chunk, so a
+  // second row carrying an ISBN that the first row is about to create still
+  // looks new and takes the CREATE branch. That raises P2002 against
+  // `title_isbn13_per_org`, and Postgres then aborts the whole transaction:
+  // Prisma does not wrap statements in savepoints, so every subsequent
+  // statement on that `tx` fails with 25P02 ("current transaction is aborted").
+  // The result was up to CHUNK_SIZE-1 unrelated valid rows discarded, reported
+  // against the wrong row with an opaque message.
+  //
+  // Keep-last rather than keep-first because a spreadsheet's later row is the
+  // correction: someone fixing a typo appends or edits below, and the file's
+  // own last word on a title is the one they meant. The dropped rows are
+  // reported as errors so the count is visible rather than silent — a file
+  // that quietly imports fewer rows than it contains is worse than one that
+  // says why.
+  const lastIndexByIsbn = new Map<string, number>();
+  for (let i = 0; i < mapped.length; i++) {
+    const key = mapped[i].data.isbn13 ?? mapped[i].data.isbn10;
+    if (key) lastIndexByIsbn.set(key, i);
+  }
+  const valid: ValidRow[] = [];
+  for (let i = 0; i < mapped.length; i++) {
+    const row = mapped[i];
+    const key = row.data.isbn13 ?? row.data.isbn10;
+    if (key && lastIndexByIsbn.get(key) !== i) {
+      errors.push({
+        row: row.rowNum,
+        field: 'isbn',
+        message: `duplicate isbn ${key} in this file — superseded by row ${lastIndexByIsbn.get(key)! + 1}`,
+      });
+      continue;
+    }
+    valid.push(row);
+  }
+
   return { valid, errors, skipped: errors.length };
 }
+
+/** Exported for tests: validateRows is internal, but its dedupe is a
+ *  behaviour worth asserting directly rather than through a whole import. */
+export const validateRowsForTest = validateRows;
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -576,17 +615,23 @@ export async function applyChunk(
       // database error) is wrapped in `ChunkRowError` and rethrown, which
       // aborts and rolls back this chunk's transaction — `importTitles`
       // reports it against this exact row instead of a generic failure.
-      if (isUniqueConstraintError(err) && data.isbn13) {
-        const winner = await tx.title.findFirst({
-          where: { isbn13: data.isbn13 },
-          select: { id: true },
-        });
-        if (winner) {
-          await updateScalarFields(tx, winner.id, data);
-          updated++;
-          continue;
-        }
-      }
+      // NO in-transaction P2002 recovery here, deliberately. An earlier version
+      // caught the unique violation and tried to re-read the winner and update
+      // it instead. That could never work: Prisma does not wrap statements in
+      // savepoints, so the failed INSERT aborts the whole Postgres transaction
+      // and every following statement returns 25P02 ("current transaction is
+      // aborted, commands ignored until end of transaction block"). The
+      // recovery always threw, the chunk rolled back anyway, and the comment
+      // claiming otherwise was false — verified directly against Postgres.
+      //
+      // The common trigger (the same ISBN twice in one uploaded file) is now
+      // removed upstream by the in-file dedupe in `validateRows`. What remains
+      // is a genuine cross-request race: two concurrent imports of different
+      // files sharing an ISBN. That correctly rolls this chunk back and is
+      // reported against the offending row; a re-run then takes the UPDATE
+      // branch because the prepass sees the winner's row. Recovering in-place
+      // would need a per-row SAVEPOINT, which costs a round trip on every row
+      // to salvage a rare one — the wrong trade at 2,000 rows.
       throw new ChunkRowError({
         row: rowNum,
         field: 'database',

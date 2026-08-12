@@ -351,3 +351,55 @@ Fix wave (fc89c33..cfcbcdc, 6 commits), all 9 items re-reviewed ADDRESSED:
      them would have failed at DI.
 Final: preflight:library green end to end (lint, typecheck, boundary, build, BUNDLE,
 109 unit + 11 db unit, 9 e2e). Verified by the controller directly, not just reported.
+
+## Phase 1a — whole-branch review (2026-08-12, opus)
+
+Verdict: ship after fixing 2. Preflight green end to end (249 unit / 262 e2e /
+16 suites, real ncc bundle). All five load-bearing invariants verified LIVE
+against pg_policy, not read from the diff: 20 tenant tables forced with both
+USING and WITH CHECK and the NULLIF predicate; every client-supplied FK looked
+up on `tx`; no scheduler transition; the three concurrency primitives proven
+free of any deadlock cycle; every long-lived client owned.
+
+FIXED (controller, hybrid mode):
+  The isbn13 P2002 "recovery" in applyChunk was DEAD CODE and its comment was
+  false. The reviewer proved against live Postgres that Prisma does not wrap
+  statements in savepoints, so the failed INSERT aborts the transaction and the
+  recovery's findFirst always returns 25P02. Worse, the trigger was not exotic
+  concurrency but A DUPLICATE ISBN INSIDE ONE UPLOADED CSV — resolvePrepass
+  builds its existing map once, before any chunk, so the second occurrence took
+  the CREATE branch and discarded up to 199 unrelated valid rows, blamed on the
+  wrong row. Fixed by deduping in-file in validateRows (keep-last, dropped rows
+  reported), and removing the recovery with an honest comment. The unit test
+  that "proved" the recovery was asserting a fiction — it passed only because
+  the fake tx does not model transaction abort. Replaced.
+
+RULING OWED AND GIVEN (user, 2026-08-12): **fix branch scope before the
+console.** Circulation shipped entirely un-branch-scoped, contradicting spec §7
+and §5.3 — Loan/Hold carry no branchId, CirculationPolicy is unique on
+(orgId, memberType) not (orgId, branchId, memberType), CirculationController
+has no BranchScopeGuard, and holds/fines/overdue/day-report all return org-wide
+data. An ASSISTANT scoped to branch A can work any branch-B copy. This is PLAN
+drift, not execution error: each task matched its own brief, which is exactly
+what per-task review cannot catch. Backfillable (Loan.branchId derives from
+Copy.branchId). Do it before Phase 1b so the console is built against the real
+shape.
+
+NEXT PHASE (triaged): org cache holds suspension 60s · no (orgId,isbn10) partial
+unique index · cap-crossing refresh revoke is audit-silent · day report uses UTC
+not org timezone (5.5h wrong for IST — needs LibraryOrg.timezone + AT TIME ZONE,
+a schema change, before the console renders a "Today" tile) · /overdue soft
+500-row cap without pagination.
+
+GENUINELY FINE: PlanResolverService.invalidate() uncalled (no mutation endpoint
+exists) · cancelling a READY hold does not re-promote (documented, nobody
+blocked) · login/refresh throttling design.
+
+MINORS worth doing with the branch-scope task: authz matrix's route enumeration
+passes VACUOUSLY if Express's _router is absent (assert length > 0, same
+reasoning rls-audit already applies to itself) · duplicate queuePosition
+possible after cancelHold · money crosses the API as both string and number ·
+three of four Redis clients lack the trap-8 enableOfflineQueue/connectTimeout
+hardening, and org.middleware's runs on EVERY request before auth · returnLoan
+overwrites Copy.status so a DAMAGED copy reverts to AVAILABLE · DayReportQueryDto
+accepts 2026-13-45 and 500s.

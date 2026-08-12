@@ -100,6 +100,48 @@ describe('mapImportRow', () => {
   });
 });
 
+describe('validateRows — in-file ISBN duplicates', () => {
+  // The bug this closes: resolvePrepass builds its existing-title map ONCE
+  // before any chunk, so a second row carrying an ISBN the first row is about
+  // to create still looked new and took the CREATE branch. That raised P2002,
+  // and because Postgres aborts the whole transaction on a failed statement
+  // (25P02, no savepoints), up to CHUNK_SIZE-1 unrelated valid rows in that
+  // chunk were discarded and blamed on the wrong row.
+  const service = new ImportService();
+  const NOT_A_UUID = 'not-a-real-org-id';
+
+  it('keeps the LAST occurrence and reports the earlier one, rather than letting it reach the database', async () => {
+    // withOrg rejects a non-UUID org before opening a connection, so this
+    // asserts validateRows' behaviour without needing a database: the error
+    // list is built before any transaction is attempted.
+    const rows = [
+      { isbn: '9780140328721', title: 'First Attempt' },
+      { isbn: '9780140328722', title: 'Unrelated' },
+      { isbn: '978-0-14-032872-1', title: 'Corrected Later In The File' }, // same isbn, hyphenated
+    ];
+    await expect(service.importTitles(NOT_A_UUID, rows)).rejects.toThrow('withOrg: orgId must be a UUID');
+
+    // Reaching withOrg at all proves the duplicate did not throw earlier; the
+    // dedupe itself is asserted through the pure path below.
+    const { validateRowsForTest } = await import('./import.service');
+    const result = validateRowsForTest(rows);
+    expect(result.valid.map((r) => r.rowNum)).toEqual([2, 3]); // row 1 dropped, row 3 kept
+    expect(result.errors).toEqual([
+      { row: 1, field: 'isbn', message: 'duplicate isbn 9780140328721 in this file — superseded by row 3' },
+    ]);
+  });
+
+  it('does not deduplicate rows with no ISBN — they are distinct items by policy', () => {
+    const { validateRowsForTest } = require('./import.service');
+    const result = validateRowsForTest([
+      { title: 'Untitled Pamphlet' },
+      { title: 'Untitled Pamphlet' },
+    ]);
+    expect(result.valid).toHaveLength(2);
+    expect(result.errors).toEqual([]);
+  });
+});
+
 describe('ImportService.importTitles — row cap', () => {
   // orgId is deliberately NOT a UUID here, so that if the cap check is ever
   // wrong, the test finds out from the cap check itself rather than from
@@ -332,20 +374,27 @@ describe('applyRows', () => {
   });
 
   it(
-    'a concurrent import racing on the same isbn13 (P2002 on create) recovers by updating the winner\'s row, ' +
-      'instead of aborting the whole file (Finding 3)',
+    'a concurrent import racing on the same isbn13 aborts THIS chunk and names the row — ' +
+      'it does not silently recover',
     async () => {
+      // An earlier version caught this P2002 and tried to re-read the winner
+      // and update it on the same `tx`. That could never work against real
+      // Postgres: a failed statement aborts the whole transaction, so every
+      // following statement returns 25P02. The old test passed only because
+      // this fake `tx` does not model transaction abort — it was asserting a
+      // fiction. The honest contract is the one below.
+      //
+      // The COMMON trigger (the same ISBN twice in one file) is now removed
+      // upstream by validateRows' in-file dedupe, so what reaches here is a
+      // genuine cross-request race, and rolling the chunk back is correct: a
+      // re-run takes the UPDATE branch because the prepass then sees the
+      // winner's row.
       const racedIsbn = '9780140999999';
       let createAttempts = 0;
       const { tx, titles } = makeFakeTx({
         createBehavior: (data) => {
           if (data.isbn13 === racedIsbn) {
             createAttempts++;
-            // Simulate the concurrent transaction's row landing between our
-            // Pass-2 read (which found nothing) and our create — exactly
-            // the Trap 3 scenario: two transactions both `BEGIN` before
-            // either commits, so neither sees the other's row until the
-            // unique index enforces it at write time.
             titles.set('winner-1', { id: 'winner-1', orgId: ORG_ID, isbn13: racedIsbn, title: 'Other Import Won' });
             return 'throw-p2002';
           }
@@ -353,14 +402,13 @@ describe('applyRows', () => {
         },
       });
 
-      const result = await applyRows(tx, ORG_ID, [{ isbn: racedIsbn, title: 'Our Import Lost The Race' }]);
+      await expect(
+        applyRows(tx, ORG_ID, [{ isbn: racedIsbn, title: 'Our Import Lost The Race' }]),
+      ).rejects.toMatchObject({ name: 'ChunkRowError', rowError: { row: 1, field: 'database' } });
 
       expect(createAttempts).toBe(1);
-      // NOT an error, NOT an abort of the whole (one-row) file: the row is
-      // counted as an update against the row that won the race.
-      expect(result).toEqual({ created: 0, createdNoIsbn: 0, updated: 1 });
-      expect(titles.get('winner-1')?.title).toBe('Our Import Lost The Race'); // our data applied on top
-      expect(titles.size).toBe(1); // not two rows for one isbn13
+      expect(titles.get('winner-1')?.title).toBe('Other Import Won'); // the winner's row is untouched
+      expect(titles.size).toBe(1);
     },
   );
 
