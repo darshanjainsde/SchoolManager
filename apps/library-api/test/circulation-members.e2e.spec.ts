@@ -23,6 +23,9 @@ interface MembersOrg {
   memberToken: string;
 }
 
+/** Stands in for a Sckools `Student.id` the school app already holds. */
+const SCKOOLS_STUDENT_ID = '9f1d2c3b-4a5e-4f60-8712-abcdef012345';
+
 const host = (org: Pick<MembersOrg, 'slug'>) => `${org.slug}.library.trackyour.in`;
 
 async function seedOrg(suffix: string): Promise<MembersOrg> {
@@ -93,6 +96,12 @@ describeLive('GET /circulation/members', () => {
     await seedMember(org.orgId, org.mainBranchId, 'RAF-00044', 'Suspended', 'Menon', 'SUSPENDED');
     await seedMember(org.orgId, org.annexeBranchId, 'RAF-00050', 'Annexe', 'Only');
     await seedMember(org.orgId, null, 'RAF-00060', 'Roaming', 'Nobranch');
+
+    // Carries a Sckools Student.id — the cross-service link (design §13).
+    await getLibraryPlatformPrisma().member.update({
+      where: { id: (await seedMember(org.orgId, org.mainBranchId, 'RAF-00070', 'Linked', 'ToSckools')).id },
+      data: { externalRef: SCKOOLS_STUDENT_ID },
+    });
 
     // Same code and name in a DIFFERENT org — the cross-tenant probe.
     await seedMember(other.orgId, other.mainBranchId, 'RAF-00042', 'Ravi', 'Menon');
@@ -208,6 +217,33 @@ describeLive('GET /circulation/members', () => {
     it('a member with no home branch is visible to every branch — the module’s "unknown passes through" convention', async () => {
       const res = await search('?q=Roaming', org.annexeLibrarianToken).expect(200);
       expect(res.body.map((m: { code: string }) => m.code)).toContain('RAF-00060');
+    });
+  });
+
+  /**
+   * How Sckools answers "what has this student borrowed?" — it calls here with
+   * the Student.id it already holds, rather than reading the library's tables.
+   * That is what lets the two services live in separate databases (design §13).
+   */
+  describe('externalRef — the Sckools link', () => {
+    it('finds the member a Sckools student id maps to', async () => {
+      const res = await search(`?externalRef=${SCKOOLS_STUDENT_ID}`).expect(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].code).toBe('RAF-00070');
+    });
+
+    it('returns nothing for a student who has no library member — not an error', async () => {
+      const res = await search('?externalRef=11111111-2222-4333-8444-555555555555').expect(200);
+      expect(res.body).toEqual([]);
+    });
+
+    it('rejects a non-uuid externalRef rather than treating it as a search term', async () => {
+      await search('?externalRef=not-a-uuid').expect(400);
+    });
+
+    it('never crosses tenants: another org cannot resolve this org’s student id', async () => {
+      const res = await search(`?externalRef=${SCKOOLS_STUDENT_ID}`, other.librarianToken, other).expect(200);
+      expect(res.body).toEqual([]);
     });
   });
 

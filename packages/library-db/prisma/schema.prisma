@@ -65,6 +65,20 @@ model LibraryOrg {
   locale       String    @default("en-IN")
   contactEmail String?
   contactPhone String?
+
+  /// The Sckools `School.id` this library belongs to, when the services are
+  /// linked. Null until then — the library runs standalone and must keep
+  /// working that way.
+  ///
+  /// Unique because the merge plan is one LibraryOrg per School (§13). Nullable
+  /// uniqueness is safe in Postgres: many NULLs coexist, so unlinked orgs do
+  /// not collide with each other.
+  ///
+  /// Added BEFORE the library ever held real data. The same column added later
+  /// is a migration against live rows on a table every request touches — this
+  /// costs nothing now and is the cheapest insurance in the schema.
+  schoolId     String?   @unique @db.Uuid
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

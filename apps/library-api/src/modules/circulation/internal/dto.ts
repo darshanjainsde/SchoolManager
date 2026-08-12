@@ -89,6 +89,16 @@ export class SearchMembersQueryDto {
   @IsOptional() @IsString() @MaxLength(100) q?: string;
 
   /**
+   * The Sckools `Student.id` / `Teacher.id` this member was created from.
+   *
+   * This is the join Sckools uses to answer "what has this student borrowed?"
+   * without ever reading the library's tables — it calls here with the id it
+   * already has. Exact match only: it is an id, not a search term, so it does
+   * not go through the ranking path at all.
+   */
+  @IsOptional() @IsUUID('4') externalRef?: string;
+
+  /**
    * Max 50, not the 200 the other list DTOs allow: this feeds a typeahead
    * under a desk input, where a librarian picks from the first few or types
    * more. A bigger page would only ship more children's names to a browser.

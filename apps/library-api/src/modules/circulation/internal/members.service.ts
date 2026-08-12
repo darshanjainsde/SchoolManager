@@ -143,6 +143,25 @@ export class MembersService {
     const limit = query.limit ?? 20;
     const raw = (query.q ?? '').trim();
 
+    // Exact lookup by the Sckools id, short-circuiting the whole ranked search.
+    // This is the cross-service path (§13 of the design): Sckools holds a
+    // Student.id and asks the library who that is here, rather than reading
+    // library tables. Indexed by (orgId, externalRef).
+    if (query.externalRef) {
+      const rows = await tx.member.findMany({
+        where: {
+          orgId,
+          externalRef: query.externalRef,
+          ...(allowedBranches.length > 0
+            ? { OR: [{ homeBranchId: null }, { homeBranchId: { in: allowedBranches } }] }
+            : {}),
+        },
+        select: MEMBER_CARD_SELECT,
+        take: limit,
+      });
+      return rows as MemberCard[];
+    }
+
     // Same "unknown passes through" convention as listFines/listHolds: a
     // member with no home branch is visible to every branch's desk.
     const branchClause =
