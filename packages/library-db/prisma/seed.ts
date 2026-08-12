@@ -66,6 +66,65 @@ function memberBatch(orgId: string, branchId: string, count: number): Prisma.Mem
   return rows;
 }
 
+/**
+ * Without this, a freshly seeded library cannot issue a single book: the desk
+ * refuses with "No circulation policy configured for member type STUDENT".
+ * The API is right to refuse — issuing with no rules is worse than not
+ * issuing — but a seed whose whole job is a usable library must supply the
+ * rules, and this was found by driving the real desk flow rather than by any
+ * test.
+ *
+ * One row per member type, at the ORG level (branchId null), so a branch can
+ * later override a single type without the seed pre-empting that choice.
+ * Numbers are ordinary Indian-school defaults, not placeholders: two weeks,
+ * one renewal, a rupee a day after three days' grace.
+ */
+async function seedCirculationPolicies(
+  prisma: ReturnType<typeof getLibraryPlatformPrisma>,
+  orgId: string,
+): Promise<void> {
+  const types = ['STUDENT', 'TEACHER', 'EXTERNAL'] as const;
+  const byType = {
+    STUDENT: { maxBooks: 3, loanDays: 14, renewLimit: 1, maxHolds: 3 },
+    TEACHER: { maxBooks: 10, loanDays: 30, renewLimit: 2, maxHolds: 5 },
+    EXTERNAL: { maxBooks: 2, loanDays: 14, renewLimit: 0, maxHolds: 1 },
+  } as const;
+
+  for (const memberType of types) {
+    const t = byType[memberType];
+
+    // Not an upsert: `CirculationPolicy` has no `@@unique` to key one on. The
+    // real rule ("at most one org-default row per (orgId, memberType)") is a
+    // partial unique index in SQL, which Prisma cannot express, so there is no
+    // compound `where` to upsert against. Find-then-create is safe here because
+    // a seed is single-threaded; the partial index is what actually holds the
+    // line against anything concurrent.
+    const existing = await prisma.circulationPolicy.findFirst({
+      where: { orgId, branchId: null, memberType },
+      select: { id: true },
+    });
+    if (existing) continue;
+
+    await prisma.circulationPolicy.create({
+      data: {
+        orgId,
+        branchId: null,
+        memberType,
+        maxBooks: t.maxBooks,
+        loanDays: t.loanDays,
+        renewLimit: t.renewLimit,
+        renewDays: t.loanDays,
+        finePerDay: 1,
+        graceDays: 3,
+        maxFine: 100,
+        maxHolds: t.maxHolds,
+        holdShelfDays: 5,
+        maxOutstandingFine: 50,
+      },
+    });
+  }
+}
+
 async function seedRaffles(prisma: ReturnType<typeof getLibraryPlatformPrisma>, seedPassword: string, platformHost: string) {
   const org = await prisma.libraryOrg.upsert({
     where: { slug: 'raffles' },
@@ -125,6 +184,8 @@ async function seedRaffles(prisma: ReturnType<typeof getLibraryPlatformPrisma>, 
     },
   });
 
+  await seedCirculationPolicies(prisma, org.id);
+
   const memberCount = 300;
   const result = await prisma.member.createMany({
     data: memberBatch(org.id, branch.id, memberCount),
@@ -162,6 +223,8 @@ async function seedNorthgate(prisma: ReturnType<typeof getLibraryPlatformPrisma>
     update: {},
     create: { orgId: org.id, name: 'Main Library', code: 'MAIN', active: true },
   });
+
+  await seedCirculationPolicies(prisma, org.id);
 
   const result = await prisma.member.createMany({
     data: memberBatch(org.id, branch.id, 5),
