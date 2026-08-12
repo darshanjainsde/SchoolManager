@@ -41,6 +41,23 @@ outcomes: `shipped` · `shipped-after-fix` · `died-nothing` · `died-partial` �
 The `outcome` field is the whole point — a dispatch that dies after 90 minutes
 costs what one that ships a feature costs, and nothing else distinguishes them.
 
+## Execution mode — decided 2026-08-12
+
+**Hybrid: the controller implements, subagents review.** Measured over 65+
+dispatches: implementation dispatches were 70% of wall time and carried every
+death; review dispatches were 15% and caught every defect that mattered — two
+live cross-tenant writes, an RLS audit passing against an empty schema, an
+11-minute `/ready` hang, a bundle that never built, a migration that would have
+failed the first production deploy. None would have failed a test.
+
+So: write the code in-session, and dispatch adversarial reviews. Checkpoint to
+the ledger often, since the controller no longer gets fresh eyes per task and
+that was the property being traded away.
+
+Full-subagent implementation is still right for work that is large, mechanical,
+and well-specified enough to hand over whole. The rules below apply whenever a
+dispatch does happen.
+
 ## Dispatching subagents
 
 Measured over 65 dispatches (15h35m): **reviews are 15% of wall time, dying
