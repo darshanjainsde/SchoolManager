@@ -283,3 +283,211 @@ a { color: var(--lb-brand); }
   text-transform: uppercase; color: var(--lb-ink-3); align-self: center;
 }
 .lbx-dl dd { margin: 0; }
+
+/* ── circulation desk ──────────────────────────────────────────────────── */
+.lbx-scanbar {
+  display: flex; gap: 0.5rem; align-items: center;
+  background: var(--lb-paper); border: 2px solid var(--lb-brand);
+  border-radius: var(--lb-r-sm); padding: 0.55rem 0.7rem;
+  box-shadow: 0 0 0 4px var(--lb-brand-tint);
+}
+.lbx-scan-ico { color: var(--lb-brand); font-size: 1.05rem; }
+.lbx-scanbar input {
+  flex: 1; border: 0; background: none; outline: none; min-width: 0;
+  font-family: var(--lb-mono); font-size: 0.95rem; color: var(--lb-ink); padding: 0.1rem 0;
+}
+.lbx-scanbar input::placeholder { color: var(--lb-ink-3); }
+.lbx-scanhint {
+  font-family: var(--lb-mono); font-size: 0.64rem; color: var(--lb-ink-3);
+  letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+}
+
+.lbx-rows { margin-top: 0.85rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.lbx-row {
+  display: grid; grid-template-columns: 2.3rem 1fr auto; gap: 0.75rem;
+  align-items: center; padding: 0.6rem 0.75rem;
+  background: var(--lb-paper); border: 1px solid var(--lb-line);
+  border-radius: var(--lb-r-sm);
+  animation: lbx-flipin 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes lbx-flipin {
+  from { opacity: 0; transform: translateY(-14px) rotateX(-18deg); }
+  to { opacity: 1; transform: none; }
+}
+.lbx-cover {
+  width: 2.3rem; height: 3rem; border-radius: 3px; flex: none;
+  display: grid; place-items: center; color: #fff; font-size: 0.95rem;
+  box-shadow: var(--lb-shadow-sm);
+  background: linear-gradient(150deg, var(--lb-brand), var(--lb-brand-2));
+}
+.lbx-cover.returned { background: linear-gradient(150deg, var(--lb-good), #5d8a66); }
+.lbx-cover.fined { background: linear-gradient(150deg, var(--lb-accent), #b0863a); }
+.lbx-cover.failed { background: linear-gradient(150deg, var(--lb-bad), #a85450); }
+.lbx-row-t { font-weight: 600; font-size: 0.88rem; font-family: var(--lb-mono); }
+.lbx-row-m { font-size: 0.76rem; color: var(--lb-ink-3); }
+
+/* The outcome lands as a rotated ink stamp — the desk's one flourish, and it
+   carries a word as well as a colour so it is never colour alone. */
+.lbx-stamp {
+  font-family: var(--lb-mono); font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  border: 2px solid var(--lb-good); color: var(--lb-good); background: var(--lb-good-tint);
+  padding: 0.2rem 0.45rem; border-radius: 4px; transform: rotate(-3.5deg);
+  text-align: center; line-height: 1.25; white-space: nowrap;
+  animation: lbx-stampin 0.3s 0.12s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.lbx-stamp small { display: block; font-size: 0.78em; font-weight: 500; letter-spacing: 0; }
+.lbx-stamp.returned { border-color: var(--lb-brand); color: var(--lb-brand); background: var(--lb-brand-tint); }
+.lbx-stamp.fined { border-color: var(--lb-accent); color: var(--lb-accent); background: var(--lb-accent-tint); }
+.lbx-stamp.failed { border-color: var(--lb-bad); color: var(--lb-bad); background: var(--lb-bad-tint); }
+@keyframes lbx-stampin {
+  from { opacity: 0; transform: rotate(-3.5deg) scale(1.7); }
+  60% { opacity: 1; transform: rotate(-3.5deg) scale(0.94); }
+  to { opacity: 1; transform: rotate(-3.5deg) scale(1); }
+}
+
+/* ── due ring ──────────────────────────────────────────────────────────── */
+.lbx-ring { width: 26px; height: 26px; flex: none; }
+.lbx-ring circle { fill: none; stroke-width: 3; }
+.lbx-ring-bg { stroke: var(--lb-line); }
+.lbx-ring-fg {
+  stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%;
+  transition: stroke-dashoffset 0.4s ease;
+}
+.lbx-ring-fg.ok { stroke: var(--lb-good); }
+.lbx-ring-fg.soon { stroke: var(--lb-accent); }
+.lbx-ring-fg.over { stroke: var(--lb-bad); animation: lbx-pulse 1.8s 1s ease-in-out infinite; }
+@keyframes lbx-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* ============================================================
+   Member picker — find-a-person at the desk
+   ============================================================ */
+
+.lbx-picker { position: relative; display: flex; flex-direction: column; gap: 0.3rem; }
+.lbx-picker-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--lb-ink-3);
+  font-weight: 600;
+}
+.lbx-picker input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--lb-line-2);
+  border-radius: var(--lb-r-sm);
+  background: var(--lb-surface);
+  color: var(--lb-ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.lbx-picker input:focus-visible { outline: 2px solid var(--lb-brand); outline-offset: 1px; }
+
+/* The dropdown floats over the scan rows rather than pushing them down —
+   a list that shoves the desk's own controls around as you type is unusable. */
+.lbx-hits {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0.25rem 0 0;
+  padding: 0.2rem;
+  list-style: none;
+  background: var(--lb-surface);
+  border: 1px solid var(--lb-line-2);
+  border-radius: var(--lb-r-sm);
+  box-shadow: var(--lb-shadow);
+  max-height: 17rem;
+  overflow-y: auto;
+}
+.lbx-hits li { margin: 0; }
+.lbx-hit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.45rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--lb-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lbx-hit.on { background: var(--lb-brand-tint); }
+.lbx-hit-name { flex: 1; font-size: 0.87rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lbx-hit-code { font-size: 0.75rem; color: var(--lb-ink-3); flex: none; }
+.lbx-hits-empty { margin: 0.4rem 0 0; font-size: 0.82rem; color: var(--lb-ink-3); }
+
+/* The chosen member: a card, not a text field, so it is obvious at a glance
+   who the next scan will be issued to. */
+.lbx-member-chosen {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--lb-line-2);
+  border-radius: var(--lb-r-sm);
+  background: var(--lb-surface);
+  box-shadow: var(--lb-shadow-sm);
+  animation: lbx-member-in 0.22s ease-out both;
+}
+@keyframes lbx-member-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lbx-member-chosen { animation: none; }
+}
+.lbx-member-chosen > div { flex: 1; }
+.lbx-member-name { font-weight: 600; font-size: 0.92rem; }
+.lbx-member-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+  color: var(--lb-ink-3);
+  margin-top: 0.1rem;
+}
+
+.lbx-disc {
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.lbx-disc.sm { width: 1.5rem; height: 1.5rem; font-size: 0.6rem; }
+
+.lbx-pill {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.08rem 0.35rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.lbx-pill.ok { background: var(--lb-good-tint); color: var(--lb-good); }
+.lbx-pill.warn { background: var(--lb-accent-tint); color: var(--lb-accent); }
+.lbx-pill.stop { background: var(--lb-bad-tint); color: var(--lb-bad); }
+
+/* Overdue days: the number carries the urgency, so it is sized and coloured
+   rather than sitting in a sentence. */
+.lbx-days { font-variant-numeric: tabular-nums; font-weight: 700; }
+.lbx-days.soon { color: var(--lb-accent); }
+.lbx-days.over { color: var(--lb-bad); }
+.lbx-sub { display: block; font-size: 0.75rem; color: var(--lb-ink-3); margin-top: 0.1rem; }
+.lbx-empty {
+  padding: 1.6rem 1rem;
+  text-align: center;
+  color: var(--lb-ink-3);
+  font-size: 0.88rem;
+}

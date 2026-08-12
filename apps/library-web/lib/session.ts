@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 /**
  * Where the tokens live, and the honest note about it.
  *
@@ -75,4 +77,27 @@ export function readClaims(accessToken: string): TokenClaims | null {
 export function isExpired(claims: TokenClaims | null, skewSeconds = 30): boolean {
   if (!claims?.exp) return false;
   return claims.exp * 1000 - skewSeconds * 1000 <= Date.now();
+}
+
+export interface ApiCtx {
+  host: string;
+  token: string;
+}
+
+/**
+ * The session as request context, read AFTER mount.
+ *
+ * `readSession` touches localStorage, which does not exist on the server.
+ * Calling it during render makes the server HTML and the hydration render
+ * disagree — the exact mismatch this project has hit before. So it runs in an
+ * effect and the first paint is `null`; every screen using this must handle
+ * that one render where there is no context yet.
+ */
+export function useApiCtx(): ApiCtx | null {
+  const [ctx, setCtx] = useState<ApiCtx | null>(null);
+  useEffect(() => {
+    const s = readSession();
+    if (s) setCtx({ host: s.host, token: s.accessToken });
+  }, []);
+  return ctx;
 }
