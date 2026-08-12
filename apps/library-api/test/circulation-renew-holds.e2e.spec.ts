@@ -251,6 +251,41 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       expect(positions).toEqual([1, 2]); // no duplicate, no gap
     });
 
+    /**
+     * Phase 1a review finding: `MAX(queuePosition)+1` was scoped to
+     * PENDING/READY holds only, so cancelling the hold that currently holds
+     * the max position shrinks that set and can reissue the cancelled
+     * hold's OLD position to a brand-new hold. Never a live conflict (the
+     * cancelled hold is terminal), but two different Hold rows for the same
+     * title showing the same `queuePosition` reads as a duplicate from any
+     * console listing a title's hold history. Fixed by scoping the MAX to
+     * every hold the title has EVER had, regardless of status — a strictly
+     * increasing per-title counter, never reused.
+     */
+    it('cancelling the highest-position hold does not let a later hold reuse its queuePosition', async () => {
+      const memberA = await seedMember(org.orgId, org.branchId, `REISSUE-A-${Date.now()}`);
+      const memberB = await seedMember(org.orgId, org.branchId, `REISSUE-B-${Date.now()}`);
+      const memberC = await seedMember(org.orgId, org.branchId, `REISSUE-C-${Date.now()}`);
+      const title = await seedTitle(org.orgId, 'queue-position-reissue');
+
+      const r1 = await createHold(title.id, memberA.id);
+      expect(r1.body.hold.queuePosition).toBe(1);
+      const r2 = await createHold(title.id, memberB.id);
+      expect(r2.body.hold.queuePosition).toBe(2); // this is the one about to be cancelled — currently the max
+
+      const cancelRes = await request(app.getHttpServer())
+        .delete(`/circulation/holds/${r2.body.hold.id}`)
+        .set('X-Library-Host', host(org))
+        .set('Authorization', `Bearer ${org.librarianToken}`);
+      expect(cancelRes.status).toBe(200);
+
+      const r3 = await createHold(title.id, memberC.id);
+      expect(r3.status).toBe(201);
+      // Without the fix this would be 2 — the position the just-cancelled
+      // hold used, since MAX({PENDING,READY}) after the cancel is only 1.
+      expect(r3.body.hold.queuePosition).toBe(3);
+    });
+
     it('GET /circulation/holds reports a stale READY hold as EXPIRED at read time, without anything having swept the stored row', async () => {
       const member = await seedMember(org.orgId, org.branchId, `LAZY-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'lazy-expiry');

@@ -104,6 +104,15 @@ describeLive('authz matrix — every role against every endpoint', () => {
         registered.push(`${m.toUpperCase()} ${layer.route.path}`);
       }
     }
+    // Phase 1a review finding: `server._router?.stack ?? []` degrades to an
+    // empty array — silently — if Express's internals ever move `_router`
+    // (Express 5 already renames it), and an empty `registered` makes
+    // `missing` trivially `[]` too: this test would pass HAVING CHECKED
+    // NOTHING, exactly the failure mode `rls-audit.ts`'s own `tablesChecked`
+    // guard exists to catch for the RLS coverage audit. Asserting a nonzero
+    // count is what makes "covers every registered route" an actual claim
+    // rather than a vacuous one.
+    expect(registered.length).toBeGreaterThan(0);
     const listed = new Set(ENDPOINTS.map((e) => `${e.method} ${e.path}`));
     const missing = registered.filter((r) => !listed.has(r));
     expect(missing).toEqual([]); // add the endpoint to test/endpoints.ts

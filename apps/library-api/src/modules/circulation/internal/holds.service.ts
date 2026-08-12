@@ -161,8 +161,26 @@ export class HoldsService {
     );
 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${orgId}), hashtext(${dto.titleId}))`;
+    // Phase 1a review finding: MAX(queuePosition) must be taken over EVERY
+    // hold this title has ever had, not just the currently PENDING/READY
+    // ones. Cancelling (or the copy-issue flow collecting) the hold that
+    // currently holds the max position SHRINKS the {PENDING,READY} set, so
+    // an aggregate scoped to that set alone can recompute a LOWER max and
+    // then reissue +1 as a position a terminal (CANCELLED/COLLECTED/EXPIRED)
+    // hold already used. That is never a LIVE collision — the unique index
+    // `hold_one_pending_per_member_title` and this method's own status
+    // filtering elsewhere only ever care about currently-open holds — but it
+    // makes `queuePosition` non-monotonic per title, which reads as a
+    // duplicate from any UI/report listing a title's hold HISTORY (console).
+    // Scoping the max to ALL statuses makes position numbers a strictly
+    // increasing per-title sequence — like a ticket counter — with gaps left
+    // by terminal holds NEVER reused; ordering among live holds (this
+    // service's `listHolds`, `promoteOrRelease`'s PENDING lock/order) is
+    // unaffected, since both already filter by status independently and
+    // only ever rely on RELATIVE order, never on the numbers being
+    // contiguous.
     const agg = await tx.hold.aggregate({
-      where: { orgId, titleId: dto.titleId, status: { in: ['PENDING', 'READY'] } },
+      where: { orgId, titleId: dto.titleId },
       _max: { queuePosition: true },
     });
     const queuePosition = (agg._max.queuePosition ?? 0) + 1;
