@@ -39,9 +39,19 @@ interface FinesOrg {
 
 const host = (org: Pick<FinesOrg, 'slug'>) => `${org.slug}.library.trackyour.in`;
 
-async function seedOrg(suffix: string): Promise<FinesOrg> {
+/**
+ * `timezone` defaults to the schema's own default (`Asia/Kolkata`) when
+ * omitted — real orgs never see this parameter; it exists only so the
+ * pre-existing "reconciles ... against hand-computed fixtures" suite below
+ * (whose fixtures are deliberately UTC-midnight-based, unrelated to this
+ * task) can keep asserting against UTC boundaries explicitly, while the new
+ * "follows the org's own timezone" suite exercises the real default.
+ */
+async function seedOrg(suffix: string, timezone?: string): Promise<FinesOrg> {
   const prisma = getLibraryPlatformPrisma();
-  const org = await prisma.libraryOrg.create({ data: { slug: `fines-${suffix}`, name: 'Fines E2E', status: 'LIVE' } });
+  const org = await prisma.libraryOrg.create({
+    data: { slug: `fines-${suffix}`, name: 'Fines E2E', status: 'LIVE', ...(timezone ? { timezone } : {}) },
+  });
   const branch = await prisma.branch.create({ data: { orgId: org.id, name: 'Main', code: 'MAIN' } });
   await prisma.circulationPolicy.create({ data: { orgId: org.id, memberType: 'STUDENT', ...POLICY } });
 
@@ -235,10 +245,10 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
       const futureCopy = await seedCopy(org.orgId, org.branchId, title.id, `OD-FUTURE-${Date.now()}`);
       const prisma = getLibraryPlatformPrisma();
       const overdueLoan = await prisma.loan.create({
-        data: { orgId: org.orgId, copyId: overdueCopy.id, memberId: member.id, dueAt: new Date(Date.now() - 3 * MS_PER_DAY) },
+        data: { orgId: org.orgId, copyId: overdueCopy.id, branchId: org.branchId, memberId: member.id, dueAt: new Date(Date.now() - 3 * MS_PER_DAY) },
       });
       await prisma.loan.create({
-        data: { orgId: org.orgId, copyId: futureCopy.id, memberId: member.id, dueAt: new Date(Date.now() + 3 * MS_PER_DAY) },
+        data: { orgId: org.orgId, copyId: futureCopy.id, branchId: org.branchId, memberId: member.id, dueAt: new Date(Date.now() + 3 * MS_PER_DAY) },
       });
 
       const res = await request(app.getHttpServer())
@@ -288,6 +298,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
         data: copies.map((c, i) => ({
           orgId: org.orgId,
           copyId: c.id,
+          branchId: org.branchId,
           memberId: member.id,
           // Spread ± N/2 hours around now: roughly half overdue, half not — realistic selectivity for the `dueAt < now` predicate.
           dueAt: new Date(nowMs + (i - N / 2) * 3_600_000),
@@ -315,7 +326,10 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
     const hoursIn = (h: number) => new Date(dayStart.getTime() + h * 3_600_000);
 
     beforeAll(async () => {
-      org = await seedOrg(`report-${Date.now().toString(36)}`);
+      // Explicit 'UTC' — these fixtures are deliberately UTC-midnight-based
+      // (see hoursIn() above); the org's own timezone (Asia/Kolkata by
+      // default) is exercised by the dedicated describe block below instead.
+      org = await seedOrg(`report-${Date.now().toString(36)}`, 'UTC');
       const branchId = org.branchId;
       const prisma = getLibraryPlatformPrisma();
       const title = await seedTitle(org.orgId, 'day-report');
@@ -323,28 +337,28 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
 
       // L1: issued IN the day, due far in the future, still open -> issued+1, NOT overdue at day end.
       const c1 = await seedCopy(org.orgId, branchId, title.id, `DR-1-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c1.id, memberId: member.id, issuedAt: hoursIn(1), dueAt: new Date(dayStart.getTime() + 14 * MS_PER_DAY) } });
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c1.id, branchId, memberId: member.id, issuedAt: hoursIn(1), dueAt: new Date(dayStart.getTime() + 14 * MS_PER_DAY) } });
 
       // L2: issued IN the day, due IN the day, never returned -> issued+1, overdue+1 (still outstanding, past due by day end).
       const c2 = await seedCopy(org.orgId, branchId, title.id, `DR-2-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c2.id, memberId: member.id, issuedAt: hoursIn(2), dueAt: hoursIn(3) } });
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c2.id, branchId, memberId: member.id, issuedAt: hoursIn(2), dueAt: hoursIn(3) } });
 
       // L3: issued IN the day, due IN the day, returned IN the day BEFORE its own dueAt -> issued+1, returned+1, NOT overdue (resolved before day end).
       const c3 = await seedCopy(org.orgId, branchId, title.id, `DR-3-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c3.id, memberId: member.id, issuedAt: hoursIn(3), dueAt: hoursIn(5), returnedAt: hoursIn(4), status: 'RETURNED' } });
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c3.id, branchId, memberId: member.id, issuedAt: hoursIn(3), dueAt: hoursIn(5), returnedAt: hoursIn(4), status: 'RETURNED' } });
 
       // L4: issued the day BEFORE, due IN the day, never returned -> NOT counted as issued (wrong day), but overdue+1 by this day's end.
       const c4 = await seedCopy(org.orgId, branchId, title.id, `DR-4-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c4.id, memberId: member.id, issuedAt: new Date(dayStart.getTime() - MS_PER_DAY), dueAt: hoursIn(1) } });
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c4.id, branchId, memberId: member.id, issuedAt: new Date(dayStart.getTime() - MS_PER_DAY), dueAt: hoursIn(1) } });
 
       // L5: issued long before, was overdue, but returned IN the day -> returned+1, NOT counted as issued, NOT overdue (resolved before day end).
       const c5 = await seedCopy(org.orgId, branchId, title.id, `DR-5-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c5.id, memberId: member.id, issuedAt: new Date(dayStart.getTime() - 20 * MS_PER_DAY), dueAt: new Date(dayStart.getTime() - 10 * MS_PER_DAY), returnedAt: hoursIn(6), status: 'RETURNED' } });
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c5.id, branchId, memberId: member.id, issuedAt: new Date(dayStart.getTime() - 20 * MS_PER_DAY), dueAt: new Date(dayStart.getTime() - 10 * MS_PER_DAY), returnedAt: hoursIn(6), status: 'RETURNED' } });
 
       // L6: outside the window entirely (issued/due/returned all the day after) -> must not appear in any count.
       const c6 = await seedCopy(org.orgId, branchId, title.id, `DR-6-${Date.now()}`);
       await prisma.loan.create({
-        data: { orgId: org.orgId, copyId: c6.id, memberId: member.id, issuedAt: new Date(dayStart.getTime() + MS_PER_DAY + 3_600_000), dueAt: new Date(dayStart.getTime() + 15 * MS_PER_DAY) },
+        data: { orgId: org.orgId, copyId: c6.id, branchId, memberId: member.id, issuedAt: new Date(dayStart.getTime() + MS_PER_DAY + 3_600_000), dueAt: new Date(dayStart.getTime() + 15 * MS_PER_DAY) },
       });
 
       // Fines: two accrued IN the day (45.50 + 12.25 = 57.75), one OUTSIDE the day (999, must be excluded).
@@ -367,8 +381,93 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
         issued: 3, // L1, L2, L3
         returned: 2, // L3, L5
         overdue: 2, // L2, L4
-        finesAccrued: { count: 2, amount: 57.75 },
+        // Decimal STRING, not a number — see fines.service.ts's
+        // `decimalToMoneyString` doc: this is the one money representation
+        // used across the whole API now, matching how `Fine.amount` already
+        // serialized on every other route.
+        finesAccrued: { count: 2, amount: '57.75' },
       });
+    });
+  });
+
+  /**
+   * "Also fix" (Phase 1a review): the day report used UTC calendar-day
+   * boundaries regardless of the org's own timezone, which is 5.5 hours
+   * wrong for an Indian school (`LibraryOrg.timezone` defaults to
+   * `Asia/Kolkata`) — the desk's own "today" and the report's "today"
+   * disagreed for any issue in the first 5.5 hours of the IST calendar day
+   * (00:00–05:30 IST), which the OLD UTC-midnight boundary still counted as
+   * the PREVIOUS UTC day. Fixed by `fines.service.ts`'s `dayRangeForOrg`,
+   * which computes the org's own midnight-to-midnight window in Postgres via
+   * `AT TIME ZONE` rather than a fixed-offset shift in JS.
+   *
+   * Every `issuedAt` below is built by parsing a REAL ISO-8601 string with
+   * an explicit `+05:30` offset (`new Date(...)`), never by hand-subtracting
+   * 5.5 hours — LIBRARY-TRAPS.md #15: verification code must not reimplement
+   * the thing it's checking from memory.
+   */
+  describe("GET /circulation/day-report — follows the org's own timezone (Asia/Kolkata)", () => {
+    let org: FinesOrg;
+
+    beforeAll(async () => {
+      // No timezone override -> the schema default, Asia/Kolkata, which is
+      // exactly the case this task's proof scenario asks for.
+      org = await seedOrg(`ist-${Date.now().toString(36)}`);
+    });
+    afterAll(() => cleanup(org.orgId));
+
+    const dayReport = (date: string) =>
+      request(app.getHttpServer())
+        .get('/circulation/day-report')
+        .query({ date })
+        .set('X-Library-Host', host(org))
+        .set('Authorization', `Bearer ${org.librarianToken}`);
+
+    it('an issue at 21:00 IST lands in THAT calendar day\'s report, not the next', async () => {
+      const member = await seedMember(org.orgId, org.branchId, `IST-EVE-${Date.now()}`);
+      const title = await seedTitle(org.orgId, 'ist-evening');
+      const copy = await seedCopy(org.orgId, org.branchId, title.id, `IST-EVE-${Date.now()}`);
+      const day = '2026-08-08';
+      const issuedAt = new Date(`${day}T21:00:00.000+05:30`);
+      await getLibraryPlatformPrisma().loan.create({
+        data: {
+          orgId: org.orgId, copyId: copy.id, branchId: org.branchId, memberId: member.id,
+          issuedAt, dueAt: new Date(issuedAt.getTime() + 14 * MS_PER_DAY),
+        },
+      });
+
+      const today = await dayReport(day);
+      expect(today.status).toBe(200);
+      expect(today.body.date).toBe(day);
+      expect(today.body.issued).toBeGreaterThanOrEqual(1);
+
+      const tomorrow = await dayReport('2026-08-09');
+      expect(tomorrow.body.issued).toBe(0);
+    });
+
+    it('an issue at 01:30 IST — inside the old UTC-boundary bug window — lands in the CORRECT IST day, not the previous UTC day', async () => {
+      const member = await seedMember(org.orgId, org.branchId, `IST-EARLY-${Date.now()}`);
+      const title = await seedTitle(org.orgId, 'ist-early-morning');
+      const copy = await seedCopy(org.orgId, org.branchId, title.id, `IST-EARLY-${Date.now()}`);
+      const day = '2026-08-10';
+      // 01:30 IST on the 10th is 20:00 UTC on the 9th — under the OLD
+      // UTC-midnight boundary this would have been counted in the 9th's
+      // report, not the 10th's, even though the desk's own IST wall clock
+      // says it happened on the 10th. This is the actual discriminating
+      // case for the bug the task's own words describe.
+      const issuedAt = new Date(`${day}T01:30:00.000+05:30`);
+      await getLibraryPlatformPrisma().loan.create({
+        data: {
+          orgId: org.orgId, copyId: copy.id, branchId: org.branchId, memberId: member.id,
+          issuedAt, dueAt: new Date(issuedAt.getTime() + 14 * MS_PER_DAY),
+        },
+      });
+
+      const correctDay = await dayReport(day);
+      expect(correctDay.body.issued).toBeGreaterThanOrEqual(1);
+
+      const oldUtcDay = await dayReport('2026-08-09');
+      expect(oldUtcDay.body.issued).toBe(0);
     });
   });
 });

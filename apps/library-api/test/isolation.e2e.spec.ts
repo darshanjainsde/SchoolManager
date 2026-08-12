@@ -206,6 +206,7 @@ describeLive('circulation cross-org isolation (Loan)', () => {
       data: {
         orgId: orgB.id,
         copyId: copyB.id,
+        branchId: orgB.branchId,
         memberId: orgB.memberId,
         dueAt: new Date(Date.now() + 14 * 86_400_000),
       },
@@ -239,6 +240,7 @@ describeLive('circulation cross-org isolation (Loan)', () => {
           data: {
             orgId: orgB.id,
             copyId: copyB.id,
+            branchId: orgB.branchId,
             memberId: orgB.memberId,
             dueAt: new Date(Date.now() + 14 * 86_400_000),
           },

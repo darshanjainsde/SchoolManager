@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type CopyStatus, type Loan, type Fine, type LibraryTx } from '@library/db';
+import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import { loadPolicy } from './policy-loader';
 import {
   computeFine,
@@ -88,6 +89,16 @@ export class LoansService {
    * lookup here, on `tx`, closes that and is race-free — a lookup on a
    * separate connection would be a TOCTOU against the write below.
    *
+   * `allowedBranches` is the CALLING STAFF USER's branch scope
+   * (`LibJwtPayload.branches`), checked against the COPY's own branch after
+   * it is loaded — never a branch named in the request, which doesn't exist
+   * for this route (`IssueLoanDto` carries a barcode and a memberId, no
+   * branchId). This is the missing half of the divergence the Phase 1a
+   * review found: `evaluateIssue`'s BRANCH_MISMATCH (below) is a different
+   * rule entirely — it compares the MEMBER's home branch to the copy, and
+   * stays unchanged. An ASSISTANT scoped to branch A must be denied issuing
+   * a branch-B copy regardless of the member's own home branch.
+   *
    * Concurrency: this method does NOT itself serialize two callers issuing
    * the same barcode — under READ COMMITTED, two transactions that both
    * `BEGIN` before either commits can both read the same "copy is
@@ -103,14 +114,22 @@ export class LoansService {
    * circulation-issue-return.e2e.spec.ts for the same proof against the
    * real /circulation/issue route).
    */
-  async issue(tx: LibraryTx, orgId: string, dto: IssueLoanDto, actorUserId: string, now: Date): Promise<IssueResult> {
+  async issue(
+    tx: LibraryTx,
+    orgId: string,
+    dto: IssueLoanDto,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<IssueResult> {
     const copy = await tx.copy.findUnique({ where: { orgId_barcode: { orgId, barcode: dto.barcode } } });
     if (!copy) throw new NotFoundException('Copy not found');
+    assertBranchInScope(copy.branchId, allowedBranches);
 
     const member = await tx.member.findUnique({ where: { id: dto.memberId } });
     if (!member) throw new NotFoundException('Member not found');
 
-    const policy = await loadPolicy(tx, orgId, member.memberType);
+    const policy = await loadPolicy(tx, orgId, member.memberType, copy.branchId);
 
     // Only relevant when the copy is currently ON_HOLD_SHELF — the READY
     // hold that put it there is what decides whether THIS member may take
@@ -153,6 +172,7 @@ export class LoansService {
         data: {
           orgId,
           copyId: copy.id,
+          branchId: copy.branchId,
           memberId: member.id,
           dueAt: decision.dueAt,
           issuedByUserId: actorUserId,
@@ -197,12 +217,25 @@ export class LoansService {
    * amount is > 0) -> promote the title's next pending hold onto this copy,
    * or set `Copy.status = AVAILABLE` if there is none.
    */
-  async returnLoan(tx: LibraryTx, orgId: string, dto: ReturnLoanDto, actorUserId: string, now: Date): Promise<ReturnResult> {
+  async returnLoan(
+    tx: LibraryTx,
+    orgId: string,
+    dto: ReturnLoanDto,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<ReturnResult> {
     const copy = await tx.copy.findUnique({ where: { orgId_barcode: { orgId, barcode: dto.barcode } } });
     if (!copy) throw new NotFoundException('Copy not found');
 
     const loan = await tx.loan.findFirst({ where: { copyId: copy.id, returnedAt: null } });
     if (!loan) throw new NotFoundException('No active loan for this copy');
+    // Checked against the LOAN's own branchId (the branch it was issued
+    // at), not the copy's — they are always equal in this phase (nothing
+    // moves a copy between branches after issue), but the loan row is the
+    // one this action actually mutates, so that's what a staff user's scope
+    // is checked against.
+    assertBranchInScope(loan.branchId, allowedBranches);
 
     // Loan.member is onDelete: Restrict, so this row is guaranteed to exist
     // for any real Loan — this findUnique is for memberType (the fine
@@ -212,7 +245,7 @@ export class LoansService {
     const member = await tx.member.findUnique({ where: { id: loan.memberId } });
     if (!member) throw new NotFoundException('Member not found');
 
-    const policy = await loadPolicy(tx, orgId, member.memberType);
+    const policy = await loadPolicy(tx, orgId, member.memberType, loan.branchId);
     const { days, amount } = computeFine(policy, loan.dueAt, now);
 
     const returnedLoan = await tx.loan.update({
@@ -246,7 +279,7 @@ export class LoansService {
       },
     });
 
-    const promotion = await this.promoteOrRelease(tx, orgId, copy.id, copy.titleId, actorUserId, now);
+    const promotion = await this.promoteOrRelease(tx, orgId, copy.id, copy.branchId, copy.titleId, actorUserId, now);
 
     return { loan: returnedLoan, fine, promotedHoldId: promotion.promotedHoldId, copyStatus: promotion.copyStatus };
   }
@@ -317,6 +350,7 @@ export class LoansService {
     tx: LibraryTx,
     orgId: string,
     copyId: string,
+    branchId: string,
     titleId: string,
     actorUserId: string,
     now: Date,
@@ -358,13 +392,16 @@ export class LoansService {
     // tunable (see CirculationPolicy).
     const holdMember = await tx.member.findUnique({ where: { id: winnerRow.memberId }, select: { memberType: true } });
     if (!holdMember) throw new NotFoundException('Hold member not found');
-    const holdPolicy = await loadPolicy(tx, orgId, holdMember.memberType);
+    // Branch-specific policy of the BRANCH THE COPY IS AT (not the winning
+    // member's home branch) — that copy's branch is what the desk holding it
+    // physically operates under.
+    const holdPolicy = await loadPolicy(tx, orgId, holdMember.memberType, branchId);
     const expiresAt = holdShelfExpiry(holdPolicy, now);
 
     await tx.copy.update({ where: { id: copyId }, data: { status: 'ON_HOLD_SHELF' } });
     await tx.hold.update({
       where: { id: winnerRow.id },
-      data: { status: 'READY', readyCopyId: copyId, readyAt: now, expiresAt },
+      data: { status: 'READY', readyCopyId: copyId, branchId, readyAt: now, expiresAt },
     });
 
     // Durable record only — nothing drains this table until Phase 4 (see

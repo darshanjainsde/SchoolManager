@@ -305,7 +305,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
       copy = await seedCopy(org.orgId, org.branchId, title.id, `HR-${Date.now()}`);
 
       const prisma = getLibraryPlatformPrisma();
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copy.id, memberId: borrower.id, dueAt: FOURTEEN_DAYS_OUT } });
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copy.id, branchId: org.branchId, memberId: borrower.id, dueAt: FOURTEEN_DAYS_OUT } });
       await prisma.copy.update({ where: { id: copy.id }, data: { status: 'ON_LOAN' } });
       hold = await prisma.hold.create({
         data: { orgId: org.orgId, titleId: title.id, memberId: waiter.id, queuePosition: 1, status: 'PENDING', expiresAt: FAR_FUTURE },
@@ -378,9 +378,9 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
       copyY = await seedCopy(org.orgId, org.branchId, title.id, `HRACE-Y-${Date.now()}`);
 
       const prisma = getLibraryPlatformPrisma();
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyX.id, memberId: borrowerX.id, dueAt: FOURTEEN_DAYS_OUT } });
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyX.id, branchId: org.branchId, memberId: borrowerX.id, dueAt: FOURTEEN_DAYS_OUT } });
       await prisma.copy.update({ where: { id: copyX.id }, data: { status: 'ON_LOAN' } });
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyY.id, memberId: borrowerY.id, dueAt: FOURTEEN_DAYS_OUT } });
+      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyY.id, branchId: org.branchId, memberId: borrowerY.id, dueAt: FOURTEEN_DAYS_OUT } });
       await prisma.copy.update({ where: { id: copyY.id }, data: { status: 'ON_LOAN' } });
 
       hold = await prisma.hold.create({

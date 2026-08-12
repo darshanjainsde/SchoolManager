@@ -1,21 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { LibraryTx } from '@library/db';
+import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import type { AddCopyDto, UpdateCopyDto } from './dto';
 import { mapPrismaError } from './prisma-errors';
-
-/**
- * Branch authorization for a route that names no `branchId` of its own —
- * `PATCH /catalog/copies/:id` and `GET /catalog/copies/by-barcode/:barcode`
- * act on an existing Copy row, and the branch that matters is a property of
- * THAT row, not of the request. `BranchScopeGuard` cannot enforce this: it
- * only ever sees params/query/body, never a database row. So the check
- * happens here, after the copy is loaded, using the same "empty array means
- * all branches" convention `BranchScopeGuard` uses.
- */
-function assertBranchInScope(branchId: string, allowedBranches: string[]): void {
-  if (allowedBranches.length === 0) return;
-  if (!allowedBranches.includes(branchId)) throw new ForbiddenException('Branch out of scope');
-}
 
 @Injectable()
 export class CopiesService {

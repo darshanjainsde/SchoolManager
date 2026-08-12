@@ -70,8 +70,8 @@ function seedCopy(orgId: string, branchId: string, titleId: string, barcode: str
   return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, barcode } });
 }
 
-function seedActiveLoan(orgId: string, copyId: string, memberId: string, dueAt: Date) {
-  return getLibraryPlatformPrisma().loan.create({ data: { orgId, copyId, memberId, dueAt } });
+function seedActiveLoan(orgId: string, copyId: string, branchId: string, memberId: string, dueAt: Date) {
+  return getLibraryPlatformPrisma().loan.create({ data: { orgId, copyId, branchId, memberId, dueAt } });
 }
 
 async function cleanup(orgId: string): Promise<void> {
@@ -115,7 +115,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       const member = await seedMember(org.orgId, org.branchId, `RENEW-OK-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'renew-ok');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `RENEW-OK-${Date.now()}`);
-      const loan = await seedActiveLoan(org.orgId, copy.id, member.id, FOURTEEN_DAYS_OUT);
+      const loan = await seedActiveLoan(org.orgId, copy.id, org.branchId, member.id, FOURTEEN_DAYS_OUT);
 
       const before = Date.now();
       const res = await renew(copy.barcode);
@@ -139,7 +139,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       const waiter = await seedMember(org.orgId, org.branchId, `RENEW-HH-WAIT-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'renew-has-holds');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `RENEW-HH-${Date.now()}`);
-      await seedActiveLoan(org.orgId, copy.id, borrower.id, FOURTEEN_DAYS_OUT);
+      await seedActiveLoan(org.orgId, copy.id, org.branchId, borrower.id, FOURTEEN_DAYS_OUT);
 
       const holdRes = await request(app.getHttpServer())
         .post('/circulation/holds')
@@ -157,7 +157,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       const member = await seedMember(org.orgId, org.branchId, `RENEW-LIM-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'renew-limit');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `RENEW-LIM-${Date.now()}`);
-      const loan = await seedActiveLoan(org.orgId, copy.id, member.id, FOURTEEN_DAYS_OUT);
+      const loan = await seedActiveLoan(org.orgId, copy.id, org.branchId, member.id, FOURTEEN_DAYS_OUT);
       await getLibraryPlatformPrisma().loan.update({ where: { id: loan.id }, data: { renewCount: POLICY.renewLimit } });
 
       const res = await renew(copy.barcode);
@@ -169,7 +169,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       const member = await seedMember(org.orgId, org.branchId, `RENEW-OD-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'renew-overdue');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `RENEW-OD-${Date.now()}`);
-      await seedActiveLoan(org.orgId, copy.id, member.id, new Date(Date.now() - MS_PER_DAY));
+      await seedActiveLoan(org.orgId, copy.id, org.branchId, member.id, new Date(Date.now() - MS_PER_DAY));
 
       const res = await renew(copy.barcode);
       expect(res.status).toBe(403);
@@ -319,7 +319,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       const waiter = await seedMember(org.orgId, org.branchId, `CR-WAIT-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'cancel-ready-releases-copy');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `CR-${Date.now()}`);
-      await seedActiveLoan(org.orgId, copy.id, borrower.id, FOURTEEN_DAYS_OUT);
+      await seedActiveLoan(org.orgId, copy.id, org.branchId, borrower.id, FOURTEEN_DAYS_OUT);
 
       const holdRes = await createHold(title.id, waiter.id);
       const holdId = holdRes.body.hold.id;
@@ -388,9 +388,9 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       copyA = await seedCopy(org.orgId, org.branchId, title.id, `LC-A-${Date.now()}`);
       copyB = await seedCopy(org.orgId, org.branchId, title.id, `LC-B-${Date.now()}`);
       copyC = await seedCopy(org.orgId, org.branchId, title.id, `LC-C-${Date.now()}`);
-      await seedActiveLoan(org.orgId, copyA.id, borrowerA.id, FOURTEEN_DAYS_OUT);
-      await seedActiveLoan(org.orgId, copyB.id, borrowerB.id, FOURTEEN_DAYS_OUT);
-      await seedActiveLoan(org.orgId, copyC.id, borrowerC.id, FOURTEEN_DAYS_OUT);
+      await seedActiveLoan(org.orgId, copyA.id, org.branchId, borrowerA.id, FOURTEEN_DAYS_OUT);
+      await seedActiveLoan(org.orgId, copyB.id, org.branchId, borrowerB.id, FOURTEEN_DAYS_OUT);
+      await seedActiveLoan(org.orgId, copyC.id, org.branchId, borrowerC.id, FOURTEEN_DAYS_OUT);
     });
     afterAll(() => cleanup(org.orgId));
 

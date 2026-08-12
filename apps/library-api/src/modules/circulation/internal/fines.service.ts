@@ -1,13 +1,28 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type Fine, type LibraryTx } from '@library/db';
+import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import type { DayReportQueryDto, ListFinesQueryDto, WaiveFineDto } from './dto';
 
 const MS_PER_DAY = 86_400_000;
 
-/** `Prisma.Decimal | null` (a nullable aggregate) -> plain `number`, defaulting a missing sum to 0. Same conversion loans.service.ts's `decimalToNumber` does — kept local to this module rather than shared, matching that file's own precedent of not factoring a 3-line Decimal helper out. */
-function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
-  if (value === null || value === undefined) return 0;
-  return typeof value === 'number' ? value : value.toNumber();
+/**
+ * Money representation, decided for this task: DECIMAL STRINGS everywhere,
+ * not numbers, not integer minor units. Every `Fine` money column
+ * (`amount`/`paidAmount`/`waivedAmount`) already comes back as a string on
+ * every route that returns a `Fine` row directly (`listFines`, `waive`) —
+ * Prisma's `Decimal.toJSON()` returns `.toString()`. `dayReport`'s
+ * `finesAccrued.amount` was the ONE place that diverged: it went through
+ * `.toNumber()` first, so a fine came back as `"12.5"` while the day report
+ * emitted `12.5` as a JS number for the same kind of figure. Picking the
+ * string form (over converting the ALREADY-SHIPPED `Fine` routes to numbers,
+ * or to minor-unit integers everywhere) costs nothing on the write path —
+ * `Prisma.Decimal` accepts a string directly — and preserves exact decimal
+ * precision without a cents-conversion helper at every read/write site
+ * across a still-growing money surface (`CirculationPolicy.finePerDay`/
+ * `maxFine`, and Phase 3's `Invoice`/`Payment`/`Expense`).
+ */
+function decimalToMoneyString(value: Prisma.Decimal | null | undefined): string {
+  return value ? value.toString() : '0';
 }
 
 export interface WaiveResult {
@@ -30,7 +45,8 @@ export interface DayReport {
   issued: number;
   returned: number;
   overdue: number;
-  finesAccrued: { count: number; amount: number };
+  /** `amount` is a decimal STRING — see `decimalToMoneyString`'s own doc for why. */
+  finesAccrued: { count: number; amount: string };
 }
 
 /**
@@ -42,32 +58,77 @@ export interface DayReport {
  * 20260811190200_circulation migration) exactly: the same leading columns,
  * the same partial predicate, so Postgres can satisfy this with one Index
  * Scan on `loan_due` rather than a sequential scan over every loan the org
- * has ever issued.
+ * has ever issued. `allowedBranches` (empty = all) adds one extra AND'd
+ * predicate on `"branchId"` — it does not change the leading columns the
+ * `loan_due` index scan matches, only what's filtered after that scan.
  */
-export function overdueLoansQuery(orgId: string, asOf: Date, limit = 500): Prisma.Sql {
+export function overdueLoansQuery(orgId: string, asOf: Date, allowedBranches: string[] = [], limit = 500): Prisma.Sql {
+  const branchClause =
+    allowedBranches.length > 0 ? Prisma.sql`AND "branchId" = ANY(${allowedBranches}::uuid[])` : Prisma.empty;
   return Prisma.sql`
     SELECT "id", "copyId", "memberId", "issuedAt", "dueAt", "renewCount"
     FROM "Loan"
-    WHERE "orgId" = ${orgId}::uuid AND "returnedAt" IS NULL AND "dueAt" < ${asOf}
+    WHERE "orgId" = ${orgId}::uuid AND "returnedAt" IS NULL AND "dueAt" < ${asOf} ${branchClause}
     ORDER BY "dueAt" ASC
     LIMIT ${limit}
   `;
 }
 
-function dayRangeUtc(dateStr: string): { start: Date; end: Date } {
-  const start = new Date(`${dateStr}T00:00:00.000Z`);
-  const end = new Date(start.getTime() + MS_PER_DAY);
-  return { start, end };
+/**
+ * Day boundaries in the ORG'S OWN timezone (`LibraryOrg.timezone`, default
+ * `Asia/Kolkata`), not UTC. Previously `dayRangeUtc` treated `dateStr` as a
+ * UTC calendar day — 5.5 hours wrong for an Indian school: a 21:00 IST issue
+ * is 15:30 UTC, still the SAME UTC calendar day, so that part actually
+ * agreed by coincidence; the divergence bites at the edges, e.g. a 21:30 IST
+ * issue (16:00 UTC) lands fine, but anything issued between 00:00 and 05:29
+ * IST is still the PREVIOUS UTC day, so the desk's "today" and the report's
+ * "today" disagree every night across that window — see the task's own
+ * proof scenario.
+ *
+ * `(dateStr::date)::timestamp AT TIME ZONE o.timezone` interprets the given
+ * calendar date as MIDNIGHT WALL-CLOCK TIME IN THE ORG'S ZONE and returns
+ * the equivalent UTC instant — computed in Postgres deliberately, not
+ * reimplemented as a fixed-offset shift in JS, so it stays correct for any
+ * IANA zone Postgres knows about (DST transitions included), not just
+ * Kolkata's fixed +05:30. `orgId`/`timezone` are both bound parameters, not
+ * string-interpolated, regardless of the source being a config default today.
+ */
+async function dayRangeForOrg(tx: LibraryTx, orgId: string, dateStr: string): Promise<{ start: Date; end: Date }> {
+  const rows = await tx.$queryRaw<Array<{ start: Date; end: Date }>>`
+    SELECT
+      (${dateStr}::date)::timestamp AT TIME ZONE o."timezone" AS "start",
+      ((${dateStr}::date) + 1)::timestamp AT TIME ZONE o."timezone" AS "end"
+    FROM "LibraryOrg" o
+    WHERE o."id" = ${orgId}::uuid
+  `;
+  const row = rows[0];
+  if (!row) throw new NotFoundException('Org not found');
+  return { start: row.start, end: row.end };
 }
 
 @Injectable()
 export class FinesService {
-  async listFines(tx: LibraryTx, orgId: string, query: ListFinesQueryDto): Promise<Fine[]> {
+  /**
+   * Branch filter joins through `loan` because `Fine` carries no `branchId`
+   * of its own (only `Loan`/`Hold` gained one — see the branch-scope
+   * migration's own doc; a Fine is money owed by a MEMBER, not tied to one
+   * branch the way a Copy is). A fine with `loanId: null` (this codebase's
+   * only fine-creation path always sets one — `loans.service.ts`'s late
+   * return flow — but `kind` also allows DAMAGE/LOST/OTHER for a future
+   * loan-less fee) has no branch to attribute, so it is visible to every
+   * branch-scoped caller rather than hidden from all of them — the same
+   * "unknown branch passes through" convention `listHolds` uses for a still-
+   * PENDING hold.
+   */
+  async listFines(tx: LibraryTx, orgId: string, query: ListFinesQueryDto, allowedBranches: string[]): Promise<Fine[]> {
     return tx.fine.findMany({
       where: {
         orgId,
         ...(query.memberId ? { memberId: query.memberId } : {}),
         ...(query.status ? { status: query.status } : {}),
+        ...(allowedBranches.length > 0
+          ? { OR: [{ loanId: null }, { loan: { branchId: { in: allowedBranches } } }] }
+          : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: query.limit ?? 50,
@@ -83,10 +144,23 @@ export class FinesService {
    * checks bypass RLS by design; the constraint alone would accept a fine
    * id from another org). A fine already `WAIVED`, or with nothing
    * outstanding (`PAID` in full), is a 409, not silently accepted.
+   *
+   * Branch-scope checked via the fine's LOAN (same join reasoning as
+   * `listFines` above) only when one exists — a loan-less fine has no branch
+   * to check against, same "unknown passes through" convention.
    */
-  async waive(tx: LibraryTx, orgId: string, fineId: string, dto: WaiveFineDto, actorUserId: string, now: Date): Promise<WaiveResult> {
-    const fine = await tx.fine.findUnique({ where: { id: fineId } });
+  async waive(
+    tx: LibraryTx,
+    orgId: string,
+    fineId: string,
+    dto: WaiveFineDto,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<WaiveResult> {
+    const fine = await tx.fine.findUnique({ where: { id: fineId }, include: { loan: { select: { branchId: true } } } });
     if (!fine) throw new NotFoundException('Fine not found');
+    if (fine.loan) assertBranchInScope(fine.loan.branchId, allowedBranches);
 
     if (fine.status === 'WAIVED') {
       throw new ConflictException({ reason: 'ALREADY_WAIVED', message: 'This fine has already been waived' });
@@ -123,9 +197,9 @@ export class FinesService {
   }
 
   /** See `overdueLoansQuery`'s own doc for why this delegates its SQL shape to that exported function rather than building it inline. */
-  async listOverdue(tx: LibraryTx, orgId: string, now: Date): Promise<OverdueLoanItem[]> {
+  async listOverdue(tx: LibraryTx, orgId: string, now: Date, allowedBranches: string[]): Promise<OverdueLoanItem[]> {
     const rows = await tx.$queryRaw<Array<{ id: string; copyId: string; memberId: string; issuedAt: Date; dueAt: Date; renewCount: number }>>(
-      overdueLoansQuery(orgId, now),
+      overdueLoansQuery(orgId, now, allowedBranches),
     );
     return rows.map((r) => ({
       ...r,
@@ -135,26 +209,43 @@ export class FinesService {
 
   /**
    * Issued / returned / overdue counts, and fines accrued (count + amount),
-   * for one UTC calendar day. `overdue` is "still outstanding AND past due
-   * as of the END of that day" — not merely "overdue right now" — so a
-   * historical date reconciles the same way today it will next month:
-   * `dueAt < dayEnd AND (returnedAt IS NULL OR returnedAt >= dayEnd)`.
-   * `finesAccrued` counts `Fine` rows CREATED that day (this codebase's only
-   * fine-creation path is `loans.service.ts`'s late-return flow, kind
-   * `OVERDUE`, but this counts every kind — nothing here assumes only
-   * `OVERDUE` fines exist).
+   * for one calendar day IN THE ORG'S OWN TIMEZONE (`dayRangeForOrg` — see
+   * its own doc for why UTC boundaries were wrong). `overdue` is "still
+   * outstanding AND past due as of the END of that day" — not merely
+   * "overdue right now" — so a historical date reconciles the same way today
+   * it will next month: `dueAt < dayEnd AND (returnedAt IS NULL OR
+   * returnedAt >= dayEnd)`. `finesAccrued` counts `Fine` rows CREATED that
+   * day (this codebase's only fine-creation path is `loans.service.ts`'s
+   * late-return flow, kind `OVERDUE`, but this counts every kind — nothing
+   * here assumes only `OVERDUE` fines exist).
+   *
+   * Branch filter: `Loan` filters directly on its own `branchId`; the `Fine`
+   * aggregate joins through `loan`, same reasoning/convention as
+   * `listFines`/`waive` above (a loan-less fine passes through for every
+   * branch-scoped caller, since it has no branch to attribute).
    */
-  async dayReport(tx: LibraryTx, orgId: string, query: DayReportQueryDto): Promise<DayReport> {
+  async dayReport(tx: LibraryTx, orgId: string, query: DayReportQueryDto, allowedBranches: string[]): Promise<DayReport> {
     const dateStr = query.date ?? new Date().toISOString().slice(0, 10);
-    const { start, end } = dayRangeUtc(dateStr);
+    const { start, end } = await dayRangeForOrg(tx, orgId, dateStr);
+    const branchFilter = allowedBranches.length > 0 ? { branchId: { in: allowedBranches } } : {};
 
     const [issued, returned, overdue, fineAgg] = await Promise.all([
-      tx.loan.count({ where: { orgId, issuedAt: { gte: start, lt: end } } }),
-      tx.loan.count({ where: { orgId, returnedAt: { gte: start, lt: end } } }),
+      tx.loan.count({ where: { orgId, ...branchFilter, issuedAt: { gte: start, lt: end } } }),
+      tx.loan.count({ where: { orgId, ...branchFilter, returnedAt: { gte: start, lt: end } } }),
       tx.loan.count({
-        where: { orgId, dueAt: { lt: end }, OR: [{ returnedAt: null }, { returnedAt: { gte: end } }] },
+        where: { orgId, ...branchFilter, dueAt: { lt: end }, OR: [{ returnedAt: null }, { returnedAt: { gte: end } }] },
       }),
-      tx.fine.aggregate({ where: { orgId, createdAt: { gte: start, lt: end } }, _sum: { amount: true }, _count: { _all: true } }),
+      tx.fine.aggregate({
+        where: {
+          orgId,
+          createdAt: { gte: start, lt: end },
+          ...(allowedBranches.length > 0
+            ? { OR: [{ loanId: null }, { loan: { branchId: { in: allowedBranches } } }] }
+            : {}),
+        },
+        _sum: { amount: true },
+        _count: { _all: true },
+      }),
     ]);
 
     return {
@@ -162,7 +253,7 @@ export class FinesService {
       issued,
       returned,
       overdue,
-      finesAccrued: { count: fineAgg._count._all, amount: decimalToNumber(fineAgg._sum.amount) },
+      finesAccrued: { count: fineAgg._count._all, amount: decimalToMoneyString(fineAgg._sum.amount) },
     };
   }
 }

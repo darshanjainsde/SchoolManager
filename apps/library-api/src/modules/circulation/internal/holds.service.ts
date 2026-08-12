@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type Hold, type Loan, type LibraryTx } from '@library/db';
 import { assertQuota } from '../../plans';
+import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import { loadPolicy } from './policy-loader';
 import { evaluateRenew, holdState, type HoldStatusValue, type RenewDenial } from './policy';
 import type { CreateHoldDto, ListHoldsQueryDto, RenewLoanDto } from './dto';
@@ -63,12 +64,22 @@ export class HoldsService {
    * whose turn a renewal would push back, which is `evaluateRenew`'s own
    * `pendingHoldsOnTitle` parameter name and reasoning (policy.ts).
    */
-  async renew(tx: LibraryTx, orgId: string, dto: RenewLoanDto, actorUserId: string, now: Date): Promise<RenewResult> {
+  async renew(
+    tx: LibraryTx,
+    orgId: string,
+    dto: RenewLoanDto,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<RenewResult> {
     const copy = await tx.copy.findUnique({ where: { orgId_barcode: { orgId, barcode: dto.barcode } } });
     if (!copy) throw new NotFoundException('Copy not found');
 
     const loan = await tx.loan.findFirst({ where: { copyId: copy.id, returnedAt: null } });
     if (!loan) throw new NotFoundException('No active loan for this copy');
+    // Same reasoning as loans.service.ts's returnLoan: checked against the
+    // LOAN's own branch, the row this action actually mutates.
+    assertBranchInScope(loan.branchId, allowedBranches);
 
     // Same non-FK-lookup reasoning as loans.service.ts's returnLoan: Loan.member
     // is onDelete Restrict, and loan.memberId was read off an already
@@ -76,7 +87,7 @@ export class HoldsService {
     const member = await tx.member.findUnique({ where: { id: loan.memberId } });
     if (!member) throw new NotFoundException('Member not found');
 
-    const policy = await loadPolicy(tx, orgId, member.memberType);
+    const policy = await loadPolicy(tx, orgId, member.memberType, loan.branchId);
     const pendingHoldsOnTitle = await tx.hold.count({ where: { orgId, titleId: copy.titleId, status: 'PENDING' } });
 
     const decision = evaluateRenew(policy, loan, pendingHoldsOnTitle, now);
@@ -122,6 +133,16 @@ export class HoldsService {
    * quota-lock-then-queue-lock order can never deadlock against itself
    * (assertQuota's own doc: the risk is only cross-call-site inconsistent
    * ordering, not two locks used consistently by one path).
+   *
+   * Deliberately NOT branch-scope-checked against the caller's
+   * `allowedBranches`: a hold is placed on a Title (org-wide — any branch's
+   * copy can fill it) and this method touches no row that has a branch of
+   * its own yet, so there is nothing here for `assertBranchInScope` to check
+   * against, unlike `issue`/`returnLoan`/`renew`, which each load a
+   * Copy/Loan row with a real branch. The member's OWN home branch is still
+   * used to resolve which `CirculationPolicy` (branch override vs org
+   * default) governs their `maxHolds` quota below — that is a policy
+   * lookup, not an authorization check.
    */
   async createHold(tx: LibraryTx, orgId: string, dto: CreateHoldDto, actorUserId: string, now: Date): Promise<CreateHoldResult> {
     const title = await tx.title.findUnique({ where: { id: dto.titleId } });
@@ -130,7 +151,7 @@ export class HoldsService {
     const member = await tx.member.findUnique({ where: { id: dto.memberId } });
     if (!member) throw new NotFoundException('Member not found');
 
-    const policy = await loadPolicy(tx, orgId, member.memberType);
+    const policy = await loadPolicy(tx, orgId, member.memberType, member.homeBranchId);
     await assertQuota(
       tx,
       orgId,
@@ -184,10 +205,23 @@ export class HoldsService {
    * RETURN (`loans.service.ts`'s `promoteOrRelease`), per the brief's
    * "swept opportunistically on the next return" scope; a cancelled READY
    * hold's copy simply sits AVAILABLE until that copy next circulates.
+   *
+   * Branch-scope checked only when `hold.branchId` is actually set — only a
+   * READY (or previously-READY) hold has one (see the Hold model's own
+   * schema doc). A still-PENDING hold has none, same reasoning as
+   * `createHold` above: cancelling a place in an org-wide queue is not a
+   * branch-scoped action.
    */
-  async cancelHold(tx: LibraryTx, orgId: string, holdId: string, actorUserId: string): Promise<{ hold: Hold }> {
+  async cancelHold(
+    tx: LibraryTx,
+    orgId: string,
+    holdId: string,
+    actorUserId: string,
+    allowedBranches: string[],
+  ): Promise<{ hold: Hold }> {
     const hold = await tx.hold.findUnique({ where: { id: holdId } });
     if (!hold) throw new NotFoundException('Hold not found');
+    if (hold.branchId) assertBranchInScope(hold.branchId, allowedBranches);
 
     if (hold.status !== 'PENDING' && hold.status !== 'READY') {
       throw new ConflictException({ reason: 'HOLD_NOT_CANCELLABLE', message: `Cannot cancel a hold in status ${hold.status}` });
@@ -222,13 +256,23 @@ export class HoldsService {
    * trap 7, no scheduler). `status` filtering is applied AFTER that
    * reprojection, in JS, precisely so filtering by `EXPIRED` actually
    * surfaces these not-yet-swept rows.
+   *
+   * Branch filter: `allowedBranches.length === 0` means "all branches" (same
+   * convention as `BranchScopeGuard`/`assertBranchInScope`) — no filter at
+   * all. Otherwise a hold is visible when its OWN `branchId` is one of the
+   * caller's branches, OR `branchId` is null (a still-PENDING hold not yet
+   * tied to any branch — see the Hold model's own schema doc): a
+   * branch-scoped desk still needs to see the org-wide queue it may
+   * eventually fulfil, it just can't see another branch's ALREADY-PROMOTED
+   * holds.
    */
-  async listHolds(tx: LibraryTx, orgId: string, query: ListHoldsQueryDto, now: Date): Promise<HoldListItem[]> {
+  async listHolds(tx: LibraryTx, orgId: string, query: ListHoldsQueryDto, now: Date, allowedBranches: string[]): Promise<HoldListItem[]> {
     const rows = await tx.hold.findMany({
       where: {
         orgId,
         ...(query.memberId ? { memberId: query.memberId } : {}),
         ...(query.titleId ? { titleId: query.titleId } : {}),
+        ...(allowedBranches.length > 0 ? { OR: [{ branchId: null }, { branchId: { in: allowedBranches } }] } : {}),
       },
       orderBy: [{ titleId: 'asc' }, { queuePosition: 'asc' }],
       take: query.limit ?? 50,

@@ -65,10 +65,10 @@ function makeBarrier(): () => Promise<void> {
   };
 }
 
-function issueLoanAttempt(orgId: string, copyId: string, memberId: string, dueAt: Date, arrive: () => Promise<void>) {
+function issueLoanAttempt(orgId: string, copyId: string, branchId: string, memberId: string, dueAt: Date, arrive: () => Promise<void>) {
   return withOrg(orgId, async (tx) => {
     await arrive();
-    return tx.loan.create({ data: { orgId, copyId, memberId, dueAt, status: 'ACTIVE' } });
+    return tx.loan.create({ data: { orgId, copyId, branchId, memberId, dueAt, status: 'ACTIVE' } });
   });
 }
 
@@ -108,8 +108,8 @@ describeLive('loan_one_active_per_copy makes a double-issue impossible', () => {
 
     // Fire both concurrently — Promise.allSettled, not sequential awaits.
     const [first, second] = await Promise.allSettled([
-      issueLoanAttempt(fx.orgId, fx.copyId, fx.memberAId, dueAt, arrive),
-      issueLoanAttempt(fx.orgId, fx.copyId, fx.memberBId, dueAt, arrive),
+      issueLoanAttempt(fx.orgId, fx.copyId, fx.branchId, fx.memberAId, dueAt, arrive),
+      issueLoanAttempt(fx.orgId, fx.copyId, fx.branchId, fx.memberBId, dueAt, arrive),
     ]);
     const outcomes = [first, second];
 
@@ -147,8 +147,8 @@ describeLiveSuperuser('loan_one_active_per_copy — prove it discriminates (Task
         const arrive = makeBarrier();
 
         const [first, second] = await Promise.allSettled([
-          issueLoanAttempt(fx.orgId, fx.copyId, fx.memberAId, dueAt, arrive),
-          issueLoanAttempt(fx.orgId, fx.copyId, fx.memberBId, dueAt, arrive),
+          issueLoanAttempt(fx.orgId, fx.copyId, fx.branchId, fx.memberAId, dueAt, arrive),
+          issueLoanAttempt(fx.orgId, fx.copyId, fx.branchId, fx.memberBId, dueAt, arrive),
         ]);
         const fulfilled = [first, second].filter((r) => r.status === 'fulfilled');
 
