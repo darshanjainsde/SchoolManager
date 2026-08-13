@@ -111,18 +111,70 @@ and when — never a live join back to `Title`, or editing the catalogue next te
 rewrites a bill already issued. Deliberately not added early: an unused enum plus three
 unused columns is a real cost, and `schema-shape.spec.ts` scans every enum in the file.
 
-- `POST /issues/:id/lost` — the five-step atomic flow (§2.4/2.5), callable by librarian or
-  by the holder from `/me`.
-- Settlement: **pay**, **bring a replacement** (new copy, next number, charge cleared in
-  kind), **found** (reversible while unsettled), **write-off** (out of print, ₹0, with
-  approver).
-- Self-reported loss needs a librarian **confirm** step — a 9-year-old tapping "I lost it"
-  creates a bill to their parent with no adult in the loop. Freeze the charge at *report*
-  time so the incentive still works; confirm before it becomes payable.
-- Lost-books panel; dues with librarian-only waive (reason required); collections
-  dashboard by reason and method, plus a waiver log.
+**THE RULE THIS PHASE TURNS ON.** A `LOST` fine is only ever created by a deliberate human
+action, with the amount **and its source** on screen at that moment. Never at self-report
+time, never from `UNPRICED` coerced to ₹0, and `PURCHASE_COST` never shown bare — always
+with its age ("the library paid ₹45 when this copy was bought — check this").
+
+P3 is the first time this software produces a number a parent is asked to pay, and it is a
+big jump: ₹6 of late charge becomes a ₹305 bill the instant a loss is recorded, in a product
+whose own governing decision is that fines are off by default because most schools charge
+children nothing. If that number can appear without a human having looked at it, the failure
+mode is not an angry parent — it is the **librarian quietly stopping reporting losses**. She
+leaves the book issued to a child who left school three years ago, and the register, the
+availability count and the not-returned list are then all wrong forever. Everything the
+phase exists for dies at once.
+
+- **The five steps, in order**, one transaction, explicit timeout:
+  1. **Close the issue** (`returnedAt = now`, `status = LOST`). First, because it is the
+     step that STOPS THE MONEY: the late charge is derived at read time from rows where
+     `returnedAt IS NULL`, so this makes every existing read stop billing at once. Do *not*
+     instead leave it null and add `AND status='ACTIVE'` to each query — one missed query
+     keeps billing the child who owned up (trap 9, applied to money).
+  2. **Freeze the accrued late charge** as an `OVERDUE` fine, honouring `chargeStudentFines`
+     exactly as `returnBook` does. This converts a derived number into a stored one.
+  3. **`Copy.status = LOST`** — nothing else; availability is counted, never stored.
+  4. **Raise the priced `LOST` fine**, with its source snapshotted. `UNPRICED` raises **no
+     fine at all** — a ₹0 fine reads as "nothing owed" to every total and to P5's No Dues
+     certificate.
+  5. **Retire the number**: the `LostReport` row plus the audit entry.
+- **Self-report creates no `Fine` row.** The frozen figure lives on `LostReport` until a
+  librarian confirms; both fines are then created from the frozen figures, and confirm is
+  where the price may be typed. `FineStatus` gains **no** `PENDING` value — adding one to a
+  shipped money enum silently makes a 9-year-old's unconfirmed tap count as money owed in
+  `listFines`, `dayReport`, the owed tile and P4's `/me/dues`. Reject restores the world
+  exactly and the late clock resumes across the gap. The child sees no rupee figure at all
+  before confirm.
+- Settlement: **pay** (in full only — a counter taking ₹100 today and ₹199 next week needs a
+  payments table, so P3 does not offer it), **bring a replacement**, **found**, **write-off**.
+- **A found book keeps its OLD accession number.** "A retired number never returns" is about
+  *replacements* — a different physical object must never inherit a number. A found book is
+  the same object, with that number already in ink inside its cover. The
+  `(orgId, accessionNumber)` unique index is what structurally prevents reuse, so reversal is
+  safe by construction. The frozen late charge stays frozen: un-freezing it makes "Found it"
+  a button nobody presses.
+- **A replacement copy gets `acquisitionCost: null`** — not the price charged. The school
+  paid nothing; writing the charge there fakes the auditor's "Price paid" column *and* plants
+  a false `PURCHASE_COST` for the resolver to find the next time that copy is lost.
+- **Write-off records its approver rather than gating on one.** There is no principal role,
+  and in a 400-student school the librarian is often the only account — gating behind a role
+  nobody holds yields either a permanently open due that poisons every total, or a fake
+  "paid". Required reason plus a required free-text "approved by" captures the human who
+  actually said yes; every write-off shows in the waiver log.
+- **Waiver reasons are codes, not free text** — 400 unique strings cannot answer "where did
+  each rupee go". `BOOK_FOUND` and `REPLACED_IN_KIND` are *mechanical* and excluded from the
+  "let off" money figure: the school lost nothing either time.
+- A **no-member "missing at stock take"** route ships in P3 even though the stock-take screen
+  is P5 — otherwise a librarian invents a fake issue to a child in order to record a missing
+  book.
+- Dues list is **member-shaped, not fine-shaped** ("does Meera owe anything?"), split by
+  member type so a teacher's ₹300 is never inside a figure a principal reads as what the
+  children owe.
+- **P3 sends no money notification of any kind.** That single restraint makes P4's "no push
+  saying *you owe ₹300*" true by construction until P4 designs the message deliberately.
 - **Do NOT build** the payment-provider ledger yet (PM: fines are off by default; ship a
-  dues list and a paper receipt).
+  dues list and a paper receipt). Nor damage-at-return, partial payments, refunds/credits as
+  money states, or a principal role.
 
 ### P4 — Student and teacher portals
 Auth bridge accepting a Sckools token via `Member.externalRef`; `/me/issues`, `/me/dues`,
