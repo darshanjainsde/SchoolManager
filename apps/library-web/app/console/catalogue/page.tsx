@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readSession } from '@/lib/session';
 import { searchTitles, spineHue, type TitleHit } from '@/lib/catalogue';
+import type { Money } from '@/lib/circulation';
 import { ApiError } from '@/lib/api';
+// In components/, not beside the page's default export: Next permits only a
+// fixed set of exports from a route file, and a stray named export compiles,
+// lints and unit-tests clean before failing `next build`. See
+// app/route-file-exports.test.ts, which guards exactly this.
+import { ReplacementPrice } from '@/components/ReplacementPrice';
 
 type State =
   | { kind: 'loading' }
@@ -154,6 +160,38 @@ export default function CataloguePage() {
             <dt>Edition</dt><dd>{selected.edition ?? '—'}</dd>
             <dt>Language</dt><dd>{selected.language}</dd>
             <dt>Pages</dt><dd>{selected.pageCount ?? '—'}</dd>
+            <dt>Cost to replace</dt>
+            <dd>
+              {/* `key` is load-bearing, not a list-rendering habit. The detail
+                  panel is fixed-position, not modal, so the table behind it
+                  stays clickable and switching books is just another row click
+                  — which only calls setSelected, never unmounting this
+                  component. Without a key React reuses the same instance and
+                  keeps its `editing`/`draft` state, so a half-typed ₹299 for
+                  book A stays on screen under book B's heading and Save writes
+                  it to B. Keying on the id remounts it, which is the only
+                  correct fix: resetting state in an effect races the first
+                  render. */}
+              <ReplacementPrice
+                key={selected.id}
+                title={selected}
+                onSaved={(price) => {
+                  // Keep the aside and the list row in step, so closing and
+                  // reopening the panel does not appear to lose the edit.
+                  setSelected((s) => (s && s.id === selected.id ? { ...s, replacementPrice: price } : s));
+                  setState((st) =>
+                    st.kind === 'ready'
+                      ? {
+                          ...st,
+                          hits: st.hits.map((h) =>
+                            h.id === selected.id ? { ...h, replacementPrice: price } : h,
+                          ),
+                        }
+                      : st,
+                  );
+                }}
+              />
+            </dd>
           </dl>
           {selected.description ? <p style={{ fontSize: '.88rem' }}>{selected.description}</p> : null}
         </aside>

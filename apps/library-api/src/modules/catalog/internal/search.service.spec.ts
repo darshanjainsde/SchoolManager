@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { buildPrefixTsQuery, tokenize, SearchService } from './search.service';
 import type { LibraryTx } from '@library/db';
 
@@ -66,7 +68,7 @@ describe('SearchService.searchTitles — parameterization', () => {
     const orgId = '11111111-1111-4111-8111-111111111111';
     const malicious = "'; DROP TABLE \"Title\"; --";
 
-    await service.searchTitles(tx, orgId, malicious, 10);
+    await service.searchTitles(tx, orgId, malicious, 'LIBRARIAN', 10);
 
     expect(calls).toHaveLength(1);
     const { strings, values } = calls[0];
@@ -84,7 +86,7 @@ describe('SearchService.searchTitles — parameterization', () => {
     const service = new SearchService();
     const orgId = '11111111-1111-4111-8111-111111111111';
 
-    await service.searchTitles(tx, orgId, '!!!', 10);
+    await service.searchTitles(tx, orgId, '!!!', 'LIBRARIAN', 10);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].strings.join('')).not.toContain('to_tsquery');
@@ -96,10 +98,65 @@ describe('SearchService.searchTitles — parameterization', () => {
     const service = new SearchService();
     const orgId = '11111111-1111-4111-8111-111111111111';
 
-    await service.searchTitles(tx, orgId, 'lord', 10_000);
+    await service.searchTitles(tx, orgId, 'lord', 'LIBRARIAN', 10_000);
     expect(calls[0].values).toContain(100);
 
-    await service.searchTitles(tx, orgId, 'lord', -5);
+    await service.searchTitles(tx, orgId, 'lord', 'LIBRARIAN', -5);
     expect(calls[1].values).toContain(1);
+  });
+});
+
+describe('SearchService.searchTitles — replacement price is staff-only', () => {
+  /**
+   * Both branches of `searchTitles` (the tokenized search and the empty-query
+   * listing) are exercised, because they are two separate raw queries and a
+   * strip applied to only one of them is exactly the kind of half-fix that
+   * looks green.
+   */
+  function serviceReturning(rows: unknown[]) {
+    const tx = { $queryRaw: () => Promise.resolve(rows) } as unknown as LibraryTx;
+    return { tx, service: new SearchService() };
+  }
+
+  const ORG = '11111111-1111-4111-8111-111111111111';
+  const ROW = { id: 'a', title: 'The Hungry Tide', replacementPrice: 399 };
+
+  it.each(['', 'hungry'])(
+    'omits the price for a MEMBER (query: "%s")',
+    async (query) => {
+      const { tx, service } = serviceReturning([ROW]);
+      const [hit] = await service.searchTitles(tx, ORG, query, 'MEMBER');
+      expect('replacementPrice' in hit).toBe(false);
+      // The rest of the hit must survive — this is a redaction, not a filter.
+      expect(hit).toMatchObject({ id: 'a', title: 'The Hungry Tide' });
+    },
+  );
+
+  it.each(['', 'hungry'])(
+    'keeps the price for a LIBRARIAN (query: "%s")',
+    async (query) => {
+      const { tx, service } = serviceReturning([ROW]);
+      const [hit] = await service.searchTitles(tx, ORG, query, 'LIBRARIAN');
+      expect(hit).toHaveProperty('replacementPrice', 399);
+    },
+  );
+
+  it('selects the column on both branches, so the strip is what protects it', () => {
+    // If a future edit dropped "replacementPrice" from the SELECT lists, the
+    // MEMBER tests above would still pass — vacuously — while a LIBRARIAN
+    // silently lost the field.
+    //
+    // Counted inside the SQL template literals only, not across the whole file:
+    // a plain file-wide match is satisfied by any two mentions, so an edit that
+    // removed the column from the SQL while adding a sentence about it to the
+    // JSDoc above would stay green. The e2e's `priceOn(asLibrarian) === '399'`
+    // is the real, behavioural guard; this one exists to fail FAST and name the
+    // cause, without a database.
+    const source = readFileSync(join(__dirname, 'search.service.ts'), 'utf8');
+    const sqlOnly = [...source.matchAll(/\$queryRaw<[^>]*>`([\s\S]*?)`/g)].map((m) => m[1]);
+    expect(sqlOnly).toHaveLength(2); // the no-token listing and the tokenized search
+    for (const sql of sqlOnly) {
+      expect(sql).toMatch(/"replacementPrice"/);
+    }
   });
 });

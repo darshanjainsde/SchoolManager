@@ -77,9 +77,11 @@ export class CatalogController {
 
   @Get('titles')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT', 'MEMBER')
-  listTitles(@Query() query: SearchTitlesQueryDto) {
+  listTitles(@Query() query: SearchTitlesQueryDto, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
-    return withOrg(orgId, (tx) => this.search.searchTitles(tx, orgId, query.q ?? '', query.limit));
+    return withOrg(orgId, (tx) =>
+      this.search.searchTitles(tx, orgId, query.q ?? '', user.role, query.limit),
+    );
   }
 
   @Post('titles')
@@ -91,9 +93,9 @@ export class CatalogController {
 
   @Get('titles/:id')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT', 'MEMBER')
-  getTitle(@Param('id', new ParseUUIDPipe()) id: string) {
+  getTitle(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
-    return withOrg(orgId, (tx) => this.titles.get(tx, id));
+    return withOrg(orgId, (tx) => this.titles.get(tx, id, user.role));
   }
 
   @Patch('titles/:id')

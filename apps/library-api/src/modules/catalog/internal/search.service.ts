@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { LibraryTx } from '@library/db';
+import type { LibraryTx, Prisma } from '@library/db';
+import type { LibJwtPayload } from '../../auth';
+import { forRole } from './replacement-price-visibility';
 
 export interface TitleSearchHit {
   id: string;
@@ -15,6 +17,21 @@ export interface TitleSearchHit {
   coverUrl: string | null;
   description: string | null;
   pageCount: number | null;
+  /**
+   * A `Prisma.Decimal` at runtime, on BOTH read paths — verified empirically
+   * against a real Postgres rather than recalled (LIBRARY-TRAPS #15): a
+   * `numeric` column comes back as a Decimal instance from `$queryRaw` exactly
+   * as it does from the Prisma client, and a NULL comes back as `null` from
+   * both. `Decimal.toJSON()` is `toString()`, so this serialises over HTTP as a
+   * decimal STRING (`"299"`, trailing zeros dropped), never a JSON number —
+   * which is why the console types it as `Money` (`string | number`) and
+   * normalises through `rupees()`. No conversion code is needed on either path;
+   * the two agree because neither one converts.
+   *
+   * Absent entirely, not null, on a MEMBER response — see
+   * `replacement-price-visibility.ts`.
+   */
+  replacementPrice: Prisma.Decimal | null;
   createdAt: Date;
   updatedAt: Date;
   rank: number;
@@ -72,26 +89,38 @@ export class SearchService {
    * '')` (verified live) merely warns and returns a query that matches
    * nothing, and because skipping it avoids the round trip entirely.
    */
-  async searchTitles(tx: LibraryTx, orgId: string, q: string, limit = DEFAULT_LIMIT): Promise<TitleSearchHit[]> {
+  async searchTitles(
+    tx: LibraryTx,
+    orgId: string,
+    q: string,
+    // Ahead of `limit` so it can be REQUIRED rather than a defaulted trailing
+    // parameter. `GET /catalog/titles` is open to MEMBER and `replacementPrice`
+    // must not reach a student, so the compiler is what makes a future caller
+    // name the role instead of inheriting a permissive default it never thought
+    // about. There is exactly one caller today; the reorder costs nothing.
+    role: LibJwtPayload['role'],
+    limit = DEFAULT_LIMIT,
+  ): Promise<Array<TitleSearchHit | Omit<TitleSearchHit, 'replacementPrice'>>> {
     const boundedLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
     const tokens = tokenize(q);
 
     if (tokens.length === 0) {
-      return tx.$queryRaw<TitleSearchHit[]>`
+      const rows = await tx.$queryRaw<TitleSearchHit[]>`
         SELECT id, isbn13, isbn10, title, subtitle, publisher, "publishedYear", edition,
                language, "callNumber", "coverUrl", description, "pageCount",
-               "createdAt", "updatedAt", 0::float8 AS rank
+               "replacementPrice", "createdAt", "updatedAt", 0::float8 AS rank
         FROM "Title"
         WHERE "orgId" = ${orgId}::uuid
         ORDER BY title ASC
         LIMIT ${boundedLimit}
       `;
+      return forRole(role, rows);
     }
 
     const tsQuery = buildPrefixTsQuery(tokens);
     const likePattern = `%${escapeLikePattern(q)}%`;
 
-    return tx.$queryRaw<TitleSearchHit[]>`
+    const rows = await tx.$queryRaw<TitleSearchHit[]>`
       WITH matches AS (
         SELECT t.id, ts_rank(t."searchVector", to_tsquery('simple', ${tsQuery})) AS rank
         FROM "Title" t
@@ -112,11 +141,12 @@ export class SearchService {
       )
       SELECT t.id, t.isbn13, t.isbn10, t.title, t.subtitle, t.publisher, t."publishedYear",
              t.edition, t.language, t."callNumber", t."coverUrl", t.description, t."pageCount",
-             t."createdAt", t."updatedAt", r.rank
+             t."replacementPrice", t."createdAt", t."updatedAt", r.rank
       FROM ranked r
       JOIN "Title" t ON t.id = r.id
       ORDER BY r.rank DESC, t.title ASC
       LIMIT ${boundedLimit}
     `;
+    return forRole(role, rows);
   }
 }

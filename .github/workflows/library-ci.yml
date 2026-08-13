@@ -30,6 +30,12 @@ on:
   push:
     paths:
       - 'apps/library-api/**'
+      # The gate job runs `--filter "@library/*"`, which INCLUDES @library/web,
+      # so the console's lint/typecheck/build/tests already run here — but
+      # without this line they could only ever be TRIGGERED by editing a file in
+      # another package. Console-only changes ran zero CI (trap 9: check that
+      # the paths filter includes the files that define the guarantee).
+      - 'apps/library-web/**'
       - 'packages/library-db/**'
       - '.github/workflows/library-ci.yml'
       - '.dependency-cruiser.library.cjs'
@@ -40,6 +46,12 @@ on:
   pull_request:
     paths:
       - 'apps/library-api/**'
+      # The gate job runs `--filter "@library/*"`, which INCLUDES @library/web,
+      # so the console's lint/typecheck/build/tests already run here — but
+      # without this line they could only ever be TRIGGERED by editing a file in
+      # another package. Console-only changes ran zero CI (trap 9: check that
+      # the paths filter includes the files that define the guarantee).
+      - 'apps/library-web/**'
       - 'packages/library-db/**'
       - '.github/workflows/library-ci.yml'
       - '.dependency-cruiser.library.cjs'
@@ -134,7 +146,7 @@ jobs:
       # of the scan.
       - name: Module boundary (no cross-module reach-in, no Sckools imports)
         run: >-
-          pnpm exec depcruise apps/library-api packages/library-db
+          pnpm exec depcruise apps/library-api apps/library-web packages/library-db
           --config .dependency-cruiser.library.cjs
 
       - name: Build

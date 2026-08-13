@@ -1,12 +1,39 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type LibraryTx } from '@library/db';
+import type { LibJwtPayload } from '../../auth';
 import type { CreateTitleDto, UpdateTitleDto } from './dto';
 import { mapPrismaError } from './prisma-errors';
+import { canSeeReplacementPrice, stripReplacementPrice } from './replacement-price-visibility';
 
 const TITLE_INCLUDE = {
   authors: { include: { author: true } },
   categories: { include: { category: true } },
   copies: true,
+} satisfies Prisma.TitleInclude;
+
+/**
+ * What a MEMBER gets. The difference from `TITLE_INCLUDE` is `copies`, and it
+ * is not cosmetic.
+ *
+ * `copies: true` returns every Copy column, including `acquisitionCost` — and
+ * `common/replacement-price.ts` puts `Copy.acquisitionCost` at step 3 of the
+ * resolution order, so on any title whose `replacementPrice` is still null (the
+ * default state for a school onboarding four thousand books) that column IS the
+ * number the loss screen will suggest. Stripping the title's `replacementPrice`
+ * while shipping the copies' `acquisitionCost` would leave the child able to
+ * read their likely bill off the catalogue anyway, which is the exact thing
+ * `replacement-price-visibility.ts` exists to prevent — just one join away.
+ *
+ * A student looking at a book needs to know whether one is on the shelf, not
+ * what the school paid for it on which bill. So the copy is projected down to
+ * that: the number written in the front cover, where it lives, and whether it
+ * is available. `acquisitionCost`, `acquiredAt`, `condition`, `branchId` and
+ * `orgId` are all staff bookkeeping and none of them go out.
+ */
+const TITLE_INCLUDE_MEMBER = {
+  authors: { include: { author: true } },
+  categories: { include: { category: true } },
+  copies: { select: { id: true, accessionNumber: true, shelf: true, status: true } },
 } satisfies Prisma.TitleInclude;
 
 @Injectable()
@@ -67,6 +94,7 @@ export class TitlesService {
           coverUrl: dto.coverUrl,
           description: dto.description,
           pageCount: dto.pageCount,
+          replacementPrice: dto.replacementPrice,
           authors: authorLinks.length ? { create: authorLinks } : undefined,
           categories: dto.categoryIds?.length
             ? { create: dto.categoryIds.map((categoryId) => ({ categoryId })) }
@@ -79,10 +107,24 @@ export class TitlesService {
     }
   }
 
-  async get(tx: LibraryTx, id: string) {
-    const title = await tx.title.findUnique({ where: { id }, include: TITLE_INCLUDE });
+  /**
+   * `role` is not optional and has no default on purpose. `GET
+   * /catalog/titles/:id` is open to MEMBER, and `replacementPrice` must not
+   * reach a student (see `replacement-price-visibility.ts` for why). Making the
+   * caller name the role means a future route cannot read a title without
+   * deciding this question — a defaulted parameter would let it forget.
+   */
+  async get(tx: LibraryTx, id: string, role: LibJwtPayload['role']) {
+    // The role decides the SHAPE of the query, not just what is pruned after
+    // it: money a student must not see is never selected in the first place,
+    // so no later refactor of the response can accidentally reveal it.
+    const staff = canSeeReplacementPrice(role);
+    const title = await tx.title.findUnique({
+      where: { id },
+      include: staff ? TITLE_INCLUDE : TITLE_INCLUDE_MEMBER,
+    });
     if (!title) throw new NotFoundException('Title not found');
-    return title;
+    return staff ? title : stripReplacementPrice(title);
   }
 
   async update(tx: LibraryTx, id: string, dto: UpdateTitleDto) {
@@ -102,6 +144,10 @@ export class TitlesService {
           coverUrl: dto.coverUrl,
           description: dto.description,
           pageCount: dto.pageCount,
+          // `undefined` leaves it alone, `null` clears it — see
+          // `UpdateTitleDto.replacementPrice` for why null is a legitimate,
+          // deliberately-reachable value here and not an oversight.
+          replacementPrice: dto.replacementPrice,
         },
         include: TITLE_INCLUDE,
       });

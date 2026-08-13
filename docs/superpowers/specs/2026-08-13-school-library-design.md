@@ -62,7 +62,7 @@ limits.
    `issue_one_active_per_copy`, `reservation_one_per_member_title`,
    `VisitAttendance_one_per_member_visit`.
 
-## 3. Shipped (all green: 253 unit + 406 e2e)
+## 3. Shipped (all green: 343 unit + 424 e2e)
 
 | Area | State |
 |---|---|
@@ -73,17 +73,43 @@ limits.
 | `Issue` vocabulary + accession number replacing barcode | P2a — `2fce144` |
 | `GET /search/suggest` typeahead; `Reservation` vocabulary | P2b — `7e3251f` |
 | Library period: timetable, capacity warning, auto-attendance, settings | P2c — `0366660` |
+| `Title.replacementPrice`, the price resolver, and the console field that sets it | P2d — unblocks P3 |
 
 **Deployed to staging:** console + API live, CORS correct, day-report timezone-correct.
-`GET /search/suggest` and the period routes are **not yet deployed** — staging still needs
-the four newest migrations.
+`GET /search/suggest`, the period routes and the replacement-price field are **not yet
+deployed** — staging still needs the five newest migrations (`search_trigram`,
+`reservation_vocabulary`, `library_period`, `visit_branch_scope`,
+`title_replacement_price`).
 
 ## 4. What is left
 
 ### P3 — Lost books, dues, collections
-**Blocked on a schema gap:** there is no replacement-price field. `Copy.acquisitionCost`
-is historic and nullable — the ₹45 paid in 1998 is not what a parent is asked for. Add
-`Title.replacementPrice` (and allow a per-loss override) **before** building this.
+**No longer blocked.** `Title.replacementPrice` now exists (Decimal(10,2), nullable, with a
+`>= 0` CHECK in the database), along with a pure resolver —
+`apps/library-api/src/common/replacement-price.ts` — which is the one place the resolution
+order lives:
+
+> typed override → `Title.replacementPrice` → `Copy.acquisitionCost` → `UNPRICED`
+
+It returns `{ amount, source }`, and **`UNPRICED` is a legitimate outcome, not an error.**
+A missing price must never block *recording* a loss: the report is what freezes the daily
+late charge, so refusing it to collect a catalogue field would keep billing the child who
+owned up. Only the money is deferred. `PURCHASE_COST` must always be shown *with* its age
+("the library paid ₹45 when this copy was bought") — it is historic, and presenting it bare
+is how a wrong number acquires authority. Zero is a real price (a book written off as out of
+print), never "absent".
+
+Four ways a price gets in, none of them a new screen: the catalogue detail field, a one-way
+seed from the add-copies path (never overwrites a value a librarian set), the CSV import's
+`replacementPrice` column, and the per-loss override. It is **not visible to a MEMBER** —
+the only party that tells a child what they owe is the library, after a librarian confirms
+the loss.
+
+**P3 still owes the provenance columns.** The resolved amount must be SNAPSHOTTED onto the
+`Fine` row with its source (`TITLE_PRICE` / `PURCHASE_COST` / `TYPED` / …), plus who set it
+and when — never a live join back to `Title`, or editing the catalogue next term silently
+rewrites a bill already issued. Deliberately not added early: an unused enum plus three
+unused columns is a real cost, and `schema-shape.spec.ts` scans every enum in the file.
 
 - `POST /issues/:id/lost` — the five-step atomic flow (§2.4/2.5), callable by librarian or
   by the holder from `/me`.

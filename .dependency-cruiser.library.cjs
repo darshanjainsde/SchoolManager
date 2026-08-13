@@ -30,8 +30,13 @@ module.exports = {
       severity: 'error',
       comment:
         'The library service must never import Sckools code. Merging later is a routing change; a shared import makes it a rewrite.',
-      from: { path: '^(apps/library-api|packages/library-db)/' },
-      to: { path: '^(apps/api|packages/(db|config|types))/|^@skoolos/' },
+      // `apps/library-web` included: the console is as much "the library" as
+      // the API is, and it sits beside apps/web in the same monorepo with the
+      // same `@/` alias habits, so a stray `@skoolos/types` import there is if
+      // anything MORE likely than in the API — and it was previously
+      // unscanned, so nothing would have said so (trap 9).
+      from: { path: '^(apps/library-api|apps/library-web|packages/library-db)/' },
+      to: { path: '^(apps/api|apps/web|packages/(db|config|types))/|^@skoolos/' },
     },
   ],
   options: {

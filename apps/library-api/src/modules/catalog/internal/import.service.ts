@@ -1,5 +1,6 @@
 import { Injectable, PayloadTooLargeException } from '@nestjs/common';
 import { withOrg, type LibraryTx } from '@library/db';
+import { REPLACEMENT_PRICE_MAX } from './dto';
 
 export interface RowError {
   /** 1-indexed position among DATA rows — i.e. the row directly below the header is row 1. */
@@ -54,6 +55,10 @@ export interface ParsedTitleRow {
   language?: string;
   callNumber?: string;
   category?: string;
+  /** See `mapImportRow`'s `replacementPrice` block. Title-level, like every
+   *  other field here — `acquisitionCost` is deliberately NOT importable,
+   *  because it is per physical copy and this importer creates titles. */
+  replacementPrice?: number;
 }
 
 /**
@@ -187,6 +192,40 @@ export function mapImportRow(
     publishedYear = n;
   }
 
+  // What it costs to buy this book again today — the number a parent is asked
+  // to pay for a lost copy. Importable because it is the ONLY realistic way a
+  // school with four thousand existing books ends up with a non-null price on
+  // more than a handful of them; without it every loss takes the "no price on
+  // record" branch and the field ships without shipping the product. Schools'
+  // existing spreadsheets almost always already carry a price column.
+  //
+  // Bounds mirror `CreateTitleDto.replacementPrice` exactly, importing the same
+  // constant rather than restating the number, so the CSV path and the JSON
+  // path cannot drift into accepting different things.
+  let replacementPrice: number | undefined;
+  const replacementPriceRaw = record.replacementprice;
+  if (replacementPriceRaw) {
+    const n = Number(replacementPriceRaw);
+    // `Number('')` is 0 and `Number('abc')` is NaN — the blank case is already
+    // excluded by the truthiness check above, so a NaN here is a real typo.
+    // The decimal-places test is a string test on purpose: `0.1 + 0.2` shows
+    // why asking a float how many decimal places it has is not a question with
+    // a reliable answer.
+    const decimals = replacementPriceRaw.includes('.')
+      ? replacementPriceRaw.trim().split('.')[1].length
+      : 0;
+    if (!Number.isFinite(n) || n < 0 || n > REPLACEMENT_PRICE_MAX || decimals > 2) {
+      return {
+        error: {
+          row,
+          field: 'replacementPrice',
+          message: `replacementPrice must be a number between 0 and ${REPLACEMENT_PRICE_MAX} with at most 2 decimal places`,
+        },
+      };
+    }
+    replacementPrice = n;
+  }
+
   return {
     data: {
       isbn13: isbnRaw && isThirteen ? isbnRaw : undefined,
@@ -200,6 +239,7 @@ export function mapImportRow(
       language: record.language || undefined,
       callNumber: record.callnumber || undefined,
       category: record.category || undefined,
+      replacementPrice,
     },
   };
 }
@@ -587,6 +627,7 @@ export async function applyChunk(
           edition: data.edition,
           language: data.language ?? 'en',
           callNumber: data.callNumber,
+          replacementPrice: data.replacementPrice,
           authors: authorId ? { create: [{ authorId, role: 'AUTHOR' }] } : undefined,
           categories: categoryId ? { create: [{ categoryId }] } : undefined,
         },
@@ -664,6 +705,12 @@ function updateScalarFields(tx: LibraryTx, titleId: string, data: ParsedTitleRow
       edition: data.edition,
       language: data.language,
       callNumber: data.callNumber,
+      // `undefined` when the column is absent or blank, so a re-import of a
+      // file WITHOUT a replacementPrice column never wipes a price a librarian
+      // has set by hand. There is deliberately no way to CLEAR a price by
+      // import — that is a per-title decision (PATCH with null), not something
+      // a bulk file should be able to do to four thousand books at once.
+      replacementPrice: data.replacementPrice,
     },
   });
 }

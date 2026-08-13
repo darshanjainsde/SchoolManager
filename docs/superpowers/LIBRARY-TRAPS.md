@@ -92,6 +92,25 @@ rather than fail. Production pins that limit deliberately; CI must not.
 
 ---
 
+**17. Redacting a column does not redact the join.** `stripReplacementPrice`
+removed `Title.replacementPrice` for a student and shipped `copies: true`
+alongside it — every Copy row in full, including `acquisitionCost`, which is
+step 3 of the very resolver that decides what the child will be billed. The
+strip was correct and the guarantee still did not hold, one join away. When a
+value must not reach a role, make the ROLE choose the query shape (a projected
+`select`), so the money is never fetched rather than fetched-and-pruned; and
+check every `include:` on the same response, not just the top-level fields.
+
+**18. `tsx` skips DTO validation as well as DI, so local probing cannot verify
+it.** Trap 6 is about `design:paramtypes` and guards. The same missing metadata
+makes Nest's global `ValidationPipe` receive `metatype === undefined` and skip
+the DTO entirely: `POST /auth/login` with no `identifier` returns **500**, not
+400, under `pnpm dev`. `tsc` and the ncc bundle DO emit the metadata (verified:
+95 `design:paramtypes` in `api/index.js`), so production validates correctly —
+which means a manual curl session against the dev server proves nothing about
+any `@Min`/`@Max`/`@IsNumber` bound. Verify DTO bounds with e2e or against the
+built bundle, never against `tsx`.
+
 ## Judgement
 
 **14. Before proposing a fix to a security or concurrency defect, name the new failure

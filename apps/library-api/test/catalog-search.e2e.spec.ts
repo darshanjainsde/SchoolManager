@@ -70,7 +70,7 @@ describeLive('catalogue search (SearchService, real Postgres)', () => {
   });
 
   const runSearch = (orgId: string, q: string) =>
-    withOrg(orgId, (tx: LibraryTx) => search.searchTitles(tx, orgId, q, 20));
+    withOrg(orgId, (tx: LibraryTx) => search.searchTitles(tx, orgId, q, 'LIBRARIAN', 20));
 
   it('ranks a title-field match above a publisher-field match for the same term', async () => {
     const hits = await runSearch(orgA.id, 'voyager');

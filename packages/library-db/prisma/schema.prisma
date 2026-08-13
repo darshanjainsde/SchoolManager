@@ -369,6 +369,42 @@ model Title {
   coverUrl      String?
   description   String?
   pageCount     Int?
+
+  /// What a parent is asked to pay when a copy of this book is lost — today's
+  /// cost to buy it again, NOT what the school once paid. `Copy.acquisitionCost`
+  /// is that other number: per physical copy, from the bill, historic and
+  /// immutable. The two must never be conflated in a UI or backfilled into each
+  /// other; the register column is labelled "Price paid" and this one "Cost to
+  /// replace" precisely so a librarian cannot read one as the other.
+  ///
+  /// Title-level, not per copy: a replacement is bought at today's market
+  /// price, which is one number per book. Where a title's editions genuinely
+  /// differ, the loss screen takes a per-loss override (P3) rather than making
+  /// every school maintain a price on every physical copy forever.
+  ///
+  /// NULLABLE, and that is a designed state, not a gap. A school onboarding
+  /// four thousand existing books starts with this unset everywhere, so a
+  /// missing price must never block RECORDING a loss — reporting a loss is what
+  /// freezes the daily late charge (§2.4), and blocking the report to collect a
+  /// catalogue field would punish the child who owned up. Only the money is
+  /// deferred: the librarian types an amount at the counter, or later.
+  ///
+  /// Seeded one-way from the add-copies path (`copies.service.ts#add`): the
+  /// price paid for a book being bought today is also, on that day, what it
+  /// costs to replace. It is written ONLY when this column is still null, by a
+  /// conditional UPDATE rather than a read-then-write, and never overwrites a
+  /// number a librarian has since set.
+  ///
+  /// Not visible to a MEMBER. `search.service.ts` and `titles.service.ts#get`
+  /// strip it for student callers: the only party that tells a child what they
+  /// owe is the library, after a librarian has confirmed the loss.
+  ///
+  /// A `>= 0` CHECK lives in the database (`Title_replacementPrice_nonnegative`),
+  /// not only in the DTO — a negative value would credit a parent for losing a
+  /// book, and no path, including a future import or a hand-written UPDATE,
+  /// should be able to produce one.
+  replacementPrice Decimal? @db.Decimal(10, 2)
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

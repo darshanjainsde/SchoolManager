@@ -95,6 +95,66 @@ describe('mapImportRow', () => {
     });
   });
 
+  describe('replacementPrice', () => {
+    const PRICE_ERROR =
+      'replacementPrice must be a number between 0 and 100000 with at most 2 decimal places';
+
+    it('reads a whole-rupee and a two-decimal price', () => {
+      expect(
+        mapImportRow({ isbn: '9780140328721', title: 'T', replacementprice: '299' }, 1),
+      ).toEqual({ data: expect.objectContaining({ replacementPrice: 299 }) });
+      expect(
+        mapImportRow({ isbn: '9780140328721', title: 'T', replacementprice: '299.50' }, 1),
+      ).toEqual({ data: expect.objectContaining({ replacementPrice: 299.5 }) });
+    });
+
+    it('accepts zero — a book settled at ₹0 is a real decision, not a missing value', () => {
+      expect(
+        mapImportRow({ isbn: '9780140328721', title: 'T', replacementprice: '0' }, 1),
+      ).toEqual({ data: expect.objectContaining({ replacementPrice: 0 }) });
+    });
+
+    it('leaves it undefined when the column is absent or blank, rather than defaulting to 0', () => {
+      // A 0 here would read as "this book is free to replace" on every row of
+      // every file that omits the column — which is most of them.
+      expect(mapImportRow({ isbn: '9780140328721', title: 'T' }, 1)).toEqual({
+        data: expect.objectContaining({ replacementPrice: undefined }),
+      });
+      expect(
+        mapImportRow({ isbn: '9780140328721', title: 'T', replacementprice: '' }, 1),
+      ).toEqual({ data: expect.objectContaining({ replacementPrice: undefined }) });
+    });
+
+    it('rejects a negative price — it would credit a parent for losing a book', () => {
+      expect(
+        mapImportRow({ isbn: '9780140328721', title: 'T', replacementprice: '-1' }, 7),
+      ).toEqual({ error: { row: 7, field: 'replacementPrice', message: PRICE_ERROR } });
+    });
+
+    it('rejects the paise-for-rupees fat finger above the ceiling', () => {
+      // 29900 typed for 299.00 is the slip this bound exists to catch before it
+      // becomes a bill; 100000 itself is still accepted.
+      expect(
+        mapImportRow({ isbn: '9780140328721', title: 'T', replacementprice: '100001' }, 8),
+      ).toEqual({ error: { row: 8, field: 'replacementPrice', message: PRICE_ERROR } });
+      expect(
+        mapImportRow({ isbn: '9780140328721', title: 'T', replacementprice: '100000' }, 8),
+      ).toEqual({ data: expect.objectContaining({ replacementPrice: 100000 }) });
+    });
+
+    it('rejects more than two decimal places instead of letting Postgres round it', () => {
+      expect(
+        mapImportRow({ isbn: '9780140328721', title: 'T', replacementprice: '299.999' }, 9),
+      ).toEqual({ error: { row: 9, field: 'replacementPrice', message: PRICE_ERROR } });
+    });
+
+    it('rejects text rather than importing NaN', () => {
+      expect(
+        mapImportRow({ isbn: '9780140328721', title: 'T', replacementprice: 'Rs 299' }, 10),
+      ).toEqual({ error: { row: 10, field: 'replacementPrice', message: PRICE_ERROR } });
+    });
+  });
+
   it('leaves optional fields undefined rather than empty strings when the CSV cell is blank', () => {
     const result = mapImportRow({ isbn: '9780140328721', title: 'T', subtitle: '' }, 1);
     expect(result).toEqual({ data: expect.objectContaining({ subtitle: undefined }) });

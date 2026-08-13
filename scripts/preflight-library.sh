@@ -64,7 +64,7 @@ step "typecheck"                    pnpm "${LIB_FILTER[@]}" run typecheck
 # (the ncc entry point) and packages/library-db/prisma/seed.ts. See
 # .dependency-cruiser.library.cjs's doNotFollow/exclude for what stays out of
 # the scan (node_modules, generated, dist, api).
-step "module boundary"              pnpm exec depcruise apps/library-api packages/library-db \
+step "module boundary"              pnpm exec depcruise apps/library-api apps/library-web packages/library-db \
                                        --config .dependency-cruiser.library.cjs
 step "build"                        pnpm "${LIB_FILTER[@]}" run build
 # Regression guard for the artifact that actually deploys: Vercel's

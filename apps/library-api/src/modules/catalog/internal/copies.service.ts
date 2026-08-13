@@ -1,8 +1,60 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { LibraryTx } from '@library/db';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
-import type { AddCopyDto, UpdateCopyDto } from './dto';
+import { REPLACEMENT_PRICE_MAX, type AddCopyDto, type UpdateCopyDto } from './dto';
 import { mapPrismaError } from './prisma-errors';
+
+/**
+ * Seeds `Title.replacementPrice` from the price paid for a copy being added —
+ * but ONLY while the title has no price of its own, and never overwriting one a
+ * librarian has since set. On the day a book is bought, what the school paid IS
+ * what it costs to replace; the design is that the two are allowed to diverge
+ * afterwards, so this seed is strictly one-way.
+ *
+ * Written as a single conditional UPDATE, deliberately NOT as read-then-write.
+ * A transaction gives atomicity, not mutual exclusion (LIBRARY-TRAPS #3): under
+ * READ COMMITTED, two clerks adding copies of the same title concurrently would
+ * both read NULL, both decide to write, and the later commit would silently
+ * clobber the earlier one. `updateMany` compiles to `UPDATE "Title" SET ...
+ * WHERE id = $1 AND "replacementPrice" IS NULL`, and Postgres re-evaluates that
+ * WHERE against the updated row after the first transaction commits — so the
+ * second one matches zero rows and does nothing. No advisory lock needed: the
+ * row lock plus the predicate is the whole guarantee.
+ *
+ * Runs on the caller's `tx`, i.e. inside the same interactive transaction as
+ * the copy creation, so a rolled-back copy can never leave a seeded price
+ * behind. It adds one statement to a path that does four, comfortably inside
+ * Prisma's default 5s interactive-transaction budget, so no explicit timeout is
+ * needed here.
+ *
+ * A no-op when the copy carries no `acquisitionCost` — a copy added with no
+ * price tells us nothing about what a replacement costs, and seeding 0 would be
+ * far worse than leaving it unset: 0 reads as "this book is free to replace".
+ */
+async function seedReplacementPrice(
+  tx: LibraryTx,
+  titleId: string,
+  acquisitionCost: number | undefined,
+): Promise<void> {
+  if (acquisitionCost === undefined || acquisitionCost === null) return;
+
+  // Bounded here as well as in `AddCopyDto`, because this function is a
+  // service-level entry point: an e2e, a future admin script or a bulk tool
+  // calls `CopiesService.add` directly, with no ValidationPipe between it and
+  // the database. A price the API would reject must not reach a parent's bill
+  // through a path that skipped the pipe — and a negative would otherwise trip
+  // `Title_replacementPrice_nonnegative`, which Prisma reports without a `.code`
+  // and `mapPrismaError` therefore turns into a 500 that also rolls back the
+  // copy. Out-of-range is skipped rather than thrown: the copy itself is still
+  // a legitimate thing to record, and the price is the part we decline to guess.
+  if (!Number.isFinite(acquisitionCost)) return;
+  if (acquisitionCost < 0 || acquisitionCost > REPLACEMENT_PRICE_MAX) return;
+
+  await tx.title.updateMany({
+    where: { id: titleId, replacementPrice: null },
+    data: { replacementPrice: acquisitionCost },
+  });
+}
 
 @Injectable()
 export class CopiesService {
@@ -26,7 +78,7 @@ export class CopiesService {
     if (!branch) throw new NotFoundException('Branch not found');
 
     try {
-      return await tx.copy.create({
+      const copy = await tx.copy.create({
         data: {
           orgId,
           titleId,
@@ -39,6 +91,9 @@ export class CopiesService {
           status: dto.status,
         },
       });
+
+      await seedReplacementPrice(tx, titleId, dto.acquisitionCost);
+      return copy;
     } catch (err) {
       mapPrismaError(err, 'copy');
     }
