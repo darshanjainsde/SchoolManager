@@ -7,11 +7,12 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RenewBookDto, ReturnBookDto, SearchMembersQueryDto, WaiveFineDto } from './dto';
+import { CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
 import { MembersService } from './members.service';
+import { LostService, LOST_TX_OPTIONS } from './lost.service';
 
 /**
  * Guard order mirrors `CatalogController`: JWT identity, then the plan
@@ -50,6 +51,7 @@ export class CirculationController {
     @Inject(ReservationsService) private readonly reservations: ReservationsService,
     @Inject(FinesService) private readonly fines: FinesService,
     @Inject(MembersService) private readonly members: MembersService,
+    @Inject(LostService) private readonly lost: LostService,
   ) {}
 
   @Post('issue')
@@ -71,6 +73,33 @@ export class CirculationController {
     const orgId = this.orgs.requireOrgId();
     const now = new Date();
     return withOrg(orgId, (tx) => this.issues.returnBook(tx, orgId, dto, user.sub, now, user.branches));
+  }
+
+  /**
+   * Report a book lost, from the counter.
+   *
+   * ASSISTANT is included deliberately: reporting a loss is a DESK action, and
+   * the thing it does first is stop the child's late charge growing. Gating it
+   * behind a role the person at the counter may not hold would mean the charge
+   * keeps running while they wait for someone senior — the exact incentive this
+   * flow exists to protect. Forgiving the money afterwards is the restricted
+   * action, not recording the loss.
+   */
+  @Post('lost')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  @UseInterceptors(IdempotencyInterceptor)
+  reportLost(@Body() dto: ReportLostDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) => this.lost.reportLost(tx, orgId, dto, user.sub, now, user.branches),
+      // `withOrg(orgId, fn, client, options)` — the transaction options are the
+      // FOURTH argument, behind the client. Passing `undefined` keeps the
+      // default tenant client while still widening the timeout.
+      undefined,
+      LOST_TX_OPTIONS,
+    );
   }
 
   @Post('renew')

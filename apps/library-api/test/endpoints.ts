@@ -60,6 +60,14 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/circulation/issue', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-ISSUE', memberId: '11111111-1111-4111-8111-111111111111' } },
   { method: 'POST', path: '/circulation/return', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-RETURN' } },
 
+  // P3 — reporting a loss. Same desk roles as issue/return, and deliberately so:
+  // the first thing this does is STOP the child's late charge growing, so gating
+  // it behind a role the person at the counter may not hold would keep the
+  // charge running while they fetch someone senior. Forgiving the money
+  // afterwards is the restricted action (see /circulation/fines/:id/waive,
+  // which excludes ASSISTANT); recording the loss is not.
+  { method: 'POST', path: '/circulation/lost', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-LOST' } },
+
   // Task 9 — renew and reservations. Same desk-role split as issue/return: ORG_OWNER/
   // LIBRARIAN/ASSISTANT work the desk, MEMBER is denied. Ids in bodies are
   // well-formed UUIDs that legitimately won't resolve to a real row for most

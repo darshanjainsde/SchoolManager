@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class IssueBookDto {
   @IsString() @MinLength(1) @MaxLength(100) accessionNumber!: string;
@@ -109,4 +109,25 @@ export class SearchMembersQueryDto {
   @Min(1)
   @Max(50)
   limit?: number;
+}
+
+export class ReportLostDto {
+  @IsString() @MinLength(1) @MaxLength(100) accessionNumber!: string;
+
+  /**
+   * The per-loss override — what the librarian says a replacement costs for
+   * THIS book, typed while looking at it. Optional: when omitted the price is
+   * resolved from the title, then from what the school paid, then not at all
+   * (see `common/replacement-price.ts`).
+   *
+   * Same bounds as `CreateTitleDto.replacementPrice`, and for the same reasons:
+   * two decimal places to match DECIMAL(10,2), a lower bound of 0 because
+   * negative money would credit a parent for losing a book, and a ₹100000
+   * ceiling to catch `29900` typed for `299.00` before it becomes a bill.
+   */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100_000)
+  replacementPrice?: number;
 }
