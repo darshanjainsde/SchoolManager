@@ -1,3 +1,12 @@
+> **SUPERSEDED — 2026-08-13.** This spec was reverse-engineered from Librify, a
+> study-hall SaaS that rents seats by the month, and its business model became our
+> requirements by mistake. The reading-room and money sections describe a product a
+> school librarian does not use, and the reading-room module built from them was
+> reverted in full.
+>
+> **Read `2026-08-13-school-library-design.md` instead.** Sections §0a and §1
+> (tenancy, auth, catalogue, circulation) remain accurate and shipped.
+
 # Library Service — design spec
 
 **Date:** 2026-08-08
