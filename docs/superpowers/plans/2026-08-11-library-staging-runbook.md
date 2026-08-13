@@ -3,13 +3,36 @@
 **Staging is LIVE as of 2026-08-11.** Migrations applied, RLS verified enforcing,
 seed data in place. This file records how, so it is repeatable.
 
+> ### ⚠ CORRECTED 2026-08-13 — this file named the PRODUCTION project
+>
+> Every command below originally carried `pnczxkyteaocpdoufwyz`. That is the
+> **Sckools production** project — 3 real schools, 301 students — and running
+> the documented `prisma migrate deploy` against it would have migrated
+> production while believing it was staging. The library's own project is
+> `eocxgzcfzwmbaivobzfx`, as §0 of
+> `docs/superpowers/specs/2026-08-13-school-library-design.md` states.
+>
+> Corrected throughout. **Before any command in this file, assert the ref:**
+>
+> ```bash
+> case "$LIBRARY_DIRECT_URL" in
+>   *pnczxkyteaocpdoufwyz*) echo "STOP: that is PRODUCTION"; return 1 ;;
+>   *eocxgzcfzwmbaivobzfx*) echo "ok: library project" ;;
+>   *) echo "STOP: unrecognised project ref"; return 1 ;;
+> esac
+> ```
+>
+> The spec's §0 claim that "the production ref appears nowhere in library
+> config" was false while this file said otherwise — a doc IS config when it is
+> the only place the connection string is written down.
+
 ## Facts
 
 | | |
 |---|---|
-| Supabase project | `pnczxkyteaocpdoufwyz` (ap-south-1) |
-| Pooler host | `aws-1-ap-south-1.pooler.supabase.com` — `:6543` runtime, `:5432` migrations |
-| Username form | `<role>.pnczxkyteaocpdoufwyz` |
+| Supabase project | `eocxgzcfzwmbaivobzfx` (ap-south-1) — the library's OWN project, never `pnczxkyteaocpdoufwyz` |
+| Pooler host | `aws-1-ap-south-1.pooler.supabase.com` — `:6543` runtime, `:5432` migrations. **Confirm the region/prefix against the Supabase dashboard for THIS project** — it was recorded for the old one. |
+| Username form | `<role>.eocxgzcfzwmbaivobzfx` |
 | Schemas | `library`, `testboard` |
 | Orgs seeded | `raffles` (300 members), `northgate` (5) — the second exists so isolation has a tenant to fail against |
 | Logins | `owner@raffles.test`, `librarian@raffles.test` — password from `LIBRARY_SEED_PASSWORD` (currently `password`) |
@@ -47,7 +70,7 @@ needs, so no default-privileges rule is required.
 ## Deploy migrations to staging
 
 ```bash
-export LIBRARY_DIRECT_URL='postgresql://library_platform.pnczxkyteaocpdoufwyz:<pw>@aws-1-ap-south-1.pooler.supabase.com:5432/postgres?schema=library'
+export LIBRARY_DIRECT_URL='postgresql://library_platform.eocxgzcfzwmbaivobzfx:<pw>@aws-1-ap-south-1.pooler.supabase.com:5432/postgres?schema=library'
 export LIBRARY_DATABASE_URL="$LIBRARY_DIRECT_URL"
 pnpm --filter @library/db exec prisma migrate deploy
 ```
