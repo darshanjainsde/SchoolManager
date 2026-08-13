@@ -3,9 +3,9 @@ export {
   evaluateRenew,
   computeFine,
   issueState,
-  nextHoldToPromote,
-  holdShelfExpiry,
-  holdState,
+  nextReservationToPromote,
+  reservedShelfExpiry,
+  reservationState,
   DUE_SOON_WINDOW_DAYS,
 } from './internal/policy';
 export type {
@@ -13,8 +13,8 @@ export type {
   Member,
   Copy,
   Issue,
-  Hold,
-  HoldStatusValue,
+  Reservation,
+  ReservationStatusValue,
   IssueDenial,
   RenewDenial,
   IssueState,

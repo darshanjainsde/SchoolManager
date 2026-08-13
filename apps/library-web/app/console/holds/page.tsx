@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api';
 import { useApiCtx } from '@/lib/session';
-import { daysUntil, listHolds, type HoldRow } from '@/lib/circulation';
+import { daysUntil, listReservations, type ReservationRow } from '@/lib/circulation';
 import { initials, memberHue, memberName } from '@/lib/members';
 
 type State =
   | { kind: 'loading' }
-  | { kind: 'ready'; rows: HoldRow[] }
+  | { kind: 'ready'; rows: ReservationRow[] }
   | { kind: 'error'; message: string };
 
 const FILTERS = [
@@ -17,8 +17,8 @@ const FILTERS = [
   { key: 'PENDING', label: 'Waiting' },
 ] as const;
 
-/** READY holds are the actionable ones — a book is physically waiting to be collected. */
-function pillFor(status: HoldRow['status']): { cls: string; label: string } {
+/** READY reservations are the actionable ones — a book is physically waiting to be collected. */
+function pillFor(status: ReservationRow['status']): { cls: string; label: string } {
   if (status === 'READY') return { cls: 'ok', label: 'Ready' };
   if (status === 'PENDING') return { cls: 'warn', label: 'Waiting' };
   if (status === 'EXPIRED') return { cls: 'stop', label: 'Expired' };
@@ -34,7 +34,7 @@ export default function HoldsPage() {
     if (!ctx) return;
     setState({ kind: 'loading' });
     try {
-      const rows = await listHolds(ctx, { status: filter || undefined, limit: 100 });
+      const rows = await listReservations(ctx, { status: filter || undefined, limit: 100 });
       setState({ kind: 'ready', rows });
     } catch (err) {
       setState({
@@ -50,8 +50,8 @@ export default function HoldsPage() {
     <>
       <div className="lbx-pagehead">
         <div>
-          <h2>Holds</h2>
-          <p>Who is waiting for what, and what is sitting on the hold shelf.</p>
+          <h2>Reservations</h2>
+          <p>Who is waiting for what, and what is sitting on the reservation shelf.</p>
         </div>
         <div style={{ display: 'flex', gap: '.4rem' }}>
           {FILTERS.map((f) => (

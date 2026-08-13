@@ -205,9 +205,9 @@ async function seedCirculationPolicies(
 ): Promise<void> {
   const types = ['STUDENT', 'TEACHER', 'EXTERNAL'] as const;
   const byType = {
-    STUDENT: { maxBooks: 3, issueDays: 14, renewLimit: 1, maxHolds: 3 },
-    TEACHER: { maxBooks: 10, issueDays: 30, renewLimit: 2, maxHolds: 5 },
-    EXTERNAL: { maxBooks: 2, issueDays: 14, renewLimit: 0, maxHolds: 1 },
+    STUDENT: { maxBooks: 3, issueDays: 14, renewLimit: 1, maxReservations: 3 },
+    TEACHER: { maxBooks: 10, issueDays: 30, renewLimit: 2, maxReservations: 5 },
+    EXTERNAL: { maxBooks: 2, issueDays: 14, renewLimit: 0, maxReservations: 1 },
   } as const;
 
   for (const memberType of types) {
@@ -217,7 +217,7 @@ async function seedCirculationPolicies(
     // real rule ("at most one org-default row per (orgId, memberType)") is a
     // partial unique index in SQL, which Prisma cannot express, so there is no
     // compound `where` to upsert against. Find-then-create is safe here because
-    // a seed is single-threaded; the partial index is what actually holds the
+    // a seed is single-threaded; the partial index is what actually reservations the
     // line against anything concurrent.
     const existing = await prisma.circulationPolicy.findFirst({
       where: { orgId, branchId: null, memberType },
@@ -237,8 +237,8 @@ async function seedCirculationPolicies(
         finePerDay: 1,
         graceDays: 3,
         maxFine: 100,
-        maxHolds: t.maxHolds,
-        holdShelfDays: 5,
+        maxReservations: t.maxReservations,
+        reservedShelfDays: 5,
         maxOutstandingFine: 50,
       },
     });

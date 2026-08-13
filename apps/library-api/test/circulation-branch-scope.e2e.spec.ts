@@ -23,8 +23,8 @@ const POLICY: Policy = {
   finePerDay: 5,
   graceDays: 1,
   maxFine: 500,
-  maxHolds: 3,
-  holdShelfDays: 3,
+  maxReservations: 3,
+  reservedShelfDays: 3,
   maxOutstandingFine: 1000,
 };
 
@@ -32,7 +32,7 @@ const POLICY: Policy = {
  * Phase 1a whole-branch review finding: the catalogue enforces branch scope
  * in both the guard and the service; circulation enforced none. Today an
  * ASSISTANT scoped to branch A can issue, return and renew any branch-B
- * copy, and `/circulation/holds`, `/fines`, `/overdue`, `/day-report` all
+ * copy, and `/circulation/reservations`, `/fines`, `/overdue`, `/day-report` all
  * return org-wide data. This suite is the same shape as
  * `catalog-branch-scope.e2e.spec.ts` — real app, real HTTP, real JWTs —
  * because the defect (and the fix) is specifically about how the guard, the
@@ -270,7 +270,7 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
     });
   });
 
-  describe('/circulation/holds — a PENDING (unassigned) hold passes through; a promoted one is branch-filtered', () => {
+  describe('/circulation/reservations — a PENDING (unassigned) reservation passes through; a promoted one is branch-filtered', () => {
     let org: BranchScopeOrg;
     let memberA: { id: string };
     let memberB: { id: string };
@@ -279,52 +279,52 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
     let branchBHoldId: string;
 
     beforeAll(async () => {
-      org = await seedOrg(`holds-${Date.now().toString(36)}`);
+      org = await seedOrg(`reservations-${Date.now().toString(36)}`);
       memberA = await seedMember(org.orgId, org.branchAId, `HOLD-A-${Date.now()}`);
       memberB = await seedMember(org.orgId, org.branchBId, `HOLD-B-${Date.now()}`);
-      title = await seedTitle(org.orgId, 'holds');
+      title = await seedTitle(org.orgId, 'reservations');
       const prisma = getLibraryPlatformPrisma();
 
-      // A hold promoted onto a branch-B copy: issue+return a branch-B copy
+      // A reservation promoted onto a branch-B copy: issue+return a branch-B copy
       // with a waiter queued FIRST (lowest queuePosition — a return always
-      // promotes the OLDEST PENDING hold on the title, per
-      // `nextHoldToPromote`), so the return promotes THIS hold onto that
-      // branch-B copy (branchId = branchB), not whichever hold is created
+      // promotes the OLDEST PENDING reservation on the title, per
+      // `nextReservationToPromote`), so the return promotes THIS reservation onto that
+      // branch-B copy (branchId = branchB), not whichever reservation is created
       // second.
       const copyB1 = await seedCopy(org.orgId, org.branchBId, title.id, `HOLDS-B1-${Date.now()}`);
       const borrowerB = await seedMember(org.orgId, org.branchBId, `HOLD-BORROW-${Date.now()}`);
       await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyB1.id, branchId: org.branchBId, memberId: borrowerB.id, dueAt: new Date(Date.now() + 14 * MS_PER_DAY) } });
-      await prisma.copy.update({ where: { id: copyB1.id }, data: { status: 'ON_LOAN' } });
+      await prisma.copy.update({ where: { id: copyB1.id }, data: { status: 'ISSUED' } });
 
       const waiterHoldRes = await request(app.getHttpServer())
-        .post('/circulation/holds')
+        .post('/circulation/reservations')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.allBranchesLibrarianToken}`)
         .send({ titleId: title.id, memberId: memberB.id });
-      branchBHoldId = waiterHoldRes.body.hold.id;
+      branchBHoldId = waiterHoldRes.body.reservation.id;
 
       const returnRes = await request(app.getHttpServer())
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.allBranchesLibrarianToken}`)
         .send({ accessionNumber: copyB1.accessionNumber });
-      expect(returnRes.body.promotedHoldId).toBe(branchBHoldId);
+      expect(returnRes.body.promotedReservationId).toBe(branchBHoldId);
 
-      // A still-PENDING hold, created AFTER the one above so it holds a
+      // A still-PENDING reservation, created AFTER the one above so it reservations a
       // higher queue position and is NOT the one a return would promote: no
-      // branch assigned yet (see the Hold model's own schema doc).
+      // branch assigned yet (see the Reservation model's own schema doc).
       const pendingRes = await request(app.getHttpServer())
-        .post('/circulation/holds')
+        .post('/circulation/reservations')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.allBranchesLibrarianToken}`)
         .send({ titleId: title.id, memberId: memberA.id });
-      pendingHoldId = pendingRes.body.hold.id;
+      pendingHoldId = pendingRes.body.reservation.id;
     });
     afterAll(() => cleanup(org.orgId));
 
-    it('a branch-A-scoped librarian still sees the still-PENDING (unassigned) hold', async () => {
+    it('a branch-A-scoped librarian still sees the still-PENDING (unassigned) reservation', async () => {
       const res = await request(app.getHttpServer())
-        .get('/circulation/holds')
+        .get('/circulation/reservations')
         .query({ titleId: title.id })
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.scopedLibrarianToken}`);
@@ -333,9 +333,9 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
       expect(ids).toContain(pendingHoldId);
     });
 
-    it('the SAME branch-A-scoped librarian does NOT see the hold promoted onto a branch-B copy', async () => {
+    it('the SAME branch-A-scoped librarian does NOT see the reservation promoted onto a branch-B copy', async () => {
       const res = await request(app.getHttpServer())
-        .get('/circulation/holds')
+        .get('/circulation/reservations')
         .query({ titleId: title.id })
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.scopedLibrarianToken}`);
@@ -345,7 +345,7 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
 
     it('a librarian with an empty branches array sees both', async () => {
       const res = await request(app.getHttpServer())
-        .get('/circulation/holds')
+        .get('/circulation/reservations')
         .query({ titleId: title.id })
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.allBranchesLibrarianToken}`);

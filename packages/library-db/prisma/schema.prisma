@@ -94,7 +94,7 @@ model LibraryOrg {
   copies     Copy[]
   policies   CirculationPolicy[]
   issues     Issue[]
-  holds      Hold[]
+  reservations Reservation[]
   fines      Fine[]
   outbox     NotificationOutbox[]
 }
@@ -160,7 +160,7 @@ model Branch {
   members  Member[]
   copies   Copy[]
   issues   Issue[]
-  holds    Hold[]
+  reservations Reservation[]
   policies CirculationPolicy[]
 
   @@unique([orgId, code])
@@ -223,7 +223,7 @@ model Member {
   homeBranch Branch?    @relation(fields: [homeBranchId], references: [id], onDelete: SetNull)
   login      LibUser?
   issues     Issue[]
-  holds      Hold[]
+  reservations Reservation[]
   fines      Fine[]
 
   @@unique([orgId, code])
@@ -328,8 +328,8 @@ enum CopyCondition {
 
 enum CopyStatus {
   AVAILABLE
-  ON_LOAN
-  ON_HOLD_SHELF
+  ISSUED
+  RESERVED_SHELF
   IN_TRANSIT
   LOST
   DAMAGED
@@ -364,7 +364,7 @@ model Title {
   authors    TitleAuthor[]
   categories TitleCategory[]
   copies     Copy[]
-  holds      Hold[]
+  reservations Reservation[]
 
   @@index([orgId])
   @@index([orgId, callNumber])
@@ -459,7 +459,7 @@ model Copy {
   /// stock.
   branch Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
   issues Issue[]
-  holds  Hold[]     @relation("HoldReadyCopy")
+  reservations Reservation[]     @relation("ReservationReadyCopy")
 
   @@unique([orgId, accessionNumber])
   @@index([titleId, status])
@@ -487,7 +487,7 @@ enum IssueStatus {
 /// once both collapse into the same value. See
 /// packages/library-db/src/schema-shape.spec.ts's `FORBIDDEN_VALUE_EXCEPTIONS`
 /// for the reviewable, by-name exception this value is allow-listed under.
-enum HoldStatus {
+enum ReservationStatus {
   PENDING
   READY
   COLLECTED
@@ -543,8 +543,8 @@ model CirculationPolicy {
   graceDays          Int
   /// null = uncapped.
   maxFine            Decimal?   @db.Decimal(10, 2)
-  maxHolds           Int
-  holdShelfDays      Int
+  maxReservations    Int
+  reservedShelfDays  Int
   /// null = no outstanding-fine gate on new issues.
   maxOutstandingFine Decimal?   @db.Decimal(10, 2)
   createdAt          DateTime   @default(now())
@@ -569,7 +569,7 @@ model Issue {
   /// Denormalized from `Copy.branchId` at issue time (LoansService.issue) so
   /// "which branch is this loan at" is answerable directly, without a join
   /// through Copy, on every branch-scoped read (BranchScopeGuard,
-  /// listOverdue, dayReport). NOT NULL: unlike Hold.branchId, an Issue always
+  /// listOverdue, dayReport). NOT NULL: unlike Reservation.branchId, an Issue always
   /// has a copy from the moment it exists, so there is no "not yet known"
   /// state to represent.
   branchId         String     @db.Uuid
@@ -603,7 +603,7 @@ model Issue {
 /// Keyed on titleId, not copyId: a member holds a place in line for a TITLE
 /// (any available copy will do), and only gets tied to a specific copy
 /// (readyCopyId) once one is pulled for them.
-model Hold {
+model Reservation {
   id            String     @id @default(uuid()) @db.Uuid
   orgId         String     @db.Uuid
   titleId       String     @db.Uuid
@@ -617,7 +617,7 @@ model Hold {
   memberId      String     @db.Uuid
   /// Lower = earlier in the queue.
   queuePosition Int
-  status        HoldStatus @default(PENDING)
+  status        ReservationStatus @default(PENDING)
   readyCopyId   String?    @db.Uuid
   readyAt       DateTime?
   /// Meaningful ONLY when status is READY: the hold-shelf deadline, set at
@@ -649,7 +649,7 @@ model Hold {
   org       LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
   title     Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)
   member    Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  readyCopy Copy?      @relation("HoldReadyCopy", fields: [readyCopyId], references: [id], onDelete: SetNull)
+  readyCopy Copy?      @relation("ReservationReadyCopy", fields: [readyCopyId], references: [id], onDelete: SetNull)
   /// Restrict, same reasoning as Issue.branch — a branch a hold was ever
   /// promoted onto must not vanish out from under that history.
   branch    Branch?    @relation(fields: [branchId], references: [id], onDelete: Restrict)
@@ -709,7 +709,7 @@ enum NotificationChannel {
 /// writes a `HOLD_READY` row here on hold promotion — nothing drains this
 /// table until Phase 4's outbox drain cron exists (see the no-scheduler rule,
 /// §6.3 of the design doc: a missed drain delays a message, it can never
-/// corrupt an Issue/Hold/Fine, because none of THEIR state depends on this
+/// corrupt an Issue/Reservation/Fine, because none of THEIR state depends on this
 /// table ever being read). `templateKey` is a plain string, not an enum,
 /// because `NotificationTemplate` (the model that would own that
 /// enumeration) is itself a Phase 4 table — pinning the key values into this

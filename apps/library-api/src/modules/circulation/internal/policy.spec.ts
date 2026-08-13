@@ -3,13 +3,13 @@ import {
   DUE_SOON_WINDOW_DAYS,
   evaluateIssue,
   evaluateRenew,
-  holdShelfExpiry,
-  holdState,
+  reservedShelfExpiry,
+  reservationState,
   issueState,
-  nextHoldToPromote,
+  nextReservationToPromote,
   type Copy,
-  type Hold,
-  type HoldStatusValue,
+  type Reservation,
+  type ReservationStatusValue,
   type Issue,
   type Member,
   type Policy,
@@ -25,8 +25,8 @@ const POLICY: Policy = {
   finePerDay: 5,
   graceDays: 2,
   maxFine: 200,
-  maxHolds: 2,
-  holdShelfDays: 3,
+  maxReservations: 2,
+  reservedShelfDays: 3,
   maxOutstandingFine: 100,
 };
 
@@ -67,18 +67,18 @@ describe('evaluateIssue', () => {
       expect: { allowed: false, reason: 'MEMBER_NOT_ACTIVE' },
     },
     {
-      name: 'a copy ON_HOLD_SHELF for a different member is denied',
-      copy: { status: 'ON_HOLD_SHELF', heldForMemberId: 'someone-else' },
+      name: 'a copy RESERVED_SHELF for a different member is denied',
+      copy: { status: 'RESERVED_SHELF', heldForMemberId: 'someone-else' },
       expect: { allowed: false, reason: 'COPY_ON_HOLD_FOR_OTHER' },
     },
     {
-      name: 'a copy ON_HOLD_SHELF for THIS member is allowed',
-      copy: { status: 'ON_HOLD_SHELF', heldForMemberId: ACTIVE_MEMBER.id },
+      name: 'a copy RESERVED_SHELF for THIS member is allowed',
+      copy: { status: 'RESERVED_SHELF', heldForMemberId: ACTIVE_MEMBER.id },
       expect: { allowed: true },
     },
     {
-      name: 'a copy that is ON_LOAN is denied as not available',
-      copy: { status: 'ON_LOAN' },
+      name: 'a copy that is ISSUED is denied as not available',
+      copy: { status: 'ISSUED' },
       expect: { allowed: false, reason: 'COPY_NOT_AVAILABLE' },
     },
     {
@@ -145,12 +145,12 @@ describe('evaluateIssue', () => {
 describe('evaluateRenew', () => {
   const OK_LOAN: Issue = { dueAt: new Date(NOW.getTime() + 3 * MS_PER_DAY), returnedAt: null, renewCount: 0 };
 
-  it('renewal is refused when the title has pending holds', () => {
+  it('renewal is refused when the title has pending reservations', () => {
     const result = evaluateRenew(POLICY, OK_LOAN, 1, NOW);
     expect(result).toEqual({ allowed: false, reason: 'HAS_HOLDS' });
   });
 
-  it('renewal is allowed when there are no pending holds on the title', () => {
+  it('renewal is allowed when there are no pending reservations on the title', () => {
     const result = evaluateRenew(POLICY, OK_LOAN, 0, NOW);
     expect(result).toEqual({ allowed: true, newDueAt: new Date(NOW.getTime() + POLICY.renewDays * MS_PER_DAY) });
   });
@@ -176,7 +176,7 @@ describe('evaluateRenew', () => {
     expect(result.allowed).toBe(true);
   });
 
-  it('checks precedence: overdue wins even when renewLimit and holds are also violated', () => {
+  it('checks precedence: overdue wins even when renewLimit and reservations are also violated', () => {
     const overdue: Issue = { ...OK_LOAN, dueAt: new Date(NOW.getTime() - 1), renewCount: POLICY.renewLimit };
     const result = evaluateRenew(POLICY, overdue, 5, NOW);
     expect(result).toEqual({ allowed: false, reason: 'ALREADY_OVERDUE' });
@@ -252,71 +252,71 @@ describe('issueState', () => {
   });
 });
 
-describe('nextHoldToPromote', () => {
+describe('nextReservationToPromote', () => {
   const notExpired = new Date(NOW.getTime() + MS_PER_DAY);
   const expired = new Date(NOW.getTime() - 1);
 
-  it('returns null for an empty hold list', () => {
-    expect(nextHoldToPromote([], NOW)).toBeNull();
+  it('returns null for an empty reservation list', () => {
+    expect(nextReservationToPromote([], NOW)).toBeNull();
   });
 
-  it('returns null when every hold has expired', () => {
-    const holds: Hold[] = [
+  it('returns null when every reservation has expired', () => {
+    const reservations: Reservation[] = [
       { memberId: 'm1', queuePosition: 1, expiresAt: expired },
       { memberId: 'm2', queuePosition: 2, expiresAt: expired },
     ];
-    expect(nextHoldToPromote(holds, NOW)).toBeNull();
+    expect(nextReservationToPromote(reservations, NOW)).toBeNull();
   });
 
-  it('skips an expired hold and returns the lowest queue position among the rest', () => {
-    const holds: Hold[] = [
+  it('skips an expired reservation and returns the lowest queue position among the rest', () => {
+    const reservations: Reservation[] = [
       { memberId: 'earliest-but-expired', queuePosition: 1, expiresAt: expired },
       { memberId: 'next-in-line', queuePosition: 2, expiresAt: notExpired },
       { memberId: 'later', queuePosition: 3, expiresAt: notExpired },
     ];
-    expect(nextHoldToPromote(holds, NOW)).toEqual({ memberId: 'next-in-line', queuePosition: 2, expiresAt: notExpired });
+    expect(nextReservationToPromote(reservations, NOW)).toEqual({ memberId: 'next-in-line', queuePosition: 2, expiresAt: notExpired });
   });
 
-  it('a hold expiring at exactly now is treated as expired', () => {
-    const holds: Hold[] = [{ memberId: 'm1', queuePosition: 1, expiresAt: NOW }];
-    expect(nextHoldToPromote(holds, NOW)).toBeNull();
-  });
-});
-
-describe('holdShelfExpiry', () => {
-  it('is exactly policy.holdShelfDays after now', () => {
-    expect(holdShelfExpiry(POLICY, NOW)).toEqual(new Date(NOW.getTime() + POLICY.holdShelfDays * MS_PER_DAY));
-  });
-
-  it('zero holdShelfDays returns now unchanged', () => {
-    expect(holdShelfExpiry({ ...POLICY, holdShelfDays: 0 }, NOW)).toEqual(NOW);
+  it('a reservation expiring at exactly now is treated as expired', () => {
+    const reservations: Reservation[] = [{ memberId: 'm1', queuePosition: 1, expiresAt: NOW }];
+    expect(nextReservationToPromote(reservations, NOW)).toBeNull();
   });
 });
 
-describe('holdState', () => {
+describe('reservedShelfExpiry', () => {
+  it('is exactly policy.reservedShelfDays after now', () => {
+    expect(reservedShelfExpiry(POLICY, NOW)).toEqual(new Date(NOW.getTime() + POLICY.reservedShelfDays * MS_PER_DAY));
+  });
+
+  it('zero reservedShelfDays returns now unchanged', () => {
+    expect(reservedShelfExpiry({ ...POLICY, reservedShelfDays: 0 }, NOW)).toEqual(NOW);
+  });
+});
+
+describe('reservationState', () => {
   const notExpired = new Date(NOW.getTime() + MS_PER_DAY);
   const expired = new Date(NOW.getTime() - 1);
 
-  it('a READY hold not yet past its shelf deadline stays READY', () => {
-    expect(holdState({ status: 'READY', expiresAt: notExpired }, NOW)).toBe('READY');
+  it('a READY reservation not yet past its shelf deadline stays READY', () => {
+    expect(reservationState({ status: 'READY', expiresAt: notExpired }, NOW)).toBe('READY');
   });
 
-  it('a READY hold past its shelf deadline reads as EXPIRED, even though nothing wrote that', () => {
-    expect(holdState({ status: 'READY', expiresAt: expired }, NOW)).toBe('EXPIRED');
+  it('a READY reservation past its shelf deadline reads as EXPIRED, even though nothing wrote that', () => {
+    expect(reservationState({ status: 'READY', expiresAt: expired }, NOW)).toBe('EXPIRED');
   });
 
-  it('a READY hold expiring at exactly now reads as EXPIRED (same boundary as nextHoldToPromote)', () => {
-    expect(holdState({ status: 'READY', expiresAt: NOW }, NOW)).toBe('EXPIRED');
+  it('a READY reservation expiring at exactly now reads as EXPIRED (same boundary as nextReservationToPromote)', () => {
+    expect(reservationState({ status: 'READY', expiresAt: NOW }, NOW)).toBe('EXPIRED');
   });
 
-  it('a PENDING hold is never reinterpreted by expiresAt, however far in the past', () => {
-    expect(holdState({ status: 'PENDING', expiresAt: expired }, NOW)).toBe('PENDING');
+  it('a PENDING reservation is never reinterpreted by expiresAt, however far in the past', () => {
+    expect(reservationState({ status: 'PENDING', expiresAt: expired }, NOW)).toBe('PENDING');
   });
 
-  const terminal: HoldStatusValue[] = ['COLLECTED', 'EXPIRED', 'CANCELLED'];
+  const terminal: ReservationStatusValue[] = ['COLLECTED', 'EXPIRED', 'CANCELLED'];
   for (const status of terminal) {
-    it(`a terminal ${status} hold passes through unchanged regardless of expiresAt`, () => {
-      expect(holdState({ status, expiresAt: expired }, NOW)).toBe(status);
+    it(`a terminal ${status} reservation passes through unchanged regardless of expiresAt`, () => {
+      expect(reservationState({ status, expiresAt: expired }, NOW)).toBe(status);
     });
   }
 });

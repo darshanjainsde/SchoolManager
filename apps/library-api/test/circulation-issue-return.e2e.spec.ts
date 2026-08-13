@@ -13,11 +13,11 @@ import { LIVE } from './helpers/live-db';
 
 const describeLive = LIVE ? describe : describe.skip;
 
-/** A far-future placeholder for a PENDING hold's (non-null) `expiresAt` —
- * see `issues.service.ts`'s `promoteOrRelease` doc: a PENDING hold's expiry
- * only becomes meaningful once it is promoted to READY (Task 9's hold-shelf
+/** A far-future placeholder for a PENDING reservation's (non-null) `expiresAt` —
+ * see `issues.service.ts`'s `promoteOrRelease` doc: a PENDING reservation's expiry
+ * only becomes meaningful once it is promoted to READY (Task 9's reservation-shelf
  * countdown), so a placeholder this far out is never mistaken for "already
- * expired" by `nextHoldToPromote`. */
+ * expired" by `nextReservationToPromote`. */
 const FAR_FUTURE = new Date(Date.now() + 365 * 86_400_000);
 const FOURTEEN_DAYS_OUT = new Date(Date.now() + 14 * 86_400_000);
 
@@ -29,8 +29,8 @@ const POLICY: Policy = {
   finePerDay: 5,
   graceDays: 1,
   maxFine: 500,
-  maxHolds: 3,
-  holdShelfDays: 3,
+  maxReservations: 3,
+  reservedShelfDays: 3,
   maxOutstandingFine: 1000,
 };
 
@@ -124,14 +124,14 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
         .set('Authorization', `Bearer ${org.librarianToken}`)
         .send({ accessionNumber: copy.accessionNumber });
 
-    it('issues the copy: Issue created, Copy -> ON_LOAN', async () => {
+    it('issues the copy: Issue created, Copy -> ISSUED', async () => {
       const res = await issue();
       expect(res.status).toBe(201);
       expect(res.body.issue.memberId).toBe(member.id);
       expect(res.body.issue.returnedAt).toBeNull();
 
       const dbCopy = await getLibraryPlatformPrisma().copy.findUnique({ where: { id: copy.id } });
-      expect(dbCopy?.status).toBe('ON_LOAN');
+      expect(dbCopy?.status).toBe('ISSUED');
     });
 
     it('returns on time: no Fine row, Copy -> AVAILABLE', async () => {
@@ -231,7 +231,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     });
   });
 
-  describe('a copy on the hold shelf', () => {
+  describe('a copy on the reservation shelf', () => {
     let org: CircOrg;
     let heldMember: { id: string };
     let otherMember: { id: string };
@@ -241,19 +241,19 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
       org = await seedCircOrg(`shelf-${Date.now().toString(36)}`);
       heldMember = await seedMember(org.orgId, org.branchId, 'SHELF-HELD');
       otherMember = await seedMember(org.orgId, org.branchId, 'SHELF-OTHER');
-      title = await seedTitle(org.orgId, 'hold-shelf');
+      title = await seedTitle(org.orgId, 'reservation-shelf');
     });
     afterAll(() => cleanup(org.orgId));
 
-    it('issuing to the held member collects the hold in the same transaction', async () => {
+    it('issuing to the held member collects the reservation in the same transaction', async () => {
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `SHELF-COLLECT-${Date.now()}`);
-      const hold = await getLibraryPlatformPrisma().hold.create({
+      const reservation = await getLibraryPlatformPrisma().reservation.create({
         data: {
           orgId: org.orgId, titleId: title.id, memberId: heldMember.id, queuePosition: 1,
           status: 'READY', readyCopyId: copy.id, readyAt: new Date(), expiresAt: FAR_FUTURE,
         },
       });
-      await getLibraryPlatformPrisma().copy.update({ where: { id: copy.id }, data: { status: 'ON_HOLD_SHELF' } });
+      await getLibraryPlatformPrisma().copy.update({ where: { id: copy.id }, data: { status: 'RESERVED_SHELF' } });
 
       const res = await request(app.getHttpServer())
         .post('/circulation/issue')
@@ -262,21 +262,21 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
         .send({ accessionNumber: copy.accessionNumber, memberId: heldMember.id });
 
       expect(res.status).toBe(201);
-      expect(res.body.collectedHoldId).toBe(hold.id);
+      expect(res.body.collectedReservationId).toBe(reservation.id);
 
-      const dbHold = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold.id } });
+      const dbHold = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: reservation.id } });
       expect(dbHold?.status).toBe('COLLECTED');
     });
 
     it('issuing to a DIFFERENT member is denied 409 COPY_ON_HOLD_FOR_OTHER', async () => {
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `SHELF-DENY-${Date.now()}`);
-      await getLibraryPlatformPrisma().hold.create({
+      await getLibraryPlatformPrisma().reservation.create({
         data: {
           orgId: org.orgId, titleId: title.id, memberId: heldMember.id, queuePosition: 1,
           status: 'READY', readyCopyId: copy.id, readyAt: new Date(), expiresAt: FAR_FUTURE,
         },
       });
-      await getLibraryPlatformPrisma().copy.update({ where: { id: copy.id }, data: { status: 'ON_HOLD_SHELF' } });
+      await getLibraryPlatformPrisma().copy.update({ where: { id: copy.id }, data: { status: 'RESERVED_SHELF' } });
 
       const res = await request(app.getHttpServer())
         .post('/circulation/issue')
@@ -289,31 +289,31 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     });
   });
 
-  describe('returning a copy promotes the next pending hold and writes the outbox row', () => {
+  describe('returning a copy promotes the next pending reservation and writes the outbox row', () => {
     let org: CircOrg;
     let borrower: { id: string };
     let waiter: { id: string };
     let title: { id: string };
     let copy: { id: string; accessionNumber: string };
-    let hold: { id: string };
+    let reservation: { id: string };
 
     beforeAll(async () => {
-      org = await seedCircOrg(`hold-return-${Date.now().toString(36)}`);
+      org = await seedCircOrg(`reservation-return-${Date.now().toString(36)}`);
       borrower = await seedMember(org.orgId, org.branchId, 'HR-BORROW');
       waiter = await seedMember(org.orgId, org.branchId, 'HR-WAIT');
-      title = await seedTitle(org.orgId, 'hold-return');
+      title = await seedTitle(org.orgId, 'reservation-return');
       copy = await seedCopy(org.orgId, org.branchId, title.id, `HR-${Date.now()}`);
 
       const prisma = getLibraryPlatformPrisma();
       await prisma.issue.create({ data: { orgId: org.orgId, copyId: copy.id, branchId: org.branchId, memberId: borrower.id, dueAt: FOURTEEN_DAYS_OUT } });
-      await prisma.copy.update({ where: { id: copy.id }, data: { status: 'ON_LOAN' } });
-      hold = await prisma.hold.create({
+      await prisma.copy.update({ where: { id: copy.id }, data: { status: 'ISSUED' } });
+      reservation = await prisma.reservation.create({
         data: { orgId: org.orgId, titleId: title.id, memberId: waiter.id, queuePosition: 1, status: 'PENDING', expiresAt: FAR_FUTURE },
       });
     });
     afterAll(() => cleanup(org.orgId));
 
-    it('promotes the hold onto the returned copy; the outbox carries a durable HOLD_READY row, not a sent message', async () => {
+    it('promotes the reservation onto the returned copy; the outbox carries a durable HOLD_READY row, not a sent message', async () => {
       const res = await request(app.getHttpServer())
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
@@ -321,16 +321,16 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
         .send({ accessionNumber: copy.accessionNumber });
 
       expect(res.status).toBe(201);
-      expect(res.body.promotedHoldId).toBe(hold.id);
-      expect(res.body.copyStatus).toBe('ON_HOLD_SHELF');
+      expect(res.body.promotedReservationId).toBe(reservation.id);
+      expect(res.body.copyStatus).toBe('RESERVED_SHELF');
 
-      const dbHold = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold.id } });
+      const dbHold = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: reservation.id } });
       expect(dbHold?.status).toBe('READY');
       expect(dbHold?.readyCopyId).toBe(copy.id);
       expect(dbHold?.expiresAt.getTime()).toBeGreaterThan(Date.now());
 
       const dbCopy = await getLibraryPlatformPrisma().copy.findUnique({ where: { id: copy.id } });
-      expect(dbCopy?.status).toBe('ON_HOLD_SHELF');
+      expect(dbCopy?.status).toBe('RESERVED_SHELF');
 
       const outboxRows = await getLibraryPlatformPrisma().notificationOutbox.findMany({
         where: { orgId: org.orgId, templateKey: 'HOLD_READY' },
@@ -346,19 +346,19 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
 
   /**
    * Regression proof for `docs/superpowers/LIBRARY-TRAPS.md` trap 3 applied
-   * to hold promotion specifically: `SELECT ... FOR UPDATE` on the title's
-   * PENDING holds is what stops two simultaneous returns of two DIFFERENT
-   * copies of the SAME title from both reading "hold X is next" and both
+   * to reservation promotion specifically: `SELECT ... FOR UPDATE` on the title's
+   * PENDING reservations is what stops two simultaneous returns of two DIFFERENT
+   * copies of the SAME title from both reading "reservation X is next" and both
    * promoting it. Manually verified to discriminate during development by
    * temporarily removing the `FOR UPDATE` clause from
    * `issues.service.ts`'s `promoteOrRelease` query and re-running this exact
-   * test: both copies ended up `ON_HOLD_SHELF`, the single Hold row was
+   * test: both copies ended up `RESERVED_SHELF`, the single Reservation row was
    * left pointing at only ONE of them (last-writer-wins on `readyCopyId`),
-   * and TWO `HOLD_READY` outbox rows were written for the same hold — see
+   * and TWO `HOLD_READY` outbox rows were written for the same reservation — see
    * task-8-report.md for the captured before/after. Restoring `FOR UPDATE`
    * makes this pass again.
    */
-  describe('hold promotion under concurrency', () => {
+  describe('reservation promotion under concurrency', () => {
     let org: CircOrg;
     let waiter: { id: string };
     let borrowerX: { id: string };
@@ -366,30 +366,30 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     let title: { id: string };
     let copyX: { id: string; accessionNumber: string };
     let copyY: { id: string; accessionNumber: string };
-    let hold: { id: string };
+    let reservation: { id: string };
 
     beforeAll(async () => {
-      org = await seedCircOrg(`hold-race-${Date.now().toString(36)}`);
+      org = await seedCircOrg(`reservation-race-${Date.now().toString(36)}`);
       waiter = await seedMember(org.orgId, org.branchId, 'HRACE-WAIT');
       borrowerX = await seedMember(org.orgId, org.branchId, 'HRACE-X');
       borrowerY = await seedMember(org.orgId, org.branchId, 'HRACE-Y');
-      title = await seedTitle(org.orgId, 'hold-race');
+      title = await seedTitle(org.orgId, 'reservation-race');
       copyX = await seedCopy(org.orgId, org.branchId, title.id, `HRACE-X-${Date.now()}`);
       copyY = await seedCopy(org.orgId, org.branchId, title.id, `HRACE-Y-${Date.now()}`);
 
       const prisma = getLibraryPlatformPrisma();
       await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyX.id, branchId: org.branchId, memberId: borrowerX.id, dueAt: FOURTEEN_DAYS_OUT } });
-      await prisma.copy.update({ where: { id: copyX.id }, data: { status: 'ON_LOAN' } });
+      await prisma.copy.update({ where: { id: copyX.id }, data: { status: 'ISSUED' } });
       await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyY.id, branchId: org.branchId, memberId: borrowerY.id, dueAt: FOURTEEN_DAYS_OUT } });
-      await prisma.copy.update({ where: { id: copyY.id }, data: { status: 'ON_LOAN' } });
+      await prisma.copy.update({ where: { id: copyY.id }, data: { status: 'ISSUED' } });
 
-      hold = await prisma.hold.create({
+      reservation = await prisma.reservation.create({
         data: { orgId: org.orgId, titleId: title.id, memberId: waiter.id, queuePosition: 1, status: 'PENDING', expiresAt: FAR_FUTURE },
       });
     });
     afterAll(() => cleanup(org.orgId));
 
-    it('two simultaneous returns of two copies of the same title promote the single pending hold exactly once', async () => {
+    it('two simultaneous returns of two copies of the same title promote the single pending reservation exactly once', async () => {
       const returnCopy = (accessionNumber: string) =>
         request(app.getHttpServer())
           .post('/circulation/return')
@@ -405,24 +405,24 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
       expect(r1.status).toBe(201);
       expect(r2.status).toBe(201);
 
-      const promotedIds = [r1.body.promotedHoldId, r2.body.promotedHoldId].filter((id) => id !== null);
-      expect(promotedIds).toEqual([hold.id]); // exactly ONE of the two promoted it
+      const promotedIds = [r1.body.promotedReservationId, r2.body.promotedReservationId].filter((id) => id !== null);
+      expect(promotedIds).toEqual([reservation.id]); // exactly ONE of the two promoted it
 
       const statuses = [r1.body.copyStatus, r2.body.copyStatus].sort();
-      expect(statuses).toEqual(['AVAILABLE', 'ON_HOLD_SHELF']);
+      expect(statuses).toEqual(['AVAILABLE', 'RESERVED_SHELF']);
 
-      const dbHold = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold.id } });
+      const dbHold = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: reservation.id } });
       expect(dbHold?.status).toBe('READY');
       expect([copyX.id, copyY.id]).toContain(dbHold?.readyCopyId);
 
       const dbCopies = await getLibraryPlatformPrisma().copy.findMany({ where: { id: { in: [copyX.id, copyY.id] } } });
-      const shelfCopy = dbCopies.find((c) => c.status === 'ON_HOLD_SHELF');
+      const shelfCopy = dbCopies.find((c) => c.status === 'RESERVED_SHELF');
       const availableCopy = dbCopies.find((c) => c.status === 'AVAILABLE');
-      expect(shelfCopy?.id).toBe(dbHold?.readyCopyId); // the promoted copy is the one Hold actually points at
-      expect(availableCopy).toBeDefined(); // the loser correctly fell through to AVAILABLE, not left ON_LOAN
+      expect(shelfCopy?.id).toBe(dbHold?.readyCopyId); // the promoted copy is the one Reservation actually points at
+      expect(availableCopy).toBeDefined(); // the loser correctly fell through to AVAILABLE, not left ISSUED
 
       // Not duplicated — without the FOR UPDATE lock, both transactions
-      // would have written their own HOLD_READY row for the same hold.
+      // would have written their own HOLD_READY row for the same reservation.
       const outboxRows = await getLibraryPlatformPrisma().notificationOutbox.findMany({
         where: { orgId: org.orgId, templateKey: 'HOLD_READY' },
       });
@@ -508,7 +508,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
       expect(statuses).toEqual([201, 409]);
 
       const loser = r1.status === 409 ? r1 : r2;
-      expect(loser.body.reason).toBe('ALREADY_ON_LOAN');
+      expect(loser.body.reason).toBe('ALREADY_ISSUED');
 
       const issues = await getLibraryPlatformPrisma().issue.findMany({ where: { copyId: copy.id, returnedAt: null } });
       expect(issues).toHaveLength(1);

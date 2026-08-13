@@ -145,15 +145,15 @@ async function dayRangeForOrg(
 export class FinesService {
   /**
    * Branch filter joins through `issue` because `Fine` carries no `branchId`
-   * of its own (only `Issue`/`Hold` gained one — see the branch-scope
+   * of its own (only `Issue`/`Reservation` gained one — see the branch-scope
    * migration's own doc; a Fine is money owed by a MEMBER, not tied to one
    * branch the way a Copy is). A fine with `issueId: null` (this codebase's
    * only fine-creation path always sets one — `issues.service.ts`'s late
    * return flow — but `kind` also allows DAMAGE/LOST/OTHER for a future
    * issue-less fee) has no branch to attribute, so it is visible to every
    * branch-scoped caller rather than hidden from all of them — the same
-   * "unknown branch passes through" convention `listHolds` uses for a still-
-   * PENDING hold.
+   * "unknown branch passes through" convention `listReservations` uses for a still-
+   * PENDING reservation.
    */
   async listFines(tx: LibraryTx, orgId: string, query: ListFinesQueryDto, allowedBranches: string[]): Promise<FineListItem[]> {
     return tx.fine.findMany({

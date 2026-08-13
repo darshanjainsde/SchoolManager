@@ -24,8 +24,8 @@ const POLICY: Policy = {
   finePerDay: 5,
   graceDays: 1,
   maxFine: 500,
-  maxHolds: 2,
-  holdShelfDays: 3,
+  maxReservations: 2,
+  reservedShelfDays: 3,
   maxOutstandingFine: 1000,
 };
 
@@ -40,7 +40,7 @@ const host = (org: Pick<RHOrg, 'slug'>) => `${org.slug}.library.trackyour.in`;
 
 async function seedOrg(suffix: string, policyOverrides: Partial<Policy> = {}): Promise<RHOrg> {
   const prisma = getLibraryPlatformPrisma();
-  const org = await prisma.libraryOrg.create({ data: { slug: `rh-${suffix}`, name: 'Renew/Holds E2E', status: 'LIVE' } });
+  const org = await prisma.libraryOrg.create({ data: { slug: `rh-${suffix}`, name: 'Renew/Reservations E2E', status: 'LIVE' } });
   const branch = await prisma.branch.create({ data: { orgId: org.id, name: 'Main', code: 'MAIN' } });
   await prisma.circulationPolicy.create({ data: { orgId: org.id, memberType: 'STUDENT', ...POLICY, ...policyOverrides } });
 
@@ -63,7 +63,7 @@ function seedMember(orgId: string, branchId: string, code: string) {
 }
 
 function seedTitle(orgId: string, label: string) {
-  return getLibraryPlatformPrisma().title.create({ data: { orgId, title: `Renew/Holds E2E — ${label}` } });
+  return getLibraryPlatformPrisma().title.create({ data: { orgId, title: `Renew/Reservations E2E — ${label}` } });
 }
 
 function seedCopy(orgId: string, branchId: string, titleId: string, accessionNumber: string) {
@@ -78,7 +78,7 @@ async function cleanup(orgId: string): Promise<void> {
   await getLibraryPlatformPrisma().libraryOrg.deleteMany({ where: { id: orgId } });
 }
 
-describeLive('circulation desk — renew and holds (Task 9)', () => {
+describeLive('circulation desk — renew and reservations (Task 9)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -134,15 +134,15 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       expect(dbLoan?.renewCount).toBe(1);
     });
 
-    it('is refused (403 HAS_HOLDS) when the title has a pending hold — the rule that keeps the queue moving', async () => {
+    it('is refused (403 HAS_HOLDS) when the title has a pending reservation — the rule that keeps the queue moving', async () => {
       const borrower = await seedMember(org.orgId, org.branchId, `RENEW-HH-BORROW-${Date.now()}`);
       const waiter = await seedMember(org.orgId, org.branchId, `RENEW-HH-WAIT-${Date.now()}`);
-      const title = await seedTitle(org.orgId, 'renew-has-holds');
+      const title = await seedTitle(org.orgId, 'renew-has-reservations');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `RENEW-HH-${Date.now()}`);
       await seedActiveLoan(org.orgId, copy.id, org.branchId, borrower.id, FOURTEEN_DAYS_OUT);
 
       const holdRes = await request(app.getHttpServer())
-        .post('/circulation/holds')
+        .post('/circulation/reservations')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
         .send({ titleId: title.id, memberId: waiter.id });
@@ -184,113 +184,113 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
     });
   });
 
-  describe('holds — create, quota, queue ordering, cancel, list', () => {
+  describe('reservations — create, quota, queue ordering, cancel, list', () => {
     let org: RHOrg;
 
     beforeAll(async () => {
-      org = await seedOrg(`holds-${Date.now().toString(36)}`);
+      org = await seedOrg(`reservations-${Date.now().toString(36)}`);
     });
     afterAll(() => cleanup(org.orgId));
 
-    const createHold = (titleId: string, memberId: string) =>
+    const createReservation = (titleId: string, memberId: string) =>
       request(app.getHttpServer())
-        .post('/circulation/holds')
+        .post('/circulation/reservations')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
         .send({ titleId, memberId });
 
-    it('assigns queuePosition 1 to the first hold on a title, 2 to the next', async () => {
+    it('assigns queuePosition 1 to the first reservation on a title, 2 to the next', async () => {
       const memberA = await seedMember(org.orgId, org.branchId, `QP-A-${Date.now()}`);
       const memberB = await seedMember(org.orgId, org.branchId, `QP-B-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'queue-position');
 
-      const r1 = await createHold(title.id, memberA.id);
+      const r1 = await createReservation(title.id, memberA.id);
       expect(r1.status).toBe(201);
-      expect(r1.body.hold.queuePosition).toBe(1);
-      expect(r1.body.hold.status).toBe('PENDING');
+      expect(r1.body.reservation.queuePosition).toBe(1);
+      expect(r1.body.reservation.status).toBe('PENDING');
 
-      const r2 = await createHold(title.id, memberB.id);
+      const r2 = await createReservation(title.id, memberB.id);
       expect(r2.status).toBe(201);
-      expect(r2.body.hold.queuePosition).toBe(2);
+      expect(r2.body.reservation.queuePosition).toBe(2);
     });
 
-    it('the same member cannot place a second open hold on the same title (409 ALREADY_HOLDING)', async () => {
+    it('the same member cannot place a second open reservation on the same title (409 ALREADY_HOLDING)', async () => {
       const member = await seedMember(org.orgId, org.branchId, `DUP-${Date.now()}`);
-      const title = await seedTitle(org.orgId, 'duplicate-hold');
+      const title = await seedTitle(org.orgId, 'duplicate-reservation');
 
-      const first = await createHold(title.id, member.id);
+      const first = await createReservation(title.id, member.id);
       expect(first.status).toBe(201);
 
-      const second = await createHold(title.id, member.id);
+      const second = await createReservation(title.id, member.id);
       expect(second.status).toBe(409);
       expect(second.body.reason).toBe('ALREADY_HOLDING');
     });
 
-    it('maxHolds is enforced per member across titles via assertQuota', async () => {
+    it('maxReservations is enforced per member across titles via assertQuota', async () => {
       const member = await seedMember(org.orgId, org.branchId, `QUOTA-${Date.now()}`);
       const titles = await Promise.all([1, 2, 3].map((n) => seedTitle(org.orgId, `quota-${n}-${Date.now()}`)));
 
-      const r1 = await createHold(titles[0].id, member.id);
+      const r1 = await createReservation(titles[0].id, member.id);
       expect(r1.status).toBe(201);
-      const r2 = await createHold(titles[1].id, member.id);
-      expect(r2.status).toBe(201); // POLICY.maxHolds is 2 for this suite's org
+      const r2 = await createReservation(titles[1].id, member.id);
+      expect(r2.status).toBe(201); // POLICY.maxReservations is 2 for this suite's org
 
-      const r3 = await createHold(titles[2].id, member.id);
+      const r3 = await createReservation(titles[2].id, member.id);
       expect(r3.status).toBe(403);
     });
 
-    it('concurrent hold creation on the same title assigns unique, non-colliding queue positions', async () => {
+    it('concurrent reservation creation on the same title assigns unique, non-colliding queue positions', async () => {
       const memberA = await seedMember(org.orgId, org.branchId, `RACE-A-${Date.now()}`);
       const memberB = await seedMember(org.orgId, org.branchId, `RACE-B-${Date.now()}`);
-      const title = await seedTitle(org.orgId, 'hold-create-race');
+      const title = await seedTitle(org.orgId, 'reservation-create-race');
 
-      const [r1, r2] = await Promise.all([createHold(title.id, memberA.id), createHold(title.id, memberB.id)]);
+      const [r1, r2] = await Promise.all([createReservation(title.id, memberA.id), createReservation(title.id, memberB.id)]);
       expect(r1.status).toBe(201);
       expect(r2.status).toBe(201);
-      const positions = [r1.body.hold.queuePosition, r2.body.hold.queuePosition].sort();
+      const positions = [r1.body.reservation.queuePosition, r2.body.reservation.queuePosition].sort();
       expect(positions).toEqual([1, 2]); // no duplicate, no gap
     });
 
     /**
      * Phase 1a review finding: `MAX(queuePosition)+1` was scoped to
-     * PENDING/READY holds only, so cancelling the hold that currently holds
+     * PENDING/READY reservations only, so cancelling the reservation that currently reservations
      * the max position shrinks that set and can reissue the cancelled
-     * hold's OLD position to a brand-new hold. Never a live conflict (the
-     * cancelled hold is terminal), but two different Hold rows for the same
+     * reservation's OLD position to a brand-new reservation. Never a live conflict (the
+     * cancelled reservation is terminal), but two different Reservation rows for the same
      * title showing the same `queuePosition` reads as a duplicate from any
-     * console listing a title's hold history. Fixed by scoping the MAX to
-     * every hold the title has EVER had, regardless of status — a strictly
+     * console listing a title's reservation history. Fixed by scoping the MAX to
+     * every reservation the title has EVER had, regardless of status — a strictly
      * increasing per-title counter, never reused.
      */
-    it('cancelling the highest-position hold does not let a later hold reuse its queuePosition', async () => {
+    it('cancelling the highest-position reservation does not let a later reservation reuse its queuePosition', async () => {
       const memberA = await seedMember(org.orgId, org.branchId, `REISSUE-A-${Date.now()}`);
       const memberB = await seedMember(org.orgId, org.branchId, `REISSUE-B-${Date.now()}`);
       const memberC = await seedMember(org.orgId, org.branchId, `REISSUE-C-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'queue-position-reissue');
 
-      const r1 = await createHold(title.id, memberA.id);
-      expect(r1.body.hold.queuePosition).toBe(1);
-      const r2 = await createHold(title.id, memberB.id);
-      expect(r2.body.hold.queuePosition).toBe(2); // this is the one about to be cancelled — currently the max
+      const r1 = await createReservation(title.id, memberA.id);
+      expect(r1.body.reservation.queuePosition).toBe(1);
+      const r2 = await createReservation(title.id, memberB.id);
+      expect(r2.body.reservation.queuePosition).toBe(2); // this is the one about to be cancelled — currently the max
 
       const cancelRes = await request(app.getHttpServer())
-        .delete(`/circulation/holds/${r2.body.hold.id}`)
+        .delete(`/circulation/reservations/${r2.body.reservation.id}`)
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`);
       expect(cancelRes.status).toBe(200);
 
-      const r3 = await createHold(title.id, memberC.id);
+      const r3 = await createReservation(title.id, memberC.id);
       expect(r3.status).toBe(201);
       // Without the fix this would be 2 — the position the just-cancelled
-      // hold used, since MAX({PENDING,READY}) after the cancel is only 1.
-      expect(r3.body.hold.queuePosition).toBe(3);
+      // reservation used, since MAX({PENDING,READY}) after the cancel is only 1.
+      expect(r3.body.reservation.queuePosition).toBe(3);
     });
 
-    it('GET /circulation/holds reports a stale READY hold as EXPIRED at read time, without anything having swept the stored row', async () => {
+    it('GET /circulation/reservations reports a stale READY reservation as EXPIRED at read time, without anything having swept the stored row', async () => {
       const member = await seedMember(org.orgId, org.branchId, `LAZY-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'lazy-expiry');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `LAZY-${Date.now()}`);
-      const hold = await getLibraryPlatformPrisma().hold.create({
+      const reservation = await getLibraryPlatformPrisma().reservation.create({
         data: {
           orgId: org.orgId, titleId: title.id, memberId: member.id, queuePosition: 1,
           status: 'READY', readyCopyId: copy.id, readyAt: new Date(Date.now() - 10 * MS_PER_DAY),
@@ -299,76 +299,76 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get('/circulation/holds')
+        .get('/circulation/reservations')
         .query({ titleId: title.id })
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`);
 
       expect(res.status).toBe(200);
-      const found = res.body.find((h: { id: string }) => h.id === hold.id);
+      const found = res.body.find((h: { id: string }) => h.id === reservation.id);
       expect(found.status).toBe('EXPIRED');
 
       // The stored row is untouched — this was a pure read-time projection,
       // not a write (trap 7: no scheduler/read-path may perform the
       // transition; only the next RETURN for this title does).
-      const dbHold = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold.id } });
+      const dbHold = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: reservation.id } });
       expect(dbHold?.status).toBe('READY');
     });
 
-    it('cancels a PENDING hold', async () => {
+    it('cancels a PENDING reservation', async () => {
       const member = await seedMember(org.orgId, org.branchId, `CANCEL-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'cancel-pending');
-      const created = await createHold(title.id, member.id);
+      const created = await createReservation(title.id, member.id);
 
       const res = await request(app.getHttpServer())
-        .delete(`/circulation/holds/${created.body.hold.id}`)
+        .delete(`/circulation/reservations/${created.body.reservation.id}`)
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.hold.status).toBe('CANCELLED');
+      expect(res.body.reservation.status).toBe('CANCELLED');
     });
 
-    it('cancelling an already-terminal hold is a 409, not silently accepted', async () => {
+    it('cancelling an already-terminal reservation is a 409, not silently accepted', async () => {
       const member = await seedMember(org.orgId, org.branchId, `CANCEL2X-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'cancel-twice');
-      const created = await createHold(title.id, member.id);
-      const holdId = created.body.hold.id;
+      const created = await createReservation(title.id, member.id);
+      const holdId = created.body.reservation.id;
 
       const first = await request(app.getHttpServer())
-        .delete(`/circulation/holds/${holdId}`)
+        .delete(`/circulation/reservations/${holdId}`)
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`);
       expect(first.status).toBe(200);
 
       const second = await request(app.getHttpServer())
-        .delete(`/circulation/holds/${holdId}`)
+        .delete(`/circulation/reservations/${holdId}`)
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`);
       expect(second.status).toBe(409);
       expect(second.body.reason).toBe('HOLD_NOT_CANCELLABLE');
     });
 
-    it('cancelling a READY hold releases its copy back to AVAILABLE', async () => {
+    it('cancelling a READY reservation releases its copy back to AVAILABLE', async () => {
       const borrower = await seedMember(org.orgId, org.branchId, `CR-BORROW-${Date.now()}`);
       const waiter = await seedMember(org.orgId, org.branchId, `CR-WAIT-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'cancel-ready-releases-copy');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `CR-${Date.now()}`);
       await seedActiveLoan(org.orgId, copy.id, org.branchId, borrower.id, FOURTEEN_DAYS_OUT);
 
-      const holdRes = await createHold(title.id, waiter.id);
-      const holdId = holdRes.body.hold.id;
+      const holdRes = await createReservation(title.id, waiter.id);
+      const holdId = holdRes.body.reservation.id;
 
       const returnRes = await request(app.getHttpServer())
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
         .send({ accessionNumber: copy.accessionNumber });
-      expect(returnRes.body.promotedHoldId).toBe(holdId);
-      expect(returnRes.body.copyStatus).toBe('ON_HOLD_SHELF');
+      expect(returnRes.body.promotedReservationId).toBe(holdId);
+      expect(returnRes.body.copyStatus).toBe('RESERVED_SHELF');
 
       const cancelRes = await request(app.getHttpServer())
-        .delete(`/circulation/holds/${holdId}`)
+        .delete(`/circulation/reservations/${holdId}`)
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`);
       expect(cancelRes.status).toBe(200);
@@ -383,7 +383,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
    * members queued for it:
    *   1. Return copy A -> promotes hold1 (member1) to READY; hold2 untouched.
    *   2. member1 collects copy A (an ordinary /circulation/issue, same
-   *      mechanism Task 8 already proves marks a matching READY hold
+   *      mechanism Task 8 already proves marks a matching READY reservation
    *      COLLECTED) -> hold1 COLLECTED.
    *   3. Return copy B -> hold1 is no longer PENDING, so this promotes
    *      hold2 (member2) to READY.
@@ -395,7 +395,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
    *      expires it and releases copy B to AVAILABLE, then promotes hold3
    *      (member3) onto copy C.
    */
-  describe('full lifecycle: two holds -> promote first -> collect -> promote second -> expire -> promote third', () => {
+  describe('full lifecycle: two reservations -> promote first -> collect -> promote second -> expire -> promote third', () => {
     let org: RHOrg;
     let member1: { id: string };
     let member2: { id: string };
@@ -437,34 +437,34 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
         .send(body);
 
     it('step 0: three members queue for the title in order', async () => {
-      const r1 = await post('/circulation/holds', { titleId: title.id, memberId: member1.id });
+      const r1 = await post('/circulation/reservations', { titleId: title.id, memberId: member1.id });
       expect(r1.status).toBe(201);
-      expect(r1.body.hold.queuePosition).toBe(1);
-      hold1Id = r1.body.hold.id;
+      expect(r1.body.reservation.queuePosition).toBe(1);
+      hold1Id = r1.body.reservation.id;
 
-      const r2 = await post('/circulation/holds', { titleId: title.id, memberId: member2.id });
+      const r2 = await post('/circulation/reservations', { titleId: title.id, memberId: member2.id });
       expect(r2.status).toBe(201);
-      expect(r2.body.hold.queuePosition).toBe(2);
-      hold2Id = r2.body.hold.id;
+      expect(r2.body.reservation.queuePosition).toBe(2);
+      hold2Id = r2.body.reservation.id;
 
-      const r3 = await post('/circulation/holds', { titleId: title.id, memberId: member3.id });
+      const r3 = await post('/circulation/reservations', { titleId: title.id, memberId: member3.id });
       expect(r3.status).toBe(201);
-      expect(r3.body.hold.queuePosition).toBe(3);
-      hold3Id = r3.body.hold.id;
+      expect(r3.body.reservation.queuePosition).toBe(3);
+      hold3Id = r3.body.reservation.id;
     });
 
     it('step 1: returning copy A promotes exactly hold1 — hold2 is untouched', async () => {
       const res = await post('/circulation/return', { accessionNumber: copyA.accessionNumber });
       expect(res.status).toBe(201);
-      expect(res.body.promotedHoldId).toBe(hold1Id);
-      expect(res.body.copyStatus).toBe('ON_HOLD_SHELF');
+      expect(res.body.promotedReservationId).toBe(hold1Id);
+      expect(res.body.copyStatus).toBe('RESERVED_SHELF');
 
-      const dbHold1 = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold1Id } });
+      const dbHold1 = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: hold1Id } });
       expect(dbHold1?.status).toBe('READY');
       expect(dbHold1?.readyCopyId).toBe(copyA.id);
       expect(dbHold1?.expiresAt.getTime()).toBeGreaterThan(Date.now());
 
-      const dbHold2 = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold2Id } });
+      const dbHold2 = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: hold2Id } });
       expect(dbHold2?.status).toBe('PENDING');
       expect(dbHold2?.queuePosition).toBe(2);
     });
@@ -472,56 +472,56 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
     it('step 2: member1 collects copy A — hold1 -> COLLECTED', async () => {
       const res = await post('/circulation/issue', { accessionNumber: copyA.accessionNumber, memberId: member1.id });
       expect(res.status).toBe(201);
-      expect(res.body.collectedHoldId).toBe(hold1Id);
+      expect(res.body.collectedReservationId).toBe(hold1Id);
 
-      const dbHold1 = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold1Id } });
+      const dbHold1 = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: hold1Id } });
       expect(dbHold1?.status).toBe('COLLECTED');
       const dbCopyA = await getLibraryPlatformPrisma().copy.findUnique({ where: { id: copyA.id } });
-      expect(dbCopyA?.status).toBe('ON_LOAN');
+      expect(dbCopyA?.status).toBe('ISSUED');
     });
 
     it('step 3: returning copy B promotes hold2 (hold1 is out of the queue)', async () => {
       const res = await post('/circulation/return', { accessionNumber: copyB.accessionNumber });
       expect(res.status).toBe(201);
-      expect(res.body.promotedHoldId).toBe(hold2Id);
-      expect(res.body.copyStatus).toBe('ON_HOLD_SHELF');
+      expect(res.body.promotedReservationId).toBe(hold2Id);
+      expect(res.body.copyStatus).toBe('RESERVED_SHELF');
 
-      const dbHold2 = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold2Id } });
+      const dbHold2 = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: hold2Id } });
       expect(dbHold2?.status).toBe('READY');
       expect(dbHold2?.readyCopyId).toBe(copyB.id);
     });
 
     it('step 4: let hold2\'s shelf window elapse (backdate expiresAt — no HTTP-injectable clock exists in this codebase)', async () => {
-      await getLibraryPlatformPrisma().hold.update({
+      await getLibraryPlatformPrisma().reservation.update({
         where: { id: hold2Id },
         data: { expiresAt: new Date(Date.now() - MS_PER_DAY) },
       });
 
-      // GET /circulation/holds already reports it EXPIRED at read time, before any return sweeps it.
+      // GET /circulation/reservations already reports it EXPIRED at read time, before any return sweeps it.
       const res = await request(app.getHttpServer())
-        .get('/circulation/holds')
+        .get('/circulation/reservations')
         .query({ titleId: title.id })
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`);
       const found = res.body.find((h: { id: string }) => h.id === hold2Id);
       expect(found.status).toBe('EXPIRED');
-      const dbHold2 = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold2Id } });
+      const dbHold2 = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: hold2Id } });
       expect(dbHold2?.status).toBe('READY'); // still not written — no sweep has run yet
     });
 
     it('step 5: returning copy C expires the stale hold2, releases copy B, and promotes hold3 onto copy C', async () => {
       const res = await post('/circulation/return', { accessionNumber: copyC.accessionNumber });
       expect(res.status).toBe(201);
-      expect(res.body.promotedHoldId).toBe(hold3Id);
-      expect(res.body.copyStatus).toBe('ON_HOLD_SHELF');
+      expect(res.body.promotedReservationId).toBe(hold3Id);
+      expect(res.body.copyStatus).toBe('RESERVED_SHELF');
 
-      const dbHold2 = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold2Id } });
+      const dbHold2 = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: hold2Id } });
       expect(dbHold2?.status).toBe('EXPIRED');
 
       const dbCopyB = await getLibraryPlatformPrisma().copy.findUnique({ where: { id: copyB.id } });
       expect(dbCopyB?.status).toBe('AVAILABLE'); // freed, not re-promoted onto in this same pass
 
-      const dbHold3 = await getLibraryPlatformPrisma().hold.findUnique({ where: { id: hold3Id } });
+      const dbHold3 = await getLibraryPlatformPrisma().reservation.findUnique({ where: { id: hold3Id } });
       expect(dbHold3?.status).toBe('READY');
       expect(dbHold3?.readyCopyId).toBe(copyC.id);
       expect(dbHold3?.expiresAt.getTime()).toBeGreaterThan(Date.now());

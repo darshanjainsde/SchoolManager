@@ -23,7 +23,7 @@ interface MembersOrg {
   memberToken: string;
 }
 
-/** Stands in for a Sckools `Student.id` the school app already holds. */
+/** Stands in for a Sckools `Student.id` the school app already reservations. */
 const SCKOOLS_STUDENT_ID = '9f1d2c3b-4a5e-4f60-8712-abcdef012345';
 
 const host = (org: Pick<MembersOrg, 'slug'>) => `${org.slug}.library.trackyour.in`;
@@ -222,7 +222,7 @@ describeLive('GET /circulation/members', () => {
 
   /**
    * How Sckools answers "what has this student borrowed?" — it calls here with
-   * the Student.id it already holds, rather than reading the library's tables.
+   * the Student.id it already reservations, rather than reading the library's tables.
    * That is what lets the two services live in separate databases (design §13).
    */
   describe('externalRef — the Sckools link', () => {

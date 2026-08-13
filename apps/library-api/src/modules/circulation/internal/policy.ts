@@ -11,7 +11,7 @@
  *
  * No catalogue/circulation DB tables exist yet in this phase (Task 1's
  * schema changes were scoped to `RefreshToken` only) — the `Member`, `Copy`,
- * `Issue`, and `Hold` shapes below are this module's own minimal contract,
+ * `Issue`, and `Reservation` shapes below are this module's own minimal contract,
  * not a re-export of a Prisma model. `Member.status`'s three values
  * deliberately match the existing `MemberStatus` enum
  * (`packages/library-db/prisma/schema.prisma`) so a future Prisma-backed
@@ -40,8 +40,8 @@ export interface Policy {
   graceDays: number;
   /** `null` = uncapped. */
   maxFine: number | null;
-  maxHolds: number;
-  holdShelfDays: number;
+  maxReservations: number;
+  reservedShelfDays: number;
   /** `null` = no outstanding-fine gate on new issues. */
   maxOutstandingFine: number | null;
 }
@@ -55,16 +55,16 @@ export interface Member {
 
 export interface Copy {
   /**
-   * Matches `CopyStatus` (`AVAILABLE | ON_LOAN | ON_HOLD_SHELF | IN_TRANSIT |
+   * Matches `CopyStatus` (`AVAILABLE | ISSUED | RESERVED_SHELF | IN_TRANSIT |
    * LOST | DAMAGED | WITHDRAWN`) in the Prisma schema — fixed to that exact
    * set, not "IN_REPAIR" (a value that was never in the real enum; caught
    * while wiring Task 8's Prisma-backed caller, see LIBRARY-TRAPS.md's
    * verification-from-memory trap), so a Prisma-backed caller needs no
    * translation layer.
    */
-  status: 'AVAILABLE' | 'ON_LOAN' | 'ON_HOLD_SHELF' | 'IN_TRANSIT' | 'LOST' | 'DAMAGED' | 'WITHDRAWN';
+  status: 'AVAILABLE' | 'ISSUED' | 'RESERVED_SHELF' | 'IN_TRANSIT' | 'LOST' | 'DAMAGED' | 'WITHDRAWN';
   branchId: string;
-  /** Set only when `status` is `ON_HOLD_SHELF`: which member the shelf hold is reserved for. */
+  /** Set only when `status` is `RESERVED_SHELF`: which member the shelf reservation is reserved for. */
   heldForMemberId?: string | null;
 }
 
@@ -74,21 +74,21 @@ export interface Issue {
   renewCount: number;
 }
 
-export interface Hold {
+export interface Reservation {
   memberId: string;
   /** Lower = earlier in the queue. */
   queuePosition: number;
-  /** The hold-shelf deadline (see `Policy.holdShelfDays`) — past this, the hold is expired and must be skipped. */
+  /** The reservation-shelf deadline (see `Policy.reservedShelfDays`) — past this, the reservation is expired and must be skipped. */
   expiresAt: Date;
 }
 
 /**
- * Matches `HoldStatus` in the Prisma schema exactly (`PENDING | READY |
+ * Matches `ReservationStatus` in the Prisma schema exactly (`PENDING | READY |
  * COLLECTED | EXPIRED | CANCELLED`) — same "fixed to the real enum" shape as
  * `Copy['status']` above, so a Prisma-backed caller needs no translation
  * layer.
  */
-export type HoldStatusValue = 'PENDING' | 'READY' | 'COLLECTED' | 'EXPIRED' | 'CANCELLED';
+export type ReservationStatusValue = 'PENDING' | 'READY' | 'COLLECTED' | 'EXPIRED' | 'CANCELLED';
 
 const MS_PER_DAY = 86_400_000;
 
@@ -111,7 +111,7 @@ export const DUE_SOON_WINDOW_DAYS = 2;
  *
  * Checks run in a fixed order and stop at the first violation — the reason
  * returned is always the FIRST applicable one below, not an arbitrary pick
- * among several that might simultaneously hold:
+ * among several that might simultaneously reservation:
  *   1. MEMBER_NOT_ACTIVE — a non-active member fails before anything about
  *      the copy is even considered.
  *   2. MEMBER_LIMIT_REACHED — `openLoans >= maxBooks` (at the limit, not
@@ -121,8 +121,8 @@ export const DUE_SOON_WINDOW_DAYS = 2;
  *   4. BRANCH_MISMATCH — this org's policy is no inter-branch lending: a
  *      copy may only be issued to a member whose home branch owns it.
  *   5. COPY_ON_HOLD_FOR_OTHER / COPY_NOT_AVAILABLE — a copy reserved on the
- *      hold shelf for a DIFFERENT member is not issuable to this one; the
- *      member the hold IS for may take it (that is what a hold shelf is
+ *      reservation shelf for a DIFFERENT member is not issuable to this one; the
+ *      member the reservation IS for may take it (that is what a reservation shelf is
  *      for); any other non-`AVAILABLE` status is a flat "not available".
  */
 export function evaluateIssue(
@@ -139,7 +139,7 @@ export function evaluateIssue(
     return { allowed: false, reason: 'OUTSTANDING_FINES_EXCEED_LIMIT' };
   }
   if (member.homeBranchId !== copy.branchId) return { allowed: false, reason: 'BRANCH_MISMATCH' };
-  if (copy.status === 'ON_HOLD_SHELF') {
+  if (copy.status === 'RESERVED_SHELF') {
     if (copy.heldForMemberId !== member.id) return { allowed: false, reason: 'COPY_ON_HOLD_FOR_OTHER' };
   } else if (copy.status !== 'AVAILABLE') {
     return { allowed: false, reason: 'COPY_NOT_AVAILABLE' };
@@ -154,7 +154,7 @@ export function evaluateIssue(
  *      have its fine settled), never silently extended.
  *   2. RENEW_LIMIT — `issue.renewCount >= renewLimit`.
  *   3. HAS_HOLDS — another member is waiting on this title
- *      (`pendingHoldsOnTitle > 0`); renewing would make them wait longer.
+ *      (`pendingReservationsOnTitle > 0`); renewing would make them wait longer.
  *
  * The new due date is `renewDays` from `now` (today), not from the old
  * `dueAt` — a renewal extends from when it's actually granted.
@@ -162,12 +162,12 @@ export function evaluateIssue(
 export function evaluateRenew(
   p: Policy,
   issue: Issue,
-  pendingHoldsOnTitle: number,
+  pendingReservationsOnTitle: number,
   now: Date,
 ): { allowed: true; newDueAt: Date } | { allowed: false; reason: RenewDenial } {
   if (now.getTime() > issue.dueAt.getTime()) return { allowed: false, reason: 'ALREADY_OVERDUE' };
   if (issue.renewCount >= p.renewLimit) return { allowed: false, reason: 'RENEW_LIMIT' };
-  if (pendingHoldsOnTitle > 0) return { allowed: false, reason: 'HAS_HOLDS' };
+  if (pendingReservationsOnTitle > 0) return { allowed: false, reason: 'HAS_HOLDS' };
   return { allowed: true, newDueAt: addDays(now, p.renewDays) };
 }
 
@@ -204,51 +204,51 @@ export function issueState(issue: Pick<Issue, 'dueAt' | 'returnedAt'>, now: Date
 }
 
 /**
- * The hold that should be promoted next: the lowest `queuePosition` among
- * holds not yet expired (`expiresAt` strictly after `now`), or `null` if
- * `holds` is empty or every hold in it has expired.
+ * The reservation that should be promoted next: the lowest `queuePosition` among
+ * reservations not yet expired (`expiresAt` strictly after `now`), or `null` if
+ * `reservations` is empty or every reservation in it has expired.
  */
-export function nextHoldToPromote(holds: Hold[], now: Date): Hold | null {
-  const live = holds.filter((h) => h.expiresAt.getTime() > now.getTime());
+export function nextReservationToPromote(reservations: Reservation[], now: Date): Reservation | null {
+  const live = reservations.filter((h) => h.expiresAt.getTime() > now.getTime());
   if (live.length === 0) return null;
   return live.reduce((best, h) => (h.queuePosition < best.queuePosition ? h : best));
 }
 
 /**
- * The hold-shelf deadline for a hold promoted to `READY` right now — the
+ * The reservation-shelf deadline for a reservation promoted to `READY` right now — the
  * window a member has to collect a copy pulled for them before it lapses
- * back to the next person in the queue. `policy.holdShelfDays` is the single
+ * back to the next person in the queue. `policy.reservedShelfDays` is the single
  * configured source for this; a caller (`issues.service.ts`'s return flow)
  * must compute it here rather than re-adding days inline, so this and
  * `evaluateIssue`'s `dueAt` math never drift apart on how "N days from now"
  * is rounded.
  */
-export function holdShelfExpiry(p: Policy, now: Date): Date {
-  return addDays(now, p.holdShelfDays);
+export function reservedShelfExpiry(p: Policy, now: Date): Date {
+  return addDays(now, p.reservedShelfDays);
 }
 
 /**
- * The EFFECTIVE status of a hold `at` a point in time — never mutates
+ * The EFFECTIVE status of a reservation `at` a point in time — never mutates
  * anything, purely a read-time projection (Task 9; trap 7's "no state
- * transition may depend on a scheduler" applies here: a stale `READY` hold
+ * transition may depend on a scheduler" applies here: a stale `READY` reservation
  * is reported as `EXPIRED` on every read from the moment its shelf window
  * lapses, but the STORED row keeps saying `READY` until a user-triggered
  * action — the next return for that title — actually writes `EXPIRED`; see
  * `issues.service.ts`'s `promoteOrRelease`).
  *
- * Only `READY` is ever reinterpreted. `PENDING` never is: a pending hold's
+ * Only `READY` is ever reinterpreted. `PENDING` never is: a pending reservation's
  * `expiresAt` is a placeholder with no real deadline in this phase (nothing
  * has been promoted for it yet, so there is nothing to expire) — see
- * `holds.service.ts`'s `PENDING_HOLD_SENTINEL_YEARS` for the placeholder
- * itself and the schema's own doc on `Hold.expiresAt` for the full
+ * `reservations.service.ts`'s `PENDING_HOLD_SENTINEL_YEARS` for the placeholder
+ * itself and the schema's own doc on `Reservation.expiresAt` for the full
  * PENDING-vs-READY convention. `COLLECTED`/`EXPIRED`/`CANCELLED` are
  * terminal and pass through unchanged regardless of `expiresAt`.
  *
- * Boundary matches `nextHoldToPromote`'s "live" test above (`expiresAt >
- * now` is live): a hold expiring at exactly `now` is already expired here
+ * Boundary matches `nextReservationToPromote`'s "live" test above (`expiresAt >
+ * now` is live): a reservation expiring at exactly `now` is already expired here
  * too, not on the next tick.
  */
-export function holdState(hold: { status: HoldStatusValue; expiresAt: Date }, now: Date): HoldStatusValue {
-  if (hold.status === 'READY' && hold.expiresAt.getTime() <= now.getTime()) return 'EXPIRED';
-  return hold.status;
+export function reservationState(reservation: { status: ReservationStatusValue; expiresAt: Date }, now: Date): ReservationStatusValue {
+  if (reservation.status === 'READY' && reservation.expiresAt.getTime() <= now.getTime()) return 'EXPIRED';
+  return reservation.status;
 }

@@ -24,23 +24,23 @@ export class RenewBookDto {
   @IsString() @MinLength(1) @MaxLength(100) accessionNumber!: string;
 }
 
-export class CreateHoldDto {
-  /** Client-supplied FK — looked up on `tx` in `holds.service.ts`'s `createHold`, same reasoning as `IssueBookDto.memberId` above. */
+export class CreateReservationDto {
+  /** Client-supplied FK — looked up on `tx` in `reservations.service.ts`'s `createReservation`, same reasoning as `IssueBookDto.memberId` above. */
   @IsUUID('4') titleId!: string;
 
   /** Client-supplied FK — same reasoning. */
   @IsUUID('4') memberId!: string;
 }
 
-export const HOLD_STATUSES = ['PENDING', 'READY', 'COLLECTED', 'EXPIRED', 'CANCELLED'] as const;
-export type HoldStatusInput = (typeof HOLD_STATUSES)[number];
+export const RESERVATION_STATUSES = ['PENDING', 'READY', 'COLLECTED', 'EXPIRED', 'CANCELLED'] as const;
+export type ReservationStatusInput = (typeof RESERVATION_STATUSES)[number];
 
-export class ListHoldsQueryDto {
+export class ListReservationsQueryDto {
   @IsOptional() @IsUUID('4') memberId?: string;
   @IsOptional() @IsUUID('4') titleId?: string;
 
-  /** Filtered against the EFFECTIVE (read-time-computed) status — see `policy.ts`'s `holdState` — not the raw stored column. */
-  @IsOptional() @IsIn(HOLD_STATUSES) status?: HoldStatusInput;
+  /** Filtered against the EFFECTIVE (read-time-computed) status — see `policy.ts`'s `reservationState` — not the raw stored column. */
+  @IsOptional() @IsIn(RESERVATION_STATUSES) status?: ReservationStatusInput;
 
   @IsOptional()
   @Type(() => Number)

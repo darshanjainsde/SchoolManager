@@ -27,7 +27,7 @@ const NAV = [
     { href: '/console/catalogue', label: 'Catalogue', icon: '▤', roles: ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT', 'MEMBER'] },
   ]},
   { group: 'People', items: [
-    { href: '/console/holds', label: 'Holds', icon: '⎘', roles: ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'] },
+    { href: '/console/reservations', label: 'Reservations', icon: '⎘', roles: ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'] },
     { href: '/console/overdue', label: 'Overdue', icon: '⚑', roles: ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'] },
     { href: '/console/fines', label: 'Fines', icon: '₹', roles: ['ORG_OWNER', 'LIBRARIAN'] },
   ]},

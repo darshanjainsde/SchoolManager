@@ -5,7 +5,7 @@ import { PlansModule } from '../../plans';
 import { IdempotencyModule } from '../../../common/idempotency/idempotency.module';
 import { CirculationController } from './circulation.controller';
 import { FinesService } from './fines.service';
-import { HoldsService } from './holds.service';
+import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
 import { MembersService } from './members.service';
 
@@ -26,6 +26,6 @@ import { MembersService } from './members.service';
 @Module({
   imports: [TenancyModule, PlansModule, IdempotencyModule],
   controllers: [CirculationController],
-  providers: [JwtService, IssuesService, HoldsService, FinesService, MembersService],
+  providers: [JwtService, IssuesService, ReservationsService, FinesService, MembersService],
 })
 export class CirculationModule {}

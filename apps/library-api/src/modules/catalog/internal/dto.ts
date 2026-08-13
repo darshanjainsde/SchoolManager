@@ -23,8 +23,8 @@ export type CopyConditionInput = (typeof COPY_CONDITIONS)[number];
 
 export const COPY_STATUSES = [
   'AVAILABLE',
-  'ON_LOAN',
-  'ON_HOLD_SHELF',
+  'ISSUED',
+  'RESERVED_SHELF',
   'IN_TRANSIT',
   'LOST',
   'DAMAGED',

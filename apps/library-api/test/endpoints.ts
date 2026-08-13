@@ -60,7 +60,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/circulation/issue', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-ISSUE', memberId: '11111111-1111-4111-8111-111111111111' } },
   { method: 'POST', path: '/circulation/return', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-RETURN' } },
 
-  // Task 9 — renew and holds. Same desk-role split as issue/return: ORG_OWNER/
+  // Task 9 — renew and reservations. Same desk-role split as issue/return: ORG_OWNER/
   // LIBRARIAN/ASSISTANT work the desk, MEMBER is denied. Ids in bodies are
   // well-formed UUIDs that legitimately won't resolve to a real row for most
   // roles under test — guards run before the handler, so that's a 404 for an
@@ -68,12 +68,12 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/circulation/renew', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-RENEW' } },
   {
     method: 'POST',
-    path: '/circulation/holds',
+    path: '/circulation/reservations',
     roles: READERS,
     body: { titleId: '11111111-1111-4111-8111-111111111111', memberId: '11111111-1111-4111-8111-111111111111' },
   },
-  { method: 'DELETE', path: '/circulation/holds/:id', roles: READERS },
-  { method: 'GET', path: '/circulation/holds', roles: READERS },
+  { method: 'DELETE', path: '/circulation/reservations/:id', roles: READERS },
+  { method: 'GET', path: '/circulation/reservations', roles: READERS },
 
   // Task 10 — fines, waivers, day-end report. Waiver is a WRITERS-only action
   // (ASSISTANT must be denied — see fines.service.ts's `waive`); the rest are
@@ -87,4 +87,10 @@ export const ENDPOINTS: EndpointSpec[] = [
   // must not be able to enumerate the school roll, which for a school library
   // is a list of children's names.
   { method: 'GET', path: '/circulation/members', roles: READERS },
+
+  // The one search box. ALL_STAFF including MEMBER: a student looking a book up
+  // from their own app is the point, and the service returns only what that
+  // role should see. Gated on CATALOG rather than CIRCULATION — searching is a
+  // catalogue act, and a plan without lending should still be able to search.
+  { method: 'GET', path: '/search/suggest', roles: ALL_STAFF },
 ];

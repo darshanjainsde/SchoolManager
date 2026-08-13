@@ -35,7 +35,7 @@ export default function DeskPage() {
   const [error, setError] = useState<string | null>(null);
   const ctx = useApiCtx();
 
-  // A desk is operated by scanner, not by mouse. The field must hold focus
+  // A desk is operated by scanner, not by mouse. The field must reservation focus
   // through every scan or the second accessionNumber lands in the page instead of the
   // input — the single most common way a circulation screen becomes unusable.
   const scanRef = useRef<HTMLInputElement>(null);
@@ -70,7 +70,7 @@ export default function DeskPage() {
           accessionNumber: code,
           kind: 'issued',
           headline: code,
-          detail: `${memberName(member)} · due in ${days} day${days === 1 ? '' : 's'}${res.collectedHoldId ? ' · hold collected' : ''}`,
+          detail: `${memberName(member)} · due in ${days} day${days === 1 ? '' : 's'}${res.collectedReservationId ? ' · reservation collected' : ''}`,
           stamp: 'Issued',
           stampSub: new Date(res.issue.dueAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
         });
@@ -82,8 +82,8 @@ export default function DeskPage() {
           accessionNumber: code,
           kind: fined ? 'fined' : 'returned',
           headline: code,
-          detail: res.promotedHoldId
-            ? 'Held for the next member — put it on the hold shelf'
+          detail: res.promotedReservationId
+            ? 'Held for the next member — put it on the reservation shelf'
             : 'Back on the shelf',
           stamp: 'Returned',
           stampSub: fined ? `${formatRupees(res.fine!.amount)} fine` : 'on time',

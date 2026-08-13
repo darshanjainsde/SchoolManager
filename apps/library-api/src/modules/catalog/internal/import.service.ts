@@ -145,7 +145,7 @@ class DryRunChunkRollback extends Error {
  * this row and keep going", and it can only do that if failures come back
  * as data, not as control flow that would abort the whole file.
  *
- * ISBN is OPTIONAL. A school library holds plenty of items with no ISBN —
+ * ISBN is OPTIONAL. A school library reservations plenty of items with no ISBN —
  * older stock, local-language titles, donations, pamphlets — so rejecting
  * a row for lacking one would make bulk import useless for exactly the
  * collections that most need it. A present-but-malformed ISBN is still a

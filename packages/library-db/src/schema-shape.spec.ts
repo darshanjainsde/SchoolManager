@@ -30,13 +30,13 @@ export const FORBIDDEN_VALUE_EXCEPTIONS: Array<{ enumName: string; value: string
       'Fine-creation time by application code. Never flipped by a clock — it is a reason, not a status.',
   },
   {
-    enumName: 'HoldStatus',
+    enumName: 'ReservationStatus',
     value: 'EXPIRED',
     reason:
       'A terminal status set by a USER-TRIGGERED ACTION (the sweep that runs on the next return for ' +
       "that title), never by a scheduler in the absence of a request. expiresAt remains the source of " +
-      'truth for "has this hold lapsed yet" before that sweep runs. Without a value distinct from ' +
-      'CANCELLED, "how many holds went unclaimed" becomes unanswerable from stored data — restored ' +
+      'truth for "has this reservation lapsed yet" before that sweep runs. Without a value distinct from ' +
+      'CANCELLED, "how many reservations went unclaimed" becomes unanswerable from stored data — restored ' +
       'after review finding 2 flagged that reporting regression.',
   },
 ];

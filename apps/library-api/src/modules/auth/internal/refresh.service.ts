@@ -142,7 +142,7 @@ export class RefreshService {
 
   /**
    * Replay of an already-revoked token normally means the token was stolen:
-   * the thief and the owner now both hold tokens in the same family.
+   * the thief and the owner now both reservation tokens in the same family.
    * Revoking the family — in its own committed write, BEFORE the 401 — logs
    * both out rather than letting the thief keep rotating.
    *

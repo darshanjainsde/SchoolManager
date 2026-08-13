@@ -182,7 +182,7 @@ describe('IdempotencyInterceptor', () => {
   describe('requestHash uses the concrete request URL, not the route pattern (Group B, finding 2)', () => {
     // Production shape: Express has matched the route by the time this
     // interceptor runs, so req.route.path is the *pattern* ('/issues/:id'),
-    // req.params holds the matched segment, and req.originalUrl is the real
+    // req.params reservations the matched segment, and req.originalUrl is the real
     // request target. The old bug used req.route?.path for hashing, so
     // POST /issues/1 and POST /issues/2 — two different resources — with the
     // same Idempotency-Key and the same body hashed identically.

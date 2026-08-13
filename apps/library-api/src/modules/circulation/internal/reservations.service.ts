@@ -1,24 +1,24 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, type Hold, type Issue, type LibraryTx } from '@library/db';
+import { Prisma, type Reservation, type Issue, type LibraryTx } from '@library/db';
 import { assertQuota } from '../../plans';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import { loadPolicy } from './policy-loader';
-import { evaluateRenew, holdState, type HoldStatusValue, type RenewDenial } from './policy';
-import type { CreateHoldDto, ListHoldsQueryDto, RenewBookDto } from './dto';
+import { evaluateRenew, reservationState, type ReservationStatusValue, type RenewDenial } from './policy';
+import type { CreateReservationDto, ListReservationsQueryDto, RenewBookDto } from './dto';
 import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
 
 /**
- * PENDING holds have no real deadline yet — nothing has been promoted for
- * them, so there is nothing to expire. `Hold.expiresAt` is NOT NULL (see its
+ * PENDING reservations have no real deadline yet — nothing has been promoted for
+ * them, so there is nothing to expire. `Reservation.expiresAt` is NOT NULL (see its
  * schema doc in schema.prisma), so rather than adding a nullable column or a
- * queue-timeout feature this phase doesn't have, a PENDING hold gets this
+ * queue-timeout feature this phase doesn't have, a PENDING reservation gets this
  * far-future sentinel instead. 100 years keeps it unambiguously "not a real
  * deadline" for any human or log reading the row, and is always `>` `now`
- * for `nextHoldToPromote`'s (currently vestigial for PENDING — see that
- * function's own doc) live filter, and `policy.ts`'s `holdState` never
- * reinterprets a PENDING hold by `expiresAt` at all regardless of its value.
- * The moment a hold is promoted to READY this is overwritten with the REAL
- * deadline — `holdShelfExpiry(policy, now)` — in `issues.service.ts`'s
+ * for `nextReservationToPromote`'s (currently vestigial for PENDING — see that
+ * function's own doc) live filter, and `policy.ts`'s `reservationState` never
+ * reinterprets a PENDING reservation by `expiresAt` at all regardless of its value.
+ * The moment a reservation is promoted to READY this is overwritten with the REAL
+ * deadline — `reservedShelfExpiry(policy, now)` — in `issues.service.ts`'s
  * `promoteOrRelease`, unchanged from Task 8. This is the ONE place the
  * sentinel is produced; do not re-derive it at another call site.
  */
@@ -43,30 +43,30 @@ export interface RenewResult {
   issue: Issue;
 }
 
-export interface CreateHoldResult {
-  hold: Hold;
+export interface CreateReservationResult {
+  reservation: Reservation;
 }
 
-export interface HoldListItem extends Omit<Hold, 'status'> {
-  /** The EFFECTIVE status (`policy.ts`'s `holdState`), not necessarily the stored column — see that function's doc. */
-  status: HoldStatusValue;
+export interface ReservationListItem extends Omit<Reservation, 'status'> {
+  /** The EFFECTIVE status (`policy.ts`'s `reservationState`), not necessarily the stored column — see that function's doc. */
+  status: ReservationStatusValue;
   /** Hydrated so the queue is readable by a person — see `MEMBER_CARD_SELECT`. */
   member: MemberCard;
   title: { id: string; title: string };
 }
 
 @Injectable()
-export class HoldsService {
+export class ReservationsService {
   /**
    * One transaction: resolve the active issue for the scanned accessionNumber ->
-   * load member/policy -> count PENDING holds on the issue's title ->
+   * load member/policy -> count PENDING reservations on the issue's title ->
    * `evaluateRenew` -> update `Issue.dueAt`/`renewCount`, write an
-   * `AuditLog` row. Deliberately counts only `PENDING` holds (not `READY`):
-   * a READY hold is already tied to a SPECIFIC other copy of this title
+   * `AuditLog` row. Deliberately counts only `PENDING` reservations (not `READY`):
+   * a READY reservation is already tied to a SPECIFIC other copy of this title
    * (`readyCopyId`), so renewing THIS issue doesn't delay that member's
    * fulfillment — only someone still waiting for ANY copy (PENDING) is
    * whose turn a renewal would push back, which is `evaluateRenew`'s own
-   * `pendingHoldsOnTitle` parameter name and reasoning (policy.ts).
+   * `pendingReservationsOnTitle` parameter name and reasoning (policy.ts).
    */
   async renew(
     tx: LibraryTx,
@@ -92,9 +92,9 @@ export class HoldsService {
     if (!member) throw new NotFoundException('Member not found');
 
     const policy = await loadPolicy(tx, orgId, member.memberType, issue.branchId);
-    const pendingHoldsOnTitle = await tx.hold.count({ where: { orgId, titleId: copy.titleId, status: 'PENDING' } });
+    const pendingReservationsOnTitle = await tx.reservation.count({ where: { orgId, titleId: copy.titleId, status: 'PENDING' } });
 
-    const decision = evaluateRenew(policy, issue, pendingHoldsOnTitle, now);
+    const decision = evaluateRenew(policy, issue, pendingReservationsOnTitle, now);
     if (!decision.allowed) throw renewDenialToException(decision.reason);
 
     const updated = await tx.issue.update({
@@ -118,19 +118,19 @@ export class HoldsService {
 
   /**
    * One transaction: resolve title/member (both client-supplied FKs, looked
-   * up on `tx` — see `dto.ts`'s doc on `CreateHoldDto`) -> `assertQuota` on
-   * `maxHolds` (counting this member's own open — `PENDING`/`READY` —
-   * holds, not their total history) -> assign the next `queuePosition`
-   * under an advisory lock -> insert the `Hold` row.
+   * up on `tx` — see `dto.ts`'s doc on `CreateReservationDto`) -> `assertQuota` on
+   * `maxReservations` (counting this member's own open — `PENDING`/`READY` —
+   * reservations, not their total history) -> assign the next `queuePosition`
+   * under an advisory lock -> insert the `Reservation` row.
    *
    * Queue-position assignment CANNOT reuse the return flow's `SELECT ...
    * FOR UPDATE` pattern directly: that pattern locks EXISTING rows, so it
-   * locks nothing (and therefore serializes nothing) the first time a hold
-   * is placed on a title with zero prior holds — exactly the
+   * locks nothing (and therefore serializes nothing) the first time a reservation
+   * is placed on a title with zero prior reservations — exactly the
    * txn-scope-is-not-mutual-exclusion trap (LIBRARY-TRAPS.md #3) applied to
    * an aggregate over a possibly-empty set. An advisory lock keyed on
    * `(orgId, titleId)`, acquired BEFORE the `MAX(queuePosition)` read, has
-   * no such gap: it blocks a second concurrent `createHold` for the same
+   * no such gap: it blocks a second concurrent `createReservation` for the same
    * title regardless of how many rows currently exist. This is the only
    * call site that locks `(orgId, titleId)` this way and the only call site
    * that calls `assertQuota` in this method, so the fixed
@@ -139,16 +139,16 @@ export class HoldsService {
    * ordering, not two locks used consistently by one path).
    *
    * Deliberately NOT branch-scope-checked against the caller's
-   * `allowedBranches`: a hold is placed on a Title (org-wide — any branch's
+   * `allowedBranches`: a reservation is placed on a Title (org-wide — any branch's
    * copy can fill it) and this method touches no row that has a branch of
    * its own yet, so there is nothing here for `assertBranchInScope` to check
    * against, unlike `issue`/`returnBook`/`renew`, which each load a
    * Copy/Issue row with a real branch. The member's OWN home branch is still
    * used to resolve which `CirculationPolicy` (branch override vs org
-   * default) governs their `maxHolds` quota below — that is a policy
+   * default) governs their `maxReservations` quota below — that is a policy
    * lookup, not an authorization check.
    */
-  async createHold(tx: LibraryTx, orgId: string, dto: CreateHoldDto, actorUserId: string, now: Date): Promise<CreateHoldResult> {
+  async createReservation(tx: LibraryTx, orgId: string, dto: CreateReservationDto, actorUserId: string, now: Date): Promise<CreateReservationResult> {
     const title = await tx.title.findUnique({ where: { id: dto.titleId } });
     if (!title) throw new NotFoundException('Title not found');
 
@@ -159,46 +159,46 @@ export class HoldsService {
     await assertQuota(
       tx,
       orgId,
-      policy.maxHolds,
-      (txx) => txx.hold.count({ where: { orgId, memberId: member.id, status: { in: ['PENDING', 'READY'] } } }),
-      `holds:${member.id}`,
+      policy.maxReservations,
+      (txx) => txx.reservation.count({ where: { orgId, memberId: member.id, status: { in: ['PENDING', 'READY'] } } }),
+      `reservations:${member.id}`,
     );
 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${orgId}), hashtext(${dto.titleId}))`;
     // Phase 1a review finding: MAX(queuePosition) must be taken over EVERY
-    // hold this title has ever had, not just the currently PENDING/READY
-    // ones. Cancelling (or the copy-issue flow collecting) the hold that
-    // currently holds the max position SHRINKS the {PENDING,READY} set, so
+    // reservation this title has ever had, not just the currently PENDING/READY
+    // ones. Cancelling (or the copy-issue flow collecting) the reservation that
+    // currently reservations the max position SHRINKS the {PENDING,READY} set, so
     // an aggregate scoped to that set alone can recompute a LOWER max and
     // then reissue +1 as a position a terminal (CANCELLED/COLLECTED/EXPIRED)
-    // hold already used. That is never a LIVE collision — the unique index
-    // `hold_one_pending_per_member_title` and this method's own status
-    // filtering elsewhere only ever care about currently-open holds — but it
+    // reservation already used. That is never a LIVE collision — the unique index
+    // `reservation_one_per_member_title` and this method's own status
+    // filtering elsewhere only ever care about currently-open reservations — but it
     // makes `queuePosition` non-monotonic per title, which reads as a
-    // duplicate from any UI/report listing a title's hold HISTORY (console).
+    // duplicate from any UI/report listing a title's reservation HISTORY (console).
     // Scoping the max to ALL statuses makes position numbers a strictly
     // increasing per-title sequence — like a ticket counter — with gaps left
-    // by terminal holds NEVER reused; ordering among live holds (this
-    // service's `listHolds`, `promoteOrRelease`'s PENDING lock/order) is
+    // by terminal reservations NEVER reused; ordering among live reservations (this
+    // service's `listReservations`, `promoteOrRelease`'s PENDING lock/order) is
     // unaffected, since both already filter by status independently and
     // only ever rely on RELATIVE order, never on the numbers being
     // contiguous.
-    const agg = await tx.hold.aggregate({
+    const agg = await tx.reservation.aggregate({
       where: { orgId, titleId: dto.titleId },
       _max: { queuePosition: true },
     });
     const queuePosition = (agg._max.queuePosition ?? 0) + 1;
 
-    let hold: Hold;
+    let reservation: Reservation;
     try {
-      hold = await tx.hold.create({
+      reservation = await tx.reservation.create({
         data: { orgId, titleId: dto.titleId, memberId: member.id, queuePosition, status: 'PENDING', expiresAt: pendingHoldSentinel(now) },
       });
     } catch (err) {
-      // hold_one_pending_per_member_title — this member already has an open
-      // (PENDING or READY) hold on this title.
+      // reservation_one_per_member_title — this member already has an open
+      // (PENDING or READY) reservation on this title.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException({ reason: 'ALREADY_HOLDING', message: 'This member already has an open hold on this title' });
+        throw new ConflictException({ reason: 'ALREADY_HOLDING', message: 'This member already has an open reservation on this title' });
       }
       throw err;
     }
@@ -207,72 +207,72 @@ export class HoldsService {
       data: {
         orgId,
         actorUserId,
-        action: 'circulation.hold.create',
-        entity: 'Hold',
-        entityId: hold.id,
+        action: 'circulation.reservation.create',
+        entity: 'Reservation',
+        entityId: reservation.id,
         after: { titleId: dto.titleId, memberId: member.id, queuePosition },
       },
     });
 
-    return { hold };
+    return { reservation };
   }
 
   /**
-   * Cancels a `PENDING` or `READY` hold — anything else (`COLLECTED`,
+   * Cancels a `PENDING` or `READY` reservation — anything else (`COLLECTED`,
    * `EXPIRED`, already `CANCELLED`) is a 409, not silently accepted. `id` is
    * a client-supplied FK, looked up on `tx` — same reasoning as everywhere
-   * else in this module. If the hold was `READY`, its reserved copy reverts
-   * to `AVAILABLE` (nobody is claiming it now) — but the next PENDING hold
+   * else in this module. If the reservation was `READY`, its reserved copy reverts
+   * to `AVAILABLE` (nobody is claiming it now) — but the next PENDING reservation
    * is deliberately NOT promoted onto it here: promotion is coupled to a
    * RETURN (`issues.service.ts`'s `promoteOrRelease`), per the brief's
    * "swept opportunistically on the next return" scope; a cancelled READY
-   * hold's copy simply sits AVAILABLE until that copy next circulates.
+   * reservation's copy simply sits AVAILABLE until that copy next circulates.
    *
-   * Branch-scope checked only when `hold.branchId` is actually set — only a
-   * READY (or previously-READY) hold has one (see the Hold model's own
-   * schema doc). A still-PENDING hold has none, same reasoning as
-   * `createHold` above: cancelling a place in an org-wide queue is not a
+   * Branch-scope checked only when `reservation.branchId` is actually set — only a
+   * READY (or previously-READY) reservation has one (see the Reservation model's own
+   * schema doc). A still-PENDING reservation has none, same reasoning as
+   * `createReservation` above: cancelling a place in an org-wide queue is not a
    * branch-scoped action.
    */
-  async cancelHold(
+  async cancelReservation(
     tx: LibraryTx,
     orgId: string,
     holdId: string,
     actorUserId: string,
     allowedBranches: string[],
-  ): Promise<{ hold: Hold }> {
-    const hold = await tx.hold.findUnique({ where: { id: holdId } });
-    if (!hold) throw new NotFoundException('Hold not found');
-    if (hold.branchId) assertBranchInScope(hold.branchId, allowedBranches);
+  ): Promise<{ reservation: Reservation }> {
+    const reservation = await tx.reservation.findUnique({ where: { id: holdId } });
+    if (!reservation) throw new NotFoundException('Reservation not found');
+    if (reservation.branchId) assertBranchInScope(reservation.branchId, allowedBranches);
 
-    if (hold.status !== 'PENDING' && hold.status !== 'READY') {
-      throw new ConflictException({ reason: 'HOLD_NOT_CANCELLABLE', message: `Cannot cancel a hold in status ${hold.status}` });
+    if (reservation.status !== 'PENDING' && reservation.status !== 'READY') {
+      throw new ConflictException({ reason: 'HOLD_NOT_CANCELLABLE', message: `Cannot cancel a reservation in status ${reservation.status}` });
     }
 
-    const updated = await tx.hold.update({ where: { id: hold.id }, data: { status: 'CANCELLED' } });
-    if (hold.status === 'READY' && hold.readyCopyId) {
-      await tx.copy.update({ where: { id: hold.readyCopyId }, data: { status: 'AVAILABLE' } });
+    const updated = await tx.reservation.update({ where: { id: reservation.id }, data: { status: 'CANCELLED' } });
+    if (reservation.status === 'READY' && reservation.readyCopyId) {
+      await tx.copy.update({ where: { id: reservation.readyCopyId }, data: { status: 'AVAILABLE' } });
     }
 
     await tx.auditLog.create({
       data: {
         orgId,
         actorUserId,
-        action: 'circulation.hold.cancel',
-        entity: 'Hold',
-        entityId: hold.id,
-        before: { status: hold.status },
+        action: 'circulation.reservation.cancel',
+        entity: 'Reservation',
+        entityId: reservation.id,
+        before: { status: reservation.status },
         after: { status: 'CANCELLED' },
       },
     });
 
-    return { hold: updated };
+    return { reservation: updated };
   }
 
   /**
-   * Lists holds (optionally filtered by `memberId`/`titleId`/effective
+   * Lists reservations (optionally filtered by `memberId`/`titleId`/effective
    * `status`), reprojecting each row's status through `policy.ts`'s
-   * `holdState` — a stale `READY` hold reads as `EXPIRED` here from the
+   * `reservationState` — a stale `READY` reservation reads as `EXPIRED` here from the
    * moment its shelf window lapses, even though the stored column hasn't
    * been swept yet (that write only happens on the title's next return —
    * trap 7, no scheduler). `status` filtering is applied AFTER that
@@ -281,15 +281,15 @@ export class HoldsService {
    *
    * Branch filter: `allowedBranches.length === 0` means "all branches" (same
    * convention as `BranchScopeGuard`/`assertBranchInScope`) — no filter at
-   * all. Otherwise a hold is visible when its OWN `branchId` is one of the
-   * caller's branches, OR `branchId` is null (a still-PENDING hold not yet
-   * tied to any branch — see the Hold model's own schema doc): a
+   * all. Otherwise a reservation is visible when its OWN `branchId` is one of the
+   * caller's branches, OR `branchId` is null (a still-PENDING reservation not yet
+   * tied to any branch — see the Reservation model's own schema doc): a
    * branch-scoped desk still needs to see the org-wide queue it may
    * eventually fulfil, it just can't see another branch's ALREADY-PROMOTED
-   * holds.
+   * reservations.
    */
-  async listHolds(tx: LibraryTx, orgId: string, query: ListHoldsQueryDto, now: Date, allowedBranches: string[]): Promise<HoldListItem[]> {
-    const rows = await tx.hold.findMany({
+  async listReservations(tx: LibraryTx, orgId: string, query: ListReservationsQueryDto, now: Date, allowedBranches: string[]): Promise<ReservationListItem[]> {
+    const rows = await tx.reservation.findMany({
       where: {
         orgId,
         ...(query.memberId ? { memberId: query.memberId } : {}),
@@ -298,7 +298,7 @@ export class HoldsService {
       },
       orderBy: [{ titleId: 'asc' }, { queuePosition: 'asc' }],
       take: query.limit ?? 50,
-      // Hydrated in the same query rather than by the client: a holds queue
+      // Hydrated in the same query rather than by the client: a reservations queue
       // showing bare UUIDs cannot be acted on, and one call per row would be
       // an N+1 on a screen that lists 50 by default.
       include: {
@@ -307,7 +307,7 @@ export class HoldsService {
       },
     });
 
-    const projected: HoldListItem[] = rows.map((h) => ({ ...h, status: holdState(h, now) }));
+    const projected: ReservationListItem[] = rows.map((h) => ({ ...h, status: reservationState(h, now) }));
     return query.status ? projected.filter((h) => h.status === query.status) : projected;
   }
 }

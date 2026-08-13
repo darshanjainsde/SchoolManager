@@ -24,8 +24,8 @@ const POLICY: Policy = {
   finePerDay: 5,
   graceDays: 1,
   maxFine: 500,
-  maxHolds: 3,
-  holdShelfDays: 3,
+  maxReservations: 3,
+  reservedShelfDays: 3,
   maxOutstandingFine: 1000,
 };
 
@@ -320,7 +320,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
        * The original asserted `/Index.*issue_due/` — the specific index by
        * name — and flaked roughly half the time on a long-lived local
        * database: identical code, alternating pass/fail. The cause is not the
-       * query. `Issue` holds every org ever created by every e2e run, so
+       * query. `Issue` reservations every org ever created by every e2e run, so
        * `orgId = X` gets less selective as the table accumulates; the planner
        * eventually estimates ~1 matching row (it printed `rows=1`, cost 4.16)
        * and picks `issue_one_active_per_copy` instead. Both are partial indexes

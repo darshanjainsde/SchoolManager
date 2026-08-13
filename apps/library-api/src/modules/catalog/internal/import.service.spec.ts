@@ -54,7 +54,7 @@ describe('mapImportRow', () => {
   });
 
   it('ACCEPTS a row with no isbn at all — a blank cell is a deliberate omission, not an error', () => {
-    // Policy: a school library holds plenty of items with no ISBN (older
+    // Policy: a school library reservations plenty of items with no ISBN (older
     // stock, local-language titles, donations, pamphlets), so rejecting them
     // would make bulk import useless for exactly the collections that most
     // need it. Such a row is never matched against an existing Title, so it

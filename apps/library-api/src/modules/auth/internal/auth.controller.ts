@@ -43,9 +43,9 @@ export class AuthController {
 
   // @Throttle here (added on review): the earlier reasoning that a 384-bit
   // token isn't guessable is still true, but it assumes the caller doesn't
-  // already hold a valid one. The grace-window replay cap
+  // already reservation a valid one. The grace-window replay cap
   // (REFRESH_GRACE_REPLAY_CAP in refresh.service.ts) is the real defence
-  // against someone who DOES hold a valid parent token firing rapid
+  // against someone who DOES reservation a valid parent token firing rapid
   // replays — this throttle is a second, coarser layer bounding overall
   // request volume against this route regardless of which token is being
   // presented.

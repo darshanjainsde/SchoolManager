@@ -5,10 +5,10 @@ import { loadPolicy } from './policy-loader';
 import {
   computeFine,
   evaluateIssue,
-  holdShelfExpiry,
-  nextHoldToPromote,
+  reservedShelfExpiry,
+  nextReservationToPromote,
   type IssueDenial,
-  type Hold as PolicyHold,
+  type Reservation as PolicyHold,
 } from './policy';
 import type { IssueBookDto, ReturnBookDto } from './dto';
 
@@ -46,7 +46,7 @@ function issueDenialMessage(reason: IssueDenial): string {
     case 'BRANCH_MISMATCH':
       return "This copy belongs to a branch other than the member's home branch";
     case 'COPY_ON_HOLD_FOR_OTHER':
-      return 'This copy is on the hold shelf for a different member';
+      return 'This copy is on the reservation shelf for a different member';
     case 'COPY_NOT_AVAILABLE':
       return 'This copy is not available to issue';
   }
@@ -60,14 +60,14 @@ function decimalToNumber(value: Prisma.Decimal | number | null | undefined): num
 
 export interface IssueResult {
   issue: Issue;
-  collectedHoldId: string | null;
+  collectedReservationId: string | null;
 }
 
 export interface ReturnResult {
   issue: Issue;
   fine: Fine | null;
-  /** Non-null when this return promoted the next hold onto the returned copy. */
-  promotedHoldId: string | null;
+  /** Non-null when this return promoted the next reservation onto the returned copy. */
+  promotedReservationId: string | null;
   copyStatus: CopyStatus;
 }
 
@@ -76,9 +76,9 @@ export class IssuesService {
   /**
    * One transaction (the caller supplies `tx` via `withOrg`): resolve copy
    * by accessionNumber -> load member/policy/open issues/open fine total ->
-   * `evaluateIssue` -> create `Issue`, set `Copy.status = ON_LOAN`, write an
-   * `AuditLog` row. If the copy was on the hold shelf for THIS member, that
-   * hold is marked `COLLECTED` in the same transaction.
+   * `evaluateIssue` -> create `Issue`, set `Copy.status = ISSUED`, write an
+   * `AuditLog` row. If the copy was on the reservation shelf for THIS member, that
+   * reservation is marked `COLLECTED` in the same transaction.
    *
    * `dto.memberId` is a client-supplied foreign key — looked up on `tx`
    * (this org's RLS-scoped transaction), never trusted at face value.
@@ -131,13 +131,13 @@ export class IssuesService {
 
     const policy = await loadPolicy(tx, orgId, member.memberType, copy.branchId);
 
-    // Only relevant when the copy is currently ON_HOLD_SHELF — the READY
-    // hold that put it there is what decides whether THIS member may take
-    // it (evaluateIssue's COPY_ON_HOLD_FOR_OTHER / "the hold IS for them"
+    // Only relevant when the copy is currently RESERVED_SHELF — the READY
+    // reservation that put it there is what decides whether THIS member may take
+    // it (evaluateIssue's COPY_ON_HOLD_FOR_OTHER / "the reservation IS for them"
     // branch).
     const readyHold =
-      copy.status === 'ON_HOLD_SHELF'
-        ? await tx.hold.findFirst({ where: { readyCopyId: copy.id, status: 'READY' } })
+      copy.status === 'RESERVED_SHELF'
+        ? await tx.reservation.findFirst({ where: { readyCopyId: copy.id, status: 'READY' } })
         : null;
 
     const [openLoans, fineAgg] = await Promise.all([
@@ -184,17 +184,17 @@ export class IssuesService {
       // above. A P2002 here means a concurrent issue on this exact copy won
       // the race between our read and our write.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException({ reason: 'ALREADY_ON_LOAN', message: 'This copy already has an active issue' });
+        throw new ConflictException({ reason: 'ALREADY_ISSUED', message: 'This copy already has an active issue' });
       }
       throw err;
     }
 
-    await tx.copy.update({ where: { id: copy.id }, data: { status: 'ON_LOAN' } });
+    await tx.copy.update({ where: { id: copy.id }, data: { status: 'ISSUED' } });
 
-    let collectedHoldId: string | null = null;
+    let collectedReservationId: string | null = null;
     if (readyHold && readyHold.memberId === member.id) {
-      await tx.hold.update({ where: { id: readyHold.id }, data: { status: 'COLLECTED' } });
-      collectedHoldId = readyHold.id;
+      await tx.reservation.update({ where: { id: readyHold.id }, data: { status: 'COLLECTED' } });
+      collectedReservationId = readyHold.id;
     }
 
     await tx.auditLog.create({
@@ -208,13 +208,13 @@ export class IssuesService {
       },
     });
 
-    return { issue, collectedHoldId };
+    return { issue, collectedReservationId };
   }
 
   /**
    * One transaction: resolve the active issue for the scanned accessionNumber -> set
    * `returnedAt` -> `computeFine` (creating a `Fine` row only when the
-   * amount is > 0) -> promote the title's next pending hold onto this copy,
+   * amount is > 0) -> promote the title's next pending reservation onto this copy,
    * or set `Copy.status = AVAILABLE` if there is none.
    */
   async returnBook(
@@ -281,40 +281,40 @@ export class IssuesService {
 
     const promotion = await this.promoteOrRelease(tx, orgId, copy.id, copy.branchId, copy.titleId, actorUserId, now);
 
-    return { issue: returnedLoan, fine, promotedHoldId: promotion.promotedHoldId, copyStatus: promotion.copyStatus };
+    return { issue: returnedLoan, fine, promotedReservationId: promotion.promotedReservationId, copyStatus: promotion.copyStatus };
   }
 
   /**
-   * Task 9: before considering which PENDING hold to promote, sweeps this
-   * title's stale `READY` holds — ones whose shelf window (`holdShelfDays`
+   * Task 9: before considering which PENDING reservation to promote, sweeps this
+   * title's stale `READY` reservations — ones whose shelf window (`reservedShelfDays`
    * from promotion) has lapsed with nobody collecting them. Locked with
    * `SELECT ... FOR UPDATE` for the same reason `promoteOrRelease`'s PENDING
    * lock below is: two simultaneous returns for the same title must not
-   * both decide the same stale hold needs expiring. A swept hold's copy
-   * reverts to `AVAILABLE` — it is NOT re-promoted onto a PENDING hold in
+   * both decide the same stale reservation needs expiring. A swept reservation's copy
+   * reverts to `AVAILABLE` — it is NOT re-promoted onto a PENDING reservation in
    * this same pass; `promoteOrRelease`'s own promotion below is scoped to
    * the copy actually being returned right now (see that method's doc).
    *
    * This is a state-transition write (`READY` -> `EXPIRED`), but it is NOT
    * trap 7 (LIBRARY-TRAPS.md #7): it never runs on a timer. It runs only
    * inside a RETURN, a user-triggered action, for the title that return
-   * concerns — exactly the exception `HoldStatus.EXPIRED`'s own schema doc
+   * concerns — exactly the exception `ReservationStatus.EXPIRED`'s own schema doc
    * carves out (a GC-style sweep triggered by real traffic is fine; a
    * scheduler deciding state on its own is not).
    */
   private async sweepExpiredReadyHolds(tx: LibraryTx, orgId: string, titleId: string, actorUserId: string, now: Date): Promise<void> {
     const readyRows = await tx.$queryRaw<Array<{ id: string; readyCopyId: string | null; expiresAt: Date }>>`
       SELECT "id", "readyCopyId", "expiresAt"
-      FROM "Hold"
+      FROM "Reservation"
       WHERE "orgId" = ${orgId}::uuid AND "titleId" = ${titleId}::uuid AND "status" = 'READY'
       FOR UPDATE
     `;
 
     for (const row of readyRows) {
-      // Same boundary as policy.ts's holdState: expiring AT expiresAt, not only strictly past it.
+      // Same boundary as policy.ts's reservationState: expiring AT expiresAt, not only strictly past it.
       if (row.expiresAt.getTime() > now.getTime()) continue;
 
-      await tx.hold.update({ where: { id: row.id }, data: { status: 'EXPIRED' } });
+      await tx.reservation.update({ where: { id: row.id }, data: { status: 'EXPIRED' } });
       if (row.readyCopyId) {
         await tx.copy.update({ where: { id: row.readyCopyId }, data: { status: 'AVAILABLE' } });
       }
@@ -322,8 +322,8 @@ export class IssuesService {
         data: {
           orgId,
           actorUserId,
-          action: 'circulation.hold.expire',
-          entity: 'Hold',
+          action: 'circulation.reservation.expire',
+          entity: 'Reservation',
           entityId: row.id,
           before: { status: 'READY', expiresAt: row.expiresAt.toISOString() },
           after: { status: 'EXPIRED', releasedCopyId: row.readyCopyId },
@@ -333,13 +333,13 @@ export class IssuesService {
   }
 
   /**
-   * Locks the title's PENDING holds with `SELECT ... FOR UPDATE` so two
+   * Locks the title's PENDING reservations with `SELECT ... FOR UPDATE` so two
    * simultaneous returns for two different copies of the same title cannot
-   * both read "hold X is next" and both promote it (trap 3 — a transaction
+   * both read "reservation X is next" and both promote it (trap 3 — a transaction
    * alone gives atomicity, not mutual exclusion). Whichever transaction's
    * `FOR UPDATE` wins the row lock proceeds; the other blocks until the
    * first commits, then re-reads the now-updated (PENDING -> READY) rows
-   * and correctly finds a different hold, or none.
+   * and correctly finds a different reservation, or none.
    *
    * Uses raw SQL because Prisma's query builder has no `FOR UPDATE` clause.
    * Runs on `tx` — the same `withOrg`-scoped transaction as every other read
@@ -354,12 +354,12 @@ export class IssuesService {
     titleId: string,
     actorUserId: string,
     now: Date,
-  ): Promise<{ promotedHoldId: string | null; copyStatus: CopyStatus }> {
+  ): Promise<{ promotedReservationId: string | null; copyStatus: CopyStatus }> {
     await this.sweepExpiredReadyHolds(tx, orgId, titleId, actorUserId, now);
 
     const rows = await tx.$queryRaw<Array<{ id: string; memberId: string; queuePosition: number; expiresAt: Date }>>`
       SELECT "id", "memberId", "queuePosition", "expiresAt"
-      FROM "Hold"
+      FROM "Reservation"
       WHERE "orgId" = ${orgId}::uuid AND "titleId" = ${titleId}::uuid AND "status" = 'PENDING'
       ORDER BY "queuePosition" ASC
       FOR UPDATE
@@ -370,11 +370,11 @@ export class IssuesService {
       queuePosition: r.queuePosition,
       expiresAt: r.expiresAt,
     }));
-    const winner = nextHoldToPromote(candidates, now);
+    const winner = nextReservationToPromote(candidates, now);
 
     if (!winner) {
       await tx.copy.update({ where: { id: copyId }, data: { status: 'AVAILABLE' } });
-      return { promotedHoldId: null, copyStatus: 'AVAILABLE' };
+      return { promotedReservationId: null, copyStatus: 'AVAILABLE' };
     }
 
     const winnerRow = rows.find((r) => r.memberId === winner.memberId && r.queuePosition === winner.queuePosition);
@@ -383,23 +383,23 @@ export class IssuesService {
       // 1:1 map of `rows`, so this can never actually happen. Kept instead
       // of a non-null assertion so a future refactor that breaks that
       // invariant fails loudly here instead of producing `undefined.id`.
-      throw new Error('promoteOrRelease: winning hold not found among locked rows');
+      throw new Error('promoteOrRelease: winning reservation not found among locked rows');
     }
 
-    // The hold-shelf deadline is a function of the WINNING member's own
-    // policy (memberType), not the returning member's — a hold can be
-    // promoted for any member type, and holdShelfDays is a per-memberType
+    // The reservation-shelf deadline is a function of the WINNING member's own
+    // policy (memberType), not the returning member's — a reservation can be
+    // promoted for any member type, and reservedShelfDays is a per-memberType
     // tunable (see CirculationPolicy).
     const holdMember = await tx.member.findUnique({ where: { id: winnerRow.memberId }, select: { memberType: true } });
-    if (!holdMember) throw new NotFoundException('Hold member not found');
+    if (!holdMember) throw new NotFoundException('Reservation member not found');
     // Branch-specific policy of the BRANCH THE COPY IS AT (not the winning
     // member's home branch) — that copy's branch is what the desk holding it
     // physically operates under.
     const holdPolicy = await loadPolicy(tx, orgId, holdMember.memberType, branchId);
-    const expiresAt = holdShelfExpiry(holdPolicy, now);
+    const expiresAt = reservedShelfExpiry(holdPolicy, now);
 
-    await tx.copy.update({ where: { id: copyId }, data: { status: 'ON_HOLD_SHELF' } });
-    await tx.hold.update({
+    await tx.copy.update({ where: { id: copyId }, data: { status: 'RESERVED_SHELF' } });
+    await tx.reservation.update({
       where: { id: winnerRow.id },
       data: { status: 'READY', readyCopyId: copyId, branchId, readyAt: now, expiresAt },
     });
@@ -424,6 +424,6 @@ export class IssuesService {
       },
     });
 
-    return { promotedHoldId: winnerRow.id, copyStatus: 'ON_HOLD_SHELF' };
+    return { promotedReservationId: winnerRow.id, copyStatus: 'RESERVED_SHELF' };
   }
 }

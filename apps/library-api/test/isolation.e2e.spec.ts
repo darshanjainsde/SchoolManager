@@ -169,7 +169,7 @@ describeLive('catalogue cross-org isolation (Title, Copy, TitleAuthor)', () => {
     // Because TitleAuthor.author is ON DELETE CASCADE, that smuggled row
     // meant org B deleting their own Author would silently delete an org-A
     // row — a covert cross-tenant side channel. The policy now requires
-    // BOTH EXISTS clauses to hold.
+    // BOTH EXISTS clauses to reservation.
     it("cannot insert a TitleAuthor row joining this org's own title to another org's author", async () => {
       await expect(
         withOrg(orgA.id, (tx) =>

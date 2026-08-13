@@ -35,14 +35,14 @@ export interface Fine {
 
 export interface IssueResult {
   issue: Issue;
-  collectedHoldId: string | null;
+  collectedReservationId: string | null;
 }
 
 export interface ReturnResult {
   issue: Issue;
   fine: Fine | null;
-  promotedHoldId: string | null;
-  copyStatus: 'AVAILABLE' | 'ON_HOLD_SHELF';
+  promotedReservationId: string | null;
+  copyStatus: 'AVAILABLE' | 'RESERVED_SHELF';
 }
 
 export interface Ctx {
@@ -123,9 +123,9 @@ export function dueTone(days: number): DueTone {
 }
 
 /* ------------------------------------------------------------------
-   Desk lists — holds, overdue, fines
-   Shapes transcribed from the API's HoldListItem / OverdueIssueItem /
-   FineListItem (circulation/internal/{holds,fines}.service.ts).
+   Desk lists — reservations, overdue, fines
+   Shapes transcribed from the API's ReservationListItem / OverdueIssueItem /
+   FineListItem (circulation/internal/{reservations,fines}.service.ts).
    ------------------------------------------------------------------ */
 
 
@@ -134,7 +134,7 @@ export interface TitleRef {
   title: string;
 }
 
-export interface HoldRow {
+export interface ReservationRow {
   id: string;
   titleId: string;
   memberId: string;
@@ -174,11 +174,11 @@ export interface FineRow {
   issue: { copy: { title: TitleRef } } | null;
 }
 
-export function listHolds(ctx: Ctx, params: { status?: string; limit?: number } = {}): Promise<HoldRow[]> {
+export function listReservations(ctx: Ctx, params: { status?: string; limit?: number } = {}): Promise<ReservationRow[]> {
   const q = new URLSearchParams();
   if (params.status) q.set('status', params.status);
   if (params.limit) q.set('limit', String(params.limit));
-  return apiFetch<HoldRow[]>(`/circulation/holds?${q}`, { host: ctx.host, token: ctx.token });
+  return apiFetch<ReservationRow[]>(`/circulation/reservations?${q}`, { host: ctx.host, token: ctx.token });
 }
 
 export function listOverdue(ctx: Ctx): Promise<OverdueRow[]> {

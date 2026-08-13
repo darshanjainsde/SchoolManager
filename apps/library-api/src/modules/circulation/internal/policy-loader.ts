@@ -18,7 +18,7 @@ function decimalToNullableNumber(value: Prisma.Decimal | null): number | null {
  *
  * `branchId` is the branch the decision under evaluation actually concerns
  * (the copy being issued/returned, the issue being renewed) — `null` when no
- * branch is known or relevant (e.g. placing a hold, before any copy is
+ * branch is known or relevant (e.g. placing a reservation, before any copy is
  * chosen), which resolves straight to the org default. Two `findFirst`
  * lookups (never `findUnique`): the migration deliberately does NOT declare
  * `@@unique([orgId, branchId, memberType])` in the Prisma schema — a plain
@@ -51,8 +51,8 @@ export async function loadPolicy(
     finePerDay: row.finePerDay.toNumber(),
     graceDays: row.graceDays,
     maxFine: decimalToNullableNumber(row.maxFine),
-    maxHolds: row.maxHolds,
-    holdShelfDays: row.holdShelfDays,
+    maxReservations: row.maxReservations,
+    reservedShelfDays: row.reservedShelfDays,
     maxOutstandingFine: decimalToNullableNumber(row.maxOutstandingFine),
   };
 }

@@ -144,7 +144,7 @@ export class MembersService {
     const raw = (query.q ?? '').trim();
 
     // Exact lookup by the Sckools id, short-circuiting the whole ranked search.
-    // This is the cross-service path (§13 of the design): Sckools holds a
+    // This is the cross-service path (§13 of the design): Sckools reservations a
     // Student.id and asks the library who that is here, rather than reading
     // library tables. Indexed by (orgId, externalRef).
     if (query.externalRef) {
@@ -162,7 +162,7 @@ export class MembersService {
       return rows as MemberCard[];
     }
 
-    // Same "unknown passes through" convention as listFines/listHolds: a
+    // Same "unknown passes through" convention as listFines/listReservations: a
     // member with no home branch is visible to every branch's desk.
     const branchClause =
       allowedBranches.length > 0

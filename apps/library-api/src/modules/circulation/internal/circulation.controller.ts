@@ -7,9 +7,9 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { CreateHoldDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListHoldsQueryDto, RenewBookDto, ReturnBookDto, SearchMembersQueryDto, WaiveFineDto } from './dto';
+import { CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RenewBookDto, ReturnBookDto, SearchMembersQueryDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
-import { HoldsService } from './holds.service';
+import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
 import { MembersService } from './members.service';
 
@@ -28,10 +28,10 @@ import { MembersService } from './members.service';
  * consistency, and so a FUTURE route that does add a request-level branchId
  * is covered automatically. The actual enforcement for every route below
  * happens in the SERVICE, against the LOADED row's own branch
- * (`assertBranchInScope` — see `issues.service.ts`/`holds.service.ts`/
+ * (`assertBranchInScope` — see `issues.service.ts`/`reservations.service.ts`/
  * `fines.service.ts`), the same pattern `CopiesService` established for
  * `PATCH /catalog/copies/:id` — because the branch these actions concern is
- * a property of an existing Copy/Issue/Hold row, not of the request.
+ * a property of an existing Copy/Issue/Reservation row, not of the request.
  *
  * `IdempotencyInterceptor` is opt-in per route (see its own class doc): a
  * accessionNumber scanner double-fire converges on ONE stored response for a
@@ -47,7 +47,7 @@ export class CirculationController {
   constructor(
     @Inject(OrgContextService) private readonly orgs: OrgContextService,
     @Inject(IssuesService) private readonly issues: IssuesService,
-    @Inject(HoldsService) private readonly holds: HoldsService,
+    @Inject(ReservationsService) private readonly reservations: ReservationsService,
     @Inject(FinesService) private readonly fines: FinesService,
     @Inject(MembersService) private readonly members: MembersService,
   ) {}
@@ -79,23 +79,23 @@ export class CirculationController {
   renew(@Body() dto: RenewBookDto, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
     const now = new Date();
-    return withOrg(orgId, (tx) => this.holds.renew(tx, orgId, dto, user.sub, now, user.branches));
+    return withOrg(orgId, (tx) => this.reservations.renew(tx, orgId, dto, user.sub, now, user.branches));
   }
 
-  @Post('holds')
+  @Post('reservations')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
   @UseInterceptors(IdempotencyInterceptor)
-  createHold(@Body() dto: CreateHoldDto, @CurrentUser() user: LibJwtPayload) {
+  createReservation(@Body() dto: CreateReservationDto, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
     const now = new Date();
-    return withOrg(orgId, (tx) => this.holds.createHold(tx, orgId, dto, user.sub, now));
+    return withOrg(orgId, (tx) => this.reservations.createReservation(tx, orgId, dto, user.sub, now));
   }
 
-  @Delete('holds/:id')
+  @Delete('reservations/:id')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
-  cancelHold(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: LibJwtPayload) {
+  cancelReservation(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
-    return withOrg(orgId, (tx) => this.holds.cancelHold(tx, orgId, id, user.sub, user.branches));
+    return withOrg(orgId, (tx) => this.reservations.cancelReservation(tx, orgId, id, user.sub, user.branches));
   }
 
   /**
@@ -119,12 +119,12 @@ export class CirculationController {
     return withOrg(orgId, (tx) => this.members.search(tx, orgId, query, user.branches));
   }
 
-  @Get('holds')
+  @Get('reservations')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
-  listHolds(@Query() query: ListHoldsQueryDto, @CurrentUser() user: LibJwtPayload) {
+  listReservations(@Query() query: ListReservationsQueryDto, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
     const now = new Date();
-    return withOrg(orgId, (tx) => this.holds.listHolds(tx, orgId, query, now, user.branches));
+    return withOrg(orgId, (tx) => this.reservations.listReservations(tx, orgId, query, now, user.branches));
   }
 
   @Get('fines')
