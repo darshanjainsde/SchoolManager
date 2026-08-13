@@ -49,6 +49,15 @@ async function seedCircOrg(suffix: string): Promise<CircOrg> {
   const branch = await prisma.branch.create({ data: { orgId: org.id, name: 'Main', code: 'MAIN' } });
   await prisma.circulationPolicy.create({ data: { orgId: org.id, memberType: 'STUDENT', ...POLICY } });
 
+  // Fines are OFF by default for students now — a default that quietly bills a
+  // ten-year-old is the wrong default. This suite tests the fine ENGINE, so it
+  // switches them on explicitly rather than relying on an implicit charge.
+  await prisma.librarySettings.upsert({
+    where: { orgId: org.id },
+    update: { chargeStudentFines: true },
+    create: { orgId: org.id, chargeStudentFines: true },
+  });
+
   const passwordHash = await argon2.hash('circ-e2e-Pw1!', { type: argon2.argon2id });
   const librarian = await prisma.libUser.create({
     data: { orgId: org.id, email: `librarian-${suffix}@circ.test`, passwordHash, role: 'LIBRARIAN', branchIds: [], active: true },

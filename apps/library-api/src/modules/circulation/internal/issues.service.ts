@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type CopyStatus, type Issue, type Fine, type LibraryTx } from '@library/db';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
+import { markPresentByTransaction } from '../../periods';
 import { loadPolicy } from './policy-loader';
 import {
   computeFine,
@@ -208,6 +209,13 @@ export class IssuesService {
       },
     });
 
+    // Attendance is a BY-PRODUCT of the transaction, never a condition on it:
+    // a child who issues a book has self-evidently attended, so the librarian
+    // never types their name into a register. Best-effort by design — see
+    // markPresentByTransaction — because a failed attendance write must never
+    // stop a child borrowing a book.
+    await markPresentByTransaction(tx, orgId, issue.memberId, member.classRef, issue.branchId);
+
     return { issue, collectedReservationId };
   }
 
@@ -254,7 +262,17 @@ export class IssuesService {
     });
 
     let fine: Fine | null = null;
-    if (amount > 0) {
+    // "Fines are off by default" was a promise nothing kept: this setting was
+    // written by the settings screen and read by no code, so every school
+    // charged children from day one. The flag gates only STUDENTS — a teacher
+    // is an adult and a different conversation.
+    const settings = await tx.librarySettings.findUnique({
+      where: { orgId },
+      select: { chargeStudentFines: true },
+    });
+    const finesAllowed = member.memberType !== 'STUDENT' || (settings?.chargeStudentFines ?? false);
+
+    if (amount > 0 && finesAllowed) {
       fine = await tx.fine.create({
         data: {
           orgId,
@@ -281,6 +299,14 @@ export class IssuesService {
 
     const promotion = await this.promoteOrRelease(tx, orgId, copy.id, copy.branchId, copy.titleId, actorUserId, now);
 
+    // Deliberately NO attendance marking on return.
+    //
+    // Returning does not prove the holder was here: "Ma'am, I brought Ravi's
+    // book" is a daily occurrence, and marking Ravi present would put a child
+    // in the library who is absent from school. A false positive on attendance
+    // is far worse than a false negative — the school would believe a missing
+    // child was accounted for. Issuing IS unambiguous, because the borrower
+    // takes the book themselves, so that is where the mark is made.
     return { issue: returnedLoan, fine, promotedReservationId: promotion.promotedReservationId, copyStatus: promotion.copyStatus };
   }
 

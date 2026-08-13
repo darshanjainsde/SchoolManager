@@ -37,8 +37,12 @@ function escapeLike(input: string): string {
  * matching word INSIDE the haystack, which is the actual question being asked,
  * and scores the same pair 0.667.
  *
- * The floor is set above what an unrelated word scores and below a genuine
- * near-miss. The `gin_trgm_ops` indexes support this operator too.
+ * It is expressed as the `<%` OPERATOR, not as `word_similarity(a,b) > 0.5`.
+ * Only the operator can use the `gin_trgm_ops` indexes; the function call is
+ * opaque to the planner, so the version written first seq-scanned Title, Author
+ * and Member on every query of four characters or more — precisely the thing
+ * the trigram migration was added to avoid. The threshold comes from
+ * `pg_trgm.word_similarity_threshold`, set per transaction below.
  */
 const FUZZY_FLOOR = 0.5;
 
@@ -64,10 +68,16 @@ export class SuggestService {
    *   3  a name or title containing it
    *   4  something close to it         — `hungy` -> The Hungry Tide (trigram)
    *
-   * All three sources are queried in parallel and merged, rather than one query
-   * over a union view: they have genuinely different shapes (a copy is one row,
-   * a title collapses its copies into a count) and a union would flatten that
-   * away only to rebuild it in JS.
+   * The three sources are queried SEQUENTIALLY, not with Promise.all. They
+   * share one transaction, which owns one connection, so they could never
+   * actually run in parallel — and on failure Promise.all returns while the
+   * others are still in flight against a transaction Prisma is rolling back,
+   * surfacing "Transaction already closed" instead of the real error. With
+   * connection_limit=1 through the pooler there was no concurrency to win.
+   *
+   * They stay three queries rather than one union because they have genuinely
+   * different shapes: a copy is one row, a title collapses its copies into a
+   * count, and a union would flatten that only to rebuild it in JS.
    *
    * Every query is org-scoped by RLS through `withOrg`; `orgId` is also in each
    * predicate so Postgres can use the org indexes rather than filtering after.
@@ -77,19 +87,31 @@ export class SuggestService {
     const limit = query.limit ?? 8;
     if (!raw) return [];
 
+    // `<%` reads its cut-off from this GUC, and SET LOCAL scopes it to the
+    // caller's transaction so it cannot leak into another request's queries.
+    await tx.$executeRaw`SELECT set_config('pg_trgm.word_similarity_threshold', ${String(FUZZY_FLOOR)}, true)`;
+
     const esc = escapeLike(raw);
     const prefix = `${esc}%`;
     const anywhere = `%${esc}%`;
     const isNumber = /^\d+$/.test(raw);
     const fuzzy = raw.length >= MIN_FUZZY_LENGTH;
 
+    // Applied to COPIES only, deliberately and explicitly.
+    //
+    // It used to be declared here and silently used in one of three queries,
+    // which read as "everything is branch-scoped" while members and titles were
+    // org-wide. A branch-scoped assistant is meant to see the whole catalogue
+    // and the whole roll — a book is a book and a child is a child — but must
+    // only act on copies held at their own branch. That is now stated rather
+    // than implied.
     const branchFilter = allowedBranches.length > 0 ? { branchId: { in: allowedBranches } } : {};
 
-    const [copies, members, titles] = await Promise.all([
-      // A book number is exact or it is nothing — a partial accession number is
+    // A book number is exact or it is nothing — a partial accession number is
       // a different book, never a near miss, so this never does prefix matching.
       isNumber
-        ? tx.copy.findMany({
+    const copies = isNumber
+      ? await tx.copy.findMany({
             where: { orgId, accessionNumber: raw, ...branchFilter },
             select: {
               id: true, accessionNumber: true, status: true,
@@ -100,11 +122,11 @@ export class SuggestService {
                 take: 1,
               },
             },
-            take: 1,
-          })
-        : Promise.resolve([]),
+          take: 1,
+        })
+      : [];
 
-      tx.$queryRaw<Array<{ id: string; code: string; firstName: string; lastName: string; classRef: string | null; rank: number; matched: string }>>`
+    const members = await tx.$queryRaw<Array<{ id: string; code: string; firstName: string; lastName: string; classRef: string | null; rank: number; matched: string }>>`
         SELECT "id", "code", "firstName", "lastName", NULL::text AS "classRef",
           CASE
             WHEN upper("code") = upper(${raw})                                       THEN 1
@@ -122,14 +144,14 @@ export class SuggestService {
             OR "firstName" ILIKE ${anywhere}
             OR "lastName"  ILIKE ${anywhere}
             OR ("firstName" || ' ' || "lastName") ILIKE ${anywhere}
-            OR (${fuzzy} AND word_similarity(${raw}, "firstName") > ${FUZZY_FLOOR})
-            OR (${fuzzy} AND word_similarity(${raw}, "lastName")  > ${FUZZY_FLOOR})
+            OR (${fuzzy} AND ${raw} <% "firstName")
+            OR (${fuzzy} AND ${raw} <% "lastName")
           )
         ORDER BY "rank" ASC, ("status"::text = 'ACTIVE') DESC, "lastName" ASC
-        LIMIT ${limit}
-      `,
+      LIMIT ${limit}
+    `;
 
-      tx.$queryRaw<Array<{ id: string; title: string; author: string | null; total: bigint; free: bigint; rank: number }>>`
+    const titles = await tx.$queryRaw<Array<{ id: string; title: string; author: string | null; total: bigint; free: bigint; rank: number }>>`
         SELECT t."id", t."title",
           (SELECT a."name" FROM "Author" a
              JOIN "TitleAuthor" ta ON ta."authorId" = a."id"
@@ -145,19 +167,18 @@ export class SuggestService {
         WHERE t."orgId" = ${orgId}::uuid
           AND (
                t."title" ILIKE ${anywhere}
-            OR (${fuzzy} AND word_similarity(${raw}, t."title") > ${FUZZY_FLOOR})
+            OR (${fuzzy} AND ${raw} <% t."title")
             OR EXISTS (
                  SELECT 1 FROM "Author" a
                    JOIN "TitleAuthor" ta ON ta."authorId" = a."id"
                   WHERE ta."titleId" = t."id"
                     AND (a."sortName" ILIKE ${anywhere}
-                         OR (${fuzzy} AND word_similarity(${raw}, a."sortName") > ${FUZZY_FLOOR}))
+                         OR (${fuzzy} AND ${raw} <% a."sortName"))
                )
           )
-        ORDER BY "rank" ASC, t."title" ASC
-        LIMIT ${limit}
-      `,
-    ]);
+      ORDER BY "rank" ASC, t."title" ASC
+      LIMIT ${limit}
+    `;
 
     const out: Suggestion[] = [];
 

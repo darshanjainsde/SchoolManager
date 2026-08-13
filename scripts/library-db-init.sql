@@ -8,6 +8,11 @@
 -- Passwords here are local-only throwaways. Staging and production use
 -- generated secrets held in GitHub environment secrets and Vercel env.
 
+-- NOTE: `prisma migrate reset` DROPS AND RECREATES the library schema, and the
+-- default privileges below go with it. Re-run this file after any reset, or the
+-- next table created by `postgres` is invisible to library_app/library_platform
+-- in information_schema — which silently blinds the RLS coverage audit rather
+-- than failing it.
 CREATE SCHEMA IF NOT EXISTS library;
 CREATE SCHEMA IF NOT EXISTS testboard;
 

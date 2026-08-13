@@ -97,6 +97,11 @@ model LibraryOrg {
   reservations Reservation[]
   fines      Fine[]
   outbox     NotificationOutbox[]
+
+  settings   LibrarySettings?
+  periods    LibraryPeriod[]
+  visits     ClassVisit[]
+  attendance VisitAttendance[]
 }
 
 model LibraryDomain {
@@ -165,6 +170,9 @@ model Branch {
 
   @@unique([orgId, code])
   @@index([orgId])
+
+  periods LibraryPeriod[]
+  visits  ClassVisit[]
 }
 
 model LibUser {
@@ -213,6 +221,14 @@ model Member {
   /// null = no expiry. Membership expiry is computed from this at read time,
   /// never stored as a status — see the no-scheduler rule in the spec (§6.3).
   membershipEndsAt DateTime?
+  /// The class this member belongs to, as the librarian writes it (`6-B`).
+  ///
+  /// Plain text and nullable on purpose: the library period must work before
+  /// the Sckools link exists, so this is typed by hand today and populated by
+  /// the one-way sync later. A foreign key to Sckools' ClassSection would make
+  /// this phase depend on a phase that has not happened.
+  classRef         String?
+
   /// Holds the Sckools Student.id / Teacher.id when the services merge.
   /// Present from the first migration so the merge needs no schema change.
   externalRef      String?
@@ -229,6 +245,8 @@ model Member {
   @@unique([orgId, code])
   @@index([orgId, status])
   @@index([orgId, externalRef])
+
+  visitAttendance VisitAttendance[]
 }
 
 /// Hash-keyed and single-use. Deliberately has no RLS policy — see the
@@ -740,4 +758,124 @@ model NotificationOutbox {
   /// are likewise absent from their models' `@@index` lists above.
 
   @@index([orgId, sentAt])
+}
+
+
+// ---------------------------------------------------------------------------
+// The library period (Phase 2c)
+//
+// A class comes to the library in a timetabled period. The library holds only
+// so many classes at once, and the librarian wants to know who actually came.
+// ---------------------------------------------------------------------------
+
+/// Per-library settings a librarian can change without a deploy.
+///
+/// One row per org, created lazily on first read. Kept separate from
+/// `LibraryOrg` so that adding a setting is not a migration on the table every
+/// request resolves a tenant against.
+model LibrarySettings {
+  id       String @id @default(uuid()) @db.Uuid
+  orgId    String @unique @db.Uuid
+
+  /// How many classes the room holds at once. Assigning one more to the same
+  /// period is refused when the timetable is set — not discovered when eighty
+  /// children arrive.
+  concurrentClassCapacity Int @default(2)
+
+  /// Attendance is recorded at all. Off is a legitimate answer: if the class
+  /// teacher already marks period attendance elsewhere, doing it again here is
+  /// duplicate work on the busiest screen in the product.
+  recordAttendance Boolean @default(true)
+
+  /// Charge late fees to students. Off by default — most schools charge
+  /// children nothing, and a default that quietly bills a ten-year-old is the
+  /// wrong default.
+  chargeStudentFines Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+/// A recurring slot in the school timetable: "6-B has the library on Tuesday,
+/// period 3".
+model LibraryPeriod {
+  id        String @id @default(uuid()) @db.Uuid
+  orgId     String @db.Uuid
+  branchId  String @db.Uuid
+
+  /// 1 = Monday .. 7 = Sunday (ISO), so ordering and arithmetic behave.
+  weekday   Int
+  /// The school's own period number, not a clock time — schools move bells.
+  period    Int
+  /// A plain class label the librarian types (`6-B`). Deliberately NOT a
+  /// foreign key to Sckools yet: this phase must work before the two services
+  /// are linked, and the sync can populate it later.
+  classRef  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org    LibraryOrg  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  visits ClassVisit[]
+
+  /// One class cannot be booked into the same slot twice. How MANY classes may
+  /// share a slot is a setting, checked in the service — a unique index cannot
+  /// express "at most N".
+  @@unique([branchId, weekday, period, classRef])
+  @@index([orgId, branchId, weekday, period])
+}
+
+/// One actual visit by one class on one day.
+model ClassVisit {
+  id        String    @id @default(uuid()) @db.Uuid
+  orgId     String    @db.Uuid
+  branchId  String    @db.Uuid
+  periodId  String?   @db.Uuid
+  classRef  String
+  /// The library's own day, in the org timezone.
+  date      DateTime  @db.Date
+  openedAt  DateTime  @default(now())
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  org        LibraryOrg       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  branch     Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  period     LibraryPeriod?   @relation(fields: [periodId], references: [id], onDelete: SetNull)
+  attendance VisitAttendance[]
+
+  /// One visit per class per day PER BRANCH. Omitting branchId here let two
+  /// branches that each have a "6-B" collide: `openVisit` would hand branch A's
+  /// visit to branch B, and both rosters would merge.
+  @@unique([orgId, branchId, classRef, date])
+  @@index([orgId, branchId, date])
+}
+
+/// Who was present at a visit.
+model VisitAttendance {
+  id       String  @id @default(uuid()) @db.Uuid
+  orgId    String  @db.Uuid
+  visitId  String  @db.Uuid
+  memberId String  @db.Uuid
+
+  /// True when a circulation transaction put this row here rather than a
+  /// person ticking a box. Issuing or returning a book PROVES the child was
+  /// present, so the librarian only ticks the few who came and browsed —
+  /// forty ticks become about five. Keeping the distinction also separates
+  /// "attended but borrowed nothing" from "was not here", which is exactly the
+  /// signal reading promotion needs.
+  auto     Boolean @default(false)
+
+  markedAt DateTime @default(now())
+
+  org    LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  visit  ClassVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  member Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// Present is present — a second scan must not create a second row, and the
+  /// database is what enforces that under a double-tap, not the handler.
+  @@unique([visitId, memberId])
+  @@index([orgId, memberId])
 }

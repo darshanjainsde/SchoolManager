@@ -93,4 +93,19 @@ export const ENDPOINTS: EndpointSpec[] = [
   // role should see. Gated on CATALOG rather than CIRCULATION — searching is a
   // catalogue act, and a plan without lending should still be able to search.
   { method: 'GET', path: '/search/suggest', roles: ALL_STAFF },
+
+  // Phase 2c — the library period. Setting the timetable and the room's capacity
+  // is configuration (WRITERS); opening a visit and ticking a child present is
+  // counter work, so ASSISTANT can do it. MEMBER is denied throughout — a child
+  // has no business reading a class roster.
+  { method: 'GET',    path: '/periods/settings', roles: READERS },
+  { method: 'PATCH',  path: '/periods/settings', roles: WRITERS, body: { concurrentClassCapacity: 2 } },
+  { method: 'GET',    path: '/periods', roles: READERS },
+  { method: 'POST',   path: '/periods', roles: WRITERS, body: { branchId: '11111111-1111-4111-8111-111111111111', weekday: 2, period: 3, classRef: 'AUTHZ-PROBE' } },
+  { method: 'DELETE', path: '/periods/:id', roles: WRITERS },
+  { method: 'GET',    path: '/periods/visits/live', roles: READERS },
+  { method: 'GET',    path: '/periods/visits', roles: READERS },
+  { method: 'POST',   path: '/periods/visits/open', roles: READERS, body: { branchId: '11111111-1111-4111-8111-111111111111', classRef: 'AUTHZ-PROBE' } },
+  { method: 'POST',   path: '/periods/visits/:id/close', roles: READERS },
+  { method: 'POST',   path: '/periods/visits/:id/attendance', roles: READERS, body: { memberId: '11111111-1111-4111-8111-111111111111' } },
 ];
