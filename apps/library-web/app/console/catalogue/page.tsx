@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readSession } from '@/lib/session';
 import { searchTitles, spineHue, type TitleHit } from '@/lib/catalogue';
-import type { Money } from '@/lib/circulation';
 import { ApiError } from '@/lib/api';
 // In components/, not beside the page's default export: Next permits only a
 // fixed set of exports from a route file, and a stray named export compiles,
