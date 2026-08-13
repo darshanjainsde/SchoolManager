@@ -34,3 +34,4 @@ apps/library-web/next-env.d.ts
 # Vercel CLI link + the ncc bundle output (rebuilt by `pnpm bundle` on deploy)
 .vercel
 apps/library-api/api/
+.env*
