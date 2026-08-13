@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, type CopyStatus, type Loan, type Fine, type LibraryTx } from '@library/db';
+import { Prisma, type CopyStatus, type Issue, type Fine, type LibraryTx } from '@library/db';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import { loadPolicy } from './policy-loader';
 import {
@@ -10,7 +10,7 @@ import {
   type IssueDenial,
   type Hold as PolicyHold,
 } from './policy';
-import type { IssueLoanDto, ReturnLoanDto } from './dto';
+import type { IssueBookDto, ReturnBookDto } from './dto';
 
 /**
  * `IssueDenial` -> the HTTP exception a circulation-desk caller should see.
@@ -59,12 +59,12 @@ function decimalToNumber(value: Prisma.Decimal | number | null | undefined): num
 }
 
 export interface IssueResult {
-  loan: Loan;
+  issue: Issue;
   collectedHoldId: string | null;
 }
 
 export interface ReturnResult {
-  loan: Loan;
+  issue: Issue;
   fine: Fine | null;
   /** Non-null when this return promoted the next hold onto the returned copy. */
   promotedHoldId: string | null;
@@ -72,19 +72,19 @@ export interface ReturnResult {
 }
 
 @Injectable()
-export class LoansService {
+export class IssuesService {
   /**
    * One transaction (the caller supplies `tx` via `withOrg`): resolve copy
-   * by barcode -> load member/policy/open loans/open fine total ->
-   * `evaluateIssue` -> create `Loan`, set `Copy.status = ON_LOAN`, write an
+   * by accessionNumber -> load member/policy/open issues/open fine total ->
+   * `evaluateIssue` -> create `Issue`, set `Copy.status = ON_LOAN`, write an
    * `AuditLog` row. If the copy was on the hold shelf for THIS member, that
    * hold is marked `COLLECTED` in the same transaction.
    *
    * `dto.memberId` is a client-supplied foreign key — looked up on `tx`
    * (this org's RLS-scoped transaction), never trusted at face value.
-   * Postgres FK checks bypass RLS by design, so `tx.loan.create`'s own FK
+   * Postgres FK checks bypass RLS by design, so `tx.issue.create`'s own FK
    * constraint would happily accept another org's member id and produce a
-   * Loan that structurally references a row this caller can never see
+   * Issue that structurally references a row this caller can never see
    * (LIBRARY-TRAPS.md, client-supplied-fk-not-org-checked). Doing the
    * lookup here, on `tx`, closes that and is race-free — a lookup on a
    * separate connection would be a TOCTOU against the write below.
@@ -92,7 +92,7 @@ export class LoansService {
    * `allowedBranches` is the CALLING STAFF USER's branch scope
    * (`LibJwtPayload.branches`), checked against the COPY's own branch after
    * it is loaded — never a branch named in the request, which doesn't exist
-   * for this route (`IssueLoanDto` carries a barcode and a memberId, no
+   * for this route (`IssueBookDto` carries a accessionNumber and a memberId, no
    * branchId). This is the missing half of the divergence the Phase 1a
    * review found: `evaluateIssue`'s BRANCH_MISMATCH (below) is a different
    * rule entirely — it compares the MEMBER's home branch to the copy, and
@@ -100,29 +100,29 @@ export class LoansService {
    * a branch-B copy regardless of the member's own home branch.
    *
    * Concurrency: this method does NOT itself serialize two callers issuing
-   * the same barcode — under READ COMMITTED, two transactions that both
+   * the same accessionNumber — under READ COMMITTED, two transactions that both
    * `BEGIN` before either commits can both read the same "copy is
-   * AVAILABLE" snapshot and both reach `tx.loan.create` (trap 3,
+   * AVAILABLE" snapshot and both reach `tx.issue.create` (trap 3,
    * LIBRARY-TRAPS.md). What actually makes a double-issue impossible is the
-   * `loan_one_active_per_copy` partial unique index on `Loan(copyId) WHERE
+   * `issue_one_active_per_copy` partial unique index on `Issue(copyId) WHERE
    * "returnedAt" IS NULL` (Task 4): the loser's `create` raises P2002, which
    * this method turns into a 409 rather than an unhandled 500. An
    * `Idempotency-Key` on the route converges the *response* for retried
    * duplicates, but two genuinely concurrent requests still both reach this
    * method — the index, not the interceptor, is the actual guarantee (see
-   * loan-constraints.e2e.spec.ts for the proof, and this module's own
+   * issue-constraints.e2e.spec.ts for the proof, and this module's own
    * circulation-issue-return.e2e.spec.ts for the same proof against the
    * real /circulation/issue route).
    */
   async issue(
     tx: LibraryTx,
     orgId: string,
-    dto: IssueLoanDto,
+    dto: IssueBookDto,
     actorUserId: string,
     now: Date,
     allowedBranches: string[],
   ): Promise<IssueResult> {
-    const copy = await tx.copy.findUnique({ where: { orgId_barcode: { orgId, barcode: dto.barcode } } });
+    const copy = await tx.copy.findUnique({ where: { orgId_accessionNumber: { orgId, accessionNumber: dto.accessionNumber } } });
     if (!copy) throw new NotFoundException('Copy not found');
     assertBranchInScope(copy.branchId, allowedBranches);
 
@@ -141,7 +141,7 @@ export class LoansService {
         : null;
 
     const [openLoans, fineAgg] = await Promise.all([
-      tx.loan.count({ where: { memberId: member.id, returnedAt: null } }),
+      tx.issue.count({ where: { memberId: member.id, returnedAt: null } }),
       tx.fine.aggregate({
         where: { memberId: member.id, status: { in: ['OPEN', 'PARTIAL'] } },
         _sum: { amount: true, paidAmount: true },
@@ -166,9 +166,9 @@ export class LoansService {
     );
     if (!decision.allowed) throw issueDenialToException(decision.reason);
 
-    let loan: Loan;
+    let issue: Issue;
     try {
-      loan = await tx.loan.create({
+      issue = await tx.issue.create({
         data: {
           orgId,
           copyId: copy.id,
@@ -180,11 +180,11 @@ export class LoansService {
         },
       });
     } catch (err) {
-      // loan_one_active_per_copy — see this method's own concurrency doc
+      // issue_one_active_per_copy — see this method's own concurrency doc
       // above. A P2002 here means a concurrent issue on this exact copy won
       // the race between our read and our write.
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException({ reason: 'ALREADY_ON_LOAN', message: 'This copy already has an active loan' });
+        throw new ConflictException({ reason: 'ALREADY_ON_LOAN', message: 'This copy already has an active issue' });
       }
       throw err;
     }
@@ -202,54 +202,54 @@ export class LoansService {
         orgId,
         actorUserId,
         action: 'circulation.issue',
-        entity: 'Loan',
-        entityId: loan.id,
-        after: { copyId: copy.id, barcode: dto.barcode, memberId: member.id, dueAt: decision.dueAt.toISOString() },
+        entity: 'Issue',
+        entityId: issue.id,
+        after: { copyId: copy.id, accessionNumber: dto.accessionNumber, memberId: member.id, dueAt: decision.dueAt.toISOString() },
       },
     });
 
-    return { loan, collectedHoldId };
+    return { issue, collectedHoldId };
   }
 
   /**
-   * One transaction: resolve the active loan for the scanned barcode -> set
+   * One transaction: resolve the active issue for the scanned accessionNumber -> set
    * `returnedAt` -> `computeFine` (creating a `Fine` row only when the
    * amount is > 0) -> promote the title's next pending hold onto this copy,
    * or set `Copy.status = AVAILABLE` if there is none.
    */
-  async returnLoan(
+  async returnBook(
     tx: LibraryTx,
     orgId: string,
-    dto: ReturnLoanDto,
+    dto: ReturnBookDto,
     actorUserId: string,
     now: Date,
     allowedBranches: string[],
   ): Promise<ReturnResult> {
-    const copy = await tx.copy.findUnique({ where: { orgId_barcode: { orgId, barcode: dto.barcode } } });
+    const copy = await tx.copy.findUnique({ where: { orgId_accessionNumber: { orgId, accessionNumber: dto.accessionNumber } } });
     if (!copy) throw new NotFoundException('Copy not found');
 
-    const loan = await tx.loan.findFirst({ where: { copyId: copy.id, returnedAt: null } });
-    if (!loan) throw new NotFoundException('No active loan for this copy');
+    const issue = await tx.issue.findFirst({ where: { copyId: copy.id, returnedAt: null } });
+    if (!issue) throw new NotFoundException('No active issue for this copy');
     // Checked against the LOAN's own branchId (the branch it was issued
     // at), not the copy's — they are always equal in this phase (nothing
-    // moves a copy between branches after issue), but the loan row is the
+    // moves a copy between branches after issue), but the issue row is the
     // one this action actually mutates, so that's what a staff user's scope
     // is checked against.
-    assertBranchInScope(loan.branchId, allowedBranches);
+    assertBranchInScope(issue.branchId, allowedBranches);
 
-    // Loan.member is onDelete: Restrict, so this row is guaranteed to exist
-    // for any real Loan — this findUnique is for memberType (the fine
-    // policy lookup key), not an FK-safety check the way IssueLoanDto's
+    // Issue.member is onDelete: Restrict, so this row is guaranteed to exist
+    // for any real Issue — this findUnique is for memberType (the fine
+    // policy lookup key), not an FK-safety check the way IssueBookDto's
     // memberId lookup above is (that one is client-supplied; this one is
     // read off an already-org-scoped row on the same `tx`).
-    const member = await tx.member.findUnique({ where: { id: loan.memberId } });
+    const member = await tx.member.findUnique({ where: { id: issue.memberId } });
     if (!member) throw new NotFoundException('Member not found');
 
-    const policy = await loadPolicy(tx, orgId, member.memberType, loan.branchId);
-    const { days, amount } = computeFine(policy, loan.dueAt, now);
+    const policy = await loadPolicy(tx, orgId, member.memberType, issue.branchId);
+    const { days, amount } = computeFine(policy, issue.dueAt, now);
 
-    const returnedLoan = await tx.loan.update({
-      where: { id: loan.id },
+    const returnedLoan = await tx.issue.update({
+      where: { id: issue.id },
       data: { returnedAt: now, returnedByUserId: actorUserId, status: 'RETURNED' },
     });
 
@@ -259,7 +259,7 @@ export class LoansService {
         data: {
           orgId,
           memberId: member.id,
-          loanId: loan.id,
+          issueId: issue.id,
           kind: 'OVERDUE',
           status: 'OPEN',
           amount: new Prisma.Decimal(amount),
@@ -273,15 +273,15 @@ export class LoansService {
         orgId,
         actorUserId,
         action: 'circulation.return',
-        entity: 'Loan',
-        entityId: loan.id,
-        after: { copyId: copy.id, barcode: dto.barcode, memberId: member.id, overdueDays: days, fineAmount: amount },
+        entity: 'Issue',
+        entityId: issue.id,
+        after: { copyId: copy.id, accessionNumber: dto.accessionNumber, memberId: member.id, overdueDays: days, fineAmount: amount },
       },
     });
 
     const promotion = await this.promoteOrRelease(tx, orgId, copy.id, copy.branchId, copy.titleId, actorUserId, now);
 
-    return { loan: returnedLoan, fine, promotedHoldId: promotion.promotedHoldId, copyStatus: promotion.copyStatus };
+    return { issue: returnedLoan, fine, promotedHoldId: promotion.promotedHoldId, copyStatus: promotion.copyStatus };
   }
 
   /**

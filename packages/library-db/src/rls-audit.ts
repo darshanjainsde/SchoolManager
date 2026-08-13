@@ -61,7 +61,7 @@ export async function auditRlsCoverage(client: PrismaClient): Promise<RlsAuditRe
         c.relrowsecurity
         AND c.relforcerowsecurity
         AND EXISTS (
-          -- A policy existing is not enough: CREATE POLICY p ON "Loan"
+          -- A policy existing is not enough: CREATE POLICY p ON "Issue"
           -- USING (true) is forced, policied, and leaks every tenant. The
           -- USING expression must actually reference app.current_org, and a
           -- WITH CHECK clause must be present (NULL polwithcheck means

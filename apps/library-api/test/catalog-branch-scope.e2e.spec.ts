@@ -16,7 +16,7 @@ const describeLive = LIVE ? describe : describe.skip;
  * Review finding 2 (catalogue, Important): BranchScopeGuard only looked at
  * `req.params`/`req.query`, but every catalogue route that carries a
  * `branchId` at all puts it in the BODY (`AddCopyDto.branchId`), and
- * `PATCH /catalog/copies/:id` / `GET /catalog/copies/by-barcode/:barcode`
+ * `PATCH /catalog/copies/:id` / `GET /catalog/copies/by-accessionNumber/:accessionNumber`
  * carry no `branchId` anywhere in the request — the branch is a property of
  * the existing Copy row. So `requested` was always `undefined` and the guard
  * always returned `true`: a LIBRARIAN scoped to one branch could add/update
@@ -95,12 +95,12 @@ describeLive('catalogue — branch scope is enforced on all four copy routes', (
     await cleanupOrgs([orgA.id, orgB.id]);
   });
 
-  const addCopy = (token: string, branchId: string, barcode: string) =>
+  const addCopy = (token: string, branchId: string, accessionNumber: string) =>
     request(app.getHttpServer())
       .post(`/catalog/titles/${titleA.id}/copies`)
       .set('X-Library-Host', host(orgA))
       .set('Authorization', `Bearer ${token}`)
-      .send({ branchId, barcode });
+      .send({ branchId, accessionNumber });
 
   it('denies a librarian scoped to branch A adding a copy to branch B (body branchId)', async () => {
     const res = await addCopy(scopedToken, branchB.id, `BRANCH-SCOPE-DENY-${Date.now()}`);
@@ -120,14 +120,14 @@ describeLive('catalogue — branch scope is enforced on all four copy routes', (
   });
 
   describe('routes that carry no branchId in the request at all', () => {
-    let copyInBranchA: { id: string; barcode: string };
-    let copyInBranchB: { id: string; barcode: string };
+    let copyInBranchA: { id: string; accessionNumber: string };
+    let copyInBranchB: { id: string; accessionNumber: string };
 
     beforeAll(async () => {
       const createdA = await addCopy(allBranchesToken, orgA.branchId, `BRANCH-SCOPE-FIXTURE-A-${Date.now()}`);
       const createdB = await addCopy(allBranchesToken, branchB.id, `BRANCH-SCOPE-FIXTURE-B-${Date.now()}`);
-      copyInBranchA = { id: createdA.body.id, barcode: createdA.body.barcode };
-      copyInBranchB = { id: createdB.body.id, barcode: createdB.body.barcode };
+      copyInBranchA = { id: createdA.body.id, accessionNumber: createdA.body.accessionNumber };
+      copyInBranchB = { id: createdB.body.id, accessionNumber: createdB.body.accessionNumber };
     });
 
     it('denies a librarian scoped to branch A updating a copy that lives in branch B', async () => {
@@ -159,17 +159,17 @@ describeLive('catalogue — branch scope is enforced on all four copy routes', (
       expect(res.body.shelf).toBe('B1');
     });
 
-    it('denies a librarian scoped to branch A reading a branch-B copy by barcode', async () => {
+    it('denies a librarian scoped to branch A reading a branch-B copy by accessionNumber', async () => {
       const res = await request(app.getHttpServer())
-        .get(`/catalog/copies/by-barcode/${copyInBranchB.barcode}`)
+        .get(`/catalog/copies/by-accessionNumber/${copyInBranchB.accessionNumber}`)
         .set('X-Library-Host', host(orgA))
         .set('Authorization', `Bearer ${scopedToken}`);
       expect(res.status).toBe(403);
     });
 
-    it('allows a librarian scoped to branch A reading a branch-A copy by barcode', async () => {
+    it('allows a librarian scoped to branch A reading a branch-A copy by accessionNumber', async () => {
       const res = await request(app.getHttpServer())
-        .get(`/catalog/copies/by-barcode/${copyInBranchA.barcode}`)
+        .get(`/catalog/copies/by-accessionNumber/${copyInBranchA.accessionNumber}`)
         .set('X-Library-Host', host(orgA))
         .set('Authorization', `Bearer ${scopedToken}`);
       expect(res.status).toBeLessThan(400);

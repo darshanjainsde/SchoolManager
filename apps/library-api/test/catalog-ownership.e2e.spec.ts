@@ -59,7 +59,7 @@ describeLive('catalogue — client-supplied foreign keys are checked for org own
         withOrg(orgA.id, (tx: LibraryTx) =>
           copies.add(tx, orgA.id, titleInOrgA.id, {
             branchId: orgB.branchId,
-            barcode: `OWNERSHIP-PROBE-BRANCH-BAD-${Date.now()}`,
+            accessionNumber: `OWNERSHIP-PROBE-BRANCH-BAD-${Date.now()}`,
           }),
         ),
       ).rejects.toThrow(NotFoundException);
@@ -69,7 +69,7 @@ describeLive('catalogue — client-supplied foreign keys are checked for org own
       const copy = await withOrg(orgA.id, (tx: LibraryTx) =>
         copies.add(tx, orgA.id, titleInOrgA.id, {
           branchId: orgA.branchId,
-          barcode: `OWNERSHIP-PROBE-BRANCH-OK-${Date.now()}`,
+          accessionNumber: `OWNERSHIP-PROBE-BRANCH-OK-${Date.now()}`,
         }),
       );
       expect(copy?.branchId).toBe(orgA.branchId);

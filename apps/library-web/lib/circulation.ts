@@ -2,7 +2,7 @@ import { apiFetch } from './api';
 import type { MemberCard } from './members';
 
 /**
- * Transcribed from the API's own `loans.service.ts` return shapes and
+ * Transcribed from the API's own `issues.service.ts` return shapes and
  * `dto.ts`, not recalled. Money arrives as a string on some paths and a
  * number on others (Prisma `Decimal.toJSON()` returns a string), so every
  * amount is typed `string | number` and normalised once in `rupees()` —
@@ -11,7 +11,7 @@ import type { MemberCard } from './members';
  */
 export type Money = string | number;
 
-export interface Loan {
+export interface Issue {
   id: string;
   copyId: string;
   memberId: string;
@@ -26,7 +26,7 @@ export interface Loan {
 export interface Fine {
   id: string;
   memberId: string;
-  loanId: string | null;
+  issueId: string | null;
   kind: 'OVERDUE' | 'DAMAGE' | 'LOST' | 'OTHER';
   amount: Money;
   waivedAmount: Money;
@@ -34,12 +34,12 @@ export interface Fine {
 }
 
 export interface IssueResult {
-  loan: Loan;
+  issue: Issue;
   collectedHoldId: string | null;
 }
 
 export interface ReturnResult {
-  loan: Loan;
+  issue: Issue;
   fine: Fine | null;
   promotedHoldId: string | null;
   copyStatus: 'AVAILABLE' | 'ON_HOLD_SHELF';
@@ -51,43 +51,43 @@ export interface Ctx {
 }
 
 /**
- * A barcode scanner fires twice more often than anyone expects, so every desk
+ * A accessionNumber scanner fires twice more often than anyone expects, so every desk
  * write carries an Idempotency-Key. Worth knowing what that does and does not
  * buy: the interceptor converges the RESPONSE, but two genuinely concurrent
  * requests can still both run the handler — what actually prevents a double
- * loan is the `loan_one_active_per_copy` partial unique index in the database.
+ * issue is the `issue_one_active_per_copy` partial unique index in the database.
  */
 function key(): string {
   return crypto.randomUUID();
 }
 
-export function issue(ctx: Ctx, barcode: string, memberId: string): Promise<IssueResult> {
+export function issue(ctx: Ctx, accessionNumber: string, memberId: string): Promise<IssueResult> {
   return apiFetch<IssueResult>('/circulation/issue', {
     method: 'POST',
     host: ctx.host,
     token: ctx.token,
     idempotencyKey: key(),
-    body: JSON.stringify({ barcode, memberId }),
+    body: JSON.stringify({ accessionNumber, memberId }),
   });
 }
 
-export function returnLoan(ctx: Ctx, barcode: string): Promise<ReturnResult> {
+export function returnBook(ctx: Ctx, accessionNumber: string): Promise<ReturnResult> {
   return apiFetch<ReturnResult>('/circulation/return', {
     method: 'POST',
     host: ctx.host,
     token: ctx.token,
     idempotencyKey: key(),
-    body: JSON.stringify({ barcode }),
+    body: JSON.stringify({ accessionNumber }),
   });
 }
 
-export function renew(ctx: Ctx, barcode: string): Promise<{ loan: Loan }> {
-  return apiFetch<{ loan: Loan }>('/circulation/renew', {
+export function renew(ctx: Ctx, accessionNumber: string): Promise<{ issue: Issue }> {
+  return apiFetch<{ issue: Issue }>('/circulation/renew', {
     method: 'POST',
     host: ctx.host,
     token: ctx.token,
     idempotencyKey: key(),
-    body: JSON.stringify({ barcode }),
+    body: JSON.stringify({ accessionNumber }),
   });
 }
 
@@ -115,7 +115,7 @@ export function daysUntil(dueAt: string, now = new Date()): number {
 
 export type DueTone = 'ok' | 'soon' | 'over';
 
-/** Mirrors policy.ts's loanState bands so the UI and the engine agree. */
+/** Mirrors policy.ts's issueState bands so the UI and the engine agree. */
 export function dueTone(days: number): DueTone {
   if (days < 0) return 'over';
   if (days <= 3) return 'soon';
@@ -124,7 +124,7 @@ export function dueTone(days: number): DueTone {
 
 /* ------------------------------------------------------------------
    Desk lists — holds, overdue, fines
-   Shapes transcribed from the API's HoldListItem / OverdueLoanItem /
+   Shapes transcribed from the API's HoldListItem / OverdueIssueItem /
    FineListItem (circulation/internal/{holds,fines}.service.ts).
    ------------------------------------------------------------------ */
 
@@ -156,13 +156,13 @@ export interface OverdueRow {
   daysOverdue: number;
   member: MemberCard;
   title: TitleRef;
-  barcode: string;
+  accessionNumber: string;
 }
 
 export interface FineRow {
   id: string;
   memberId: string;
-  loanId: string | null;
+  issueId: string | null;
   kind: 'OVERDUE' | 'DAMAGE' | 'LOST' | 'OTHER';
   status: 'OPEN' | 'PAID' | 'WAIVED' | 'PARTIAL';
   amount: Money;
@@ -170,8 +170,8 @@ export interface FineRow {
   waivedAmount: Money | null;
   createdAt: string;
   member: MemberCard;
-  /** Null for a fine raised without a loan behind it (damage, lost item). */
-  loan: { copy: { title: TitleRef } } | null;
+  /** Null for a fine raised without a issue behind it (damage, lost item). */
+  issue: { copy: { title: TitleRef } } | null;
 }
 
 export function listHolds(ctx: Ctx, params: { status?: string; limit?: number } = {}): Promise<HoldRow[]> {

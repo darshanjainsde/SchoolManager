@@ -7,7 +7,7 @@ import { Prisma } from '@library/db';
  * (or a Postgres constraint message) leak out as an unhandled 500.
  *
  *   P2025 — record to update/delete not found            -> 404
- *   P2002 — unique constraint violated (isbn13, barcode,
+ *   P2002 — unique constraint violated (isbn13, accessionNumber,
  *           Author/Category sortName/name)                -> 409
  *   P2003 — foreign key violated (e.g. deleting a title
  *           that still has copies, or a copy/category

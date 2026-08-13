@@ -95,7 +95,7 @@ export default function OverduePage() {
                       </td>
                       <td>
                         {r.title.title}
-                        <span className="lbx-sub lbx-mono">{r.barcode}</span>
+                        <span className="lbx-sub lbx-mono">{r.accessionNumber}</span>
                       </td>
                       <td className="lbx-mono">
                         {new Date(r.dueAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}

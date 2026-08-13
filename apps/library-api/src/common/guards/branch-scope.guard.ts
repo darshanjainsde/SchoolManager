@@ -9,10 +9,10 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@
  * query string, or the body (e.g. `AddCopyDto.branchId`). Some routes act on
  * an existing resource whose branch is a property of a row already in the
  * database, not of the request (`PATCH /catalog/copies/:id`,
- * `GET /catalog/copies/by-barcode/:barcode`) — this guard cannot know that
+ * `GET /catalog/copies/by-accessionNumber/:accessionNumber`) — this guard cannot know that
  * without a database read, so those routes enforce branch scope themselves,
  * in the service, after loading the row (see CopiesService.update /
- * getByBarcode).
+ * getByAccessionNumber).
  */
 @Injectable()
 export class BranchScopeGuard implements CanActivate {

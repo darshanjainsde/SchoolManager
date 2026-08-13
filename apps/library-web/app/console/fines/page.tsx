@@ -132,7 +132,7 @@ export default function FinesPage() {
                         </span>
                       </div>
                     </td>
-                    <td>{f.loan?.copy.title.title ?? <span style={{ color: 'var(--lb-ink-3)' }}>—</span>}</td>
+                    <td>{f.issue?.copy.title.title ?? <span style={{ color: 'var(--lb-ink-3)' }}>—</span>}</td>
                     <td>
                       <span className="lbx-pill warn">{f.kind.toLowerCase()}</span>
                     </td>
@@ -162,7 +162,7 @@ export default function FinesPage() {
             <button className="lbx-btn ghost" onClick={() => setWaiving(null)}>Cancel</button>
           </div>
           <p className="lbx-au">
-            {memberName(waiving.member)} · {waiving.loan?.copy.title.title ?? 'no book attached'}
+            {memberName(waiving.member)} · {waiving.issue?.copy.title.title ?? 'no book attached'}
           </p>
           <div className="lbx-field" style={{ marginTop: '.6rem' }}>
             <label htmlFor="reason">Reason</label>

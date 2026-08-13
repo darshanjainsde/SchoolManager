@@ -18,7 +18,7 @@ const FOURTEEN_DAYS_OUT = new Date(Date.now() + 14 * MS_PER_DAY);
 
 const POLICY: Policy = {
   maxBooks: 5,
-  loanDays: 14,
+  issueDays: 14,
   renewLimit: 2,
   renewDays: 14,
   finePerDay: 5,
@@ -66,12 +66,12 @@ function seedTitle(orgId: string, label: string) {
   return getLibraryPlatformPrisma().title.create({ data: { orgId, title: `Renew/Holds E2E — ${label}` } });
 }
 
-function seedCopy(orgId: string, branchId: string, titleId: string, barcode: string) {
-  return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, barcode } });
+function seedCopy(orgId: string, branchId: string, titleId: string, accessionNumber: string) {
+  return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, accessionNumber } });
 }
 
 function seedActiveLoan(orgId: string, copyId: string, branchId: string, memberId: string, dueAt: Date) {
-  return getLibraryPlatformPrisma().loan.create({ data: { orgId, copyId, branchId, memberId, dueAt } });
+  return getLibraryPlatformPrisma().issue.create({ data: { orgId, copyId, branchId, memberId, dueAt } });
 }
 
 async function cleanup(orgId: string): Promise<void> {
@@ -104,33 +104,33 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
     });
     afterAll(() => cleanup(org.orgId));
 
-    const renew = (barcode: string) =>
+    const renew = (accessionNumber: string) =>
       request(app.getHttpServer())
         .post('/circulation/renew')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ barcode });
+        .send({ accessionNumber });
 
     it('extends dueAt by renewDays and increments renewCount', async () => {
       const member = await seedMember(org.orgId, org.branchId, `RENEW-OK-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'renew-ok');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `RENEW-OK-${Date.now()}`);
-      const loan = await seedActiveLoan(org.orgId, copy.id, org.branchId, member.id, FOURTEEN_DAYS_OUT);
+      const issue = await seedActiveLoan(org.orgId, copy.id, org.branchId, member.id, FOURTEEN_DAYS_OUT);
 
       const before = Date.now();
-      const res = await renew(copy.barcode);
+      const res = await renew(copy.accessionNumber);
       const after = Date.now();
 
       expect(res.status).toBe(201);
-      expect(res.body.loan.renewCount).toBe(1);
-      const newDueAt = new Date(res.body.loan.dueAt).getTime();
+      expect(res.body.issue.renewCount).toBe(1);
+      const newDueAt = new Date(res.body.issue.dueAt).getTime();
       // newDueAt = "now" (server-side, read once per request) + renewDays —
       // bracket it against our own before/after wall-clock reads rather than
       // asserting an exact value, since we don't control the server's clock.
       expect(newDueAt).toBeGreaterThanOrEqual(before + POLICY.renewDays * MS_PER_DAY - 2000);
       expect(newDueAt).toBeLessThanOrEqual(after + POLICY.renewDays * MS_PER_DAY + 2000);
 
-      const dbLoan = await getLibraryPlatformPrisma().loan.findUnique({ where: { id: loan.id } });
+      const dbLoan = await getLibraryPlatformPrisma().issue.findUnique({ where: { id: issue.id } });
       expect(dbLoan?.renewCount).toBe(1);
     });
 
@@ -148,7 +148,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
         .send({ titleId: title.id, memberId: waiter.id });
       expect(holdRes.status).toBe(201);
 
-      const res = await renew(copy.barcode);
+      const res = await renew(copy.accessionNumber);
       expect(res.status).toBe(403);
       expect(res.body.reason).toBe('HAS_HOLDS');
     });
@@ -157,29 +157,29 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
       const member = await seedMember(org.orgId, org.branchId, `RENEW-LIM-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'renew-limit');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `RENEW-LIM-${Date.now()}`);
-      const loan = await seedActiveLoan(org.orgId, copy.id, org.branchId, member.id, FOURTEEN_DAYS_OUT);
-      await getLibraryPlatformPrisma().loan.update({ where: { id: loan.id }, data: { renewCount: POLICY.renewLimit } });
+      const issue = await seedActiveLoan(org.orgId, copy.id, org.branchId, member.id, FOURTEEN_DAYS_OUT);
+      await getLibraryPlatformPrisma().issue.update({ where: { id: issue.id }, data: { renewCount: POLICY.renewLimit } });
 
-      const res = await renew(copy.barcode);
+      const res = await renew(copy.accessionNumber);
       expect(res.status).toBe(403);
       expect(res.body.reason).toBe('RENEW_LIMIT');
     });
 
-    it('is refused (403 ALREADY_OVERDUE) once the loan is already overdue', async () => {
+    it('is refused (403 ALREADY_OVERDUE) once the issue is already overdue', async () => {
       const member = await seedMember(org.orgId, org.branchId, `RENEW-OD-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'renew-overdue');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `RENEW-OD-${Date.now()}`);
       await seedActiveLoan(org.orgId, copy.id, org.branchId, member.id, new Date(Date.now() - MS_PER_DAY));
 
-      const res = await renew(copy.barcode);
+      const res = await renew(copy.accessionNumber);
       expect(res.status).toBe(403);
       expect(res.body.reason).toBe('ALREADY_OVERDUE');
     });
 
-    it('404s when the barcode has no active loan', async () => {
-      const title = await seedTitle(org.orgId, 'renew-no-loan');
+    it('404s when the accessionNumber has no active issue', async () => {
+      const title = await seedTitle(org.orgId, 'renew-no-issue');
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `RENEW-NOLOAN-${Date.now()}`);
-      const res = await renew(copy.barcode);
+      const res = await renew(copy.accessionNumber);
       expect(res.status).toBe(404);
     });
   });
@@ -363,7 +363,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ barcode: copy.barcode });
+        .send({ accessionNumber: copy.accessionNumber });
       expect(returnRes.body.promotedHoldId).toBe(holdId);
       expect(returnRes.body.copyStatus).toBe('ON_HOLD_SHELF');
 
@@ -389,7 +389,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
    *      hold2 (member2) to READY.
    *   4. hold2's shelf window is made to have elapsed (backdating
    *      `expiresAt` directly, the same idiom this suite's sibling e2e uses
-   *      for `Loan.dueAt` — there is no clock injected through HTTP; the
+   *      for `Issue.dueAt` — there is no clock injected through HTTP; the
    *      controller reads `new Date()` once per request, by design).
    *   5. Return copy C -> the sweep in `promoteOrRelease` finds hold2 stale,
    *      expires it and releases copy B to AVAILABLE, then promotes hold3
@@ -404,9 +404,9 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
     let borrowerB: { id: string };
     let borrowerC: { id: string };
     let title: { id: string };
-    let copyA: { id: string; barcode: string };
-    let copyB: { id: string; barcode: string };
-    let copyC: { id: string; barcode: string };
+    let copyA: { id: string; accessionNumber: string };
+    let copyB: { id: string; accessionNumber: string };
+    let copyC: { id: string; accessionNumber: string };
     let hold1Id: string;
     let hold2Id: string;
     let hold3Id: string;
@@ -454,7 +454,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
     });
 
     it('step 1: returning copy A promotes exactly hold1 — hold2 is untouched', async () => {
-      const res = await post('/circulation/return', { barcode: copyA.barcode });
+      const res = await post('/circulation/return', { accessionNumber: copyA.accessionNumber });
       expect(res.status).toBe(201);
       expect(res.body.promotedHoldId).toBe(hold1Id);
       expect(res.body.copyStatus).toBe('ON_HOLD_SHELF');
@@ -470,7 +470,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
     });
 
     it('step 2: member1 collects copy A — hold1 -> COLLECTED', async () => {
-      const res = await post('/circulation/issue', { barcode: copyA.barcode, memberId: member1.id });
+      const res = await post('/circulation/issue', { accessionNumber: copyA.accessionNumber, memberId: member1.id });
       expect(res.status).toBe(201);
       expect(res.body.collectedHoldId).toBe(hold1Id);
 
@@ -481,7 +481,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
     });
 
     it('step 3: returning copy B promotes hold2 (hold1 is out of the queue)', async () => {
-      const res = await post('/circulation/return', { barcode: copyB.barcode });
+      const res = await post('/circulation/return', { accessionNumber: copyB.accessionNumber });
       expect(res.status).toBe(201);
       expect(res.body.promotedHoldId).toBe(hold2Id);
       expect(res.body.copyStatus).toBe('ON_HOLD_SHELF');
@@ -510,7 +510,7 @@ describeLive('circulation desk — renew and holds (Task 9)', () => {
     });
 
     it('step 5: returning copy C expires the stale hold2, releases copy B, and promotes hold3 onto copy C', async () => {
-      const res = await post('/circulation/return', { barcode: copyC.barcode });
+      const res = await post('/circulation/return', { accessionNumber: copyC.accessionNumber });
       expect(res.status).toBe(201);
       expect(res.body.promotedHoldId).toBe(hold3Id);
       expect(res.body.copyStatus).toBe('ON_HOLD_SHELF');

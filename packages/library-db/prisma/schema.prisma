@@ -93,7 +93,7 @@ model LibraryOrg {
   categories Category[]
   copies     Copy[]
   policies   CirculationPolicy[]
-  loans      Loan[]
+  issues     Issue[]
   holds      Hold[]
   fines      Fine[]
   outbox     NotificationOutbox[]
@@ -159,7 +159,7 @@ model Branch {
   org      LibraryOrg          @relation(fields: [orgId], references: [id], onDelete: Cascade)
   members  Member[]
   copies   Copy[]
-  loans    Loan[]
+  issues   Issue[]
   holds    Hold[]
   policies CirculationPolicy[]
 
@@ -186,8 +186,8 @@ model LibUser {
   org           LibraryOrg     @relation(fields: [orgId], references: [id], onDelete: Cascade)
   member        Member?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
   refresh       RefreshToken[]
-  loansIssued   Loan[]         @relation("LoanIssuedBy")
-  loansReturned Loan[]         @relation("LoanReturnedBy")
+  issuesMade    Issue[]         @relation("IssueIssuedBy")
+  issuesTakenBack Issue[]         @relation("IssueReturnedBy")
   finesWaived   Fine[]         @relation("FineWaivedBy")
 
   @@unique([orgId, email])
@@ -222,7 +222,7 @@ model Member {
   org        LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
   homeBranch Branch?    @relation(fields: [homeBranchId], references: [id], onDelete: SetNull)
   login      LibUser?
-  loans      Loan[]
+  issues     Issue[]
   holds      Hold[]
   fines      Fine[]
 
@@ -433,8 +433,16 @@ model Copy {
   orgId           String        @db.Uuid
   titleId         String        @db.Uuid
   branchId        String        @db.Uuid
-  barcode         String
-  accessionNumber String?
+  /// The number written inside the front cover, by hand, permanently. It is
+  /// unique per PHYSICAL COPY and is the only identifier this service uses —
+  /// there is deliberately no barcode, because a school should not have to buy
+  /// and maintain scanner hardware to lend a book. Sequential per library, which
+  /// is what lets stock verification accept a shelf as a RANGE.
+  ///
+  /// Never reused. A copy written off as lost keeps its number for good and a
+  /// replacement is entered under the next one, so the register reads as a
+  /// history rather than a stock list — which is what an auditor checks.
+  accessionNumber String
   shelf           String?
   condition       CopyCondition @default(GOOD)
   acquiredAt      DateTime?
@@ -450,15 +458,15 @@ model Copy {
   /// Restrict, not Cascade: same reasoning for a branch that still holds
   /// stock.
   branch Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  loans  Loan[]
+  issues Issue[]
   holds  Hold[]     @relation("HoldReadyCopy")
 
-  @@unique([orgId, barcode])
+  @@unique([orgId, accessionNumber])
   @@index([titleId, status])
   @@index([orgId, branchId, status])
 }
 
-enum LoanStatus {
+enum IssueStatus {
   ACTIVE
   RETURNED
   LOST
@@ -527,7 +535,7 @@ model CirculationPolicy {
   branchId           String?    @db.Uuid
   memberType         MemberType
   maxBooks           Int
-  loanDays           Int
+  issueDays          Int
   renewLimit         Int
   renewDays          Int
   finePerDay         Decimal    @db.Decimal(10, 2)
@@ -554,26 +562,26 @@ model CirculationPolicy {
   @@index([orgId])
 }
 
-model Loan {
+model Issue {
   id               String     @id @default(uuid()) @db.Uuid
   orgId            String     @db.Uuid
   copyId           String     @db.Uuid
   /// Denormalized from `Copy.branchId` at issue time (LoansService.issue) so
   /// "which branch is this loan at" is answerable directly, without a join
   /// through Copy, on every branch-scoped read (BranchScopeGuard,
-  /// listOverdue, dayReport). NOT NULL: unlike Hold.branchId, a Loan always
+  /// listOverdue, dayReport). NOT NULL: unlike Hold.branchId, an Issue always
   /// has a copy from the moment it exists, so there is no "not yet known"
   /// state to represent.
   branchId         String     @db.Uuid
   memberId         String     @db.Uuid
   issuedAt         DateTime   @default(now())
   dueAt            DateTime
-  /// null while the loan is open. OVERDUE is never stored — see LoanStatus.
+  /// null while the issue is open. LATE is never stored — see IssueStatus.
   returnedAt       DateTime?
   renewCount       Int        @default(0)
   issuedByUserId   String?    @db.Uuid
   returnedByUserId String?    @db.Uuid
-  status           LoanStatus @default(ACTIVE)
+  status           IssueStatus @default(ACTIVE)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
@@ -584,8 +592,8 @@ model Loan {
   /// must not vanish out from under it.
   branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
   member     Member     @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  issuedBy   LibUser?   @relation("LoanIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
-  returnedBy LibUser?   @relation("LoanReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
+  issuedBy   LibUser?   @relation("IssueIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
+  returnedBy LibUser?   @relation("IssueReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
   fines      Fine[]
 
   @@index([orgId])
@@ -603,7 +611,7 @@ model Hold {
   /// it (mirrors readyCopyId/readyAt, set together in
   /// LoansService.promoteOrRelease). A still-PENDING hold has no branch: it
   /// is a place in line for a Title, fillable by any branch's copy, so this
-  /// stays null until promotion — unlike Loan.branchId, which is set at
+  /// stays null until promotion — unlike Issue.branchId, which is set at
   /// issue and therefore NOT NULL.
   branchId      String?    @db.Uuid
   memberId      String     @db.Uuid
@@ -642,7 +650,7 @@ model Hold {
   title     Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)
   member    Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
   readyCopy Copy?      @relation("HoldReadyCopy", fields: [readyCopyId], references: [id], onDelete: SetNull)
-  /// Restrict, same reasoning as Loan.branch — a branch a hold was ever
+  /// Restrict, same reasoning as Issue.branch — a branch a hold was ever
   /// promoted onto must not vanish out from under that history.
   branch    Branch?    @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
@@ -654,7 +662,7 @@ model Fine {
   id             String     @id @default(uuid()) @db.Uuid
   orgId          String     @db.Uuid
   memberId       String     @db.Uuid
-  loanId         String?    @db.Uuid
+  issueId        String?    @db.Uuid
   kind           FineKind
   status         FineStatus @default(OPEN)
   amount         Decimal    @db.Decimal(10, 2)
@@ -676,12 +684,12 @@ model Fine {
   org      LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
   /// Restrict, not Cascade (fixed per review finding 4): loanId is nullable
   /// and kind includes DAMAGE/OTHER, so a member can carry an OPEN fine with
-  /// no Loan behind it at all. Cascade would let deleting that member
+  /// no Issue behind it at all. Cascade would let deleting that member
   /// silently destroy a real financial record — money genuinely owed —
   /// exactly the "fails quietly" failure mode Copy.title's Restrict already
   /// exists to prevent for physical stock.
   member   Member     @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  loan     Loan?      @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  issue    Issue?     @relation(fields: [issueId], references: [id], onDelete: SetNull)
   /// SetNull, not Restrict: the waiving LibUser leaving/being deleted must
   /// not block user deletion, and losing "who waived it" is acceptable —
   /// the money itself (waivedAmount/waivedReason) stays on the row either way.
@@ -701,7 +709,7 @@ enum NotificationChannel {
 /// writes a `HOLD_READY` row here on hold promotion — nothing drains this
 /// table until Phase 4's outbox drain cron exists (see the no-scheduler rule,
 /// §6.3 of the design doc: a missed drain delays a message, it can never
-/// corrupt a Loan/Hold/Fine, because none of THEIR state depends on this
+/// corrupt an Issue/Hold/Fine, because none of THEIR state depends on this
 /// table ever being read). `templateKey` is a plain string, not an enum,
 /// because `NotificationTemplate` (the model that would own that
 /// enumeration) is itself a Phase 4 table — pinning the key values into this

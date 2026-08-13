@@ -62,7 +62,7 @@ describeLive('catalogue cross-org isolation (Title, Copy, TitleAuthor)', () => {
     titleA = await prisma.title.create({ data: { orgId: orgA.id, title: 'Org A Title' } });
     titleB = await prisma.title.create({ data: { orgId: orgB.id, title: 'Org B Title' } });
     copyA = await prisma.copy.create({
-      data: { orgId: orgA.id, titleId: titleA.id, branchId: orgA.branchId, barcode: 'A-0001' },
+      data: { orgId: orgA.id, titleId: titleA.id, branchId: orgA.branchId, accessionNumber: 'A-0001' },
     });
 
     authorB = await prisma.author.create({ data: { orgId: orgB.id, name: 'B Author', sortName: 'author, b' } });
@@ -130,7 +130,7 @@ describeLive('catalogue cross-org isolation (Title, Copy, TitleAuthor)', () => {
     it('cannot insert a copy belonging to another org', async () => {
       await expect(
         withOrg(orgB.id, (tx) =>
-          tx.copy.create({ data: { orgId: orgA.id, titleId: titleA.id, branchId: orgA.branchId, barcode: 'SMUG' } })),
+          tx.copy.create({ data: { orgId: orgA.id, titleId: titleA.id, branchId: orgA.branchId, accessionNumber: 'SMUG' } })),
       ).rejects.toThrow();
     });
 
@@ -187,7 +187,7 @@ describeLive('catalogue cross-org isolation (Title, Copy, TitleAuthor)', () => {
   });
 });
 
-describeLive('circulation cross-org isolation (Loan)', () => {
+describeLive('circulation cross-org isolation (Issue)', () => {
   let orgA: SeededOrg;
   let orgB: SeededOrg;
   let titleB: { id: string };
@@ -200,9 +200,9 @@ describeLive('circulation cross-org isolation (Loan)', () => {
 
     titleB = await prisma.title.create({ data: { orgId: orgB.id, title: 'Org B Circulation Title' } });
     copyB = await prisma.copy.create({
-      data: { orgId: orgB.id, titleId: titleB.id, branchId: orgB.branchId, barcode: 'B-0001' },
+      data: { orgId: orgB.id, titleId: titleB.id, branchId: orgB.branchId, accessionNumber: 'B-0001' },
     });
-    loanB = await prisma.loan.create({
+    loanB = await prisma.issue.create({
       data: {
         orgId: orgB.id,
         copyId: copyB.id,
@@ -215,28 +215,28 @@ describeLive('circulation cross-org isolation (Loan)', () => {
 
   afterAll(async () => { await cleanupOrgs([orgA.id, orgB.id]); });
 
-  it("cannot read another org's loan even when asked for it by id", async () => {
-    const found = await withOrg(orgA.id, (tx) => tx.loan.findUnique({ where: { id: loanB.id } }));
+  it("cannot read another org's issue even when asked for it by id", async () => {
+    const found = await withOrg(orgA.id, (tx) => tx.issue.findUnique({ where: { id: loanB.id } }));
     expect(found).toBeNull();
   });
 
-  it("cannot list another org's loans", async () => {
-    const loans = await withOrg(orgA.id, (tx) => tx.loan.findMany());
-    expect(loans.map((l) => l.id)).not.toContain(loanB.id);
+  it("cannot list another org's issues", async () => {
+    const issues = await withOrg(orgA.id, (tx) => tx.issue.findMany());
+    expect(issues.map((l) => l.id)).not.toContain(loanB.id);
   });
 
-  it("cannot update another org's loan", async () => {
+  it("cannot update another org's issue", async () => {
     await expect(
-      withOrg(orgA.id, (tx) => tx.loan.update({ where: { id: loanB.id }, data: { renewCount: 99 } })),
+      withOrg(orgA.id, (tx) => tx.issue.update({ where: { id: loanB.id }, data: { renewCount: 99 } })),
     ).rejects.toThrow();
-    const untouched = await withOrg(orgB.id, (tx) => tx.loan.findUnique({ where: { id: loanB.id } }));
+    const untouched = await withOrg(orgB.id, (tx) => tx.issue.findUnique({ where: { id: loanB.id } }));
     expect(untouched?.renewCount).toBe(0);
   });
 
-  it('cannot insert a loan belonging to another org', async () => {
+  it('cannot insert a issue belonging to another org', async () => {
     await expect(
       withOrg(orgA.id, (tx) =>
-        tx.loan.create({
+        tx.issue.create({
           data: {
             orgId: orgB.id,
             copyId: copyB.id,
@@ -250,7 +250,7 @@ describeLive('circulation cross-org isolation (Loan)', () => {
 
   it('returns zero rows when no org is scoped at all', async () => {
     const { getLibraryTenantPrisma } = await import('@library/db');
-    const rows = await getLibraryTenantPrisma().loan.findMany();
+    const rows = await getLibraryTenantPrisma().issue.findMany();
     expect(rows).toEqual([]);
   });
 });

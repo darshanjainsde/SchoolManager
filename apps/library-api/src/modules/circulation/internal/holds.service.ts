@@ -1,10 +1,10 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, type Hold, type Loan, type LibraryTx } from '@library/db';
+import { Prisma, type Hold, type Issue, type LibraryTx } from '@library/db';
 import { assertQuota } from '../../plans';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import { loadPolicy } from './policy-loader';
 import { evaluateRenew, holdState, type HoldStatusValue, type RenewDenial } from './policy';
-import type { CreateHoldDto, ListHoldsQueryDto, RenewLoanDto } from './dto';
+import type { CreateHoldDto, ListHoldsQueryDto, RenewBookDto } from './dto';
 import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
 
 /**
@@ -18,7 +18,7 @@ import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
  * function's own doc) live filter, and `policy.ts`'s `holdState` never
  * reinterprets a PENDING hold by `expiresAt` at all regardless of its value.
  * The moment a hold is promoted to READY this is overwritten with the REAL
- * deadline — `holdShelfExpiry(policy, now)` — in `loans.service.ts`'s
+ * deadline — `holdShelfExpiry(policy, now)` — in `issues.service.ts`'s
  * `promoteOrRelease`, unchanged from Task 8. This is the ONE place the
  * sentinel is produced; do not re-derive it at another call site.
  */
@@ -28,19 +28,19 @@ function pendingHoldSentinel(now: Date): Date {
   return new Date(now.getTime() + PENDING_HOLD_SENTINEL_YEARS * 365 * MS_PER_DAY);
 }
 
-/** `RenewDenial` -> the HTTP exception a circulation-desk caller should see. All three are policy/state denials on the LOAN itself, not a copy-availability conflict — so 403 uniformly, same body shape as `loans.service.ts`'s `issueDenialToException`. */
+/** `RenewDenial` -> the HTTP exception a circulation-desk caller should see. All three are policy/state denials on the LOAN itself, not a copy-availability conflict — so 403 uniformly, same body shape as `issues.service.ts`'s `issueDenialToException`. */
 function renewDenialToException(reason: RenewDenial): ForbiddenException {
   const message =
     reason === 'ALREADY_OVERDUE'
-      ? 'This loan is already overdue and must be returned, not renewed'
+      ? 'This issue is already overdue and must be returned, not renewed'
       : reason === 'RENEW_LIMIT'
-        ? 'This loan has reached its renewal limit'
+        ? 'This issue has reached its renewal limit'
         : 'Another member is waiting on this title — renewing would delay their turn';
   return new ForbiddenException({ reason, message });
 }
 
 export interface RenewResult {
-  loan: Loan;
+  issue: Issue;
 }
 
 export interface CreateHoldResult {
@@ -58,12 +58,12 @@ export interface HoldListItem extends Omit<Hold, 'status'> {
 @Injectable()
 export class HoldsService {
   /**
-   * One transaction: resolve the active loan for the scanned barcode ->
-   * load member/policy -> count PENDING holds on the loan's title ->
-   * `evaluateRenew` -> update `Loan.dueAt`/`renewCount`, write an
+   * One transaction: resolve the active issue for the scanned accessionNumber ->
+   * load member/policy -> count PENDING holds on the issue's title ->
+   * `evaluateRenew` -> update `Issue.dueAt`/`renewCount`, write an
    * `AuditLog` row. Deliberately counts only `PENDING` holds (not `READY`):
    * a READY hold is already tied to a SPECIFIC other copy of this title
-   * (`readyCopyId`), so renewing THIS loan doesn't delay that member's
+   * (`readyCopyId`), so renewing THIS issue doesn't delay that member's
    * fulfillment — only someone still waiting for ANY copy (PENDING) is
    * whose turn a renewal would push back, which is `evaluateRenew`'s own
    * `pendingHoldsOnTitle` parameter name and reasoning (policy.ts).
@@ -71,34 +71,34 @@ export class HoldsService {
   async renew(
     tx: LibraryTx,
     orgId: string,
-    dto: RenewLoanDto,
+    dto: RenewBookDto,
     actorUserId: string,
     now: Date,
     allowedBranches: string[],
   ): Promise<RenewResult> {
-    const copy = await tx.copy.findUnique({ where: { orgId_barcode: { orgId, barcode: dto.barcode } } });
+    const copy = await tx.copy.findUnique({ where: { orgId_accessionNumber: { orgId, accessionNumber: dto.accessionNumber } } });
     if (!copy) throw new NotFoundException('Copy not found');
 
-    const loan = await tx.loan.findFirst({ where: { copyId: copy.id, returnedAt: null } });
-    if (!loan) throw new NotFoundException('No active loan for this copy');
-    // Same reasoning as loans.service.ts's returnLoan: checked against the
+    const issue = await tx.issue.findFirst({ where: { copyId: copy.id, returnedAt: null } });
+    if (!issue) throw new NotFoundException('No active issue for this copy');
+    // Same reasoning as issues.service.ts's returnBook: checked against the
     // LOAN's own branch, the row this action actually mutates.
-    assertBranchInScope(loan.branchId, allowedBranches);
+    assertBranchInScope(issue.branchId, allowedBranches);
 
-    // Same non-FK-lookup reasoning as loans.service.ts's returnLoan: Loan.member
-    // is onDelete Restrict, and loan.memberId was read off an already
+    // Same non-FK-lookup reasoning as issues.service.ts's returnBook: Issue.member
+    // is onDelete Restrict, and issue.memberId was read off an already
     // org-scoped row on this same tx, not supplied by the client.
-    const member = await tx.member.findUnique({ where: { id: loan.memberId } });
+    const member = await tx.member.findUnique({ where: { id: issue.memberId } });
     if (!member) throw new NotFoundException('Member not found');
 
-    const policy = await loadPolicy(tx, orgId, member.memberType, loan.branchId);
+    const policy = await loadPolicy(tx, orgId, member.memberType, issue.branchId);
     const pendingHoldsOnTitle = await tx.hold.count({ where: { orgId, titleId: copy.titleId, status: 'PENDING' } });
 
-    const decision = evaluateRenew(policy, loan, pendingHoldsOnTitle, now);
+    const decision = evaluateRenew(policy, issue, pendingHoldsOnTitle, now);
     if (!decision.allowed) throw renewDenialToException(decision.reason);
 
-    const updated = await tx.loan.update({
-      where: { id: loan.id },
+    const updated = await tx.issue.update({
+      where: { id: issue.id },
       data: { dueAt: decision.newDueAt, renewCount: { increment: 1 } },
     });
 
@@ -107,13 +107,13 @@ export class HoldsService {
         orgId,
         actorUserId,
         action: 'circulation.renew',
-        entity: 'Loan',
-        entityId: loan.id,
-        after: { copyId: copy.id, barcode: dto.barcode, memberId: member.id, newDueAt: decision.newDueAt.toISOString(), renewCount: updated.renewCount },
+        entity: 'Issue',
+        entityId: issue.id,
+        after: { copyId: copy.id, accessionNumber: dto.accessionNumber, memberId: member.id, newDueAt: decision.newDueAt.toISOString(), renewCount: updated.renewCount },
       },
     });
 
-    return { loan: updated };
+    return { issue: updated };
   }
 
   /**
@@ -142,8 +142,8 @@ export class HoldsService {
    * `allowedBranches`: a hold is placed on a Title (org-wide — any branch's
    * copy can fill it) and this method touches no row that has a branch of
    * its own yet, so there is nothing here for `assertBranchInScope` to check
-   * against, unlike `issue`/`returnLoan`/`renew`, which each load a
-   * Copy/Loan row with a real branch. The member's OWN home branch is still
+   * against, unlike `issue`/`returnBook`/`renew`, which each load a
+   * Copy/Issue row with a real branch. The member's OWN home branch is still
    * used to resolve which `CirculationPolicy` (branch override vs org
    * default) governs their `maxHolds` quota below — that is a policy
    * lookup, not an authorization check.
@@ -224,7 +224,7 @@ export class HoldsService {
    * else in this module. If the hold was `READY`, its reserved copy reverts
    * to `AVAILABLE` (nobody is claiming it now) — but the next PENDING hold
    * is deliberately NOT promoted onto it here: promotion is coupled to a
-   * RETURN (`loans.service.ts`'s `promoteOrRelease`), per the brief's
+   * RETURN (`issues.service.ts`'s `promoteOrRelease`), per the brief's
    * "swept opportunistically on the next return" scope; a cancelled READY
    * hold's copy simply sits AVAILABLE until that copy next circulates.
    *

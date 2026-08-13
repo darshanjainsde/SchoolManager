@@ -17,7 +17,7 @@ function decimalToNullableNumber(value: Prisma.Decimal | null): number | null {
  * transaction (and therefore RLS) as the caller's other reads.
  *
  * `branchId` is the branch the decision under evaluation actually concerns
- * (the copy being issued/returned, the loan being renewed) — `null` when no
+ * (the copy being issued/returned, the issue being renewed) — `null` when no
  * branch is known or relevant (e.g. placing a hold, before any copy is
  * chosen), which resolves straight to the org default. Two `findFirst`
  * lookups (never `findUnique`): the migration deliberately does NOT declare
@@ -30,7 +30,7 @@ function decimalToNullableNumber(value: Prisma.Decimal | null): number | null {
  * Every circulation decision goes through `policy.ts` — see that file's own
  * header comment — so this loader is what makes calling it from a real
  * Prisma-backed service possible at all, without ever re-deriving "how to
- * read a CirculationPolicy row" inline in `loans.service.ts`.
+ * read a CirculationPolicy row" inline in `issues.service.ts`.
  */
 export async function loadPolicy(
   tx: LibraryTx,
@@ -45,7 +45,7 @@ export async function loadPolicy(
   }
   return {
     maxBooks: row.maxBooks,
-    loanDays: row.loanDays,
+    issueDays: row.issueDays,
     renewLimit: row.renewLimit,
     renewDays: row.renewDays,
     finePerDay: row.finePerDay.toNumber(),

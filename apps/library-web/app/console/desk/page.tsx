@@ -9,7 +9,7 @@ import {
   daysUntil,
   formatRupees,
   issue,
-  returnLoan,
+  returnBook,
   type IssueResult,
   type ReturnResult,
 } from '@/lib/circulation';
@@ -18,7 +18,7 @@ type Mode = 'issue' | 'return';
 
 interface Row {
   id: string;
-  barcode: string;
+  accessionNumber: string;
   kind: 'issued' | 'returned' | 'fined' | 'failed';
   headline: string;
   detail: string;
@@ -28,7 +28,7 @@ interface Row {
 
 export default function DeskPage() {
   const [mode, setMode] = useState<Mode>('issue');
-  const [barcode, setBarcode] = useState('');
+  const [accessionNumber, setAccessionNumber] = useState('');
   const [member, setMember] = useState<MemberCard | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
@@ -36,7 +36,7 @@ export default function DeskPage() {
   const ctx = useApiCtx();
 
   // A desk is operated by scanner, not by mouse. The field must hold focus
-  // through every scan or the second barcode lands in the page instead of the
+  // through every scan or the second accessionNumber lands in the page instead of the
   // input — the single most common way a circulation screen becomes unusable.
   const scanRef = useRef<HTMLInputElement>(null);
   const refocus = useCallback(() => scanRef.current?.focus(), []);
@@ -48,7 +48,7 @@ export default function DeskPage() {
 
   async function onScan(e: React.FormEvent) {
     e.preventDefault();
-    const code = barcode.trim();
+    const code = accessionNumber.trim();
     if (!code || busy) return;
 
     const session = readSession();
@@ -64,22 +64,22 @@ export default function DeskPage() {
           return;
         }
         const res: IssueResult = await issue(call, code, member.id);
-        const days = daysUntil(res.loan.dueAt);
+        const days = daysUntil(res.issue.dueAt);
         pushRow({
-          id: res.loan.id,
-          barcode: code,
+          id: res.issue.id,
+          accessionNumber: code,
           kind: 'issued',
           headline: code,
           detail: `${memberName(member)} · due in ${days} day${days === 1 ? '' : 's'}${res.collectedHoldId ? ' · hold collected' : ''}`,
           stamp: 'Issued',
-          stampSub: new Date(res.loan.dueAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+          stampSub: new Date(res.issue.dueAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
         });
       } else {
-        const res: ReturnResult = await returnLoan(call, code);
+        const res: ReturnResult = await returnBook(call, code);
         const fined = res.fine !== null;
         pushRow({
-          id: res.loan.id,
-          barcode: code,
+          id: res.issue.id,
+          accessionNumber: code,
           kind: fined ? 'fined' : 'returned',
           headline: code,
           detail: res.promotedHoldId
@@ -89,19 +89,19 @@ export default function DeskPage() {
           stampSub: fined ? `${formatRupees(res.fine!.amount)} fine` : 'on time',
         });
       }
-      setBarcode('');
+      setAccessionNumber('');
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Could not reach the library.';
       pushRow({
         id: `${code}-${Date.now()}`,
-        barcode: code,
+        accessionNumber: code,
         kind: 'failed',
         headline: code,
         detail: message,
         stamp: 'Refused',
         stampSub: err instanceof ApiError ? `${err.status}` : 'offline',
       });
-      setBarcode('');
+      setAccessionNumber('');
     } finally {
       setBusy(false);
       refocus();
@@ -113,7 +113,7 @@ export default function DeskPage() {
       <div className="lbx-pagehead">
         <div>
           <h2>Circulation desk</h2>
-          <p>Scan a barcode to {mode === 'issue' ? 'issue' : 'take a return'}. The field keeps focus between scans.</p>
+          <p>Scan a accessionNumber to {mode === 'issue' ? 'issue' : 'take a return'}. The field keeps focus between scans.</p>
         </div>
         <div style={{ display: 'flex', gap: '.4rem' }}>
           <button
@@ -149,10 +149,10 @@ export default function DeskPage() {
           <span className="lbx-scan-ico" aria-hidden="true">▮▯▮</span>
           <input
             ref={scanRef}
-            value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
-            placeholder="Scan or type a barcode…"
-            aria-label="Barcode"
+            value={accessionNumber}
+            onChange={(e) => setAccessionNumber(e.target.value)}
+            placeholder="Scan or type a accessionNumber…"
+            aria-label="AccessionNumber"
             autoComplete="off"
             disabled={busy}
           />

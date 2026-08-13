@@ -52,15 +52,15 @@ describeLive('PrismaIdempotencyStore.create resolves a concurrent duplicate inse
       await bothArrived;
     };
 
-    const attempt = (loanId: string) =>
+    const attempt = (issueId: string) =>
       arriveAtBarrier().then(() =>
         store.create({
           orgId,
           key: 'race-key-1',
-          endpoint: 'POST /loans',
+          endpoint: 'POST /issues',
           requestHash: 'same-request-hash',
           responseStatus: 201,
-          responseBody: { loanId },
+          responseBody: { issueId },
         }),
       );
 
@@ -79,7 +79,7 @@ describeLive('PrismaIdempotencyStore.create resolves a concurrent duplicate inse
     expect(loserResult.existing.requestHash).toBe('same-request-hash');
     // The loser's `existing.responseBody` is the winner's — whichever of
     // FROM-A/FROM-B actually landed first in Postgres.
-    expect(['FROM-A', 'FROM-B']).toContain((loserResult.existing.responseBody as { loanId: string }).loanId);
+    expect(['FROM-A', 'FROM-B']).toContain((loserResult.existing.responseBody as { issueId: string }).issueId);
 
     // IdempotencyKey is FORCE ROW LEVEL SECURITY — a query against the
     // tenant client with no `app.current_org` GUC set (raw SQL included,
@@ -101,16 +101,16 @@ describeLive('PrismaIdempotencyStore.create resolves a concurrent duplicate inse
       await bothArrived;
     };
 
-    const attempt = (requestHash: string, loanId: string) =>
+    const attempt = (requestHash: string, issueId: string) =>
       arriveAtBarrier().then(() => ({
         ownHash: requestHash,
         result: store.create({
           orgId,
           key: 'race-key-2',
-          endpoint: 'POST /loans',
+          endpoint: 'POST /issues',
           requestHash,
           responseStatus: 201,
-          responseBody: { loanId },
+          responseBody: { issueId },
         }),
       }));
 

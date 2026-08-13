@@ -58,7 +58,7 @@ const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
  * there — the body of `POST /catalog/titles/:id/copies`). Two routes act on
  * an existing Copy whose branch is a property of that row, not of the
  * request, so the guard cannot see it: `PATCH /catalog/copies/:id` and
- * `GET /catalog/copies/by-barcode/:barcode` enforce branch scope themselves,
+ * `GET /catalog/copies/by-accessionNumber/:accessionNumber` enforce branch scope themselves,
  * in CopiesService, after loading the row.
  */
 @Controller('catalog')
@@ -129,11 +129,11 @@ export class CatalogController {
     return withOrg(orgId, (tx) => this.copies.update(tx, id, dto, user.branches));
   }
 
-  @Get('copies/by-barcode/:barcode')
+  @Get('copies/by-accessionNumber/:accessionNumber')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
-  getCopyByBarcode(@Param('barcode') barcode: string, @CurrentUser() user: LibJwtPayload) {
+  getCopyByAccessionNumber(@Param('accessionNumber') accessionNumber: string, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
-    return withOrg(orgId, (tx) => this.copies.getByBarcode(tx, orgId, barcode, user.branches));
+    return withOrg(orgId, (tx) => this.copies.getByAccessionNumber(tx, orgId, accessionNumber, user.branches));
   }
 
   @Get('categories')

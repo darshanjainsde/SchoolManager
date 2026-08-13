@@ -84,10 +84,10 @@ describe('library schema invariants', () => {
 
   it('regression: an un-exempted, real status enum poisoned with a forbidden value is still caught', () => {
     // Complements the test above from the other direction: an EXISTING
-    // `...Status`-named enum (LoanStatus) that is NOT in the exception list
+    // `...Status`-named enum (IssueStatus) that is NOT in the exception list
     // must still be caught — proving the exception list is opt-in per
     // (enum, value) pair, not a blanket pass for anything "Status"-shaped.
-    const poisoned = schema.replace('enum LoanStatus {\n  ACTIVE', 'enum LoanStatus {\n  OVERDUE\n  ACTIVE');
+    const poisoned = schema.replace('enum IssueStatus {\n  ACTIVE', 'enum IssueStatus {\n  OVERDUE\n  ACTIVE');
     expect(poisoned).not.toBe(schema); // the replace actually matched something
     const enumBlocks = [...poisoned.matchAll(/enum (\w+) \{([^}]*)\}/g)].map((m) => ({ name: m[1], body: m[2] }));
     const violations: string[] = [];
@@ -98,7 +98,7 @@ describe('library schema invariants', () => {
         if (!exempt) violations.push(`${name}.${forbidden}`);
       }
     }
-    expect(violations).toContain('LoanStatus.OVERDUE');
+    expect(violations).toContain('IssueStatus.OVERDUE');
   });
 
   it('keeps Member.externalRef so the Sckools merge needs no migration', () => {
@@ -124,7 +124,7 @@ describe('library schema invariants', () => {
    */
   const RESTRICT_RELATIONS: Array<{ model: string; field: string }> = [
     { model: 'Fine', field: 'member' },
-    { model: 'Loan', field: 'member' },
+    { model: 'Issue', field: 'member' },
     { model: 'Copy', field: 'title' },
     { model: 'Copy', field: 'branch' },
   ];

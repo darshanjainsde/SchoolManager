@@ -94,8 +94,16 @@ export class SearchTitlesQueryDto {
 
 export class AddCopyDto {
   @IsUUID('4') branchId!: string;
-  @IsString() @MinLength(1) @MaxLength(100) barcode!: string;
-  @IsOptional() @IsString() @MaxLength(100) accessionNumber?: string;
+  /**
+   * The number written inside the front cover. Required, because a copy with no
+   * number cannot be lent, shelved or audited — and this service has no other
+   * identifier for a physical book.
+   *
+   * Digits in practice (they run in sequence per library, which is what lets
+   * stock verification accept a whole shelf as a range), but stored as text so
+   * a school with a legacy prefix is not locked out.
+   */
+  @IsString() @MinLength(1) @MaxLength(100) accessionNumber!: string;
   @IsOptional() @IsString() @MaxLength(100) shelf?: string;
   @IsOptional() @IsIn(COPY_CONDITIONS) condition?: CopyConditionInput;
   @IsOptional() @IsDateString() acquiredAt?: string;

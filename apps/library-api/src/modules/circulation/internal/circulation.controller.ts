@@ -7,10 +7,10 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { CreateHoldDto, DayReportQueryDto, IssueLoanDto, ListFinesQueryDto, ListHoldsQueryDto, RenewLoanDto, ReturnLoanDto, SearchMembersQueryDto, WaiveFineDto } from './dto';
+import { CreateHoldDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListHoldsQueryDto, RenewBookDto, ReturnBookDto, SearchMembersQueryDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { HoldsService } from './holds.service';
-import { LoansService } from './loans.service';
+import { IssuesService } from './issues.service';
 import { MembersService } from './members.service';
 
 /**
@@ -22,22 +22,22 @@ import { MembersService } from './members.service';
  * in sync with what's actually mounted here.
  *
  * `BranchScopeGuard` only enforces branch scope for a `branchId` the request
- * carries directly — none of the routes below do (barcodes and member/title
+ * carries directly — none of the routes below do (accessionNumbers and member/title
  * ids, never a branchId), so this guard is effectively a no-op here today,
  * kept for the same reason `CatalogController` keeps it in its chain:
  * consistency, and so a FUTURE route that does add a request-level branchId
  * is covered automatically. The actual enforcement for every route below
  * happens in the SERVICE, against the LOADED row's own branch
- * (`assertBranchInScope` — see `loans.service.ts`/`holds.service.ts`/
+ * (`assertBranchInScope` — see `issues.service.ts`/`holds.service.ts`/
  * `fines.service.ts`), the same pattern `CopiesService` established for
  * `PATCH /catalog/copies/:id` — because the branch these actions concern is
- * a property of an existing Copy/Loan/Hold row, not of the request.
+ * a property of an existing Copy/Issue/Hold row, not of the request.
  *
  * `IdempotencyInterceptor` is opt-in per route (see its own class doc): a
- * barcode scanner double-fire converges on ONE stored response for a
+ * accessionNumber scanner double-fire converges on ONE stored response for a
  * *retried* request, but it is NOT what makes a genuinely concurrent
- * double-scan produce only one Loan — that's `loan_one_active_per_copy`
- * (Task 4), asserted directly in `loans.service.ts`'s `issue` doc and in
+ * double-scan produce only one Issue — that's `issue_one_active_per_copy`
+ * (Task 4), asserted directly in `issues.service.ts`'s `issue` doc and in
  * this module's e2e suite.
  */
 @Controller('circulation')
@@ -46,7 +46,7 @@ import { MembersService } from './members.service';
 export class CirculationController {
   constructor(
     @Inject(OrgContextService) private readonly orgs: OrgContextService,
-    @Inject(LoansService) private readonly loans: LoansService,
+    @Inject(IssuesService) private readonly issues: IssuesService,
     @Inject(HoldsService) private readonly holds: HoldsService,
     @Inject(FinesService) private readonly fines: FinesService,
     @Inject(MembersService) private readonly members: MembersService,
@@ -55,28 +55,28 @@ export class CirculationController {
   @Post('issue')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
   @UseInterceptors(IdempotencyInterceptor)
-  issue(@Body() dto: IssueLoanDto, @CurrentUser() user: LibJwtPayload) {
+  issue(@Body() dto: IssueBookDto, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
     // The wall clock is read exactly once per request, here, and threaded
     // through as an explicit parameter — never `new Date()` inside
-    // loans.service.ts or policy.ts (see policy.ts's own header comment).
+    // issues.service.ts or policy.ts (see policy.ts's own header comment).
     const now = new Date();
-    return withOrg(orgId, (tx) => this.loans.issue(tx, orgId, dto, user.sub, now, user.branches));
+    return withOrg(orgId, (tx) => this.issues.issue(tx, orgId, dto, user.sub, now, user.branches));
   }
 
   @Post('return')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
   @UseInterceptors(IdempotencyInterceptor)
-  returnLoan(@Body() dto: ReturnLoanDto, @CurrentUser() user: LibJwtPayload) {
+  returnBook(@Body() dto: ReturnBookDto, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
     const now = new Date();
-    return withOrg(orgId, (tx) => this.loans.returnLoan(tx, orgId, dto, user.sub, now, user.branches));
+    return withOrg(orgId, (tx) => this.issues.returnBook(tx, orgId, dto, user.sub, now, user.branches));
   }
 
   @Post('renew')
   @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
   @UseInterceptors(IdempotencyInterceptor)
-  renew(@Body() dto: RenewLoanDto, @CurrentUser() user: LibJwtPayload) {
+  renew(@Body() dto: RenewBookDto, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
     const now = new Date();
     return withOrg(orgId, (tx) => this.holds.renew(tx, orgId, dto, user.sub, now, user.branches));

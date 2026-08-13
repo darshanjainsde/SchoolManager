@@ -17,7 +17,7 @@ const SUPERUSER_URL = process.env.LIBRARY_DIRECT_URL ?? process.env.LIBRARY_DATA
 if (LIVE && !SUPERUSER_URL && process.env.CI) {
   throw new Error(
     'LIVE is true but neither LIBRARY_DIRECT_URL nor LIBRARY_DATABASE_URL is set while process.env.CI ' +
-      'is set. The loan_one_active_per_copy discriminates-test needs a superuser connection to drop and ' +
+      'is set. The issue_one_active_per_copy discriminates-test needs a superuser connection to drop and ' +
       'recreate the index and must not silently skip in CI.',
   );
 }
@@ -34,12 +34,12 @@ interface Fixture {
 async function seedFixture(suffix: string): Promise<Fixture> {
   const prisma = getLibraryPlatformPrisma();
   const org = await prisma.libraryOrg.create({
-    data: { slug: `loan-race-e2e-${suffix}`, name: 'Loan Race E2E', status: 'LIVE' },
+    data: { slug: `issue-race-e2e-${suffix}`, name: 'Issue Race E2E', status: 'LIVE' },
   });
   const branch = await prisma.branch.create({ data: { orgId: org.id, name: 'Main', code: 'MAIN' } });
-  const title = await prisma.title.create({ data: { orgId: org.id, title: 'Loan Race Title' } });
+  const title = await prisma.title.create({ data: { orgId: org.id, title: 'Issue Race Title' } });
   const copy = await prisma.copy.create({
-    data: { orgId: org.id, titleId: title.id, branchId: branch.id, barcode: `RACE-${suffix}` },
+    data: { orgId: org.id, titleId: title.id, branchId: branch.id, accessionNumber: `RACE-${suffix}` },
   });
   const memberA = await prisma.member.create({
     data: { orgId: org.id, homeBranchId: branch.id, code: `RACE-A-${suffix}`, firstName: 'Race', lastName: 'A', status: 'ACTIVE' },
@@ -68,20 +68,20 @@ function makeBarrier(): () => Promise<void> {
 function issueLoanAttempt(orgId: string, copyId: string, branchId: string, memberId: string, dueAt: Date, arrive: () => Promise<void>) {
   return withOrg(orgId, async (tx) => {
     await arrive();
-    return tx.loan.create({ data: { orgId, copyId, branchId, memberId, dueAt, status: 'ACTIVE' } });
+    return tx.issue.create({ data: { orgId, copyId, branchId, memberId, dueAt, status: 'ACTIVE' } });
   });
 }
 
 /**
- * Regression test for `loan_one_active_per_copy`, the partial unique index
- * (`ON "Loan" ("copyId") WHERE "returnedAt" IS NULL`) that is the actual
- * concurrency guarantee behind "a copy can have at most one active loan" —
+ * Regression test for `issue_one_active_per_copy`, the partial unique index
+ * (`ON "Issue" ("copyId") WHERE "returnedAt" IS NULL`) that is the actual
+ * concurrency guarantee behind "a copy can have at most one active issue" —
  * see docs/superpowers/LIBRARY-TRAPS.md trap 3 and trap 16. A transaction
  * gives atomicity, not mutual exclusion: under READ COMMITTED, two
  * transactions that both `BEGIN` before either commits read the same
  * snapshot, so an application-level "is this copy AVAILABLE?" check inside
  * one transaction still races against a second desk scanning the same
- * barcode at the same moment. Only a database-enforced constraint — not a
+ * accessionNumber at the same moment. Only a database-enforced constraint — not a
  * check-then-write in application code — can make that race impossible
  * rather than merely unlikely.
  *
@@ -90,7 +90,7 @@ function issueLoanAttempt(orgId: string, copyId: string, branchId: string, membe
  * absent lets both through (the "discriminates" describe block below, which
  * always restores the index in `finally`, including on assertion failure).
  */
-describeLive('loan_one_active_per_copy makes a double-issue impossible', () => {
+describeLive('issue_one_active_per_copy makes a double-issue impossible', () => {
   let fx: Fixture;
 
   beforeAll(async () => {
@@ -120,12 +120,12 @@ describeLive('loan_one_active_per_copy makes a double-issue impossible', () => {
     expect(rejected).toHaveLength(1);
     expect((rejected[0] as PromiseRejectedResult).reason).toBeDefined();
 
-    const loans = await getLibraryPlatformPrisma().loan.findMany({ where: { copyId: fx.copyId, returnedAt: null } });
-    expect(loans).toHaveLength(1);
+    const issues = await getLibraryPlatformPrisma().issue.findMany({ where: { copyId: fx.copyId, returnedAt: null } });
+    expect(issues).toHaveLength(1);
   });
 });
 
-describeLiveSuperuser('loan_one_active_per_copy — prove it discriminates (Task 4, trap 16)', () => {
+describeLiveSuperuser('issue_one_active_per_copy — prove it discriminates (Task 4, trap 16)', () => {
   let fx: Fixture;
 
   beforeAll(async () => {
@@ -141,7 +141,7 @@ describeLiveSuperuser('loan_one_active_per_copy — prove it discriminates (Task
     const superuser = new Client({ connectionString: SUPERUSER_URL });
     await superuser.connect();
     try {
-      await superuser.query('DROP INDEX library.loan_one_active_per_copy');
+      await superuser.query('DROP INDEX library.issue_one_active_per_copy');
       try {
         const dueAt = new Date(Date.now() + 14 * 86_400_000);
         const arrive = makeBarrier();
@@ -155,18 +155,18 @@ describeLiveSuperuser('loan_one_active_per_copy — prove it discriminates (Task
         // With the constraint gone, BOTH concurrent issues succeed — this is
         // the exact double-issue bug the index exists to prevent.
         expect(fulfilled).toHaveLength(2);
-        const loans = await getLibraryPlatformPrisma().loan.findMany({
+        const issues = await getLibraryPlatformPrisma().issue.findMany({
           where: { copyId: fx.copyId, returnedAt: null },
         });
-        expect(loans).toHaveLength(2);
+        expect(issues).toHaveLength(2);
       } finally {
-        // Clean up the two loans this test deliberately let through FIRST —
+        // Clean up the two issues this test deliberately let through FIRST —
         // `CREATE UNIQUE INDEX` fails outright if existing rows already
         // violate the constraint being created, so the index must be
         // recreated against a clean table, not the other way around.
-        await getLibraryPlatformPrisma().loan.deleteMany({ where: { copyId: fx.copyId } });
+        await getLibraryPlatformPrisma().issue.deleteMany({ where: { copyId: fx.copyId } });
         await superuser.query(
-          'CREATE UNIQUE INDEX loan_one_active_per_copy ON library."Loan" ("copyId") WHERE "returnedAt" IS NULL',
+          'CREATE UNIQUE INDEX issue_one_active_per_copy ON library."Issue" ("copyId") WHERE "returnedAt" IS NULL',
         );
       }
     } finally {

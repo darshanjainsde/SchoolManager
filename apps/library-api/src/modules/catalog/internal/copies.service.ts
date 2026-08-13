@@ -31,7 +31,6 @@ export class CopiesService {
           orgId,
           titleId,
           branchId: dto.branchId,
-          barcode: dto.barcode,
           accessionNumber: dto.accessionNumber,
           shelf: dto.shelf,
           condition: dto.condition,
@@ -70,9 +69,9 @@ export class CopiesService {
     }
   }
 
-  async getByBarcode(tx: LibraryTx, orgId: string, barcode: string, allowedBranches: string[]) {
+  async getByAccessionNumber(tx: LibraryTx, orgId: string, accessionNumber: string, allowedBranches: string[]) {
     const copy = await tx.copy.findUnique({
-      where: { orgId_barcode: { orgId, barcode } },
+      where: { orgId_accessionNumber: { orgId, accessionNumber } },
       include: { title: true, branch: true },
     });
     if (!copy) throw new NotFoundException('Copy not found');

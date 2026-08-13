@@ -65,7 +65,7 @@ describe('IdempotencyInterceptor', () => {
     const store = fakeStore();
     const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
     const { handler, res } = handlerReturning({ ok: true }, 201);
-    const req = { method: 'POST', path: '/loans', headers: {}, body: { a: 1 } };
+    const req = { method: 'POST', path: '/issues', headers: {}, body: { a: 1 } };
 
     const result = await interceptor.intercept(makeContext(req, res), handler);
     await expect(firstValue(result)).resolves.toEqual({ ok: true });
@@ -76,24 +76,24 @@ describe('IdempotencyInterceptor', () => {
   it('miss: runs the handler and stores the response', async () => {
     const store = fakeStore();
     const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
-    const { handler, res } = handlerReturning({ loanId: 'L1' }, 201);
-    const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
+    const { handler, res } = handlerReturning({ issueId: 'L1' }, 201);
+    const req = { method: 'POST', path: '/issues', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
 
     const result = await interceptor.intercept(makeContext(req, res), handler);
-    await expect(firstValue(result)).resolves.toEqual({ loanId: 'L1' });
+    await expect(firstValue(result)).resolves.toEqual({ issueId: 'L1' });
     expect(store.calls.create).toHaveLength(1);
     const stored = store.calls.create[0] as { orgId: string; key: string; responseStatus: number; responseBody: unknown };
     expect(stored.orgId).toBe(ORG);
     expect(stored.key).toBe('key-1');
     expect(stored.responseStatus).toBe(201);
-    expect(stored.responseBody).toEqual({ loanId: 'L1' });
+    expect(stored.responseBody).toEqual({ issueId: 'L1' });
   });
 
   it('hit, same requestHash: replays the stored response without running the handler', async () => {
-    const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
+    const req = { method: 'POST', path: '/issues', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
     const requestHash = hashRequest(req.method, concreteRequestPath(req as never), req.body);
     const store = fakeStore({
-      find: async () => ({ requestHash, responseStatus: 201, responseBody: { loanId: 'L1' } }),
+      find: async () => ({ requestHash, responseStatus: 201, responseBody: { issueId: 'L1' } }),
     });
     const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
     let handlerRan = false;
@@ -101,16 +101,16 @@ describe('IdempotencyInterceptor', () => {
     const res = fakeResponse();
 
     const result = await interceptor.intercept(makeContext(req, res), handler);
-    await expect(firstValue(result)).resolves.toEqual({ loanId: 'L1' });
+    await expect(firstValue(result)).resolves.toEqual({ issueId: 'L1' });
     expect(handlerRan).toBe(false);
     expect(res.statusCode).toBe(201);
     expect(store.calls.create).toHaveLength(0);
   });
 
   it('hit, different requestHash: throws 409 without running the handler', async () => {
-    const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
+    const req = { method: 'POST', path: '/issues', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
     const store = fakeStore({
-      find: async () => ({ requestHash: 'a-different-hash', responseStatus: 201, responseBody: { loanId: 'L1' } }),
+      find: async () => ({ requestHash: 'a-different-hash', responseStatus: 201, responseBody: { issueId: 'L1' } }),
     });
     const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
     let handlerRan = false;
@@ -124,7 +124,7 @@ describe('IdempotencyInterceptor', () => {
     it('does not store a response when the handler throws a 500-class error', async () => {
       const store = fakeStore();
       const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
-      const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: {} };
+      const req = { method: 'POST', path: '/issues', headers: { 'idempotency-key': 'key-1' }, body: {} };
 
       await expect(
         interceptor.intercept(makeContext(req, fakeResponse()), handlerThrowing(new Error('db exploded'))),
@@ -135,7 +135,7 @@ describe('IdempotencyInterceptor', () => {
     it('stores a response when the handler throws a 4xx error, so a replay does not re-run it', async () => {
       const store = fakeStore();
       const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
-      const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: {} };
+      const req = { method: 'POST', path: '/issues', headers: { 'idempotency-key': 'key-1' }, body: {} };
 
       await expect(
         interceptor.intercept(makeContext(req, fakeResponse()), handlerThrowing(new BadRequestException('bad body'))),
@@ -148,23 +148,23 @@ describe('IdempotencyInterceptor', () => {
 
   describe('decision 2: concurrent duplicates racing store.create', () => {
     it('same requestHash lost the race: returns the winner\'s stored response, not a crash', async () => {
-      const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
+      const req = { method: 'POST', path: '/issues', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
       const requestHash = hashRequest(req.method, concreteRequestPath(req as never), req.body);
-      const winner: IdempotencyRecord = { requestHash, responseStatus: 201, responseBody: { loanId: 'WINNER' } };
+      const winner: IdempotencyRecord = { requestHash, responseStatus: 201, responseBody: { issueId: 'WINNER' } };
       const store = fakeStore({ create: async (): Promise<CreateResult> => ({ won: false, existing: winner }) });
       const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
-      const { handler, res } = handlerReturning({ loanId: 'LOSER' }, 201);
+      const { handler, res } = handlerReturning({ issueId: 'LOSER' }, 201);
 
       const result = await interceptor.intercept(makeContext(req, res), handler);
-      await expect(firstValue(result)).resolves.toEqual({ loanId: 'WINNER' });
+      await expect(firstValue(result)).resolves.toEqual({ issueId: 'WINNER' });
     });
 
     it('different requestHash lost the race: throws 409 instead of silently returning the wrong body', async () => {
-      const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
-      const winner: IdempotencyRecord = { requestHash: 'not-mine', responseStatus: 201, responseBody: { loanId: 'OTHER' } };
+      const req = { method: 'POST', path: '/issues', headers: { 'idempotency-key': 'key-1' }, body: { memberId: 'M1' } };
+      const winner: IdempotencyRecord = { requestHash: 'not-mine', responseStatus: 201, responseBody: { issueId: 'OTHER' } };
       const store = fakeStore({ create: async (): Promise<CreateResult> => ({ won: false, existing: winner }) });
       const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
-      const { handler, res } = handlerReturning({ loanId: 'MINE' }, 201);
+      const { handler, res } = handlerReturning({ issueId: 'MINE' }, 201);
 
       await expect(interceptor.intercept(makeContext(req, res), handler)).rejects.toThrow(ConflictException);
     });
@@ -173,7 +173,7 @@ describe('IdempotencyInterceptor', () => {
   it('throws (via requireOrgId) when the header is present but no tenant has been resolved', async () => {
     const store = fakeStore();
     const interceptor = new IdempotencyInterceptor(store, fakeOrgs(null));
-    const req = { method: 'POST', path: '/loans', headers: { 'idempotency-key': 'key-1' }, body: {} };
+    const req = { method: 'POST', path: '/issues', headers: { 'idempotency-key': 'key-1' }, body: {} };
     const { handler, res } = handlerReturning({}, 201);
 
     await expect(interceptor.intercept(makeContext(req, res), handler)).rejects.toThrow('No tenant resolved');
@@ -181,17 +181,17 @@ describe('IdempotencyInterceptor', () => {
 
   describe('requestHash uses the concrete request URL, not the route pattern (Group B, finding 2)', () => {
     // Production shape: Express has matched the route by the time this
-    // interceptor runs, so req.route.path is the *pattern* ('/loans/:id'),
+    // interceptor runs, so req.route.path is the *pattern* ('/issues/:id'),
     // req.params holds the matched segment, and req.originalUrl is the real
     // request target. The old bug used req.route?.path for hashing, so
-    // POST /loans/1 and POST /loans/2 — two different resources — with the
+    // POST /issues/1 and POST /issues/2 — two different resources — with the
     // same Idempotency-Key and the same body hashed identically.
     function productionShapeRequest(id: string, key = 'key-1') {
       return {
         method: 'POST',
-        path: `/loans/${id}`,
-        originalUrl: `/loans/${id}`,
-        route: { path: '/loans/:id' },
+        path: `/issues/${id}`,
+        originalUrl: `/issues/${id}`,
+        route: { path: '/issues/:id' },
         params: { id },
         headers: { 'idempotency-key': key },
         body: { action: 'return' }, // deliberately identical across both requests
@@ -228,20 +228,20 @@ describe('IdempotencyInterceptor', () => {
       const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
 
       const first = productionShapeRequest('1');
-      const { handler: handler1, res: res1 } = handlerReturning({ loanId: '1' }, 200);
+      const { handler: handler1, res: res1 } = handlerReturning({ issueId: '1' }, 200);
       const result1 = await interceptor.intercept(makeContext(first, res1), handler1);
-      await expect(firstValue(result1)).resolves.toEqual({ loanId: '1' });
+      await expect(firstValue(result1)).resolves.toEqual({ issueId: '1' });
 
       // Same Idempotency-Key, same route pattern, same body — only the
       // concrete resource id differs. Bug (pre-fix): hashing the route
       // pattern instead of the concrete URL made this indistinguishable
       // from a retry of the FIRST request, so it would silently resolve to
-      // { loanId: '1' } — the wrong resource's response — for a POST to
-      // /loans/2, without ever running its own handler or surfacing an
+      // { issueId: '1' } — the wrong resource's response — for a POST to
+      // /issues/2, without ever running its own handler or surfacing an
       // error to the caller.
       const second = productionShapeRequest('2');
       let handler2Ran = false;
-      const handler2: CallHandler = { handle: () => { handler2Ran = true; return of({ loanId: '2' }); } };
+      const handler2: CallHandler = { handle: () => { handler2Ran = true; return of({ issueId: '2' }); } };
 
       await expect(
         interceptor.intercept(makeContext(second, fakeResponse()), handler2),
@@ -254,7 +254,7 @@ describe('IdempotencyInterceptor', () => {
       const interceptor = new IdempotencyInterceptor(store, fakeOrgs());
 
       const req = productionShapeRequest('1');
-      const { handler: firstHandler, res: firstRes } = handlerReturning({ loanId: '1' }, 200);
+      const { handler: firstHandler, res: firstRes } = handlerReturning({ issueId: '1' }, 200);
       await interceptor.intercept(makeContext(req, firstRes), firstHandler);
 
       let retryHandlerRan = false;
@@ -262,7 +262,7 @@ describe('IdempotencyInterceptor', () => {
       const retryRes = fakeResponse();
       const result = await interceptor.intercept(makeContext(productionShapeRequest('1'), retryRes), retryHandler);
 
-      await expect(firstValue(result)).resolves.toEqual({ loanId: '1' });
+      await expect(firstValue(result)).resolves.toEqual({ issueId: '1' });
       expect(retryHandlerRan).toBe(false);
       expect(retryRes.statusCode).toBe(200);
     });

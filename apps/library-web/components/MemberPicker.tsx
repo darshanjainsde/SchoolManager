@@ -16,7 +16,7 @@ interface Props {
   ctx: Ctx;
   selected: MemberCard | null;
   onSelect: (member: MemberCard | null) => void;
-  /** Called after a pick so the desk can put focus back on the barcode field. */
+  /** Called after a pick so the desk can put focus back on the accessionNumber field. */
   onPicked?: () => void;
 }
 

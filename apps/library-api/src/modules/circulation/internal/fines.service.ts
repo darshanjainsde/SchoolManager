@@ -32,11 +32,11 @@ export interface WaiveResult {
 
 export interface FineListItem extends Fine {
   member: MemberCard;
-  /** Null for a fine raised without a loan behind it (damage, lost item). */
-  loan: { copy: { title: { id: string; title: string } } } | null;
+  /** Null for a fine raised without a issue behind it (damage, lost item). */
+  issue: { copy: { title: { id: string; title: string } } } | null;
 }
 
-export interface OverdueLoanItem {
+export interface OverdueIssueItem {
   id: string;
   copyId: string;
   memberId: string;
@@ -47,7 +47,7 @@ export interface OverdueLoanItem {
   daysOverdue: number;
   member: MemberCard;
   title: { id: string; title: string };
-  barcode: string;
+  accessionNumber: string;
 }
 
 export interface DayReport {
@@ -63,21 +63,21 @@ export interface DayReport {
  * The exact SQL `listOverdue` runs, exported so the e2e suite can `EXPLAIN`
  * the SAME query the service issues — never a hand-retyped approximation of
  * it (LIBRARY-TRAPS.md #15: verification code written from memory/near-copy
- * is this project's most-repeated mistake). Shaped to match the `loan_due`
- * partial index (`Loan("orgId","dueAt") WHERE "returnedAt" IS NULL`,
+ * is this project's most-repeated mistake). Shaped to match the `issue_due`
+ * partial index (`Issue("orgId","dueAt") WHERE "returnedAt" IS NULL`,
  * 20260811190200_circulation migration) exactly: the same leading columns,
  * the same partial predicate, so Postgres can satisfy this with one Index
- * Scan on `loan_due` rather than a sequential scan over every loan the org
+ * Scan on `issue_due` rather than a sequential scan over every issue the org
  * has ever issued. `allowedBranches` (empty = all) adds one extra AND'd
  * predicate on `"branchId"` — it does not change the leading columns the
- * `loan_due` index scan matches, only what's filtered after that scan.
+ * `issue_due` index scan matches, only what's filtered after that scan.
  */
-export function overdueLoansQuery(orgId: string, asOf: Date, allowedBranches: string[] = [], limit = 500): Prisma.Sql {
+export function overdueIssuesQuery(orgId: string, asOf: Date, allowedBranches: string[] = [], limit = 500): Prisma.Sql {
   const branchClause =
     allowedBranches.length > 0 ? Prisma.sql`AND "branchId" = ANY(${allowedBranches}::uuid[])` : Prisma.empty;
   return Prisma.sql`
     SELECT "id", "copyId", "memberId", "issuedAt", "dueAt", "renewCount"
-    FROM "Loan"
+    FROM "Issue"
     WHERE "orgId" = ${orgId}::uuid AND "returnedAt" IS NULL AND "dueAt" < ${asOf} ${branchClause}
     ORDER BY "dueAt" ASC
     LIMIT ${limit}
@@ -144,13 +144,13 @@ async function dayRangeForOrg(
 @Injectable()
 export class FinesService {
   /**
-   * Branch filter joins through `loan` because `Fine` carries no `branchId`
-   * of its own (only `Loan`/`Hold` gained one — see the branch-scope
+   * Branch filter joins through `issue` because `Fine` carries no `branchId`
+   * of its own (only `Issue`/`Hold` gained one — see the branch-scope
    * migration's own doc; a Fine is money owed by a MEMBER, not tied to one
-   * branch the way a Copy is). A fine with `loanId: null` (this codebase's
-   * only fine-creation path always sets one — `loans.service.ts`'s late
+   * branch the way a Copy is). A fine with `issueId: null` (this codebase's
+   * only fine-creation path always sets one — `issues.service.ts`'s late
    * return flow — but `kind` also allows DAMAGE/LOST/OTHER for a future
-   * loan-less fee) has no branch to attribute, so it is visible to every
+   * issue-less fee) has no branch to attribute, so it is visible to every
    * branch-scoped caller rather than hidden from all of them — the same
    * "unknown branch passes through" convention `listHolds` uses for a still-
    * PENDING hold.
@@ -162,17 +162,17 @@ export class FinesService {
         ...(query.memberId ? { memberId: query.memberId } : {}),
         ...(query.status ? { status: query.status } : {}),
         ...(allowedBranches.length > 0
-          ? { OR: [{ loanId: null }, { loan: { branchId: { in: allowedBranches } } }] }
+          ? { OR: [{ issueId: null }, { issue: { branchId: { in: allowedBranches } } }] }
           : {}),
       },
       orderBy: { createdAt: 'desc' },
       take: query.limit ?? 50,
-      // Who owes it, and for which book. A fine with no loan (a damage or
+      // Who owes it, and for which book. A fine with no issue (a damage or
       // lost-item charge raised directly) legitimately has no title, which is
       // why `title` is nullable here rather than assumed present.
       include: {
         member: { select: MEMBER_CARD_SELECT },
-        loan: { select: { copy: { select: { title: { select: { id: true, title: true } } } } } },
+        issue: { select: { copy: { select: { title: { select: { id: true, title: true } } } } } },
       },
     });
   }
@@ -188,7 +188,7 @@ export class FinesService {
    * outstanding (`PAID` in full), is a 409, not silently accepted.
    *
    * Branch-scope checked via the fine's LOAN (same join reasoning as
-   * `listFines` above) only when one exists — a loan-less fine has no branch
+   * `listFines` above) only when one exists — a issue-less fine has no branch
    * to check against, same "unknown passes through" convention.
    */
   async waive(
@@ -200,9 +200,9 @@ export class FinesService {
     now: Date,
     allowedBranches: string[],
   ): Promise<WaiveResult> {
-    const fine = await tx.fine.findUnique({ where: { id: fineId }, include: { loan: { select: { branchId: true } } } });
+    const fine = await tx.fine.findUnique({ where: { id: fineId }, include: { issue: { select: { branchId: true } } } });
     if (!fine) throw new NotFoundException('Fine not found');
-    if (fine.loan) assertBranchInScope(fine.loan.branchId, allowedBranches);
+    if (fine.issue) assertBranchInScope(fine.issue.branchId, allowedBranches);
 
     if (fine.status === 'WAIVED') {
       throw new ConflictException({ reason: 'ALREADY_WAIVED', message: 'This fine has already been waived' });
@@ -239,21 +239,21 @@ export class FinesService {
   }
 
   /**
-   * See `overdueLoansQuery`'s own doc for why this delegates its SQL shape to
+   * See `overdueIssuesQuery`'s own doc for why this delegates its SQL shape to
    * that exported function rather than building it inline.
    *
    * The member and title are fetched by TWO follow-up lookups rather than by
-   * joining them into that SQL, and the choice is deliberate. `overdueLoansQuery`
-   * is shaped column-for-column to the `loan_due` partial index, with an e2e
+   * joining them into that SQL, and the choice is deliberate. `overdueIssuesQuery`
+   * is shaped column-for-column to the `issue_due` partial index, with an e2e
    * test that EXPLAINs it and fails on a Seq Scan; adding joins would put that
    * plan back in play for a screen that lists at most 500 rows. Instead the
    * tuned query stays byte-identical, and the hydration is two primary-key
    * `IN` lookups over the distinct ids — three indexed queries in total, no
    * N+1, and nothing that can regress the plan the test protects.
    */
-  async listOverdue(tx: LibraryTx, orgId: string, now: Date, allowedBranches: string[]): Promise<OverdueLoanItem[]> {
+  async listOverdue(tx: LibraryTx, orgId: string, now: Date, allowedBranches: string[]): Promise<OverdueIssueItem[]> {
     const rows = await tx.$queryRaw<Array<{ id: string; copyId: string; memberId: string; issuedAt: Date; dueAt: Date; renewCount: number }>>(
-      overdueLoansQuery(orgId, now, allowedBranches),
+      overdueIssuesQuery(orgId, now, allowedBranches),
     );
     if (rows.length === 0) return [];
 
@@ -264,7 +264,7 @@ export class FinesService {
       }),
       tx.copy.findMany({
         where: { id: { in: [...new Set(rows.map((r) => r.copyId))] } },
-        select: { id: true, barcode: true, title: { select: { id: true, title: true } } },
+        select: { id: true, accessionNumber: true, title: { select: { id: true, title: true } } },
       }),
     ]);
 
@@ -275,7 +275,7 @@ export class FinesService {
       const member = memberById.get(r.memberId);
       const copy = copyById.get(r.copyId);
       // Both are FK-guaranteed to exist, so a miss means RLS hid a row that
-      // the loan still points at — a real tenancy fault. Dropping the row is
+      // the issue still points at — a real tenancy fault. Dropping the row is
       // the safe read: it is better to under-report an overdue book than to
       // render half a record from another org.
       if (!member || !copy) return [];
@@ -284,7 +284,7 @@ export class FinesService {
         daysOverdue: Math.floor((now.getTime() - r.dueAt.getTime()) / MS_PER_DAY),
         member,
         title: copy.title,
-        barcode: copy.barcode,
+        accessionNumber: copy.accessionNumber,
       }];
     });
   }
@@ -297,13 +297,13 @@ export class FinesService {
    * "overdue right now" — so a historical date reconciles the same way today
    * it will next month: `dueAt < dayEnd AND (returnedAt IS NULL OR
    * returnedAt >= dayEnd)`. `finesAccrued` counts `Fine` rows CREATED that
-   * day (this codebase's only fine-creation path is `loans.service.ts`'s
+   * day (this codebase's only fine-creation path is `issues.service.ts`'s
    * late-return flow, kind `OVERDUE`, but this counts every kind — nothing
    * here assumes only `OVERDUE` fines exist).
    *
-   * Branch filter: `Loan` filters directly on its own `branchId`; the `Fine`
-   * aggregate joins through `loan`, same reasoning/convention as
-   * `listFines`/`waive` above (a loan-less fine passes through for every
+   * Branch filter: `Issue` filters directly on its own `branchId`; the `Fine`
+   * aggregate joins through `issue`, same reasoning/convention as
+   * `listFines`/`waive` above (a issue-less fine passes through for every
    * branch-scoped caller, since it has no branch to attribute).
    */
   async dayReport(tx: LibraryTx, orgId: string, query: DayReportQueryDto, allowedBranches: string[]): Promise<DayReport> {
@@ -311,9 +311,9 @@ export class FinesService {
     const branchFilter = allowedBranches.length > 0 ? { branchId: { in: allowedBranches } } : {};
 
     const [issued, returned, overdue, fineAgg] = await Promise.all([
-      tx.loan.count({ where: { orgId, ...branchFilter, issuedAt: { gte: start, lt: end } } }),
-      tx.loan.count({ where: { orgId, ...branchFilter, returnedAt: { gte: start, lt: end } } }),
-      tx.loan.count({
+      tx.issue.count({ where: { orgId, ...branchFilter, issuedAt: { gte: start, lt: end } } }),
+      tx.issue.count({ where: { orgId, ...branchFilter, returnedAt: { gte: start, lt: end } } }),
+      tx.issue.count({
         where: { orgId, ...branchFilter, dueAt: { lt: end }, OR: [{ returnedAt: null }, { returnedAt: { gte: end } }] },
       }),
       tx.fine.aggregate({
@@ -321,7 +321,7 @@ export class FinesService {
           orgId,
           createdAt: { gte: start, lt: end },
           ...(allowedBranches.length > 0
-            ? { OR: [{ loanId: null }, { loan: { branchId: { in: allowedBranches } } }] }
+            ? { OR: [{ issueId: null }, { issue: { branchId: { in: allowedBranches } } }] }
             : {}),
         },
         _sum: { amount: true },

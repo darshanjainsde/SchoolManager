@@ -32,10 +32,10 @@ export const ENDPOINTS: EndpointSpec[] = [
     method: 'POST',
     path: '/catalog/titles/:id/copies',
     roles: WRITERS,
-    body: { branchId: '11111111-1111-4111-8111-111111111111', barcode: 'AUTHZ-MATRIX-PROBE-0001' },
+    body: { branchId: '11111111-1111-4111-8111-111111111111', accessionNumber: 'AUTHZ-MATRIX-PROBE-0001' },
   },
   { method: 'PATCH', path: '/catalog/copies/:id', roles: WRITERS, body: { shelf: 'A1' } },
-  { method: 'GET', path: '/catalog/copies/by-barcode/:barcode', roles: READERS },
+  { method: 'GET', path: '/catalog/copies/by-accessionNumber/:accessionNumber', roles: READERS },
   { method: 'GET', path: '/catalog/categories', roles: READERS },
   { method: 'POST', path: '/catalog/categories', roles: WRITERS, body: { name: 'Authz Matrix Probe Category' } },
 
@@ -51,21 +51,21 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // Task 8 — circulation desk. ORG_OWNER/LIBRARIAN/ASSISTANT all work the
   // desk; MEMBER is denied (a member cannot issue/return their own or
-  // anyone else's loan through this route). Bodies name a barcode that
+  // anyone else's issue through this route). Bodies name a accessionNumber that
   // legitimately won't resolve to a real Copy for most roles under test —
   // that's fine for authz purposes, same reasoning as catalog/import/titles
   // above: guards run before the handler body, so a denied role still gets
   // 401/403, and an allowed role reaching the handler with no matching copy
   // gets a 404, which is a non-401/403 response same as any other allowed row.
-  { method: 'POST', path: '/circulation/issue', roles: READERS, body: { barcode: 'AUTHZ-MATRIX-PROBE-ISSUE', memberId: '11111111-1111-4111-8111-111111111111' } },
-  { method: 'POST', path: '/circulation/return', roles: READERS, body: { barcode: 'AUTHZ-MATRIX-PROBE-RETURN' } },
+  { method: 'POST', path: '/circulation/issue', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-ISSUE', memberId: '11111111-1111-4111-8111-111111111111' } },
+  { method: 'POST', path: '/circulation/return', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-RETURN' } },
 
   // Task 9 — renew and holds. Same desk-role split as issue/return: ORG_OWNER/
   // LIBRARIAN/ASSISTANT work the desk, MEMBER is denied. Ids in bodies are
   // well-formed UUIDs that legitimately won't resolve to a real row for most
   // roles under test — guards run before the handler, so that's a 404 for an
   // allowed role, not a 401/403, same reasoning as circulation/issue above.
-  { method: 'POST', path: '/circulation/renew', roles: READERS, body: { barcode: 'AUTHZ-MATRIX-PROBE-RENEW' } },
+  { method: 'POST', path: '/circulation/renew', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-RENEW' } },
   {
     method: 'POST',
     path: '/circulation/holds',

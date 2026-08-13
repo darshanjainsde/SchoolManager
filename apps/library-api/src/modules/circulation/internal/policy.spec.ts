@@ -5,12 +5,12 @@ import {
   evaluateRenew,
   holdShelfExpiry,
   holdState,
-  loanState,
+  issueState,
   nextHoldToPromote,
   type Copy,
   type Hold,
   type HoldStatusValue,
-  type Loan,
+  type Issue,
   type Member,
   type Policy,
 } from './policy';
@@ -19,7 +19,7 @@ const MS_PER_DAY = 86_400_000;
 
 const POLICY: Policy = {
   maxBooks: 3,
-  loanDays: 14,
+  issueDays: 14,
   renewLimit: 2,
   renewDays: 7,
   finePerDay: 5,
@@ -124,9 +124,9 @@ describe('evaluateIssue', () => {
     });
   }
 
-  it('a successful issue sets dueAt to now + loanDays', () => {
+  it('a successful issue sets dueAt to now + issueDays', () => {
     const result = evaluateIssue(POLICY, ACTIVE_MEMBER, AVAILABLE_COPY, 0, 0, NOW);
-    expect(result).toEqual({ allowed: true, dueAt: new Date(NOW.getTime() + POLICY.loanDays * MS_PER_DAY) });
+    expect(result).toEqual({ allowed: true, dueAt: new Date(NOW.getTime() + POLICY.issueDays * MS_PER_DAY) });
   });
 
   it('checks precedence: an inactive member is denied even when every other input also violates a rule', () => {
@@ -143,7 +143,7 @@ describe('evaluateIssue', () => {
 });
 
 describe('evaluateRenew', () => {
-  const OK_LOAN: Loan = { dueAt: new Date(NOW.getTime() + 3 * MS_PER_DAY), returnedAt: null, renewCount: 0 };
+  const OK_LOAN: Issue = { dueAt: new Date(NOW.getTime() + 3 * MS_PER_DAY), returnedAt: null, renewCount: 0 };
 
   it('renewal is refused when the title has pending holds', () => {
     const result = evaluateRenew(POLICY, OK_LOAN, 1, NOW);
@@ -165,19 +165,19 @@ describe('evaluateRenew', () => {
     expect(result.allowed).toBe(true);
   });
 
-  it('renewal is refused once the loan is already overdue', () => {
-    const overdue: Loan = { ...OK_LOAN, dueAt: new Date(NOW.getTime() - 1) };
+  it('renewal is refused once the issue is already overdue', () => {
+    const overdue: Issue = { ...OK_LOAN, dueAt: new Date(NOW.getTime() - 1) };
     const result = evaluateRenew(POLICY, overdue, 0, NOW);
     expect(result).toEqual({ allowed: false, reason: 'ALREADY_OVERDUE' });
   });
 
-  it('a loan due at exactly now is not yet overdue and may still be renewed', () => {
+  it('a issue due at exactly now is not yet overdue and may still be renewed', () => {
     const result = evaluateRenew(POLICY, { ...OK_LOAN, dueAt: NOW }, 0, NOW);
     expect(result.allowed).toBe(true);
   });
 
   it('checks precedence: overdue wins even when renewLimit and holds are also violated', () => {
-    const overdue: Loan = { ...OK_LOAN, dueAt: new Date(NOW.getTime() - 1), renewCount: POLICY.renewLimit };
+    const overdue: Issue = { ...OK_LOAN, dueAt: new Date(NOW.getTime() - 1), renewCount: POLICY.renewLimit };
     const result = evaluateRenew(POLICY, overdue, 5, NOW);
     expect(result).toEqual({ allowed: false, reason: 'ALREADY_OVERDUE' });
   });
@@ -221,34 +221,34 @@ describe('computeFine', () => {
   });
 });
 
-describe('loanState', () => {
+describe('issueState', () => {
   const dueAt = new Date('2026-08-11T00:00:00.000Z');
 
-  it('a loan with returnedAt set is RETURNED regardless of now', () => {
-    const loan: Pick<Loan, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: new Date('2026-08-01T00:00:00.000Z') };
-    expect(loanState(loan, new Date('2030-01-01T00:00:00.000Z'))).toBe('RETURNED');
+  it('a issue with returnedAt set is RETURNED regardless of now', () => {
+    const issue: Pick<Issue, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: new Date('2026-08-01T00:00:00.000Z') };
+    expect(issueState(issue, new Date('2030-01-01T00:00:00.000Z'))).toBe('RETURNED');
   });
 
   it('is OVERDUE one second after dueAt', () => {
-    const loan: Pick<Loan, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: null };
-    expect(loanState(loan, new Date(dueAt.getTime() + 1_000))).toBe('OVERDUE');
+    const issue: Pick<Issue, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: null };
+    expect(issueState(issue, new Date(dueAt.getTime() + 1_000))).toBe('OVERDUE');
   });
 
   it('is not yet OVERDUE at exactly dueAt', () => {
-    const loan: Pick<Loan, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: null };
-    expect(loanState(loan, dueAt)).not.toBe('OVERDUE');
+    const issue: Pick<Issue, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: null };
+    expect(issueState(issue, dueAt)).not.toBe('OVERDUE');
   });
 
   it('is DUE_SOON inside the due-soon window', () => {
-    const loan: Pick<Loan, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: null };
+    const issue: Pick<Issue, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: null };
     const now = new Date(dueAt.getTime() - (DUE_SOON_WINDOW_DAYS * MS_PER_DAY - 1));
-    expect(loanState(loan, now)).toBe('DUE_SOON');
+    expect(issueState(issue, now)).toBe('DUE_SOON');
   });
 
   it('is ACTIVE just outside the due-soon window', () => {
-    const loan: Pick<Loan, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: null };
+    const issue: Pick<Issue, 'dueAt' | 'returnedAt'> = { dueAt, returnedAt: null };
     const now = new Date(dueAt.getTime() - (DUE_SOON_WINDOW_DAYS * MS_PER_DAY + 1));
-    expect(loanState(loan, now)).toBe('ACTIVE');
+    expect(issueState(issue, now)).toBe('ACTIVE');
   });
 });
 

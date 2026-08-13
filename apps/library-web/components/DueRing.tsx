@@ -11,7 +11,7 @@ import { daysUntil, dueTone } from '@/lib/circulation';
 export function DueRing({ dueAt }: { dueAt: string }) {
   const days = daysUntil(dueAt);
   const tone = dueTone(days);
-  // 0 days left = full ring; clamp so a long loan does not underflow the dash.
+  // 0 days left = full ring; clamp so a long issue does not underflow the dash.
   const frac = Math.max(0, Math.min(1, 1 - days / 14));
   const dash = 63;
   return (

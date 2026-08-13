@@ -2,7 +2,7 @@ export {
   evaluateIssue,
   evaluateRenew,
   computeFine,
-  loanState,
+  issueState,
   nextHoldToPromote,
   holdShelfExpiry,
   holdState,
@@ -12,11 +12,11 @@ export type {
   Policy,
   Member,
   Copy,
-  Loan,
+  Issue,
   Hold,
   HoldStatusValue,
   IssueDenial,
   RenewDenial,
-  LoanState,
+  IssueState,
 } from './internal/policy';
 export { CirculationModule } from './internal/circulation.module';

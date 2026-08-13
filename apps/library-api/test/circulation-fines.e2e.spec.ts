@@ -9,7 +9,7 @@ import { configureApp } from '../src/configure-app';
 import { closeOrgLookupRedis } from '../src/modules/tenancy';
 import { signAccessToken } from '../src/modules/auth/internal/auth.module';
 import type { Policy } from '../src/modules/circulation';
-import { overdueLoansQuery } from '../src/modules/circulation/internal/fines.service';
+import { overdueIssuesQuery } from '../src/modules/circulation/internal/fines.service';
 import { LIVE } from './helpers/live-db';
 
 const describeLive = LIVE ? describe : describe.skip;
@@ -18,7 +18,7 @@ const MS_PER_DAY = 86_400_000;
 
 const POLICY: Policy = {
   maxBooks: 5,
-  loanDays: 14,
+  issueDays: 14,
   renewLimit: 2,
   renewDays: 14,
   finePerDay: 5,
@@ -84,8 +84,8 @@ function seedTitle(orgId: string, label: string) {
   return getLibraryPlatformPrisma().title.create({ data: { orgId, title: `Fines E2E — ${label}` } });
 }
 
-function seedCopy(orgId: string, branchId: string, titleId: string, barcode: string) {
-  return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, barcode } });
+function seedCopy(orgId: string, branchId: string, titleId: string, accessionNumber: string) {
+  return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, accessionNumber } });
 }
 
 async function cleanup(orgId: string): Promise<void> {
@@ -238,16 +238,16 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
     });
     afterAll(() => cleanup(org.orgId));
 
-    it('lists only OPEN loans past dueAt, with daysOverdue computed at read time (never stored)', async () => {
+    it('lists only OPEN issues past dueAt, with daysOverdue computed at read time (never stored)', async () => {
       const member = await seedMember(org.orgId, org.branchId, `OD-${Date.now()}`);
       const title = await seedTitle(org.orgId, 'overdue-list');
       const overdueCopy = await seedCopy(org.orgId, org.branchId, title.id, `OD-OVERDUE-${Date.now()}`);
       const futureCopy = await seedCopy(org.orgId, org.branchId, title.id, `OD-FUTURE-${Date.now()}`);
       const prisma = getLibraryPlatformPrisma();
-      const overdueLoan = await prisma.loan.create({
+      const overdueLoan = await prisma.issue.create({
         data: { orgId: org.orgId, copyId: overdueCopy.id, branchId: org.branchId, memberId: member.id, dueAt: new Date(Date.now() - 3 * MS_PER_DAY) },
       });
-      await prisma.loan.create({
+      await prisma.issue.create({
         data: { orgId: org.orgId, copyId: futureCopy.id, branchId: org.branchId, memberId: member.id, dueAt: new Date(Date.now() + 3 * MS_PER_DAY) },
       });
 
@@ -265,14 +265,14 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
     });
 
     /**
-     * The actual guard: `overdueLoansQuery` (fines.service.ts) is the SAME
+     * The actual guard: `overdueIssuesQuery` (fines.service.ts) is the SAME
      * SQL the route runs — this test `EXPLAIN`s that exact query, not a
      * hand-retyped copy of it (LIBRARY-TRAPS.md #15). Asserts an Index Scan
-     * on `loan_due`, never a Seq Scan. See task-9-10-report.md for the
-     * deliberate-break proof (dropping `loan_due` and re-running this exact
+     * on `issue_due`, never a Seq Scan. See task-9-10-report.md for the
+     * deliberate-break proof (dropping `issue_due` and re-running this exact
      * assertion to watch it fail, then restoring the index).
      */
-    it('the overdue query is index-shaped, and loan_due still exists and is valid', async () => {
+    it('the overdue query is index-shaped, and issue_due still exists and is valid', async () => {
       // A 1-2 row fixture is NOT a valid proof here: Postgres's cost-based
       // optimizer correctly prefers a Seq Scan over an Index Scan on a tiny
       // table (confirmed live while writing this test — see
@@ -289,12 +289,12 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
       const stamp = Date.now();
       await prisma.copy.createMany({
         data: Array.from({ length: N }, (_, i) => ({
-          orgId: org.orgId, titleId: title.id, branchId: org.branchId, barcode: `EXPLAIN-BULK-${stamp}-${i}`,
+          orgId: org.orgId, titleId: title.id, branchId: org.branchId, accessionNumber: `EXPLAIN-BULK-${stamp}-${i}`,
         })),
       });
       const copies = await prisma.copy.findMany({ where: { orgId: org.orgId, titleId: title.id }, select: { id: true } });
       const nowMs = Date.now();
-      await prisma.loan.createMany({
+      await prisma.issue.createMany({
         data: copies.map((c, i) => ({
           orgId: org.orgId,
           copyId: c.id,
@@ -304,10 +304,10 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
           dueAt: new Date(nowMs + (i - N / 2) * 3_600_000),
         })),
       });
-      await prisma.$executeRawUnsafe('ANALYZE "Loan"');
+      await prisma.$executeRawUnsafe('ANALYZE "Issue"');
       await prisma.$executeRawUnsafe('ANALYZE "Copy"');
 
-      const sql = overdueLoansQuery(org.orgId, new Date());
+      const sql = overdueIssuesQuery(org.orgId, new Date());
       const plan = await withOrg(org.orgId, (tx: LibraryTx) => tx.$queryRaw<Array<{ 'QUERY PLAN': string }>>`EXPLAIN ${sql}`);
       const planText = plan.map((r) => r['QUERY PLAN']).join('\n');
 
@@ -317,13 +317,13 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
       /*
        * Two assertions, both deterministic, replacing one that was not.
        *
-       * The original asserted `/Index.*loan_due/` — the specific index by
+       * The original asserted `/Index.*issue_due/` — the specific index by
        * name — and flaked roughly half the time on a long-lived local
        * database: identical code, alternating pass/fail. The cause is not the
-       * query. `Loan` holds every org ever created by every e2e run, so
+       * query. `Issue` holds every org ever created by every e2e run, so
        * `orgId = X` gets less selective as the table accumulates; the planner
        * eventually estimates ~1 matching row (it printed `rows=1`, cost 4.16)
-       * and picks `loan_one_active_per_copy` instead. Both are partial indexes
+       * and picks `issue_one_active_per_copy` instead. Both are partial indexes
        * with the same `WHERE "returnedAt" IS NULL`, both are Index Scans, and
        * at that estimated size both are correct choices. The test was
        * asserting a planner preference, which is not a property of this code.
@@ -332,26 +332,26 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
        *
        *   1. The query stays index-shaped. If someone wraps `dueAt` in a
        *      function or adds an OR that defeats indexing, this query falls
-       *      back to reading every loan the org ever made — caught by the
-       *      Seq Scan assertion plus requiring an Index Scan on Loan.
-       *   2. `loan_due` still exists and is valid. Deleting the migration or
+       *      back to reading every issue the org ever made — caught by the
+       *      Seq Scan assertion plus requiring an Index Scan on Issue.
+       *   2. `issue_due` still exists and is valid. Deleting the migration or
        *      leaving the index INVALID after a failed concurrent build is
        *      caught by reading the catalog, which no planner decision can
        *      make flaky. (This is the risk the deliberate-break proof in
        *      task-9-10-report.md exercised by dropping the index.)
        */
-      expect(planText).not.toMatch(/Seq Scan on "?Loan"?/);
-      expect(planText).toMatch(/Index (Only )?Scan using \w+ on "?Loan"?/);
+      expect(planText).not.toMatch(/Seq Scan on "?Issue"?/);
+      expect(planText).toMatch(/Index (Only )?Scan using \w+ on "?Issue"?/);
 
       const [idx] = await prisma.$queryRaw<Array<{ indexdef: string; indisvalid: boolean }>>`
         SELECT i.indexdef, x.indisvalid
         FROM pg_indexes i
         JOIN pg_class c ON c.relname = i.indexname
         JOIN pg_index x ON x.indexrelid = c.oid
-        WHERE i.schemaname = 'library' AND i.indexname = 'loan_due'
+        WHERE i.schemaname = 'library' AND i.indexname = 'issue_due'
       `;
       // Missing here means the migration is gone and GET /circulation/overdue
-      // would read every loan the org has ever made.
+      // would read every issue the org has ever made.
       expect(idx).toBeDefined();
       expect(idx.indisvalid).toBe(true);
       expect(idx.indexdef).toMatch(/"?dueAt"?/);
@@ -377,27 +377,27 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
 
       // L1: issued IN the day, due far in the future, still open -> issued+1, NOT overdue at day end.
       const c1 = await seedCopy(org.orgId, branchId, title.id, `DR-1-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c1.id, branchId, memberId: member.id, issuedAt: hoursIn(1), dueAt: new Date(dayStart.getTime() + 14 * MS_PER_DAY) } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: c1.id, branchId, memberId: member.id, issuedAt: hoursIn(1), dueAt: new Date(dayStart.getTime() + 14 * MS_PER_DAY) } });
 
       // L2: issued IN the day, due IN the day, never returned -> issued+1, overdue+1 (still outstanding, past due by day end).
       const c2 = await seedCopy(org.orgId, branchId, title.id, `DR-2-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c2.id, branchId, memberId: member.id, issuedAt: hoursIn(2), dueAt: hoursIn(3) } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: c2.id, branchId, memberId: member.id, issuedAt: hoursIn(2), dueAt: hoursIn(3) } });
 
       // L3: issued IN the day, due IN the day, returned IN the day BEFORE its own dueAt -> issued+1, returned+1, NOT overdue (resolved before day end).
       const c3 = await seedCopy(org.orgId, branchId, title.id, `DR-3-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c3.id, branchId, memberId: member.id, issuedAt: hoursIn(3), dueAt: hoursIn(5), returnedAt: hoursIn(4), status: 'RETURNED' } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: c3.id, branchId, memberId: member.id, issuedAt: hoursIn(3), dueAt: hoursIn(5), returnedAt: hoursIn(4), status: 'RETURNED' } });
 
       // L4: issued the day BEFORE, due IN the day, never returned -> NOT counted as issued (wrong day), but overdue+1 by this day's end.
       const c4 = await seedCopy(org.orgId, branchId, title.id, `DR-4-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c4.id, branchId, memberId: member.id, issuedAt: new Date(dayStart.getTime() - MS_PER_DAY), dueAt: hoursIn(1) } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: c4.id, branchId, memberId: member.id, issuedAt: new Date(dayStart.getTime() - MS_PER_DAY), dueAt: hoursIn(1) } });
 
       // L5: issued long before, was overdue, but returned IN the day -> returned+1, NOT counted as issued, NOT overdue (resolved before day end).
       const c5 = await seedCopy(org.orgId, branchId, title.id, `DR-5-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: c5.id, branchId, memberId: member.id, issuedAt: new Date(dayStart.getTime() - 20 * MS_PER_DAY), dueAt: new Date(dayStart.getTime() - 10 * MS_PER_DAY), returnedAt: hoursIn(6), status: 'RETURNED' } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: c5.id, branchId, memberId: member.id, issuedAt: new Date(dayStart.getTime() - 20 * MS_PER_DAY), dueAt: new Date(dayStart.getTime() - 10 * MS_PER_DAY), returnedAt: hoursIn(6), status: 'RETURNED' } });
 
       // L6: outside the window entirely (issued/due/returned all the day after) -> must not appear in any count.
       const c6 = await seedCopy(org.orgId, branchId, title.id, `DR-6-${Date.now()}`);
-      await prisma.loan.create({
+      await prisma.issue.create({
         data: { orgId: org.orgId, copyId: c6.id, branchId, memberId: member.id, issuedAt: new Date(dayStart.getTime() + MS_PER_DAY + 3_600_000), dueAt: new Date(dayStart.getTime() + 15 * MS_PER_DAY) },
       });
 
@@ -488,7 +488,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
       }
     });
 
-    it('counts a loan issued moments ago, whatever the UTC date happens to be', async () => {
+    it('counts a issue issued moments ago, whatever the UTC date happens to be', async () => {
       // Kiritimati is UTC+14, so for 14 hours a day its date is already
       // tomorrow by UTC. Under the old UTC-derived default this returned 0.
       const org = await seedOrg(`tznow-${Date.now().toString(36)}`, 'Pacific/Kiritimati');
@@ -496,7 +496,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
         const member = await seedMember(org.orgId, org.branchId, `TZNOW-${Date.now()}`);
         const title = await seedTitle(org.orgId, 'tz-now');
         const copy = await seedCopy(org.orgId, org.branchId, title.id, `TZNOW-${Date.now()}`);
-        await getLibraryPlatformPrisma().loan.create({
+        await getLibraryPlatformPrisma().issue.create({
           data: {
             orgId: org.orgId,
             copyId: copy.id,
@@ -542,7 +542,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
       const copy = await seedCopy(org.orgId, org.branchId, title.id, `IST-EVE-${Date.now()}`);
       const day = '2026-08-08';
       const issuedAt = new Date(`${day}T21:00:00.000+05:30`);
-      await getLibraryPlatformPrisma().loan.create({
+      await getLibraryPlatformPrisma().issue.create({
         data: {
           orgId: org.orgId, copyId: copy.id, branchId: org.branchId, memberId: member.id,
           issuedAt, dueAt: new Date(issuedAt.getTime() + 14 * MS_PER_DAY),
@@ -569,7 +569,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
       // says it happened on the 10th. This is the actual discriminating
       // case for the bug the task's own words describe.
       const issuedAt = new Date(`${day}T01:30:00.000+05:30`);
-      await getLibraryPlatformPrisma().loan.create({
+      await getLibraryPlatformPrisma().issue.create({
         data: {
           orgId: org.orgId, copyId: copy.id, branchId: org.branchId, memberId: member.id,
           issuedAt, dueAt: new Date(issuedAt.getTime() + 14 * MS_PER_DAY),

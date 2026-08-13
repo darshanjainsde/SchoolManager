@@ -5,13 +5,13 @@
  * the wall clock exactly once per request, or a test fixture). This is the
  * single source of truth the API, a future mobile app, and every report must
  * agree on for "can this be issued/renewed," "what does this cost," and
- * "what state is this loan in" — so it is deliberately over-tested rather
+ * "what state is this issue in" — so it is deliberately over-tested rather
  * than trusted to match how libraries work from memory (see
  * `docs/superpowers/LIBRARY-TRAPS.md`, trap 15).
  *
  * No catalogue/circulation DB tables exist yet in this phase (Task 1's
  * schema changes were scoped to `RefreshToken` only) — the `Member`, `Copy`,
- * `Loan`, and `Hold` shapes below are this module's own minimal contract,
+ * `Issue`, and `Hold` shapes below are this module's own minimal contract,
  * not a re-export of a Prisma model. `Member.status`'s three values
  * deliberately match the existing `MemberStatus` enum
  * (`packages/library-db/prisma/schema.prisma`) so a future Prisma-backed
@@ -28,11 +28,11 @@ export type IssueDenial =
 
 export type RenewDenial = 'RENEW_LIMIT' | 'HAS_HOLDS' | 'ALREADY_OVERDUE';
 
-export type LoanState = 'ACTIVE' | 'DUE_SOON' | 'OVERDUE' | 'RETURNED';
+export type IssueState = 'ACTIVE' | 'DUE_SOON' | 'OVERDUE' | 'RETURNED';
 
 export interface Policy {
   maxBooks: number;
-  loanDays: number;
+  issueDays: number;
   renewLimit: number;
   renewDays: number;
   finePerDay: number;
@@ -68,7 +68,7 @@ export interface Copy {
   heldForMemberId?: string | null;
 }
 
-export interface Loan {
+export interface Issue {
   dueAt: Date;
   returnedAt: Date | null;
   renewCount: number;
@@ -97,7 +97,7 @@ function addDays(date: Date, days: number): Date {
 }
 
 /**
- * How far ahead of `dueAt` a still-active loan is reported as `DUE_SOON`
+ * How far ahead of `dueAt` a still-active issue is reported as `DUE_SOON`
  * rather than `ACTIVE`. Not a `Policy` field: it drives client-facing
  * reminder UI, not a borrowing/fee rule any org configures, so it lives here
  * as a fixed constant rather than a per-org tunable. Exported so a caller
@@ -144,15 +144,15 @@ export function evaluateIssue(
   } else if (copy.status !== 'AVAILABLE') {
     return { allowed: false, reason: 'COPY_NOT_AVAILABLE' };
   }
-  return { allowed: true, dueAt: addDays(now, p.loanDays) };
+  return { allowed: true, dueAt: addDays(now, p.issueDays) };
 }
 
 /**
- * Whether `loan` may be renewed right now, and its new due date if so.
+ * Whether `issue` may be renewed right now, and its new due date if so.
  *
- *   1. ALREADY_OVERDUE — a loan already past `dueAt` must be returned (or
+ *   1. ALREADY_OVERDUE — a issue already past `dueAt` must be returned (or
  *      have its fine settled), never silently extended.
- *   2. RENEW_LIMIT — `loan.renewCount >= renewLimit`.
+ *   2. RENEW_LIMIT — `issue.renewCount >= renewLimit`.
  *   3. HAS_HOLDS — another member is waiting on this title
  *      (`pendingHoldsOnTitle > 0`); renewing would make them wait longer.
  *
@@ -161,18 +161,18 @@ export function evaluateIssue(
  */
 export function evaluateRenew(
   p: Policy,
-  loan: Loan,
+  issue: Issue,
   pendingHoldsOnTitle: number,
   now: Date,
 ): { allowed: true; newDueAt: Date } | { allowed: false; reason: RenewDenial } {
-  if (now.getTime() > loan.dueAt.getTime()) return { allowed: false, reason: 'ALREADY_OVERDUE' };
-  if (loan.renewCount >= p.renewLimit) return { allowed: false, reason: 'RENEW_LIMIT' };
+  if (now.getTime() > issue.dueAt.getTime()) return { allowed: false, reason: 'ALREADY_OVERDUE' };
+  if (issue.renewCount >= p.renewLimit) return { allowed: false, reason: 'RENEW_LIMIT' };
   if (pendingHoldsOnTitle > 0) return { allowed: false, reason: 'HAS_HOLDS' };
   return { allowed: true, newDueAt: addDays(now, p.renewDays) };
 }
 
 /**
- * The fine owed for a loan due at `dueAt`, evaluated `at` a point in time.
+ * The fine owed for a issue due at `dueAt`, evaluated `at` a point in time.
  *
  * `days` is the BILLABLE day count — `floor((at - dueAt) / 1 day)` minus
  * `graceDays`, floored at 0 — not the raw overdue day count. Being overdue
@@ -191,14 +191,14 @@ export function computeFine(p: Policy, dueAt: Date, at: Date): { days: number; a
 
 /**
  * `RETURNED` whenever `returnedAt` is set (regardless of `now`) — a returned
- * loan's clock stops. Otherwise: `OVERDUE` once `now` is strictly past
+ * issue's clock stops. Otherwise: `OVERDUE` once `now` is strictly past
  * `dueAt` (AT `dueAt` is not yet overdue), `DUE_SOON` inside
  * `DUE_SOON_WINDOW_DAYS` of `dueAt`, else `ACTIVE`.
  */
-export function loanState(loan: Pick<Loan, 'dueAt' | 'returnedAt'>, now: Date): LoanState {
-  if (loan.returnedAt !== null) return 'RETURNED';
-  if (now.getTime() > loan.dueAt.getTime()) return 'OVERDUE';
-  const dueSoonFrom = loan.dueAt.getTime() - DUE_SOON_WINDOW_DAYS * MS_PER_DAY;
+export function issueState(issue: Pick<Issue, 'dueAt' | 'returnedAt'>, now: Date): IssueState {
+  if (issue.returnedAt !== null) return 'RETURNED';
+  if (now.getTime() > issue.dueAt.getTime()) return 'OVERDUE';
+  const dueSoonFrom = issue.dueAt.getTime() - DUE_SOON_WINDOW_DAYS * MS_PER_DAY;
   if (now.getTime() >= dueSoonFrom) return 'DUE_SOON';
   return 'ACTIVE';
 }
@@ -218,7 +218,7 @@ export function nextHoldToPromote(holds: Hold[], now: Date): Hold | null {
  * The hold-shelf deadline for a hold promoted to `READY` right now — the
  * window a member has to collect a copy pulled for them before it lapses
  * back to the next person in the queue. `policy.holdShelfDays` is the single
- * configured source for this; a caller (`loans.service.ts`'s return flow)
+ * configured source for this; a caller (`issues.service.ts`'s return flow)
  * must compute it here rather than re-adding days inline, so this and
  * `evaluateIssue`'s `dueAt` math never drift apart on how "N days from now"
  * is rounded.
@@ -234,7 +234,7 @@ export function holdShelfExpiry(p: Policy, now: Date): Date {
  * is reported as `EXPIRED` on every read from the moment its shelf window
  * lapses, but the STORED row keeps saying `READY` until a user-triggered
  * action — the next return for that title — actually writes `EXPIRED`; see
- * `loans.service.ts`'s `promoteOrRelease`).
+ * `issues.service.ts`'s `promoteOrRelease`).
  *
  * Only `READY` is ever reinterpreted. `PENDING` never is: a pending hold's
  * `expiresAt` is a placeholder with no real deadline in this phase (nothing

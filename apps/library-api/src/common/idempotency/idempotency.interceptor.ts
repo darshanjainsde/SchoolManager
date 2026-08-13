@@ -78,8 +78,8 @@ export function hashRequest(method: string, path: string, body: unknown): string
 /**
  * The concrete identity of a request for idempotency hashing: the actual URL
  * that was requested (path + query string), NOT `req.route?.path` (the
- * Express route *pattern*, e.g. `/loans/:id`). Using the pattern means
- * `POST /loans/1` and `POST /loans/2` — two different resources — hash
+ * Express route *pattern*, e.g. `/issues/:id`). Using the pattern means
+ * `POST /issues/1` and `POST /issues/2` — two different resources — hash
  * identically for the same `Idempotency-Key` and body, so the second request
  * would silently replay the first's response instead of either running or
  * correctly 409ing. `req.originalUrl` is Express's untouched original
@@ -98,7 +98,7 @@ function getHeader(req: Request, name: string): string | undefined {
 }
 
 /**
- * Barcode scanners double-fire; flaky phones retry. This interceptor makes
+ * AccessionNumber scanners double-fire; flaky phones retry. This interceptor makes
  * a client-supplied `Idempotency-Key` turn a *retried* write into a replay
  * of the first attempt's response instead of a second attempt.
  *
@@ -115,7 +115,7 @@ function getHeader(req: Request, name: string): string | undefined {
  *     converge on the same *response*. The handler itself can still run
  *     twice server-side before either request reaches the point of
  *     storing — see Decision 2 below. For an endpoint where a second
- *     handler execution is itself harmful (e.g. two loan rows, not just a
+ *     handler execution is itself harmful (e.g. two issue rows, not just a
  *     wasted one), this interceptor is necessary but not sufficient: pair
  *     it with a database-level uniqueness constraint or an advisory lock
  *     the same way `assertQuota` in `require-quota.ts` uses

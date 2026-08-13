@@ -14,7 +14,7 @@ import { LIVE } from './helpers/live-db';
 const describeLive = LIVE ? describe : describe.skip;
 
 /** A far-future placeholder for a PENDING hold's (non-null) `expiresAt` —
- * see `loans.service.ts`'s `promoteOrRelease` doc: a PENDING hold's expiry
+ * see `issues.service.ts`'s `promoteOrRelease` doc: a PENDING hold's expiry
  * only becomes meaningful once it is promoted to READY (Task 9's hold-shelf
  * countdown), so a placeholder this far out is never mistaken for "already
  * expired" by `nextHoldToPromote`. */
@@ -23,7 +23,7 @@ const FOURTEEN_DAYS_OUT = new Date(Date.now() + 14 * 86_400_000);
 
 const POLICY: Policy = {
   maxBooks: 5,
-  loanDays: 14,
+  issueDays: 14,
   renewLimit: 2,
   renewDays: 14,
   finePerDay: 5,
@@ -71,8 +71,8 @@ function seedTitle(orgId: string, label: string) {
   return getLibraryPlatformPrisma().title.create({ data: { orgId, title: `Circulation E2E — ${label}` } });
 }
 
-function seedCopy(orgId: string, branchId: string, titleId: string, barcode: string) {
-  return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, barcode } });
+function seedCopy(orgId: string, branchId: string, titleId: string, accessionNumber: string) {
+  return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, accessionNumber } });
 }
 
 async function cleanup(orgId: string): Promise<void> {
@@ -100,7 +100,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
   describe('full flow: issue -> return on time (no fine) -> issue -> return late (fine to the rupee)', () => {
     let org: CircOrg;
     let member: { id: string };
-    let copy: { id: string; barcode: string };
+    let copy: { id: string; accessionNumber: string };
 
     beforeAll(async () => {
       org = await seedCircOrg(`full-${Date.now().toString(36)}`);
@@ -115,20 +115,20 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
         .post('/circulation/issue')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ barcode: copy.barcode, memberId: member.id });
+        .send({ accessionNumber: copy.accessionNumber, memberId: member.id });
 
     const doReturn = () =>
       request(app.getHttpServer())
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ barcode: copy.barcode });
+        .send({ accessionNumber: copy.accessionNumber });
 
-    it('issues the copy: Loan created, Copy -> ON_LOAN', async () => {
+    it('issues the copy: Issue created, Copy -> ON_LOAN', async () => {
       const res = await issue();
       expect(res.status).toBe(201);
-      expect(res.body.loan.memberId).toBe(member.id);
-      expect(res.body.loan.returnedAt).toBeNull();
+      expect(res.body.issue.memberId).toBe(member.id);
+      expect(res.body.issue.returnedAt).toBeNull();
 
       const dbCopy = await getLibraryPlatformPrisma().copy.findUnique({ where: { id: copy.id } });
       expect(dbCopy?.status).toBe('ON_LOAN');
@@ -152,13 +152,13 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     });
 
     it('returns late: Fine amount matches computeFine to the rupee', async () => {
-      // Force the loan overdue by backdating dueAt directly — there is no
+      // Force the issue overdue by backdating dueAt directly — there is no
       // clock to fake through the HTTP layer, and the controller reads
       // `new Date()` itself (see circulation.controller.ts's own comment on
       // why: the clock is read exactly once per request, not injected).
-      const activeLoan = await getLibraryPlatformPrisma().loan.findFirst({ where: { copyId: copy.id, returnedAt: null } });
+      const activeLoan = await getLibraryPlatformPrisma().issue.findFirst({ where: { copyId: copy.id, returnedAt: null } });
       const pastDue = new Date(Date.now() - 5 * 86_400_000);
-      await getLibraryPlatformPrisma().loan.update({ where: { id: activeLoan!.id }, data: { dueAt: pastDue } });
+      await getLibraryPlatformPrisma().issue.update({ where: { id: activeLoan!.id }, data: { dueAt: pastDue } });
 
       const res = await doReturn();
       expect(res.status).toBe(201);
@@ -167,22 +167,22 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
       // computeFine against the EXACT `now` the server used (its own
       // `returnedAt`), not a fresh `new Date()` here — avoids any clock-skew
       // flake between test and server process.
-      const serverNow = new Date(res.body.loan.returnedAt);
+      const serverNow = new Date(res.body.issue.returnedAt);
       const expected = computeFine(POLICY, pastDue, serverNow);
       expect(expected.amount).toBeGreaterThan(0); // sanity: the fixture actually produced an overdue fine
       expect(Number(res.body.fine.amount)).toBe(expected.amount);
       expect(res.body.fine.reason).toBe(`${expected.days} day(s) overdue`);
 
-      const dbFine = await getLibraryPlatformPrisma().fine.findFirst({ where: { loanId: activeLoan!.id } });
+      const dbFine = await getLibraryPlatformPrisma().fine.findFirst({ where: { issueId: activeLoan!.id } });
       expect(Number(dbFine?.amount)).toBe(expected.amount);
     });
   });
 
-  describe('issuing a copy already on loan is denied', () => {
+  describe('issuing a copy already on issue is denied', () => {
     let org: CircOrg;
     let memberA: { id: string };
     let memberB: { id: string };
-    let copy: { id: string; barcode: string };
+    let copy: { id: string; accessionNumber: string };
 
     beforeAll(async () => {
       org = await seedCircOrg(`unavail-${Date.now().toString(36)}`);
@@ -199,7 +199,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
           .post('/circulation/issue')
           .set('X-Library-Host', host(org))
           .set('Authorization', `Bearer ${org.librarianToken}`)
-          .send({ barcode: copy.barcode, memberId });
+          .send({ accessionNumber: copy.accessionNumber, memberId });
 
       const first = await issueAs(memberA.id);
       expect(first.status).toBe(201);
@@ -210,13 +210,13 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     });
   });
 
-  describe('returning a barcode with no active loan', () => {
+  describe('returning a accessionNumber with no active issue', () => {
     let org: CircOrg;
-    let copy: { id: string; barcode: string };
+    let copy: { id: string; accessionNumber: string };
 
     beforeAll(async () => {
       org = await seedCircOrg(`noloan-${Date.now().toString(36)}`);
-      const title = await seedTitle(org.orgId, 'no-active-loan');
+      const title = await seedTitle(org.orgId, 'no-active-issue');
       copy = await seedCopy(org.orgId, org.branchId, title.id, `NOLOAN-${Date.now()}`);
     });
     afterAll(() => cleanup(org.orgId));
@@ -226,7 +226,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ barcode: copy.barcode });
+        .send({ accessionNumber: copy.accessionNumber });
       expect(res.status).toBe(404);
     });
   });
@@ -259,7 +259,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
         .post('/circulation/issue')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ barcode: copy.barcode, memberId: heldMember.id });
+        .send({ accessionNumber: copy.accessionNumber, memberId: heldMember.id });
 
       expect(res.status).toBe(201);
       expect(res.body.collectedHoldId).toBe(hold.id);
@@ -282,7 +282,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
         .post('/circulation/issue')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ barcode: copy.barcode, memberId: otherMember.id });
+        .send({ accessionNumber: copy.accessionNumber, memberId: otherMember.id });
 
       expect(res.status).toBe(409);
       expect(res.body.reason).toBe('COPY_ON_HOLD_FOR_OTHER');
@@ -294,7 +294,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     let borrower: { id: string };
     let waiter: { id: string };
     let title: { id: string };
-    let copy: { id: string; barcode: string };
+    let copy: { id: string; accessionNumber: string };
     let hold: { id: string };
 
     beforeAll(async () => {
@@ -305,7 +305,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
       copy = await seedCopy(org.orgId, org.branchId, title.id, `HR-${Date.now()}`);
 
       const prisma = getLibraryPlatformPrisma();
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copy.id, branchId: org.branchId, memberId: borrower.id, dueAt: FOURTEEN_DAYS_OUT } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: copy.id, branchId: org.branchId, memberId: borrower.id, dueAt: FOURTEEN_DAYS_OUT } });
       await prisma.copy.update({ where: { id: copy.id }, data: { status: 'ON_LOAN' } });
       hold = await prisma.hold.create({
         data: { orgId: org.orgId, titleId: title.id, memberId: waiter.id, queuePosition: 1, status: 'PENDING', expiresAt: FAR_FUTURE },
@@ -318,7 +318,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ barcode: copy.barcode });
+        .send({ accessionNumber: copy.accessionNumber });
 
       expect(res.status).toBe(201);
       expect(res.body.promotedHoldId).toBe(hold.id);
@@ -351,7 +351,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
    * copies of the SAME title from both reading "hold X is next" and both
    * promoting it. Manually verified to discriminate during development by
    * temporarily removing the `FOR UPDATE` clause from
-   * `loans.service.ts`'s `promoteOrRelease` query and re-running this exact
+   * `issues.service.ts`'s `promoteOrRelease` query and re-running this exact
    * test: both copies ended up `ON_HOLD_SHELF`, the single Hold row was
    * left pointing at only ONE of them (last-writer-wins on `readyCopyId`),
    * and TWO `HOLD_READY` outbox rows were written for the same hold — see
@@ -364,8 +364,8 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     let borrowerX: { id: string };
     let borrowerY: { id: string };
     let title: { id: string };
-    let copyX: { id: string; barcode: string };
-    let copyY: { id: string; barcode: string };
+    let copyX: { id: string; accessionNumber: string };
+    let copyY: { id: string; accessionNumber: string };
     let hold: { id: string };
 
     beforeAll(async () => {
@@ -378,9 +378,9 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
       copyY = await seedCopy(org.orgId, org.branchId, title.id, `HRACE-Y-${Date.now()}`);
 
       const prisma = getLibraryPlatformPrisma();
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyX.id, branchId: org.branchId, memberId: borrowerX.id, dueAt: FOURTEEN_DAYS_OUT } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyX.id, branchId: org.branchId, memberId: borrowerX.id, dueAt: FOURTEEN_DAYS_OUT } });
       await prisma.copy.update({ where: { id: copyX.id }, data: { status: 'ON_LOAN' } });
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyY.id, branchId: org.branchId, memberId: borrowerY.id, dueAt: FOURTEEN_DAYS_OUT } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyY.id, branchId: org.branchId, memberId: borrowerY.id, dueAt: FOURTEEN_DAYS_OUT } });
       await prisma.copy.update({ where: { id: copyY.id }, data: { status: 'ON_LOAN' } });
 
       hold = await prisma.hold.create({
@@ -390,18 +390,18 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     afterAll(() => cleanup(org.orgId));
 
     it('two simultaneous returns of two copies of the same title promote the single pending hold exactly once', async () => {
-      const returnCopy = (barcode: string) =>
+      const returnCopy = (accessionNumber: string) =>
         request(app.getHttpServer())
           .post('/circulation/return')
           .set('X-Library-Host', host(org))
           .set('Authorization', `Bearer ${org.librarianToken}`)
-          .send({ barcode });
+          .send({ accessionNumber });
 
       // Fired together, not sequentially awaited — both requests are
       // genuinely in flight, each in its own `withOrg` transaction, so the
       // FOR UPDATE lock is the thing actually being exercised, not JS-side
       // ordering.
-      const [r1, r2] = await Promise.all([returnCopy(copyX.barcode), returnCopy(copyY.barcode)]);
+      const [r1, r2] = await Promise.all([returnCopy(copyX.accessionNumber), returnCopy(copyY.accessionNumber)]);
       expect(r1.status).toBe(201);
       expect(r2.status).toBe(201);
 
@@ -431,17 +431,17 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
   });
 
   /**
-   * `Idempotency-Key` converges the RESPONSE for a retried barcode-scanner
+   * `Idempotency-Key` converges the RESPONSE for a retried accessionNumber-scanner
    * double-fire — it does not, and is documented as not, preventing the
    * HANDLER from running twice for two genuinely concurrent requests (see
    * `IdempotencyInterceptor`'s own class doc and `circulation.controller.ts`).
-   * `loan_one_active_per_copy` (Task 4) is what actually prevents a second
-   * Loan row. Asserted directly, per the brief.
+   * `issue_one_active_per_copy` (Task 4) is what actually prevents a second
+   * Issue row. Asserted directly, per the brief.
    */
   describe('Idempotency-Key on /circulation/issue', () => {
     let org: CircOrg;
     let member: { id: string };
-    let copy: { id: string; barcode: string };
+    let copy: { id: string; accessionNumber: string };
 
     beforeAll(async () => {
       org = await seedCircOrg(`idem-${Date.now().toString(36)}`);
@@ -451,7 +451,7 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     });
     afterAll(() => cleanup(org.orgId));
 
-    it('two concurrent identical requests with the same key still produce exactly one Loan row and no 500s', async () => {
+    it('two concurrent identical requests with the same key still produce exactly one Issue row and no 500s', async () => {
       const key = `idem-key-${Date.now().toString(36)}`;
       const fire = () =>
         request(app.getHttpServer())
@@ -459,32 +459,32 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
           .set('X-Library-Host', host(org))
           .set('Authorization', `Bearer ${org.librarianToken}`)
           .set('Idempotency-Key', key)
-          .send({ barcode: copy.barcode, memberId: member.id });
+          .send({ accessionNumber: copy.accessionNumber, memberId: member.id });
 
       const [r1, r2] = await Promise.all([fire(), fire()]);
       expect(r1.status).toBeLessThan(500);
       expect(r2.status).toBeLessThan(500);
 
-      const loans = await getLibraryPlatformPrisma().loan.findMany({ where: { copyId: copy.id, returnedAt: null } });
-      expect(loans).toHaveLength(1);
+      const issues = await getLibraryPlatformPrisma().issue.findMany({ where: { copyId: copy.id, returnedAt: null } });
+      expect(issues).toHaveLength(1);
     });
   });
 
   /**
-   * Regression proof for Task 4's `loan_one_active_per_copy` exercised
-   * through the REAL `/circulation/issue` route end to end (loan-constraints
+   * Regression proof for Task 4's `issue_one_active_per_copy` exercised
+   * through the REAL `/circulation/issue` route end to end (issue-constraints
    * e2e.spec.ts already proves the raw index directly against
-   * `tx.loan.create`; this proves the SERVICE correctly turns the resulting
+   * `tx.issue.create`; this proves the SERVICE correctly turns the resulting
    * P2002 into a 409 rather than an unhandled 500). Not re-run here: dropping
    * and recreating the index itself (the "does it discriminate" half of the
-   * proof) — that lives in loan-constraints.e2e.spec.ts and is not repeated
+   * proof) — that lives in issue-constraints.e2e.spec.ts and is not repeated
    * per guard per consuming module.
    */
   describe('double-issue is impossible through the real endpoint', () => {
     let org: CircOrg;
     let memberA: { id: string };
     let memberB: { id: string };
-    let copy: { id: string; barcode: string };
+    let copy: { id: string; accessionNumber: string };
 
     beforeAll(async () => {
       org = await seedCircOrg(`dbl-${Date.now().toString(36)}`);
@@ -495,13 +495,13 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
     });
     afterAll(() => cleanup(org.orgId));
 
-    it('two concurrent issues of the same barcode by different members: exactly one 201, one 409, one Loan row', async () => {
+    it('two concurrent issues of the same accessionNumber by different members: exactly one 201, one 409, one Issue row', async () => {
       const issueAs = (memberId: string) =>
         request(app.getHttpServer())
           .post('/circulation/issue')
           .set('X-Library-Host', host(org))
           .set('Authorization', `Bearer ${org.librarianToken}`)
-          .send({ barcode: copy.barcode, memberId });
+          .send({ accessionNumber: copy.accessionNumber, memberId });
 
       const [r1, r2] = await Promise.all([issueAs(memberA.id), issueAs(memberB.id)]);
       const statuses = [r1.status, r2.status].sort((a, b) => a - b);
@@ -510,8 +510,8 @@ describeLive('circulation desk — issue and return (Task 8)', () => {
       const loser = r1.status === 409 ? r1 : r2;
       expect(loser.body.reason).toBe('ALREADY_ON_LOAN');
 
-      const loans = await getLibraryPlatformPrisma().loan.findMany({ where: { copyId: copy.id, returnedAt: null } });
-      expect(loans).toHaveLength(1);
+      const issues = await getLibraryPlatformPrisma().issue.findMany({ where: { copyId: copy.id, returnedAt: null } });
+      expect(issues).toHaveLength(1);
     });
   });
 });

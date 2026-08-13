@@ -6,7 +6,7 @@ import { IdempotencyModule } from '../../../common/idempotency/idempotency.modul
 import { CirculationController } from './circulation.controller';
 import { FinesService } from './fines.service';
 import { HoldsService } from './holds.service';
-import { LoansService } from './loans.service';
+import { IssuesService } from './issues.service';
 import { MembersService } from './members.service';
 
 /**
@@ -26,6 +26,6 @@ import { MembersService } from './members.service';
 @Module({
   imports: [TenancyModule, PlansModule, IdempotencyModule],
   controllers: [CirculationController],
-  providers: [JwtService, LoansService, HoldsService, FinesService, MembersService],
+  providers: [JwtService, IssuesService, HoldsService, FinesService, MembersService],
 })
 export class CirculationModule {}

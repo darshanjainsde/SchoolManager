@@ -130,9 +130,9 @@ const SHELF: Array<{
 
 /**
  * Builds the shelf for one org: categories, authors, titles, and physical
- * copies with accession-style barcodes.
+ * copies numbered the way a school actually numbers them.
  *
- * Idempotent by (orgId, isbn13) for titles and (orgId, barcode) for copies, so
+ * Idempotent by (orgId, isbn13) for titles and (orgId, accessionNumber) for copies, so
  * re-running the seed against an existing database tops it up rather than
  * duplicating it or failing on a unique constraint.
  */
@@ -158,7 +158,7 @@ async function seedShelf(
 
   let titles = 0;
   let copies = 0;
-  let accession = 1;
+  let accession = 1001;
 
   for (const b of SHELF) {
     let title = await prisma.title.findFirst({ where: { orgId, isbn13: b.isbn13 }, select: { id: true } });
@@ -182,13 +182,15 @@ async function seedShelf(
     }
 
     for (let i = 0; i < b.copies; i += 1) {
-      // ACC-00001 style: what a school actually stamps inside the cover, and
-      // what the desk's barcode field expects to be scanned.
-      const barcode = `ACC-${String(accession++).padStart(5, '0')}`;
-      const has = await prisma.copy.findFirst({ where: { orgId, barcode }, select: { id: true } });
+      // Plain sequential integers, starting at 1001 — what a school writes by
+      // hand inside the front cover. Sequential is load-bearing, not cosmetic:
+      // it is what lets stock verification accept a whole shelf as a RANGE
+      // (`1001-1040`) instead of forty separate entries.
+      const accessionNumber = String(accession++);
+      const has = await prisma.copy.findFirst({ where: { orgId, accessionNumber }, select: { id: true } });
       if (has) continue;
       await prisma.copy.create({
-        data: { orgId, titleId: title.id, branchId, barcode, shelf: b.dewey.slice(0, 3), condition: 'GOOD' },
+        data: { orgId, titleId: title.id, branchId, accessionNumber, shelf: b.dewey.slice(0, 3), condition: 'GOOD' },
       });
       copies += 1;
     }
@@ -203,9 +205,9 @@ async function seedCirculationPolicies(
 ): Promise<void> {
   const types = ['STUDENT', 'TEACHER', 'EXTERNAL'] as const;
   const byType = {
-    STUDENT: { maxBooks: 3, loanDays: 14, renewLimit: 1, maxHolds: 3 },
-    TEACHER: { maxBooks: 10, loanDays: 30, renewLimit: 2, maxHolds: 5 },
-    EXTERNAL: { maxBooks: 2, loanDays: 14, renewLimit: 0, maxHolds: 1 },
+    STUDENT: { maxBooks: 3, issueDays: 14, renewLimit: 1, maxHolds: 3 },
+    TEACHER: { maxBooks: 10, issueDays: 30, renewLimit: 2, maxHolds: 5 },
+    EXTERNAL: { maxBooks: 2, issueDays: 14, renewLimit: 0, maxHolds: 1 },
   } as const;
 
   for (const memberType of types) {
@@ -229,9 +231,9 @@ async function seedCirculationPolicies(
         branchId: null,
         memberType,
         maxBooks: t.maxBooks,
-        loanDays: t.loanDays,
+        issueDays: t.issueDays,
         renewLimit: t.renewLimit,
-        renewDays: t.loanDays,
+        renewDays: t.issueDays,
         finePerDay: 1,
         graceDays: 3,
         maxFine: 100,

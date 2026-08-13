@@ -17,7 +17,7 @@ const MS_PER_DAY = 86_400_000;
 
 const POLICY: Policy = {
   maxBooks: 5,
-  loanDays: 14,
+  issueDays: 14,
   renewLimit: 2,
   renewDays: 14,
   finePerDay: 5,
@@ -99,8 +99,8 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
   function seedTitle(orgId: string, label: string) {
     return getLibraryPlatformPrisma().title.create({ data: { orgId, title: `Circ Branch Scope E2E — ${label}` } });
   }
-  function seedCopy(orgId: string, branchId: string, titleId: string, barcode: string) {
-    return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, barcode } });
+  function seedCopy(orgId: string, branchId: string, titleId: string, accessionNumber: string) {
+    return getLibraryPlatformPrisma().copy.create({ data: { orgId, titleId, branchId, accessionNumber } });
   }
   async function cleanup(orgId: string): Promise<void> {
     await getLibraryPlatformPrisma().libraryOrg.deleteMany({ where: { id: orgId } });
@@ -121,7 +121,7 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
     await disconnectLibrary();
   });
 
-  describe('issue / return / renew — enforced against the LOADED copy/loan\'s own branch', () => {
+  describe('issue / return / renew — enforced against the LOADED copy/issue\'s own branch', () => {
     let org: BranchScopeOrg;
     let memberA: { id: string };
     let memberB: { id: string };
@@ -135,74 +135,74 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
     });
     afterAll(() => cleanup(org.orgId));
 
-    const issueAs = (token: string, barcode: string, memberId: string) =>
+    const issueAs = (token: string, accessionNumber: string, memberId: string) =>
       request(app.getHttpServer())
         .post('/circulation/issue')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${token}`)
-        .send({ barcode, memberId });
+        .send({ accessionNumber, memberId });
 
     it('an ASSISTANT scoped to branch A is denied issuing a branch-B copy', async () => {
       const copyB = await seedCopy(org.orgId, org.branchBId, title.id, `DESK-DENY-${Date.now()}`);
-      const res = await issueAs(org.scopedAssistantToken, copyB.barcode, memberB.id);
+      const res = await issueAs(org.scopedAssistantToken, copyB.accessionNumber, memberB.id);
       expect(res.status).toBe(403);
     });
 
     it('the SAME ASSISTANT is allowed issuing a branch-A copy', async () => {
       const copyA = await seedCopy(org.orgId, org.branchAId, title.id, `DESK-ALLOW-${Date.now()}`);
-      const res = await issueAs(org.scopedAssistantToken, copyA.barcode, memberA.id);
+      const res = await issueAs(org.scopedAssistantToken, copyA.accessionNumber, memberA.id);
       expect(res.status).toBe(201);
-      expect(res.body.loan.branchId).toBe(org.branchAId);
+      expect(res.body.issue.branchId).toBe(org.branchAId);
     });
 
-    it('is denied returning a branch-B loan', async () => {
+    it('is denied returning a branch-B issue', async () => {
       const copyB = await seedCopy(org.orgId, org.branchBId, title.id, `DESK-RET-DENY-${Date.now()}`);
-      const issueRes = await issueAs(org.allBranchesLibrarianToken, copyB.barcode, memberB.id);
+      const issueRes = await issueAs(org.allBranchesLibrarianToken, copyB.accessionNumber, memberB.id);
       expect(issueRes.status).toBe(201);
 
       const res = await request(app.getHttpServer())
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.scopedAssistantToken}`)
-        .send({ barcode: copyB.barcode });
+        .send({ accessionNumber: copyB.accessionNumber });
       expect(res.status).toBe(403);
     });
 
-    it('is allowed returning a branch-A loan', async () => {
+    it('is allowed returning a branch-A issue', async () => {
       const copyA = await seedCopy(org.orgId, org.branchAId, title.id, `DESK-RET-ALLOW-${Date.now()}`);
-      const issueRes = await issueAs(org.scopedAssistantToken, copyA.barcode, memberA.id);
+      const issueRes = await issueAs(org.scopedAssistantToken, copyA.accessionNumber, memberA.id);
       expect(issueRes.status).toBe(201);
 
       const res = await request(app.getHttpServer())
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.scopedAssistantToken}`)
-        .send({ barcode: copyA.barcode });
+        .send({ accessionNumber: copyA.accessionNumber });
       expect(res.status).toBe(201);
     });
 
-    it('is denied renewing a branch-B loan', async () => {
+    it('is denied renewing a branch-B issue', async () => {
       const copyB = await seedCopy(org.orgId, org.branchBId, title.id, `DESK-RENEW-DENY-${Date.now()}`);
-      const issueRes = await issueAs(org.allBranchesLibrarianToken, copyB.barcode, memberB.id);
+      const issueRes = await issueAs(org.allBranchesLibrarianToken, copyB.accessionNumber, memberB.id);
       expect(issueRes.status).toBe(201);
 
       const res = await request(app.getHttpServer())
         .post('/circulation/renew')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.scopedAssistantToken}`)
-        .send({ barcode: copyB.barcode });
+        .send({ accessionNumber: copyB.accessionNumber });
       expect(res.status).toBe(403);
     });
 
     it('a LIBRARIAN with an empty branches array can issue AND return either branch', async () => {
       const copyB = await seedCopy(org.orgId, org.branchBId, title.id, `DESK-ALLALL-${Date.now()}`);
-      const issueRes = await issueAs(org.allBranchesLibrarianToken, copyB.barcode, memberB.id);
+      const issueRes = await issueAs(org.allBranchesLibrarianToken, copyB.accessionNumber, memberB.id);
       expect(issueRes.status).toBe(201);
       const returnRes = await request(app.getHttpServer())
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.allBranchesLibrarianToken}`)
-        .send({ barcode: copyB.barcode });
+        .send({ accessionNumber: copyB.accessionNumber });
       expect(returnRes.status).toBe(201);
     });
   });
@@ -224,12 +224,12 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
       // issuedAt defaults to now() -- today's day-report picks both up
       // unless filtered by branch; dueAt is backdated so both are OVERDUE.
       const pastDue = new Date(Date.now() - 3 * MS_PER_DAY);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyA.id, branchId: org.branchAId, memberId: memberA.id, dueAt: pastDue } });
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyB.id, branchId: org.branchBId, memberId: memberB.id, dueAt: pastDue } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyA.id, branchId: org.branchAId, memberId: memberA.id, dueAt: pastDue } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyB.id, branchId: org.branchBId, memberId: memberB.id, dueAt: pastDue } });
     });
     afterAll(() => cleanup(org.orgId));
 
-    it('/overdue for a branch-A librarian excludes branch-B loans', async () => {
+    it('/overdue for a branch-A librarian excludes branch-B issues', async () => {
       const res = await request(app.getHttpServer())
         .get('/circulation/overdue')
         .set('X-Library-Host', host(org))
@@ -251,7 +251,7 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
       expect(memberIds).toContain(memberB.id);
     });
 
-    it('/day-report "issued" for a branch-A librarian excludes the branch-B loan', async () => {
+    it('/day-report "issued" for a branch-A librarian excludes the branch-B issue', async () => {
       const scoped = await request(app.getHttpServer())
         .get('/circulation/day-report')
         .set('X-Library-Host', host(org))
@@ -293,7 +293,7 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
       // second.
       const copyB1 = await seedCopy(org.orgId, org.branchBId, title.id, `HOLDS-B1-${Date.now()}`);
       const borrowerB = await seedMember(org.orgId, org.branchBId, `HOLD-BORROW-${Date.now()}`);
-      await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyB1.id, branchId: org.branchBId, memberId: borrowerB.id, dueAt: new Date(Date.now() + 14 * MS_PER_DAY) } });
+      await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyB1.id, branchId: org.branchBId, memberId: borrowerB.id, dueAt: new Date(Date.now() + 14 * MS_PER_DAY) } });
       await prisma.copy.update({ where: { id: copyB1.id }, data: { status: 'ON_LOAN' } });
 
       const waiterHoldRes = await request(app.getHttpServer())
@@ -307,7 +307,7 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
         .post('/circulation/return')
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.allBranchesLibrarianToken}`)
-        .send({ barcode: copyB1.barcode });
+        .send({ accessionNumber: copyB1.accessionNumber });
       expect(returnRes.body.promotedHoldId).toBe(branchBHoldId);
 
       // A still-PENDING hold, created AFTER the one above so it holds a
@@ -355,7 +355,7 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
     });
   });
 
-  describe('/circulation/fines — filtered via the fine\'s own loan branch', () => {
+  describe('/circulation/fines — filtered via the fine\'s own issue branch', () => {
     let org: BranchScopeOrg;
     let memberA: { id: string };
     let memberB: { id: string };
@@ -371,10 +371,10 @@ describeLive('circulation — branch scope is enforced (Phase 1a review)', () =>
       const copyA = await seedCopy(org.orgId, org.branchAId, title.id, `FINE-A-${Date.now()}`);
       const copyB = await seedCopy(org.orgId, org.branchBId, title.id, `FINE-B-${Date.now()}`);
 
-      const loanA = await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyA.id, branchId: org.branchAId, memberId: memberA.id, dueAt: new Date(Date.now() - MS_PER_DAY) } });
-      const loanB = await prisma.loan.create({ data: { orgId: org.orgId, copyId: copyB.id, branchId: org.branchBId, memberId: memberB.id, dueAt: new Date(Date.now() - MS_PER_DAY) } });
-      const fineA = await prisma.fine.create({ data: { orgId: org.orgId, memberId: memberA.id, loanId: loanA.id, kind: 'OVERDUE', status: 'OPEN', amount: 10 } });
-      const fineB = await prisma.fine.create({ data: { orgId: org.orgId, memberId: memberB.id, loanId: loanB.id, kind: 'OVERDUE', status: 'OPEN', amount: 10 } });
+      const loanA = await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyA.id, branchId: org.branchAId, memberId: memberA.id, dueAt: new Date(Date.now() - MS_PER_DAY) } });
+      const loanB = await prisma.issue.create({ data: { orgId: org.orgId, copyId: copyB.id, branchId: org.branchBId, memberId: memberB.id, dueAt: new Date(Date.now() - MS_PER_DAY) } });
+      const fineA = await prisma.fine.create({ data: { orgId: org.orgId, memberId: memberA.id, issueId: loanA.id, kind: 'OVERDUE', status: 'OPEN', amount: 10 } });
+      const fineB = await prisma.fine.create({ data: { orgId: org.orgId, memberId: memberB.id, issueId: loanB.id, kind: 'OVERDUE', status: 'OPEN', amount: 10 } });
       fineAId = fineA.id;
       fineBId = fineB.id;
     });
