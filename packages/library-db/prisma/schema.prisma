@@ -96,6 +96,7 @@ model LibraryOrg {
   issues     Issue[]
   reservations Reservation[]
   fines      Fine[]
+  lostReports LostReport[]
   outbox     NotificationOutbox[]
 
   settings   LibrarySettings?
@@ -173,6 +174,7 @@ model Branch {
 
   periods LibraryPeriod[]
   visits  ClassVisit[]
+  lostReports LostReport[]
 }
 
 model LibUser {
@@ -197,6 +199,11 @@ model LibUser {
   issuesMade    Issue[]         @relation("IssueIssuedBy")
   issuesTakenBack Issue[]         @relation("IssueReturnedBy")
   finesWaived   Fine[]         @relation("FineWaivedBy")
+  fineAmountsSet Fine[]        @relation("FineAmountSetBy")
+  finesPaidTaken Fine[]        @relation("FinePaidBy")
+  lostReported   LostReport[]  @relation("LostReportReportedBy")
+  lostConfirmed  LostReport[]  @relation("LostReportConfirmedBy")
+  lostSettled    LostReport[]  @relation("LostReportSettledBy")
 
   @@unique([orgId, email])
   @@unique([orgId, phone])
@@ -241,6 +248,7 @@ model Member {
   issues     Issue[]
   reservations Reservation[]
   fines      Fine[]
+  lostReports LostReport[]
 
   @@unique([orgId, code])
   @@index([orgId, status])
@@ -514,6 +522,7 @@ model Copy {
   branch Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
   issues Issue[]
   reservations Reservation[]     @relation("ReservationReadyCopy")
+  lostReports  LostReport[]
 
   @@unique([orgId, accessionNumber])
   @@index([titleId, status])
@@ -556,11 +565,105 @@ enum FineKind {
   OTHER
 }
 
+/// Deliberately UNCHANGED by P3, and that is a decision rather than an
+/// oversight. Adding a value to a money enum that is already shipped silently
+/// changes the meaning of every sum built on it: a `PENDING` for an
+/// unconfirmed self-report would start counting a nine-year-old's tap as money
+/// owed in `listFines`, `dayReport.finesAccrued`, the console's "still owed"
+/// tile and P4's `/me/dues`, unless every one of those were found and filtered
+/// — which is trap 9 on the one surface where being wrong reaches a parent.
+/// An unconfirmed loss therefore has NO Fine row at all; the frozen figure
+/// lives on `LostReport` until a librarian confirms. Likewise no `REFUND` or
+/// `CREDIT`: a book found after a parent paid is recorded as a refund owed at
+/// the desk (see `LostReport`), not as a new money state.
 enum FineStatus {
   OPEN
   PAID
   WAIVED
   PARTIAL
+}
+
+/// Where the amount on a `LOST` fine came from. Mirrors
+/// `apps/library-api/src/common/replacement-price.ts`'s resolver, MINUS its
+/// `UNPRICED` case — an unpriced loss creates no fine at all (a ₹0 fine reads
+/// as "nothing owed" to every total and to P5's No Dues certificate), so that
+/// value could never appear on a row and does not belong in the enum.
+///
+/// This is snapshotted, never re-derived. The bill handed to a parent in
+/// August must still read the same next March, even after someone edits that
+/// book's price in the catalogue.
+enum FineAmountSource {
+  /// A librarian typed this amount for this specific loss, looking at the book.
+  TYPED
+  /// `Title.replacementPrice` — today's cost to buy the book again.
+  TITLE_PRICE
+  /// `Copy.acquisitionCost` — historic, what the school paid. Must always be
+  /// presented WITH its age ("the library paid ₹45 when this copy was bought"),
+  /// never bare.
+  PURCHASE_COST
+}
+
+/// How money that was collected actually crossed the counter. Cash and UPI are
+/// what an Indian school desk sees; `OTHER` requires a note.
+///
+/// Three columns on `Fine`, not a `FinePayment` table: the spec defers the
+/// payment-provider ledger, and what keeps this honest rather than a
+/// half-ledger is that P3 records payment IN FULL ONLY. A counter taking ₹100
+/// today and ₹199 next week genuinely needs a payments table — one method
+/// column cannot truthfully describe two payments — so that is not offered.
+enum PaymentMethod {
+  CASH
+  UPI
+  OTHER
+}
+
+/// Why a fine was let off. A CODE rather than free text because the collections
+/// dashboard asks "where did each rupee go", and four hundred unique strings
+/// cannot answer it.
+///
+/// The first two are MECHANICAL: the school lost nothing, so they must be
+/// excluded from the "let off" money figure. Counting them would inflate what
+/// looks like the school's generosity with book-keeping.
+enum WaiverReason {
+  /// The original copy turned up. Cleared in kind, not forgiven.
+  BOOK_FOUND
+  /// The family brought a physical replacement. Cleared in kind, not forgiven.
+  REPLACED_IN_KIND
+  /// Out of print, nothing to replace it with. Genuinely written off.
+  WRITTEN_OFF_UNREPLACEABLE
+  /// The family cannot pay. Genuinely forgiven.
+  HARDSHIP
+  /// We charged the wrong person, or charged for our own mistake. The honest
+  /// home for "I typed the wrong number and billed the wrong child", which has
+  /// no route at all today.
+  LIBRARY_ERROR
+  /// A deliberate gift, with a reason in the note.
+  GOODWILL
+}
+
+/// Every value here is set by a USER ACTION, never by a clock — trap 7. In
+/// order: REPORTED by a member self-reporting; CONFIRMED by a librarian
+/// confirming (or set at creation when a librarian reports it themselves, since
+/// the adult is already in the loop); REJECTED by a librarian when the book
+/// turns up before confirmation; the three SETTLED_/WRITTEN_OFF values by the
+/// corresponding settlement action; FOUND when the original copy reappears.
+///
+/// No value in this enum is time-derived, so `schema-shape.spec.ts` needs no
+/// new `FORBIDDEN_VALUE_EXCEPTIONS` entry.
+enum LostReportStatus {
+  /// Self-reported, awaiting a librarian. The late charge is ALREADY frozen and
+  /// the copy is already out of circulation — only the money waits.
+  REPORTED
+  /// A librarian has seen it. This is the point at which fines exist.
+  CONFIRMED
+  /// The book turned up before confirmation; the world is restored exactly.
+  REJECTED
+  SETTLED_PAID
+  /// The family brought a replacement copy.
+  SETTLED_IN_KIND
+  WRITTEN_OFF
+  /// The original copy reappeared after confirmation.
+  FOUND
 }
 
 /// Keyed on (orgId, memberType) — MemberType stays a fixed enum (see
@@ -649,6 +752,7 @@ model Issue {
   issuedBy   LibUser?   @relation("IssueIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
   returnedBy LibUser?   @relation("IssueReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
   fines      Fine[]
+  lostReports LostReport[]
 
   @@index([orgId])
   @@index([orgId, branchId])
@@ -732,6 +836,48 @@ model Fine {
   waivedAmount   Decimal?   @db.Decimal(10, 2)
   waivedReason   String?
   waivedAt       DateTime?
+
+  /// P3. A CODE alongside the existing free-text `waivedReason`, so the
+  /// collections dashboard can answer "where did each rupee go" — and so the
+  /// two MECHANICAL reasons (BOOK_FOUND, REPLACED_IN_KIND) can be excluded from
+  /// the "let off" total, since the school lost nothing in either case. Set
+  /// together with the other `waived*` fields; null on every fine waived before
+  /// P3 and on every fine that was never waived.
+  waiverReasonCode WaiverReason?
+
+  /// Where this amount came from — snapshotted at the moment the charge was
+  /// raised, NEVER a live join back to `Title.replacementPrice`. Editing a
+  /// book's catalogue price next term must not silently rewrite a bill already
+  /// handed to a parent.
+  ///
+  /// Null on an `OVERDUE` fine, which is computed from the circulation policy
+  /// rather than resolved from a price, and on every fine created before P3.
+  /// Non-null on a `LOST` fine.
+  amountSource     FineAmountSource?
+
+  /// The human who TYPED this amount — set only when `amountSource` is `TYPED`,
+  /// and null for `TITLE_PRICE`/`PURCHASE_COST`, where nobody typed anything and
+  /// claiming a person did would be a lie an auditor could read. "Which
+  /// librarian ran the flow" is answered by `LostReport.confirmedByUserId`; this
+  /// column answers the narrower and more consequential "who chose this number".
+  ///
+  /// SetNull, matching `waivedBy`: losing who typed it must not block deleting a
+  /// departed user, and the amount itself survives regardless.
+  amountSetByUserId String?   @db.Uuid
+
+  /// There is deliberately no `amountSetAt`: the amount is fixed when the fine
+  /// row is created and never edited afterwards, so `createdAt` already IS that
+  /// timestamp, and a second column could only ever disagree with it.
+
+  /// P3, recorded not moved. Money crossing the counter is written down here;
+  /// no provider, no ledger, no partial history — see `PaymentMethod`.
+  paidAt         DateTime?
+  paidByUserId   String?    @db.Uuid
+  paidMethod     PaymentMethod?
+  /// Required by convention when `paidMethod` is OTHER; also the place a
+  /// receipt/slip number goes.
+  paymentNote    String?
+
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
@@ -748,8 +894,134 @@ model Fine {
   /// not block user deletion, and losing "who waived it" is acceptable —
   /// the money itself (waivedAmount/waivedReason) stays on the row either way.
   waivedBy LibUser?   @relation("FineWaivedBy", fields: [waivedByUserId], references: [id], onDelete: SetNull)
+  /// SetNull, same reasoning as `waivedBy` — see `amountSetByUserId`.
+  amountSetBy LibUser? @relation("FineAmountSetBy", fields: [amountSetByUserId], references: [id], onDelete: SetNull)
+  /// SetNull, same reasoning: who took the cash is worth keeping, but must
+  /// never block deleting a departed user, and the payment itself survives.
+  paidBy   LibUser?   @relation("FinePaidBy", fields: [paidByUserId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
+  /// Same unindexed-FK reasoning as LostReport: deleting a LibUser must not
+  /// scan every fine the school has ever raised.
+  @@index([amountSetByUserId])
+  @@index([paidByUserId])
+}
+
+/// One physical book reported lost, and everything that happened to it after.
+///
+/// This exists as its own table rather than as extra columns on `Issue` for two
+/// reasons. First, a loss found during stock verification has NO issue and NO
+/// member at all — nobody had it, it is simply not on the shelf — and the
+/// alternative to modelling that is a librarian inventing a fake issue to a
+/// child in order to record a missing book. Second, the report is the thing
+/// that must survive every later reversal: a rejected report, a found book, a
+/// refunded payment all stay readable afterwards, which is what makes the
+/// register a history rather than a stock list.
+///
+/// It is also the ONLY home for the frozen late charge between a child's
+/// self-report and a librarian's confirmation, because no `Fine` row exists yet
+/// in that window (see `FineStatus`).
+model LostReport {
+  id       String @id @default(uuid()) @db.Uuid
+  orgId    String @db.Uuid
+
+  /// Restrict: a copy with a loss on its record must not vanish out from under
+  /// it — the same reasoning as `Issue.copy`.
+  copyId   String @db.Uuid
+
+  /// Denormalized from the copy at report time, exactly as `Issue.branchId` is,
+  /// so "which branch was this lost at" is answerable without a join on every
+  /// branch-scoped read. NOT NULL: a copy always has a branch, including a
+  /// stock-take loss.
+  branchId String @db.Uuid
+
+  /// NULL for a loss found at stock verification: nobody had it. Non-null for
+  /// every loss that came off an issue. A database CHECK ties this to `issueId`
+  /// so the two can never disagree — see the migration's
+  /// `LostReport_member_and_issue_together`.
+  memberId String? @db.Uuid
+  /// NULL for a stock-take loss, for the same reason. Restrict where present:
+  /// the issue is the history this report is about.
+  issueId  String? @db.Uuid
+
+  /// The account that reported it. A self-reporting student IS a `LibUser` with
+  /// role MEMBER, so this is the same FK either way; `selfReported` is what
+  /// distinguishes them, because the ROLE on the account can change later and
+  /// the fact of who reported it cannot.
+  reportedByUserId String?  @db.Uuid
+  /// True when the holder reported their own loss from the app. Load-bearing:
+  /// a self-report creates no fines and waits for confirmation, a
+  /// librarian-reported loss is created already CONFIRMED because the adult is
+  /// standing at the counter having the conversation.
+  selfReported     Boolean  @default(false)
+  reportedAt       DateTime @default(now())
+
+  status LostReportStatus
+
+  confirmedAt       DateTime?
+  confirmedByUserId String?   @db.Uuid
+  /// Why a librarian rejected the report — required when status is REJECTED.
+  rejectedReason    String?
+
+  /// The late charge as it stood at the MOMENT OF REPORT, frozen. Not
+  /// recomputed later: that is the whole incentive — owning up stops the clock,
+  /// and a number that kept moving afterwards would make the report pointless.
+  /// Null only when fines are off for this member type, so nothing accrued.
+  ///
+  /// After confirmation an `OVERDUE` Fine carries this same figure. They are
+  /// written together, in one transaction, from one value, and neither is
+  /// updated independently afterwards: this column is the RECORD of what was
+  /// frozen, the fine is the BILL.
+  frozenLateAmount Decimal? @db.Decimal(10, 2)
+
+  /// What a replacement costs, resolved at confirmation. NULL means UNPRICED —
+  /// a legitimate, visible state: the loss is recorded, the copy is out of
+  /// circulation, the late charge is frozen, and the money is deferred until a
+  /// human types a number. It must never be coerced to 0.
+  replacementAmount Decimal? @db.Decimal(10, 2)
+  /// Where `replacementAmount` came from. Null exactly when it is null.
+  priceSource       FineAmountSource?
+
+  /// Settlement. `settledAt`/`settledByUserId` are set for every terminal
+  /// outcome; which one it was is carried by `status`.
+  settledAt        DateTime?
+  settledByUserId  String?   @db.Uuid
+  /// For a write-off: the human who actually authorised it, in words — "Principal
+  /// Mrs Rao, note dated 12 Aug". Free text on purpose. There is no principal
+  /// ROLE in this service, and inventing one to gate this would, in a school
+  /// where the librarian is the only account, produce either a due that can
+  /// never be closed or a fake "paid" entry. Recorded approval that is auditable
+  /// beats a gate that gets routed around.
+  approvedByNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org        LibraryOrg @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  copy       Copy       @relation(fields: [copyId], references: [id], onDelete: Restrict)
+  branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  member     Member?    @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  issue      Issue?     @relation(fields: [issueId], references: [id], onDelete: Restrict)
+  reportedBy LibUser?   @relation("LostReportReportedBy", fields: [reportedByUserId], references: [id], onDelete: SetNull)
+  confirmedBy LibUser?  @relation("LostReportConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  settledBy  LibUser?   @relation("LostReportSettledBy", fields: [settledByUserId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+  @@index([orgId, branchId, status])
+  @@index([orgId, memberId])
+
+  /// One per FK column. Postgres checks referencing rows when a PARENT is
+  /// deleted, and a composite index led by orgId cannot serve a lookup by
+  /// copyId alone — without these, deleting a Copy/Member/Issue/Branch/LibUser
+  /// sequentially scans this table. Measured: their absence took the e2e
+  /// authz-matrix suite from 17s to 823s.
+  @@index([copyId])
+  @@index([issueId])
+  @@index([memberId])
+  @@index([branchId])
+  @@index([reportedByUserId])
+  @@index([confirmedByUserId])
+  @@index([settledByUserId])
 }
 
 enum NotificationChannel {
