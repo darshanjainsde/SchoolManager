@@ -103,17 +103,42 @@ export function overdueLoansQuery(orgId: string, asOf: Date, allowedBranches: st
  * Kolkata's fixed +05:30. `orgId`/`timezone` are both bound parameters, not
  * string-interpolated, regardless of the source being a config default today.
  */
-async function dayRangeForOrg(tx: LibraryTx, orgId: string, dateStr: string): Promise<{ start: Date; end: Date }> {
-  const rows = await tx.$queryRaw<Array<{ start: Date; end: Date }>>`
+async function dayRangeForOrg(
+  tx: LibraryTx,
+  orgId: string,
+  dateStr: string | null,
+): Promise<{ start: Date; end: Date; date: string }> {
+  /*
+   * "Today" is resolved HERE, in SQL, against the org's own timezone — never
+   * by the caller.
+   *
+   * It used to default to `new Date().toISOString().slice(0, 10)`, which is
+   * the UTC date, and that string was then interpreted as a day in the org's
+   * timezone. For an Asia/Kolkata school those disagree for 5.5 hours every
+   * day: between 18:30 and 24:00 UTC it is already tomorrow in IST, so the
+   * report asked for YESTERDAY's window and returned zero for books issued
+   * minutes earlier. Any librarian looking at the console between midnight
+   * and 05:30 IST saw an empty day.
+   *
+   * A branch-scope e2e test caught this only because the suite happened to run
+   * across the IST midnight boundary — it had passed every previous run.
+   *
+   * The resolved date is returned so the response reports the day it actually
+   * measured rather than the one the caller guessed.
+   */
+  const rows = await tx.$queryRaw<Array<{ start: Date; end: Date; date: string }>>`
     SELECT
-      (${dateStr}::date)::timestamp AT TIME ZONE o."timezone" AS "start",
-      ((${dateStr}::date) + 1)::timestamp AT TIME ZONE o."timezone" AS "end"
+      (COALESCE(${dateStr}::date, (now() AT TIME ZONE o."timezone")::date))::timestamp
+        AT TIME ZONE o."timezone" AS "start",
+      ((COALESCE(${dateStr}::date, (now() AT TIME ZONE o."timezone")::date)) + 1)::timestamp
+        AT TIME ZONE o."timezone" AS "end",
+      to_char(COALESCE(${dateStr}::date, (now() AT TIME ZONE o."timezone")::date), 'YYYY-MM-DD') AS "date"
     FROM "LibraryOrg" o
     WHERE o."id" = ${orgId}::uuid
   `;
   const row = rows[0];
   if (!row) throw new NotFoundException('Org not found');
-  return { start: row.start, end: row.end };
+  return { start: row.start, end: row.end, date: row.date };
 }
 
 @Injectable()
@@ -282,8 +307,7 @@ export class FinesService {
    * branch-scoped caller, since it has no branch to attribute).
    */
   async dayReport(tx: LibraryTx, orgId: string, query: DayReportQueryDto, allowedBranches: string[]): Promise<DayReport> {
-    const dateStr = query.date ?? new Date().toISOString().slice(0, 10);
-    const { start, end } = await dayRangeForOrg(tx, orgId, dateStr);
+    const { start, end, date: dateStr } = await dayRangeForOrg(tx, orgId, query.date ?? null);
     const branchFilter = allowedBranches.length > 0 ? { branchId: { in: allowedBranches } } : {};
 
     const [issued, returned, overdue, fineAgg] = await Promise.all([

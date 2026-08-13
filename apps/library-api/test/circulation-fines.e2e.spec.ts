@@ -446,6 +446,79 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
    * 5.5 hours — LIBRARY-TRAPS.md #15: verification code must not reimplement
    * the thing it's checking from memory.
    */
+  /**
+   * The DEFAULT day (no ?date=) must be resolved in the org's timezone.
+   *
+   * This shipped wrong: the default was `new Date().toISOString().slice(0,10)`
+   * — the UTC date — which was then interpreted as a day in the org's zone.
+   * For an Asia/Kolkata school those disagree between 18:30 and 24:00 UTC
+   * (00:00–05:30 IST), so a book issued at 00:30 IST was reported under the
+   * previous day and "today" came back empty.
+   *
+   * These tests are deliberately time-of-day independent: rather than mocking
+   * a clock, they use a zone whose calendar date differs from UTC's RIGHT NOW,
+   * whenever "now" happens to be. Pacific/Kiritimati (UTC+14) is always ahead;
+   * Pacific/Midway (UTC-11) is always behind. At least one of them disagrees
+   * with the UTC date at every instant, so the old bug cannot hide.
+   */
+  describe('GET /circulation/day-report — the default day is the org\'s day, not UTC\'s', () => {
+    it.each([
+      ['Pacific/Kiritimati', 'UTC+14 — its calendar date runs ahead of UTC'],
+      ['Pacific/Midway', 'UTC-11 — its calendar date runs behind UTC'],
+    ])('reports the org\'s own current date in %s (%s)', async (timezone) => {
+      const org = await seedOrg(`tzdefault-${Date.now().toString(36)}-${timezone.replace(/\W/g, '').toLowerCase()}`, timezone);
+      try {
+        const res = await request(app.getHttpServer())
+          .get('/circulation/day-report')
+          .set('X-Library-Host', host(org))
+          .set('Authorization', `Bearer ${org.librarianToken}`)
+          .expect(200);
+
+        // What that zone's calendar date actually is at this instant.
+        const expected = new Intl.DateTimeFormat('en-CA', {
+          timeZone: timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date());
+
+        expect(res.body.date).toBe(expected);
+      } finally {
+        await cleanup(org.orgId);
+      }
+    });
+
+    it('counts a loan issued moments ago, whatever the UTC date happens to be', async () => {
+      // Kiritimati is UTC+14, so for 14 hours a day its date is already
+      // tomorrow by UTC. Under the old UTC-derived default this returned 0.
+      const org = await seedOrg(`tznow-${Date.now().toString(36)}`, 'Pacific/Kiritimati');
+      try {
+        const member = await seedMember(org.orgId, org.branchId, `TZNOW-${Date.now()}`);
+        const title = await seedTitle(org.orgId, 'tz-now');
+        const copy = await seedCopy(org.orgId, org.branchId, title.id, `TZNOW-${Date.now()}`);
+        await getLibraryPlatformPrisma().loan.create({
+          data: {
+            orgId: org.orgId,
+            copyId: copy.id,
+            branchId: org.branchId,
+            memberId: member.id,
+            dueAt: new Date(Date.now() + 14 * MS_PER_DAY),
+          },
+        });
+
+        const res = await request(app.getHttpServer())
+          .get('/circulation/day-report')
+          .set('X-Library-Host', host(org))
+          .set('Authorization', `Bearer ${org.librarianToken}`)
+          .expect(200);
+
+        expect(res.body.issued).toBe(1);
+      } finally {
+        await cleanup(org.orgId);
+      }
+    });
+  });
+
   describe("GET /circulation/day-report — follows the org's own timezone (Asia/Kolkata)", () => {
     let org: FinesOrg;
 
