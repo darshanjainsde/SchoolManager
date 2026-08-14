@@ -7,7 +7,7 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { ConfirmLostDto, PayLostDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
+import { ConfirmLostDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
@@ -198,6 +198,62 @@ export class CirculationController {
       orgId,
       (tx) =>
         this.lost.writeOffLost(tx, orgId, id, dto.approvedByNote, dto.reason, user.sub, now, user.branches),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /** The family brought a replacement copy. Clearing a charge in kind is
+   *  forgiving money, so WRITERS only. */
+  @Post('lost/:id/replace')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  @UseInterceptors(IdempotencyInterceptor)
+  replaceInKind(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ReplaceInKindDto,
+    @CurrentUser() user: LibJwtPayload,
+  ) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) =>
+        this.lost.replaceInKind(tx, orgId, id, dto.accessionNumber, dto.condition, user.sub, now, user.branches),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /**
+   * The original turned up. ASSISTANT can do this: reversing must be as easy as
+   * reporting, or nobody reports — and the frozen late charge stands either way,
+   * so this is not a way to give money back.
+   */
+  @Post('lost/:id/found')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  @UseInterceptors(IdempotencyInterceptor)
+  foundLost(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) => this.lost.foundLost(tx, orgId, id, user.sub, now, user.branches),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /** Missing from the shelf, nobody had it. Deliberately a different route from
+   *  /circulation/lost so a stock-take loss can never be pinned on a child. */
+  @Post('lost/missing')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  @UseInterceptors(IdempotencyInterceptor)
+  reportMissing(@Body() dto: ReportMissingDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) => this.lost.reportMissing(tx, orgId, dto.accessionNumber, user.sub, now, user.branches),
       undefined,
       LOST_TX_OPTIONS,
     );

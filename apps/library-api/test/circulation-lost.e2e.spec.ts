@@ -781,3 +781,252 @@ describeLive('circulation — settling a lost book', () => {
     });
   });
 });
+
+/**
+ * Settlement B — a replacement copy, the original turning up, and a book that
+ * simply is not on the shelf.
+ *
+ * The two assertions worth the file: a REPLACEMENT gets a new number and a null
+ * acquisitionCost, while a FOUND book keeps its old one — and a stock-take loss
+ * can never be attached to a child.
+ */
+describeLive('circulation — replacement, found, and missing at stock take', () => {
+  const lost = new LostService();
+  const prisma = getLibraryPlatformPrisma();
+
+  let org: SeededOrg;
+  let other: SeededOrg;
+  let titleId: string;
+  let staffId: string;
+  const DAY = 24 * 60 * 60 * 1000;
+
+  beforeAll(async () => {
+    ({ orgA: org, orgB: other } = await seedTwoOrgs(`settleb-${Date.now().toString(36)}`));
+    titleId = (
+      await prisma.title.create({
+        data: { orgId: org.id, title: 'Swami and Friends', replacementPrice: 275, publisher: 'Indian Thought' },
+      })
+    ).id;
+    staffId = (
+      await prisma.libUser.create({
+        data: {
+          orgId: org.id, email: `sb-${Date.now()}@t.local`, passwordHash: 'x',
+          role: 'LIBRARIAN', branchIds: [org.branchId],
+        },
+      })
+    ).id;
+    await prisma.circulationPolicy.create({
+      data: {
+        orgId: org.id, memberType: 'STUDENT', maxBooks: 5, issueDays: 14, renewLimit: 2,
+        renewDays: 14, finePerDay: 5, graceDays: 1, maxFine: 500, maxReservations: 3,
+        reservedShelfDays: 3, maxOutstandingFine: 1000,
+      },
+    });
+    await prisma.librarySettings.upsert({
+      where: { orgId: org.id },
+      create: { orgId: org.id, chargeStudentFines: true },
+      update: { chargeStudentFines: true },
+    });
+  });
+
+  afterAll(async () => {
+    await cleanupOrgs([org.id, other.id]);
+  });
+
+  async function confirmedLoss() {
+    const accessionNumber = `SB-${Date.now()}-${Math.floor(process.hrtime()[1] / 1000)}`;
+    const copy = await prisma.copy.create({
+      data: {
+        orgId: org.id, titleId, branchId: org.branchId, accessionNumber,
+        status: 'ISSUED', shelf: 'A-3',
+      },
+    });
+    await prisma.issue.create({
+      data: {
+        orgId: org.id, copyId: copy.id, branchId: org.branchId, memberId: org.memberId,
+        dueAt: new Date(Date.now() - 4 * DAY), status: 'ACTIVE',
+      },
+    });
+    const loss = await withOrg(
+      org.id,
+      (tx: LibraryTx) => lost.reportLost(tx, org.id, { accessionNumber }, staffId, new Date(), [org.branchId]),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+    return { ...loss, copy, accessionNumber };
+  }
+
+  describe('replacement in kind', () => {
+    it('clones the book onto a NEW number, with no acquisition cost', async () => {
+      const loss = await confirmedLoss();
+      const newNumber = `SB-NEW-${Date.now()}`;
+
+      const result = await withOrg(
+        org.id,
+        (tx: LibraryTx) =>
+          lost.replaceInKind(tx, org.id, loss.lostReportId, newNumber, undefined, staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      const created = await prisma.copy.findUnique({ where: { id: result.newCopyId } });
+      expect(created!.accessionNumber).toBe(newNumber);
+      expect(created!.titleId).toBe(titleId); // cloned — publisher, price etc. come with it
+      expect(created!.shelf).toBe('A-3');
+      expect(created!.status).toBe('AVAILABLE');
+      // GOOD, not NEW: a parent's replacement is usually second-hand.
+      expect(created!.condition).toBe('GOOD');
+      // The school paid nothing. A figure here would fake the register's
+      // "Price paid" column AND plant a false PURCHASE_COST for the resolver.
+      expect(created!.acquisitionCost).toBeNull();
+
+      // The old copy keeps its number and stays retired, so the register shows
+      // both: one lost, one added.
+      const old = await prisma.copy.findUnique({ where: { id: loss.copy.id } });
+      expect(old!.status).toBe('LOST');
+      expect(old!.accessionNumber).toBe(loss.accessionNumber);
+    });
+
+    it('clears the BOOK charge in kind but leaves the late charge standing', async () => {
+      const loss = await confirmedLoss();
+      const result = await withOrg(
+        org.id,
+        (tx: LibraryTx) =>
+          lost.replaceInKind(tx, org.id, loss.lostReportId, `SB-NEW2-${Date.now()}`, undefined, staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      expect(result.clearedFineIds).toEqual([loss.replacementFineId]);
+      const book = await prisma.fine.findUnique({ where: { id: loss.replacementFineId! } });
+      expect(book!.status).toBe('WAIVED');
+      // MECHANICAL — the school lost nothing, so collections must exclude it
+      // from "let off".
+      expect(book!.waiverReasonCode).toBe('REPLACED_IN_KIND');
+
+      // They were still late.
+      const late = await prisma.fine.findUnique({ where: { id: loss.lateFineId! } });
+      expect(late!.status).toBe('OPEN');
+    });
+
+    it('refuses a number already in the register — including the lost book’s own', async () => {
+      const loss = await confirmedLoss();
+      await expect(
+        withOrg(
+          org.id,
+          (tx: LibraryTx) =>
+            lost.replaceInKind(tx, org.id, loss.lostReportId, loss.accessionNumber, undefined, staffId, new Date(), [org.branchId]),
+          undefined,
+          LOST_TX_OPTIONS,
+        ),
+      ).rejects.toThrow(/already in the register/);
+    });
+  });
+
+  describe('found', () => {
+    it('puts the book back on the shelf AT ITS OLD NUMBER', async () => {
+      const loss = await confirmedLoss();
+
+      const result = await withOrg(
+        org.id,
+        (tx: LibraryTx) => lost.foundLost(tx, org.id, loss.lostReportId, staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      // The same physical object, with that number already in ink inside its
+      // cover. "A retired number never returns" is about REPLACEMENTS.
+      expect(result.accessionNumber).toBe(loss.accessionNumber);
+      const copy = await prisma.copy.findUnique({ where: { id: loss.copy.id } });
+      expect(copy!.status).toBe('AVAILABLE');
+      expect(copy!.accessionNumber).toBe(loss.accessionNumber);
+    });
+
+    it('clears the book charge but KEEPS the late charge frozen', async () => {
+      const loss = await confirmedLoss();
+      await withOrg(
+        org.id,
+        (tx: LibraryTx) => lost.foundLost(tx, org.id, loss.lostReportId, staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      const book = await prisma.fine.findUnique({ where: { id: loss.replacementFineId! } });
+      expect(book!.status).toBe('WAIVED');
+      expect(book!.waiverReasonCode).toBe('BOOK_FOUND');
+
+      // Un-freezing this would make "Found it" a button nobody presses.
+      const late = await prisma.fine.findUnique({ where: { id: loss.lateFineId! } });
+      expect(late!.status).toBe('OPEN');
+      expect(Number(late!.amount)).toBe(loss.frozenLateAmount);
+    });
+
+    it('frees the copy for a FUTURE loss report — lost, found, lost again', async () => {
+      const loss = await confirmedLoss();
+      await withOrg(
+        org.id,
+        (tx: LibraryTx) => lost.foundLost(tx, org.id, loss.lostReportId, staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+      // The partial unique index only covers OPEN statuses, so a terminal
+      // report must not block a new one years later.
+      const again = await withOrg(
+        org.id,
+        (tx: LibraryTx) => lost.reportMissing(tx, org.id, loss.accessionNumber, staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+      expect(again.lostReportId).toBeDefined();
+      expect(await prisma.lostReport.count({ where: { copyId: loss.copy.id } })).toBe(2);
+    });
+  });
+
+  describe('missing at stock take', () => {
+    it('records a loss with NO member and NO issue, and charges nobody', async () => {
+      const accessionNumber = `SB-MISS-${Date.now()}`;
+      const copy = await prisma.copy.create({
+        data: { orgId: org.id, titleId, branchId: org.branchId, accessionNumber, status: 'AVAILABLE' },
+      });
+
+      const result = await withOrg(
+        org.id,
+        (tx: LibraryTx) => lost.reportMissing(tx, org.id, accessionNumber, staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      const report = await prisma.lostReport.findUnique({ where: { id: result.lostReportId } });
+      // The whole point: nobody had it, so nobody is on the hook. Without this
+      // route a librarian has to invent a fake issue to a child.
+      expect(report!.memberId).toBeNull();
+      expect(report!.issueId).toBeNull();
+      expect(report!.status).toBe('CONFIRMED');
+      expect(report!.frozenLateAmount).toBeNull();
+      expect((await prisma.copy.findUnique({ where: { id: copy.id } }))!.status).toBe('LOST');
+      expect(await prisma.fine.count({ where: { orgId: org.id, reason: { contains: accessionNumber } } })).toBe(0);
+    });
+
+    it('refuses a copy somebody actually has — that is a different flow', async () => {
+      const accessionNumber = `SB-HELD-${Date.now()}`;
+      const copy = await prisma.copy.create({
+        data: { orgId: org.id, titleId, branchId: org.branchId, accessionNumber, status: 'ISSUED' },
+      });
+      await prisma.issue.create({
+        data: {
+          orgId: org.id, copyId: copy.id, branchId: org.branchId, memberId: org.memberId,
+          dueAt: new Date(Date.now() + DAY), status: 'ACTIVE',
+        },
+      });
+
+      await expect(
+        withOrg(
+          org.id,
+          (tx: LibraryTx) => lost.reportMissing(tx, org.id, accessionNumber, staffId, new Date(), [org.branchId]),
+          undefined,
+          LOST_TX_OPTIONS,
+        ),
+      ).rejects.toThrow(/issued to a member/);
+    });
+  });
+});

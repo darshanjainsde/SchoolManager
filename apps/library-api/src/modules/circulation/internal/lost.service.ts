@@ -658,4 +658,250 @@ export class LostService {
 
     return { lostReportId: report.id, waivedFineIds, totalWrittenOff: total.toNumber() };
   }
+
+  /**
+   * The family brought a physical replacement.
+   *
+   * The charge is cleared IN KIND, not forgiven — `REPLACED_IN_KIND` is a
+   * mechanical waiver code precisely so the collections dashboard excludes it
+   * from "let off": the school lost nothing. The frozen LATE charge is a
+   * separate fine and is NOT touched; they were still late.
+   *
+   * The new copy is CLONED from the same title, so author, publisher, edition,
+   * call number and the replacement price all come with it. The only thing
+   * typed is the accession number, because the librarian has to write it inside
+   * the cover by hand anyway.
+   *
+   * Its `acquisitionCost` is NULL, deliberately, and this overrides the
+   * prototype (which set it to the price charged). `acquisitionCost` means
+   * "what the school paid, from the bill" — it feeds the register's *Price
+   * paid* column. The school paid nothing here. Writing the charge there would
+   * put a rupee figure the school never spent into an auditor's column, and
+   * worse, plant a false `PURCHASE_COST` for the price resolver to find the
+   * next time this copy goes missing.
+   *
+   * The OLD copy keeps its number and stays LOST. A replacement is a different
+   * physical object, and a retired number never returns — that is what makes
+   * the register a history rather than a stock list.
+   */
+  async replaceInKind(
+    tx: LibraryTx,
+    orgId: string,
+    reportId: string,
+    newAccessionNumber: string,
+    condition: 'NEW' | 'GOOD' | 'FAIR' | 'POOR' | undefined,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<{ lostReportId: string; newCopyId: string; clearedFineIds: string[] }> {
+    const { report, openFines } = await this.loadSettleable(tx, reportId, allowedBranches);
+    const oldCopy = await tx.copy.findUnique({ where: { id: report.copyId } });
+    if (!oldCopy) throw new NotFoundException('Copy not found');
+
+    let newCopy;
+    try {
+      newCopy = await tx.copy.create({
+        data: {
+          orgId,
+          titleId: oldCopy.titleId,
+          branchId: oldCopy.branchId,
+          accessionNumber: newAccessionNumber,
+          shelf: oldCopy.shelf,
+          // GOOD, not NEW: a parent's replacement is usually second-hand.
+          condition: condition ?? 'GOOD',
+          acquiredAt: now,
+          acquisitionCost: null,
+          status: 'AVAILABLE',
+        },
+      });
+    } catch (err) {
+      // `Copy_orgId_accessionNumber_key` — the number is already in the
+      // register, which is exactly the collision the unique index exists to
+      // catch. A retired number can never be reused, so this is also what stops
+      // someone re-entering the lost book's own number.
+      throw new ConflictException(
+        `Accession number ${newAccessionNumber} is already in the register`,
+      );
+    }
+
+    // Only the LOST fine is cleared in kind. The late charge stands.
+    const clearedFineIds: string[] = [];
+    for (const fine of openFines.filter((f) => f.kind === 'LOST')) {
+      await tx.fine.update({
+        where: { id: fine.id },
+        data: {
+          status: 'WAIVED',
+          waivedByUserId: actorUserId,
+          waivedAmount: fine.amount.minus(fine.paidAmount),
+          waivedReason: `Replaced in kind — new copy ${newAccessionNumber}`,
+          waiverReasonCode: 'REPLACED_IN_KIND',
+          waivedAt: now,
+        },
+      });
+      clearedFineIds.push(fine.id);
+    }
+
+    await tx.lostReport.update({
+      where: { id: report.id },
+      data: { status: 'SETTLED_IN_KIND', settledAt: now, settledByUserId: actorUserId },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.replace_in_kind',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: {
+          retiredAccessionNumber: oldCopy.accessionNumber,
+          newAccessionNumber,
+          newCopyId: newCopy.id,
+          clearedFineIds,
+        },
+      },
+    });
+
+    return { lostReportId: report.id, newCopyId: newCopy.id, clearedFineIds };
+  }
+
+  /**
+   * The original book turned up, after it had already been confirmed lost.
+   *
+   * It goes back on the shelf AT ITS OLD ACCESSION NUMBER. "A retired number
+   * never returns" is a rule about REPLACEMENTS — a different physical object
+   * must never inherit a number, or the register claims two books are one.
+   * This is the SAME object, with that number already written in ink inside its
+   * own front cover; giving it a new one would mean striking through the
+   * child's book and listing one physical copy twice. The rule survives because
+   * nothing was ever deleted: the row still holds `(orgId, accessionNumber)`
+   * unique, so the number remains structurally unavailable to any NEW copy.
+   *
+   * The frozen late charge STAYS FROZEN. They were still late, and un-freezing
+   * it would make "Found it" a button nobody presses — which is the one thing
+   * that would actually cost the school books.
+   */
+  async foundLost(
+    tx: LibraryTx,
+    orgId: string,
+    reportId: string,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<{ lostReportId: string; accessionNumber: string; clearedFineIds: string[] }> {
+    const { report, openFines } = await this.loadSettleable(tx, reportId, allowedBranches);
+    const copy = await tx.copy.findUnique({ where: { id: report.copyId } });
+    if (!copy) throw new NotFoundException('Copy not found');
+
+    await tx.copy.update({ where: { id: copy.id }, data: { status: 'AVAILABLE' } });
+
+    const clearedFineIds: string[] = [];
+    for (const fine of openFines.filter((f) => f.kind === 'LOST')) {
+      await tx.fine.update({
+        where: { id: fine.id },
+        data: {
+          status: 'WAIVED',
+          waivedByUserId: actorUserId,
+          waivedAmount: fine.amount.minus(fine.paidAmount),
+          waivedReason: 'The original copy was found',
+          waiverReasonCode: 'BOOK_FOUND',
+          waivedAt: now,
+        },
+      });
+      clearedFineIds.push(fine.id);
+    }
+
+    await tx.lostReport.update({
+      where: { id: report.id },
+      data: { status: 'FOUND', settledAt: now, settledByUserId: actorUserId },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.found',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: { accessionNumber: copy.accessionNumber, clearedFineIds },
+      },
+    });
+
+    return { lostReportId: report.id, accessionNumber: copy.accessionNumber, clearedFineIds };
+  }
+
+  /**
+   * A book is missing from the shelf and nobody has it — found during stock
+   * verification.
+   *
+   * A separate route, with no member and no issue, and that separation is the
+   * point. Without it a librarian has to invent a fake issue to a child in
+   * order to record a missing book, which puts a loss on a real person's record
+   * and, if fines are on, a bill on their parent. The
+   * `LostReport_member_and_issue_together` CHECK makes attaching a member here
+   * structurally impossible rather than merely discouraged.
+   *
+   * Ships in P3 even though the stock-take SCREEN is P5: the screen can wait,
+   * the fake issue cannot.
+   */
+  async reportMissing(
+    tx: LibraryTx,
+    orgId: string,
+    accessionNumber: string,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<{ lostReportId: string }> {
+    const copy = await tx.copy.findUnique({
+      where: { orgId_accessionNumber: { orgId, accessionNumber } },
+    });
+    if (!copy) throw new NotFoundException('Copy not found');
+    assertBranchInScope(copy.branchId, allowedBranches);
+
+    const activeIssue = await tx.issue.findFirst({
+      where: { copyId: copy.id, returnedAt: null },
+    });
+    if (activeIssue) {
+      // Somebody does have it — this is a loss with a holder, and it must go
+      // through the flow that freezes their charge and bills them, not through
+      // the one that says nobody had it.
+      throw new ConflictException(
+        'This copy is issued to a member — report it lost against that issue instead',
+      );
+    }
+
+    await tx.copy.update({ where: { id: copy.id }, data: { status: 'LOST' } });
+
+    const report = await tx.lostReport.create({
+      data: {
+        orgId,
+        copyId: copy.id,
+        branchId: copy.branchId,
+        // Both null, together — the CHECK enforces it.
+        memberId: null,
+        issueId: null,
+        reportedByUserId: actorUserId,
+        selfReported: false,
+        reportedAt: now,
+        // Straight to CONFIRMED: there is no money to wait for and nobody to
+        // confirm it against.
+        status: 'CONFIRMED',
+        confirmedAt: now,
+        confirmedByUserId: actorUserId,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.missing_at_stock_take',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: { accessionNumber, copyId: copy.id },
+      },
+    });
+
+    return { lostReportId: report.id };
+  }
 }

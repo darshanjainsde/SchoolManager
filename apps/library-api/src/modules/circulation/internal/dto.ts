@@ -175,3 +175,19 @@ export class WriteOffLostDto {
 
   @IsString() @MinLength(1) @MaxLength(500) reason!: string;
 }
+
+export class ReplaceInKindDto {
+  /**
+   * The number the librarian writes inside the new copy's front cover. Typed,
+   * not generated: they have to write it by hand anyway, and the accession
+   * allocator is P5's problem.
+   */
+  @IsString() @MinLength(1) @MaxLength(100) accessionNumber!: string;
+
+  /** Defaults to GOOD, not NEW — a parent's replacement is usually second-hand. */
+  @IsOptional() @IsIn(['NEW', 'GOOD', 'FAIR', 'POOR']) condition?: 'NEW' | 'GOOD' | 'FAIR' | 'POOR';
+}
+
+export class ReportMissingDto {
+  @IsString() @MinLength(1) @MaxLength(100) accessionNumber!: string;
+}

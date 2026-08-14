@@ -82,6 +82,12 @@ export const ENDPOINTS: EndpointSpec[] = [
   // it is not, so write-off is WRITERS-only — the same split as fines/:id/waive.
   { method: 'POST', path: '/circulation/lost/:id/pay', roles: READERS, body: { method: 'CASH' } },
   { method: 'POST', path: '/circulation/lost/:id/write-off', roles: WRITERS, body: { approvedByNote: 'Authz matrix probe', reason: 'probe' } },
+  // Clearing a charge in kind is forgiving money, so WRITERS. Marking a book
+  // found is not — reversing must be as easy as reporting or nobody reports,
+  // and the frozen late charge stands either way.
+  { method: 'POST', path: '/circulation/lost/:id/replace', roles: WRITERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-REPL' } },
+  { method: 'POST', path: '/circulation/lost/:id/found', roles: READERS },
+  { method: 'POST', path: '/circulation/lost/missing', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-MISSING' } },
 
   // Task 9 — renew and reservations. Same desk-role split as issue/return: ORG_OWNER/
   // LIBRARIAN/ASSISTANT work the desk, MEMBER is denied. Ids in bodies are
