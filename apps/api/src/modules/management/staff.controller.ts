@@ -18,9 +18,29 @@ import { TenantContextService } from '../tenancy';
 import { StaffService } from './staff.service';
 import { CreateLoginDto, CreateStaffDto, UpdateStaffDto } from './management.dto';
 
+/**
+ * The school's staff records. SCHOOL_ADMIN only, every route.
+ *
+ * `RolesGuard` used to sit on the two login-invite handlers alone, with a note
+ * calling the rest "intentionally open to any authenticated MANAGEMENT-feature
+ * role". That was not a policy, it was a hole: `RequireFeatureGuard` asks
+ * whether the SCHOOL bought the feature and never who is asking, and the only
+ * `APP_GUARD` in `app.module.ts` is `ThrottlerGuard`. So a STUDENT token read
+ * the staff roster with its emails and phone numbers, and a TEACHER token
+ * reached `DELETE /manage/staff/:id`.
+ *
+ * Watched fail before the fix (`management-authz.e2e-spec.ts`): the DELETE
+ * answered **404, not 403** — authorization never ran, the handler simply did
+ * not find that row. A real id would have deleted it.
+ *
+ * Nothing else called these: the admin console at `app/app/staff/page.tsx` is
+ * the only client, and `/manage/staff-attendance/*` — which STAFF and the
+ * mobile worker portal do call — is a different controller with its own guards.
+ */
 @Controller('manage/staff')
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard)
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
 @RequireFeature('MANAGEMENT')
+@Roles('SCHOOL_ADMIN')
 export class StaffController {
   constructor(
     private readonly staff: StaffService,
@@ -56,21 +76,16 @@ export class StaffController {
   }
 
   /**
-   * Login-invite routes are SCHOOL_ADMIN-only (mirrors TeachersController),
-   * so RolesGuard + @Roles are applied per-handler here rather than at the
-   * class level — the other handlers on this controller intentionally stay
-   * open to any authenticated MANAGEMENT-feature role.
+   * Creates the staff member's login. `dto.role` is `STAFF` or `LIBRARIAN`
+   * only — `management.dto.ts` pins that with `@IsIn`, which is what stops a
+   * staff screen from minting a TEACHER or a SCHOOL_ADMIN.
    */
   @Post(':id/login')
-  @UseGuards(RolesGuard)
-  @Roles('SCHOOL_ADMIN')
   createLogin(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateLoginDto) {
     return this.staff.createLogin(this.sid(), id, dto);
   }
 
   @Post(':id/invite/resend')
-  @UseGuards(RolesGuard)
-  @Roles('SCHOOL_ADMIN')
   resendInvite(@Param('id', ParseUUIDPipe) id: string) {
     return this.staff.resendInvite(this.sid(), id);
   }

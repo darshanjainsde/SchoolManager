@@ -177,6 +177,76 @@ describe('management authorization', () => {
     });
   });
 
+  // ── The staff RECORDS controller: SCHOOL_ADMIN-only, all of it ─────────────
+  //
+  // `StaffController` carried `SchoolJwtGuard + RequireFeatureGuard` at the
+  // class level and `RolesGuard` only on the two login-invite handlers, with a
+  // comment calling the rest "intentionally open to any authenticated
+  // MANAGEMENT-feature role". `RequireFeatureGuard` asks whether the SCHOOL
+  // bought the feature — never who is asking — and the only APP_GUARD is
+  // ThrottlerGuard, so every one of these was reachable with a STUDENT token.
+  // A child could read the staff roster with its emails and phone numbers, and
+  // DELETE a staff record.
+  //
+  // Found while adding the LIBRARIAN role: minting a console login for someone
+  // whose whole job is at a desk outside the console is what made "which
+  // routes does a non-admin token actually reach" worth answering.
+  describe('staff records — every route is SCHOOL_ADMIN-only', () => {
+    it('a STUDENT cannot list staff', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/staff')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('a TEACHER cannot list staff', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/staff')
+        .set(as(teacherToken))
+        .expect(403);
+    });
+
+    it('a STAFF login cannot list staff — being on the roster is not managing it', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/staff')
+        .set(as(staffToken))
+        .expect(403);
+    });
+
+    it('a STUDENT cannot create a staff record', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/staff')
+        .set(as(studentToken))
+        .send({ firstName: 'Not', lastName: 'Allowed', role: 'OTHER' })
+        .expect(403);
+    });
+
+    // The one that matters most: a well-formed UUID from a non-admin token.
+    // 403 must come from the guard, BEFORE the handler decides whether the row
+    // exists — a 404 here would mean the authorization ran second.
+    it('a TEACHER cannot delete a staff record', async () => {
+      await request(app.getHttpServer())
+        .delete('/manage/staff/00000000-0000-0000-0000-000000000001')
+        .set(as(teacherToken))
+        .expect(403);
+    });
+
+    it('a STUDENT cannot update a staff record', async () => {
+      await request(app.getHttpServer())
+        .put('/manage/staff/00000000-0000-0000-0000-000000000001')
+        .set(as(studentToken))
+        .send({ firstName: 'Edited' })
+        .expect(403);
+    });
+
+    it('a SCHOOL_ADMIN can still list staff', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/staff')
+        .set(as(adminToken))
+        .expect(200);
+    });
+  });
+
   // ── NotificationOutbox drain cron route (S6/S7 wiring, Task 2) ─────────────
   // Mirrors `internal/cron/exam-reminders`: no JWT exists for a cron
   // invocation, so the route is `@Public()` and gated by `CronSecretGuard`
