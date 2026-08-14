@@ -363,6 +363,21 @@ describe('management authorization', () => {
   // cron-secret.guard.ts / cron-secret.guard.spec.ts), not 403 — asserted
   // here against the guard's real, already-unit-tested behaviour.
   describe('internal/cron/notification-outbox — CronSecretGuard', () => {
+    // The library's daily reminder walks EVERY school's library and writes
+    // into people's inboxes. Unauthenticated, that is a spam cannon, so it
+    // gets the same closed-by-default treatment and its own assertion rather
+    // than inheriting confidence from the sibling route above.
+    it('401s the library reminder cron with no secret header', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/internal/cron/library-reminders')
+        .expect(401);
+      expect(res.body.code).toBe('UNAUTHORIZED');
+    });
+
+    it('401s a POST to the library reminder cron with no secret header', async () => {
+      await request(app.getHttpServer()).post('/internal/cron/library-reminders').expect(401);
+    });
+
     it('401s a GET with no cron secret header', async () => {
       const res = await request(app.getHttpServer())
         .get('/internal/cron/notification-outbox')

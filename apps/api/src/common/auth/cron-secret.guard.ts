@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
-import { ApiError } from '../../common/errors/api-error';
+import { ApiError } from '../errors/api-error';
 
 /**
  * Constant-time comparison of a caller-supplied credential against the

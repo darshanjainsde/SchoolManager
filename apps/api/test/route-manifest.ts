@@ -41,6 +41,8 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /me/assignments",
   "GET /me/library",
   "PATCH /manage/announcements/:id",
+  "GET /internal/cron/library-reminders",
+  "POST /internal/cron/library-reminders",
   "POST /internal/cron/notification-outbox",
   "POST /manage/assignments",
   "POST /manage/assignments/upload",

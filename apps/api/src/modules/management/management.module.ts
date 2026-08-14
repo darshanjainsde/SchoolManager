@@ -27,7 +27,7 @@ import { ExamRemindersService } from './exam-reminders.service';
 import { ExamRemindersController } from './exam-reminders.controller';
 import { NotificationOutboxService } from './notification-outbox.service';
 import { NotificationOutboxController } from './notification-outbox.controller';
-import { CronSecretGuard } from './cron-secret.guard';
+import { CronSecretGuard } from '../../common/auth/cron-secret.guard';
 import { LoginInviteService } from './internal/login-invite.service';
 import { LeaveService } from './leave.service';
 import { LeaveController, SubstitutionController } from './leave.controller';

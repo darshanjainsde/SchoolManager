@@ -1,6 +1,6 @@
 import { Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { Public } from '../../common/auth/public.decorator';
-import { CronSecretGuard } from './cron-secret.guard';
+import { CronSecretGuard } from '../../common/auth/cron-secret.guard';
 import { ExamRemindersService, type ExamReminderRunResult } from './exam-reminders.service';
 
 /**

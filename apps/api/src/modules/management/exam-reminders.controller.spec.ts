@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { PATH_METADATA, METHOD_METADATA, GUARDS_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
-import { CronSecretGuard } from './cron-secret.guard';
+import { CronSecretGuard } from '../../common/auth/cron-secret.guard';
 import { ExamRemindersController } from './exam-reminders.controller';
 
 describe('ExamRemindersController', () => {
