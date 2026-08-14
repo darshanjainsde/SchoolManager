@@ -13,6 +13,7 @@ import {
   DeskDayQueryDto,
   NextNumbersQueryDto,
   IssueAtDeskDto,
+  MarkPresentDto,
   NudgeClassTeachersDto,
   RecordDamageDto,
   SearchMembersQueryDto,
@@ -172,5 +173,31 @@ export class LibraryDeskController {
   @Get('day')
   async day(@CurrentUser() user: SchoolJwtPayload, @Query() query: DeskDayQueryDto) {
     return this.desk.today(await this.orgId(user), query.date);
+  }
+
+  /**
+   * The class that is in the library right now, and its roster.
+   *
+   * Six to eight times a day a class arrives together, and until now no console
+   * in the product could show her the list. Nothing due is a resting state, not
+   * an error; a school with no library periods on the timetable at all is a
+   * different answer again, and `periodsConfigured` is what tells them apart.
+   */
+  @Get('period/now')
+  async periodNow(@CurrentUser() user: SchoolJwtPayload) {
+    return this.desk.periodNow(await this.orgId(user));
+  }
+
+  /**
+   * Tick a child who came and browsed without borrowing — or take it back.
+   *
+   * `present` is required both ways round on purpose: this is the only route in
+   * the product that writes attendance by hand, and a false positive on a
+   * child's register is worse than a missing tick. It must be as easy to undo
+   * as it was to make.
+   */
+  @Post('period/present')
+  async markPresent(@CurrentUser() user: SchoolJwtPayload, @Body() dto: MarkPresentDto) {
+    return this.desk.markPresent(await this.orgId(user), dto.visitId, dto.memberId, dto.present);
   }
 }

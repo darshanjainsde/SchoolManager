@@ -269,6 +269,10 @@ describe('management authorization', () => {
       '/manage/library/day',
       '/manage/library/status',
       '/manage/library/next-numbers',
+      // The class in the library right now, with every child's name, borrower
+      // number and how many books they hold. A whole class list, which is
+      // exactly what no student or teacher token may read here.
+      '/manage/library/period/now',
     ];
 
     it.each(deskRoutes)('a STUDENT cannot reach %s', async (route) => {
@@ -302,6 +306,17 @@ describe('management authorization', () => {
       // message every class teacher in the school.
       ['/manage/library/nudge', { classRefs: ['6-B'] }],
       ['/manage/library/books', { title: 'X', accessionNumbers: ['9001'] }],
+      // Attendance is a record about a child that a parent may later be shown.
+      // A student reaching this could mark himself present at a library period
+      // he never attended, or unmark a classmate who was.
+      [
+        '/manage/library/period/present',
+        {
+          visitId: '00000000-0000-0000-0000-000000000001',
+          memberId: '00000000-0000-0000-0000-000000000002',
+          present: true,
+        },
+      ],
     ];
 
     it.each(deskWrites)('a STUDENT cannot POST %s', async (route, body) => {

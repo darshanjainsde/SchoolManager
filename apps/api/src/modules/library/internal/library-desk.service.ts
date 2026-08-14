@@ -9,6 +9,8 @@ import {
   voidIssue as coreVoid,
   recordDamage as coreDamage,
   addBook as coreAddBook,
+  liveVisits as coreLiveVisits,
+  markAttendance as coreMarkAttendance,
   suggestNextAccessionNumbers,
   type RecordDamageInput,
   type AddBookInput,
@@ -90,6 +92,69 @@ export interface DeskDayRow {
   accessionNumber: string;
 }
 
+/** One child on the roster of the class that is in the library now. */
+export interface PeriodChild {
+  memberId: string;
+  /** The borrower number in the register — how she finds him if two share a name. */
+  code: string;
+  name: string;
+  /**
+   * THREE states, never a boolean.
+   *
+   *   `auto` — he borrowed or returned something, so the transaction proves it;
+   *   `hand` — she ticked him, because he came and browsed;
+   *   `no`   — nobody has said he was here.
+   *
+   * Collapsing `auto` and `hand` would lose the only signal that separates
+   * "attended but borrowed nothing" from "was not here", and it is the reason
+   * she ticks five children rather than forty.
+   */
+  seen: 'auto' | 'hand' | 'no';
+  /** Books this child is holding right now, and how many of those are late. */
+  holding: number;
+  late: number;
+}
+
+/** A class that is in the library right now. */
+export interface PeriodClass {
+  visitId: string;
+  classRef: string;
+  /** Children on the class list. */
+  strength: number;
+  /** How many of them have been seen, by either route. */
+  present: number;
+  roster: PeriodChild[];
+}
+
+export interface PeriodNow {
+  /** The library's own date, in the ORG's timezone. */
+  date: string;
+  /**
+   * False when this school has no library periods on the timetable AT ALL —
+   * which is a setup answer, not an empty one. No class being due right now is
+   * the ordinary resting state and must not read the same way.
+   */
+  periodsConfigured: boolean;
+  /** False when this library has turned attendance off; then nothing here is ticked. */
+  attendanceOn: boolean;
+  classes: PeriodClass[];
+  /**
+   * The room is over-filled. Null the rest of the time.
+   *
+   * Surfaced from the same over-capacity condition `createPeriod` warns on when
+   * the timetable is built, because that warning is seen once by whoever typed
+   * the timetable and never again by the person standing in the full room.
+   */
+  warning: string | null;
+}
+
+/**
+ * What the library behaves as before anyone has saved a setting — the same two
+ * defaults `PeriodsService.getSettings` falls back to. A read must not create
+ * the row (that would make a GET take locks), so the fallback lives here too.
+ */
+const DEFAULT_CLASS_CAPACITY = 2;
+
 /**
  * Explicit transaction bounds for every counter WRITE.
  *
@@ -133,6 +198,18 @@ function daysBetween(from: Date, to: Date): number {
 
 function fullName(m: { firstName: string; lastName: string }): string {
   return `${m.firstName} ${m.lastName}`.trim();
+}
+
+/**
+ * Narrow the roster's `seen` to the three states the screen knows.
+ *
+ * `liveVisits` builds it in an object literal, so TypeScript widens it to
+ * `string` at the boundary. Anything that is not `auto` or `hand` becomes `no`
+ * — the direction that is safe, because §2.6 ranks a false POSITIVE on
+ * attendance as far worse than a false negative.
+ */
+function seenState(seen: string): PeriodChild['seen'] {
+  return seen === 'auto' ? 'auto' : seen === 'hand' ? 'hand' : 'no';
 }
 
 @Injectable()
@@ -697,5 +774,112 @@ export class LibraryDeskService {
       // a librarian stop trusting the day's count.
       return rows.sort((a, b) => b.at.localeCompare(a.at));
     });
+  }
+
+  /**
+   * The class that is in the library right now, and its roster.
+   *
+   * A school library runs on the timetable, not on walk-ins: 6-B arrives at
+   * 10:40, forty children at once, six to eight times a day. Issuing a book
+   * already marks a child present as a by-product, so what is left for her is
+   * the few who came and browsed and borrowed nothing — five ticks, not forty.
+   *
+   * THREE ANSWERS, and the screen must tell them apart:
+   *   - classes in the room, with rosters;
+   *   - nothing due right now, which is the ordinary resting state of a library
+   *     between periods and not an error;
+   *   - no library periods on the timetable at all, which is a setup answer and
+   *     needs the office, not the librarian. `periodsConfigured` is the only
+   *     thing that distinguishes the last two, and no roster query can imply it.
+   *
+   * `liveVisits` is called, not copied — the same function the library console
+   * runs, so the two consoles cannot disagree about who was present.
+   *
+   * The response is BUILT: `LiveVisitsResult` carries every open loan per child
+   * with its title and due date, which is a book list nobody asked for on a tick
+   * screen. What survives is the count and how many of those are late.
+   */
+  async periodNow(orgId: string): Promise<PeriodNow> {
+    return withOrg(
+      orgId,
+      async (tx: LibraryTx) => {
+        const live = await coreLiveVisits(tx, orgId, ALL_BRANCHES);
+
+        // A read must not write. `PeriodsService.updateSettings` creates the
+        // row; here its absence simply means the library behaves as the
+        // defaults describe.
+        const settings = await tx.librarySettings.findUnique({
+          where: { orgId },
+          select: { concurrentClassCapacity: true, recordAttendance: true },
+        });
+        const capacity = settings?.concurrentClassCapacity ?? DEFAULT_CLASS_CAPACITY;
+
+        // Cheaper than a count, and the question is only ever "any at all?".
+        const anyPeriod = await tx.libraryPeriod.findFirst({ where: { orgId }, select: { id: true } });
+
+        const classes: PeriodClass[] = live.visits.map((v) => ({
+          visitId: v.id,
+          classRef: v.classRef,
+          strength: v.strength,
+          present: v.present,
+          roster: v.roster.map((r) => ({
+            memberId: r.id,
+            code: r.code,
+            name: fullName(r),
+            seen: seenState(r.seen),
+            holding: r.holding,
+            late: r.late,
+          })),
+        }));
+
+        // THE REAL LIMIT IS SEATS. `concurrentClassCapacity` counts classes
+        // because that is what a timetable slot holds, but a room does not fill
+        // with classes — it fills with children, and two classes of forty-five
+        // over-fill a room that three of twenty would not. So the condition is
+        // the one `createPeriod` already warns on, and the sentence states the
+        // headcount, which is the number she can act on.
+        const children = classes.reduce((n, c) => n + c.strength, 0);
+        const warning =
+          classes.length > capacity
+            ? `${classes.length} classes are in the library at once — ${children} children. It is set to hold ${capacity} at a time. The office builds the timetable; this screen only reports it.`
+            : null;
+
+        return {
+          date: live.date,
+          periodsConfigured: anyPeriod !== null,
+          attendanceOn: settings?.recordAttendance ?? true,
+          classes,
+          warning,
+        };
+      },
+      undefined,
+      DESK_TX_OPTIONS,
+    );
+  }
+
+  /**
+   * Tick a child who came and browsed without borrowing — or take the tick back.
+   *
+   * REVERSIBLE, and that is the requirement rather than a convenience. §2.6
+   * ranks a false POSITIVE on attendance as far worse than a false negative: a
+   * child marked present who was not there is a register that quietly lies, and
+   * the only defence against a mis-tap on a list of forty names is being able
+   * to undo it. `present: false` is that undo.
+   *
+   * A hand tick never downgrades an automatic one — the transaction is the
+   * stronger evidence — which `markAttendance` enforces in the upsert.
+   */
+  async markPresent(orgId: string, visitId: string, memberId: string, present: boolean) {
+    return withOrg(
+      orgId,
+      async (tx: LibraryTx) => {
+        const result = await coreMarkAttendance(tx, orgId, visitId, { memberId, present }, ALL_BRANCHES);
+        // The member comes back with the answer so the screen can reconcile the
+        // row it ticked, rather than assuming the one it sent.
+        return { visitId, memberId, present: result.present };
+      },
+      undefined,
+      DESK_TX_OPTIONS,
+    );
   }
 }

@@ -1,6 +1,7 @@
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsISO8601,
@@ -136,6 +137,29 @@ export class UndoIssueDto {
   @IsString()
   @Length(1, 200)
   reason!: string;
+}
+
+export class MarkPresentDto {
+  /** The class's visit for today — `PeriodClass.visitId`, never re-derived here. */
+  @IsUUID()
+  visitId!: string;
+
+  @IsUUID()
+  memberId!: string;
+
+  /**
+   * `false` UNTICKS, and it is the reason this field exists rather than the
+   * route being a bare "mark present". A false positive on attendance is far
+   * worse than a false negative, and a mis-tap on a list of forty names is
+   * only harmless while it can be taken back.
+   *
+   * Required, not optional. `markAttendance` treats an absent `present` as a
+   * tick, which is a sensible default for a hand-written API call and a bad one
+   * for a screen: a client that forgot the field would silently mark a child
+   * present. The browser always knows which way it is toggling.
+   */
+  @IsBoolean()
+  present!: boolean;
 }
 
 export class DeskDayQueryDto {
