@@ -9,6 +9,7 @@ import { CatalogModule } from './modules/catalog';
 import { CirculationModule } from './modules/circulation';
 import { SearchModule } from './modules/search';
 import { PeriodsModule } from './modules/periods';
+import { MeModule } from './modules/me';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
 
@@ -64,6 +65,7 @@ import { IdempotencyModule } from './common/idempotency/idempotency.module';
     CirculationModule,
     SearchModule,
     PeriodsModule,
+    MeModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

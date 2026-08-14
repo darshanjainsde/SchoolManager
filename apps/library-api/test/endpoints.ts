@@ -138,6 +138,16 @@ export const ENDPOINTS: EndpointSpec[] = [
   // catalogue act, and a plan without lending should still be able to search.
   { method: 'GET', path: '/search/suggest', roles: ALL_STAFF },
 
+  // P4 — a borrower's own account. ALL_STAFF including MEMBER, and the member
+  // is resolved from the caller's OWN login inside the service, so there is no
+  // id in any path or query that could be pointed at somebody else. A staff
+  // login with no member row gets a 404, which is a non-401/403 the same as
+  // every other allowed-role probe row here.
+  { method: 'GET', path: '/me/issues', roles: ALL_STAFF },
+  { method: 'GET', path: '/me/dues', roles: ALL_STAFF },
+  { method: 'GET', path: '/me/history', roles: ALL_STAFF },
+  { method: 'GET', path: '/me/availability/:titleId', roles: ALL_STAFF },
+
   // Phase 2c — the library period. Setting the timetable and the room's capacity
   // is configuration (WRITERS); opening a visit and ticking a child present is
   // counter work, so ASSISTANT can do it. MEMBER is denied throughout — a child
