@@ -129,13 +129,41 @@ Deliberately NOT built, and still open: the payment-provider ledger, partial pay
 damage-at-return, a principal role, and refunds as a money state (a found-after-payment
 refund is recorded as an obligation on `LostReport`, settled at the desk).
 
-### P4 — Student and teacher portals
-Auth bridge accepting a Sckools token via `Member.externalRef`; `/me/issues`, `/me/dues`,
-`/me/history`; availability search; self-report lost. Notifications to **both** the
-Sckools inbox and push. **Teachers need different politics** — no push saying "you owe
-₹300", a separate list from students, principal approval to waive.
+### P4 — Student and teacher portals — **PARTLY SHIPPED**
+
+Shipped: the auth bridge (`POST /auth/sckools/exchange`, RS256 public-key verified, joined
+on `Member.externalRef`), roster enrolment, `GET /me/library` + `/shelf` + `/class` served
+in-process from `apps/api`, and the student and teacher screens on web behind the two-stage
+gate (`LIBRARY` feature AND `libraryLive`). The `LIBRARIAN` role, a librarian login the
+admin console can mint, and the counter at `/library` shipped with it.
+
+**The bridge is wired at one end only, and this is the trap for whoever picks it up.**
+Nothing calls `/auth/sckools/exchange` — no client, only the authz matrix. Nothing in
+`apps/api` signs RS256, and `SCKOOLS_JWT_PUBLIC_KEY` is set in no environment, so the route
+answers 503 everywhere it is deployed. Worse, it could not serve the person it is now most
+needed for: `exchange()` requires a `Member` **with a `login` row**, and `enrolSchool()`
+creates members for students and teachers only, with no `LibraryLogin` — so a LIBRARIAN
+resolves to *"This person has no library membership"*. Single sign-on into the standalone
+console needs a library identity for staff, which is unbuilt.
+
+Still open: `/me/dues`, `/me/history`, self-report lost from the student screen, and
+notifications to **both** the Sckools inbox and push. **Teachers need different politics** —
+no push saying "you owe ₹300", a separate list from students, principal approval to waive.
 **Do NOT build** a student-facing reservation queue (a child cannot collect outside their
 period, and shelf expiry then punishes them; "tell me when it's back" is the real want).
+
+### P4b — The counter's writes
+`/library` ships READ-ONLY: find a copy, find a member, today's log, not returned, and the
+first-run enrol. Take-back and give-out are absent — not disabled — because `issue`,
+`return` and `renew` live in `apps/library-api/src/modules/circulation/` and `apps/api`
+cannot import them. A second implementation would answer "what does this child owe" twice.
+The unblock is `packages/library-core`, into which the pure policy layer and then the
+circulation bodies move; both apps import it. Until that lands the counter cannot write.
+
+Also unbuilt and ranked daily by the PM: **undo a wrong transaction** (she fakes a return
+instead, which corrupts the day report and the copy's history), **damage at return**
+(`FineKind.DAMAGE` and `CopyCondition` exist; no route), and **the library period's
+attendance tick** for children who came and borrowed nothing.
 
 ### P5 — Register and stock verification
 14 canonical CBSE/NIOS columns, exportable. Scanner-free stock take using accession
