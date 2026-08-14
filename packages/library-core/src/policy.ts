@@ -218,7 +218,7 @@ export function nextReservationToPromote(reservations: Reservation[], now: Date)
  * The reservation-shelf deadline for a reservation promoted to `READY` right now — the
  * window a member has to collect a copy pulled for them before it lapses
  * back to the next person in the queue. `policy.reservedShelfDays` is the single
- * configured source for this; a caller (`issues.service.ts`'s return flow)
+ * configured source for this; a caller (`circulation/issues.ts`'s return flow)
  * must compute it here rather than re-adding days inline, so this and
  * `evaluateIssue`'s `dueAt` math never drift apart on how "N days from now"
  * is rounded.
@@ -234,7 +234,7 @@ export function reservedShelfExpiry(p: Policy, now: Date): Date {
  * is reported as `EXPIRED` on every read from the moment its shelf window
  * lapses, but the STORED row keeps saying `READY` until a user-triggered
  * action — the next return for that title — actually writes `EXPIRED`; see
- * `issues.service.ts`'s `promoteOrRelease`).
+ * `circulation/issues.ts`'s `promoteOrRelease`).
  *
  * Only `READY` is ever reinterpreted. `PENDING` never is: a pending reservation's
  * `expiresAt` is a placeholder with no real deadline in this phase (nothing
