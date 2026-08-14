@@ -43,6 +43,16 @@ enum UserRole {
   /// apps/api/src/modules/management/staff.service.ts and
   /// apps/web/app/login/page.tsx.
   STAFF
+  /// The school librarian. A ROLE rather than STAFF-plus-a-sub-role for two
+  /// reasons: `RolesGuard` reads `payload.role` directly, so `@Roles('LIBRARIAN')`
+  /// must be expressible without a second query; and STAFF already means
+  /// "non-teaching staff" with its own portal at /staff-attendance/mine.
+  ///
+  /// In an Indian school "librarian" is a job title, not a permission set — she
+  /// thinks of herself as the librarian — so she signs in at the school's normal
+  /// /login and lands on the library counter, seeing nothing else of the admin
+  /// console.
+  LIBRARIAN
 }
 
 enum MediaKind {

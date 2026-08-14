@@ -1,0 +1,28 @@
+-- Adds LIBRARIAN to UserRole.
+--
+-- IRREVERSIBLE, and deliberately ALONE in its own migration. Two separate
+-- reasons, both verified rather than assumed:
+--
+-- 1. Postgres cannot remove a value from an enum type. Undoing this means
+--    recreating the type and rewriting every column that uses it, under lock,
+--    on a live database. So it ships by itself, ahead of anything that depends
+--    on it, and the name is never later reused for a different meaning.
+--
+-- 2. A new enum value CANNOT BE USED in the same transaction that adds it, and
+--    Prisma wraps each migration in one. Verified on the local PG 16.14:
+--
+--      BEGIN;
+--      ALTER TYPE t_probe ADD VALUE IF NOT EXISTS 'B';
+--      SELECT 'B'::t_probe;
+--      -- ERROR: unsafe use of new value "B" of enum type t_probe
+--      -- HINT:  New enum values must be committed before they can be used.
+--
+--    So any later migration that INSERTs a LIBRARIAN user, adds a CHECK naming
+--    it, or backfills a row with it must be a SEPARATE migration from this one.
+--    Folding them together fails at deploy time, not at review time — and on a
+--    fresh database it fails on the very first replay.
+--
+-- ADD VALUE IF NOT EXISTS makes this re-runnable, which matters because a
+-- half-applied enum change cannot be rolled back and retried the way ordinary
+-- DDL can.
+ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'LIBRARIAN';

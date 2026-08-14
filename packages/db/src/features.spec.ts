@@ -40,4 +40,24 @@ describe('resolveFeatures', () => {
     expect(f.has('PUBLIC_SITE')).toBe(true);
     expect((f as Set<string>).has('NOPE')).toBe(false);
   });
+
+  describe('LIBRARY is opt-in only', () => {
+    it('is in NO tier by default, not even PRO', () => {
+      // The claim the feature comment makes, asserted so it cannot quietly stop
+      // being true. Many schools have a cupboard of books and no circulation;
+      // giving them a Library tab by default makes the product look unfinished
+      // and makes a real library look like a freebie rather than a choice.
+      for (const tier of ['BASIC', 'STANDARD', 'PRO'] as const) {
+        expect(resolveFeatures(tier, []).has('LIBRARY')).toBe(false);
+      }
+    });
+
+    it('is reachable only through an explicit per-school override', () => {
+      const f = resolveFeatures('PRO', [{ featureKey: 'LIBRARY', enabled: true }]);
+      expect(f.has('LIBRARY')).toBe(true);
+      // And it is a real key, not silently dropped like an unknown one — the
+      // override path above must be able to switch it on for a BASIC school too.
+      expect(resolveFeatures('BASIC', [{ featureKey: 'LIBRARY', enabled: true }]).has('LIBRARY')).toBe(true);
+    });
+  });
 });
