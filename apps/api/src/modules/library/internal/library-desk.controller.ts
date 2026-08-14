@@ -11,6 +11,7 @@ import {
   AccessionNumberDto,
   DeskDayQueryDto,
   IssueAtDeskDto,
+  RecordDamageDto,
   SearchMembersQueryDto,
   UndoIssueDto,
 } from './library-desk.dto';
@@ -68,6 +69,23 @@ export class LibraryDeskController {
   @Post('issue')
   async issue(@CurrentUser() user: SchoolJwtPayload, @Body() dto: IssueAtDeskDto) {
     return this.desk.issueBook(await this.orgId(user), dto.accessionNumber, dto.memberId, user.sub);
+  }
+
+  /**
+   * A book came back damaged.
+   *
+   * Creates NO `Fine` and takes no amount. Pricing damage is a money decision
+   * and belongs behind the same deliberate-human gate as a lost book. The
+   * counter's promise — noting this costs the family nothing — is what keeps
+   * a librarian willing to note it at all.
+   */
+  @Post('damage')
+  async damage(@CurrentUser() user: SchoolJwtPayload, @Body() dto: RecordDamageDto) {
+    return this.desk.recordDamage(
+      await this.orgId(user),
+      { accessionNumber: dto.accessionNumber, condition: dto.condition, note: dto.note },
+      user.sub,
+    );
   }
 
   /**

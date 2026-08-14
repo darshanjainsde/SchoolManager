@@ -1,4 +1,4 @@
-import { IsInt, IsISO8601, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -48,6 +48,21 @@ export class IssueAtDeskDto extends AccessionNumberDto {
    */
   @IsUUID()
   memberId!: string;
+}
+
+export class RecordDamageDto extends AccessionNumberDto {
+  /**
+   * `NEW` is excluded on purpose — "damaged, condition NEW" is a row nobody
+   * can act on later. The service refuses it too; this is the earlier of the
+   * two refusals, not the only one.
+   */
+  @IsIn(['GOOD', 'FAIR', 'POOR'])
+  condition!: 'GOOD' | 'FAIR' | 'POOR';
+
+  /** What is actually wrong, in her words. "Last twenty pages torn." */
+  @IsString()
+  @Length(1, 300)
+  note!: string;
 }
 
 export class UndoIssueDto {

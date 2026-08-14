@@ -100,6 +100,29 @@ export default function LibraryCounterPage(): React.JSX.Element {
 
   const deskBusy = takeBack.isPending || giveOut.isPending;
 
+  // ── Damage ───────────────────────────────────────────────────────────────
+  // Opened from the return receipt, because that is the moment she is holding
+  // the book and can see the torn page.
+  const [damaging, setDamaging] = useState<string | null>(null);
+  const [condition, setCondition] = useState<'GOOD' | 'FAIR' | 'POOR'>('FAIR');
+  const [damageNote, setDamageNote] = useState('');
+  const [damageDone, setDamageDone] = useState<string | null>(null);
+
+  const damage = useMutation({
+    mutationFn: (body: { accessionNumber: string; condition: string; note: string }) =>
+      api.post<{ title: string }>('/manage/library/damage', body),
+    onSuccess: () => {
+      setDamaging(null);
+      setDamageNote('');
+      // Said EVERY time, not once. It is the sentence that keeps her willing to
+      // record damage at all — the moment she suspects a note might bill a
+      // family, she stops writing them and the condition column dies.
+      setDamageDone('Noted. No charge has been made.');
+      refreshDesk();
+    },
+    onError: (e: Error) => setDeskError(e.message),
+  });
+
   // ── Undo ─────────────────────────────────────────────────────────────────
   // Only an issue can be undone, and only while it is still out. `undoing`
   // holds the row being confirmed — the reason is typed, never assumed.
@@ -386,8 +409,63 @@ export default function LibraryCounterPage(): React.JSX.Element {
           {receipt.r.promotedReservationId ? (
             <span className="sk-desk-aside">Keep this one aside — it is reserved.</span>
           ) : null}
+          <button
+            type="button"
+            className="sk-desk-clear"
+            onClick={() => {
+              setDamaging(receipt.r.accessionNumber);
+              setDamageNote('');
+              setDamageDone(null);
+            }}
+          >
+            Book is damaged
+          </button>
         </div>
       ) : null}
+
+      {damaging ? (
+        <div className="sk-desk-receipt" data-tone="calm">
+          <span className="sk-lib-title">What is the damage?</span>
+          <div className="sk-desk-modes">
+            {(['GOOD', 'FAIR', 'POOR'] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="sk-desk-mode"
+                data-on={condition === c}
+                onClick={() => setCondition(c)}
+              >
+                {/* Her words, not the enum's. "POOR" is a database value. */}
+                {c === 'GOOD' ? 'A little worn' : c === 'FAIR' ? 'Damaged' : 'Badly damaged'}
+              </button>
+            ))}
+          </div>
+          <input
+            className="sk-lib-search"
+            value={damageNote}
+            onChange={(e) => setDamageNote(e.target.value)}
+            placeholder="Last twenty pages torn"
+            aria-label="What is the damage?"
+          />
+          <div className="sk-desk-actions">
+            <button
+              className="sk-btn"
+              data-variant="primary"
+              disabled={damage.isPending || !damageNote.trim()}
+              onClick={() =>
+                damage.mutate({ accessionNumber: damaging, condition, note: damageNote.trim() })
+              }
+            >
+              {damage.isPending ? 'Saving…' : 'Save the note'}
+            </button>
+            <button className="sk-btn" onClick={() => setDamaging(null)}>
+              Cancel
+            </button>
+          </div>
+          <span className="sk-lib-nudge">Noting this does not charge the family anything.</span>
+        </div>
+      ) : null}
+      {damageDone ? <p className="sk-lib-nudge">{damageDone}</p> : null}
       {receipt?.kind === 'issued' ? (
         <div className="sk-desk-receipt" data-tone="calm">
           <span className="sk-lib-title">{receipt.r.title}</span>

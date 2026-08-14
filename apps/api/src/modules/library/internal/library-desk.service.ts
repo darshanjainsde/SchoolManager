@@ -5,6 +5,8 @@ import {
   returnBook as coreReturn,
   renew as coreRenew,
   voidIssue as coreVoid,
+  recordDamage as coreDamage,
+  type RecordDamageInput,
 } from '@library/core';
 
 /**
@@ -238,6 +240,23 @@ export class LibraryDeskService {
           collectedReservationId: result.collectedReservationId,
         };
       },
+      undefined,
+      DESK_TX_OPTIONS,
+    );
+  }
+
+  /**
+   * A book came back damaged.
+   *
+   * Records it and charges nothing — no `Fine`, no amount taken, no rupee
+   * figure anywhere in the response. That is what makes it safe for her to
+   * note, and a librarian who is not afraid of the button is the only way this
+   * column ever holds the truth.
+   */
+  async recordDamage(orgId: string, input: RecordDamageInput, actorUserId: string, now = new Date()) {
+    return withOrg(
+      orgId,
+      (tx: LibraryTx) => coreDamage(tx, orgId, input, actorUserId, now),
       undefined,
       DESK_TX_OPTIONS,
     );

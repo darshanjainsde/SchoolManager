@@ -296,6 +296,7 @@ describe('management authorization', () => {
       // Undo DELETES an issue row. A student reaching it could erase the loan
       // that says they are holding a book.
       ['/manage/library/undo', { issueId: '00000000-0000-0000-0000-000000000001', reason: 'x' }],
+      ['/manage/library/damage', { accessionNumber: '1142', condition: 'POOR', note: 'torn' }],
     ];
 
     it.each(deskWrites)('a STUDENT cannot POST %s', async (route, body) => {
