@@ -25,6 +25,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/ready', roles: [], anonymous: true },
   { method: 'POST', path: '/auth/login', roles: [], anonymous: true, body: { identifier: 'x@y.z', password: 'nope' } },
   { method: 'POST', path: '/auth/refresh', roles: [], anonymous: true, body: { refreshToken: 'nope' } },
+  // P4 — trading a Sckools sign-in for a library one. Anonymous by definition:
+  // the caller has no library session yet, which is the entire point.
+  { method: 'POST', path: '/auth/sckools/exchange', roles: [], anonymous: true, body: { sckoolsToken: 'nope' } },
 
   // Catalog — ASSISTANT is read-only (GET only), LIBRARIAN/ORG_OWNER read+write,
   // MEMBER gets search + title detail only. See task-6-brief.md.

@@ -1,8 +1,10 @@
 import { Body, Controller, Inject, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { withOrg, type LibraryTx } from '@library/db';
 import { OrgContextService } from '../../tenancy';
 import { AuthService } from './auth.service';
-import { LoginDto, RefreshDto } from './dto';
+import { SckoolsBridgeService } from './sckools-bridge.service';
+import { LoginDto, RefreshDto , SckoolsExchangeDto } from './dto';
 import { RefreshService } from './refresh.service';
 import { loginIdentityTracker, refreshIdentityTracker } from './throttle-trackers';
 
@@ -20,7 +22,23 @@ export class AuthController {
     @Inject(AuthService) private readonly auth: AuthService,
     @Inject(OrgContextService) private readonly orgs: OrgContextService,
     @Inject(RefreshService) private readonly refreshService: RefreshService,
+    @Inject(SckoolsBridgeService) private readonly bridge: SckoolsBridgeService,
   ) {}
+
+  /**
+   * Trade a Sckools sign-in for a library one.
+   *
+   * Anonymous like `/auth/login` — the whole point is that the caller has no
+   * library session yet — and rate-limited the same way, because it is a login
+   * by another name and an unthrottled token-verification endpoint is an
+   * oracle.
+   */
+  @Post('sckools/exchange')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async exchangeSckoolsToken(@Body() dto: SckoolsExchangeDto) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx: LibraryTx) => this.bridge.exchange(tx, orgId, dto.sckoolsToken));
+  }
 
   // Two independent throttlers, per spec §9.4 — a per-IP bucket alone
   // punishes a whole NAT'd school for one busy morning (see the review

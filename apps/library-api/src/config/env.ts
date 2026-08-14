@@ -32,6 +32,24 @@ const schema = z.object({
 
   LIBRARY_PLATFORM_HOST: z.string().min(1),
   CRON_SECRET: z.string().optional(),
+
+  /**
+   * The PUBLIC key Sckools signs its tokens with (RS256, PEM).
+   *
+   * Public deliberately, not a shared secret. A shared HMAC secret would mean a
+   * compromise of this service lets an attacker mint SCKOOLS tokens too — one
+   * blast radius becomes two, for a service that exists to be separable. And
+   * verifying by calling Sckools would make every library login depend on
+   * Sckools being reachable, coupling two systems that are deliberately not.
+   *
+   * Optional: the library runs standalone today and must keep working that way
+   * (§1). Absent, the bridge route reports that it is not configured rather
+   * than failing closed on a feature nobody enabled.
+   */
+  SCKOOLS_JWT_PUBLIC_KEY: z.string().optional(),
+  /** Expected `iss` on a Sckools token. Checked so a token minted by some other
+   *  service holding the same key cannot be replayed here. */
+  SCKOOLS_JWT_ISSUER: z.string().default('sckools'),
   SENTRY_DSN: z.string().optional(),
 });
 

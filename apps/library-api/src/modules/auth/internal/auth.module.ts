@@ -6,6 +6,7 @@ import { TenancyModule } from '../../tenancy';
 import { AuthController } from './auth.controller';
 import { AuthService, type AuthStore, type AuthUserRow, type TokenIssuer } from './auth.service';
 import { PasswordService } from './password.service';
+import { SckoolsBridgeService } from './sckools-bridge.service';
 import {
   RefreshService,
   type AccessSigner,
@@ -290,6 +291,9 @@ export class PrismaRefreshStore implements RefreshStore {
       inject: ['REFRESH_STORE', 'ACCESS_SIGNER'],
     },
     { provide: 'TOKEN_ISSUER', useClass: JwtTokenIssuer },
+    // Verifies a Sckools token with a PUBLIC key and mints an ordinary library
+    // one — see the service for why it is never a shared secret.
+    SckoolsBridgeService,
     {
       provide: AuthService,
       useFactory: (store: AuthStore, passwords: PasswordService, tokens: TokenIssuer) =>
