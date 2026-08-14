@@ -1825,3 +1825,111 @@ button.sk-availcell:hover { filter: brightness(0.97); }
   background: var(--sk-card); color: var(--sk-ink); font: inherit; font-size: 13px;
 }
 .sk-input:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; border-color: var(--sk-brand); }
+
+/* ── THE LIBRARY, FOR A STUDENT AND A TEACHER ─────────────────────────────
+   These rules were missing entirely: /portal/library, /teacher/library and
+   components/library/my-books.tsx shipped writing `sk-lib-*` class names that
+   no stylesheet declared, so both screens painted as bare unstyled lists. The
+   markup and copy were right; only the skin was absent.
+
+   Every value here resolves through an EXISTING token, so the dark scheme and
+   both theme toggles follow with no new declarations — the four-places
+   maintenance rule at the top of this file applies to tokens, and adding one
+   for the library would have meant four edits and a guard to keep in step.
+
+   TONE IS NOT ALARM. `data-tone` carries calm / soon / late from `toneFor()`
+   in lib/library.ts. Late is painted in the bad hue but as a quiet tinted
+   pill, never a red row: most children are a day or two late and that is the
+   ordinary condition of a school library. A screen that is red every week
+   trains a reader to stop seeing red.
+
+   AVAILABILITY IS NOT A FAILURE STATE either — a book being out is the
+   library working. `[data-out="true"]` goes neutral, not red. Red on "all
+   out" would read as an error the child caused. */
+.sk-lib { display: flex; flex-direction: column; gap: 6px; }
+.sk-lib > h1 {
+  font-family: var(--sk-serif); font-size: clamp(21px, 3vw, 26px);
+  font-weight: 650; letter-spacing: -0.01em; margin: 0 0 2px;
+}
+/* The section label, not a second title — the page has one heading and these
+   name the parts underneath it. */
+.sk-lib-h2 {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--sk-ink-3); margin: 16px 0 0;
+}
+
+.sk-lib-books, .sk-lib-shelf, .sk-lib-class {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;
+}
+
+/* A borrowed book is a card, because it is a thing the child is holding. The
+   tone rides the left edge so the whole row never becomes the signal. */
+.sk-lib-book {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--sk-card); border: 1px solid var(--sk-line);
+  border-left: 3px solid var(--sk-line-2);
+  border-radius: var(--sk-r-sm); padding: 11px 14px;
+}
+.sk-lib-book[data-tone="soon"] { border-left-color: var(--sk-amber); }
+.sk-lib-book[data-tone="late"] { border-left-color: var(--sk-bad); }
+.sk-lib-book-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sk-lib-book-when { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+
+.sk-lib-title { font-size: 14.5px; font-weight: 650; color: var(--sk-ink); }
+/* "no. 1142" — tabular so a column of numbers lines up, which is how she reads
+   them off a shelf. */
+.sk-lib-no { font-size: 11.5px; color: var(--sk-ink-3); font-variant-numeric: tabular-nums; }
+.sk-lib-author { font-size: 12px; color: var(--sk-ink-3); }
+.sk-lib-backby { font-size: 11.5px; color: var(--sk-ink-3); white-space: nowrap; }
+
+.sk-lib-state {
+  font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  background: var(--sk-bg-2); color: var(--sk-ink-2);
+}
+.sk-lib-state[data-tone="soon"] { background: var(--sk-amber-tint); color: var(--sk-amber-ink); }
+.sk-lib-state[data-tone="late"] { background: var(--sk-bad-tint); color: var(--sk-bad); }
+
+.sk-lib-empty {
+  font-size: 13px; color: var(--sk-ink-3); background: var(--sk-bg-2);
+  border-radius: var(--sk-r-sm); padding: 14px 16px; margin: 0;
+}
+
+.sk-lib-search {
+  width: 100%; border: 1px solid var(--sk-line-2); border-radius: 10px; padding: 9px 12px;
+  background: var(--sk-card); color: var(--sk-ink); font: inherit; font-size: 13.5px;
+}
+.sk-lib-search:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; border-color: var(--sk-brand); }
+
+.sk-lib-shelf-row, .sk-lib-class-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--sk-card); border: 1px solid var(--sk-line);
+  border-radius: var(--sk-r-sm); padding: 10px 14px;
+}
+/* The title takes the slack; the pill stays whole at the end of the row. */
+.sk-lib-shelf-row .sk-lib-title, .sk-lib-class-row .sk-lib-title { flex: 1; min-width: 0; }
+.sk-lib-avail {
+  font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; flex: none;
+  background: var(--sk-good-tint); color: var(--sk-good);
+}
+.sk-lib-avail[data-out="true"] { background: var(--sk-bg-2); color: var(--sk-ink-3); }
+
+/* The teacher's nudge list. The child's name leads, because the teacher is
+   about to say it out loud. */
+.sk-lib-child { font-size: 14px; font-weight: 650; color: var(--sk-ink); flex: none; }
+.sk-lib-class-row .sk-lib-title { font-weight: 400; color: var(--sk-ink-2); font-size: 13px; }
+.sk-lib-nudge { font-size: 12.5px; color: var(--sk-ink-3); margin: 2px 0 0; }
+
+/* Money is stated plainly and once. No tile, no colour, no button — the
+   library records what is owed, it does not collect it here. */
+.sk-lib-owed {
+  font-family: var(--sk-serif); font-size: 26px; font-weight: 650; color: var(--sk-ink);
+  margin: 2px 0 0; font-variant-numeric: tabular-nums;
+}
+.sk-lib-owed-note { font-size: 12.5px; color: var(--sk-ink-3); margin: 2px 0 0; }
+
+/* On a phone the two-column book row stacks rather than crushing the title. */
+@media (max-width: 480px) {
+  .sk-lib-book { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .sk-lib-book-when { flex-direction: row; align-items: center; gap: 8px; }
+  .sk-lib-shelf-row, .sk-lib-class-row { flex-wrap: wrap; }
+}
