@@ -23,6 +23,13 @@ it('rejects SCHOOL_ADMIN (web-only)', () => {
   expect(() => portalForRole('SCHOOL_ADMIN')).toThrow(/web console/i);
 });
 
+// LIBRARIAN is a real tenant role with a real login, and the app has no
+// counter to send her to. Before this case existed the switch fell through and
+// returned undefined, which the bootstrap passed to the router as a route.
+it('rejects LIBRARIAN (the counter is a web screen)', () => {
+  expect(() => portalForRole('LIBRARIAN')).toThrow(/web console/i);
+});
+
 describe('resolveStartRoute', () => {
   const sessionFor = (role: Session['role']): Session => ({
     accessToken: 'at', refreshToken: 'rt', role,
@@ -34,6 +41,12 @@ describe('resolveStartRoute', () => {
   // letting portalForRole's throw propagate.
   it('falls back to the gate for a persisted OWNER session', () => {
     expect(resolveStartRoute(sessionFor('OWNER'))).toBe('/(auth)/login');
+  });
+
+  // Same contract for a librarian: the login screen surfaces the message and
+  // clears the session rather than the app bricking on an undefined route.
+  it('falls back to the gate for a persisted LIBRARIAN session', () => {
+    expect(resolveStartRoute(sessionFor('LIBRARIAN'))).toBe('/(auth)/login');
   });
 
   it('routes a valid session straight to its portal', () => {

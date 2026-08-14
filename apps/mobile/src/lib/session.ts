@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-export type Role = 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'STAFF' | 'OWNER';
+export type Role = 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'STAFF' | 'LIBRARIAN' | 'OWNER';
 
 export interface Session {
   accessToken: string;

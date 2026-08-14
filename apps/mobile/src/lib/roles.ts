@@ -16,6 +16,14 @@ export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(
     // the "wrong portal" gap this exists to close. See web's parallel fix
     // (apps/web/lib/role-routes.ts) for the same STAFF-portal split.
     case 'STAFF': return '/(worker)/today';
+    // The library counter is a desk: search a child, type a book number, hand
+    // the book over. It lives on the web console. Until `LIBRARIAN` was added
+    // to `Role` this case did not exist and the switch fell off its end,
+    // returning `undefined` — which `resolveStartRoute` then handed to the
+    // router as a route. Widening the union is what turns that silent
+    // undefined into a compile error, since the return type names three
+    // literals and TypeScript rejects a non-exhaustive switch.
+    case 'LIBRARIAN': throw new Error('The library counter is on the web console.');
     case 'OWNER': throw new Error('Owner accounts use the web console.');
   }
 }
