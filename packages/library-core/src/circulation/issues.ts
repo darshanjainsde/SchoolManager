@@ -167,6 +167,35 @@ export async function issue(
   const member = await tx.member.findUnique({ where: { id: dto.memberId } });
   if (!member) throw new NotFoundException('Member not found');
 
+  // SERIALISE THIS MEMBER'S ISSUES. Being inside a transaction is not enough.
+  //
+  // `evaluateIssue` below counts this member's open loans and their open fine
+  // total, then creates an Issue. Under READ COMMITTED two transactions that
+  // both BEGIN before either COMMITs read the same pre-race snapshot, so a
+  // child on their last permitted book can be handed two, and a child over the
+  // fine limit can be handed one by each of two clerks. `issue_one_active_per_copy`
+  // does not help: it constrains the COPY, and these are two different copies.
+  //
+  // The lock is transaction-scoped, so it releases on COMMIT or ROLLBACK with
+  // no unlock to forget, and it is taken BEFORE the counting reads — a lock
+  // acquired after the read would serialise nothing. Same primitive and same
+  // reasoning as `assertQuota` in the plans module.
+  //
+  // ORDERING: this is the FIRST lock `issue` takes, before any row lock it
+  // later acquires by updating Copy or Reservation. `returnBook` takes row
+  // locks (`FOR UPDATE` on Reservation) and never takes this one, so no
+  // transaction holds one while waiting on the other in the opposite order and
+  // there is no AB-BA cycle. Keep it that way: an advisory lock taken after a
+  // row lock in either function reintroduces one.
+  //
+  // NEW FAILURE MODE IT CREATES (named deliberately, per the traps file): a
+  // second issue for the SAME member now waits instead of racing. It grants no
+  // new capability and makes no quantity unbounded — the only thing it can
+  // grow is wait time, which the caller's explicit transaction timeout bounds.
+  // Two clerks serving two DIFFERENT children never contend: the key includes
+  // the member.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${orgId}), hashtext(${member.id}))`;
+
   const policy = await loadPolicy(tx, orgId, member.memberType, copy.branchId);
 
   // Only relevant when the copy is currently RESERVED_SHELF — the READY
