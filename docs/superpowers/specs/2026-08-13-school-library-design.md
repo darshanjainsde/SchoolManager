@@ -62,7 +62,7 @@ limits.
    `issue_one_active_per_copy`, `reservation_one_per_member_title`,
    `VisitAttendance_one_per_member_visit`.
 
-## 3. Shipped (all green: 343 unit + 424 e2e)
+## 3. Shipped (all green: 356 unit + 566 e2e)
 
 | Area | State |
 |---|---|
@@ -74,107 +74,54 @@ limits.
 | `GET /search/suggest` typeahead; `Reservation` vocabulary | P2b — `7e3251f` |
 | Library period: timetable, capacity warning, auto-attendance, settings | P2c — `0366660` |
 | `Title.replacementPrice`, the price resolver, and the console field that sets it | P2d — unblocks P3 |
+| **P3 — lost books, dues, collections.** Report/self-report/confirm/reject, five settlements, member-shaped dues, collections + waiver log, three console screens | P3.1–P3.9 |
+| Every foreign key indexed; `fk-indexes.spec.ts` guards it with an empty baseline | with P3.9 |
 
 **Deployed to staging:** console + API live, CORS correct, day-report timezone-correct.
-`GET /search/suggest`, the period routes and the replacement-price field are **not yet
-deployed** — staging still needs the five newest migrations (`search_trigram`,
-`reservation_vocabulary`, `library_period`, `visit_branch_scope`,
-`title_replacement_price`).
+Staging was brought up to `title_replacement_price` on 2026-08-13 (data intact: 305
+members, 161 copies; RLS audit and isolation e2e green against it), and the API and console
+were redeployed to match. **Staging is now three migrations behind again** — `lost_reports`,
+`lost_refund_owed` and `index_foreign_keys` — and its code predates P3 entirely.
+
+The staging runbook named the PRODUCTION project until `52c6cfa`; the library's own project
+is `eocxgzcfzwmbaivobzfx` and the pooler host is `aws-0-`, not `aws-1-`. Assert the ref
+before running anything against it.
 
 ## 4. What is left
 
-### P3 — Lost books, dues, collections
-**No longer blocked.** `Title.replacementPrice` now exists (Decimal(10,2), nullable, with a
-`>= 0` CHECK in the database), along with a pure resolver —
-`apps/library-api/src/common/replacement-price.ts` — which is the one place the resolution
-order lives:
+### P3 — Lost books, dues, collections — **SHIPPED**
 
-> typed override → `Title.replacementPrice` → `Copy.acquisitionCost` → `UNPRICED`
+Built as P3.1–P3.9. The rules it turns on, kept here because they are what any change to
+this area must not break:
 
-It returns `{ amount, source }`, and **`UNPRICED` is a legitimate outcome, not an error.**
-A missing price must never block *recording* a loss: the report is what freezes the daily
-late charge, so refusing it to collect a catalogue field would keep billing the child who
-owned up. Only the money is deferred. `PURCHASE_COST` must always be shown *with* its age
-("the library paid ₹45 when this copy was bought") — it is historic, and presenting it bare
-is how a wrong number acquires authority. Zero is a real price (a book written off as out of
-print), never "absent".
-
-Four ways a price gets in, none of them a new screen: the catalogue detail field, a one-way
-seed from the add-copies path (never overwrites a value a librarian set), the CSV import's
-`replacementPrice` column, and the per-loss override. It is **not visible to a MEMBER** —
-the only party that tells a child what they owe is the library, after a librarian confirms
-the loss.
-
-**P3 still owes the provenance columns.** The resolved amount must be SNAPSHOTTED onto the
-`Fine` row with its source (`TITLE_PRICE` / `PURCHASE_COST` / `TYPED` / …), plus who set it
-and when — never a live join back to `Title`, or editing the catalogue next term silently
-rewrites a bill already issued. Deliberately not added early: an unused enum plus three
-unused columns is a real cost, and `schema-shape.spec.ts` scans every enum in the file.
-
-**THE RULE THIS PHASE TURNS ON.** A `LOST` fine is only ever created by a deliberate human
-action, with the amount **and its source** on screen at that moment. Never at self-report
-time, never from `UNPRICED` coerced to ₹0, and `PURCHASE_COST` never shown bare — always
-with its age ("the library paid ₹45 when this copy was bought — check this").
-
-P3 is the first time this software produces a number a parent is asked to pay, and it is a
-big jump: ₹6 of late charge becomes a ₹305 bill the instant a loss is recorded, in a product
-whose own governing decision is that fines are off by default because most schools charge
-children nothing. If that number can appear without a human having looked at it, the failure
-mode is not an angry parent — it is the **librarian quietly stopping reporting losses**. She
-leaves the book issued to a child who left school three years ago, and the register, the
-availability count and the not-returned list are then all wrong forever. Everything the
-phase exists for dies at once.
-
-- **The five steps, in order**, one transaction, explicit timeout:
-  1. **Close the issue** (`returnedAt = now`, `status = LOST`). First, because it is the
-     step that STOPS THE MONEY: the late charge is derived at read time from rows where
-     `returnedAt IS NULL`, so this makes every existing read stop billing at once. Do *not*
-     instead leave it null and add `AND status='ACTIVE'` to each query — one missed query
-     keeps billing the child who owned up (trap 9, applied to money).
-  2. **Freeze the accrued late charge** as an `OVERDUE` fine, honouring `chargeStudentFines`
-     exactly as `returnBook` does. This converts a derived number into a stored one.
-  3. **`Copy.status = LOST`** — nothing else; availability is counted, never stored.
-  4. **Raise the priced `LOST` fine**, with its source snapshotted. `UNPRICED` raises **no
-     fine at all** — a ₹0 fine reads as "nothing owed" to every total and to P5's No Dues
-     certificate.
-  5. **Retire the number**: the `LostReport` row plus the audit entry.
+- **A `LOST` fine is only ever created by a deliberate human action**, with the amount and
+  its source visible at that moment. Never at self-report time, never from `UNPRICED`
+  coerced to ₹0, and `PURCHASE_COST` never shown bare — always with its age. P3 is the
+  first time this software produces a number a parent pays, and ₹6 of late charge becomes
+  a ₹305 bill the instant a loss is recorded. If that number can appear without a human
+  looking at it, the failure is not an angry parent — it is the **librarian quietly
+  stopping reporting losses**, and then the register, the availability count and the
+  not-returned list are wrong forever.
+- **Closing the issue is step one**, because it is what stops the money: the late charge is
+  derived at read time from `returnedAt IS NULL`. Adding `AND status='ACTIVE'` to each
+  reading query instead is trap 9 applied to money.
 - **Self-report creates no `Fine` row.** The frozen figure lives on `LostReport` until a
-  librarian confirms; both fines are then created from the frozen figures, and confirm is
-  where the price may be typed. `FineStatus` gains **no** `PENDING` value — adding one to a
-  shipped money enum silently makes a 9-year-old's unconfirmed tap count as money owed in
-  `listFines`, `dayReport`, the owed tile and P4's `/me/dues`. Reject restores the world
-  exactly and the late clock resumes across the gap. The child sees no rupee figure at all
-  before confirm.
-- Settlement: **pay** (in full only — a counter taking ₹100 today and ₹199 next week needs a
-  payments table, so P3 does not offer it), **bring a replacement**, **found**, **write-off**.
-- **A found book keeps its OLD accession number.** "A retired number never returns" is about
-  *replacements* — a different physical object must never inherit a number. A found book is
-  the same object, with that number already in ink inside its cover. The
-  `(orgId, accessionNumber)` unique index is what structurally prevents reuse, so reversal is
-  safe by construction. The frozen late charge stays frozen: un-freezing it makes "Found it"
-  a button nobody presses.
-- **A replacement copy gets `acquisitionCost: null`** — not the price charged. The school
-  paid nothing; writing the charge there fakes the auditor's "Price paid" column *and* plants
-  a false `PURCHASE_COST` for the resolver to find the next time that copy is lost.
-- **Write-off records its approver rather than gating on one.** There is no principal role,
-  and in a 400-student school the librarian is often the only account — gating behind a role
-  nobody holds yields either a permanently open due that poisons every total, or a fake
-  "paid". Required reason plus a required free-text "approved by" captures the human who
-  actually said yes; every write-off shows in the waiver log.
-- **Waiver reasons are codes, not free text** — 400 unique strings cannot answer "where did
-  each rupee go". `BOOK_FOUND` and `REPLACED_IN_KIND` are *mechanical* and excluded from the
-  "let off" money figure: the school lost nothing either time.
-- A **no-member "missing at stock take"** route ships in P3 even though the stock-take screen
-  is P5 — otherwise a librarian invents a fake issue to a child in order to record a missing
-  book.
-- Dues list is **member-shaped, not fine-shaped** ("does Meera owe anything?"), split by
-  member type so a teacher's ₹300 is never inside a figure a principal reads as what the
-  children owe.
-- **P3 sends no money notification of any kind.** That single restraint makes P4's "no push
-  saying *you owe ₹300*" true by construction until P4 designs the message deliberately.
-- **Do NOT build** the payment-provider ledger yet (PM: fines are off by default; ship a
-  dues list and a paper receipt). Nor damage-at-return, partial payments, refunds/credits as
-  money states, or a principal role.
+  librarian confirms; confirm builds both fines from the FROZEN figures, never recomputed.
+  `FineStatus` gains no `PENDING`, no `REFUND`, no `CREDIT` — a new value in a shipped
+  money enum silently changes every sum built on it.
+- **A found book keeps its old accession number; a replacement gets the next one** with
+  `acquisitionCost` NULL. Retiring a number is about replacements — a different physical
+  object — and the `(orgId, accessionNumber)` unique index is what makes reversal safe.
+- **Mechanical waivers** (`BOOK_FOUND`, `REPLACED_IN_KIND`) are excluded from "let off":
+  the school lost nothing, and counting them makes book-keeping read as generosity.
+- **A stock-take loss has no member and no issue**, enforced by a CHECK, so a missing book
+  can never be pinned on a child who never had it.
+- P3 sends **no money notification of any kind**, which is what makes P4's "no push saying
+  *you owe ₹300*" true by construction until P4 designs the message deliberately.
+
+Deliberately NOT built, and still open: the payment-provider ledger, partial payments,
+damage-at-return, a principal role, and refunds as a money state (a found-after-payment
+refund is recorded as an obligation on `LostReport`, settled at the desk).
 
 ### P4 — Student and teacher portals
 Auth bridge accepting a Sckools token via `Member.externalRef`; `/me/issues`, `/me/dues`,
