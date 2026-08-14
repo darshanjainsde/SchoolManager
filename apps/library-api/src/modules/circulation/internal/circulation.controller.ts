@@ -7,7 +7,7 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, WaiveFineDto } from './dto';
+import { ConfirmLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
@@ -97,6 +97,65 @@ export class CirculationController {
       // `withOrg(orgId, fn, client, options)` — the transaction options are the
       // FOURTH argument, behind the client. Passing `undefined` keeps the
       // default tenant client while still widening the timeout.
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /**
+   * A child reports their own book lost, from the app. MEMBER-only in spirit,
+   * but staff roles are allowed through so a librarian testing the app path
+   * gets a clean 404 rather than a confusing 403 — the service resolves the
+   * member from the caller's OWN login and refuses anything not in their hands,
+   * so an account with no member row simply has nothing it can report.
+   */
+  @Post('lost/self-report')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT', 'MEMBER')
+  @UseInterceptors(IdempotencyInterceptor)
+  selfReportLost(@Body() dto: SelfReportLostDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) => this.lost.selfReportLost(tx, orgId, dto.accessionNumber, user.sub, now),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /** Confirming is where the money becomes real, so it is staff-only. */
+  @Post('lost/:id/confirm')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  @UseInterceptors(IdempotencyInterceptor)
+  confirmLost(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ConfirmLostDto,
+    @CurrentUser() user: LibJwtPayload,
+  ) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) => this.lost.confirmLost(tx, orgId, id, dto.replacementPrice, user.sub, now, user.branches),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /** The book turned up before anyone was charged. Restores the world exactly. */
+  @Post('lost/:id/reject')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  @UseInterceptors(IdempotencyInterceptor)
+  rejectLost(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: RejectLostDto,
+    @CurrentUser() user: LibJwtPayload,
+  ) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) => this.lost.rejectLost(tx, orgId, id, dto.reason, user.sub, now, user.branches),
       undefined,
       LOST_TX_OPTIONS,
     );

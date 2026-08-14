@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type LibraryTx } from '@library/db';
 import {
   resolveReplacementPrice,
@@ -209,5 +209,294 @@ export class LostService {
       lateFineId,
       replacementFineId,
     };
+  }
+
+  /**
+   * A child reports their own book lost, from the app.
+   *
+   * Runs steps 1, 3 and 5 — the issue closes, the copy leaves circulation, the
+   * report is recorded — and FREEZES the late figure onto the report. It
+   * creates NO fines. That split is the whole design:
+   *
+   *   - The incentive has to work from the moment of the tap, or owning up is
+   *     not cheaper than staying quiet. So the clock stops immediately and the
+   *     accrued figure is captured immediately.
+   *   - But a nine-year-old tapping a button must not create a bill to their
+   *     parent with no adult in the loop. So the money waits for a librarian.
+   *
+   * There is deliberately no `FineStatus.PENDING` holding the amount instead:
+   * adding a value to a shipped money enum would silently start counting an
+   * unconfirmed tap as money owed in `listFines`, `dayReport`, the console's
+   * owed tile and P4's `/me/dues`, unless every one of them were found and
+   * filtered (trap 9).
+   *
+   * The member is resolved HERE, from the caller's own `LibUser.memberId`,
+   * rather than accepted as a parameter. The controller has no way to hand in
+   * someone else's id even by mistake, and there is no request-body field a
+   * client could put one in — which is what makes "a child may only report a
+   * book that is in their own hands" a property of the code rather than of
+   * every future caller remembering.
+   */
+  async selfReportLost(
+    tx: LibraryTx,
+    orgId: string,
+    accessionNumber: string,
+    actorUserId: string,
+    now: Date,
+  ): Promise<{ lostReportId: string; frozenLateAmount: number | null }> {
+    const actor = await tx.libUser.findUnique({
+      where: { id: actorUserId },
+      select: { memberId: true },
+    });
+    if (!actor?.memberId) {
+      // A staff account with no member row has no books of its own to lose.
+      throw new NotFoundException('No active issue for this copy');
+    }
+    const memberId = actor.memberId;
+
+    const copy = await tx.copy.findUnique({
+      where: { orgId_accessionNumber: { orgId, accessionNumber } },
+    });
+    if (!copy) throw new NotFoundException('Copy not found');
+
+    // Scoped to THIS member's active issue: a child cannot report a book that
+    // is not in their own hands, and the 404 is deliberately identical to the
+    // one above so the route cannot be used to probe what other people hold.
+    const issue = await tx.issue.findFirst({
+      where: { copyId: copy.id, memberId, returnedAt: null },
+    });
+    if (!issue) throw new NotFoundException('No active issue for this copy');
+
+    const member = await tx.member.findUnique({ where: { id: memberId } });
+    if (!member) throw new NotFoundException('Member not found');
+
+    const policy = await loadPolicy(tx, orgId, member.memberType, issue.branchId);
+    const { amount: lateAmount } = computeFine(policy, issue.dueAt, now);
+    const settings = await tx.librarySettings.findUnique({
+      where: { orgId },
+      select: { chargeStudentFines: true },
+    });
+    const finesAllowed =
+      member.memberType !== 'STUDENT' || (settings?.chargeStudentFines ?? false);
+    const frozenLateAmount = finesAllowed && lateAmount > 0 ? lateAmount : null;
+
+    await tx.issue.update({
+      where: { id: issue.id },
+      data: { returnedAt: now, returnedByUserId: actorUserId, status: 'LOST' },
+    });
+    await tx.copy.update({ where: { id: copy.id }, data: { status: 'LOST' } });
+
+    const report = await tx.lostReport.create({
+      data: {
+        orgId,
+        copyId: copy.id,
+        branchId: issue.branchId,
+        memberId,
+        issueId: issue.id,
+        reportedByUserId: actorUserId,
+        selfReported: true,
+        reportedAt: now,
+        // REPORTED, not CONFIRMED: no money exists yet.
+        status: 'REPORTED',
+        frozenLateAmount:
+          frozenLateAmount === null ? null : new Prisma.Decimal(frozenLateAmount),
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.self_report',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: { accessionNumber, copyId: copy.id, memberId, frozenLateAmount },
+      },
+    });
+
+    return { lostReportId: report.id, frozenLateAmount };
+  }
+
+  /**
+   * A librarian confirms a self-reported loss. This is the moment the money
+   * becomes real, and the only moment a human is looking at the actual book —
+   * so it is also where the price may be typed.
+   *
+   * Both fines are created from the FROZEN figures, never recomputed. Days have
+   * passed since the child tapped the button, and recomputing the late charge
+   * here would quietly undo the freeze the whole incentive rests on.
+   */
+  async confirmLost(
+    tx: LibraryTx,
+    orgId: string,
+    reportId: string,
+    typedPrice: number | undefined,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<ReportLostResult> {
+    const report = await tx.lostReport.findUnique({
+      where: { id: reportId },
+      include: { copy: { include: { title: { select: { replacementPrice: true } } } } },
+    });
+    if (!report) throw new NotFoundException('Lost report not found');
+    assertBranchInScope(report.branchId, allowedBranches);
+    if (report.status !== 'REPORTED') {
+      throw new ConflictException(`Lost report is ${report.status}, not awaiting confirmation`);
+    }
+    if (!report.memberId || !report.issueId) {
+      // Structurally impossible for a self-report (the CHECK constraints
+      // guarantee it), but the types are nullable for stock-take losses.
+      throw new ConflictException('This loss has no member to charge');
+    }
+
+    const member = await tx.member.findUnique({ where: { id: report.memberId } });
+    if (!member) throw new NotFoundException('Member not found');
+    const settings = await tx.librarySettings.findUnique({
+      where: { orgId },
+      select: { chargeStudentFines: true },
+    });
+    const finesAllowed =
+      member.memberType !== 'STUDENT' || (settings?.chargeStudentFines ?? false);
+
+    // The frozen figure, as captured at REPORT time. Not recomputed.
+    const frozenLateAmount = report.frozenLateAmount?.toNumber() ?? null;
+    let lateFineId: string | null = null;
+    if (frozenLateAmount !== null && finesAllowed) {
+      const lateFine = await tx.fine.create({
+        data: {
+          orgId,
+          memberId: report.memberId,
+          issueId: report.issueId,
+          kind: 'OVERDUE',
+          status: 'OPEN',
+          amount: new Prisma.Decimal(frozenLateAmount),
+          reason: 'Late charge frozen when the loss was reported',
+        },
+      });
+      lateFineId = lateFine.id;
+    }
+
+    const resolved = resolveReplacementPrice({
+      typed: typedPrice,
+      titlePrice: report.copy.title.replacementPrice?.toNumber() ?? null,
+      copyAcquisitionCost: report.copy.acquisitionCost?.toNumber() ?? null,
+    });
+
+    let replacementFineId: string | null = null;
+    if (resolved.amount !== null && finesAllowed && resolved.source !== 'UNPRICED') {
+      const replacementFine = await tx.fine.create({
+        data: {
+          orgId,
+          memberId: report.memberId,
+          issueId: report.issueId,
+          kind: 'LOST',
+          status: 'OPEN',
+          amount: new Prisma.Decimal(resolved.amount),
+          reason: `Replacement for ${report.copy.accessionNumber}`,
+          amountSource: resolved.source,
+          amountSetByUserId: resolved.source === 'TYPED' ? actorUserId : null,
+        },
+      });
+      replacementFineId = replacementFine.id;
+    }
+
+    await tx.lostReport.update({
+      where: { id: report.id },
+      data: {
+        status: 'CONFIRMED',
+        confirmedAt: now,
+        confirmedByUserId: actorUserId,
+        replacementAmount:
+          resolved.amount === null ? null : new Prisma.Decimal(resolved.amount),
+        priceSource: resolved.source === 'UNPRICED' ? null : resolved.source,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.confirm',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: { frozenLateAmount, replacementAmount: resolved.amount, priceSource: resolved.source },
+      },
+    });
+
+    return {
+      lostReportId: report.id,
+      frozenLateAmount,
+      replacementAmount: resolved.amount,
+      priceSource: resolved.source,
+      lateFineId,
+      replacementFineId,
+    };
+  }
+
+  /**
+   * The book turned up on the shelf that afternoon. Restores the world exactly:
+   * the issue reopens, the copy goes back to ISSUED, and no money was ever
+   * created because confirmation never happened.
+   *
+   * The late clock resumes from the original `dueAt`, INCLUDING the days
+   * between report and rejection — the child did in fact still have the book
+   * for all of them, and pretending otherwise would make a false report a way
+   * to buy free days.
+   *
+   * The report row is never deleted. A rejected report is part of the history,
+   * and it is also the only way anyone can later see how often this happens.
+   */
+  async rejectLost(
+    tx: LibraryTx,
+    orgId: string,
+    reportId: string,
+    reason: string,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<{ lostReportId: string; issueId: string | null }> {
+    const report = await tx.lostReport.findUnique({ where: { id: reportId } });
+    if (!report) throw new NotFoundException('Lost report not found');
+    assertBranchInScope(report.branchId, allowedBranches);
+    if (report.status !== 'REPORTED') {
+      throw new ConflictException(
+        `Lost report is ${report.status}; only a report awaiting confirmation can be rejected`,
+      );
+    }
+
+    if (report.issueId) {
+      await tx.issue.update({
+        where: { id: report.issueId },
+        data: { returnedAt: null, returnedByUserId: null, status: 'ACTIVE' },
+      });
+    }
+    await tx.copy.update({
+      where: { id: report.copyId },
+      data: { status: report.issueId ? 'ISSUED' : 'AVAILABLE' },
+    });
+
+    await tx.lostReport.update({
+      where: { id: report.id },
+      data: {
+        status: 'REJECTED',
+        rejectedReason: reason,
+        settledAt: now,
+        settledByUserId: actorUserId,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.reject',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: { reason, issueId: report.issueId },
+      },
+    });
+
+    return { lostReportId: report.id, issueId: report.issueId };
   }
 }

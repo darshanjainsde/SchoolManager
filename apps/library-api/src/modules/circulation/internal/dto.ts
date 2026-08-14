@@ -131,3 +131,24 @@ export class ReportLostDto {
   @Max(100_000)
   replacementPrice?: number;
 }
+
+export class SelfReportLostDto {
+  @IsString() @MinLength(1) @MaxLength(100) accessionNumber!: string;
+}
+
+export class ConfirmLostDto {
+  /** The per-loss override, typed by the librarian at confirmation — the one
+   *  moment a human is looking at the actual book. Same bounds as
+   *  `ReportLostDto.replacementPrice`. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100_000)
+  replacementPrice?: number;
+}
+
+export class RejectLostDto {
+  /** Required. A rejection that does not say why is indistinguishable, later,
+   *  from a mistake — and this row stays in the history for good. */
+  @IsString() @MinLength(1) @MaxLength(500) reason!: string;
+}

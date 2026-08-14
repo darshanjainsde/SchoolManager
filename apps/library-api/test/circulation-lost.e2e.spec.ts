@@ -340,3 +340,266 @@ describeLive('circulation — reporting a book lost', () => {
     });
   });
 });
+
+/**
+ * Self-report -> confirm -> reject.
+ *
+ * The assertion this file exists for is the NEGATIVE one: between a child
+ * tapping "I lost it" and a librarian confirming, no Fine row exists and no
+ * total moves. That is what keeps a nine-year-old from creating a bill to their
+ * parent with no adult in the loop, and it is why FineStatus has no PENDING.
+ */
+describeLive('circulation — a child reports their own book lost', () => {
+  const lost = new LostService();
+  const fines = new FinesService();
+  const prisma = getLibraryPlatformPrisma();
+
+  let org: SeededOrg;
+  let other: SeededOrg;
+  let titleId: string;
+  let librarianId: string;
+  /** A LibUser with role MEMBER, linked to the seeded member — this is what a
+   *  child's login actually is. */
+  let childUserId: string;
+  let childMemberId: string;
+  let classmateUserId: string;
+
+  const DAY = 24 * 60 * 60 * 1000;
+
+  beforeAll(async () => {
+    ({ orgA: org, orgB: other } = await seedTwoOrgs(`selflost-${Date.now().toString(36)}`));
+    titleId = (
+      await prisma.title.create({
+        data: { orgId: org.id, title: 'Panchatantra', replacementPrice: 195 },
+      })
+    ).id;
+    librarianId = (
+      await prisma.libUser.create({
+        data: {
+          orgId: org.id, email: `sl-lib-${Date.now()}@t.local`, passwordHash: 'x',
+          role: 'LIBRARIAN', branchIds: [org.branchId],
+        },
+      })
+    ).id;
+    childMemberId = org.memberId;
+    childUserId = (
+      await prisma.libUser.create({
+        data: {
+          orgId: org.id, email: `sl-child-${Date.now()}@t.local`, passwordHash: 'x',
+          role: 'MEMBER', branchIds: [org.branchId], memberId: childMemberId,
+        },
+      })
+    ).id;
+    const classmate = await prisma.member.create({
+      data: { orgId: org.id, code: `CM-${Date.now()}`, firstName: 'Class', lastName: 'Mate' },
+    });
+    classmateUserId = (
+      await prisma.libUser.create({
+        data: {
+          orgId: org.id, email: `sl-mate-${Date.now()}@t.local`, passwordHash: 'x',
+          role: 'MEMBER', branchIds: [org.branchId], memberId: classmate.id,
+        },
+      })
+    ).id;
+    await prisma.circulationPolicy.create({
+      data: {
+        orgId: org.id, memberType: 'STUDENT', maxBooks: 5, issueDays: 14, renewLimit: 2,
+        renewDays: 14, finePerDay: 5, graceDays: 1, maxFine: 500, maxReservations: 3,
+        reservedShelfDays: 3, maxOutstandingFine: 1000,
+      },
+    });
+    await prisma.librarySettings.upsert({
+      where: { orgId: org.id },
+      create: { orgId: org.id, chargeStudentFines: true },
+      update: { chargeStudentFines: true },
+    });
+  });
+
+  afterAll(async () => {
+    await cleanupOrgs([org.id, other.id]);
+  });
+
+  async function issuedToChild(days: number) {
+    const accessionNumber = `SL-${Date.now()}-${Math.floor(process.hrtime()[1] / 1000)}`;
+    const copy = await prisma.copy.create({
+      data: { orgId: org.id, titleId, branchId: org.branchId, accessionNumber, status: 'ISSUED' },
+    });
+    const issue = await prisma.issue.create({
+      data: {
+        orgId: org.id, copyId: copy.id, branchId: org.branchId, memberId: childMemberId,
+        issuedAt: new Date(Date.now() - (days + 14) * DAY),
+        dueAt: new Date(Date.now() - days * DAY), status: 'ACTIVE',
+      },
+    });
+    return { copy, issue, accessionNumber };
+  }
+
+  const selfReport = (accessionNumber: string, asUserId = childUserId) =>
+    withOrg(
+      org.id,
+      (tx: LibraryTx) => lost.selfReportLost(tx, org.id, accessionNumber, asUserId, new Date()),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+
+  it('freezes the charge and retires the copy, but creates NO fine', async () => {
+    const { copy, issue, accessionNumber } = await issuedToChild(6);
+    const owedBefore = await prisma.fine.count({ where: { memberId: childMemberId } });
+
+    const result = await selfReport(accessionNumber);
+
+    // The incentive works from the tap: the clock has stopped.
+    expect((await prisma.issue.findUnique({ where: { id: issue.id } }))!.returnedAt).not.toBeNull();
+    expect((await prisma.copy.findUnique({ where: { id: copy.id } }))!.status).toBe('LOST');
+    expect(result.frozenLateAmount).toBeGreaterThan(0);
+
+    // But no money exists yet — the whole point of the confirm step.
+    expect(await prisma.fine.count({ where: { memberId: childMemberId } })).toBe(owedBefore);
+    const report = await prisma.lostReport.findUnique({ where: { id: result.lostReportId } });
+    expect(report!.status).toBe('REPORTED');
+    expect(report!.selfReported).toBe(true);
+    expect(report!.confirmedAt).toBeNull();
+    // And nothing is priced yet — that is the librarian's call, with the book
+    // in front of them.
+    expect(report!.replacementAmount).toBeNull();
+  });
+
+  it("refuses to report a classmate's book", async () => {
+    const { accessionNumber } = await issuedToChild(2);
+    // Same 404 as an unknown copy, deliberately — this route must not be usable
+    // to discover what other children are holding.
+    await expect(selfReport(accessionNumber, classmateUserId)).rejects.toThrow(
+      /No active issue for this copy/,
+    );
+  });
+
+  it('confirm creates both fines FROM THE FROZEN FIGURES, not recomputed', async () => {
+    const { accessionNumber } = await issuedToChild(6);
+    const reported = await selfReport(accessionNumber);
+    const frozen = reported.frozenLateAmount!;
+
+    // Days pass before the librarian gets to it. The charge must not move.
+    const muchLater = new Date(Date.now() + 30 * DAY);
+    const confirmed = await withOrg(
+      org.id,
+      (tx: LibraryTx) =>
+        lost.confirmLost(tx, org.id, reported.lostReportId, undefined, librarianId, muchLater, [
+          org.branchId,
+        ]),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+
+    expect(confirmed.frozenLateAmount).toBe(frozen);
+    const lateFine = await prisma.fine.findUnique({ where: { id: confirmed.lateFineId! } });
+    expect(Number(lateFine!.amount)).toBe(frozen);
+    // Priced from the title at confirm time, with its source recorded.
+    expect(confirmed.replacementAmount).toBe(195);
+    expect(confirmed.priceSource).toBe('TITLE_PRICE');
+  });
+
+  it('confirm accepts a typed price and names who typed it', async () => {
+    const { accessionNumber } = await issuedToChild(1);
+    const reported = await selfReport(accessionNumber);
+
+    const confirmed = await withOrg(
+      org.id,
+      (tx: LibraryTx) =>
+        lost.confirmLost(tx, org.id, reported.lostReportId, 260, librarianId, new Date(), [org.branchId]),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+
+    expect(confirmed.replacementAmount).toBe(260);
+    expect(confirmed.priceSource).toBe('TYPED');
+    const fine = await prisma.fine.findUnique({ where: { id: confirmed.replacementFineId! } });
+    expect(fine!.amountSetByUserId).toBe(librarianId);
+  });
+
+  it('confirming twice is refused', async () => {
+    const { accessionNumber } = await issuedToChild(1);
+    const reported = await selfReport(accessionNumber);
+    const confirm = () =>
+      withOrg(
+        org.id,
+        (tx: LibraryTx) =>
+          lost.confirmLost(tx, org.id, reported.lostReportId, undefined, librarianId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+    await confirm();
+    await expect(confirm()).rejects.toThrow(/not awaiting confirmation/);
+  });
+
+  describe('reject — the book turned up that afternoon', () => {
+    it('restores the issue and the copy exactly, with no money anywhere', async () => {
+      const { copy, issue, accessionNumber } = await issuedToChild(4);
+      const reported = await selfReport(accessionNumber);
+
+      await withOrg(
+        org.id,
+        (tx: LibraryTx) =>
+          lost.rejectLost(tx, org.id, reported.lostReportId, 'Found on the returns trolley', librarianId, new Date(), [
+            org.branchId,
+          ]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      const restored = await prisma.issue.findUnique({ where: { id: issue.id } });
+      expect(restored!.returnedAt).toBeNull();
+      expect(restored!.status).toBe('ACTIVE');
+      expect(restored!.returnedByUserId).toBeNull();
+      expect((await prisma.copy.findUnique({ where: { id: copy.id } }))!.status).toBe('ISSUED');
+      expect(await prisma.fine.count({ where: { issueId: issue.id } })).toBe(0);
+
+      // The report survives as history — never deleted.
+      const report = await prisma.lostReport.findUnique({ where: { id: reported.lostReportId } });
+      expect(report!.status).toBe('REJECTED');
+      expect(report!.rejectedReason).toMatch(/returns trolley/);
+    });
+
+    it('the late clock resumes across the gap — a false report buys no free days', async () => {
+      const { accessionNumber, issue } = await issuedToChild(10);
+      const reported = await selfReport(accessionNumber);
+      await withOrg(
+        org.id,
+        (tx: LibraryTx) =>
+          lost.rejectLost(tx, org.id, reported.lostReportId, 'Turned up', librarianId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      // Back on the overdue list, counted from the ORIGINAL dueAt.
+      const overdue = await withOrg(org.id, (tx: LibraryTx) =>
+        fines.listOverdue(tx, org.id, new Date(), [org.branchId]),
+      );
+      const row = overdue.find((r) => r.accessionNumber === accessionNumber);
+      expect(row).toBeDefined();
+      expect(row!.daysOverdue).toBeGreaterThanOrEqual(10);
+      expect(issue.id).toBeDefined();
+    });
+
+    it('a confirmed report can no longer be rejected', async () => {
+      const { accessionNumber } = await issuedToChild(1);
+      const reported = await selfReport(accessionNumber);
+      await withOrg(
+        org.id,
+        (tx: LibraryTx) =>
+          lost.confirmLost(tx, org.id, reported.lostReportId, undefined, librarianId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      await expect(
+        withOrg(
+          org.id,
+          (tx: LibraryTx) =>
+            lost.rejectLost(tx, org.id, reported.lostReportId, 'too late', librarianId, new Date(), [org.branchId]),
+          undefined,
+          LOST_TX_OPTIONS,
+        ),
+      ).rejects.toThrow(/only a report awaiting confirmation/);
+    });
+  });
+});

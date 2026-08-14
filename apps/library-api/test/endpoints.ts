@@ -68,6 +68,17 @@ export const ENDPOINTS: EndpointSpec[] = [
   // which excludes ASSISTANT); recording the loss is not.
   { method: 'POST', path: '/circulation/lost', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-LOST' } },
 
+  // Self-report is the one circulation route a MEMBER may call: it is a child
+  // saying "I lost my own book". Safety does not come from the role here — the
+  // service resolves the member from the caller's OWN login and will only touch
+  // an issue in their hands — so an allowed role with nothing to report gets a
+  // 404, same as every other probe row above.
+  { method: 'POST', path: '/circulation/lost/self-report', roles: ALL_STAFF, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-SELF-LOST' } },
+  // Confirm and reject turn a report into money, or undo it. Staff only, and
+  // narrower than the desk: no ASSISTANT.
+  { method: 'POST', path: '/circulation/lost/:id/confirm', roles: WRITERS, body: {} },
+  { method: 'POST', path: '/circulation/lost/:id/reject', roles: WRITERS, body: { reason: 'authz matrix probe' } },
+
   // Task 9 — renew and reservations. Same desk-role split as issue/return: ORG_OWNER/
   // LIBRARIAN/ASSISTANT work the desk, MEMBER is denied. Ids in bodies are
   // well-formed UUIDs that legitimately won't resolve to a real row for most
