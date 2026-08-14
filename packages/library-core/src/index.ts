@@ -54,6 +54,8 @@ export type {
 /* --- the write paths (see the layer note above) --- */
 export { issue, returnBook } from './circulation/issues';
 export type { IssueBookInput, ReturnBookInput, IssueResult, ReturnResult } from './circulation/issues';
+export { voidIssue } from './circulation/void';
+export type { VoidIssueResult } from './circulation/void';
 export { renew } from './circulation/renew';
 export type { RenewBookInput, RenewResult } from './circulation/renew';
 export { loadPolicy } from './circulation/policy-loader';

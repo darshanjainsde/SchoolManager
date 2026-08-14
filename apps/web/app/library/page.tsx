@@ -100,6 +100,34 @@ export default function LibraryCounterPage(): React.JSX.Element {
 
   const deskBusy = takeBack.isPending || giveOut.isPending;
 
+  // ── Undo ─────────────────────────────────────────────────────────────────
+  // Only an issue can be undone, and only while it is still out. `undoing`
+  // holds the row being confirmed — the reason is typed, never assumed.
+  const [undoing, setUndoing] = useState<DeskDayRow | null>(null);
+  const [undoReason, setUndoReason] = useState('');
+  const [undone, setUndone] = useState<string | null>(null);
+
+  const undo = useMutation({
+    mutationFn: ({ issueId, reason }: { issueId: string; reason: string }) =>
+      api.post<{ memberName: string; attendanceRemovedFor: string | null }>(
+        '/manage/library/undo',
+        { issueId, reason },
+      ),
+    onSuccess: (r) => {
+      setUndoing(null);
+      setUndoReason('');
+      // She is TOLD when the automatic attendance mark went with it, rather
+      // than discovering later that a child's register changed.
+      setUndone(
+        r.attendanceRemovedFor
+          ? `Undone. ${r.attendanceRemovedFor} is no longer marked present.`
+          : 'Undone.',
+      );
+      refreshDesk();
+    },
+    onError: (e: Error) => setDeskError(e.message),
+  });
+
   // Searching for the child to issue to — separate from the "find a child"
   // section further down, which answers a question rather than choosing anyone.
   const deskPeople = useQuery({
@@ -435,6 +463,7 @@ export default function LibraryCounterPage(): React.JSX.Element {
 
       {/* ── Today ──────────────────────────────────────────────────────────── */}
       <h2 className="sk-lib-h2">Today</h2>
+      {undone ? <p className="sk-lib-nudge">{undone}</p> : null}
       {dayRows.length > 0 ? (
         <ul className="sk-lib-shelf">
           {dayRows.map((r, i) => (
@@ -445,12 +474,57 @@ export default function LibraryCounterPage(): React.JSX.Element {
               <span className="sk-lib-avail" data-out={r.kind === 'ISSUED' ? 'true' : 'false'}>
                 {r.kind === 'ISSUED' ? 'given out' : 'taken back'}
               </span>
+              {/* Only what was GIVEN OUT can be undone. A return is undone by
+                  giving the book out again, which is a real counter action —
+                  and the API refuses a returned issue anyway. */}
+              {r.kind === 'ISSUED' ? (
+                <button
+                  type="button"
+                  className="sk-desk-clear"
+                  onClick={() => {
+                    setUndoing(r);
+                    setUndoReason('');
+                    setUndone(null);
+                  }}
+                >
+                  Undo
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>
       ) : (
         <p className="sk-lib-empty">Nothing yet today.</p>
       )}
+
+      {undoing ? (
+        <div className="sk-desk-receipt" data-tone="late">
+          <span className="sk-lib-title">Undo &ldquo;{undoing.title}&rdquo;?</span>
+          <span className="sk-lib-author">
+            The book goes back on the shelf and nothing is counted.
+          </span>
+          <input
+            className="sk-lib-search"
+            value={undoReason}
+            onChange={(e) => setUndoReason(e.target.value)}
+            placeholder="Wrong number typed"
+            aria-label="Why are you undoing this?"
+          />
+          <div className="sk-desk-actions">
+            <button
+              className="sk-btn"
+              data-variant="primary"
+              disabled={undo.isPending || !undoReason.trim()}
+              onClick={() => undo.mutate({ issueId: undoing.issueId, reason: undoReason.trim() })}
+            >
+              {undo.isPending ? 'Undoing…' : 'Undo it'}
+            </button>
+            <button className="sk-btn" onClick={() => setUndoing(null)}>
+              Keep it
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* ── Not returned ───────────────────────────────────────────────────── */}
       <h2 className="sk-lib-h2">

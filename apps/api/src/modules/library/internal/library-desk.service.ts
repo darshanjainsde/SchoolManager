@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { withOrg, type LibraryTx } from '@library/db';
-import { issue as coreIssue, returnBook as coreReturn, renew as coreRenew } from '@library/core';
+import {
+  issue as coreIssue,
+  returnBook as coreReturn,
+  renew as coreRenew,
+  voidIssue as coreVoid,
+} from '@library/core';
 
 /**
  * The counter, as the librarian sees it.
@@ -233,6 +238,27 @@ export class LibraryDeskService {
           collectedReservationId: result.collectedReservationId,
         };
       },
+      undefined,
+      DESK_TX_OPTIONS,
+    );
+  }
+
+  /**
+   * Undo an issue that should never have happened — a mistyped number, or the
+   * wrong child chosen.
+   *
+   * Daily, and the reason it must exist: without it her only options are to
+   * leave a false loan standing against a child, or to "return" a book that was
+   * never taken — which fabricates a return in the day report and, once the due
+   * date passes, bills a family for a book sitting on the shelf.
+   *
+   * The reason is required by the route, not optional, because this deletes the
+   * issue row: the audit entry is the only record it ever existed.
+   */
+  async undoIssue(orgId: string, issueId: string, reason: string, actorUserId: string) {
+    return withOrg(
+      orgId,
+      (tx: LibraryTx) => coreVoid(tx, orgId, issueId, reason.trim(), actorUserId),
       undefined,
       DESK_TX_OPTIONS,
     );

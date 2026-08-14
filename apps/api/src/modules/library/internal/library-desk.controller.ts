@@ -12,6 +12,7 @@ import {
   DeskDayQueryDto,
   IssueAtDeskDto,
   SearchMembersQueryDto,
+  UndoIssueDto,
 } from './library-desk.dto';
 
 /**
@@ -67,6 +68,19 @@ export class LibraryDeskController {
   @Post('issue')
   async issue(@CurrentUser() user: SchoolJwtPayload, @Body() dto: IssueAtDeskDto) {
     return this.desk.issueBook(await this.orgId(user), dto.accessionNumber, dto.memberId, user.sub);
+  }
+
+  /**
+   * Undo an issue that should never have happened.
+   *
+   * Deletes the issue rather than marking it VOID — the late charge is derived
+   * at read time from `returnedAt IS NULL` in dozens of places, so a voided
+   * row left open would keep accruing money, and one marked returned would
+   * fabricate a return in the day report. The `AuditLog` row is the history.
+   */
+  @Post('undo')
+  async undo(@CurrentUser() user: SchoolJwtPayload, @Body() dto: UndoIssueDto) {
+    return this.desk.undoIssue(await this.orgId(user), dto.issueId, dto.reason, user.sub);
   }
 
   /** Keep it a little longer, if the policy allows. */

@@ -120,7 +120,18 @@ describeLive('me — a borrower sees their own account, and nothing else', () =>
     // whatever they happen to be called.
     const json = JSON.stringify(rows);
     expect(json).not.toMatch(/replacementPrice|acquisitionCost/);
-    expect(json).not.toContain('399');
+
+    // The price check reads VALUES, not the serialized blob. It used to be
+    // `expect(json).not.toContain('399')`, which failed on a run where a row's
+    // uuid happened to be `37639928-b84b-...` — the digits 3-9-9 sit inside it.
+    // Every row carries a uuid and two ISO timestamps, so a bare three-digit
+    // substring check collides at a few percent per run: a guard that cries
+    // wolf gets deleted, and this one is guarding money reaching a child.
+    // Reading the values instead still catches a price surfacing under ANY key
+    // name, which is the thing actually worth catching.
+    const values = rows.flatMap((row) => Object.values(row));
+    expect(values).not.toContain(399); // Title.replacementPrice
+    expect(values).not.toContain(45); // Copy.acquisitionCost
     for (const row of rows) {
       expect(Object.keys(row).sort()).toEqual([
         'accessionNumber', 'daysLeft', 'dueAt', 'id', 'issuedAt',

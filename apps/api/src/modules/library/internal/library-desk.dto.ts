@@ -50,6 +50,21 @@ export class IssueAtDeskDto extends AccessionNumberDto {
   memberId!: string;
 }
 
+export class UndoIssueDto {
+  @IsUUID()
+  issueId!: string;
+
+  /**
+   * Required, never optional. This deletes the issue row, so the audit entry
+   * is the only record it ever existed — "Wrong number typed" is a sentence
+   * that makes the history readable a year later, and an empty reason makes it
+   * a mystery.
+   */
+  @IsString()
+  @Length(1, 200)
+  reason!: string;
+}
+
 export class DeskDayQueryDto {
   /**
    * A calendar date in the ORG's timezone, not an instant. Omitted means the
