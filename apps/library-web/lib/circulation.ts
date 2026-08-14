@@ -192,13 +192,25 @@ export function listFines(ctx: Ctx, params: { status?: string; limit?: number } 
   return apiFetch<FineRow[]>(`/circulation/fines?${q}`, { host: ctx.host, token: ctx.token });
 }
 
-export function waiveFine(ctx: Ctx, fineId: string, reason: string): Promise<{ fine: FineRow }> {
+/**
+ * `reasonCode` is required by the API and therefore required here. Free text
+ * alone cannot answer the collections dashboard's "where did each rupee go",
+ * and it is also how the two MECHANICAL outcomes — the book was found, the
+ * family replaced it — end up inflating a school's "let off" figure when it
+ * lost nothing either time.
+ */
+export function waiveFine(
+  ctx: Ctx,
+  fineId: string,
+  reason: string,
+  reasonCode: string,
+): Promise<{ fine: FineRow }> {
   return apiFetch<{ fine: FineRow }>(`/circulation/fines/${fineId}/waive`, {
     method: 'POST',
     host: ctx.host,
     token: ctx.token,
     idempotencyKey: key(),
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason, reasonCode }),
   });
 }
 

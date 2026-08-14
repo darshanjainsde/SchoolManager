@@ -5,6 +5,7 @@ import { ApiError } from '@/lib/api';
 import { useApiCtx } from '@/lib/session';
 import { formatRupees, listFines, outstanding, waiveFine, type FineRow } from '@/lib/circulation';
 import { initials, memberHue, memberName } from '@/lib/members';
+import { WAIVER_REASONS } from '@/lib/lost';
 
 type State =
   | { kind: 'loading' }
@@ -27,6 +28,10 @@ export default function FinesPage() {
   // says only "waived" answers nothing later.
   const [waiving, setWaiving] = useState<FineRow | null>(null);
   const [reason, setReason] = useState('');
+  // A CODE as well as the words. The words explain this one waiver to a human;
+  // the code is what lets the collections screen answer "where did each rupee
+  // go" across four hundred of them.
+  const [reasonCode, setReasonCode] = useState<string>('GOODWILL');
   const [busy, setBusy] = useState(false);
   const [waiveError, setWaiveError] = useState<string | null>(null);
 
@@ -51,7 +56,7 @@ export default function FinesPage() {
     setBusy(true);
     setWaiveError(null);
     try {
-      await waiveFine(ctx, waiving.id, reason.trim());
+      await waiveFine(ctx, waiving.id, reason.trim(), reasonCode);
       setWaiving(null);
       setReason('');
       await load();
@@ -165,7 +170,25 @@ export default function FinesPage() {
             {memberName(waiving.member)} · {waiving.issue?.copy.title.title ?? 'no book attached'}
           </p>
           <div className="lbx-field" style={{ marginTop: '.6rem' }}>
-            <label htmlFor="reason">Reason</label>
+            <label htmlFor="reasonCode">Why</label>
+            <select
+              id="reasonCode"
+              value={reasonCode}
+              onChange={(e) => setReasonCode(e.target.value)}
+            >
+              {WAIVER_REASONS.map((r) => (
+                <option key={r.code} value={r.code}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: '.72rem', color: 'var(--lb-ink-3)' }}>
+              The last two mean the school lost nothing, so they are kept out of
+              what Collections reports as money let off.
+            </div>
+          </div>
+          <div className="lbx-field" style={{ marginTop: '.6rem' }}>
+            <label htmlFor="reason">In your own words</label>
             <input
               id="reason"
               value={reason}

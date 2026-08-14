@@ -29,7 +29,10 @@ const NAV = [
   { group: 'People', items: [
     { href: '/console/reservations', label: 'Reservations', icon: '⎘', roles: ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'] },
     { href: '/console/overdue', label: 'Overdue', icon: '⚑', roles: ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'] },
+    { href: '/console/lost', label: 'Lost books', icon: '✱', roles: ['ORG_OWNER', 'LIBRARIAN'] },
+    { href: '/console/dues', label: 'Outstanding', icon: '◈', roles: ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'] },
     { href: '/console/fines', label: 'Fines', icon: '₹', roles: ['ORG_OWNER', 'LIBRARIAN'] },
+    { href: '/console/collections', label: 'Collections', icon: '◍', roles: ['ORG_OWNER', 'LIBRARIAN'] },
   ]},
 ] as const;
 
