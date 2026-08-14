@@ -1,9 +1,8 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, type Reservation, type Issue, type LibraryTx } from '@library/db';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, type Reservation, type LibraryTx } from '@library/db';
 import { assertQuota } from '../../plans';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
-import { loadPolicy } from './policy-loader';
-import { evaluateRenew, reservationState, type ReservationStatusValue, type RenewDenial } from '@library/core';
+import { loadPolicy, renew, reservationState, type ReservationStatusValue, type RenewResult } from '@library/core';
 import type { CreateReservationDto, ListReservationsQueryDto, RenewBookDto } from './dto';
 import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
 
@@ -28,20 +27,7 @@ function pendingHoldSentinel(now: Date): Date {
   return new Date(now.getTime() + PENDING_HOLD_SENTINEL_YEARS * 365 * MS_PER_DAY);
 }
 
-/** `RenewDenial` -> the HTTP exception a circulation-desk caller should see. All three are policy/state denials on the LOAN itself, not a copy-availability conflict — so 403 uniformly, same body shape as `issues.service.ts`'s `issueDenialToException`. */
-function renewDenialToException(reason: RenewDenial): ForbiddenException {
-  const message =
-    reason === 'ALREADY_OVERDUE'
-      ? 'This issue is already overdue and must be returned, not renewed'
-      : reason === 'RENEW_LIMIT'
-        ? 'This issue has reached its renewal limit'
-        : 'Another member is waiting on this title — renewing would delay their turn';
-  return new ForbiddenException({ reason, message });
-}
-
-export interface RenewResult {
-  issue: Issue;
-}
+export type { RenewResult };
 
 export interface CreateReservationResult {
   reservation: Reservation;
@@ -58,15 +44,16 @@ export interface ReservationListItem extends Omit<Reservation, 'status'> {
 @Injectable()
 export class ReservationsService {
   /**
-   * One transaction: resolve the active issue for the scanned accessionNumber ->
-   * load member/policy -> count PENDING reservations on the issue's title ->
-   * `evaluateRenew` -> update `Issue.dueAt`/`renewCount`, write an
-   * `AuditLog` row. Deliberately counts only `PENDING` reservations (not `READY`):
-   * a READY reservation is already tied to a SPECIFIC other copy of this title
-   * (`readyCopyId`), so renewing THIS issue doesn't delay that member's
-   * fulfillment — only someone still waiting for ANY copy (PENDING) is
-   * whose turn a renewal would push back, which is `evaluateRenew`'s own
-   * `pendingReservationsOnTitle` parameter name and reasoning (policy.ts).
+   * The Nest seam over `@library/core`'s `renew` — the body lives in
+   * `packages/library-core/src/circulation/renew.ts`, for the same reason
+   * `issue`/`returnBook` moved (see `issues.service.ts`): `apps/api` cannot
+   * import `apps/library-api`, and a second renewal implementation on the
+   * Sckools side would be a second answer to what a member's due date is.
+   *
+   * `createReservation`/`cancelReservation`/`listReservations` below have NOT
+   * moved — they are not part of the issue/return/renew set this change was
+   * scoped to, and `createReservation` in particular depends on `assertQuota`
+   * from the plans module.
    */
   async renew(
     tx: LibraryTx,
@@ -76,44 +63,7 @@ export class ReservationsService {
     now: Date,
     allowedBranches: string[],
   ): Promise<RenewResult> {
-    const copy = await tx.copy.findUnique({ where: { orgId_accessionNumber: { orgId, accessionNumber: dto.accessionNumber } } });
-    if (!copy) throw new NotFoundException('Copy not found');
-
-    const issue = await tx.issue.findFirst({ where: { copyId: copy.id, returnedAt: null } });
-    if (!issue) throw new NotFoundException('No active issue for this copy');
-    // Same reasoning as issues.service.ts's returnBook: checked against the
-    // LOAN's own branch, the row this action actually mutates.
-    assertBranchInScope(issue.branchId, allowedBranches);
-
-    // Same non-FK-lookup reasoning as issues.service.ts's returnBook: Issue.member
-    // is onDelete Restrict, and issue.memberId was read off an already
-    // org-scoped row on this same tx, not supplied by the client.
-    const member = await tx.member.findUnique({ where: { id: issue.memberId } });
-    if (!member) throw new NotFoundException('Member not found');
-
-    const policy = await loadPolicy(tx, orgId, member.memberType, issue.branchId);
-    const pendingReservationsOnTitle = await tx.reservation.count({ where: { orgId, titleId: copy.titleId, status: 'PENDING' } });
-
-    const decision = evaluateRenew(policy, issue, pendingReservationsOnTitle, now);
-    if (!decision.allowed) throw renewDenialToException(decision.reason);
-
-    const updated = await tx.issue.update({
-      where: { id: issue.id },
-      data: { dueAt: decision.newDueAt, renewCount: { increment: 1 } },
-    });
-
-    await tx.auditLog.create({
-      data: {
-        orgId,
-        actorUserId,
-        action: 'circulation.renew',
-        entity: 'Issue',
-        entityId: issue.id,
-        after: { copyId: copy.id, accessionNumber: dto.accessionNumber, memberId: member.id, newDueAt: decision.newDueAt.toISOString(), renewCount: updated.renewCount },
-      },
-    });
-
-    return { issue: updated };
+    return renew(tx, orgId, dto, actorUserId, now, allowedBranches);
   }
 
   /**

@@ -10,10 +10,19 @@
     "build": "tsc -p tsconfig.json",
     "test": "jest --passWithNoTests"
   },
+  "dependencies": {
+    "@library/db": "workspace:*"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^10.3.7"
+  },
   "devDependencies": {
+    "@nestjs/common": "^10.3.7",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.30",
     "jest": "^29.7.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
     "ts-jest": "^29.1.2",
     "typescript": "^5.4.5"
   }

@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Prisma, type LibraryTx, type MemberType } from '@library/db';
-import type { Policy } from '@library/core';
+import type { Policy } from '../policy';
 
 /** `Prisma.Decimal | null` (a nullable money/rate column) -> plain `number | null`, never a string. */
 function decimalToNullableNumber(value: Prisma.Decimal | null): number | null {
@@ -30,7 +30,16 @@ function decimalToNullableNumber(value: Prisma.Decimal | null): number | null {
  * Every circulation decision goes through `policy.ts` — see that file's own
  * header comment — so this loader is what makes calling it from a real
  * Prisma-backed service possible at all, without ever re-deriving "how to
- * read a CirculationPolicy row" inline in `issues.service.ts`.
+ * read a CirculationPolicy row" inline in `issues.ts`.
+ *
+ * This deliberately stayed in `apps/library-api` when `policy.ts` moved into
+ * `@library/core`, because it is not pure — it reads Prisma and throws a Nest
+ * exception. It moved here the moment `issue`/`returnBook`/`renew` did: they
+ * call it, `@library/core` cannot import `apps/library-api`, and the
+ * alternative — `apps/api` writing its own CirculationPolicy reader — is the
+ * second answer to "what may this child borrow" that this package exists to
+ * prevent. Purity is not the rule for this layer; single-implementation is
+ * (see `index.ts`).
  */
 export async function loadPolicy(
   tx: LibraryTx,

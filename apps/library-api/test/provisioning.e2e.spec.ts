@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getLibraryPlatformPrisma } from '@library/db';
 import { ProvisioningService } from '../src/modules/provisioning';
-import { loadPolicy } from '../src/modules/circulation/internal/policy-loader';
+import { loadPolicy } from '@library/core';
 import { LIVE } from './helpers/live-db';
 
 const describeLive = LIVE ? describe : describe.skip;
