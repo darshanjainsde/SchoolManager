@@ -270,3 +270,14 @@ export class PayFineDto {
    *  or slip number goes. */
   @IsOptional() @IsString() @MaxLength(300) note?: string;
 }
+
+/**
+ * Undoing an issue requires a reason in the librarian's own words. The audit
+ * row is the ONLY record that the issue existed once the row is deleted, and a
+ * bare "voided" answers nothing three months later when someone asks why a
+ * book shows no loan history for a week it was clearly off the shelf.
+ */
+export class VoidIssueDto {
+  @IsUUID('4') issueId!: string;
+  @IsString() @MinLength(3) @MaxLength(300) reason!: string;
+}

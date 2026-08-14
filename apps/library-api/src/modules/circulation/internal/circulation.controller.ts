@@ -7,12 +7,13 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { ConfirmLostDto, ListLostQueryDto, PayFineDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, TurnedUpDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, CollectionsQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiverLogQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
+import { ConfirmLostDto, ListLostQueryDto, PayFineDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, TurnedUpDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, CollectionsQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiverLogQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, VoidIssueDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
 import { MembersService } from './members.service';
 import { LostService, LOST_TX_OPTIONS } from './lost.service';
+import { VoidService } from './void.service';
 
 /**
  * Guard order mirrors `CatalogController`: JWT identity, then the plan
@@ -52,6 +53,7 @@ export class CirculationController {
     @Inject(FinesService) private readonly fines: FinesService,
     @Inject(MembersService) private readonly members: MembersService,
     @Inject(LostService) private readonly lost: LostService,
+    @Inject(VoidService) private readonly voids: VoidService,
   ) {}
 
   @Post('issue')
@@ -321,6 +323,25 @@ export class CirculationController {
   outstandingRefunds(@CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
     return withOrg(orgId, (tx) => this.lost.outstandingRefunds(tx, orgId, user.branches));
+  }
+
+  /**
+   * Undo an issue that should not have happened — a mistyped book number or
+   * member code. Deletes the issue and restores the shelf; the reason and a
+   * full snapshot go to the audit log.
+   *
+   * ASSISTANT is allowed deliberately. The person who mistypes at the counter
+   * is usually the assistant, and making them fetch the librarian does not
+   * prevent the correction — it pushes them to fake a return instead, which
+   * fabricates a return in the day report and leaves the copy's history wrong.
+   * Every void is audited with an actor and a reason.
+   */
+  @Post('void')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  @UseInterceptors(IdempotencyInterceptor)
+  voidIssue(@Body() dto: VoidIssueDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.voids.voidIssue(tx, orgId, dto.issueId, dto.reason, user.sub));
   }
 
   @Post('renew')

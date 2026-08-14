@@ -127,6 +127,11 @@ export const ENDPOINTS: EndpointSpec[] = [
   // well-formed UUIDs that legitimately won't resolve to a real row for most
   // roles under test — guards run before the handler, so that's a 404 for an
   // allowed role, not a 401/403, same reasoning as circulation/issue above.
+  // Undo a mistyped issue. ASSISTANT included deliberately — see the route's
+  // own comment: excluding the person who makes the mistake does not prevent
+  // the correction, it pushes them to fake a return instead.
+  { method: 'POST', path: '/circulation/void', roles: ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'],
+    body: { issueId: '00000000-0000-4000-8000-000000000000', reason: 'authz probe' } },
   { method: 'POST', path: '/circulation/renew', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-RENEW' } },
   {
     method: 'POST',
@@ -195,4 +200,12 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST',   path: '/periods/visits/open', roles: READERS, body: { branchId: '11111111-1111-4111-8111-111111111111', classRef: 'AUTHZ-PROBE' } },
   { method: 'POST',   path: '/periods/visits/:id/close', roles: READERS },
   { method: 'POST',   path: '/periods/visits/:id/attendance', roles: READERS, body: { memberId: '11111111-1111-4111-8111-111111111111' } },
+
+  // P6 reports. Staff-only and NARROWER than the desk: no ASSISTANT. These name
+  // children by class and by what they have not read, which is a conversation
+  // for whoever runs the school, not whoever is covering the counter.
+  { method: 'GET', path: '/reports/issues-per-class', roles: WRITERS },
+  { method: 'GET', path: '/reports/most-read', roles: WRITERS },
+  { method: 'GET', path: '/reports/read-nothing', roles: WRITERS },
+  { method: 'GET', path: '/reports/late-returners', roles: WRITERS },
 ];

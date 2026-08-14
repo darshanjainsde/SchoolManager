@@ -9,6 +9,7 @@ import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
 import { MembersService } from './members.service';
 import { LostService } from './lost.service';
+import { VoidService } from './void.service';
 
 /**
  * Same shape as `CatalogModule` (see its own doc comment for the full
@@ -27,6 +28,6 @@ import { LostService } from './lost.service';
 @Module({
   imports: [TenancyModule, PlansModule, IdempotencyModule],
   controllers: [CirculationController],
-  providers: [JwtService, IssuesService, ReservationsService, FinesService, MembersService, LostService],
+  providers: [JwtService, IssuesService, ReservationsService, FinesService, MembersService, LostService, VoidService],
 })
 export class CirculationModule {}
