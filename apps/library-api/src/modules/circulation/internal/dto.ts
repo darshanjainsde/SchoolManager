@@ -152,3 +152,26 @@ export class RejectLostDto {
    *  from a mistake — and this row stays in the history for good. */
   @IsString() @MinLength(1) @MaxLength(500) reason!: string;
 }
+
+export class PayLostDto {
+  /** How the money actually crossed the counter. */
+  @IsIn(['CASH', 'UPI', 'OTHER']) method!: 'CASH' | 'UPI' | 'OTHER';
+
+  /** Required by convention when `method` is OTHER; also where a paper receipt
+   *  or slip number goes. */
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+}
+
+export class WriteOffLostDto {
+  /**
+   * The human who authorised it, in words — "Principal Mrs Rao, note dated 12
+   * Aug". Free text on purpose: there is no principal ROLE in this service, and
+   * inventing one to gate write-off would, in a school where the librarian is
+   * the only account, produce either a due that can never be closed or a fake
+   * "paid" entry. Recorded approval that is auditable beats a gate that gets
+   * routed around — so this is REQUIRED.
+   */
+  @IsString() @MinLength(1) @MaxLength(300) approvedByNote!: string;
+
+  @IsString() @MinLength(1) @MaxLength(500) reason!: string;
+}

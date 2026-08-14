@@ -499,4 +499,163 @@ export class LostService {
 
     return { lostReportId: report.id, issueId: report.issueId };
   }
+
+  /**
+   * Loads a report that is ready to be settled, with its outstanding fines.
+   *
+   * Shared by every settlement route so "which reports can still be settled"
+   * and "which fines belong to this loss" have ONE answer. The fines are found
+   * through `issueId` because that is the link the loss flow writes onto both
+   * of them; a stock-take loss has no issue and therefore no fines, which is
+   * correct — there is nobody to charge.
+   */
+  private async loadSettleable(
+    tx: LibraryTx,
+    reportId: string,
+    allowedBranches: string[],
+  ) {
+    const report = await tx.lostReport.findUnique({ where: { id: reportId } });
+    if (!report) throw new NotFoundException('Lost report not found');
+    assertBranchInScope(report.branchId, allowedBranches);
+    if (report.status !== 'CONFIRMED') {
+      throw new ConflictException(
+        `Lost report is ${report.status}; only a confirmed loss can be settled`,
+      );
+    }
+    const openFines = report.issueId
+      ? await tx.fine.findMany({
+          where: { issueId: report.issueId, status: { in: ['OPEN', 'PARTIAL'] } },
+        })
+      : [];
+    return { report, openFines };
+  }
+
+  /**
+   * The family paid. Money is RECORDED, not moved — there is no provider, no
+   * ledger, and no receipt beyond the paper slip the librarian writes.
+   *
+   * IN FULL ONLY. A counter that takes ₹100 today and ₹199 next week genuinely
+   * needs a payments table, because one `paidMethod` column cannot truthfully
+   * describe two payments — so P3 does not offer it, and `FineStatus.PARTIAL`
+   * stays unused by this path. Pay in full, or waive the remainder with a
+   * reason.
+   */
+  async payLost(
+    tx: LibraryTx,
+    orgId: string,
+    reportId: string,
+    method: 'CASH' | 'UPI' | 'OTHER',
+    note: string | undefined,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<{ lostReportId: string; paidFineIds: string[]; totalPaid: number }> {
+    const { report, openFines } = await this.loadSettleable(tx, reportId, allowedBranches);
+
+    let totalPaid = new Prisma.Decimal(0);
+    const paidFineIds: string[] = [];
+    for (const fine of openFines) {
+      const outstanding = fine.amount.minus(fine.paidAmount);
+      await tx.fine.update({
+        where: { id: fine.id },
+        data: {
+          status: 'PAID',
+          paidAmount: fine.amount,
+          paidAt: now,
+          paidByUserId: actorUserId,
+          paidMethod: method,
+          paymentNote: note,
+        },
+      });
+      totalPaid = totalPaid.plus(outstanding);
+      paidFineIds.push(fine.id);
+    }
+
+    await tx.lostReport.update({
+      where: { id: report.id },
+      data: { status: 'SETTLED_PAID', settledAt: now, settledByUserId: actorUserId },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.pay',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: { method, note, totalPaid: totalPaid.toString(), fineIds: paidFineIds },
+      },
+    });
+
+    return { lostReportId: report.id, paidFineIds, totalPaid: totalPaid.toNumber() };
+  }
+
+  /**
+   * Out of print, nothing to replace it with, nobody to bill. The charge is
+   * written off at ₹0 and counted as money genuinely let off.
+   *
+   * The approver is RECORDED, not gated. There is no principal role in this
+   * service, and in a four-hundred-student school the librarian is frequently
+   * the only account there is — so gating this behind a role nobody holds would
+   * produce either a due that can never be closed (poisoning every "still owed"
+   * figure and every future No Dues certificate) or a fake "paid" entry.
+   * Instead the acting user is stored, a reason is required, and
+   * `approvedByNote` captures the human who actually said yes — "Principal Mrs
+   * Rao, note dated 12 Aug", the signed slip the librarian is holding. Recorded
+   * approval that is auditable beats a gate that gets routed around.
+   */
+  async writeOffLost(
+    tx: LibraryTx,
+    orgId: string,
+    reportId: string,
+    approvedByNote: string,
+    reason: string,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<{ lostReportId: string; waivedFineIds: string[]; totalWrittenOff: number }> {
+    const { report, openFines } = await this.loadSettleable(tx, reportId, allowedBranches);
+
+    let total = new Prisma.Decimal(0);
+    const waivedFineIds: string[] = [];
+    for (const fine of openFines) {
+      const outstanding = fine.amount.minus(fine.paidAmount);
+      await tx.fine.update({
+        where: { id: fine.id },
+        data: {
+          status: 'WAIVED',
+          waivedByUserId: actorUserId,
+          waivedAmount: outstanding,
+          waivedReason: reason,
+          waiverReasonCode: 'WRITTEN_OFF_UNREPLACEABLE',
+          waivedAt: now,
+        },
+      });
+      total = total.plus(outstanding);
+      waivedFineIds.push(fine.id);
+    }
+
+    await tx.lostReport.update({
+      where: { id: report.id },
+      data: {
+        status: 'WRITTEN_OFF',
+        settledAt: now,
+        settledByUserId: actorUserId,
+        approvedByNote,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.write_off',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: { approvedByNote, reason, totalWrittenOff: total.toString(), fineIds: waivedFineIds },
+      },
+    });
+
+    return { lostReportId: report.id, waivedFineIds, totalWrittenOff: total.toNumber() };
+  }
 }

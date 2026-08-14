@@ -78,6 +78,10 @@ export const ENDPOINTS: EndpointSpec[] = [
   // narrower than the desk: no ASSISTANT.
   { method: 'POST', path: '/circulation/lost/:id/confirm', roles: WRITERS, body: {} },
   { method: 'POST', path: '/circulation/lost/:id/reject', roles: WRITERS, body: { reason: 'authz matrix probe' } },
+  // Taking money at the desk is desk work, so ASSISTANT is included; forgiving
+  // it is not, so write-off is WRITERS-only — the same split as fines/:id/waive.
+  { method: 'POST', path: '/circulation/lost/:id/pay', roles: READERS, body: { method: 'CASH' } },
+  { method: 'POST', path: '/circulation/lost/:id/write-off', roles: WRITERS, body: { approvedByNote: 'Authz matrix probe', reason: 'probe' } },
 
   // Task 9 — renew and reservations. Same desk-role split as issue/return: ORG_OWNER/
   // LIBRARIAN/ASSISTANT work the desk, MEMBER is denied. Ids in bodies are

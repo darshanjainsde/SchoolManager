@@ -7,7 +7,7 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { ConfirmLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
+import { ConfirmLostDto, PayLostDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
@@ -156,6 +156,48 @@ export class CirculationController {
     return withOrg(
       orgId,
       (tx) => this.lost.rejectLost(tx, orgId, id, dto.reason, user.sub, now, user.branches),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /**
+   * The family paid. ASSISTANT can record it — taking money at the desk is desk
+   * work; forgiving it is not (see write-off and waive, both WRITERS-only).
+   */
+  @Post('lost/:id/pay')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  @UseInterceptors(IdempotencyInterceptor)
+  payLost(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: PayLostDto,
+    @CurrentUser() user: LibJwtPayload,
+  ) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) => this.lost.payLost(tx, orgId, id, dto.method, dto.note, user.sub, now, user.branches),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /** Forgiving money. WRITERS only, and the approver is recorded in the body. */
+  @Post('lost/:id/write-off')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  @UseInterceptors(IdempotencyInterceptor)
+  writeOffLost(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: WriteOffLostDto,
+    @CurrentUser() user: LibJwtPayload,
+  ) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) =>
+        this.lost.writeOffLost(tx, orgId, id, dto.approvedByNote, dto.reason, user.sub, now, user.branches),
       undefined,
       LOST_TX_OPTIONS,
     );

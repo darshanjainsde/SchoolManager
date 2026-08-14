@@ -603,3 +603,181 @@ describeLive('circulation — a child reports their own book lost', () => {
     });
   });
 });
+
+/**
+ * Settlement A — the family paid, or the book was written off.
+ *
+ * Both close the report AND every open fine on it together, which is the
+ * property worth pinning: a settled loss that leaves an OPEN fine behind would
+ * keep a parent on the dues list forever, and a closed fine under an unsettled
+ * report would make the lost-books panel disagree with the money.
+ */
+describeLive('circulation — settling a lost book', () => {
+  const lost = new LostService();
+  const prisma = getLibraryPlatformPrisma();
+
+  let org: SeededOrg;
+  let other: SeededOrg;
+  let titleId: string;
+  let staffId: string;
+
+  beforeAll(async () => {
+    ({ orgA: org, orgB: other } = await seedTwoOrgs(`settle-${Date.now().toString(36)}`));
+    titleId = (
+      await prisma.title.create({ data: { orgId: org.id, title: 'Malgudi Days', replacementPrice: 299 } })
+    ).id;
+    staffId = (
+      await prisma.libUser.create({
+        data: {
+          orgId: org.id, email: `settle-${Date.now()}@t.local`, passwordHash: 'x',
+          role: 'LIBRARIAN', branchIds: [org.branchId],
+        },
+      })
+    ).id;
+    await prisma.circulationPolicy.create({
+      data: {
+        orgId: org.id, memberType: 'STUDENT', maxBooks: 5, issueDays: 14, renewLimit: 2,
+        renewDays: 14, finePerDay: 5, graceDays: 1, maxFine: 500, maxReservations: 3,
+        reservedShelfDays: 3, maxOutstandingFine: 1000,
+      },
+    });
+    await prisma.librarySettings.upsert({
+      where: { orgId: org.id },
+      create: { orgId: org.id, chargeStudentFines: true },
+      update: { chargeStudentFines: true },
+    });
+  });
+
+  afterAll(async () => {
+    await cleanupOrgs([org.id, other.id]);
+  });
+
+  /** A confirmed loss with both fines raised: 4 days late + a 299 book. */
+  async function confirmedLoss() {
+    const DAY = 24 * 60 * 60 * 1000;
+    const accessionNumber = `SET-${Date.now()}-${Math.floor(process.hrtime()[1] / 1000)}`;
+    const copy = await prisma.copy.create({
+      data: { orgId: org.id, titleId, branchId: org.branchId, accessionNumber, status: 'ISSUED' },
+    });
+    await prisma.issue.create({
+      data: {
+        orgId: org.id, copyId: copy.id, branchId: org.branchId, memberId: org.memberId,
+        dueAt: new Date(Date.now() - 4 * DAY), status: 'ACTIVE',
+      },
+    });
+    return withOrg(
+      org.id,
+      (tx: LibraryTx) =>
+        lost.reportLost(tx, org.id, { accessionNumber }, staffId, new Date(), [org.branchId]),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  describe('pay', () => {
+    it('closes the report and EVERY open fine on it, recording how it was paid', async () => {
+      const loss = await confirmedLoss();
+
+      const paid = await withOrg(
+        org.id,
+        (tx: LibraryTx) => lost.payLost(tx, org.id, loss.lostReportId, 'CASH', 'slip 42', staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      // Both fines, not just the book — a leftover OPEN row keeps a parent on
+      // the dues list forever.
+      expect(paid.paidFineIds).toHaveLength(2);
+      expect(paid.totalPaid).toBe(299 + 15); // 299 book + 3 billable days at 5 (1 grace)
+      for (const id of paid.paidFineIds) {
+        const fine = await prisma.fine.findUnique({ where: { id } });
+        expect(fine!.status).toBe('PAID');
+        expect(Number(fine!.paidAmount)).toBe(Number(fine!.amount));
+        expect(fine!.paidMethod).toBe('CASH');
+        expect(fine!.paymentNote).toBe('slip 42');
+        expect(fine!.paidByUserId).toBe(staffId);
+      }
+      const report = await prisma.lostReport.findUnique({ where: { id: loss.lostReportId } });
+      expect(report!.status).toBe('SETTLED_PAID');
+      expect(report!.settledByUserId).toBe(staffId);
+    });
+
+    it('refuses to settle the same loss twice', async () => {
+      const loss = await confirmedLoss();
+      const pay = () =>
+        withOrg(
+          org.id,
+          (tx: LibraryTx) => lost.payLost(tx, org.id, loss.lostReportId, 'UPI', undefined, staffId, new Date(), [org.branchId]),
+          undefined,
+          LOST_TX_OPTIONS,
+        );
+      await pay();
+      await expect(pay()).rejects.toThrow(/only a confirmed loss can be settled/);
+    });
+
+    it('leaves the copy retired — paying for a book does not put it back on the shelf', async () => {
+      const loss = await confirmedLoss();
+      const report = await prisma.lostReport.findUnique({ where: { id: loss.lostReportId } });
+      await withOrg(
+        org.id,
+        (tx: LibraryTx) => lost.payLost(tx, org.id, loss.lostReportId, 'CASH', undefined, staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+      expect((await prisma.copy.findUnique({ where: { id: report!.copyId } }))!.status).toBe('LOST');
+    });
+  });
+
+  describe('write-off', () => {
+    it('forgives every open fine with the mechanical reason code, and records the approver', async () => {
+      const loss = await confirmedLoss();
+
+      const written = await withOrg(
+        org.id,
+        (tx: LibraryTx) =>
+          lost.writeOffLost(
+            tx, org.id, loss.lostReportId,
+            'Principal Mrs Rao, note dated 12 Aug', 'Out of print since 1998',
+            staffId, new Date(), [org.branchId],
+          ),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+
+      expect(written.waivedFineIds).toHaveLength(2);
+      for (const id of written.waivedFineIds) {
+        const fine = await prisma.fine.findUnique({ where: { id } });
+        expect(fine!.status).toBe('WAIVED');
+        // The CODE is what the collections dashboard aggregates on; the free
+        // text alone could not answer "where did each rupee go".
+        expect(fine!.waiverReasonCode).toBe('WRITTEN_OFF_UNREPLACEABLE');
+        expect(fine!.waivedReason).toMatch(/Out of print/);
+        expect(fine!.waivedByUserId).toBe(staffId);
+      }
+      const report = await prisma.lostReport.findUnique({ where: { id: loss.lostReportId } });
+      expect(report!.status).toBe('WRITTEN_OFF');
+      // The human who actually said yes, in words — there is no principal role
+      // to gate on.
+      expect(report!.approvedByNote).toMatch(/Principal Mrs Rao/);
+    });
+
+    it('cannot write off a loss that was already paid', async () => {
+      const loss = await confirmedLoss();
+      await withOrg(
+        org.id,
+        (tx: LibraryTx) => lost.payLost(tx, org.id, loss.lostReportId, 'CASH', undefined, staffId, new Date(), [org.branchId]),
+        undefined,
+        LOST_TX_OPTIONS,
+      );
+      await expect(
+        withOrg(
+          org.id,
+          (tx: LibraryTx) =>
+            lost.writeOffLost(tx, org.id, loss.lostReportId, 'x', 'y', staffId, new Date(), [org.branchId]),
+          undefined,
+          LOST_TX_OPTIONS,
+        ),
+      ).rejects.toThrow(/only a confirmed loss can be settled/);
+    });
+  });
+});
