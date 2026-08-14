@@ -3,24 +3,42 @@
 **Staging is LIVE as of 2026-08-11.** Migrations applied, RLS verified enforcing,
 seed data in place. This file records how, so it is repeatable.
 
-> ### ⚠ CORRECTED 2026-08-13 — this file named the PRODUCTION project
+> ### ⚠ CORRECTED TWICE — read both corrections
 >
-> Every command below originally carried `pnczxkyteaocpdoufwyz`. That is the
-> **Sckools production** project — 3 real schools, 301 students — and running
-> the documented `prisma migrate deploy` against it would have migrated
-> production while believing it was staging. The library's own project is
-> `eocxgzcfzwmbaivobzfx`, as §0 of
-> `docs/superpowers/specs/2026-08-13-school-library-design.md` states.
+> **2026-08-13.** Every command below originally carried
+> `pnczxkyteaocpdoufwyz`, so the documented `prisma migrate deploy` would have
+> run against a Sckools database while believing it was the library's. The
+> library's own project is `eocxgzcfzwmbaivobzfx`. Corrected throughout.
 >
-> Corrected throughout. **Before any command in this file, assert the ref:**
+> **2026-08-14 — the first correction mislabelled which Sckools database it
+> was.** `pnczxkyteaocpdoufwyz` is Sckools **STAGING**. Production is
+> `oljrqinbjhpysgfwmtxw` (Mumbai), and until now it was named in **no library
+> guard, spec or runbook anywhere**. Evidence:
+> `design/sckools-app/seed/run-raffles-seed.sh:13` →
+> `PROJECT_REF="oljrqinbjhpysgfwmtxw"   # PROD (Mumbai)`; staging holds
+> acme/beacon/raffles, prod also holds `riverdale`.
+>
+> The *guard* below was never unsafe — its `*)` catch-all already rejected the
+> real production ref along with everything else it did not recognise. What was
+> unsafe was the **prose**, which is what a human follows when deciding where a
+> schema goes. That matters now: consolidation puts the `library` schema into
+> BOTH Sckools databases deliberately, so "which one is production" stops being
+> trivia and becomes the difference between a rehearsal and a live change.
+>
+> **Before any command in this file, assert the ref:**
 >
 > ```bash
 > case "$LIBRARY_DIRECT_URL" in
->   *pnczxkyteaocpdoufwyz*) echo "STOP: that is PRODUCTION"; return 1 ;;
+>   *oljrqinbjhpysgfwmtxw*) echo "STOP: that is Sckools PRODUCTION"; return 1 ;;
+>   *pnczxkyteaocpdoufwyz*) echo "STOP: that is Sckools STAGING";    return 1 ;;
 >   *eocxgzcfzwmbaivobzfx*) echo "ok: library project" ;;
 >   *) echo "STOP: unrecognised project ref"; return 1 ;;
 > esac
 > ```
+>
+> Naming all three is the point. A guard that rejects by exhaustion still stops
+> the command, but it cannot tell you *what you nearly did* — and this file has
+> now been wrong about that twice.
 >
 > The spec's §0 claim that "the production ref appears nowhere in library
 > config" was false while this file said otherwise — a doc IS config when it is
@@ -30,7 +48,7 @@ seed data in place. This file records how, so it is repeatable.
 
 | | |
 |---|---|
-| Supabase project | `eocxgzcfzwmbaivobzfx` (ap-south-1) — the library's OWN project, never `pnczxkyteaocpdoufwyz` |
+| Supabase project | `eocxgzcfzwmbaivobzfx` (ap-south-1) — the library's OWN project. Never `oljrqinbjhpysgfwmtxw` (Sckools PROD) and never `pnczxkyteaocpdoufwyz` (Sckools STAGING). |
 | Pooler host | `aws-1-ap-south-1.pooler.supabase.com` — `:6543` runtime, `:5432` migrations. **Confirm the region/prefix against the Supabase dashboard for THIS project** — it was recorded for the old one. |
 | Username form | `<role>.eocxgzcfzwmbaivobzfx` |
 | Schemas | `library`, `testboard` |

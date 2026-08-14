@@ -35,12 +35,22 @@ export class OutboxCronController {
   @Get('notification-outbox')
   async sweep(@Headers('authorization') auth?: string) {
     // Vercel sends `Authorization: Bearer <CRON_SECRET>` when the project has
-    // one. The route is otherwise publicly reachable, so when a secret IS
-    // configured it is required — fail closed. When none is configured (local,
-    // and any deploy that has not set it) the route stays open, which is the
-    // honest state rather than a false sense of protection.
+    // one. An UNSET secret must fail CLOSED — matching `apps/api`'s
+    // `cron-secret.guard.ts`, which this deliberately mirrors.
+    //
+    // This previously read `if (secret && auth !== ...)`, reasoning that an
+    // open route was "the honest state rather than a false sense of
+    // protection". That reasoning is wrong for this specific route, and the
+    // asymmetry is the tell: Sckools fails closed, the library failed open, so
+    // the SAME missing environment variable disabled one endpoint and exposed
+    // the other. An unauthenticated `deleteMany` is not honesty about a gap; it
+    // is the gap. The blast radius is bounded (only rows already dispatched
+    // more than 90 days ago) but it is still an unauthenticated destructive
+    // call reachable by anyone who can guess the path.
+    //
+    // Local and test runs set CRON_SECRET like any other required env value.
     const secret = loadLibraryEnv().CRON_SECRET;
-    if (secret && auth !== `Bearer ${secret}`) {
+    if (!secret || auth !== `Bearer ${secret}`) {
       throw new ForbiddenException('This endpoint is for the scheduler');
     }
 

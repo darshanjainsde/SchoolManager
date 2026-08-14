@@ -16,8 +16,14 @@ that already shipped.
 
 - **Never deploy to `main`.** The library lives on `feat/library-service`. Both Vercel
   projects are deliberately **not git-linked**, so nothing deploys on a push.
-- **Never touch the production Supabase project** (`pnczxkyteaocpdoufwyz` — 3 real
-  schools, 301 students).
+- **Never touch the production Supabase project** — `oljrqinbjhpysgfwmtxw` (ap-south-1,
+  Mumbai). This ref was WRONG here until 2026-08-14: it read `pnczxkyteaocpdoufwyz`,
+  which is **Sckools _staging_**, not production. Both are off-limits to library
+  commands, but only one of them is the database that would end a school's day, and
+  it was the one named nowhere. Corroborated by `design/sckools-app/seed/*.sh`
+  (`PROJECT_REF="oljrqinbjhpysgfwmtxw"   # PROD (Mumbai)`) and by the staging having
+  only acme/beacon/raffles while prod also carries `riverdale`.
+  The "3 real schools, 301 students" figure describes **staging**.
 - The library has its **own** database (`eocxgzcfzwmbaivobzfx`, ap-south-1) and its **own**
   Redis (Upstash `primary-dogfish-124934`). Verified: the production ref appears nowhere
   in library config.
