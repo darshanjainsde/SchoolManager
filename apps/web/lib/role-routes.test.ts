@@ -26,6 +26,14 @@ describe('homeForRole', () => {
   it('sends a LIBRARIAN to the library counter, never the admin console', () => {
     // The whole point of LIBRARIAN being its own role: she must not land on
     // /app and see students, staff and fees.
-    expect(homeForRole('LIBRARIAN')).toBe('/app/library');
+    expect(homeForRole('LIBRARIAN')).toBe('/library');
+  });
+
+  it('keeps the counter OUTSIDE the /app segment', () => {
+    // Not cosmetic. An App Router ancestor layout cannot be escaped, so a
+    // counter under /app would inherit the admin sidebar and the admin
+    // layout's own `role !== 'SCHOOL_ADMIN'` redirect no matter what its own
+    // layout did. This assertion is what stops it drifting back.
+    expect(homeForRole('LIBRARIAN').startsWith('/app')).toBe(false);
   });
 });

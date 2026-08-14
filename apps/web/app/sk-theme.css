@@ -1927,6 +1927,11 @@ button.sk-availcell:hover { filter: brightness(0.97); }
 }
 .sk-lib-owed-note { font-size: 12.5px; color: var(--sk-ink-3); margin: 2px 0 0; }
 
+/* The counter's own action row. One button, because each first-run state has
+   exactly one next action — a screen with two primary buttons is a screen that
+   has not decided what she should do. */
+.sk-desk-actions { display: flex; gap: 10px; margin-top: 4px; }
+
 /* On a phone the two-column book row stacks rather than crushing the title. */
 @media (max-width: 480px) {
   .sk-lib-book { flex-direction: column; align-items: flex-start; gap: 8px; }

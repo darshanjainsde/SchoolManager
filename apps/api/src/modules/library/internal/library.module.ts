@@ -5,6 +5,8 @@ import { LibraryMeService } from './library-me.service';
 import { LibraryMeController } from './library-me.controller';
 import { LibraryEnrolmentService } from './library-enrolment.service';
 import { LibraryAdminController } from './library-admin.controller';
+import { LibraryDeskService } from './library-desk.service';
+import { LibraryDeskController } from './library-desk.controller';
 
 /**
  * The library inside Sckools.
@@ -16,8 +18,8 @@ import { LibraryAdminController } from './library-admin.controller';
  */
 @Module({
   imports: [FeaturesModule],
-  controllers: [LibraryMeController, LibraryAdminController],
-  providers: [LibraryOrgService, LibraryMeService, LibraryEnrolmentService],
+  controllers: [LibraryMeController, LibraryAdminController, LibraryDeskController],
+  providers: [LibraryOrgService, LibraryMeService, LibraryEnrolmentService, LibraryDeskService],
   exports: [LibraryOrgService],
 })
 export class LibraryModule {}

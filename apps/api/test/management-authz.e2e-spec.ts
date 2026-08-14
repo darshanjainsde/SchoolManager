@@ -247,6 +247,45 @@ describe('management authorization', () => {
     });
   });
 
+  // ── The librarian's counter ───────────────────────────────────────────────
+  //
+  // `apps/api` has NO route-coverage check — `apps/library-api` enumerates its
+  // mounted routes and fails on an uncovered one, but this app does not, so a
+  // new controller here is caught by nothing unless someone writes the case.
+  // Every route on `LibraryDeskController` is listed below by hand for that
+  // reason; adding a route without adding a line is a silent gap.
+  //
+  // These assert the ROLE gate only. A STUDENT and a TEACHER both hold a valid
+  // school token and both have their own library surface at `/me/library`,
+  // whose shapes are deliberately redacted — the counter's are not. The
+  // feature gate (`@RequireFeature('LIBRARY')`) and the "no library
+  // provisioned" path also answer 403, which is why these use the two roles
+  // that must be refused no matter how the school is configured.
+  describe('library counter — LIBRARIAN and SCHOOL_ADMIN only', () => {
+    const deskRoutes = [
+      '/manage/library/members?q=aa',
+      '/manage/library/copies/1142',
+      '/manage/library/not-returned',
+      '/manage/library/day',
+      '/manage/library/status',
+    ];
+
+    it.each(deskRoutes)('a STUDENT cannot reach %s', async (route) => {
+      await request(app.getHttpServer()).get(route).set(as(studentToken)).expect(403);
+    });
+
+    it.each(deskRoutes)('a TEACHER cannot reach %s', async (route) => {
+      await request(app.getHttpServer()).get(route).set(as(teacherToken)).expect(403);
+    });
+
+    it('a STUDENT cannot enrol the school into the library', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/library/enrol')
+        .set(as(studentToken))
+        .expect(403);
+    });
+  });
+
   // ── NotificationOutbox drain cron route (S6/S7 wiring, Task 2) ─────────────
   // Mirrors `internal/cron/exam-reminders`: no JWT exists for a cron
   // invocation, so the route is `@Public()` and gated by `CronSecretGuard`

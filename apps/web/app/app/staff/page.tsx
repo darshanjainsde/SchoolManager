@@ -2,7 +2,7 @@
 import { useEffect, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -332,6 +332,18 @@ export default function StaffPage() {
     enabled: !!host,
   });
 
+  // Same key and shape the admin layout already uses, so this rides its cache
+  // rather than issuing a second /auth/me. A librarian login only makes sense
+  // where there is a library: without the feature she signs in and lands on a
+  // counter whose every call answers "this school does not have a library yet".
+  const meQuery = useQuery({
+    queryKey: ['me', host],
+    queryFn: () => api.get<{ features?: string[] }>('/auth/me'),
+    staleTime: 5 * 60_000,
+    enabled: !!host,
+  });
+  const hasLibrary = meQuery.data?.features?.includes('LIBRARY') ?? false;
+
   // ── Mutations ─────────────────────────────────────────────────────────────
   const addMutation = useMutation({
     mutationFn: (body: {
@@ -379,10 +391,20 @@ export default function StaffPage() {
 
   // The API falls back to the staff member's stored email when none is
   // passed, so a staff member with an address on file needs no extra input.
+  //
+  // `role` decides which kind of login this is. Omitted means STAFF, so the
+  // plain button behaves exactly as it did. LIBRARIAN is the only other value
+  // the API accepts (`management.dto.ts`, pinned with @IsIn) — deliberately,
+  // because a staff screen that could mint a TEACHER or a SCHOOL_ADMIN would
+  // be a privilege-escalation path rather than a convenience.
+  //
+  // The capability is not new: an admin could already create a librarian login
+  // with curl. What was missing was any way to do it from the console, which
+  // meant the LIBRARIAN role shipped unreachable.
   const createLoginMutation = useMutation({
-    mutationFn: (staffId: string) =>
-      api.post<LoginInviteResult>(`/manage/staff/${staffId}/login`, {}),
-    onSuccess: (result, staffId) => {
+    mutationFn: ({ staffId, role }: { staffId: string; role?: 'LIBRARIAN' }) =>
+      api.post<LoginInviteResult>(`/manage/staff/${staffId}/login`, role ? { role } : {}),
+    onSuccess: (result, { staffId }) => {
       void queryClient.invalidateQueries({ queryKey: ['mng-staff'] });
       setInviteResult({ ...result, staffId });
     },
@@ -561,16 +583,35 @@ export default function StaffPage() {
                       Resend invite
                     </button>
                   ) : (
-                    <button
-                      className="sk-btn sk-press"
-                      data-variant="primary"
-                      disabled={createLoginMutation.isPending}
-                      onClick={() => createLoginMutation.mutate(member.id)}
-                      title={member.email ? undefined : 'Add an email to this staff member first'}
-                    >
-                      <KeyRound className="h-3.5 w-3.5" />
-                      Create login
-                    </button>
+                    <>
+                      <button
+                        className="sk-btn sk-press"
+                        data-variant="primary"
+                        disabled={createLoginMutation.isPending}
+                        onClick={() => createLoginMutation.mutate({ staffId: member.id })}
+                        title={member.email ? undefined : 'Add an email to this staff member first'}
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        Create login
+                      </button>
+                      {/* Only where the school actually has a library. The two
+                          buttons differ in one thing — the role the login gets
+                          — so they say which role they make rather than
+                          hiding it behind a dropdown nobody opens. */}
+                      {hasLibrary ? (
+                        <button
+                          className="sk-btn sk-press"
+                          disabled={createLoginMutation.isPending}
+                          onClick={() =>
+                            createLoginMutation.mutate({ staffId: member.id, role: 'LIBRARIAN' })
+                          }
+                          title="Signs in at the school's normal address and lands on the library counter"
+                        >
+                          <BookOpen className="h-3.5 w-3.5" />
+                          Create librarian login
+                        </button>
+                      ) : null}
+                    </>
                   )}
                   <button
                     className="sk-btn sk-press"

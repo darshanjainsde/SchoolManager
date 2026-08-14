@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Briefcase, CalendarDays, CalendarHeart, CalendarX, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, X } from 'lucide-react';
+import { BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -33,6 +33,11 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; re
   { href: '/app/leave', label: 'Leave', icon: CalendarX, requiredFeature: 'MANAGEMENT' },
   { href: '/app/requests', label: 'Requests', icon: ClipboardCheck, requiredFeature: 'MANAGEMENT' },
   { href: '/app/settings', label: 'Settings', icon: Settings, requiredFeature: 'MANAGEMENT' },
+  // Points OUT of the /app segment on purpose — the counter is its own portal
+  // (see lib/role-routes.ts). An admin needs to reach it to set the library up
+  // and to stand in when the librarian is away; a librarian never comes
+  // through here, she lands on it directly.
+  { href: '/library', label: 'Library', icon: BookOpen, requiredFeature: 'LIBRARY' },
   { href: '/app/jobs', label: 'Jobs', icon: Briefcase, requiredFeature: 'HIRING' },
   { href: '/app/events', label: 'Events', icon: CalendarHeart, requiredFeature: 'EVENTS' },
   { href: '/app/announcements', label: 'Announcements', icon: Megaphone },
@@ -139,11 +144,22 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // other non-admin) session that landed here directly (e.g. bounced out of
   // /teacher's own guard) saw the full admin UI. `role` is undefined until
   // `me` resolves, so this only fires once we actually know it's wrong.
+  //
+  // `pathname` is in the deps deliberately. Without it this fired on mount
+  // only: `me.role` does not change during a client-side navigation and the
+  // layout does not remount, so a non-admin who was bounced once could then
+  // click any sidebar link and STAY inside the admin console — every
+  // `/manage/*` call 403-ing behind a fully-rendered admin UI. Hard navigation
+  // was guarded; soft navigation was not. Re-evaluating per route closes it.
+  //
+  // This is chrome, not authorization. What actually protects these routes is
+  // `SchoolJwtGuard + RolesGuard` on the API; this only stops a non-admin
+  // being shown a console that will refuse everything they touch.
   useEffect(() => {
     if (me?.role && me.role !== 'SCHOOL_ADMIN') {
       router.replace(homeForRole(me.role));
     }
-  }, [me?.role, router]);
+  }, [me?.role, pathname, router]);
 
   // Close the mobile drawer whenever navigation happens (Link clicks already
   // do this eagerly; this covers back/forward and any other route change).

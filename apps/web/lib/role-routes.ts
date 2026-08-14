@@ -24,7 +24,13 @@ export function homeForRole(role: string | undefined): string {
       // Straight to the counter, not the admin console. A librarian is a job
       // title, not an administrator: she signs in at the school's normal login
       // and the first thing on screen is the desk she actually works at.
-      return '/app/library';
+      //
+      // A TOP-LEVEL segment, not `/app/library`. In the App Router an ancestor
+      // layout cannot be escaped, so anything under `/app` inherits the admin
+      // shell — its sidebar, its `['me', host]` query and its
+      // `role !== 'SCHOOL_ADMIN'` redirect. `/portal`, `/teacher` and `/staff`
+      // are all siblings for exactly this reason; the counter is the fourth.
+      return '/library';
     case 'SCHOOL_ADMIN':
       return '/app';
     default:
