@@ -152,18 +152,77 @@ no push saying "you owe ₹300", a separate list from students, principal approv
 **Do NOT build** a student-facing reservation queue (a child cannot collect outside their
 period, and shelf expiry then punishes them; "tell me when it's back" is the real want).
 
-### P4b — The counter's writes
-`/library` ships READ-ONLY: find a copy, find a member, today's log, not returned, and the
-first-run enrol. Take-back and give-out are absent — not disabled — because `issue`,
-`return` and `renew` live in `apps/library-api/src/modules/circulation/` and `apps/api`
-cannot import them. A second implementation would answer "what does this child owe" twice.
-The unblock is `packages/library-core`, into which the pure policy layer and then the
-circulation bodies move; both apps import it. Until that lands the counter cannot write.
+### P4b — The counter — **SHIPPED**
 
-Also unbuilt and ranked daily by the PM: **undo a wrong transaction** (she fakes a return
-instead, which corrupts the day report and the copy's history), **damage at return**
-(`FineKind.DAMAGE` and `CopyCondition` exist; no route), and **the library period's
-attendance tick** for children who came and borrowed nothing.
+All seven of a librarian's daily actions, at `/library` inside Sckools: take a book back
+(the default mode), give one out (the child stays chosen between books), undo a mistyped
+issue, note damage, tick who came to the library period, find a copy or a child, chase what
+has not come back, and add a book. Undo, damage and the class-teacher nudge existed in NO
+console before this.
+
+**`packages/library-core` is the seam and the rule.** `apps/api` cannot import
+`apps/library-api` — there is now an explicit dependency-cruiser rule — so `policy`,
+`issue`, `returnBook`, `renew`, `voidIssue`, `recordDamage`, `addBook`, `selfReportLost`
+and the period visits live in the package and BOTH consoles call them. Never write a
+circulation rule twice: a read that disagrees is a wrong screen, a write that disagrees is
+a wrong bill. `@nestjs/common` is a PEER dependency there — two copies break
+`instanceof HttpException` and turn every 403 into a 500.
+
+**TWO IDS, and this has bitten three times.** `AuditLog.actorUserId` has no foreign key and
+takes any caller's id. `Issue.issuedByUserId`, `Issue.returnedByUserId` and
+`LostReport.reportedByUserId` are foreign keys to `LibUser`. A Sckools librarian or student
+has a `User` row and NO `LibUser` row, so every core function takes an optional `libUserId`
+that `apps/api` passes as null. Miss it and the first book issued is a 500.
+
+**Fixed while building it, both live:** any authenticated school token could read and DELETE
+`/manage/staff` records (a TEACHER token got 404, not 403 — the guard never ran), and
+`issue` counted a member's open loans then created with no mutual exclusion, so one child
+could be handed two books against a limit of one (now `pg_advisory_xact_lock` before the
+reads, with a barrier-forced test).
+
+**`apps/api` now has route-coverage enforcement** (`test/route-coverage.e2e-spec.ts`), which
+`apps/library-api` has had since Phase 1a and this app had never had — which is exactly how
+the staff hole survived. 272 mounted routes: 44 asserted, 228 in a baseline that may only
+shrink.
+
+### Before staging: two processes, one pooler
+
+`apps/api` now opens `library_app` connections on the counter's write path, and
+`apps/library-api` opens its own against the same database. Answer this before the deploy,
+not after.
+
+**What is actually shared, and what is not.** `getLibraryTenantPrisma()` is a module-level
+singleton, so it is one Prisma client PER PROCESS, and the runtime URL pins
+`connection_limit=1`. So each function instance holds at most one server connection per
+role — the pooler's client ceiling (Supavisor, in the low hundreds) is nowhere near
+binding. **The constraint is not connection exhaustion; it is serialisation inside one
+instance.**
+
+**The arithmetic that matters.** Fluid Compute reuses one instance across concurrent
+requests, and `connection_limit=1` means those requests QUEUE on a single connection. A
+library period starts, forty children hand books back at once, and every one of those
+transactions is ~20 statements. At ~80ms per transaction that is ~3.2s of queue — inside
+`DESK_TX_OPTIONS`' 5s `maxWait`. At ~200ms it is 8s, and the tail of the queue fails with
+**P2024**, which reads like pool exhaustion and is really contention. The counter would
+break at exactly the busiest minute of its day.
+
+**Do not "fix" this by guessing.** Both levers are one-line changes — raise
+`connection_limit` on `skoolos-api`'s library URL, or raise `maxWait` — and picking one
+without a measurement just moves the cliff. Measure a real burst on staging first: time
+`POST /manage/library/return` at 40 concurrent, and read the P2024 rate.
+
+**Deploy prerequisite.** `skoolos-api` needs `LIBRARY_DATABASE_URL_APP` and
+`LIBRARY_DATABASE_URL_PLATFORM`. Without them every library route 500s;
+`library-org.service.ts` already logs that cause by name rather than letting it surface as
+an unplaceable error on an unrelated-looking route. Env changes need a redeploy.
+
+### P4c — Reminders
+A daily cron (`/internal/cron/library-reminders`) tells a borrower a book goes back
+tomorrow, and follows up when one is late. **Books and dates, never money** — not even the
+word "overdue", which reads as a penalty notice. A child hears on day 1 then weekly; a
+teacher weekly only, because a colleague chased every morning mutes the channel. Idempotent
+by CHECKING `Notification.linkId` for the day, since that table has no unique index and a
+retry must not tell a child twice about one book.
 
 ### P5 — Register and stock verification
 14 canonical CBSE/NIOS columns, exportable. Scanner-free stock take using accession
