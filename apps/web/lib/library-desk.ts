@@ -56,6 +56,36 @@ export interface DeskDayRow {
   accessionNumber: string;
 }
 
+/** `POST /manage/library/return` — what the counter says after a book comes back. */
+export interface ReturnReceipt {
+  issueId: string;
+  memberName: string;
+  classRef: string | null;
+  title: string;
+  accessionNumber: string;
+  /** 0 means it came back in time. */
+  daysLate: number;
+  /**
+   * Whether a charge was RECORDED — never the amount. The counter does not
+   * collect, and a rupee figure on a return row is a bill nobody looked at
+   * before it was shown.
+   */
+  fineRecorded: boolean;
+  /** Non-null when this return promoted the next reservation onto the copy. */
+  promotedReservationId: string | null;
+}
+
+/** `POST /manage/library/issue`. */
+export interface IssueReceipt {
+  issueId: string;
+  memberName: string;
+  classRef: string | null;
+  title: string;
+  accessionNumber: string;
+  backBy: string;
+  collectedReservationId: string | null;
+}
+
 /** `GET /manage/library/status` — `library-org.service.ts#statusFor`. */
 export interface LibraryStatus {
   provisioned: boolean;
@@ -95,6 +125,27 @@ export function copyStateLabel(out: CopyCard['out']): string {
   const d = new Date(out.backBy);
   if (Number.isNaN(d.getTime())) return 'out';
   return `back by ${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+}
+
+/**
+ * What the counter says after a book comes back.
+ *
+ * Plain words, and never a rupee figure. "6 days late" is a fact she can act
+ * on; a charge is a decision somebody makes deliberately, on a different
+ * screen, with the amount and its source in front of them.
+ */
+export function returnLine(r: ReturnReceipt): string {
+  if (r.daysLate > 0) {
+    return r.daysLate === 1 ? '1 day late' : `${r.daysLate} days late`;
+  }
+  return 'Back on the shelf';
+}
+
+/** `Back by 28 August` — the whole month, because this is read aloud to a child. */
+export function backByLongLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `Back by ${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}`;
 }
 
 /** `10:42 am` — the time a counter event happened, in the reader's own clock. */

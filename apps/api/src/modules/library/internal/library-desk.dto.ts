@@ -1,4 +1,4 @@
-import { IsInt, IsISO8601, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import { IsInt, IsISO8601, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -26,6 +26,28 @@ export class SearchMembersQueryDto {
   @Min(1)
   @Max(50)
   limit?: number;
+}
+
+/**
+ * The number written inside the front cover. Never called a barcode, and
+ * never scanned — the product's promise is that a school needs no hardware,
+ * so this is a string a librarian types.
+ */
+export class AccessionNumberDto {
+  @IsString()
+  @Length(1, 32)
+  accessionNumber!: string;
+}
+
+export class IssueAtDeskDto extends AccessionNumberDto {
+  /**
+   * `@IsUUID` is the shape check, not the authorization one. A member
+   * belonging to another school is refused because the lookup runs inside
+   * `withOrg` — a foreign key would not have caught it, since Postgres checks
+   * referential integrity with RLS bypassed.
+   */
+  @IsUUID()
+  memberId!: string;
 }
 
 export class DeskDayQueryDto {

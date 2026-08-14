@@ -1932,6 +1932,53 @@ button.sk-availcell:hover { filter: brightness(0.97); }
    has not decided what she should do. */
 .sk-desk-actions { display: flex; gap: 10px; margin-top: 4px; }
 
+/* ── THE COUNTER ──────────────────────────────────────────────────────────
+   Take back / give out. Deliberately the largest, plainest thing on the page:
+   she works from a queue of children, not from a mouse, and the field is the
+   reason the screen exists. */
+.sk-desk-modes { display: flex; gap: 6px; margin-top: 6px; }
+.sk-desk-mode {
+  font: inherit; font-size: 13.5px; font-weight: 650; cursor: pointer;
+  padding: 8px 18px; border-radius: 999px;
+  border: 1px solid var(--sk-line-2); background: var(--sk-card); color: var(--sk-ink-2);
+}
+/* The chosen mode is filled, not merely outlined — at a glance, from standing,
+   she has to know whether the next number goes out or comes back. */
+.sk-desk-mode[data-on="true"] { background: var(--sk-brand); border-color: var(--sk-brand); color: #fff; }
+.sk-desk-mode:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+
+.sk-desk-form { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.sk-desk-form .sk-lib-search { flex: 1; font-size: 16px; padding: 12px 14px; }
+/* 16px is not a style choice: below it, iOS Safari zooms the page on focus and
+   she loses her place in the queue every time she taps the field. */
+.sk-desk-form .sk-lib-search:disabled { background: var(--sk-bg-2); color: var(--sk-ink-3); cursor: not-allowed; }
+
+.sk-desk-child {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--sk-brand-tint); color: var(--sk-brand-2);
+  border-radius: var(--sk-r-sm); padding: 10px 14px; margin: 8px 0 0; font-size: 13.5px;
+}
+.sk-desk-clear {
+  font: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer;
+  background: none; border: 0; padding: 0; color: var(--sk-brand-2); text-decoration: underline;
+}
+.sk-desk-pick {
+  display: flex; align-items: baseline; gap: 10px; width: 100%;
+  font: inherit; text-align: left; background: none; border: 0; padding: 0; cursor: pointer;
+}
+.sk-desk-pick:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 3px; border-radius: 4px; }
+
+/* The receipt lands in the same place every time, so the SHAPE of the line is
+   the confirmation and she never has to stop and read it. */
+.sk-desk-receipt {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 10px;
+  background: var(--sk-card); border: 1px solid var(--sk-line);
+  border-left: 3px solid var(--sk-good);
+  border-radius: var(--sk-r-sm); padding: 12px 14px;
+}
+.sk-desk-receipt[data-tone="late"] { border-left-color: var(--sk-bad); }
+.sk-desk-aside { font-size: 12.5px; font-weight: 650; color: var(--sk-amber-ink); }
+
 /* On a phone the two-column book row stacks rather than crushing the title. */
 @media (max-width: 480px) {
   .sk-lib-book { flex-direction: column; align-items: flex-start; gap: 8px; }

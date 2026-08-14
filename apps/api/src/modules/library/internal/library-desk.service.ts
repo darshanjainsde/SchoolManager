@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { withOrg, type LibraryTx } from '@library/db';
+import { issue as coreIssue, returnBook as coreReturn, renew as coreRenew } from '@library/core';
 
 /**
  * The counter, as the librarian sees it.
@@ -77,6 +78,42 @@ export interface DeskDayRow {
   accessionNumber: string;
 }
 
+/**
+ * Explicit transaction bounds for every counter WRITE.
+ *
+ * `withOrg` otherwise takes Prisma's defaults — `timeout: 5000`, `maxWait:
+ * 2000`. Issue is ~12 statements and return ~20, over a pooler, and the
+ * library console's own `POST /circulation/issue` passes nothing at all: it
+ * has simply not met a slow enough connection yet. Forty children in a
+ * 35-minute period is when it would.
+ *
+ * `maxWait` is the wait for a connection BEFORE the transaction starts;
+ * exceeding it surfaces as P2024, which reads like pool exhaustion rather
+ * than contention. Options are the FOURTH argument to `withOrg` — the third
+ * is the client — so `undefined` is passed deliberately, not by oversight.
+ */
+const DESK_TX_OPTIONS = { maxWait: 5_000, timeout: 15_000 };
+
+/**
+ * The counter has no library user of its own.
+ *
+ * A Sckools librarian holds a `User` row and no `LibUser` row, and
+ * `Issue.issuedByUserId` is a foreign key to `LibUser` — so this must be null
+ * or the first issue violates it. Her Sckools id still reaches
+ * `AuditLog.actorUserId`, which carries no FK. See the contract on
+ * `IssueBookInput` in @library/core.
+ */
+const NO_LIB_USER = null;
+
+/**
+ * Branch scoping is a library-console concept — an org with two campuses,
+ * each with its own shelves. Sckools resolves one school to one org, and its
+ * guards carry no branch. `[]` is the convention `assertBranchInScope` already
+ * uses for "every branch", shared with `BranchScopeGuard`; it is not a bypass
+ * written for this caller.
+ */
+const ALL_BRANCHES: string[] = [];
+
 /** Whole days between two instants, floored toward the past. Mirrors `library-me.service.ts`. */
 function daysBetween(from: Date, to: Date): number {
   return Math.floor((to.getTime() - from.getTime()) / 86_400_000);
@@ -88,6 +125,143 @@ function fullName(m: { firstName: string; lastName: string }): string {
 
 @Injectable()
 export class LibraryDeskService {
+  /**
+   * Take a book back. The highest-volume action at any school library, and
+   * the reason the counter defaults to it: a return needs no member, just the
+   * number written inside the front cover.
+   *
+   * ONE implementation, called — not copied. `returnBook` lives in
+   * @library/core and is the same function the library console runs, so the
+   * late charge a parent is asked for cannot differ between the two consoles.
+   *
+   * The response is BUILT here rather than passed through: `ReturnResult`
+   * carries whole `Issue`, `Fine` and `Copy` rows, and a raw fine row on a
+   * counter screen is how a rupee figure appears somewhere nobody decided to
+   * put one.
+   */
+  async returnBook(orgId: string, accessionNumber: string, actorUserId: string, now = new Date()) {
+    return withOrg(
+      orgId,
+      async (tx: LibraryTx) => {
+        const result = await coreReturn(
+          tx,
+          orgId,
+          { accessionNumber: accessionNumber.trim() },
+          actorUserId,
+          now,
+          ALL_BRANCHES,
+          NO_LIB_USER,
+        );
+
+        const member = await tx.member.findUnique({
+          where: { id: result.issue.memberId },
+          select: { firstName: true, lastName: true, classRef: true },
+        });
+        const copy = await tx.copy.findUnique({
+          where: { id: result.issue.copyId },
+          select: { accessionNumber: true, title: { select: { title: true } } },
+        });
+
+        return {
+          issueId: result.issue.id,
+          memberName: member ? fullName(member) : '',
+          classRef: member?.classRef ?? null,
+          title: copy?.title.title ?? '',
+          accessionNumber: copy?.accessionNumber ?? accessionNumber,
+          // Negative days-left is how every other library shape states
+          // lateness; `daysLate` here is its positive mirror, and 0 means it
+          // came back in time.
+          daysLate: Math.max(0, -daysBetween(now, result.issue.dueAt)),
+          // Whether a charge was RECORDED. Never the amount: the counter does
+          // not collect, and a figure on a return row is a bill nobody looked
+          // at before it was shown.
+          fineRecorded: result.fine !== null,
+          promotedReservationId: result.promotedReservationId,
+        };
+      },
+      undefined,
+      DESK_TX_OPTIONS,
+    );
+  }
+
+  /**
+   * Give a book out.
+   *
+   * `memberId` arrives from the browser, and a foreign key would NOT catch
+   * another org's member: Postgres checks referential integrity with RLS
+   * bypassed by design. What catches it is that `coreIssue` loads the member
+   * through `tx` — the same transaction, with `app.current_org` set — so a
+   * member from another org is invisible and the call fails as "not found"
+   * rather than succeeding into the wrong school.
+   */
+  async issueBook(
+    orgId: string,
+    accessionNumber: string,
+    memberId: string,
+    actorUserId: string,
+    now = new Date(),
+  ) {
+    return withOrg(
+      orgId,
+      async (tx: LibraryTx) => {
+        const result = await coreIssue(
+          tx,
+          orgId,
+          { accessionNumber: accessionNumber.trim(), memberId },
+          actorUserId,
+          now,
+          ALL_BRANCHES,
+          NO_LIB_USER,
+        );
+
+        const member = await tx.member.findUnique({
+          where: { id: result.issue.memberId },
+          select: { firstName: true, lastName: true, classRef: true },
+        });
+        const copy = await tx.copy.findUnique({
+          where: { id: result.issue.copyId },
+          select: { accessionNumber: true, title: { select: { title: true } } },
+        });
+
+        return {
+          issueId: result.issue.id,
+          memberName: member ? fullName(member) : '',
+          classRef: member?.classRef ?? null,
+          title: copy?.title.title ?? '',
+          accessionNumber: copy?.accessionNumber ?? accessionNumber,
+          backBy: result.issue.dueAt.toISOString(),
+          collectedReservationId: result.collectedReservationId,
+        };
+      },
+      undefined,
+      DESK_TX_OPTIONS,
+    );
+  }
+
+  /** Keep it a little longer. Occasional, and the policy decides whether it may. */
+  async renewBook(orgId: string, accessionNumber: string, actorUserId: string, now = new Date()) {
+    return withOrg(
+      orgId,
+      async (tx: LibraryTx) => {
+        const result = await coreRenew(
+          tx,
+          orgId,
+          { accessionNumber: accessionNumber.trim() },
+          actorUserId,
+          now,
+          ALL_BRANCHES,
+        );
+        return {
+          issueId: result.issue.id,
+          backBy: result.issue.dueAt.toISOString(),
+          renewCount: result.issue.renewCount,
+        };
+      },
+      undefined,
+      DESK_TX_OPTIONS,
+    );
+  }
+
   /**
    * Find the child standing at the counter.
    *

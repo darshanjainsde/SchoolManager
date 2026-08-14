@@ -1,4 +1,4 @@
-import { Controller, ForbiddenException, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../../common/auth/roles.guard';
 import { Roles } from '../../../common/auth/roles.decorator';
@@ -7,7 +7,12 @@ import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
 import { RequireFeature, RequireFeatureGuard } from '../../features';
 import { LibraryOrgService } from './library-org.service';
 import { LibraryDeskService } from './library-desk.service';
-import { DeskDayQueryDto, SearchMembersQueryDto } from './library-desk.dto';
+import {
+  AccessionNumberDto,
+  DeskDayQueryDto,
+  IssueAtDeskDto,
+  SearchMembersQueryDto,
+} from './library-desk.dto';
 
 /**
  * The librarian's counter.
@@ -47,6 +52,27 @@ export class LibraryDeskController {
     const orgId = await this.orgs.orgIdForSchool(user.schoolId);
     if (!orgId) throw new ForbiddenException('This school does not have a library yet');
     return orgId;
+  }
+
+  /**
+   * Take a book back. First route on the controller because it is the first
+   * thing she does — forty at once, at the start of a period.
+   */
+  @Post('return')
+  async returnBook(@CurrentUser() user: SchoolJwtPayload, @Body() dto: AccessionNumberDto) {
+    return this.desk.returnBook(await this.orgId(user), dto.accessionNumber, user.sub);
+  }
+
+  /** Give a book out to a child who has already been chosen. */
+  @Post('issue')
+  async issue(@CurrentUser() user: SchoolJwtPayload, @Body() dto: IssueAtDeskDto) {
+    return this.desk.issueBook(await this.orgId(user), dto.accessionNumber, dto.memberId, user.sub);
+  }
+
+  /** Keep it a little longer, if the policy allows. */
+  @Post('renew')
+  async renew(@CurrentUser() user: SchoolJwtPayload, @Body() dto: AccessionNumberDto) {
+    return this.desk.renewBook(await this.orgId(user), dto.accessionNumber, user.sub);
   }
 
   /** Find the child at the counter — by name, class or borrower number. */

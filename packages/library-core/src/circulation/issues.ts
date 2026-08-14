@@ -20,6 +20,28 @@ import {
  * object. The DTO classes satisfy these interfaces structurally, so the
  * controller keeps passing its validated instance unchanged.
  */
+/**
+ * WHO DID THIS — two ids, and they are not interchangeable.
+ *
+ * `actorUserId` is written to `AuditLog.actorUserId`, which is a bare
+ * `String? @db.Uuid` with **no** foreign key. Any caller's own user id is
+ * valid there, and recording it is the point: this is a money-adjacent action.
+ *
+ * `libUserId` is written to `Issue.issuedByUserId` / `returnedByUserId`, which
+ * ARE foreign keys to `LibUser`. It defaults to `actorUserId` so every
+ * `apps/library-api` call site behaves exactly as before — its callers hold a
+ * real `LibUser` id from `LibJwtGuard`.
+ *
+ * `apps/api` passes `null`. A school librarian signed into Sckools has a
+ * `User` row and no `LibUser` row at all, so passing her Sckools id here would
+ * violate the foreign key and turn the first book she ever issues into a 500.
+ * The two columns are nullable precisely because "issued by somebody outside
+ * this service's own user table" is a real state, not a gap — and the audit
+ * row still names her.
+ *
+ * Delete this parameter and the counter breaks on its first issue, silently
+ * passing tests that only ever exercise the library-api path.
+ */
 export interface IssueBookInput {
   accessionNumber: string;
   memberId: string;
@@ -136,6 +158,7 @@ export async function issue(
   actorUserId: string,
   now: Date,
   allowedBranches: string[],
+  libUserId: string | null = actorUserId,
 ): Promise<IssueResult> {
   const copy = await tx.copy.findUnique({ where: { orgId_accessionNumber: { orgId, accessionNumber: dto.accessionNumber } } });
   if (!copy) throw new NotFoundException('Copy not found');
@@ -190,7 +213,7 @@ export async function issue(
         branchId: copy.branchId,
         memberId: member.id,
         dueAt: decision.dueAt,
-        issuedByUserId: actorUserId,
+        issuedByUserId: libUserId,
         status: 'ACTIVE',
       },
     });
@@ -246,6 +269,7 @@ export async function returnBook(
   actorUserId: string,
   now: Date,
   allowedBranches: string[],
+  libUserId: string | null = actorUserId,
 ): Promise<ReturnResult> {
   const copy = await tx.copy.findUnique({ where: { orgId_accessionNumber: { orgId, accessionNumber: dto.accessionNumber } } });
   if (!copy) throw new NotFoundException('Copy not found');
@@ -272,7 +296,7 @@ export async function returnBook(
 
   const returnedLoan = await tx.issue.update({
     where: { id: activeIssue.id },
-    data: { returnedAt: now, returnedByUserId: actorUserId, status: 'RETURNED' },
+    data: { returnedAt: now, returnedByUserId: libUserId, status: 'RETURNED' },
   });
 
   let fine: Fine | null = null;

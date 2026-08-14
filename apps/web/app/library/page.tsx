@@ -4,15 +4,19 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import {
+  backByLongLabel,
   copyStateLabel,
   memberLine,
+  returnLine,
   timeLabel,
   type CopyCard,
   type DeskDayRow,
   type EnrolmentReport,
+  type IssueReceipt,
   type LibraryStatus,
   type MemberCard,
   type NotReturnedRow,
+  type ReturnReceipt,
 } from '@/lib/library-desk';
 
 /**
@@ -22,15 +26,19 @@ import {
  * a dashboard, and not a tab bar. She has this open all day and will not
  * navigate; anything below the fold that is not urgent is never seen.
  *
- * WHAT IS NOT HERE YET, and why it is absent rather than disabled: taking a
- * book back and giving one out are WRITES, and the issue/return/renew logic
- * lives in `apps/library-api/src/modules/circulation/` behind database
- * constraints and a policy module with its own spec. `apps/api` cannot import
- * it, and a second implementation would give two different answers to "what
- * does this child owe" — which is the one failure the money design exists to
- * prevent. So the reads ship first and the counter field arrives with the
- * shared-package extraction. A field that eats keystrokes and does nothing is
- * worse than an absent one.
+ * RETURN IS THE DEFAULT MODE. It is the higher-volume action AND the cheaper
+ * one — a return needs no member, just the number inside the front cover, so
+ * it is one field and one keystroke pattern. Defaulting to Issue would cost a
+ * mode switch on every burst of forty returns at the start of a period.
+ *
+ * The child stays CHOSEN between issues. She picks Aarav once and then types
+ * number after number; clearing him is deliberate. Re-picking per book is the
+ * difference between a counter that keeps up with a queue and one that does
+ * not.
+ *
+ * Issue and return call `@library/core` — the same functions the library
+ * console runs, not a second implementation. That is what stops the two
+ * consoles disagreeing about what a child owes.
  *
  * NO MONEY ANYWHERE ON THIS SCREEN. Not a fine stamp on a late row, not a
  * total, not ₹0. A `LOST` fine is only ever created by a deliberate human
@@ -44,6 +52,74 @@ export default function LibraryCounterPage(): React.JSX.Element {
   const queryClient = useQueryClient();
   const [term, setTerm] = useState('');
   const [number, setNumber] = useState('');
+
+  // ── The counter ──────────────────────────────────────────────────────────
+  const [mode, setMode] = useState<'return' | 'issue'>('return');
+  const [child, setChild] = useState<MemberCard | null>(null);
+  const [deskNumber, setDeskNumber] = useState('');
+  const [childTerm, setChildTerm] = useState('');
+  const [receipt, setReceipt] = useState<
+    { kind: 'returned'; r: ReturnReceipt } | { kind: 'issued'; r: IssueReceipt } | null
+  >(null);
+  const [deskError, setDeskError] = useState<string | null>(null);
+
+  /** Everything the counter touches, refetched after any write. */
+  function refreshDesk() {
+    void queryClient.invalidateQueries({ queryKey: ['library-desk'] });
+  }
+
+  const takeBack = useMutation({
+    mutationFn: (accessionNumber: string) =>
+      api.post<ReturnReceipt>('/manage/library/return', { accessionNumber }),
+    onSuccess: (r) => {
+      setReceipt({ kind: 'returned', r });
+      setDeskError(null);
+      setDeskNumber('');
+      refreshDesk();
+    },
+    onError: (e: Error) => {
+      setReceipt(null);
+      setDeskError(e.message);
+    },
+  });
+
+  const giveOut = useMutation({
+    mutationFn: ({ accessionNumber, memberId }: { accessionNumber: string; memberId: string }) =>
+      api.post<IssueReceipt>('/manage/library/issue', { accessionNumber, memberId }),
+    onSuccess: (r) => {
+      setReceipt({ kind: 'issued', r });
+      setDeskError(null);
+      setDeskNumber('');
+      refreshDesk();
+    },
+    onError: (e: Error) => {
+      setReceipt(null);
+      setDeskError(e.message);
+    },
+  });
+
+  const deskBusy = takeBack.isPending || giveOut.isPending;
+
+  // Searching for the child to issue to — separate from the "find a child"
+  // section further down, which answers a question rather than choosing anyone.
+  const deskPeople = useQuery({
+    queryKey: ['library-desk', 'members', childTerm],
+    enabled: mode === 'issue' && !child && childTerm.trim().length >= 2,
+    queryFn: () =>
+      api.get<MemberCard[]>(`/manage/library/members?q=${encodeURIComponent(childTerm.trim())}`),
+  });
+
+  function submitCounter(e: React.FormEvent) {
+    e.preventDefault();
+    const n = deskNumber.trim();
+    if (!n || deskBusy) return;
+    if (mode === 'return') {
+      takeBack.mutate(n);
+      return;
+    }
+    if (!child) return;
+    giveOut.mutate({ accessionNumber: n, memberId: child.memberId });
+  }
 
   const status = useQuery({
     queryKey: ['library-desk', 'status'],
@@ -141,6 +217,10 @@ export default function LibraryCounterPage(): React.JSX.Element {
           Add your first book and the counter opens. Until there is at least one book, the children
           do not see a Library tab either. Books are added in the library console for now.
         </p>
+        <p className="sk-lib-nudge">
+          The counter is hidden rather than greyed out — a field that takes a book number when
+          there are no books would only ever answer &ldquo;that number is not in the register&rdquo;.
+        </p>
       </section>
     );
   }
@@ -154,6 +234,143 @@ export default function LibraryCounterPage(): React.JSX.Element {
       <p className="sk-lib-nudge">
         {status.data?.members} signed up · {status.data?.copies} books in the register
       </p>
+
+      {/* ── The counter ────────────────────────────────────────────────────── */}
+      <div className="sk-desk-modes" role="group" aria-label="What are you doing?">
+        <button
+          type="button"
+          className="sk-desk-mode"
+          data-on={mode === 'return'}
+          onClick={() => {
+            setMode('return');
+            setReceipt(null);
+            setDeskError(null);
+          }}
+        >
+          Take back
+        </button>
+        <button
+          type="button"
+          className="sk-desk-mode"
+          data-on={mode === 'issue'}
+          onClick={() => {
+            setMode('issue');
+            setReceipt(null);
+            setDeskError(null);
+          }}
+        >
+          Give out
+        </button>
+      </div>
+
+      {/* Choosing the child comes BEFORE the number, and only in issue mode.
+          She stays chosen until cleared — book after book without re-picking. */}
+      {mode === 'issue' ? (
+        child ? (
+          <p className="sk-desk-child">
+            <strong>{child.name}</strong>
+            {child.classRef ? ` · ${child.classRef}` : ''} ·{' '}
+            {child.booksOut === 1 ? '1 book out' : `${child.booksOut} books out`}
+            <button
+              type="button"
+              className="sk-desk-clear"
+              onClick={() => {
+                setChild(null);
+                setChildTerm('');
+              }}
+            >
+              Change
+            </button>
+          </p>
+        ) : (
+          <>
+            <input
+              className="sk-lib-search"
+              type="search"
+              value={childTerm}
+              onChange={(e) => setChildTerm(e.target.value)}
+              placeholder="Name, class or borrower number"
+              aria-label="Choose the child"
+            />
+            {deskPeople.data && deskPeople.data.length > 0 ? (
+              <ul className="sk-lib-shelf">
+                {deskPeople.data.map((m) => (
+                  <li key={m.memberId} className="sk-lib-shelf-row">
+                    <button
+                      type="button"
+                      className="sk-desk-pick"
+                      onClick={() => {
+                        setChild(m);
+                        setChildTerm('');
+                      }}
+                    >
+                      <span className="sk-lib-child">{m.name}</span>
+                      <span className="sk-lib-author">{memberLine(m)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {deskPeople.isFetched && childTerm.trim().length >= 2 && deskPeople.data?.length === 0 ? (
+              <p className="sk-lib-empty">Nobody by that name.</p>
+            ) : null}
+          </>
+        )
+      ) : null}
+
+      <form onSubmit={submitCounter} className="sk-desk-form">
+        <input
+          className="sk-lib-search"
+          type="text"
+          value={deskNumber}
+          onChange={(e) => setDeskNumber(e.target.value)}
+          // Autofocus is right here and almost nowhere else: this field is the
+          // reason the page exists, and she works from a queue, not a mouse.
+          autoFocus
+          disabled={mode === 'issue' && !child}
+          placeholder={mode === 'issue' && !child ? 'Choose a child first' : 'Book number'}
+          aria-label={mode === 'return' ? 'Book number to take back' : 'Book number to give out'}
+        />
+        <button
+          className="sk-btn"
+          data-variant="primary"
+          type="submit"
+          disabled={deskBusy || !deskNumber.trim() || (mode === 'issue' && !child)}
+        >
+          {deskBusy ? 'Saving…' : mode === 'return' ? 'Take back' : 'Give out'}
+        </button>
+      </form>
+      <p className="sk-lib-nudge">The number written inside the front cover.</p>
+
+      {/* The receipt. One line, the same place every time, so she can work
+          without reading — the shape of the line is the confirmation. */}
+      {receipt?.kind === 'returned' ? (
+        <div className="sk-desk-receipt" data-tone={receipt.r.daysLate > 0 ? 'late' : 'calm'}>
+          <span className="sk-lib-title">{receipt.r.title}</span>
+          <span className="sk-lib-author">
+            {receipt.r.memberName}
+            {receipt.r.classRef ? `, ${receipt.r.classRef}` : ''}
+          </span>
+          <span className="sk-lib-state" data-tone={receipt.r.daysLate > 0 ? 'late' : 'calm'}>
+            {returnLine(receipt.r)}
+          </span>
+          {/* Where the next child is waiting for this exact copy. */}
+          {receipt.r.promotedReservationId ? (
+            <span className="sk-desk-aside">Keep this one aside — it is reserved.</span>
+          ) : null}
+        </div>
+      ) : null}
+      {receipt?.kind === 'issued' ? (
+        <div className="sk-desk-receipt" data-tone="calm">
+          <span className="sk-lib-title">{receipt.r.title}</span>
+          <span className="sk-lib-author">
+            {receipt.r.memberName}
+            {receipt.r.classRef ? `, ${receipt.r.classRef}` : ''}
+          </span>
+          <span className="sk-lib-state" data-tone="calm">{backByLongLabel(receipt.r.backBy)}</span>
+        </div>
+      ) : null}
+      {deskError ? <p className="sk-lib-empty" role="alert">{deskError}</p> : null}
 
       {/* ── Find a book, or find out who has one ───────────────────────────── */}
       <h2 className="sk-lib-h2">Find a book</h2>

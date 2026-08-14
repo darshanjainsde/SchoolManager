@@ -284,6 +284,28 @@ describe('management authorization', () => {
         .set(as(studentToken))
         .expect(403);
     });
+
+    // The writes matter more than the reads here: a student who could reach
+    // POST /issue could put a book on another child's account, and one who
+    // could reach POST /return could clear their own late charge by returning
+    // a book they still hold.
+    const deskWrites: Array<[string, object]> = [
+      ['/manage/library/return', { accessionNumber: '1142' }],
+      ['/manage/library/issue', { accessionNumber: '1142', memberId: '00000000-0000-0000-0000-000000000001' }],
+      ['/manage/library/renew', { accessionNumber: '1142' }],
+    ];
+
+    it.each(deskWrites)('a STUDENT cannot POST %s', async (route, body) => {
+      await request(app.getHttpServer()).post(route).set(as(studentToken)).send(body).expect(403);
+    });
+
+    it.each(deskWrites)('a TEACHER cannot POST %s', async (route, body) => {
+      await request(app.getHttpServer()).post(route).set(as(teacherToken)).send(body).expect(403);
+    });
+
+    it.each(deskWrites)('a STAFF login cannot POST %s', async (route, body) => {
+      await request(app.getHttpServer()).post(route).set(as(staffToken)).send(body).expect(403);
+    });
   });
 
   // ── NotificationOutbox drain cron route (S6/S7 wiring, Task 2) ─────────────
