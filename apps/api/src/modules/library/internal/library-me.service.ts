@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { getPlatformPrisma } from '@skoolos/db';
 import { withOrg, type LibraryTx } from '@library/db';
 
 /**
@@ -143,6 +144,27 @@ export class LibraryMeService {
    * ten-year-old: the librarian has no authority over a child, the class
    * teacher does.
    */
+  /**
+   * The caller's OWN classes, resolved from their Sckools teacher record.
+   *
+   * Returns [] for a teacher who is nobody's class teacher — a subject teacher
+   * has no register to chase, and an empty list is the honest answer rather
+   * than an error.
+   */
+  async myClassNotReturned(orgId: string, schoolId: string, userId: string, now = new Date()) {
+    const sections = await getPlatformPrisma().classSection.findMany({
+      where: { schoolId, classTeacher: { userId } },
+      select: { name: true, grade: { select: { name: true } } },
+    });
+    if (sections.length === 0) return [];
+
+    const classRefs = sections.map((s) => `${s.grade.name}-${s.name}`);
+    const all = await Promise.all(
+      classRefs.map((ref) => this.classNotReturned(orgId, ref, now)),
+    );
+    return all.flat();
+  }
+
   async classNotReturned(orgId: string, classRef: string, now = new Date()) {
     return withOrg(orgId, async (tx) => {
       const rows = await tx.issue.findMany({

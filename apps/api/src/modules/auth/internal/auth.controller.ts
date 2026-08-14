@@ -10,6 +10,7 @@ import { SchoolResolveService } from './school-resolve.service';
 import { TenantContextService } from '../../tenancy';
 import { FeatureResolverService } from '../../features';
 import { Public } from '../../../common/auth/public.decorator';
+import { LibraryOrgService } from '../../library';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
@@ -31,6 +32,7 @@ export class AuthController {
     private readonly tenantCtx: TenantContextService,
     private readonly features: FeatureResolverService,
     private readonly schoolResolve: SchoolResolveService,
+    private readonly library: LibraryOrgService,
   ) {}
 
   /**
@@ -151,12 +153,28 @@ export class AuthController {
       // the user yet — the client decides what to show instead.
       this.auth.displayNameFor(user.schoolId, user.sub, user.role),
     ]);
+    // The SECOND gate on the library menu item. `features` says the school
+    // bought a library; this says there is actually a book in it.
+    //
+    // The gap between an admin ticking Library and a librarian finishing the
+    // first shelf is weeks of real work, and a tab opening onto an empty screen
+    // during those weeks is the impression every student forms of the feature.
+    // Resolved here rather than in a second client call so the nav has one
+    // source of truth and cannot flicker between them.
+    //
+    // Only asked when the feature is on, so a school without a library never
+    // touches the library database.
+    const libraryLive = features.has('LIBRARY')
+      ? await this.library.isLiveForSchool(user.schoolId)
+      : false;
+
     return {
       userId: user.sub,
       schoolId: user.schoolId,
       role: user.role,
       name,
       features: [...features],
+      libraryLive,
     };
   }
 }

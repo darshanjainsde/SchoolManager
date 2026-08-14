@@ -103,6 +103,30 @@ export class LibraryOrgService {
     return { provisioned: true, live: copies > 0, members, copies };
   }
 
+  /**
+   * Does this school have a library with at least one book in it?
+   *
+   * Answers false — never throws — for a school that is unprovisioned, still in
+   * SETUP, or suspended. This is read on every `/auth/me`, which is the call
+   * every portal makes on load, so it must never be the thing that breaks a
+   * login for a school whose library is merely unfinished.
+   */
+  async isLiveForSchool(schoolId: string): Promise<boolean> {
+    try {
+      const orgId = await this.orgIdForSchool(schoolId);
+      if (!orgId) return false;
+      const { live } = await this.statusFor(orgId);
+      return live;
+    } catch (err) {
+      // A library database that is unreachable or unconfigured must not take
+      // /auth/me down with it — every portal in the product calls this.
+      this.logger.warn(
+        `library liveness check failed for school ${schoolId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    }
+  }
+
   private async cacheGet(schoolId: string): Promise<string | null | undefined> {
     try {
       await this.connect();

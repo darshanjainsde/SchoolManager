@@ -14,6 +14,7 @@ import {
   User,
   LogOut,
   NotebookPen,
+  Library,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -22,23 +23,13 @@ import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
 import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
 import { homeForRole } from '@/lib/role-routes';
+import { NAV_ITEMS } from './nav-items';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { MobileNavButton, MobileNavDrawer } from '@/components/MobileNavDrawer';
 import '../sk-theme.css';
 
-const NAV_ITEMS = [
-  { href: '/portal', label: 'Home', icon: LayoutDashboard },
-  { href: '/portal/timetable', label: 'Timetable', icon: CalendarDays },
-  { href: '/portal/attendance', label: 'Attendance', icon: CalendarCheck },
-  { href: '/portal/diary', label: 'Diary', icon: NotebookPen },
-  { href: '/portal/assignments', label: 'Assignments', icon: BookOpen },
-  { href: '/portal/results', label: 'Results', icon: GraduationCap },
-  { href: '/portal/announcements', label: 'Announcements', icon: Megaphone },
-  { href: '/portal/messages', label: 'Messages', icon: MessageSquare },
-  { href: '/portal/profile', label: 'Profile', icon: User },
-];
 
 export default function PortalLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -60,7 +51,19 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     enabled: status === 'authed' && audience === 'school' && !!host,
-    queryFn: () => probeApi.get<{ role: string }>('/auth/me'),
+    queryFn: () =>
+      probeApi.get<{ role: string; features?: string[]; libraryLive?: boolean }>('/auth/me'),
+  });
+
+  /**
+   * Until /auth/me answers, show only the ungated items. The opposite default
+   * (show everything, hide later) would flash a Library tab at every student in
+   * every school that does not have one, on every page load.
+   */
+  const navItems = NAV_ITEMS.filter((i) => {
+    if (i.requiredFeature && !me.data?.features?.includes(i.requiredFeature)) return false;
+    if (i.requiresLibraryLive && !me.data?.libraryLive) return false;
+    return true;
   });
 
   useEffect(() => {
@@ -129,7 +132,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
           />
         </div>
         <nav className="sk-tabs" aria-label="Portal sections">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+          {navItems.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} className="sk-tab" data-active={isActive(href)}>
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
               {label}
@@ -145,7 +148,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
         title="Student portal"
         host={host}
         sectionLabel="Sections"
-        items={NAV_ITEMS}
+        items={navItems}
         isActive={isActive}
         foot={
           // The bar hides these two on a phone (they do not fit), so the

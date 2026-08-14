@@ -68,19 +68,19 @@ export class LibraryMeController {
   }
 
   /**
-   * Which of my class has not brought a book back. TEACHER only.
+   * Which of MY class has not brought a book back. TEACHER only.
+   *
+   * The class is resolved server-side from the caller's own teacher record —
+   * never taken as a parameter. A client-supplied classRef would let any
+   * teacher read any class's list, and this list names children.
    *
    * Names and titles, never amounts. A staffroom is a public place, and the
    * moment this shows what children owe it becomes fee collection and stops
-   * being opened.
+   * being opened — and then nothing recovers the books at all.
    */
-  @Get('class/:classRef')
+  @Get('class')
   @Roles('TEACHER')
-  async classNotReturned(
-    @CurrentUser() user: SchoolJwtPayload,
-    @Query('classRef') classRef: string,
-  ) {
-    if (!classRef?.trim()) return [];
-    return this.me.classNotReturned(await this.orgId(user), classRef.trim());
+  async classNotReturned(@CurrentUser() user: SchoolJwtPayload) {
+    return this.me.myClassNotReturned(await this.orgId(user), user.schoolId, user.sub);
   }
 }

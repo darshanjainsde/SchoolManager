@@ -11,6 +11,7 @@ import {
   CalendarRange,
   StickyNote,
   NotebookPen,
+  Library,
 } from 'lucide-react';
 
 /**
@@ -30,7 +31,15 @@ import {
  * now it tells the truth. See layout.test.tsx for the dead-route regression
  * test.
  */
-export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard }[] = [
+export const NAV_ITEMS: {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  /** Hidden unless the school has this feature. */
+  requiredFeature?: string;
+  /** Hidden until the library actually has a book in it. See /portal/layout.tsx. */
+  requiresLibraryLive?: boolean;
+}[] = [
   { href: '/teacher', label: 'Today', icon: LayoutDashboard },
   { href: '/teacher/timetable', label: 'Timetable', icon: CalendarDays },
   { href: '/teacher/attendance', label: 'Attendance', icon: ClipboardCheck },
@@ -43,4 +52,11 @@ export const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashbo
   { href: '/teacher/inbox', label: 'Inbox', icon: MessageSquare },
   { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
   { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },
+  {
+    href: '/teacher/library',
+    label: 'Library',
+    icon: Library,
+    requiredFeature: 'LIBRARY',
+    requiresLibraryLive: true,
+  },
 ];
