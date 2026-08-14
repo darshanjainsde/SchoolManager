@@ -1,6 +1,6 @@
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import type { LeaveApplication, RegisterChangeRow } from '@skoolos/types';
+import type { LeaveApplication, LeaveBalanceResponse, RegisterChangeRow } from '@skoolos/types';
 import Requests from '../(tabs)/home/requests';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
@@ -63,12 +63,14 @@ function mockApi({
   register,
   cancelResult,
   postResult,
+  balance,
 }: {
   leave?: LeaveApplication[] | Error;
   leaveSequence?: (LeaveApplication[] | Error)[];
   register?: RegisterChangeRow[] | Error;
   cancelResult?: { status: string; restoredDates: number } | Error;
   postResult?: LeaveApplication | Error;
+  balance?: LeaveBalanceResponse;
 }) {
   let leaveCalls = 0;
   (api.request as jest.Mock).mockImplementation((path: string, opts?: { method?: string; body?: unknown }) => {
@@ -94,6 +96,12 @@ function mockApi({
     if (path === '/manage/leave' && opts?.method === 'POST') {
       if (postResult === undefined) throw new Error('unexpected POST /manage/leave');
       return postResult instanceof Error ? Promise.reject(postResult) : Promise.resolve(postResult);
+    }
+    if (path === '/manage/leave-policy/my-balance') {
+      // Benign default: no policy configured — the screen hides the chips.
+      return balance === undefined
+        ? Promise.reject(new ApiError(404, 'No leave policy'))
+        : Promise.resolve(balance);
     }
     throw new Error(`unexpected path: ${path} ${JSON.stringify(opts)}`);
   });
@@ -316,6 +324,32 @@ it('the reverse partial failure also holds: register data survives a failed leav
 });
 
 // ── Apply-for-leave form ─────────────────────────────────────────────────
+
+it('shows the remaining balance for the picked type, red at zero, hidden with no policy', async () => {
+  mockApi({
+    leave: [],
+    register: [],
+    balance: {
+      academicYear: { id: 'y1', name: '2026-27' },
+      balances: [
+        { typeDefId: 'd1', name: 'Sick leave', builtin: 'SICK', isPaid: true, allotted: 12, carriedIn: 0, used: 5, remaining: 7 },
+        { typeDefId: 'd2', name: 'Casual leave', builtin: 'CASUAL', isPaid: true, allotted: 8, carriedIn: 2, used: 10, remaining: 0 },
+      ],
+    },
+  });
+  const { findByTestId, getByTestId } = render(<Requests />);
+
+  // SICK is the default type — its balance shows.
+  expect(await findByTestId('apply-balance')).toHaveTextContent('7 days left this year');
+
+  // Switching to CASUAL shows its zero, with the carried days named.
+  fireEvent.press(getByTestId('apply-type-CASUAL'));
+  expect(getByTestId('apply-balance')).toHaveTextContent('0 days left this year (2 carried over)');
+
+  // A type with no grant (OTHER isn't in the payload) shows nothing.
+  fireEvent.press(getByTestId('apply-type-OTHER'));
+  expect(() => getByTestId('apply-balance')).toThrow();
+});
 
 it('the To calendar floors at the chosen From — a day before it is unpickable', async () => {
   mockApi({ leave: [], register: [] });

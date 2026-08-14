@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { LeaveApplication, LeaveTypeValue, RegisterChangeRow } from '@skoolos/types';
+import type { LeaveApplication, LeaveBalanceResponse, LeaveTypeValue, RegisterChangeRow } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { RequestList, type RequestItem } from '@/components/teacher/RequestList';
@@ -76,6 +76,15 @@ export default function TeacherRequestsPage() {
     queryFn: () => api.get<RegisterChangeRow[]>('/manage/register-changes/mine'),
   });
 
+  // The caller's own leave balances — chips above the form. 404/403 (no
+  // policy configured, or an older API) simply hides them.
+  const balanceQuery = useQuery({
+    queryKey: ['t-leave-balance'],
+    enabled: !!host,
+    retry: false,
+    queryFn: () => api.get<LeaveBalanceResponse>('/manage/leave-policy/my-balance'),
+  });
+
   const apply = useMutation({
     mutationFn: (v: { type: string; startDate: string; endDate: string; reason?: string }) =>
       api.post<LeaveApplication>('/manage/leave', v),
@@ -130,9 +139,29 @@ export default function TeacherRequestsPage() {
       <div className="sk-card" style={{ marginBottom: 16 }}>
         <div className="sk-card-h">
           <h3>Apply for leave</h3>
+          {balanceQuery.data && balanceQuery.data.balances.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+              {balanceQuery.data.balances
+                .filter((b) => b.remaining !== null)
+                .map((b) => (
+                  <span key={b.typeDefId} className="sk-pill" data-tone={(b.remaining ?? 0) <= 0 ? 'warn' : 'info'}>
+                    {b.name} · {b.remaining} of {(b.allotted ?? 0) + b.carriedIn} left
+                  </span>
+                ))}
+            </div>
+          )}
         </div>
         <div className="sk-card-b">
-          <LeaveForm key={formKey} isSubmitting={apply.isPending} onSubmit={(v) => apply.mutate(v)} />
+          <LeaveForm
+            key={formKey}
+            isSubmitting={apply.isPending}
+            remainingByType={Object.fromEntries(
+              (balanceQuery.data?.balances ?? [])
+                .filter((b) => b.builtin !== null)
+                .map((b) => [b.builtin as string, b.remaining]),
+            )}
+            onSubmit={(v) => apply.mutate(v)}
+          />
         </div>
       </div>
 

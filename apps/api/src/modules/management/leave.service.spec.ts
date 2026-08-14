@@ -2,6 +2,7 @@ import 'reflect-metadata';
 
 const txMock = {
   teacher: { findFirst: jest.fn(), findMany: jest.fn() },
+  leaveTypeDef: { findFirst: jest.fn() },
   leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   timetableSlot: { findMany: jest.fn(), findFirst: jest.fn() },
   substitution: {
@@ -48,6 +49,9 @@ describe('LeaveService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    // `apply()` resolves the school's LeaveTypeDef for the picked type;
+    // null = the school never opened its leave policy (pre-policy behaviour).
+    txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
   });
 
   describe('apply', () => {
@@ -77,12 +81,40 @@ describe('LeaveService', () => {
           schoolId: SCHOOL,
           teacherId: TEACHER,
           type: 'SICK',
+          // No LeaveTypeDef configured (pre-policy school) → null, resolved
+          // later through the enum when balances are computed.
+          typeDefId: null,
           startDate: new Date('2026-07-20'),
           endDate: new Date('2026-07-22'),
           reason: undefined,
         },
       });
       expect(result.status).toBe('PENDING');
+    });
+
+    it('stamps the school\'s own LeaveTypeDef onto the application when one exists', async () => {
+      txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER });
+      txMock.leaveTypeDef.findFirst.mockResolvedValue({ id: 'def-sick' });
+      txMock.leaveApplication.create.mockResolvedValue({
+        id: LEAVE_ID,
+        teacherId: TEACHER,
+        status: 'PENDING',
+        type: dto.type,
+        startDate: new Date(dto.startDate),
+        endDate: new Date(dto.endDate),
+        reason: null,
+        createdAt: new Date('2026-07-19T00:00:00.000Z'),
+      });
+
+      await svc.apply(SCHOOL, TEACHER_USER, dto);
+
+      expect(txMock.leaveTypeDef.findFirst).toHaveBeenCalledWith({
+        where: { schoolId: SCHOOL, builtin: 'SICK' },
+        select: { id: true },
+      });
+      expect(txMock.leaveApplication.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ typeDefId: 'def-sick' }),
+      });
     });
 
     it('throws NOT_A_TEACHER when the caller has no linked Teacher row', async () => {

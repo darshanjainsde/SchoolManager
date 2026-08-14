@@ -223,6 +223,8 @@ model School {
   staff                  Staff[]
   staffAttendance        StaffAttendance[]
   leaveApplications      LeaveApplication[]
+  leaveTypeDefs          LeaveTypeDef[]
+  leaveAllocations       LeaveAllocation[]
   pushTokens             PushToken[]
   holidays               Holiday[]
   blogPosts              BlogPost[]
@@ -602,6 +604,7 @@ model AcademicYear {
   school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSections  ClassSection[]
   timetableSlots TimetableSlot[]
+  leaveAllocations LeaveAllocation[]
 
   @@unique([schoolId, name])
   @@index([schoolId])
@@ -846,6 +849,10 @@ model LeaveApplication {
   schoolId     String      @db.Uuid
   teacherId    String      @db.Uuid
   type         LeaveType
+  /// The school's own leave-type row this application counts against.
+  /// Null on rows from before the policy feature (and on types the school
+  /// never configured) — those resolve through `type` instead.
+  typeDefId    String?     @db.Uuid
   startDate    DateTime    @db.Date
   endDate      DateTime    @db.Date
   reason       String?
@@ -854,9 +861,61 @@ model LeaveApplication {
   reviewedAt   DateTime?
   createdAt    DateTime    @default(now())
   school       School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  typeDef      LeaveTypeDef? @relation(fields: [typeDefId], references: [id], onDelete: SetNull)
 
   @@index([schoolId, status])
   @@index([schoolId, teacherId])
+}
+
+/// A school's own leave vocabulary — quota and carry-forward policy live
+/// here. Seeded from the five built-in `LeaveType` values the first time the
+/// school opens its policy, so existing applications map 1:1; a school can
+/// add custom types beyond them. No RLS — `schoolId` filters are load-bearing,
+/// same as LeaveApplication.
+model LeaveTypeDef {
+  id              String     @id @default(uuid()) @db.Uuid
+  schoolId        String     @db.Uuid
+  name            String
+  /// The built-in enum value this row mirrors — null for a custom type.
+  builtin         LeaveType?
+  isPaid          Boolean    @default(true)
+  /// Days per year that "apply defaults to everyone" grants. 0 = the type
+  /// exists but carries no standing quota (e.g. Unpaid).
+  defaultAnnual   Int        @default(0)
+  /// Max unused days that survive a year close into the next year. 0 = lapse.
+  carryForwardCap Int        @default(0)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  school          School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  allocations     LeaveAllocation[]
+  applications    LeaveApplication[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, builtin])
+  @@index([schoolId])
+}
+
+/// One teacher's grant of one leave type for one academic year. `used` is
+/// deliberately NOT a column — it is derived from APPROVED applications at
+/// read time, so a cancelled leave refunds itself and the figures cannot
+/// drift. `teacherId` is a plain uuid joined in JS, the Substitution pattern.
+model LeaveAllocation {
+  id             String       @id @default(uuid()) @db.Uuid
+  schoolId       String       @db.Uuid
+  teacherId      String       @db.Uuid
+  typeDefId      String       @db.Uuid
+  academicYearId String       @db.Uuid
+  allotted       Int          @default(0)
+  /// Days carried in from the previous year's unused balance at year close.
+  carriedIn      Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  typeDef        LeaveTypeDef @relation(fields: [typeDefId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, teacherId, typeDefId, academicYearId])
+  @@index([schoolId, academicYearId])
 }
 
 model Exam {

@@ -23,6 +23,10 @@ export type ErrorCode =
   | 'LEAVE_NOT_CANCELLABLE'
   /** Caller is neither the owning teacher nor a SCHOOL_ADMIN — pair with 403. */
   | 'LEAVE_CANCEL_FORBIDDEN'
+  /** A LeaveTypeDef with that name already exists for this school — pair with 409. */
+  | 'LEAVE_TYPE_EXISTS'
+  /** Leave policy needs an academic year and the school has none current — pair with 404. */
+  | 'NO_ACADEMIC_YEAR'
   /** A TEACHER targeted a class section they do not teach — pair with 403. */
   | 'CLASS_NOT_OWNED'
   /** Caller has no linked Student record — e.g. a non-student login hitting /me/messages. Pair with 404. */
