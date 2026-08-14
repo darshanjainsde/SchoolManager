@@ -100,6 +100,9 @@ export default function PortalAttendancePage() {
 
   // Looking further ahead than the current month can only ever show blanks.
   const atLatestMonth = month >= thisMonth;
+  // …and walking back past the student's registration month (or first
+  // recorded mark — the server sends the earlier as the floor) can too.
+  const atEarliestMonth = !!data?.earliestMonth && month <= data.earliestMonth;
 
   const cells: (number | null)[] = [
     ...Array.from({ length: leadingBlanks(month) }, () => null),
@@ -118,6 +121,7 @@ export default function PortalAttendancePage() {
         <button
           type="button"
           onClick={() => setMonth((m) => shiftMonth(m, -1))}
+          disabled={atEarliestMonth}
           aria-label="Previous month"
           className="sk-btn"
         >

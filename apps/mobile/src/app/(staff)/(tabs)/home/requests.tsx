@@ -9,8 +9,9 @@ import type {
 } from '@skoolos/types';
 import { LEAVE_TYPES } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { shiftISO, todayISO } from '@/lib/attendance';
+import { todayISO } from '@/lib/attendance';
 import { Card, Empty, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { CalendarSheet } from '@/components/CalendarSheet';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
@@ -258,9 +259,18 @@ export default function Requests() {
   const [applySubmitting, setApplySubmitting] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applySuccess, setApplySuccess] = useState(false);
+  // Which calendar sheet is up — the From or the To field's.
+  const [pickerFor, setPickerFor] = useState<'from' | 'to' | null>(null);
 
   const dateOrderInvalid = endDate < startDate;
   const canApply = !dateOrderInvalid && !applySubmitting;
+
+  function pickStartDate(iso: string) {
+    setStartDate(iso);
+    // A From moved past the To drags the To along — the calendar never
+    // leaves the range inverted.
+    setEndDate((e) => (e < iso ? iso : e));
+  }
 
   async function submitApply() {
     if (!canApply) return;
@@ -312,34 +322,40 @@ export default function Requests() {
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={labelStyle}>From</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Pressable testID="apply-from-prev" onPress={() => setStartDate((d) => shiftISO(d, -1))}>
-              <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>‹</Text>
-            </Pressable>
-            <Text testID="apply-from-date" style={{ fontSize: 12.5, color: tokens.color.ink, minWidth: 84, textAlign: 'center' }}>
-              {startDate}
-            </Text>
-            <Pressable testID="apply-from-next" onPress={() => setStartDate((d) => shiftISO(d, 1))}>
-              <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>›</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={labelStyle}>To</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Pressable testID="apply-to-prev" onPress={() => setEndDate((d) => shiftISO(d, -1))}>
-              <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>‹</Text>
-            </Pressable>
-            <Text testID="apply-to-date" style={{ fontSize: 12.5, color: tokens.color.ink, minWidth: 84, textAlign: 'center' }}>
-              {endDate}
-            </Text>
-            <Pressable testID="apply-to-next" onPress={() => setEndDate((d) => shiftISO(d, 1))}>
-              <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>›</Text>
-            </Pressable>
-          </View>
+        {/* Tapping either date opens a month calendar — the old ‹ › steppers
+            took a tap per day and never showed which weekday anything fell on. */}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(
+            [
+              { key: 'from' as const, label: 'From', value: startDate, testID: 'apply-from-date' },
+              { key: 'to' as const, label: 'To', value: endDate, testID: 'apply-to-date' },
+            ]
+          ).map((f) => (
+            <View key={f.key} style={{ flex: 1 }}>
+              <Text style={[labelStyle, { marginBottom: 6 }]}>{f.label}</Text>
+              <Pressable
+                testID={f.testID}
+                accessibilityRole="button"
+                accessibilityLabel={`${f.label} date: ${f.value}. Opens a calendar.`}
+                disabled={applySubmitting}
+                onPress={() => setPickerFor(f.key)}
+                style={{
+                  borderWidth: 1,
+                  borderColor: tokens.color.line,
+                  borderRadius: 10,
+                  backgroundColor: tokens.color.surface,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={{ fontSize: 12.5, color: tokens.color.ink }}>{formatDateOnly(f.value)}</Text>
+                <Text style={{ fontSize: 12, color: tokens.color.indigo, fontWeight: '700' }}>▾</Text>
+              </Pressable>
+            </View>
+          ))}
         </View>
 
         {dateOrderInvalid && (
@@ -347,6 +363,22 @@ export default function Requests() {
             The end date must be on or after the start date.
           </Text>
         )}
+
+        <CalendarSheet
+          open={pickerFor === 'from'}
+          title="Leave starts"
+          value={startDate}
+          onPick={pickStartDate}
+          onClose={() => setPickerFor(null)}
+        />
+        <CalendarSheet
+          open={pickerFor === 'to'}
+          title="Leave ends"
+          value={endDate}
+          minDate={startDate}
+          onPick={setEndDate}
+          onClose={() => setPickerFor(null)}
+        />
 
         <View>
           <Text style={[labelStyle, { marginBottom: 6 }]}>Reason (optional)</Text>

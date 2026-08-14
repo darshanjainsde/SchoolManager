@@ -3,7 +3,7 @@ import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import type { LeaveApplication, RegisterChangeRow } from '@skoolos/types';
 import Requests from '../(tabs)/home/requests';
 import { api, ApiError } from '@/lib/api';
-import { todayISO } from '@/lib/attendance';
+import { shiftISO, todayISO } from '@/lib/attendance';
 
 jest.mock('expo-router', () => ({
   // Test env has no NavigationContainer, so mimic focus-on-mount/refetch:
@@ -317,17 +317,24 @@ it('the reverse partial failure also holds: register data survives a failed leav
 
 // ── Apply-for-leave form ─────────────────────────────────────────────────
 
-it('end-before-start is blocked client-side and no request is fired', async () => {
+it('the To calendar floors at the chosen From — a day before it is unpickable', async () => {
   mockApi({ leave: [], register: [] });
-  const { findByTestId, findByText } = render(<Requests />);
+  const { findByTestId } = render(<Requests />);
 
   await findByTestId('apply-submit');
 
-  // Both default to today; pushing "to" one day earlier puts it before "from".
-  fireEvent.press(await findByTestId('apply-to-prev'));
-  expect(await findByText(/end date must be on or after/i)).toBeTruthy();
-
-  fireEvent.press(await findByTestId('apply-submit'));
+  // Open the To picker: both dates default to today, so yesterday's cell
+  // (when it's in the shown month) must be disabled.
+  fireEvent.press(await findByTestId('apply-to-date'));
+  const yesterday = shiftISO(TODAY, -1);
+  if (yesterday.slice(0, 7) === TODAY.slice(0, 7)) {
+    const cell = await findByTestId(`calendar-day-${yesterday}`);
+    expect(cell.props.accessibilityState?.disabled).toBe(true);
+    // A press on the dead cell must not move the To date or fire anything.
+    fireEvent.press(cell);
+  }
+  const todayCell = await findByTestId(`calendar-day-${TODAY}`);
+  expect(todayCell.props.accessibilityState?.disabled).toBe(false);
 
   await waitFor(() =>
     expect(
@@ -336,6 +343,33 @@ it('end-before-start is blocked client-side and no request is fired', async () =
       ),
     ).toHaveLength(0),
   );
+});
+
+it('picking a From beyond the To drags the To forward — the range never inverts', async () => {
+  mockApi({ leave: [], register: [], postResult: leaveRow({ id: 'lv-range' }) });
+  const { findByTestId } = render(<Requests />);
+
+  await findByTestId('apply-submit');
+
+  // From ← tomorrow, via the calendar (To still sits on today).
+  fireEvent.press(await findByTestId('apply-from-date'));
+  const tomorrow = shiftISO(TODAY, 1);
+  if (tomorrow.slice(0, 7) !== TODAY.slice(0, 7)) {
+    // Tomorrow spills into next month: page the calendar forward first.
+    fireEvent.press(await findByTestId('calendar-next-month'));
+  }
+  fireEvent.press(await findByTestId(`calendar-day-${tomorrow}`));
+
+  fireEvent.press(await findByTestId('apply-submit'));
+
+  await waitFor(() => {
+    const postCall = (api.request as jest.Mock).mock.calls.find(
+      ([p, o]: [string, { method?: string }?]) => p === '/manage/leave' && o?.method === 'POST',
+    );
+    expect(postCall).toBeTruthy();
+    // Both dates moved to tomorrow — never endDate < startDate.
+    expect(postCall[1].body).toMatchObject({ startDate: tomorrow, endDate: tomorrow });
+  });
 });
 
 it('a whitespace-only reason is sent as undefined, not an empty string', async () => {

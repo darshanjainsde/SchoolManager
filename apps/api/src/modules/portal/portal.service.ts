@@ -288,13 +288,26 @@ export class PortalService {
     const s = await this.myStudent(schoolId, userId);
     if (!s) throw new NotFoundException('No student record for this login');
 
-    const rows = await withTenant(schoolId, (tx) =>
-      tx.attendance.findMany({
-        where: { schoolId, studentId: s.id, date: { gte: start, lt: end } },
-        orderBy: { date: 'asc' },
-        select: { date: true, status: true },
-      }),
+    const [rows, firstMark] = await withTenant(schoolId, (tx) =>
+      Promise.all([
+        tx.attendance.findMany({
+          where: { schoolId, studentId: s.id, date: { gte: start, lt: end } },
+          orderBy: { date: 'asc' },
+          select: { date: true, status: true },
+        }),
+        tx.attendance.aggregate({
+          where: { schoolId, studentId: s.id },
+          _min: { date: true },
+        }),
+      ]),
     );
+
+    // The month floor the client may walk back to: registration month, or the
+    // first recorded mark if imported data predates the row's createdAt.
+    const registeredMonth = IST_DAY_FORMATTER.format(s.createdAt).slice(0, 7);
+    const firstMarkMonth = firstMark._min.date ? toDateKey(firstMark._min.date).slice(0, 7) : null;
+    const earliestMonth =
+      firstMarkMonth && firstMarkMonth < registeredMonth ? firstMarkMonth : registeredMonth;
 
     let present = 0;
     let absent = 0;
@@ -311,6 +324,7 @@ export class PortalService {
 
     return {
       month: monthKey,
+      earliestMonth,
       percent,
       present,
       absent,

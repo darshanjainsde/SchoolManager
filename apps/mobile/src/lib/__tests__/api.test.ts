@@ -30,6 +30,19 @@ it('attaches tenant host and bearer token', async () => {
   expect(init.headers['Authorization']).toBe('Bearer at1');
 });
 
+// A DELETE that succeeds answers 204 No Content. res.json() on an empty body
+// throws, which used to surface as "Could not remove that entry." AFTER the
+// server had already deleted the row — a false failure.
+it('resolves a 204 No Content without trying to parse a body', async () => {
+  await seed();
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    status: 204,
+    json: async () => { throw new SyntaxError('Unexpected end of JSON input'); },
+  });
+  await expect(api.request('/manage/diary/some-id', { method: 'DELETE' })).resolves.toBeUndefined();
+});
+
 it('refreshes once on 401 then retries', async () => {
   await seed();
   mockFetch

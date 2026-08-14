@@ -22,17 +22,22 @@ import { NextResponse, type NextRequest } from 'next/server';
  * follow-up rather than pretended-at here.
  */
 export function middleware(req: NextRequest) {
+  // Dev-only relaxations, all no-ops in production builds: next dev's runtime
+  // evaluates modules with eval (react-refresh dies without 'unsafe-eval' and
+  // the page never hydrates — verified in a browser, the consoles render dead
+  // HTML), local APIs move ports per worktree, and local minio serves images
+  // over plain http.
+  const dev = process.env.NODE_ENV === 'development';
   const csp = [
     `default-src 'self'`,
-    `script-src 'self' 'unsafe-inline'`,
+    `script-src 'self' 'unsafe-inline'${dev ? ` 'unsafe-eval'` : ''}`,
     // Tailwind/styled-jsx inject style tags at runtime; style hashes are not
     // workable here, and CSS injection is a far weaker vector than script.
     `style-src 'self' 'unsafe-inline'`,
     // School logos, staff photos and gallery images are operator-supplied
     // URLs on hosts we do not control.
-    `img-src 'self' data: blob: https:`,
-    `font-src 'self' data:`,
-    `connect-src 'self' https://api.sckools.com https://api.test.sckools.com http://127.0.0.1:3001 http://localhost:3001`,
+    `img-src 'self' data: blob: https:${dev ? ' http:' : ''}`,
+    `connect-src 'self' https://api.sckools.com https://api.test.sckools.com http://127.0.0.1:3001 http://localhost:3001${dev ? ' http://127.0.0.1:* http://localhost:*' : ''}`,
     // Contact pages embed a Google Maps iframe.
     `frame-src https://www.google.com https://maps.google.com`,
     `frame-ancestors 'self' https://sckools.com https://*.sckools.com`,

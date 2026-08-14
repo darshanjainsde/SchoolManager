@@ -137,15 +137,23 @@ function LegendKey({ bg, border, label }: { bg: string; border?: string; label: 
  */
 function MonthNav({
   month,
+  earliestMonth,
   onPrev,
   onNext,
 }: {
   month: string;
+  /** `YYYY-MM` floor from the server — the student's registration month.
+      Undefined (older API) means no floor, the pre-clamp behaviour. */
+  earliestMonth?: string;
   onPrev: () => void;
   onNext: () => void;
 }) {
   const tokens = useTokens();
   const atLatestMonth = month >= currentMonthKey();
+  // A month before the student existed can only ever show blank paper —
+  // walking back stops at the month they were registered (or their first
+  // recorded mark, whichever is earlier; the server sends the floor).
+  const atEarliestMonth = !!earliestMonth && month <= earliestMonth;
   const arrow = {
     borderWidth: 1,
     borderColor: tokens.color.line,
@@ -160,8 +168,10 @@ function MonthNav({
         testID="attendance-prev-month"
         accessibilityRole="button"
         accessibilityLabel="Previous month"
+        accessibilityState={{ disabled: atEarliestMonth }}
+        disabled={atEarliestMonth}
         onPress={onPrev}
-        style={arrow}
+        style={[arrow, { opacity: atEarliestMonth ? 0.4 : 1 }]}
       >
         <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink2 }}>‹ Prev</Text>
       </Pressable>
@@ -249,6 +259,9 @@ export default function Attendance() {
   function prevMonth() {
     const current = monthRef.current;
     if (!current) return;
+    // Mirrors the disabled arrow — belt and braces against a stale press.
+    const floor = summary?.earliestMonth;
+    if (floor && current <= floor) return;
     load(shiftMonthKey(current, -1));
   }
 
@@ -274,7 +287,12 @@ export default function Attendance() {
       )}
       {summary && month && (
         <>
-          <MonthNav month={month} onPrev={prevMonth} onNext={nextMonth} />
+          <MonthNav
+            month={month}
+            earliestMonth={summary.earliestMonth}
+            onPrev={prevMonth}
+            onNext={nextMonth}
+          />
 
           {/* The pitch's `.page .attwrap`: one sheet holding the figure, the
               rule it draws, and the month itself. */}
