@@ -34,6 +34,22 @@ const schema = z.object({
   CRON_SECRET: z.string().optional(),
 
   /**
+   * Bearer secret for `/internal/provisioning/*`, which CREATES a school's
+   * library.
+   *
+   * Deliberately NOT reusing `CRON_SECRET`. A cron secret authorises a periodic
+   * sweep; this authorises calling an org into existence for an arbitrary
+   * `schoolId`. Sharing one value would mean the scheduler's credential — which
+   * lives in a platform config and is handed to a third party's scheduler —
+   * also grants org creation. Separate secrets keep the blast radii separate.
+   *
+   * Optional in the schema, but the guard fails CLOSED when it is unset: an
+   * absent secret must never leave org creation open. (The library's outbox
+   * sweep once did exactly that, which is why this is spelled out.)
+   */
+  PROVISIONING_SECRET: z.string().optional(),
+
+  /**
    * The PUBLIC key Sckools signs its tokens with (RS256, PEM).
    *
    * Public deliberately, not a shared secret. A shared HMAC secret would mean a

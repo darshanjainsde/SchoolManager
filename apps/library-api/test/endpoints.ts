@@ -16,11 +16,27 @@ const WRITERS: Role[] = ['ORG_OWNER', 'LIBRARIAN'];
 const READERS: Role[] = ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'];
 
 export const ENDPOINTS: EndpointSpec[] = [
-  // The nightly outbox sweep. Anonymous by nature — a Vercel cron carries no
-  // tenant host, no session and no user — and protected by a bearer CRON_SECRET
-  // inside the handler instead. Listed here so the "covers every registered
-  // route" check stays exhaustive rather than silently skipping it.
-  { method: 'GET', path: '/internal/cron/notification-outbox', roles: [], anonymous: true },
+  // ── Machine-only routes: `anonymous: false` with NO roles ────────────────
+  // A Vercel cron (or the platform calling provisioning) carries no tenant
+  // host, no session and no user, so no ROLE may reach these — they are
+  // authorised by a bearer secret inside the handler instead. `anonymous:
+  // false` + `roles: []` is exactly that claim: every role is denied, and the
+  // no-bearer and cross-tenant checks below apply too.
+  //
+  // These were `anonymous: true` until 2026-08-14, which asserts the opposite —
+  // "no role is denied". That was TRUE at the time only because the handler
+  // read `if (secret && ...)`, so an unset CRON_SECRET (which was the state in
+  // every environment) left the route open to anyone. The matrix was therefore
+  // encoding a vulnerability as the expected behaviour, and would have gone red
+  // if anybody had fixed it — which is how it was found.
+  { method: 'GET', path: '/internal/cron/notification-outbox', roles: [], anonymous: false },
+
+  // Provisioning CREATES a school's library. No role may call it; the platform
+  // authorises with PROVISIONING_SECRET, deliberately a different value from
+  // CRON_SECRET so a scheduler's credential cannot create orgs.
+  { method: 'POST', path: '/internal/provisioning', roles: [], anonymous: false,
+    body: { schoolId: '00000000-0000-4000-8000-000000000000', slug: 'nope', name: 'nope' } },
+  { method: 'GET', path: '/internal/provisioning/ready/:schoolId', roles: [], anonymous: false },
   { method: 'GET', path: '/live', roles: [], anonymous: true },
   { method: 'GET', path: '/ready', roles: [], anonymous: true },
   { method: 'POST', path: '/auth/login', roles: [], anonymous: true, body: { identifier: 'x@y.z', password: 'nope' } },

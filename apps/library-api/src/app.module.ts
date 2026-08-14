@@ -9,6 +9,7 @@ import { CatalogModule } from './modules/catalog';
 import { CirculationModule } from './modules/circulation';
 import { SearchModule } from './modules/search';
 import { PeriodsModule } from './modules/periods';
+import { ProvisioningModule } from './modules/provisioning';
 import { MeModule } from './modules/me';
 import { RegisterModule } from './modules/register';
 import { InternalCronModule } from './internal-cron/internal-cron.module';
@@ -67,6 +68,7 @@ import { IdempotencyModule } from './common/idempotency/idempotency.module';
     CirculationModule,
     SearchModule,
     PeriodsModule,
+    ProvisioningModule,
     MeModule,
     RegisterModule,
     InternalCronModule,
