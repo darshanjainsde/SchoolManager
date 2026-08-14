@@ -1,6 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Prisma, type LibraryTx, type MemberType } from '@library/db';
-import type { Policy } from './policy';
+import type { Policy } from '@library/core';
 
 /** `Prisma.Decimal | null` (a nullable money/rate column) -> plain `number | null`, never a string. */
 function decimalToNullableNumber(value: Prisma.Decimal | null): number | null {

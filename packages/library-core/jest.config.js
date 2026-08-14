@@ -3,11 +3,9 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   rootDir: 'src',
-  setupFiles: ['<rootDir>/../test/env.setup.js'],
   testRegex: '.*\\.spec\\.ts$',
+  // `\s\d+\.spec\.ts` — iCloud drops "foo 2.spec.ts" conflict copies into the
+  // tree; running them means running a stale duplicate of a test that has
+  // since changed. Same ignore as @library/api and @library/db.
   testPathIgnorePatterns: ['/node_modules/', '\\s\\d+\\.spec\\.ts$'],
-  moduleNameMapper: {
-    '^@library/db$': '<rootDir>/../../../packages/library-db/src',
-    '^@library/core$': '<rootDir>/../../../packages/library-core/src',
-  },
 };

@@ -3,7 +3,7 @@ import { Prisma, type Reservation, type Issue, type LibraryTx } from '@library/d
 import { assertQuota } from '../../plans';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import { loadPolicy } from './policy-loader';
-import { evaluateRenew, reservationState, type ReservationStatusValue, type RenewDenial } from './policy';
+import { evaluateRenew, reservationState, type ReservationStatusValue, type RenewDenial } from '@library/core';
 import type { CreateReservationDto, ListReservationsQueryDto, RenewBookDto } from './dto';
 import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
 

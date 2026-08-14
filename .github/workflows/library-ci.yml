@@ -37,6 +37,10 @@ on:
       # the paths filter includes the files that define the guarantee).
       - 'apps/library-web/**'
       - 'packages/library-db/**'
+      # @library/core holds the pure circulation policy engine — the one answer
+      # to "can this be issued / what does this cost". A change there with no
+      # library-api change would otherwise run zero CI (trap 9).
+      - 'packages/library-core/**'
       - '.github/workflows/library-ci.yml'
       - '.dependency-cruiser.library.cjs'
       - 'scripts/library-db-init.sql'
@@ -53,6 +57,10 @@ on:
       # the paths filter includes the files that define the guarantee).
       - 'apps/library-web/**'
       - 'packages/library-db/**'
+      # @library/core holds the pure circulation policy engine — the one answer
+      # to "can this be issued / what does this cost". A change there with no
+      # library-api change would otherwise run zero CI (trap 9).
+      - 'packages/library-core/**'
       - '.github/workflows/library-ci.yml'
       - '.dependency-cruiser.library.cjs'
       - 'scripts/library-db-init.sql'
@@ -146,7 +154,7 @@ jobs:
       # of the scan.
       - name: Module boundary (no cross-module reach-in, no Sckools imports)
         run: >-
-          pnpm exec depcruise apps/library-api apps/library-web packages/library-db
+          pnpm exec depcruise apps/library-api apps/library-web packages/library-db packages/library-core
           --config .dependency-cruiser.library.cjs
 
       - name: Build

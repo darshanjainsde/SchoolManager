@@ -6,7 +6,7 @@ import {
 } from '../../../common/replacement-price';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import type { ReportLostDto } from './dto';
-import { computeFine } from './policy';
+import { computeFine } from '@library/core';
 import { loadPolicy } from './policy-loader';
 
 export interface ReportLostResult {

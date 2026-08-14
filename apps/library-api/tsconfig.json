@@ -5,6 +5,11 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true
   },
-  "include": ["src/**/*.ts", "server.ts", "../../packages/library-db/src/**/*"],
+  "include": [
+    "src/**/*.ts",
+    "server.ts",
+    "../../packages/library-db/src/**/*",
+    "../../packages/library-core/src/**/*"
+  ],
   "exclude": ["node_modules", "dist", "api"]
 }

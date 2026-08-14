@@ -10,7 +10,7 @@ import {
   nextReservationToPromote,
   type IssueDenial,
   type Reservation as PolicyHold,
-} from './policy';
+} from '@library/core';
 import type { IssueBookDto, ReturnBookDto } from './dto';
 
 /**
