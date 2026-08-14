@@ -22,6 +22,7 @@ import { CommunityModule } from './modules/community';
 import { HiringModule } from './modules/hiring';
 import { PublicModule } from './modules/public';
 import { PortalModule } from './modules/portal';
+import { LibraryModule } from './modules/library';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
@@ -68,6 +69,7 @@ import { BlogModule } from './modules/blog';
     HiringModule,
     PublicModule,
     PortalModule,
+    LibraryModule,
     DirectoryModule,
     MarketingModule,
     BlogModule,
