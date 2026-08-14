@@ -148,6 +148,15 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/me/history', roles: ALL_STAFF },
   { method: 'GET', path: '/me/availability/:titleId', roles: ALL_STAFF },
 
+  // P5 — the accession register, stock take, weeding. MEMBER is denied
+  // throughout: the register carries what the school paid for every copy, which
+  // is an auditor's document rather than a reader's. Weeding is WRITERS —
+  // removing a book nobody complained about is not desk work.
+  { method: 'GET',  path: '/register', roles: READERS },
+  { method: 'POST', path: '/register/stock-take', roles: READERS, body: { found: '1001-1002' } },
+  { method: 'POST', path: '/register/stock-take/unaccounted', roles: READERS, body: { found: '1001' } },
+  { method: 'POST', path: '/register/weed/:copyId', roles: WRITERS, body: { reason: 'probe', approvedByNote: 'probe' } },
+
   // Phase 2c — the library period. Setting the timetable and the room's capacity
   // is configuration (WRITERS); opening a visit and ticking a child present is
   // counter work, so ASSISTANT can do it. MEMBER is denied throughout — a child

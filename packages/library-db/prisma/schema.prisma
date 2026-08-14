@@ -205,6 +205,7 @@ model LibUser {
   lostConfirmed  LostReport[]  @relation("LostReportConfirmedBy")
   lostSettled    LostReport[]  @relation("LostReportSettledBy")
   lostRefunded   LostReport[]  @relation("LostReportRefundedBy")
+  copiesWithdrawn Copy[]       @relation("CopyWithdrawnBy")
 
   @@unique([orgId, email])
   @@unique([orgId, phone])
@@ -512,6 +513,28 @@ model Copy {
   condition       CopyCondition @default(GOOD)
   acquiredAt      DateTime?
   acquisitionCost Decimal?      @db.Decimal(10, 2)
+
+  /// The accession register's remaining canonical columns. All nullable: a
+  /// school typing up four thousand existing books has no bill number for a
+  /// 1994 donation, and refusing the row for that sends them back to the paper
+  /// register. `source` is free text (Purchase / Donation / Replacement /
+  /// Transfer …) because the list differs by state board and an enum would need
+  /// a migration every time a school wrote something reasonable.
+  source          String?
+  billNumber      String?
+  volume          String?
+  remarks         String?
+
+  /// Weeding. `WITHDRAWN` already existed as a status with nothing recording
+  /// the circumstances, so a deliberately removed book was indistinguishable
+  /// from a data error. A CHECK ties the date to the reason.
+  withdrawnAt             DateTime?
+  withdrawnReason         String?
+  withdrawnByUserId       String?      @db.Uuid
+  /// The human who authorised it, in words — same reasoning as a write-off's
+  /// `approvedByNote`: there is no principal role to gate on.
+  withdrawnApprovedByNote String?
+
   status          CopyStatus    @default(AVAILABLE)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -526,12 +549,17 @@ model Copy {
   issues Issue[]
   reservations Reservation[]     @relation("ReservationReadyCopy")
   lostReports  LostReport[]
+  withdrawnBy  LibUser?          @relation("CopyWithdrawnBy", fields: [withdrawnByUserId], references: [id], onDelete: SetNull)
 
   @@unique([orgId, accessionNumber])
   @@index([titleId, status])
   @@index([orgId, branchId, status])
   /// FK index — see 20260814090000_index_foreign_keys.
   @@index([branchId])
+  @@index([withdrawnByUserId])
+  /// The register is read in accession order, per branch, and only ever in that
+  /// order — it is a chronological ledger, not a catalogue.
+  @@index([orgId, branchId, accessionNumber])
 }
 
 enum IssueStatus {
