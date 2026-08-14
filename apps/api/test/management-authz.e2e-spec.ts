@@ -268,6 +268,7 @@ describe('management authorization', () => {
       '/manage/library/not-returned',
       '/manage/library/day',
       '/manage/library/status',
+      '/manage/library/next-numbers',
     ];
 
     it.each(deskRoutes)('a STUDENT cannot reach %s', async (route) => {
@@ -300,6 +301,7 @@ describe('management authorization', () => {
       // Nudge writes into other people's inboxes. A student reaching it could
       // message every class teacher in the school.
       ['/manage/library/nudge', { classRefs: ['6-B'] }],
+      ['/manage/library/books', { title: 'X', accessionNumbers: ['9001'] }],
     ];
 
     it.each(deskWrites)('a STUDENT cannot POST %s', async (route, body) => {

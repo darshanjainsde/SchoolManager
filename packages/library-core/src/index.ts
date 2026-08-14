@@ -54,6 +54,8 @@ export type {
 /* --- the write paths (see the layer note above) --- */
 export { issue, returnBook } from './circulation/issues';
 export type { IssueBookInput, ReturnBookInput, IssueResult, ReturnResult } from './circulation/issues';
+export { addBook, suggestNextAccessionNumbers } from './catalogue/add-book';
+export type { AddBookInput, AddBookResult } from './catalogue/add-book';
 export { recordDamage } from './circulation/damage';
 export type { RecordDamageInput, RecordDamageResult } from './circulation/damage';
 export { voidIssue } from './circulation/void';

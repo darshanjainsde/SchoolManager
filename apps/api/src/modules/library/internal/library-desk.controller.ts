@@ -9,7 +9,9 @@ import { LibraryOrgService } from './library-org.service';
 import { LibraryDeskService } from './library-desk.service';
 import {
   AccessionNumberDto,
+  AddBookDto,
   DeskDayQueryDto,
+  NextNumbersQueryDto,
   IssueAtDeskDto,
   NudgeClassTeachersDto,
   RecordDamageDto,
@@ -70,6 +72,26 @@ export class LibraryDeskController {
   @Post('issue')
   async issue(@CurrentUser() user: SchoolJwtPayload, @Body() dto: IssueAtDeskDto) {
     return this.desk.issueBook(await this.orgId(user), dto.accessionNumber, dto.memberId, user.sub);
+  }
+
+  /**
+   * Add a book and its copies — the counter's quick-add, not the catalogue
+   * editor. Sets no price: seeding `Title.replacementPrice` is a money rule
+   * that lives on the screen built for it.
+   */
+  @Post('books')
+  async addBook(@CurrentUser() user: SchoolJwtPayload, @Body() dto: AddBookDto) {
+    return this.desk.addBook(
+      await this.orgId(user),
+      { title: dto.title, author: dto.author ?? null, accessionNumbers: dto.accessionNumbers },
+      user.sub,
+    );
+  }
+
+  /** What the next numbers would be. `[]` when this register cannot be read that way. */
+  @Get('next-numbers')
+  async nextNumbers(@CurrentUser() user: SchoolJwtPayload, @Query() query: NextNumbersQueryDto) {
+    return this.desk.nextNumbers(await this.orgId(user), query.count ?? 3);
   }
 
   /**

@@ -100,6 +100,46 @@ export default function LibraryCounterPage(): React.JSX.Element {
 
   const deskBusy = takeBack.isPending || giveOut.isPending;
 
+  // ── Add a book ───────────────────────────────────────────────────────────
+  const [adding, setAdding] = useState(false);
+  const [bookTitle, setBookTitle] = useState('');
+  const [bookAuthor, setBookAuthor] = useState('');
+  const [copyCount, setCopyCount] = useState(1);
+  const [numbers, setNumbers] = useState('');
+  const [added, setAdded] = useState<string | null>(null);
+
+  // Suggestions, not assignments. Empty for a fresh register or a scheme the
+  // server cannot read — she types her own, which is what she does today.
+
+  const addBook = useMutation({
+    mutationFn: (body: { title: string; author?: string; accessionNumbers: string[] }) =>
+      api.post<{ title: string; copies: Array<{ accessionNumber: string }> }>(
+        '/manage/library/books',
+        body,
+      ),
+    onSuccess: (r) => {
+      const written = r.copies.map((c) => c.accessionNumber).join(', ');
+      // Tells her what to WRITE, because the number only means anything once
+      // it is inside the front cover.
+      setAdded(`Added. Write ${written} inside the front cover${r.copies.length > 1 ? 's' : ''}.`);
+      setAdding(false);
+      setBookTitle('');
+      setBookAuthor('');
+      setNumbers('');
+      refreshDesk();
+    },
+    onError: (e: Error) => setDeskError(e.message),
+  });
+
+  /** The numbers she will actually use: what she typed, else the suggestion. */
+  function numbersToSubmit(): string[] {
+    const typed = numbers
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean);
+    return typed.length > 0 ? typed : (suggested.data ?? []);
+  }
+
   // ── Nudge ────────────────────────────────────────────────────────────────
   const [nudged, setNudged] = useState<string | null>(null);
   const nudge = useMutation({
@@ -198,6 +238,17 @@ export default function LibraryCounterPage(): React.JSX.Element {
     queryFn: () => api.get<LibraryStatus>('/manage/library/status'),
   });
 
+  // Declared after `status` because it depends on it: the empty-shelves state
+  // renders the add form unconditionally, so the suggestion must load there
+  // too. Everywhere else it waits until she opens the form — the query is a
+  // MAX() with a regex filter over every copy, and there is no reason to pay
+  // for it on a page load where she is issuing books.
+  const suggested = useQuery({
+    queryKey: ['library-desk', 'next-numbers', copyCount],
+    enabled: adding || status.data?.copies === 0,
+    queryFn: () => api.get<string[]>(`/manage/library/next-numbers?count=${copyCount}`),
+  });
+
   const enrol = useMutation({
     mutationFn: () => api.post<EnrolmentReport>('/manage/library/enrol', {}),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['library-desk'] }),
@@ -227,6 +278,86 @@ export default function LibraryCounterPage(): React.JSX.Element {
     queryKey: ['library-desk', 'not-returned'],
     queryFn: () => api.get<NotReturnedRow[]>('/manage/library/not-returned'),
   });
+
+  /**
+   * The same form in two places — the empty-shelves state, where it IS the
+   * page, and behind a quiet button once she is running. One definition, so
+   * the two cannot drift into asking for different things.
+   */
+  function addBookForm(): React.JSX.Element {
+    const willUse = numbersToSubmit();
+    return (
+      <div className="sk-desk-receipt" data-tone="calm">
+        <input
+          className="sk-lib-search"
+          value={bookTitle}
+          onChange={(e) => setBookTitle(e.target.value)}
+          placeholder="Name of the book"
+          aria-label="Name of the book"
+        />
+        <input
+          className="sk-lib-search"
+          value={bookAuthor}
+          onChange={(e) => setBookAuthor(e.target.value)}
+          placeholder="Author (if you want)"
+          aria-label="Author"
+        />
+        <label className="sk-lib-nudge">
+          How many copies{' '}
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={copyCount}
+            onChange={(e) => setCopyCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+            aria-label="How many copies"
+            style={{ width: 64 }}
+          />
+        </label>
+        <input
+          className="sk-lib-search"
+          value={numbers}
+          onChange={(e) => setNumbers(e.target.value)}
+          placeholder={
+            suggested.data && suggested.data.length > 0
+              ? suggested.data.join(', ')
+              : 'Book numbers, separated by commas'
+          }
+          aria-label="Book numbers"
+        />
+        {suggested.data && suggested.data.length > 0 && !numbers.trim() ? (
+          <span className="sk-lib-nudge">
+            Next free numbers: {suggested.data.join(', ')}. Leave this empty to use them.
+          </span>
+        ) : (
+          <span className="sk-lib-nudge">
+            Type the number written inside each front cover, separated by commas.
+          </span>
+        )}
+        <div className="sk-desk-actions">
+          <button
+            className="sk-btn"
+            data-variant="primary"
+            disabled={addBook.isPending || !bookTitle.trim() || willUse.length === 0}
+            onClick={() =>
+              addBook.mutate({
+                title: bookTitle.trim(),
+                ...(bookAuthor.trim() ? { author: bookAuthor.trim() } : {}),
+                accessionNumbers: willUse,
+              })
+            }
+          >
+            {addBook.isPending ? 'Adding…' : 'Add to the register'}
+          </button>
+          {adding ? (
+            <button className="sk-btn" onClick={() => setAdding(false)}>
+              Cancel
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   if (status.isPending) return <p className="sk-lib-empty">Loading…</p>;
 
@@ -293,6 +424,8 @@ export default function LibraryCounterPage(): React.JSX.Element {
           The counter is hidden rather than greyed out — a field that takes a book number when
           there are no books would only ever answer &ldquo;that number is not in the register&rdquo;.
         </p>
+        {addBookForm()}
+        {added ? <p className="sk-lib-nudge">{added}</p> : null}
       </section>
     );
   }
@@ -309,7 +442,15 @@ export default function LibraryCounterPage(): React.JSX.Element {
       <h1>Library</h1>
       <p className="sk-lib-nudge">
         {status.data?.members} signed up · {status.data?.copies} books in the register
+        {' · '}
+        {/* Quiet in steady state: cataloguing is a weekly burst, not a daily
+            job, and this must never compete with the counter for her eye. */}
+        <button type="button" className="sk-desk-clear" onClick={() => setAdding((v) => !v)}>
+          {adding ? 'Not now' : 'Add a book'}
+        </button>
       </p>
+      {adding ? addBookForm() : null}
+      {added ? <p className="sk-lib-nudge">{added}</p> : null}
 
       {/* ── The counter ────────────────────────────────────────────────────── */}
       <div className="sk-desk-modes" role="group" aria-label="What are you doing?">

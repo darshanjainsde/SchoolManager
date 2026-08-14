@@ -8,7 +8,10 @@ import {
   renew as coreRenew,
   voidIssue as coreVoid,
   recordDamage as coreDamage,
+  addBook as coreAddBook,
+  suggestNextAccessionNumbers,
   type RecordDamageInput,
+  type AddBookInput,
 } from '@library/core';
 
 /**
@@ -245,6 +248,33 @@ export class LibraryDeskService {
       undefined,
       DESK_TX_OPTIONS,
     );
+  }
+
+  /**
+   * Add a book and its copies.
+   *
+   * The whole reason the empty-shelves state can offer a button instead of
+   * sending her to a second console: until one book exists, the counter cannot
+   * open and the children cannot see a Library tab either.
+   */
+  async addBook(orgId: string, input: AddBookInput, actorUserId: string) {
+    return withOrg(
+      orgId,
+      (tx: LibraryTx) => coreAddBook(tx, orgId, input, actorUserId),
+      undefined,
+      DESK_TX_OPTIONS,
+    );
+  }
+
+  /**
+   * What the next numbers would be, if this library numbers plainly.
+   *
+   * Empty is a real answer — for a fresh register, or for any scheme the
+   * suggestion cannot read. She types them instead, which is what she does
+   * today anyway.
+   */
+  async nextNumbers(orgId: string, count: number): Promise<string[]> {
+    return withOrg(orgId, (tx: LibraryTx) => suggestNextAccessionNumbers(tx, orgId, count));
   }
 
   /**

@@ -77,6 +77,37 @@ export class RecordDamageDto extends AccessionNumberDto {
   note!: string;
 }
 
+export class AddBookDto {
+  @IsString()
+  @Length(1, 300)
+  title!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  author?: string;
+
+  /**
+   * Bounded at 50 because this is the counter's quick-add, not the import
+   * path. A crate of 200 textbooks is a CSV job, and a form that pretends
+   * otherwise produces a transaction nobody wants to be inside.
+   */
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  @Length(1, 32, { each: true })
+  accessionNumbers!: string[];
+}
+
+export class NextNumbersQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  count?: number;
+}
+
 export class NudgeClassTeachersDto {
   /**
    * Which classes to nudge, as the librarian's own labels ("6-B").
