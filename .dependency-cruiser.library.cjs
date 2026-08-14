@@ -35,7 +35,12 @@ module.exports = {
       // same `@/` alias habits, so a stray `@skoolos/types` import there is if
       // anything MORE likely than in the API — and it was previously
       // unscanned, so nothing would have said so (trap 9).
-      from: { path: '^(apps/library-api|apps/library-web|packages/library-db)/' },
+      // `packages/library-core` included from the day it existed: it is the
+      // one package BOTH services import (that is its whole purpose), so a
+      // Sckools import landing here would be laundered straight into the
+      // library through a dependency the library is required to have. The
+      // package that is shared is the package that needs this rule most.
+      from: { path: '^(apps/library-api|apps/library-web|packages/(library-db|library-core))/' },
       to: { path: '^(apps/api|apps/web|packages/(db|config|types))/|^@skoolos/' },
     },
   ],
