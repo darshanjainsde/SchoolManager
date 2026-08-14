@@ -29,6 +29,10 @@ export const KIND_ICON: Record<string, string> = {
   REQUEST_DECISION: 'requests',
   DIARY: 'diary',
   ATTENDANCE: 'take',
+  // The app has no library screen yet, so this falls through to the notices
+  // glyph's neighbourhood rather than inventing one — see the mobile library
+  // tab task.
+  LIBRARY: 'assignments',
 };
 
 /**

@@ -297,6 +297,9 @@ describe('management authorization', () => {
       // that says they are holding a book.
       ['/manage/library/undo', { issueId: '00000000-0000-0000-0000-000000000001', reason: 'x' }],
       ['/manage/library/damage', { accessionNumber: '1142', condition: 'POOR', note: 'torn' }],
+      // Nudge writes into other people's inboxes. A student reaching it could
+      // message every class teacher in the school.
+      ['/manage/library/nudge', { classRefs: ['6-B'] }],
     ];
 
     it.each(deskWrites)('a STUDENT cannot POST %s', async (route, body) => {

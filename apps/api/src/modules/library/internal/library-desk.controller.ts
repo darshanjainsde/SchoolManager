@@ -11,6 +11,7 @@ import {
   AccessionNumberDto,
   DeskDayQueryDto,
   IssueAtDeskDto,
+  NudgeClassTeachersDto,
   RecordDamageDto,
   SearchMembersQueryDto,
   UndoIssueDto,
@@ -69,6 +70,18 @@ export class LibraryDeskController {
   @Post('issue')
   async issue(@CurrentUser() user: SchoolJwtPayload, @Body() dto: IssueAtDeskDto) {
     return this.desk.issueBook(await this.orgId(user), dto.accessionNumber, dto.memberId, user.sub);
+  }
+
+  /**
+   * Ask the class teachers to chase what has not come back.
+   *
+   * The only mechanism in the product that actually recovers a book from a
+   * child — the librarian has no authority over one, the class teacher does.
+   * Names, titles and days reach the teacher; amounts never do.
+   */
+  @Post('nudge')
+  async nudge(@CurrentUser() user: SchoolJwtPayload, @Body() dto: NudgeClassTeachersDto) {
+    return this.desk.nudgeClassTeachers(await this.orgId(user), user.schoolId, dto.classRefs);
   }
 
   /**

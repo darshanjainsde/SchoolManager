@@ -608,6 +608,11 @@ export const NOTIFICATION_KINDS = [
   'REQUEST_DECISION',
   'DIARY',
   'ATTENDANCE',
+  // The librarian asking a class teacher to chase books that have not come
+  // back. It is a separate kind from ANNOUNCEMENT because it is addressed to
+  // ONE teacher about THEIR class and links to their own library list — and
+  // because a school that mutes announcements must not mute this.
+  'LIBRARY',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

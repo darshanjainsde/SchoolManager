@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { getPlatformPrisma, withTenant } from '@skoolos/db';
+import { emitNotifications } from '../../../common/notifications/notification-inbox';
 import { withOrg, type LibraryTx } from '@library/db';
 import {
   issue as coreIssue,
@@ -243,6 +245,102 @@ export class LibraryDeskService {
       undefined,
       DESK_TX_OPTIONS,
     );
+  }
+
+  /**
+   * Ask a class teacher to chase the books their class has not brought back.
+   *
+   * THE ONLY MECHANISM IN THIS PRODUCT THAT ACTUALLY RECOVERS A BOOK FROM A
+   * TEN-YEAR-OLD. A librarian has no authority over a child; a class teacher
+   * does. The standalone console can print this list and can do nothing with
+   * it — reaching the teacher is the entire payoff of the library living
+   * inside Sckools, because only Sckools knows who teaches which class.
+   *
+   * NAMES, TITLES AND DAYS. Never an amount, even where fines are on — the
+   * same invariant the teacher's own screen already keeps. A staffroom is a
+   * public place, and the moment this shows what children owe it stops being a
+   * nudge and becomes fee collection, at which point the teacher stops opening
+   * it and nothing recovers the books at all.
+   *
+   * TWO DATABASES, TWO TRANSACTIONS, and deliberately not atomic. The books
+   * are in the library database and the inbox is in Sckools'. A nudge that
+   * fails to send corrupts nothing — she presses it again. Reaching for a
+   * distributed transaction to make a reminder all-or-nothing would be a much
+   * larger machine than the thing it protects.
+   */
+  async nudgeClassTeachers(
+    orgId: string,
+    schoolId: string,
+    classRefs: string[],
+    now = new Date(),
+  ): Promise<{ notified: Array<{ classRef: string; teacherName: string; books: number }>; unmatched: string[] }> {
+    const wanted = classRefs.map((c) => c.trim()).filter(Boolean);
+    if (wanted.length === 0) return { notified: [], unmatched: [] };
+
+    // 1. What is late, per class — from the library database.
+    const late = await this.notReturned(orgId, now);
+    const byClass = new Map<string, number>();
+    for (const row of late) {
+      if (!row.classRef || !wanted.includes(row.classRef)) continue;
+      byClass.set(row.classRef, (byClass.get(row.classRef) ?? 0) + 1);
+    }
+
+    // 2. Who teaches those classes — from Sckools. `classRef` is free text
+    //    ("6-B"), and the section is `grade.name` + '-' + `name`; that string
+    //    is built the same way `LibraryMeService#myClassNotReturned` builds it,
+    //    which is the only reason the two ever match. When the class list is
+    //    normalised this join stops being a string comparison.
+    const sections = await getPlatformPrisma().classSection.findMany({
+      where: { schoolId, classTeacherId: { not: null } },
+      select: {
+        name: true,
+        grade: { select: { name: true } },
+        classTeacher: { select: { userId: true, firstName: true, lastName: true } },
+      },
+    });
+
+    const notified: Array<{ classRef: string; teacherName: string; books: number }> = [];
+    const unmatched: string[] = [];
+    const recipients = new Map<string, { classRef: string; books: number; teacherName: string }>();
+
+    for (const [classRef, books] of byClass) {
+      const section = sections.find((s) => `${s.grade.name}-${s.name}` === classRef);
+      const userId = section?.classTeacher?.userId;
+      if (!section || !userId) {
+        // A class whose teacher is unset, or whose label does not match any
+        // section, is reported back rather than silently skipped — she needs
+        // to know the nudge did not go anywhere.
+        unmatched.push(classRef);
+        continue;
+      }
+      const teacherName = `${section.classTeacher?.firstName ?? ''} ${section.classTeacher?.lastName ?? ''}`.trim();
+      recipients.set(userId, { classRef, books, teacherName });
+      notified.push({ classRef, teacherName, books });
+    }
+
+    // 3. Write the inbox rows — in Sckools' own transaction.
+    if (recipients.size > 0) {
+      await withTenant(schoolId, async (tx) => {
+        for (const [userId, r] of recipients) {
+          await emitNotifications(tx, {
+            schoolId,
+            userIds: [userId],
+            kind: 'LIBRARY',
+            title:
+              r.books === 1
+                ? `1 library book not returned in ${r.classRef}`
+                : `${r.books} library books not returned in ${r.classRef}`,
+            // No amount, and no child named in the title — the list is one tap
+            // away on their own screen, where it belongs.
+            body: 'A word from you is what brings these back.',
+            linkType: 'LIBRARY',
+            linkId: null,
+          });
+        }
+      });
+    }
+
+    return { notified, unmatched };
   }
 
   /**

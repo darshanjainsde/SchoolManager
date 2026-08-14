@@ -100,6 +100,27 @@ export default function LibraryCounterPage(): React.JSX.Element {
 
   const deskBusy = takeBack.isPending || giveOut.isPending;
 
+  // ── Nudge ────────────────────────────────────────────────────────────────
+  const [nudged, setNudged] = useState<string | null>(null);
+  const nudge = useMutation({
+    mutationFn: (classRefs: string[]) =>
+      api.post<{
+        notified: Array<{ classRef: string; teacherName: string; books: number }>;
+        unmatched: string[];
+      }>('/manage/library/nudge', { classRefs }),
+    onSuccess: (r) => {
+      const sent = r.notified.map((n) => `${n.teacherName} (${n.classRef})`).join(', ');
+      // The unmatched classes are REPORTED, not swallowed. A class whose
+      // teacher is unset would otherwise look nudged and never be.
+      const missed =
+        r.unmatched.length > 0
+          ? ` No class teacher is set for ${r.unmatched.join(', ')} — the office can add one.`
+          : '';
+      setNudged(sent ? `Sent to ${sent}.${missed}` : `Nothing sent.${missed}`);
+    },
+    onError: (e: Error) => setDeskError(e.message),
+  });
+
   // ── Damage ───────────────────────────────────────────────────────────────
   // Opened from the return receipt, because that is the moment she is holding
   // the book and can see the torn page.
@@ -278,6 +299,10 @@ export default function LibraryCounterPage(): React.JSX.Element {
 
   const lateRows = late.data ?? [];
   const dayRows = day.data ?? [];
+  // The distinct classes with something outstanding — one nudge each.
+  const lateClasses = Array.from(
+    new Set(lateRows.map((r) => r.classRef).filter((c): c is string => !!c)),
+  );
 
   return (
     <section className="sk-lib">
@@ -618,6 +643,7 @@ export default function LibraryCounterPage(): React.JSX.Element {
             {lateRows.map((r) => (
               <li key={r.issueId} className="sk-lib-class-row">
                 <span className="sk-lib-child">{r.memberName}</span>
+                {r.classRef ? <span className="sk-lib-no">{r.classRef}</span> : null}
                 <span className="sk-lib-title">{r.title}</span>
                 <span className="sk-lib-no">no. {r.accessionNumber}</span>
                 {/* Days, never rupees — a staffroom is a public place, and the
@@ -632,6 +658,26 @@ export default function LibraryCounterPage(): React.JSX.Element {
           <p className="sk-lib-nudge">
             A word from the class teacher is what brings these back.
           </p>
+          {/* One message per CLASS, not per book. A teacher who gets nine
+              separate notices about nine children stops reading the ninth,
+              and the point is that they act on the list. */}
+          {lateClasses.length > 0 ? (
+            <div className="sk-desk-actions">
+              <button
+                className="sk-btn"
+                data-variant="primary"
+                disabled={nudge.isPending}
+                onClick={() => nudge.mutate(lateClasses)}
+              >
+                {nudge.isPending
+                  ? 'Sending…'
+                  : lateClasses.length === 1
+                    ? `Tell the class teacher of ${lateClasses[0]}`
+                    : `Tell ${lateClasses.length} class teachers`}
+              </button>
+            </div>
+          ) : null}
+          {nudged ? <p className="sk-lib-nudge">{nudged}</p> : null}
         </>
       ) : (
         <p className="sk-lib-empty">Nothing is late. Every book is back or still in time.</p>

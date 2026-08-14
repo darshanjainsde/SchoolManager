@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   FileText,
   GraduationCap,
+  Library,
   Megaphone,
   MessageSquare,
   NotebookPen,
@@ -26,6 +27,7 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   REQUEST_DECISION: CalendarCheck,
   DIARY: NotebookPen,
   ATTENDANCE: TrendingDown,
+  LIBRARY: Library,
 };
 
 /** Fallback for a kind the client doesn't know yet (server added one later). */
@@ -66,6 +68,10 @@ export function routeForNotification(
         // Who-needs-a-word lives inside Attendance now — it is a view of the
         // register, not a page of its own.
         return '/teacher/attendance';
+      // Straight to the not-returned list for their own class, which is the
+      // only thing the librarian is asking them to act on.
+      case 'LIBRARY':
+        return '/teacher/library';
       default:
         return null;
     }
@@ -87,6 +93,8 @@ export function routeForNotification(
     // The child's own attendance record — the same page the notice is about.
     case 'ATTENDANCE':
       return '/portal/attendance';
+    case 'LIBRARY':
+      return '/portal/library';
     // A student has no requests screen — the decision is a teacher-side route.
     case 'REQUEST_DECISION':
       return null;

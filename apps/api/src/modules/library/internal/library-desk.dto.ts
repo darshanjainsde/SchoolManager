@@ -1,4 +1,16 @@
-import { IsIn, IsInt, IsISO8601, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Max,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -63,6 +75,21 @@ export class RecordDamageDto extends AccessionNumberDto {
   @IsString()
   @Length(1, 300)
   note!: string;
+}
+
+export class NudgeClassTeachersDto {
+  /**
+   * Which classes to nudge, as the librarian's own labels ("6-B").
+   *
+   * Explicit rather than "everything late": she decides who gets a message,
+   * and a button that quietly notified every class teacher in the school
+   * would be used once and then never again.
+   */
+  @IsArray()
+  @ArrayMaxSize(60)
+  @IsString({ each: true })
+  @Length(1, 40, { each: true })
+  classRefs!: string[];
 }
 
 export class UndoIssueDto {
