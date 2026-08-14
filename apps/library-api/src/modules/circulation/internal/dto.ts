@@ -223,3 +223,14 @@ export class ReplaceInKindDto {
 export class ReportMissingDto {
   @IsString() @MinLength(1) @MaxLength(100) accessionNumber!: string;
 }
+
+export class CollectionsQueryDto {
+  /** Calendar dates in the ORG's timezone, resolved by `dayRangeForOrg` —
+   *  never UTC. Omit both for today. */
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) to?: string;
+}
+
+export class WaiverLogQueryDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
+}

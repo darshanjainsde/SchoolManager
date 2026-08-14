@@ -7,7 +7,7 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { ConfirmLostDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, ListDuesQueryDto, ListFinesQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
+import { ConfirmLostDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, CollectionsQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiverLogQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
@@ -340,6 +340,22 @@ export class CirculationController {
   listDues(@Query() query: ListDuesQueryDto, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
     return withOrg(orgId, (tx) => this.fines.listDues(tx, orgId, query, user.branches));
+  }
+
+  /** What came in, what is still owed, what was genuinely let off. */
+  @Get('collections')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  collections(@Query() query: CollectionsQueryDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.fines.collections(tx, orgId, query, user.branches));
+  }
+
+  /** Every waiver with its reason and who granted it — the log an owner reads. */
+  @Get('waivers')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  waiverLog(@Query() query: WaiverLogQueryDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.fines.waiverLog(tx, orgId, query.limit ?? 50, user.branches));
   }
 
   @Get('overdue')

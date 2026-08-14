@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type Fine, type LibraryTx } from '@library/db';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
-import type { DayReportQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiveFineDto } from './dto';
+import type { CollectionsQueryDto, DayReportQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiveFineDto } from './dto';
 import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
 
 const MS_PER_DAY = 86_400_000;
@@ -64,6 +64,41 @@ export interface OverdueIssueItem {
   member: MemberCard;
   title: { id: string; title: string };
   accessionNumber: string;
+}
+
+export interface CollectionsReport {
+  from: string;
+  to: string;
+  /** Money actually taken in the window. */
+  collected: number;
+  /** Money genuinely FORGIVEN — hardship, library error, goodwill, write-off.
+   *  Excludes the two mechanical codes: the school lost nothing when a book was
+   *  found or replaced in kind, and counting those would make this figure
+   *  useless for the only question it is asked. */
+  letOff: number;
+  /** The mechanical waivers, reported separately so they are visible but never
+   *  mistaken for generosity. */
+  clearedInKind: number;
+  /** A POSITION, not a flow: what is outstanding right now, unbounded by the window. */
+  stillOwed: number;
+  membersOwing: number;
+  byReason: Array<{ kind: 'OVERDUE' | 'DAMAGE' | 'LOST' | 'OTHER'; collected: number; owed: number }>;
+  byMethod: Array<{ method: 'CASH' | 'UPI' | 'OTHER' | 'UNRECORDED'; collected: number; count: number }>;
+}
+
+export interface WaiverLogRow {
+  fineId: string;
+  member: MemberCard;
+  classRef: string | null;
+  kind: 'OVERDUE' | 'DAMAGE' | 'LOST' | 'OTHER';
+  amount: string;
+  reasonCode: string | null;
+  reason: string | null;
+  waivedAt: Date | null;
+  waivedByUserId: string | null;
+  book: string | null;
+  accessionNumber: string | null;
+  mechanical: boolean;
 }
 
 export interface DayReport {
@@ -272,6 +307,156 @@ export class FinesService {
       owed: r.owed.toNumber(),
       fineCount: Number(r.fineCount),
       kinds: r.kinds as DuesRow['kinds'],
+    }));
+  }
+
+  /**
+   * Collections: what came in, what is still owed, and what was let off.
+   *
+   * The one rule that makes this honest is the MECHANICAL exclusion.
+   * `BOOK_FOUND` and `REPLACED_IN_KIND` are waivers in the database — the fine
+   * is closed without money — but the school lost NOTHING in either case: it
+   * has the book back, or an equivalent one. Counting them as "let off" would
+   * inflate a school's apparent generosity with what is really book-keeping,
+   * and would make the figure useless for the only question it is asked:
+   * how much did we actually forgive?
+   *
+   * Day boundaries come from `dayRangeForOrg`, reusing the org-timezone logic
+   * rather than re-deriving it — the day report already shipped a bug where a
+   * UTC-derived "today" made an Indian school's evening disappear.
+   */
+  async collections(
+    tx: LibraryTx,
+    orgId: string,
+    query: CollectionsQueryDto,
+    allowedBranches: string[],
+  ): Promise<CollectionsReport> {
+    const from = await dayRangeForOrg(tx, orgId, query.from ?? null);
+    const to = await dayRangeForOrg(tx, orgId, query.to ?? query.from ?? null);
+    const start = from.start;
+    const end = to.end;
+
+    const branchOk = Prisma.sql`(
+      ${allowedBranches.length === 0}
+      OR f."issueId" IS NULL
+      OR EXISTS (SELECT 1 FROM "Issue" i WHERE i."id" = f."issueId" AND i."branchId" = ANY (${allowedBranches}::uuid[]))
+    )`;
+
+    // MECHANICAL waivers, named once and used everywhere below.
+    const mechanical = Prisma.sql`('BOOK_FOUND', 'REPLACED_IN_KIND')`;
+
+    const [totals] = await tx.$queryRaw<
+      Array<{ collected: Prisma.Decimal; letOff: Prisma.Decimal; clearedInKind: Prisma.Decimal }>
+    >`
+      SELECT
+        COALESCE(SUM(f."paidAmount") FILTER (WHERE f."paidAt" >= ${start} AND f."paidAt" < ${end}), 0) AS "collected",
+        COALESCE(SUM(f."waivedAmount") FILTER (
+          WHERE f."waivedAt" >= ${start} AND f."waivedAt" < ${end}
+            AND (f."waiverReasonCode" IS NULL OR f."waiverReasonCode"::text NOT IN ${mechanical})
+        ), 0) AS "letOff",
+        COALESCE(SUM(f."waivedAmount") FILTER (
+          WHERE f."waivedAt" >= ${start} AND f."waivedAt" < ${end}
+            AND f."waiverReasonCode"::text IN ${mechanical}
+        ), 0) AS "clearedInKind"
+      FROM "Fine" f
+      WHERE f."orgId" = ${orgId}::uuid AND ${branchOk}
+    `;
+
+    // Still owed is a POSITION, not a flow — it is not bounded by the date
+    // window, because "what is outstanding right now" is the question.
+    const [outstanding] = await tx.$queryRaw<Array<{ owed: Prisma.Decimal; members: bigint }>>`
+      SELECT COALESCE(SUM(f."amount" - f."paidAmount" - COALESCE(f."waivedAmount", 0)), 0) AS "owed",
+             COUNT(DISTINCT f."memberId")                                                  AS "members"
+      FROM "Fine" f
+      WHERE f."orgId" = ${orgId}::uuid AND f."status" IN ('OPEN', 'PARTIAL') AND ${branchOk}
+    `;
+
+    const byReason = await tx.$queryRaw<Array<{ kind: string; collected: Prisma.Decimal; owed: Prisma.Decimal }>>`
+      SELECT f."kind"::text AS "kind",
+             COALESCE(SUM(f."paidAmount") FILTER (WHERE f."paidAt" >= ${start} AND f."paidAt" < ${end}), 0) AS "collected",
+             COALESCE(SUM(f."amount" - f."paidAmount" - COALESCE(f."waivedAmount", 0))
+                      FILTER (WHERE f."status" IN ('OPEN', 'PARTIAL')), 0) AS "owed"
+      FROM "Fine" f
+      WHERE f."orgId" = ${orgId}::uuid AND ${branchOk}
+      GROUP BY f."kind"
+      ORDER BY "collected" DESC
+    `;
+
+    const byMethod = await tx.$queryRaw<Array<{ method: string; collected: Prisma.Decimal; count: bigint }>>`
+      SELECT COALESCE(f."paidMethod"::text, 'UNRECORDED') AS "method",
+             COALESCE(SUM(f."paidAmount"), 0)             AS "collected",
+             COUNT(*)                                     AS "count"
+      FROM "Fine" f
+      WHERE f."orgId" = ${orgId}::uuid AND f."paidAt" >= ${start} AND f."paidAt" < ${end} AND ${branchOk}
+      GROUP BY f."paidMethod"
+      ORDER BY "collected" DESC
+    `;
+
+    return {
+      from: from.date,
+      to: to.date,
+      collected: totals.collected.toNumber(),
+      letOff: totals.letOff.toNumber(),
+      clearedInKind: totals.clearedInKind.toNumber(),
+      stillOwed: outstanding.owed.toNumber(),
+      membersOwing: Number(outstanding.members),
+      byReason: byReason.map((r) => ({
+        kind: r.kind as CollectionsReport['byReason'][number]['kind'],
+        collected: r.collected.toNumber(),
+        owed: r.owed.toNumber(),
+      })),
+      byMethod: byMethod.map((r) => ({
+        method: r.method as CollectionsReport['byMethod'][number]['method'],
+        collected: r.collected.toNumber(),
+        count: Number(r.count),
+      })),
+    };
+  }
+
+  /**
+   * Every waiver, with its reason and who granted it — the log an owner reads.
+   *
+   * Mechanical waivers are INCLUDED here, unlike in the money total above, and
+   * flagged. "The book was found" belongs in the audit trail; it just does not
+   * belong in "how much did we forgive".
+   */
+  async waiverLog(
+    tx: LibraryTx,
+    orgId: string,
+    limit: number,
+    allowedBranches: string[],
+  ): Promise<WaiverLogRow[]> {
+    const rows = await tx.fine.findMany({
+      where: {
+        orgId,
+        status: 'WAIVED',
+        ...(allowedBranches.length > 0
+          ? { OR: [{ issueId: null }, { issue: { branchId: { in: allowedBranches } } }] }
+          : {}),
+      },
+      orderBy: { waivedAt: 'desc' },
+      take: Math.min(Math.max(1, limit), 200),
+      include: {
+        member: { select: MEMBER_CARD_SELECT },
+        issue: { select: { copy: { select: { accessionNumber: true, title: { select: { title: true } } } } } },
+      },
+    });
+
+    return rows.map((f) => ({
+      fineId: f.id,
+      member: f.member,
+      classRef: null,
+      kind: f.kind,
+      amount: decimalToMoneyString(f.waivedAmount),
+      reasonCode: f.waiverReasonCode,
+      reason: f.waivedReason,
+      waivedAt: f.waivedAt,
+      waivedByUserId: f.waivedByUserId,
+      book: f.issue ? f.issue.copy.title.title : null,
+      accessionNumber: f.issue ? f.issue.copy.accessionNumber : null,
+      /** True when the school lost nothing — excluded from the let-off total. */
+      mechanical:
+        f.waiverReasonCode === 'BOOK_FOUND' || f.waiverReasonCode === 'REPLACED_IN_KIND',
     }));
   }
 

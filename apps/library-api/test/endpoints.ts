@@ -110,6 +110,10 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/circulation/fines', roles: READERS },
   { method: 'POST', path: '/circulation/fines/:id/waive', roles: WRITERS, body: { reason: 'Authz matrix probe', reasonCode: 'GOODWILL' } },
   { method: 'GET', path: '/circulation/dues', roles: READERS },
+  // Money reporting is WRITERS: what the school collected and forgave is an
+  // owner's view, not a counter view.
+  { method: 'GET', path: '/circulation/collections', roles: WRITERS },
+  { method: 'GET', path: '/circulation/waivers', roles: WRITERS },
   { method: 'GET', path: '/circulation/overdue', roles: READERS },
   { method: 'GET', path: '/circulation/day-report', roles: READERS },
 
