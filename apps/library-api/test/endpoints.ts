@@ -16,6 +16,11 @@ const WRITERS: Role[] = ['ORG_OWNER', 'LIBRARIAN'];
 const READERS: Role[] = ['ORG_OWNER', 'LIBRARIAN', 'ASSISTANT'];
 
 export const ENDPOINTS: EndpointSpec[] = [
+  // The nightly outbox sweep. Anonymous by nature — a Vercel cron carries no
+  // tenant host, no session and no user — and protected by a bearer CRON_SECRET
+  // inside the handler instead. Listed here so the "covers every registered
+  // route" check stays exhaustive rather than silently skipping it.
+  { method: 'GET', path: '/internal/cron/notification-outbox', roles: [], anonymous: true },
   { method: 'GET', path: '/live', roles: [], anonymous: true },
   { method: 'GET', path: '/ready', roles: [], anonymous: true },
   { method: 'POST', path: '/auth/login', roles: [], anonymous: true, body: { identifier: 'x@y.z', password: 'nope' } },

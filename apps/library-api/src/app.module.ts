@@ -11,6 +11,7 @@ import { SearchModule } from './modules/search';
 import { PeriodsModule } from './modules/periods';
 import { MeModule } from './modules/me';
 import { RegisterModule } from './modules/register';
+import { InternalCronModule } from './internal-cron/internal-cron.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
 
@@ -68,6 +69,7 @@ import { IdempotencyModule } from './common/idempotency/idempotency.module';
     PeriodsModule,
     MeModule,
     RegisterModule,
+    InternalCronModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
