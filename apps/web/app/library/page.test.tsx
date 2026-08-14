@@ -39,7 +39,11 @@ function stub({ status, members, notReturned, day }: Overrides = {}): ApiStub {
       if (path.startsWith('/manage/library/status'))
         return Promise.resolve(status ?? { provisioned: true, live: true, members: 412, copies: 161 });
       if (path.startsWith('/manage/library/members')) return Promise.resolve(members ?? []);
-      if (path.startsWith('/manage/library/not-returned')) return Promise.resolve(notReturned ?? []);
+      if (path.startsWith('/manage/library/not-returned'))
+        // Envelope, not a bare array: the route reports whether the list was cut
+        // short, because a truncated list presented as complete is how a school
+        // concludes it has 200 books out when it has 900.
+        return Promise.resolve({ truncated: false, rows: notReturned ?? [] });
       if (path.startsWith('/manage/library/day')) return Promise.resolve(day ?? []);
       if (path.startsWith('/manage/library/next-numbers')) return Promise.resolve([]);
       if (path.startsWith('/manage/library/period/now'))

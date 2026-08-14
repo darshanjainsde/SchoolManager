@@ -275,11 +275,19 @@ export async function issue(
     },
   });
 
-  // Attendance is a BY-PRODUCT of the transaction, never a condition on it:
-  // a child who issues a book has self-evidently attended, so the librarian
-  // never types their name into a register. Best-effort by design — see
-  // markPresentByTransaction — because a failed attendance write must never
-  // stop a child borrowing a book.
+  // Attendance is a BY-PRODUCT of the transaction, never a condition on it: a
+  // child who issues a book has self-evidently attended, so the librarian never
+  // types their name into a register.
+  //
+  // NOT "best-effort" — that word was here and it was false. This runs inside
+  // the caller's transaction with no try/catch, and none would help: any
+  // Postgres error puts the transaction into aborted state (25P02) and the
+  // COMMIT fails whatever JavaScript catches, since Prisma has no savepoints.
+  // What actually makes it safe is that `markPresentByTransaction` is ONE
+  // statement using `ON CONFLICT DO UPDATE`, which cannot raise. Read its doc
+  // before adding a second statement to it: the safety is structural, and the
+  // day it stops being one unfailable statement, attendance bookkeeping starts
+  // taking down lending.
   await markPresentByTransaction(tx, orgId, issued.memberId, member.classRef, issued.branchId);
 
   return { issue: issued, collectedReservationId };

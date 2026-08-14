@@ -380,12 +380,17 @@ export class LibraryDeskService {
     schoolId: string,
     classRefs: string[],
     now = new Date(),
-  ): Promise<{ notified: Array<{ classRef: string; teacherName: string; books: number }>; unmatched: string[] }> {
+  ): Promise<{
+    notified: Array<{ classRef: string; teacherName: string; books: number }>;
+    unmatched: string[];
+    /** The late list was cut short, so these counts are a floor, not a total. */
+    countsArePartial: boolean;
+  }> {
     const wanted = classRefs.map((c) => c.trim()).filter(Boolean);
-    if (wanted.length === 0) return { notified: [], unmatched: [] };
+    if (wanted.length === 0) return { notified: [], unmatched: [], countsArePartial: false };
 
     // 1. What is late, per class — from the library database.
-    const late = await this.notReturned(orgId, now);
+    const { rows: late, truncated } = await this.notReturned(orgId, now);
     const byClass = new Map<string, number>();
     for (const row of late) {
       if (!row.classRef || !wanted.includes(row.classRef)) continue;
@@ -447,7 +452,10 @@ export class LibraryDeskService {
       });
     }
 
-    return { notified, unmatched };
+    // Reported rather than swallowed: if the late list was truncated, the
+    // per-class counts in those messages are a FLOOR. A teacher told "3 books"
+    // when it is really 9 stops trusting the number, and then stops reading it.
+    return { notified, unmatched, countsArePartial: truncated };
   }
 
   /**
@@ -669,8 +677,17 @@ export class LibraryDeskService {
    * the person who has to find the book, not the person who has to find the
    * child.
    */
-  async notReturned(orgId: string, now = new Date(), limit = 200): Promise<NotReturnedRow[]> {
+  async notReturned(
+    orgId: string,
+    now = new Date(),
+    limit = 200,
+  ): Promise<{ truncated: boolean; rows: NotReturnedRow[] }> {
     return withOrg(orgId, async (tx: LibraryTx) => {
+      // One row over the limit, so the caller can tell "exactly 200 late books"
+      // from "more than 200, and you are not seeing them all". A truncated list
+      // that looks complete is how a school concludes it has 200 books out when
+      // it has 900 — and the nudge would quietly skip every class beyond the
+      // cut. The extra row is dropped below; only the FLAG survives.
       const rows = await tx.issue.findMany({
         where: { orgId, returnedAt: null, dueAt: { lt: now } },
         select: {
@@ -680,17 +697,22 @@ export class LibraryDeskService {
           copy: { select: { accessionNumber: true, title: { select: { title: true } } } },
         },
         orderBy: { dueAt: 'asc' },
-        take: limit,
+        take: limit + 1,
       });
 
-      return rows.map((r) => ({
-        issueId: r.id,
-        memberName: fullName(r.member),
-        classRef: r.member.classRef,
-        title: r.copy.title.title,
-        accessionNumber: r.copy.accessionNumber,
-        daysLate: -daysBetween(now, r.dueAt),
-      }));
+      return {
+        // `true` means there are MORE than these — the screen says so rather
+        // than presenting a cut list as the whole truth.
+        truncated: rows.length > limit,
+        rows: rows.slice(0, limit).map((r) => ({
+          issueId: r.id,
+          memberName: fullName(r.member),
+          classRef: r.member.classRef,
+          title: r.copy.title.title,
+          accessionNumber: r.copy.accessionNumber,
+          daysLate: -daysBetween(now, r.dueAt),
+        })),
+      };
     });
   }
 

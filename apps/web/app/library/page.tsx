@@ -343,7 +343,8 @@ export default function LibraryCounterPage(): React.JSX.Element {
 
   const late = useQuery({
     queryKey: ['library-desk', 'not-returned'],
-    queryFn: () => api.get<NotReturnedRow[]>('/manage/library/not-returned'),
+    queryFn: () =>
+      api.get<{ truncated: boolean; rows: NotReturnedRow[] }>('/manage/library/not-returned'),
   });
 
   /**
@@ -497,7 +498,11 @@ export default function LibraryCounterPage(): React.JSX.Element {
     );
   }
 
-  const lateRows = late.data ?? [];
+  const lateRows = late.data?.rows ?? [];
+  // Never presented as the whole truth when it is not — a cut list would make
+  // a school believe it has 200 books out when it has 900, and the nudge would
+  // quietly skip every class past the cut.
+  const lateTruncated = late.data?.truncated ?? false;
   const dayRows = day.data ?? [];
   // The distinct classes with something outstanding — one nudge each.
   const lateClasses = Array.from(
@@ -968,6 +973,12 @@ export default function LibraryCounterPage(): React.JSX.Element {
           <p className="sk-lib-nudge">
             A word from the class teacher is what brings these back.
           </p>
+          {lateTruncated ? (
+            <p className="sk-lib-nudge">
+              Showing the {lateRows.length} longest overdue. There are more — the full list
+              is in the library console.
+            </p>
+          ) : null}
           {/* One message per CLASS, not per book. A teacher who gets nine
               separate notices about nine children stops reading the ninth,
               and the point is that they act on the list. */}
