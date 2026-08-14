@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api';
 import { useApiCtx } from '@/lib/session';
-import { formatRupees, listFines, outstanding, waiveFine, type FineRow } from '@/lib/circulation';
+import { formatRupees, listFines, outstanding, payFine, waiveFine, type FineRow } from '@/lib/circulation';
 import { initials, memberHue, memberName } from '@/lib/members';
 import { WAIVER_REASONS } from '@/lib/lost';
 
@@ -34,6 +34,26 @@ export default function FinesPage() {
   const [reasonCode, setReasonCode] = useState<string>('GOODWILL');
   const [busy, setBusy] = useState(false);
   const [waiveError, setWaiveError] = useState<string | null>(null);
+  // Taking money is a different act from forgiving it, and the screen should
+  // not make them look alike: Pay is one click with a method, Waive opens a
+  // panel that demands a reason.
+  const [paying, setPaying] = useState<FineRow | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+
+  async function confirmPay(method: 'CASH' | 'UPI') {
+    if (!ctx || !paying || busy) return;
+    setBusy(true);
+    setPayError(null);
+    try {
+      await payFine(ctx, paying.id, method);
+      setPaying(null);
+      await load();
+    } catch (err) {
+      setPayError(err instanceof ApiError ? err.message : 'Could not reach the library.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     if (!ctx) return;
@@ -147,9 +167,14 @@ export default function FinesPage() {
                     </td>
                     <td style={{ textAlign: 'right' }}>
                       {owed > 0 ? (
-                        <button className="lbx-btn ghost" onClick={() => { setWaiving(f); setReason(''); setWaiveError(null); }}>
-                          Waive
-                        </button>
+                        <>
+                          <button className="lbx-btn ghost" onClick={() => { setPaying(f); setPayError(null); }}>
+                            Pay
+                          </button>{' '}
+                          <button className="lbx-btn ghost" onClick={() => { setWaiving(f); setReason(''); setWaiveError(null); }}>
+                            Waive
+                          </button>
+                        </>
                       ) : null}
                     </td>
                   </tr>
@@ -158,6 +183,36 @@ export default function FinesPage() {
             </tbody>
           </table>
         </div>
+      ) : null}
+
+      {paying ? (
+        <aside className="lbx-detail" aria-label="Record a payment">
+          <div className="lbx-detail-head">
+            <h3>Take {formatRupees(outstanding(paying))}</h3>
+            <button className="lbx-btn ghost" onClick={() => setPaying(null)}>Cancel</button>
+          </div>
+          <p className="lbx-au">
+            {memberName(paying.member)} · {paying.issue?.copy.title.title ?? 'no book attached'}
+          </p>
+          <p style={{ fontSize: '.78rem', color: 'var(--lb-ink-3)' }}>
+            In full only. Money is recorded here, not moved — write the family a
+            paper receipt.
+          </p>
+          <div style={{ display: 'flex', gap: '.4rem', marginTop: '.7rem' }}>
+            <button className="lbx-btn" disabled={busy} onClick={() => void confirmPay('CASH')}>
+              {busy ? 'Recording…' : 'Cash'}
+            </button>
+            <button className="lbx-btn" disabled={busy} onClick={() => void confirmPay('UPI')}>
+              {busy ? 'Recording…' : 'UPI'}
+            </button>
+          </div>
+          {payError ? (
+            <div className="lbx-error" role="alert" style={{ marginTop: '.5rem' }}>
+              <span aria-hidden="true">⚠</span>
+              <span>{payError}</span>
+            </div>
+          ) : null}
+        </aside>
       ) : null}
 
       {waiving ? (

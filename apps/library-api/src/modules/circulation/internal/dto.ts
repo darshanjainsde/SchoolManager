@@ -263,3 +263,10 @@ export class ListLostQueryDto {
   /** Omit for everything; `REPORTED` is the queue a librarian must clear. */
   @IsOptional() @IsIn(LOST_REPORT_STATUSES) status?: (typeof LOST_REPORT_STATUSES)[number];
 }
+
+export class PayFineDto {
+  @IsIn(['CASH', 'UPI', 'OTHER']) method!: 'CASH' | 'UPI' | 'OTHER';
+  /** Required by convention when `method` is OTHER; also where a paper receipt
+   *  or slip number goes. */
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+}

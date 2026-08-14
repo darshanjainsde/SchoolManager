@@ -117,6 +117,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   // (ASSISTANT must be denied — see fines.service.ts's `waive`); the rest are
   // desk reads.
   { method: 'GET', path: '/circulation/fines', roles: READERS },
+  { method: 'POST', path: '/circulation/fines/:id/pay', roles: READERS, body: { method: 'CASH' } },
   { method: 'POST', path: '/circulation/fines/:id/waive', roles: WRITERS, body: { reason: 'Authz matrix probe', reasonCode: 'GOODWILL' } },
   { method: 'GET', path: '/circulation/dues', roles: READERS },
   // Money reporting is WRITERS: what the school collected and forgave is an

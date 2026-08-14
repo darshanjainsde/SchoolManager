@@ -123,3 +123,102 @@ describeLive('circulation — dues, one row per member', () => {
     expect(rows.map((r) => r.memberId)).not.toContain(outsider.id);
   });
 });
+
+/**
+ * Paying an ordinary fine.
+ *
+ * The hole this fills: before it, `waive` was the only route that could close a
+ * plain late-return fine, so a librarian who took ₹15 at the desk had to record
+ * it as money LET OFF — and the collections screen then reported revenue as
+ * forgiveness.
+ */
+describeLive('circulation — paying a fine at the counter', () => {
+  const fines = new FinesService();
+  const prisma = getLibraryPlatformPrisma();
+
+  let org: SeededOrg;
+  let other: SeededOrg;
+  let staffId: string;
+
+  beforeAll(async () => {
+    ({ orgA: org, orgB: other } = await seedTwoOrgs(`payfine-${Date.now().toString(36)}`));
+    staffId = (await prisma.libUser.create({
+      data: {
+        orgId: org.id, email: `pf-${Date.now()}@t.local`, passwordHash: 'x',
+        role: 'ASSISTANT', branchIds: [org.branchId],
+      },
+    })).id;
+  });
+
+  afterAll(async () => { await cleanupOrgs([org.id, other.id]); });
+
+  const mkFine = (amount: number, extra: Record<string, unknown> = {}) =>
+    prisma.fine.create({
+      data: { orgId: org.id, memberId: org.memberId, kind: 'OVERDUE', status: 'OPEN', amount, ...extra } as never,
+    });
+
+  const pay = (id: string) =>
+    withOrg(org.id, (tx: LibraryTx) =>
+      fines.pay(tx, org.id, id, { method: 'CASH', note: 'slip 7' }, staffId, new Date(), []),
+    );
+
+  it('closes the fine and records how the money crossed the counter', async () => {
+    const fine = await mkFine(15);
+
+    const result = await pay(fine.id);
+
+    expect(result.fine.status).toBe('PAID');
+    expect(Number(result.fine.paidAmount)).toBe(15);
+    expect(result.fine.paidMethod).toBe('CASH');
+    expect(result.fine.paymentNote).toBe('slip 7');
+    expect(result.fine.paidByUserId).toBe(staffId);
+  });
+
+  it('shows up as COLLECTED, not as let off — the whole point', async () => {
+    const fine = await mkFine(40);
+    await pay(fine.id);
+
+    const [row] = await prisma.$queryRaw<Array<{ collected: unknown; letoff: unknown }>>`
+      SELECT COALESCE(SUM("paidAmount"),0) AS collected,
+             COALESCE(SUM("waivedAmount"),0) AS letoff
+      FROM "Fine" WHERE "orgId" = ${org.id}::uuid AND "id" = ${fine.id}::uuid`;
+    expect(Number(row.collected)).toBe(40);
+    expect(Number(row.letoff)).toBe(0);
+  });
+
+  it('drops the member off the dues list', async () => {
+    const fresh = await prisma.member.create({
+      data: { orgId: org.id, code: `PF-${Date.now()}`, firstName: 'Pays', lastName: 'Up' },
+    });
+    const fine = await prisma.fine.create({
+      data: { orgId: org.id, memberId: fresh.id, kind: 'OVERDUE', status: 'OPEN', amount: 25 },
+    });
+    const before = await withOrg(org.id, (tx: LibraryTx) => fines.listDues(tx, org.id, {}, []));
+    expect(before.map((r) => r.memberId)).toContain(fresh.id);
+
+    await pay(fine.id);
+
+    const after = await withOrg(org.id, (tx: LibraryTx) => fines.listDues(tx, org.id, {}, []));
+    expect(after.map((r) => r.memberId)).not.toContain(fresh.id);
+  });
+
+  it('pays only the remainder when part was already waived', async () => {
+    const fine = await mkFine(100, { status: 'PARTIAL', waivedAmount: 30, waivedReason: 'partial', waiverReasonCode: 'HARDSHIP' });
+    const result = await pay(fine.id);
+    // 100 charged, 30 forgiven, so 70 crossed the counter — not 100.
+    expect(Number(result.fine.paidAmount)).toBe(70);
+  });
+
+  it('two clerks taking the same payment do not double the recorded revenue', async () => {
+    const fine = await mkFine(60);
+    const results = await Promise.allSettled([pay(fine.id), pay(fine.id)]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const after = await prisma.fine.findUnique({ where: { id: fine.id } });
+    expect(Number(after!.paidAmount)).toBe(60);
+  });
+
+  it('refuses a fine with nothing left to pay', async () => {
+    const fine = await mkFine(10, { status: 'PAID', paidAmount: 10 });
+    await expect(pay(fine.id)).rejects.toThrow(/nothing left to pay/);
+  });
+});

@@ -193,6 +193,24 @@ export function listFines(ctx: Ctx, params: { status?: string; limit?: number } 
 }
 
 /**
+ * Money taken at the counter. In full only — see the API's `pay`.
+ */
+export function payFine(
+  ctx: Ctx,
+  fineId: string,
+  method: 'CASH' | 'UPI' | 'OTHER',
+  note?: string,
+): Promise<{ fine: FineRow }> {
+  return apiFetch<{ fine: FineRow }>(`/circulation/fines/${fineId}/pay`, {
+    method: 'POST',
+    host: ctx.host,
+    token: ctx.token,
+    idempotencyKey: key(),
+    body: JSON.stringify({ method, note }),
+  });
+}
+
+/**
  * `reasonCode` is required by the API and therefore required here. Free text
  * alone cannot answer the collections dashboard's "where did each rupee go",
  * and it is also how the two MECHANICAL outcomes — the book was found, the

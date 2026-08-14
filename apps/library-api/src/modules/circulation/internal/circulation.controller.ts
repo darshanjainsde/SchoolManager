@@ -7,7 +7,7 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { ConfirmLostDto, ListLostQueryDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, TurnedUpDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, CollectionsQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiverLogQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
+import { ConfirmLostDto, ListLostQueryDto, PayFineDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, TurnedUpDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, CollectionsQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiverLogQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
@@ -385,6 +385,23 @@ export class CirculationController {
   }
 
   /** Waiver is WRITERS-only (`ORG_OWNER`/`LIBRARIAN`) — `ASSISTANT` is deliberately denied here, asserted in the authz matrix (`test/endpoints.ts`). */
+  /**
+   * Money taken at the counter for any fine — a plain late return, damage,
+   * anything. READERS: taking money is desk work; forgiving it is not.
+   */
+  @Post('fines/:id/pay')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  @UseInterceptors(IdempotencyInterceptor)
+  payFine(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: PayFineDto,
+    @CurrentUser() user: LibJwtPayload,
+  ) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(orgId, (tx) => this.fines.pay(tx, orgId, id, dto, user.sub, now, user.branches));
+  }
+
   @Post('fines/:id/waive')
   @Roles('ORG_OWNER', 'LIBRARIAN')
   @UseInterceptors(IdempotencyInterceptor)

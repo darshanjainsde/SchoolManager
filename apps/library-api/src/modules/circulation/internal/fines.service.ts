@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type Fine, type LibraryTx } from '@library/db';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
-import type { CollectionsQueryDto, DayReportQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiveFineDto } from './dto';
+import type { CollectionsQueryDto, DayReportQueryDto, ListDuesQueryDto, ListFinesQueryDto, PayFineDto, WaiveFineDto } from './dto';
 import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
 
 const MS_PER_DAY = 86_400_000;
@@ -458,6 +458,84 @@ export class FinesService {
       mechanical:
         f.waiverReasonCode === 'BOOK_FOUND' || f.waiverReasonCode === 'REPLACED_IN_KIND',
     }));
+  }
+
+  /**
+   * Records that a fine was paid at the counter.
+   *
+   * Without this the money story had a hole big enough to make the collections
+   * screen lie: `payLost` only settles a CONFIRMED lost report, so an ordinary
+   * late-return fine — the commonest charge in the service — had exactly one
+   * route that could close it, `waive`, which books it as money LET OFF. A
+   * librarian who took ₹15 across the desk either left the fine open forever or
+   * recorded revenue as forgiveness.
+   *
+   * IN FULL ONLY, for the same reason `payLost` is: a counter that takes ₹100
+   * today and ₹99 next week needs a payments table, because one `paidMethod`
+   * column cannot describe two payments. `FineStatus.PARTIAL` stays unused by
+   * this path — pay in full, or waive the remainder with a reason.
+   *
+   * READERS, not WRITERS: taking money at the desk is desk work. Forgiving it
+   * is not, which is why `waive` excludes ASSISTANT and this does not.
+   */
+  async pay(
+    tx: LibraryTx,
+    orgId: string,
+    fineId: string,
+    dto: PayFineDto,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<WaiveResult> {
+    const fine = await tx.fine.findUnique({
+      where: { id: fineId },
+      include: { issue: { select: { branchId: true } } },
+    });
+    if (!fine) throw new NotFoundException('Fine not found');
+    if (fine.issue) assertBranchInScope(fine.issue.branchId, allowedBranches);
+
+    const outstanding = fine.amount.minus(fine.paidAmount).minus(fine.waivedAmount ?? 0);
+    if (outstanding.lte(0)) {
+      throw new ConflictException({
+        reason: 'NOTHING_OUTSTANDING',
+        message: 'This fine has nothing left to pay',
+      });
+    }
+
+    // Compare-and-swap on the status, the same lesson P3's settlements learned:
+    // two clerks taking the same payment must not both succeed and double the
+    // recorded revenue. `updateMany` re-evaluates its WHERE after the row lock.
+    const { count } = await tx.fine.updateMany({
+      where: { id: fine.id, status: { in: ['OPEN', 'PARTIAL'] } },
+      data: {
+        status: 'PAID',
+        paidAmount: fine.amount.minus(fine.waivedAmount ?? 0),
+        paidAt: now,
+        paidByUserId: actorUserId,
+        paidMethod: dto.method,
+        paymentNote: dto.note,
+      },
+    });
+    if (count === 0) {
+      throw new ConflictException({
+        reason: 'ALREADY_SETTLED',
+        message: 'This fine was settled by someone else a moment ago',
+      });
+    }
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.fine.pay',
+        entity: 'Fine',
+        entityId: fine.id,
+        before: { status: fine.status, paidAmount: fine.paidAmount.toString() },
+        after: { status: 'PAID', amount: outstanding.toString(), method: dto.method, note: dto.note },
+      },
+    });
+
+    return { fine: (await tx.fine.findUnique({ where: { id: fine.id } }))! };
   }
 
   /**
