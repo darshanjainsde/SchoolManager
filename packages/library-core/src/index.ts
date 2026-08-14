@@ -58,6 +58,8 @@ export { addBook, suggestNextAccessionNumbers } from './catalogue/add-book';
 export type { AddBookInput, AddBookResult } from './catalogue/add-book';
 export { recordDamage } from './circulation/damage';
 export type { RecordDamageInput, RecordDamageResult } from './circulation/damage';
+export { selfReportLost } from './circulation/self-report-lost';
+export type { SelfReportLostResult } from './circulation/self-report-lost';
 export { voidIssue } from './circulation/void';
 export type { VoidIssueResult } from './circulation/void';
 export { renew } from './circulation/renew';

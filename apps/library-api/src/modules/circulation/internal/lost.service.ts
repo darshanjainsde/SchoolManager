@@ -6,7 +6,7 @@ import {
 } from '../../../common/replacement-price';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
 import type { ReportLostDto } from './dto';
-import { computeFine, loadPolicy } from '@library/core';
+import { computeFine, loadPolicy, selfReportLost as coreSelfReportLost } from '@library/core';
 
 export interface ReportLostResult {
   lostReportId: string;
@@ -262,78 +262,20 @@ export class LostService {
     actorUserId: string,
     now: Date,
   ): Promise<{ lostReportId: string; lateChargeFrozen: boolean }> {
+    // The member comes from the signed-in LIBRARY user. That resolution is the
+    // one part of this flow that cannot move into @library/core: Sckools has no
+    // LibUser at all and finds the member through `Member.externalRef`
+    // instead, so the shared function takes a memberId and each identity
+    // system answers "who is this" in its own way.
     const actor = await tx.libUser.findUnique({
       where: { id: actorUserId },
       select: { memberId: true },
     });
     if (!actor?.memberId) {
       // A staff account with no member row has no books of its own to lose.
-      throw new NotFoundException('No active issue for this copy');
+      throw new NotFoundException("No active issue for this copy");
     }
-    const memberId = actor.memberId;
-
-    const copy = await tx.copy.findUnique({
-      where: { orgId_accessionNumber: { orgId, accessionNumber } },
-    });
-    if (!copy) throw new NotFoundException('Copy not found');
-
-    // Scoped to THIS member's active issue: a child cannot report a book that
-    // is not in their own hands, and the 404 is deliberately identical to the
-    // one above so the route cannot be used to probe what other people hold.
-    const issue = await tx.issue.findFirst({
-      where: { copyId: copy.id, memberId, returnedAt: null },
-    });
-    if (!issue) throw new NotFoundException('No active issue for this copy');
-
-    const member = await tx.member.findUnique({ where: { id: memberId } });
-    if (!member) throw new NotFoundException('Member not found');
-
-    const policy = await loadPolicy(tx, orgId, member.memberType, issue.branchId);
-    const { amount: lateAmount } = computeFine(policy, issue.dueAt, now);
-    const settings = await tx.librarySettings.findUnique({
-      where: { orgId },
-      select: { chargeStudentFines: true },
-    });
-    const finesAllowed =
-      member.memberType !== 'STUDENT' || (settings?.chargeStudentFines ?? false);
-    const frozenLateAmount = finesAllowed && lateAmount > 0 ? lateAmount : null;
-
-    await tx.issue.update({
-      where: { id: issue.id },
-      data: { returnedAt: now, returnedByUserId: actorUserId, status: 'LOST' },
-    });
-    await tx.copy.update({ where: { id: copy.id }, data: { status: 'LOST' } });
-
-    const report = await createLostReport(tx, {
-      orgId,
-      copyId: copy.id,
-      branchId: issue.branchId,
-      memberId,
-      issueId: issue.id,
-      reportedByUserId: actorUserId,
-      selfReported: true,
-      reportedAt: now,
-      // REPORTED, not CONFIRMED: no money exists yet.
-      status: 'REPORTED',
-      frozenLateAmount:
-        frozenLateAmount === null ? null : new Prisma.Decimal(frozenLateAmount),
-    });
-
-    await tx.auditLog.create({
-      data: {
-        orgId,
-        actorUserId,
-        action: 'circulation.lost.self_report',
-        entity: 'LostReport',
-        entityId: report.id,
-        after: { accessionNumber, copyId: copy.id, memberId, frozenLateAmount },
-      },
-    });
-
-    // Deliberately NO rupee figure. The child is told the clock has stopped;
-    // the only party that tells them what they OWE is the library, after a
-    // librarian has confirmed the loss and looked at the actual book.
-    return { lostReportId: report.id, lateChargeFrozen: frozenLateAmount !== null };
+    return coreSelfReportLost(tx, orgId, accessionNumber, actor.memberId, actorUserId, now);
   }
 
   /**

@@ -1,4 +1,4 @@
-import { Controller, ForbiddenException, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../../common/auth/roles.guard';
 import { Roles } from '../../../common/auth/roles.decorator';
@@ -7,6 +7,7 @@ import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
 import { RequireFeature, RequireFeatureGuard } from '../../features';
 import { LibraryOrgService } from './library-org.service';
 import { LibraryMeService } from './library-me.service';
+import { ReportLostDto } from './library-desk.dto';
 
 /**
  * The library, inside the portal a student or teacher already signs into.
@@ -58,6 +59,21 @@ export class LibraryMeController {
   @Roles('STUDENT', 'TEACHER')
   async mine(@CurrentUser() user: SchoolJwtPayload) {
     return this.me.mine(await this.orgId(user), user.sub);
+  }
+
+  /**
+   * "I have lost this book."
+   *
+   * STUDENT and TEACHER, and only for a book in their OWN hands — the lookup is
+   * scoped to the caller's active issues, and a book somebody else holds
+   * answers exactly as a book that does not exist. Creates no `Fine` and
+   * returns no amount: the child is told the clock has stopped, and a
+   * librarian decides the money later, looking at the actual book.
+   */
+  @Post('lost')
+  @Roles('STUDENT', 'TEACHER')
+  async reportLost(@CurrentUser() user: SchoolJwtPayload, @Body() dto: ReportLostDto) {
+    return this.me.reportLost(await this.orgId(user), user.sub, dto.accessionNumber);
   }
 
   /** Is it on the shelf? Availability is counted from copy status, never stored. */

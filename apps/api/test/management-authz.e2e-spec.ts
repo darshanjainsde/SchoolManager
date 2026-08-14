@@ -283,6 +283,26 @@ describe('management authorization', () => {
       await request(app.getHttpServer()).get(route).set(as(teacherToken)).expect(403);
     });
 
+    // The borrower's own side. `POST /me/library/lost` is the mirror image of
+    // the counter routes: STUDENT and TEACHER may reach it, and the people who
+    // RUN the library may not — a librarian reporting a loss does it from the
+    // counter, where the amount and its source are in front of a human.
+    it('a SCHOOL_ADMIN cannot report a loss through the borrower route', async () => {
+      await request(app.getHttpServer())
+        .post('/me/library/lost')
+        .set(as(adminToken))
+        .send({ accessionNumber: '1142' })
+        .expect(403);
+    });
+
+    it('a STAFF login cannot report a loss through the borrower route', async () => {
+      await request(app.getHttpServer())
+        .post('/me/library/lost')
+        .set(as(staffToken))
+        .send({ accessionNumber: '1142' })
+        .expect(403);
+    });
+
     it('a STUDENT cannot enrol the school into the library', async () => {
       await request(app.getHttpServer())
         .post('/manage/library/enrol')

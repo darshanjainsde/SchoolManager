@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import { withOrg, type LibraryTx } from '@library/db';
+import { selfReportLost } from '@library/core';
 
 /**
  * What a student or a teacher sees of the library, inside the portal they
@@ -102,6 +103,41 @@ export class LibraryMeService {
 
       return { books, isMember: true, ...(total > 0 ? { owed: total } : {}) };
     });
+  }
+
+  /**
+   * "I have lost this book."
+   *
+   * The API for this has existed since P3 and the button was deliberately held
+   * back: shipping it before a librarian could see the report would have left
+   * children owning up into a void. The counter is that screen, so it ships now.
+   *
+   * NO RUPEE FIGURE goes back, and no `Fine` is created. What the child is told
+   * is that the clock has stopped — which is the entire reason owning up is
+   * safe, and the reason a library hears about losses at all. The amount is
+   * decided later by a librarian looking at the actual book.
+   *
+   * `libUserId` is null: a Sckools student has a `User` row and no `LibUser`
+   * row, and both `Issue.returnedByUserId` and `LostReport.reportedByUserId`
+   * are foreign keys to that table. Their Sckools id still reaches the audit
+   * row, which carries no FK.
+   */
+  async reportLost(orgId: string, userId: string, accessionNumber: string, now = new Date()) {
+    return withOrg(
+      orgId,
+      async (tx) => {
+        const me = await this.member(tx, orgId, userId);
+        // Identical shape to "no active issue for this copy" on purpose: a
+        // child who is not a member must not be able to tell the difference
+        // between that and a book somebody else is holding.
+        if (!me) throw new NotFoundException('No active issue for this copy');
+        return selfReportLost(tx, orgId, accessionNumber.trim(), me.id, userId, now, null);
+      },
+      undefined,
+      // Reporting a loss touches the issue, the copy, the report and the audit
+      // row; the default 5s is the same bet the counter's writes declined.
+      { maxWait: 5_000, timeout: 15_000 },
+    );
   }
 
   /**

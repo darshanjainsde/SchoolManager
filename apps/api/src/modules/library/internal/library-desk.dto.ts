@@ -52,6 +52,14 @@ export class AccessionNumberDto {
   accessionNumber!: string;
 }
 
+/**
+ * A borrower reporting their own loss. Same single field as the counter's
+ * shapes, and it lives beside them rather than in a file of its own because
+ * `accessionNumber` means exactly the same thing on both sides of the desk —
+ * splitting it would be two names for one number.
+ */
+export class ReportLostDto extends AccessionNumberDto {}
+
 export class IssueAtDeskDto extends AccessionNumberDto {
   /**
    * `@IsUUID` is the shape check, not the authorization one. A member

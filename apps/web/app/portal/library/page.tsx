@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { MyBooks } from '@/components/library/my-books';
 import { rupees, shelfLabel, type MyLibrary, type ShelfResult } from '@/lib/library';
@@ -18,15 +18,44 @@ import { rupees, shelfLabel, type MyLibrary, type ShelfResult } from '@/lib/libr
  * what do I owe, and only if I owe something. Alerts get no tab at all; they go
  * to the Announcements tab the student already reads.
  *
- * There is no "I lost this book" control here YET. Self-report exists in the
- * API and shows the child no rupee figure by design, but the screen it belongs
- * on is the one where a librarian can see the report — that arrives with the
- * console. Shipping the button before the librarian can act on it would leave
- * children reporting losses into a void.
+ * "I have lost a book" IS here now. It was held back deliberately until a
+ * librarian had a screen showing the report — the counter — because a child
+ * owning up into a void is worse than not owning up at all. It shows no rupee
+ * figure, by design and by API: reporting creates no `Fine`, and the amount is
+ * decided later by a librarian looking at the actual book. What the child is
+ * told is that the clock has stopped, which is the whole reason owning up is
+ * safe for them.
+ *
+ * Two steps — pick the book, then confirm. This closes a real loan and moves a
+ * real book to LOST; one tap from a nine-year-old scrolling a list is not
+ * enough intent for that.
  */
 export default function StudentLibraryPage(): React.JSX.Element {
   const api = useApi();
+  const queryClient = useQueryClient();
   const [term, setTerm] = useState('');
+
+  // Two steps on purpose: choosing a book from the list, then confirming it.
+  // "I have lost it" closes the loan and moves a real book to LOST — one tap
+  // from a nine-year-old scrolling a list is not enough intent for that.
+  const [lostFor, setLostFor] = useState<{ accessionNumber: string; title: string } | null>(null);
+  const [lostDone, setLostDone] = useState<string | null>(null);
+
+  const reportLost = useMutation({
+    mutationFn: (accessionNumber: string) =>
+      api.post<{ lostReportId: string; lateChargeFrozen: boolean }>('/me/library/lost', {
+        accessionNumber,
+      }),
+    onSuccess: () => {
+      setLostFor(null);
+      // No amount, and no apology. The clock stopping is the honest, useful
+      // thing to say, and `lateChargeFrozen` is deliberately NOT turned into a
+      // rupee figure here — the API does not send one.
+      setLostDone('Thank you for telling us. The library will let you know what happens next.');
+      void queryClient.invalidateQueries({ queryKey: ['library'] });
+    },
+    onError: () => setLostDone('That did not save. Nothing has been changed.'),
+  });
 
   const mine = useQuery({
     queryKey: ['library', 'mine'],
@@ -65,6 +94,56 @@ export default function StudentLibraryPage(): React.JSX.Element {
 
       <h2 className="sk-lib-h2">My books</h2>
       <MyBooks books={mine.data?.books ?? []} />
+
+      {/* Owning up. The button was held back until a librarian had a screen to
+          see the report on — reporting into a void is worse than not reporting.
+          It says nothing about money because nothing about money has happened:
+          no Fine is created, and the amount is decided later by a librarian
+          looking at the actual book. What the child is told is that the clock
+          has stopped, which is the entire reason owning up is safe. */}
+      {(mine.data?.books.length ?? 0) > 0 ? (
+        <div className="sk-lib-lost">
+          {lostFor ? (
+            <>
+              <p className="sk-lib-nudge">
+                Tell the library you have lost <strong>{lostFor.title}</strong>?
+              </p>
+              <div className="sk-desk-actions">
+                <button
+                  className="sk-btn"
+                  data-variant="primary"
+                  disabled={reportLost.isPending}
+                  onClick={() => reportLost.mutate(lostFor.accessionNumber)}
+                >
+                  {reportLost.isPending ? 'Telling them…' : 'Yes, I have lost it'}
+                </button>
+                <button className="sk-btn" onClick={() => setLostFor(null)}>
+                  No, keep looking
+                </button>
+              </div>
+            </>
+          ) : (
+            <select
+              className="sk-lib-search"
+              value=""
+              aria-label="Tell the library you have lost a book"
+              onChange={(e) => {
+                const book = mine.data?.books.find((b) => b.issueId === e.target.value);
+                setLostFor(book ? { accessionNumber: book.accessionNumber, title: book.title } : null);
+                setLostDone(null);
+              }}
+            >
+              <option value="">I have lost a book…</option>
+              {(mine.data?.books ?? []).map((b) => (
+                <option key={b.issueId} value={b.issueId}>
+                  {b.title}
+                </option>
+              ))}
+            </select>
+          )}
+          {lostDone ? <p className="sk-lib-nudge">{lostDone}</p> : null}
+        </div>
+      ) : null}
 
       <h2 className="sk-lib-h2">Find a book</h2>
       <input

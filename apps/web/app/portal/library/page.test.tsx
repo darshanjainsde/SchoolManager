@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { renderWithProviders } from '@/test/render';
 import { useApi } from '@/lib/use-api';
 import StudentLibraryPage from './page';
@@ -38,7 +38,13 @@ describe('the student library screen', () => {
     vi.mocked(useApi).mockReturnValue(stub({ isMember: true, books: [book()] }));
     renderWithProviders(<StudentLibraryPage />);
 
-    expect(await screen.findByText('The Hungry Tide')).toBeInTheDocument();
+    // Scoped to the borrowed-books LIST. The title now legitimately appears
+    // twice on this screen — once as the book she is holding, and once as an
+    // option in "I have lost a book…", which must list her own books by name
+    // because a child does not know them by number. `getByText` across the
+    // whole screen would match both and throw.
+    const books = await screen.findByRole('list');
+    expect(within(books).getByText('The Hungry Tide')).toBeInTheDocument();
     // "no. 1042", not "accession number" — that word survives only in the
     // register, which is the auditor's document.
     expect(screen.getByText('no. 1042')).toBeInTheDocument();
@@ -66,7 +72,10 @@ describe('the student library screen', () => {
     vi.mocked(useApi).mockReturnValue(stub({ isMember: true, books: [book()] }));
     renderWithProviders(<StudentLibraryPage />);
 
-    await screen.findByText('The Hungry Tide');
+    // Waits on the book NUMBER, which appears once — the title is now also an
+    // option in the lost-a-book control. What this test is about is what is
+    // absent, so it only needs the screen to have settled.
+    await screen.findByText('no. 1042');
     expect(screen.queryByText(/what i owe/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/₹/)).not.toBeInTheDocument();
   });
