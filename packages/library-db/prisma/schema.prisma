@@ -254,6 +254,10 @@ model Member {
 
   @@unique([orgId, code])
   @@index([orgId, status])
+  /// Lookup index. The UNIQUENESS of a linked member is enforced by the partial
+  /// index `member_one_per_external_ref` (see
+  /// 20260814130000_member_external_ref_unique), which Prisma cannot express:
+  /// `externalRef` is nullable for EXTERNAL members with no Sckools account.
   @@index([orgId, externalRef])
 
   visitAttendance VisitAttendance[]

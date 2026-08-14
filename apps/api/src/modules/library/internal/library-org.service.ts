@@ -80,6 +80,29 @@ export class LibraryOrgService {
     return orgId;
   }
 
+  /**
+   * Whether this library is usable, and whether it is LIVE.
+   *
+   * `live` is the second of the two gates on the student and teacher menu item:
+   * the first is the LIBRARY feature flag, this is "are there actually books in
+   * it". Deliberately NOT cached — it changes the moment a librarian adds the
+   * first copy, and a 60s stale "not live" would have her adding books while
+   * the tab stubbornly refuses to appear.
+   */
+  async statusFor(orgId: string): Promise<{
+    provisioned: boolean;
+    live: boolean;
+    members: number;
+    copies: number;
+  }> {
+    const prisma = getLibraryPlatformPrisma();
+    const [members, copies] = await Promise.all([
+      prisma.member.count({ where: { orgId, status: 'ACTIVE' } }),
+      prisma.copy.count({ where: { orgId } }),
+    ]);
+    return { provisioned: true, live: copies > 0, members, copies };
+  }
+
   private async cacheGet(schoolId: string): Promise<string | null | undefined> {
     try {
       await this.connect();
