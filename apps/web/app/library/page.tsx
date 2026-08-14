@@ -20,6 +20,44 @@ import {
 } from '@/lib/library-desk';
 
 /**
+ * The library period, as `GET /manage/library/period/now` returns it.
+ *
+ * Transcribed from `apps/api/src/modules/library/internal/library-desk.service.ts`
+ * — read from that file, not recalled. These three live here rather than in
+ * `lib/library-desk.ts` because only this screen speaks about a period.
+ */
+interface PeriodChild {
+  memberId: string;
+  code: string;
+  name: string;
+  /**
+   * `auto` — a book crossed the counter, so the transaction proves it;
+   * `hand` — she ticked them; `no` — nobody has said they were here.
+   */
+  seen: 'auto' | 'hand' | 'no';
+  holding: number;
+  late: number;
+}
+
+interface PeriodClass {
+  visitId: string;
+  classRef: string;
+  strength: number;
+  present: number;
+  roster: PeriodChild[];
+}
+
+interface PeriodNow {
+  date: string;
+  /** False when the school has no library periods on the timetable at all. */
+  periodsConfigured: boolean;
+  attendanceOn: boolean;
+  classes: PeriodClass[];
+  /** The room is over-filled. Null the rest of the time. */
+  warning: string | null;
+}
+
+/**
  * The counter.
  *
  * ONE scrolling screen, ordered by how often a librarian does each thing — not
@@ -207,6 +245,35 @@ export default function LibraryCounterPage(): React.JSX.Element {
           ? `Undone. ${r.attendanceRemovedFor} is no longer marked present.`
           : 'Undone.',
       );
+      refreshDesk();
+    },
+    onError: (e: Error) => setDeskError(e.message),
+  });
+
+  // ── The library period ───────────────────────────────────────────────────
+  // The class that is in the room right now. Six to eight times a day a whole
+  // class arrives together, and until this section existed no screen in the
+  // product could show her the list.
+  const period = useQuery({
+    queryKey: ['library-desk', 'period'],
+    queryFn: () => api.get<PeriodNow>('/manage/library/period/now'),
+    // A class arrives in the middle of a period she is standing through, and
+    // she does not reload a page she works from all day. A minute is well
+    // inside the 35 a period lasts.
+    refetchInterval: 60_000,
+  });
+
+  const tick = useMutation({
+    mutationFn: (v: { visitId: string; memberId: string; present: boolean }) =>
+      api.post<{ visitId: string; memberId: string; present: boolean }>(
+        '/manage/library/period/present',
+        v,
+      ),
+    // Refetched rather than assumed. The screen shows what the server says a
+    // child's register holds — a tick that only looked saved is exactly the
+    // false positive this whole section is careful about.
+    onSuccess: () => {
+      setDeskError(null);
       refreshDesk();
     },
     onError: (e: Error) => setDeskError(e.message),
@@ -643,6 +710,108 @@ export default function LibraryCounterPage(): React.JSX.Element {
         </div>
       ) : null}
       {deskError ? <p className="sk-lib-empty" role="alert">{deskError}</p> : null}
+
+      {/* ── The class in the library now ────────────────────────────────────
+          High on the page, under the counter, because it is the context for
+          everything she does for the next thirty-five minutes. */}
+      <h2 className="sk-lib-h2">In the library now</h2>
+      {period.data ? (
+        !period.data.periodsConfigured ? (
+          // A setup answer, and it needs the office rather than her: the
+          // library period lives on the school timetable, which she does not
+          // write.
+          <p className="sk-lib-empty">
+            No library periods are set up yet. Ask the office to add them to the timetable.
+          </p>
+        ) : period.data.classes.length === 0 ? (
+          // RESTING, not broken. A library is empty between periods, and a
+          // screen that treats its ordinary state as a problem teaches her to
+          // ignore the times it is one.
+          <p className="sk-lib-empty">No class is due right now.</p>
+        ) : (
+          <>
+            {period.data.warning ? <p className="sk-desk-warn">{period.data.warning}</p> : null}
+            {!period.data.attendanceOn ? (
+              <p className="sk-lib-nudge">
+                This library is set not to keep attendance, so nothing here is being recorded. The
+                office can turn it back on.
+              </p>
+            ) : null}
+            {period.data.classes.map((c) => {
+              const holding = c.roster.filter((r) => r.holding > 0).length;
+              return (
+                <div key={c.visitId}>
+                  <p className="sk-desk-classline">
+                    <span className="sk-lib-child">{c.classRef}</span>
+                    <span className="sk-lib-nudge">
+                      {c.present} of {c.strength} here
+                      {holding > 0
+                        ? ` · ${holding === 1 ? '1 child has a book' : `${holding} children have books`}`
+                        : ''}
+                    </span>
+                  </p>
+                  <div className="sk-desk-roster">
+                    {c.roster.map((child) =>
+                      child.seen === 'auto' ? (
+                        // Not a button. A book crossed the counter, which is
+                        // stronger evidence than a tap — undoing it means
+                        // undoing the issue, which removes the mark and says so.
+                        <span
+                          key={child.memberId}
+                          className="sk-desk-seat"
+                          data-seen="auto"
+                          title="Borrowed or returned a book today"
+                        >
+                          {child.name}
+                          {child.late > 0 ? (
+                            <span className="sk-lib-no">
+                              {child.late === 1 ? '1 late' : `${child.late} late`}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : (
+                        <button
+                          key={child.memberId}
+                          type="button"
+                          className="sk-desk-seat"
+                          data-seen={child.seen}
+                          // Pressed IS ticked, so a screen reader hears the
+                          // state rather than only the name.
+                          aria-pressed={child.seen === 'hand'}
+                          // Only the chip being saved goes quiet.
+                          disabled={tick.isPending && tick.variables?.memberId === child.memberId}
+                          // Ticking is reversible: a second press takes it back.
+                          // A child marked present who was not there is a
+                          // register that quietly lies, and a mis-tap on a list
+                          // of forty names is only harmless while it can be undone.
+                          onClick={() =>
+                            tick.mutate({
+                              visitId: c.visitId,
+                              memberId: child.memberId,
+                              present: child.seen !== 'hand',
+                            })
+                          }
+                        >
+                          {child.name}
+                          {child.late > 0 ? (
+                            <span className="sk-lib-no">
+                              {child.late === 1 ? '1 late' : `${child.late} late`}
+                            </span>
+                          ) : null}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            <p className="sk-lib-nudge">
+              Green means they borrowed or brought back a book, so they are already counted. Tick
+              the ones who came and only browsed — press again to take a tick back.
+            </p>
+          </>
+        )
+      ) : null}
 
       {/* ── Find a book, or find out who has one ───────────────────────────── */}
       <h2 className="sk-lib-h2">Find a book</h2>

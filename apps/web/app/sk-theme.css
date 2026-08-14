@@ -1979,6 +1979,51 @@ button.sk-availcell:hover { filter: brightness(0.97); }
 .sk-desk-receipt[data-tone="late"] { border-left-color: var(--sk-bad); }
 .sk-desk-aside { font-size: 12.5px; font-weight: 650; color: var(--sk-amber-ink); }
 
+/* ── THE LIBRARY PERIOD ───────────────────────────────────────────────────
+   Forty children arrive together and about five of them need ticking — the
+   ones who came, browsed and borrowed nothing. So the roster is a wrapped
+   field of name chips, not forty rows: forty rows would push the counter off
+   the screen, and the counter is why she has the page open at all.
+
+   THREE STATES, THREE SKINS, because `seen` has three values and a tick box
+   only has two. Plain means nobody has said this child was here; brand-tinted
+   means she ticked them; green means a book crossed the counter and the
+   transaction says so. Collapsing the last two would throw away the only
+   signal that separates "attended but borrowed nothing" from "was here".
+
+   The automatic one is a SPAN, not a button. A book crossing the counter is
+   stronger evidence than a tap, so it is not hers to untap; the way to undo it
+   is to undo the issue, which already removes the mark and says whose it was.
+
+   Every value resolves through an existing token, so both schemes follow with
+   no new declarations — the same rule the block above states. */
+.sk-desk-classline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 12px 0 0; }
+.sk-desk-roster { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sk-desk-seat {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  font: inherit; font-size: 13px; font-weight: 650; cursor: pointer;
+  padding: 7px 13px; border-radius: 999px;
+  border: 1px solid var(--sk-line-2); background: var(--sk-card); color: var(--sk-ink-2);
+}
+.sk-desk-seat[data-seen="hand"] {
+  background: var(--sk-brand-tint); border-color: var(--sk-brand); color: var(--sk-brand-2);
+}
+.sk-desk-seat[data-seen="auto"] {
+  background: var(--sk-good-tint); border-color: var(--sk-good-tint); color: var(--sk-good);
+  cursor: default;
+}
+.sk-desk-seat:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+/* Only the chip being saved goes quiet — disabling all forty because one is in
+   flight would stall her mid-class. */
+.sk-desk-seat:disabled { opacity: 0.55; cursor: progress; }
+
+/* The room is over-filled. Amber, not red: it is a fact about the timetable she
+   did not write, and there is nothing here for her to fix in the moment. */
+.sk-desk-warn {
+  font-size: 13px; font-weight: 650; color: var(--sk-amber-ink); background: var(--sk-amber-tint);
+  border-radius: var(--sk-r-sm); padding: 12px 14px; margin: 8px 0 0;
+}
+
 /* On a phone the two-column book row stacks rather than crushing the title. */
 @media (max-width: 480px) {
   .sk-lib-book { flex-direction: column; align-items: flex-start; gap: 8px; }
