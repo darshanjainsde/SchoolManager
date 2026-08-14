@@ -50,8 +50,40 @@ export class ListReservationsQueryDto {
   limit?: number;
 }
 
+export const WAIVER_REASONS = [
+  'BOOK_FOUND',
+  'REPLACED_IN_KIND',
+  'WRITTEN_OFF_UNREPLACEABLE',
+  'HARDSHIP',
+  'LIBRARY_ERROR',
+  'GOODWILL',
+] as const;
+export type WaiverReasonInput = (typeof WAIVER_REASONS)[number];
+
 export class WaiveFineDto {
   @IsString() @MinLength(1) @MaxLength(500) reason!: string;
+
+  /**
+   * REQUIRED. Free text alone is unaggregatable — the collections dashboard
+   * asks "where did each rupee go" and four hundred unique strings cannot
+   * answer it. It is also how the two MECHANICAL outcomes (the book was found,
+   * the family replaced it) end up inflating a school's "let off" figure when
+   * it lost nothing either time.
+   *
+   * `LIBRARY_ERROR` matters more than it looks: it is the honest home for "I
+   * typed the wrong number and charged the wrong child", which has no route at
+   * all today.
+   */
+  @IsIn(WAIVER_REASONS) reasonCode!: WaiverReasonInput;
+}
+
+export class ListDuesQueryDto {
+  /** Split students from teachers: a teacher's ₹300 must never sit inside a
+   *  figure a principal reads as what the children owe. */
+  @IsOptional() @IsIn(['STUDENT', 'TEACHER', 'EXTERNAL']) memberType?: 'STUDENT' | 'TEACHER' | 'EXTERNAL';
+
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) offset?: number;
 }
 
 export const FINE_STATUSES = ['OPEN', 'PAID', 'WAIVED', 'PARTIAL'] as const;

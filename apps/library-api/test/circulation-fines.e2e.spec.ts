@@ -132,7 +132,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
         .post(`/circulation/fines/${fine.id}/waive`)
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ reason: 'Goodwill waiver — first offense' });
+        .send({ reason: 'Goodwill waiver — first offense', reasonCode: 'GOODWILL' });
 
       expect(res.status).toBe(201);
       expect(res.body.fine.status).toBe('WAIVED');
@@ -158,7 +158,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
         .post(`/circulation/fines/${fine.id}/waive`)
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ reason: 'Waive the rest' });
+        .send({ reason: 'Waive the rest', reasonCode: 'HARDSHIP' });
       expect(res.status).toBe(201);
       expect(Number(res.body.fine.waivedAmount)).toBe(70);
     });
@@ -170,7 +170,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
           .post(`/circulation/fines/${fine.id}/waive`)
           .set('X-Library-Host', host(org))
           .set('Authorization', `Bearer ${org.librarianToken}`)
-          .send({ reason: 'x' });
+          .send({ reason: 'x', reasonCode: 'GOODWILL' });
 
       const first = await waiveOnce();
       expect(first.status).toBe(201);
@@ -185,7 +185,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
         .post(`/circulation/fines/${fine.id}/waive`)
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.librarianToken}`)
-        .send({ reason: 'x' });
+        .send({ reason: 'x', reasonCode: 'GOODWILL' });
       expect(res.status).toBe(409);
       expect(res.body.reason).toBe('NOTHING_OUTSTANDING');
     });
@@ -196,7 +196,7 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
         .post(`/circulation/fines/${fine.id}/waive`)
         .set('X-Library-Host', host(org))
         .set('Authorization', `Bearer ${org.assistantToken}`)
-        .send({ reason: 'x' });
+        .send({ reason: 'x', reasonCode: 'GOODWILL' });
       expect(res.status).toBe(403);
     });
   });
@@ -340,8 +340,27 @@ describeLive('circulation desk — fines, waivers, overdue, day-report (Task 10)
        *      make flaky. (This is the risk the deliberate-break proof in
        *      task-9-10-report.md exercised by dropping the index.)
        */
+      /*
+       * `"?\w+"?` on the INDEX NAME, not `\w+`, and that is not cosmetic.
+       *
+       * Postgres quotes an identifier in EXPLAIN output only when it needs to —
+       * i.e. when it contains uppercase. `issue_due` and
+       * `issue_one_active_per_copy` are lowercase and print bare;
+       * `Issue_orgId_idx` (Prisma's own naming) prints as `"Issue_orgId_idx"`.
+       * A bare `\w+` cannot match a leading double quote, so this assertion
+       * silently depended on WHICH index the planner chose — passing for the
+       * two hand-written ones and failing for the Prisma-generated one, while
+       * the plan in both cases is an Index Scan and the property under test
+       * holds perfectly.
+       *
+       * That is the same failure this block's history describes (asserting a
+       * planner preference rather than a property of the code), one level
+       * down: the regex, not the index name, was carrying the assumption. It
+       * surfaced when P3's new suites shifted the row statistics enough for the
+       * planner to prefer `Issue_orgId_idx`.
+       */
       expect(planText).not.toMatch(/Seq Scan on "?Issue"?/);
-      expect(planText).toMatch(/Index (Only )?Scan using \w+ on "?Issue"?/);
+      expect(planText).toMatch(/Index (Only )?Scan using "?\w+"? on "?Issue"?/);
 
       const [idx] = await prisma.$queryRaw<Array<{ indexdef: string; indisvalid: boolean }>>`
         SELECT i.indexdef, x.indisvalid

@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type Fine, type LibraryTx } from '@library/db';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
-import type { DayReportQueryDto, ListFinesQueryDto, WaiveFineDto } from './dto';
+import type { DayReportQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiveFineDto } from './dto';
 import { MEMBER_CARD_SELECT, type MemberCard } from './members.service';
 
 const MS_PER_DAY = 86_400_000;
@@ -34,6 +34,22 @@ export interface FineListItem extends Fine {
   member: MemberCard;
   /** Null for a fine raised without a issue behind it (damage, lost item). */
   issue: { copy: { title: { id: string; title: string } } } | null;
+}
+
+/** One row per MEMBER, which is how the question is actually asked. */
+export interface DuesRow {
+  memberId: string;
+  code: string;
+  firstName: string;
+  lastName: string;
+  memberType: 'STUDENT' | 'TEACHER' | 'EXTERNAL';
+  /** As the librarian writes it (`6-B`). Free text — see Member.classRef. */
+  classRef: string | null;
+  /** Outstanding: amount minus what has been paid and what has been waived. */
+  owed: number;
+  fineCount: number;
+  /** Why they owe it, deduplicated — OVERDUE, LOST, DAMAGE, OTHER. */
+  kinds: Array<'OVERDUE' | 'DAMAGE' | 'LOST' | 'OTHER'>;
 }
 
 export interface OverdueIssueItem {
@@ -178,6 +194,88 @@ export class FinesService {
   }
 
   /**
+   * The dues list, shaped the way the question is actually asked.
+   *
+   * `listFines` above is FINE-shaped: a flat feed ordered by `createdAt`, hard
+   * capped at 50. But nobody stands at a counter asking "show me the most
+   * recent fifty fines" — they ask "does Meera owe anything?", and today that
+   * takes scrolling and mental arithmetic. This returns ONE ROW PER MEMBER,
+   * with what they owe and what it is for.
+   *
+   * `memberType` is a first-class filter, not a convenience. A teacher's ₹300
+   * must never be inside a figure a principal reads as "what the children owe",
+   * and the approved prototype's tile says "Students owing", not "Members
+   * owing". Splitting here is what makes that possible without a second query
+   * shape later.
+   *
+   * Aggregated in SQL rather than by loading fines and summing in JS: a school
+   * with three hundred members and years of history would otherwise pull every
+   * fine row it has ever raised to answer one screen.
+   */
+  async listDues(
+    tx: LibraryTx,
+    orgId: string,
+    query: ListDuesQueryDto,
+    allowedBranches: string[],
+  ): Promise<DuesRow[]> {
+    const limit = Math.min(Math.max(1, query.limit ?? 50), 200);
+    const offset = Math.max(0, query.offset ?? 0);
+
+    // Outstanding, not `amount`: a partially paid or partially waived fine owes
+    // the remainder, and a fully settled one owes nothing and must not appear.
+    const rows = await tx.$queryRaw<
+      Array<{
+        memberId: string;
+        code: string;
+        firstName: string;
+        lastName: string;
+        memberType: 'STUDENT' | 'TEACHER' | 'EXTERNAL';
+        classRef: string | null;
+        owed: Prisma.Decimal;
+        fineCount: bigint;
+        kinds: string[];
+      }>
+    >`
+      SELECT m."id"          AS "memberId",
+             m."code",
+             m."firstName",
+             m."lastName",
+             m."memberType",
+             m."classRef",
+             SUM(f."amount" - f."paidAmount" - COALESCE(f."waivedAmount", 0)) AS "owed",
+             COUNT(f."id")                                                   AS "fineCount",
+             ARRAY_AGG(DISTINCT f."kind"::text)                              AS "kinds"
+      FROM "Fine" f
+      JOIN "Member" m ON m."id" = f."memberId"
+      LEFT JOIN "Issue" i ON i."id" = f."issueId"
+      WHERE f."orgId" = ${orgId}::uuid
+        AND f."status" IN ('OPEN', 'PARTIAL')
+        AND (${query.memberType ?? null}::text IS NULL OR m."memberType"::text = ${query.memberType ?? null})
+        AND (
+          ${allowedBranches.length === 0}
+          OR f."issueId" IS NULL
+          OR i."branchId" = ANY (${allowedBranches}::uuid[])
+        )
+      GROUP BY m."id", m."code", m."firstName", m."lastName", m."memberType", m."classRef"
+      HAVING SUM(f."amount" - f."paidAmount" - COALESCE(f."waivedAmount", 0)) > 0
+      ORDER BY "owed" DESC, m."lastName" ASC, m."firstName" ASC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    return rows.map((r) => ({
+      memberId: r.memberId,
+      code: r.code,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      memberType: r.memberType,
+      classRef: r.classRef,
+      owed: r.owed.toNumber(),
+      fineCount: Number(r.fineCount),
+      kinds: r.kinds as DuesRow['kinds'],
+    }));
+  }
+
+  /**
    * Waives the FULL outstanding balance (`amount - paidAmount`) of a fine —
    * `LIBRARIAN`/`ORG_OWNER` only, enforced structurally by `@Roles` on the
    * route and asserted in the authz matrix (`ASSISTANT` must be denied: see
@@ -219,6 +317,11 @@ export class FinesService {
         waivedByUserId: actorUserId,
         waivedAmount: outstanding,
         waivedReason: dto.reason,
+        // The CODE is what the collections dashboard aggregates on. Free text
+        // alone cannot answer "where did each rupee go", and it is also how
+        // "replaced in kind" and "book found" end up inflating a school's
+        // "let off" figure when it lost nothing either time.
+        waiverReasonCode: dto.reasonCode,
         waivedAt: now,
       },
     });
@@ -231,7 +334,7 @@ export class FinesService {
         entity: 'Fine',
         entityId: fine.id,
         before: { status: fine.status, amount: fine.amount.toString(), paidAmount: fine.paidAmount.toString() },
-        after: { status: 'WAIVED', waivedAmount: outstanding.toString(), waivedReason: dto.reason },
+        after: { status: 'WAIVED', waivedAmount: outstanding.toString(), waivedReason: dto.reason, waiverReasonCode: dto.reasonCode },
       },
     });
 

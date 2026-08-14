@@ -7,7 +7,7 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { ConfirmLostDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, ListFinesQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
+import { ConfirmLostDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, ListDuesQueryDto, ListFinesQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
@@ -328,6 +328,18 @@ export class CirculationController {
     const orgId = this.orgs.requireOrgId();
     const now = new Date();
     return withOrg(orgId, (tx) => this.fines.waive(tx, orgId, id, dto, user.sub, now, user.branches));
+  }
+
+  /**
+   * The dues list, one row per MEMBER — "does Meera owe anything?", which is
+   * the question a librarian actually asks. `/circulation/fines` stays as the
+   * per-fine feed for drilling in.
+   */
+  @Get('dues')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  listDues(@Query() query: ListDuesQueryDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.fines.listDues(tx, orgId, query, user.branches));
   }
 
   @Get('overdue')

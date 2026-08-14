@@ -108,7 +108,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   // (ASSISTANT must be denied — see fines.service.ts's `waive`); the rest are
   // desk reads.
   { method: 'GET', path: '/circulation/fines', roles: READERS },
-  { method: 'POST', path: '/circulation/fines/:id/waive', roles: WRITERS, body: { reason: 'Authz matrix probe' } },
+  { method: 'POST', path: '/circulation/fines/:id/waive', roles: WRITERS, body: { reason: 'Authz matrix probe', reasonCode: 'GOODWILL' } },
+  { method: 'GET', path: '/circulation/dues', roles: READERS },
   { method: 'GET', path: '/circulation/overdue', roles: READERS },
   { method: 'GET', path: '/circulation/day-report', roles: READERS },
 
