@@ -34,39 +34,19 @@ import { describeLive } from './test-live';
  */
 
 /**
- * Foreign keys that were ALREADY unindexed when this guard was written, on
- * tables P3.1 did not touch. Listed by name, the same shape as
- * `RLS_ALLOW_LIST` and `FORBIDDEN_VALUE_EXCEPTIONS`, so the guard protects new
- * work from today without silently blessing the backlog: adding an entry here
- * is a deliberate act visible in review, and the list should only ever shrink.
+ * EMPTY, and it should stay that way.
  *
- * These are real debt, not false positives. `Issue.copyId`, `Issue.memberId`
- * and `Fine.memberId` in particular are on the hottest delete paths in the
- * service. Fixing them is a separate change with its own measurement, because
- * every index also costs on write and these tables carry a school's whole
- * history — it should not ride along inside a lost-books migration.
+ * This began as nineteen pre-existing offenders on the older tables, listed by
+ * name in the same shape as `RLS_ALLOW_LIST` and `FORBIDDEN_VALUE_EXCEPTIONS`
+ * so the guard could protect new work without silently blessing the backlog.
+ * `20260814090000_index_foreign_keys` cleared all nineteen.
+ *
+ * Adding an entry here is a deliberate act, visible in review, and needs a
+ * reason a reader can weigh — the `not rotted` test below also fails on any
+ * entry that no longer names a real unindexed FK, so the list cannot quietly
+ * accumulate dead weight either.
  */
-export const UNINDEXED_FK_BASELINE = [
-  'Category.parentId',
-  'CirculationPolicy.branchId',
-  'ClassVisit.branchId',
-  'ClassVisit.periodId',
-  'Copy.branchId',
-  'Fine.issueId',
-  'Fine.memberId',
-  'Fine.waivedByUserId',
-  'Issue.branchId',
-  'Issue.copyId',
-  'Issue.issuedByUserId',
-  'Issue.memberId',
-  'Issue.returnedByUserId',
-  'Member.homeBranchId',
-  'Reservation.branchId',
-  'Reservation.memberId',
-  'Reservation.readyCopyId',
-  'Reservation.titleId',
-  'VisitAttendance.memberId',
-];
+export const UNINDEXED_FK_BASELINE: string[] = [];
 
 describeLive('every foreign key is indexed', () => {
   it('has no FK column that would force a sequential scan on parent delete', async () => {

@@ -7,7 +7,7 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { ConfirmLostDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, CollectionsQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiverLogQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
+import { ConfirmLostDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, TurnedUpDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, CollectionsQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiverLogQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
@@ -257,6 +257,52 @@ export class CirculationController {
       undefined,
       LOST_TX_OPTIONS,
     );
+  }
+
+  /**
+   * The original turned up AFTER the family paid. Not a reversal — the money
+   * has changed hands — so it is a choice between owing a refund and the family
+   * keeping the book. WRITERS: it decides whether the school owes money.
+   */
+  @Post('lost/:id/turned-up')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  @UseInterceptors(IdempotencyInterceptor)
+  turnedUp(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: TurnedUpDto,
+    @CurrentUser() user: LibJwtPayload,
+  ) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) => this.lost.turnedUpAfterSettlement(tx, orgId, id, dto.outcome, user.sub, now, user.branches),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /** The money was handed back at the desk. Records that it happened. */
+  @Post('lost/:id/refunded')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  @UseInterceptors(IdempotencyInterceptor)
+  markRefunded(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    const now = new Date();
+    return withOrg(
+      orgId,
+      (tx) => this.lost.markRefunded(tx, orgId, id, user.sub, now, user.branches),
+      undefined,
+      LOST_TX_OPTIONS,
+    );
+  }
+
+  /** What the school still owes families. The whole point is that it is visible. */
+  @Get('lost/refunds-owed')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
+  outstandingRefunds(@CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.lost.outstandingRefunds(tx, orgId, user.branches));
   }
 
   @Post('renew')

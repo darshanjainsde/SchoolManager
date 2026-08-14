@@ -904,4 +904,168 @@ export class LostService {
 
     return { lostReportId: report.id };
   }
+
+  /**
+   * The original copy turned up AFTER the loss was settled by payment.
+   *
+   * This is not a reversal — the money has already changed hands — so it is
+   * offered as a choice with exactly two outcomes, and NEITHER of them moves
+   * money, because this software cannot and should not pretend to:
+   *
+   *   REFUND_OWED — the book goes back on the shelf at its old number, and the
+   *     school owes the family what they paid. That obligation is written down
+   *     and stays on screen until a librarian settles it at the desk and ticks
+   *     it off. The school's job is to make sure nobody forgets; the software's
+   *     job is not to move cash.
+   *
+   *   FAMILY_KEEPS — they paid for it, so it is theirs. The copy stays retired,
+   *     nothing is owed either way, and the register says so.
+   *
+   * `FineStatus` gains no `REFUND` or `CREDIT` value for this. Adding one to a
+   * shipped money enum would change the meaning of every sum built on it — the
+   * dues list, the collections tiles, P4's `/me/dues` — for an event that
+   * happens a handful of times a year. The fine stays PAID, because it WAS
+   * paid. And no credit wallet: a library credit is spendable on nothing else
+   * here, so a credit a child can never use is strictly worse than a written
+   * down obligation a human can act on.
+   */
+  async turnedUpAfterSettlement(
+    tx: LibraryTx,
+    orgId: string,
+    reportId: string,
+    outcome: 'REFUND_OWED' | 'FAMILY_KEEPS',
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<{ lostReportId: string; refundOwedAmount: number | null; copyBackOnShelf: boolean }> {
+    const report = await tx.lostReport.findUnique({ where: { id: reportId } });
+    if (!report) throw new NotFoundException('Lost report not found');
+    assertBranchInScope(report.branchId, allowedBranches);
+    if (report.status !== 'SETTLED_PAID') {
+      throw new ConflictException(
+        `Lost report is ${report.status}; this is for a loss that was already PAID — an unsettled one is simply "found"`,
+      );
+    }
+    if (report.refundOwedAmount !== null || report.refundedAt !== null) {
+      throw new ConflictException('This loss has already been recorded as turned up');
+    }
+
+    if (outcome === 'FAMILY_KEEPS') {
+      await tx.lostReport.update({
+        where: { id: report.id },
+        data: { approvedByNote: 'Turned up; the family kept the book they paid for' },
+      });
+      await tx.auditLog.create({
+        data: {
+          orgId,
+          actorUserId,
+          action: 'circulation.lost.turned_up',
+          entity: 'LostReport',
+          entityId: report.id,
+          after: { outcome, refundOwedAmount: null },
+        },
+      });
+      return { lostReportId: report.id, refundOwedAmount: null, copyBackOnShelf: false };
+    }
+
+    // What they actually paid on this loss — read from the fines, not from the
+    // report's own amounts, because a partial waiver or a price the librarian
+    // edited means the two can legitimately differ.
+    const paid = report.issueId
+      ? await tx.fine.aggregate({
+          where: { issueId: report.issueId, status: 'PAID' },
+          _sum: { paidAmount: true },
+        })
+      : { _sum: { paidAmount: null } };
+    const refundOwed = paid._sum.paidAmount ?? new Prisma.Decimal(0);
+
+    // Back on the shelf at its OLD number — the same physical object, with that
+    // number already in ink inside its cover.
+    await tx.copy.update({ where: { id: report.copyId }, data: { status: 'AVAILABLE' } });
+
+    await tx.lostReport.update({
+      where: { id: report.id },
+      data: { refundOwedAmount: refundOwed },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.turned_up',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: { outcome, refundOwedAmount: refundOwed.toString() },
+      },
+    });
+
+    return {
+      lostReportId: report.id,
+      refundOwedAmount: refundOwed.toNumber(),
+      copyBackOnShelf: true,
+    };
+  }
+
+  /**
+   * A librarian handed the money back at the desk. This records that it
+   * happened, and who did it — it does not move anything.
+   */
+  async markRefunded(
+    tx: LibraryTx,
+    orgId: string,
+    reportId: string,
+    actorUserId: string,
+    now: Date,
+    allowedBranches: string[],
+  ): Promise<{ lostReportId: string; refundedAt: Date }> {
+    const report = await tx.lostReport.findUnique({ where: { id: reportId } });
+    if (!report) throw new NotFoundException('Lost report not found');
+    assertBranchInScope(report.branchId, allowedBranches);
+    if (report.refundOwedAmount === null) {
+      throw new ConflictException('No refund is owed on this loss');
+    }
+    if (report.refundedAt !== null) {
+      throw new ConflictException('This refund has already been marked given');
+    }
+
+    await tx.lostReport.update({
+      where: { id: report.id },
+      data: { refundedAt: now, refundedByUserId: actorUserId },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        orgId,
+        actorUserId,
+        action: 'circulation.lost.refunded',
+        entity: 'LostReport',
+        entityId: report.id,
+        after: { refundOwedAmount: report.refundOwedAmount.toString(), refundedAt: now },
+      },
+    });
+
+    return { lostReportId: report.id, refundedAt: now };
+  }
+
+  /**
+   * Refunds the school still owes. This list is the entire mechanism that stops
+   * a family being quietly out of pocket, so it is deliberately unbounded and
+   * unpaginated — if it is ever long enough for that to matter, something is
+   * badly wrong and the length is itself the signal.
+   */
+  async outstandingRefunds(tx: LibraryTx, orgId: string, allowedBranches: string[]) {
+    return tx.lostReport.findMany({
+      where: {
+        orgId,
+        refundOwedAmount: { not: null },
+        refundedAt: null,
+        ...(allowedBranches.length > 0 ? { branchId: { in: allowedBranches } } : {}),
+      },
+      orderBy: { settledAt: 'asc' },
+      include: {
+        member: { select: { id: true, code: true, firstName: true, lastName: true, classRef: true } },
+        copy: { select: { accessionNumber: true, title: { select: { title: true } } } },
+      },
+    });
+  }
 }

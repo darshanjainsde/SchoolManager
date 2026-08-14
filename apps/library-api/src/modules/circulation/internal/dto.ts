@@ -234,3 +234,12 @@ export class CollectionsQueryDto {
 export class WaiverLogQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) limit?: number;
 }
+
+export class TurnedUpDto {
+  /**
+   * REFUND_OWED puts the book back on the shelf and writes down what the school
+   * owes the family. FAMILY_KEEPS leaves the copy retired — they paid for it,
+   * so it is theirs. Neither moves money; this software records, it does not pay.
+   */
+  @IsIn(['REFUND_OWED', 'FAMILY_KEEPS']) outcome!: 'REFUND_OWED' | 'FAMILY_KEEPS';
+}

@@ -88,6 +88,10 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/circulation/lost/:id/replace', roles: WRITERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-REPL' } },
   { method: 'POST', path: '/circulation/lost/:id/found', roles: READERS },
   { method: 'POST', path: '/circulation/lost/missing', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-MISSING' } },
+  // Deciding whether the school owes a family money is WRITERS.
+  { method: 'POST', path: '/circulation/lost/:id/turned-up', roles: WRITERS, body: { outcome: 'FAMILY_KEEPS' } },
+  { method: 'POST', path: '/circulation/lost/:id/refunded', roles: WRITERS, body: {} },
+  { method: 'GET',  path: '/circulation/lost/refunds-owed', roles: WRITERS },
 
   // Task 9 — renew and reservations. Same desk-role split as issue/return: ORG_OWNER/
   // LIBRARIAN/ASSISTANT work the desk, MEMBER is denied. Ids in bodies are

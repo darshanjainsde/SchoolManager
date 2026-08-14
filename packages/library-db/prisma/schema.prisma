@@ -204,6 +204,7 @@ model LibUser {
   lostReported   LostReport[]  @relation("LostReportReportedBy")
   lostConfirmed  LostReport[]  @relation("LostReportConfirmedBy")
   lostSettled    LostReport[]  @relation("LostReportSettledBy")
+  lostRefunded   LostReport[]  @relation("LostReportRefundedBy")
 
   @@unique([orgId, email])
   @@unique([orgId, phone])
@@ -255,6 +256,7 @@ model Member {
   @@index([orgId, externalRef])
 
   visitAttendance VisitAttendance[]
+  @@index([homeBranchId])
 }
 
 /// Hash-keyed and single-use. Deliberately has no RLS policy — see the
@@ -475,6 +477,7 @@ model Category {
 
   @@unique([orgId, name])
   @@index([orgId])
+  @@index([parentId])
 }
 
 /// Carries no orgId of its own — see TitleAuthor's comment above; same
@@ -527,6 +530,8 @@ model Copy {
   @@unique([orgId, accessionNumber])
   @@index([titleId, status])
   @@index([orgId, branchId, status])
+  /// FK index — see 20260814090000_index_foreign_keys.
+  @@index([branchId])
 }
 
 enum IssueStatus {
@@ -717,6 +722,7 @@ model CirculationPolicy {
 
   @@index([orgId, branchId, memberType])
   @@index([orgId])
+  @@index([branchId])
 }
 
 model Issue {
@@ -756,6 +762,12 @@ model Issue {
 
   @@index([orgId])
   @@index([orgId, branchId])
+  /// FK indexes — see 20260814090000_index_foreign_keys.
+  @@index([copyId])
+  @@index([memberId])
+  @@index([branchId])
+  @@index([issuedByUserId])
+  @@index([returnedByUserId])
 }
 
 /// Keyed on titleId, not copyId: a member holds a place in line for a TITLE
@@ -814,6 +826,11 @@ model Reservation {
 
   @@index([orgId])
   @@index([orgId, branchId])
+  /// FK indexes — see 20260814090000_index_foreign_keys.
+  @@index([titleId])
+  @@index([memberId])
+  @@index([branchId])
+  @@index([readyCopyId])
 }
 
 model Fine {
@@ -905,6 +922,9 @@ model Fine {
   /// scan every fine the school has ever raised.
   @@index([amountSetByUserId])
   @@index([paidByUserId])
+  @@index([memberId])
+  @@index([issueId])
+  @@index([waivedByUserId])
 }
 
 /// One physical book reported lost, and everything that happened to it after.
@@ -994,6 +1014,18 @@ model LostReport {
   /// beats a gate that gets routed around.
   approvedByNote   String?
 
+  /// Set when the original copy turns up AFTER the family has already paid.
+  /// The school then has both the money and the book, and software cannot send
+  /// money back — so this records the OBLIGATION and keeps it on screen until a
+  /// librarian settles it at the desk and ticks `refundedAt`.
+  ///
+  /// Null means no refund is owed: either nothing was ever paid, or the family
+  /// chose to keep the book they paid for. `FineStatus` gains no REFUND/CREDIT
+  /// value for this — see the migration's own comment.
+  refundOwedAmount Decimal?  @db.Decimal(10, 2)
+  refundedAt       DateTime?
+  refundedByUserId String?   @db.Uuid
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1005,6 +1037,7 @@ model LostReport {
   reportedBy LibUser?   @relation("LostReportReportedBy", fields: [reportedByUserId], references: [id], onDelete: SetNull)
   confirmedBy LibUser?  @relation("LostReportConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
   settledBy  LibUser?   @relation("LostReportSettledBy", fields: [settledByUserId], references: [id], onDelete: SetNull)
+  refundedBy LibUser?   @relation("LostReportRefundedBy", fields: [refundedByUserId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
   @@index([orgId, branchId, status])
@@ -1022,6 +1055,7 @@ model LostReport {
   @@index([reportedByUserId])
   @@index([confirmedByUserId])
   @@index([settledByUserId])
+  @@index([refundedByUserId])
 }
 
 enum NotificationChannel {
@@ -1159,6 +1193,8 @@ model ClassVisit {
   /// visit to branch B, and both rosters would merge.
   @@unique([orgId, branchId, classRef, date])
   @@index([orgId, branchId, date])
+  @@index([branchId])
+  @@index([periodId])
 }
 
 /// Who was present at a visit.
@@ -1186,4 +1222,5 @@ model VisitAttendance {
   /// database is what enforces that under a double-tap, not the handler.
   @@unique([visitId, memberId])
   @@index([orgId, memberId])
+  @@index([memberId])
 }
