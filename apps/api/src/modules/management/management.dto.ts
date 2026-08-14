@@ -439,6 +439,21 @@ export class CreateLoginDto {
   @IsString()
   @Length(1, 60)
   username?: string;
+
+  /**
+   * Which kind of staff login this is. Omitted means `STAFF`, so every existing
+   * caller keeps its current behaviour.
+   *
+   * `LIBRARIAN` is the only other value on purpose. This route creates a login
+   * for a `Staff` record, and the two things a school hires that need a login
+   * of their own are general non-teaching staff and the librarian. Teachers
+   * come through their own route with their own record; letting this one mint
+   * a TEACHER or SCHOOL_ADMIN would make a staff-management screen into a
+   * privilege-escalation path.
+   */
+  @IsOptional()
+  @IsIn(['STAFF', 'LIBRARIAN'])
+  role?: 'STAFF' | 'LIBRARIAN';
 }
 
 // ── TimetableSlot ─────────────────────────────────────────────────────────────

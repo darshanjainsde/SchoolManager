@@ -22,4 +22,10 @@ describe('homeForRole', () => {
     expect(homeForRole('OWNER')).toBe('/login');
     expect(homeForRole(undefined)).toBe('/login');
   });
+
+  it('sends a LIBRARIAN to the library counter, never the admin console', () => {
+    // The whole point of LIBRARIAN being its own role: she must not land on
+    // /app and see students, staff and fees.
+    expect(homeForRole('LIBRARIAN')).toBe('/app/library');
+  });
 });

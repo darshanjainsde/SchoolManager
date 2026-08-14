@@ -86,10 +86,15 @@ export class StaffService {
       const placeholder = randomBytes(32).toString('base64url');
       const passwordHash = await this.passwords.hash(placeholder);
 
+      // STAFF unless the caller asked for a librarian. Constrained to those two
+      // by the DTO — a staff screen must not be able to mint a TEACHER or an
+      // admin. See CreateLoginDto.role.
+      const role = dto.role ?? 'STAFF';
+
       let user: { id: string };
       try {
         user = await tx.user.create({
-          data: { schoolId, email, username, passwordHash, role: 'STAFF' },
+          data: { schoolId, email, username, passwordHash, role },
         });
       } catch (e) {
         if (isP2002(e)) throw this.conflictFor(e);

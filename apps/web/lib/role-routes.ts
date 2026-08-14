@@ -20,6 +20,11 @@ export function homeForRole(role: string | undefined): string {
       return '/teacher';
     case 'STAFF':
       return '/staff';
+    case 'LIBRARIAN':
+      // Straight to the counter, not the admin console. A librarian is a job
+      // title, not an administrator: she signs in at the school's normal login
+      // and the first thing on screen is the desk she actually works at.
+      return '/app/library';
     case 'SCHOOL_ADMIN':
       return '/app';
     default:
