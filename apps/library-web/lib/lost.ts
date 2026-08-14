@@ -15,15 +15,25 @@ import type { Money } from './circulation';
  * rather than sloppy — each one matches what its endpoint actually sends.
  */
 
+/**
+ * What a librarian may choose when waiving BY HAND.
+ *
+ * `BOOK_FOUND` and `REPLACED_IN_KIND` are not here on purpose. Collections
+ * excludes those two from "let off" because the school got a book back — so
+ * they must only ever be written by the routes where that actually happened.
+ * Offering them here would let any waiver be relabelled as costless and
+ * disappear from the money screen.
+ */
 export const WAIVER_REASONS = [
   { code: 'HARDSHIP', label: 'The family cannot pay' },
   { code: 'LIBRARY_ERROR', label: 'Our mistake — wrong child or wrong charge' },
   { code: 'GOODWILL', label: 'Let off as a goodwill gesture' },
   { code: 'WRITTEN_OFF_UNREPLACEABLE', label: 'Out of print — nothing to replace it with' },
-  { code: 'BOOK_FOUND', label: 'The original book was found' },
-  { code: 'REPLACED_IN_KIND', label: 'The family brought a replacement' },
 ] as const;
-export type WaiverReasonCode = (typeof WAIVER_REASONS)[number]['code'];
+export type WaiverReasonCode =
+  | (typeof WAIVER_REASONS)[number]['code']
+  | 'BOOK_FOUND'
+  | 'REPLACED_IN_KIND';
 
 /** The two the school lost nothing on — never counted as money let off. */
 export const MECHANICAL_REASONS: readonly WaiverReasonCode[] = ['BOOK_FOUND', 'REPLACED_IN_KIND'];

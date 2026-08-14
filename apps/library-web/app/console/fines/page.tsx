@@ -183,8 +183,9 @@ export default function FinesPage() {
               ))}
             </select>
             <div style={{ fontSize: '.72rem', color: 'var(--lb-ink-3)' }}>
-              The last two mean the school lost nothing, so they are kept out of
-              what Collections reports as money let off.
+              A book that was found, or replaced by the family, is cleared from the
+              lost-book screen instead — those cost the school nothing and are not
+              waivers.
             </div>
           </div>
           <div className="lbx-field" style={{ marginTop: '.6rem' }}>

@@ -7,7 +7,7 @@ import { Roles, RolesGuard } from '../../../common/guards/roles.guard';
 import { BranchScopeGuard } from '../../../common/guards/branch-scope.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdempotencyInterceptor } from '../../../common/idempotency/idempotency.interceptor';
-import { ConfirmLostDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, TurnedUpDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, CollectionsQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiverLogQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
+import { ConfirmLostDto, ListLostQueryDto, PayLostDto, ReplaceInKindDto, ReportMissingDto, TurnedUpDto, WriteOffLostDto, CreateReservationDto, DayReportQueryDto, IssueBookDto, CollectionsQueryDto, ListDuesQueryDto, ListFinesQueryDto, WaiverLogQueryDto, ListReservationsQueryDto, RejectLostDto, RenewBookDto, ReportLostDto, ReturnBookDto, SearchMembersQueryDto, SelfReportLostDto, WaiveFineDto } from './dto';
 import { FinesService } from './fines.service';
 import { ReservationsService } from './reservations.service';
 import { IssuesService } from './issues.service';
@@ -225,12 +225,18 @@ export class CirculationController {
   }
 
   /**
-   * The original turned up. ASSISTANT can do this: reversing must be as easy as
-   * reporting, or nobody reports — and the frozen late charge stands either way,
-   * so this is not a way to give money back.
+   * The original turned up.
+   *
+   * WRITERS, not the desk roles. The earlier comment argued that the frozen late
+   * charge stands either way so this is "not a way to give money back" — but the
+   * late charge is the ₹15; what this clears is the ₹299 replacement, with the
+   * MECHANICAL code that also keeps it out of the collections "let off" tile. An
+   * ASSISTANT could therefore erase the largest charge in the service and leave
+   * no trace on the screen an owner reads. Forgiving money is WRITERS, without
+   * exception.
    */
   @Post('lost/:id/found')
-  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  @Roles('ORG_OWNER', 'LIBRARIAN')
   @UseInterceptors(IdempotencyInterceptor)
   foundLost(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: LibJwtPayload) {
     const orgId = this.orgs.requireOrgId();
@@ -295,6 +301,18 @@ export class CirculationController {
       undefined,
       LOST_TX_OPTIONS,
     );
+  }
+
+  /**
+   * The lost-books queue. Staff-only, and the ONLY way any settlement route's
+   * report id can be discovered — without it a child's self-report is
+   * unreachable forever.
+   */
+  @Get('lost')
+  @Roles('ORG_OWNER', 'LIBRARIAN', 'ASSISTANT')
+  listLost(@Query() query: ListLostQueryDto, @CurrentUser() user: LibJwtPayload) {
+    const orgId = this.orgs.requireOrgId();
+    return withOrg(orgId, (tx) => this.lost.listLostReports(tx, orgId, query.status, user.branches));
   }
 
   /** What the school still owes families. The whole point is that it is visible. */

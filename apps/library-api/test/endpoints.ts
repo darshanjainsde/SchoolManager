@@ -86,11 +86,16 @@ export const ENDPOINTS: EndpointSpec[] = [
   // found is not — reversing must be as easy as reporting or nobody reports,
   // and the frozen late charge stands either way.
   { method: 'POST', path: '/circulation/lost/:id/replace', roles: WRITERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-REPL' } },
-  { method: 'POST', path: '/circulation/lost/:id/found', roles: READERS },
+  // Forgiving money is WRITERS without exception: `found` clears the LOST
+  // charge with a mechanical code, which also keeps it out of the collections
+  // "let off" tile — an ASSISTANT doing that would leave no trace anywhere an
+  // owner reads.
+  { method: 'POST', path: '/circulation/lost/:id/found', roles: WRITERS },
   { method: 'POST', path: '/circulation/lost/missing', roles: READERS, body: { accessionNumber: 'AUTHZ-MATRIX-PROBE-MISSING' } },
   // Deciding whether the school owes a family money is WRITERS.
   { method: 'POST', path: '/circulation/lost/:id/turned-up', roles: WRITERS, body: { outcome: 'FAMILY_KEEPS' } },
   { method: 'POST', path: '/circulation/lost/:id/refunded', roles: WRITERS, body: {} },
+  { method: 'GET',  path: '/circulation/lost', roles: READERS },
   { method: 'GET',  path: '/circulation/lost/refunds-owed', roles: WRITERS },
 
   // Task 9 — renew and reservations. Same desk-role split as issue/return: ORG_OWNER/

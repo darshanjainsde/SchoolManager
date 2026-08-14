@@ -50,15 +50,25 @@ export class ListReservationsQueryDto {
   limit?: number;
 }
 
-export const WAIVER_REASONS = [
-  'BOOK_FOUND',
-  'REPLACED_IN_KIND',
+/**
+ * Codes a human may choose when waiving a fine BY HAND.
+ *
+ * `BOOK_FOUND` and `REPLACED_IN_KIND` are deliberately ABSENT. They are
+ * MECHANICAL — the collections report excludes them from "let off" on the
+ * grounds that the school lost nothing — and that exclusion is only sound if
+ * they can be produced solely by the two routes where the school really did get
+ * a book back (`foundLost`, `replaceInKind`). Offered on the manual waive form
+ * they become an opt-out: any WRITER could clear a real ₹299 debt, pick "the
+ * original book was found", and the money would vanish from the one screen an
+ * owner reads.
+ */
+export const MANUAL_WAIVER_REASONS = [
   'WRITTEN_OFF_UNREPLACEABLE',
   'HARDSHIP',
   'LIBRARY_ERROR',
   'GOODWILL',
 ] as const;
-export type WaiverReasonInput = (typeof WAIVER_REASONS)[number];
+export type WaiverReasonInput = (typeof MANUAL_WAIVER_REASONS)[number];
 
 export class WaiveFineDto {
   @IsString() @MinLength(1) @MaxLength(500) reason!: string;
@@ -74,7 +84,7 @@ export class WaiveFineDto {
    * typed the wrong number and charged the wrong child", which has no route at
    * all today.
    */
-  @IsIn(WAIVER_REASONS) reasonCode!: WaiverReasonInput;
+  @IsIn(MANUAL_WAIVER_REASONS) reasonCode!: WaiverReasonInput;
 }
 
 export class ListDuesQueryDto {
@@ -242,4 +252,14 @@ export class TurnedUpDto {
    * so it is theirs. Neither moves money; this software records, it does not pay.
    */
   @IsIn(['REFUND_OWED', 'FAMILY_KEEPS']) outcome!: 'REFUND_OWED' | 'FAMILY_KEEPS';
+}
+
+export const LOST_REPORT_STATUSES = [
+  'REPORTED', 'CONFIRMED', 'REJECTED',
+  'SETTLED_PAID', 'SETTLED_IN_KIND', 'WRITTEN_OFF', 'FOUND',
+] as const;
+
+export class ListLostQueryDto {
+  /** Omit for everything; `REPORTED` is the queue a librarian must clear. */
+  @IsOptional() @IsIn(LOST_REPORT_STATUSES) status?: (typeof LOST_REPORT_STATUSES)[number];
 }

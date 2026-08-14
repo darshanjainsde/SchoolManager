@@ -30,6 +30,27 @@ export interface ReportLostResult {
  */
 export const LOST_TX_OPTIONS = { timeout: 15_000, maxWait: 10_000 };
 
+/**
+ * Creates the report, turning the partial unique index's violation into a 409.
+ *
+ * `lost_report_one_open_per_copy` is what actually serialises two clerks
+ * reporting the same book — but an unmapped P2002 surfaces as a
+ * `PrismaClientKnownRequestError` with no HTTP status, which Nest renders as a
+ * 500. The loser of a race is not a server fault: they should be told the book
+ * is already reported, the way `issues.service.ts` and `reservations.service.ts`
+ * already tell a losing caller.
+ */
+async function createLostReport(tx: LibraryTx, data: Prisma.LostReportUncheckedCreateInput) {
+  try {
+    return await tx.lostReport.create({ data });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new ConflictException('This copy is already reported lost');
+    }
+    throw err;
+  }
+}
+
 @Injectable()
 export class LostService {
   /**
@@ -158,8 +179,7 @@ export class LostService {
     // settlement hangs off. Created already CONFIRMED because a librarian is
     // standing at the counter having the conversation — the confirm step exists
     // for a child tapping a button with no adult in the loop, not for this.
-    const report = await tx.lostReport.create({
-      data: {
+    const report = await createLostReport(tx, {
         orgId,
         copyId: copy.id,
         branchId: issue.branchId,
@@ -178,7 +198,6 @@ export class LostService {
         // The CHECK `LostReport_price_has_source` ties these two together, so
         // the null-ness of one must always match the other.
         priceSource: resolved.source === 'UNPRICED' ? null : resolved.source,
-      },
     });
 
     await tx.auditLog.create({
@@ -243,7 +262,7 @@ export class LostService {
     accessionNumber: string,
     actorUserId: string,
     now: Date,
-  ): Promise<{ lostReportId: string; frozenLateAmount: number | null }> {
+  ): Promise<{ lostReportId: string; lateChargeFrozen: boolean }> {
     const actor = await tx.libUser.findUnique({
       where: { id: actorUserId },
       select: { memberId: true },
@@ -286,21 +305,19 @@ export class LostService {
     });
     await tx.copy.update({ where: { id: copy.id }, data: { status: 'LOST' } });
 
-    const report = await tx.lostReport.create({
-      data: {
-        orgId,
-        copyId: copy.id,
-        branchId: issue.branchId,
-        memberId,
-        issueId: issue.id,
-        reportedByUserId: actorUserId,
-        selfReported: true,
-        reportedAt: now,
-        // REPORTED, not CONFIRMED: no money exists yet.
-        status: 'REPORTED',
-        frozenLateAmount:
-          frozenLateAmount === null ? null : new Prisma.Decimal(frozenLateAmount),
-      },
+    const report = await createLostReport(tx, {
+      orgId,
+      copyId: copy.id,
+      branchId: issue.branchId,
+      memberId,
+      issueId: issue.id,
+      reportedByUserId: actorUserId,
+      selfReported: true,
+      reportedAt: now,
+      // REPORTED, not CONFIRMED: no money exists yet.
+      status: 'REPORTED',
+      frozenLateAmount:
+        frozenLateAmount === null ? null : new Prisma.Decimal(frozenLateAmount),
     });
 
     await tx.auditLog.create({
@@ -314,7 +331,10 @@ export class LostService {
       },
     });
 
-    return { lostReportId: report.id, frozenLateAmount };
+    // Deliberately NO rupee figure. The child is told the clock has stopped;
+    // the only party that tells them what they OWE is the library, after a
+    // librarian has confirmed the loss and looked at the actual book.
+    return { lostReportId: report.id, lateChargeFrozen: frozenLateAmount !== null };
   }
 
   /**
@@ -509,6 +529,37 @@ export class LostService {
    * of them; a stock-take loss has no issue and therefore no fines, which is
    * correct — there is nobody to charge.
    */
+  /**
+   * Moves a report OUT of `CONFIRMED` and into a terminal status, atomically.
+   *
+   * `loadSettleable` reads the status and checks it in JS, which is a
+   * check-then-write: under READ COMMITTED two clerks who both read `CONFIRMED`
+   * before either commits will both proceed, and one loss gets settled twice —
+   * once as money collected and once as money let off, for the same rupees.
+   * Trap 3, verbatim.
+   *
+   * `updateMany` with the status in its WHERE is the compare-and-swap: Postgres
+   * re-evaluates that predicate against the committed row after taking the row
+   * lock, so exactly one caller matches and the other matches zero. Every
+   * settlement claims the report through here BEFORE touching any fine.
+   */
+  private async claimSettlement(
+    tx: LibraryTx,
+    reportId: string,
+    next: 'SETTLED_PAID' | 'SETTLED_IN_KIND' | 'WRITTEN_OFF' | 'FOUND',
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    const { count } = await tx.lostReport.updateMany({
+      where: { id: reportId, status: 'CONFIRMED' },
+      data: { status: next, ...data },
+    });
+    if (count === 0) {
+      throw new ConflictException(
+        'This loss was settled by someone else a moment ago — reload before trying again',
+      );
+    }
+  }
+
   private async loadSettleable(
     tx: LibraryTx,
     reportId: string,
@@ -521,6 +572,12 @@ export class LostService {
       throw new ConflictException(
         `Lost report is ${report.status}; only a confirmed loss can be settled`,
       );
+    }
+    if (!report.issueId) {
+      // A stock-take loss has no member and no issue, so there is no money and
+      // nobody to take it from. Settling one used to succeed vacuously and could
+      // then generate a zero-rupee "refund owed" against a null member.
+      throw new ConflictException('Nobody had this book — there is nothing to settle');
     }
     const openFines = report.issueId
       ? await tx.fine.findMany({
@@ -551,6 +608,12 @@ export class LostService {
     allowedBranches: string[],
   ): Promise<{ lostReportId: string; paidFineIds: string[]; totalPaid: number }> {
     const { report, openFines } = await this.loadSettleable(tx, reportId, allowedBranches);
+    // Claim FIRST: if another clerk is settling this same loss, we must lose
+    // here, before any fine is touched.
+    await this.claimSettlement(tx, report.id, 'SETTLED_PAID', {
+      settledAt: now,
+      settledByUserId: actorUserId,
+    });
 
     let totalPaid = new Prisma.Decimal(0);
     const paidFineIds: string[] = [];
@@ -570,11 +633,6 @@ export class LostService {
       totalPaid = totalPaid.plus(outstanding);
       paidFineIds.push(fine.id);
     }
-
-    await tx.lostReport.update({
-      where: { id: report.id },
-      data: { status: 'SETTLED_PAID', settledAt: now, settledByUserId: actorUserId },
-    });
 
     await tx.auditLog.create({
       data: {
@@ -615,6 +673,11 @@ export class LostService {
     allowedBranches: string[],
   ): Promise<{ lostReportId: string; waivedFineIds: string[]; totalWrittenOff: number }> {
     const { report, openFines } = await this.loadSettleable(tx, reportId, allowedBranches);
+    await this.claimSettlement(tx, report.id, 'WRITTEN_OFF', {
+      settledAt: now,
+      settledByUserId: actorUserId,
+      approvedByNote,
+    });
 
     let total = new Prisma.Decimal(0);
     const waivedFineIds: string[] = [];
@@ -634,16 +697,6 @@ export class LostService {
       total = total.plus(outstanding);
       waivedFineIds.push(fine.id);
     }
-
-    await tx.lostReport.update({
-      where: { id: report.id },
-      data: {
-        status: 'WRITTEN_OFF',
-        settledAt: now,
-        settledByUserId: actorUserId,
-        approvedByNote,
-      },
-    });
 
     await tx.auditLog.create({
       data: {
@@ -695,6 +748,10 @@ export class LostService {
     allowedBranches: string[],
   ): Promise<{ lostReportId: string; newCopyId: string; clearedFineIds: string[] }> {
     const { report, openFines } = await this.loadSettleable(tx, reportId, allowedBranches);
+    await this.claimSettlement(tx, report.id, 'SETTLED_IN_KIND', {
+      settledAt: now,
+      settledByUserId: actorUserId,
+    });
     const oldCopy = await tx.copy.findUnique({ where: { id: report.copyId } });
     if (!oldCopy) throw new NotFoundException('Copy not found');
 
@@ -715,13 +772,16 @@ export class LostService {
         },
       });
     } catch (err) {
-      // `Copy_orgId_accessionNumber_key` — the number is already in the
-      // register, which is exactly the collision the unique index exists to
-      // catch. A retired number can never be reused, so this is also what stops
-      // someone re-entering the lost book's own number.
-      throw new ConflictException(
-        `Accession number ${newAccessionNumber} is already in the register`,
-      );
+      // ONLY the unique-violation is the librarian's typing. A bare catch here
+      // told them "that number is taken" for a timeout, a dropped connection or
+      // an FK violation too — a confident, wrong answer that sends them looking
+      // in the register for a number that is not there.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException(
+          `Accession number ${newAccessionNumber} is already in the register`,
+        );
+      }
+      throw err;
     }
 
     // Only the LOST fine is cleared in kind. The late charge stands.
@@ -740,11 +800,6 @@ export class LostService {
       });
       clearedFineIds.push(fine.id);
     }
-
-    await tx.lostReport.update({
-      where: { id: report.id },
-      data: { status: 'SETTLED_IN_KIND', settledAt: now, settledByUserId: actorUserId },
-    });
 
     await tx.auditLog.create({
       data: {
@@ -790,6 +845,10 @@ export class LostService {
     allowedBranches: string[],
   ): Promise<{ lostReportId: string; accessionNumber: string; clearedFineIds: string[] }> {
     const { report, openFines } = await this.loadSettleable(tx, reportId, allowedBranches);
+    await this.claimSettlement(tx, report.id, 'FOUND', {
+      settledAt: now,
+      settledByUserId: actorUserId,
+    });
     const copy = await tx.copy.findUnique({ where: { id: report.copyId } });
     if (!copy) throw new NotFoundException('Copy not found');
 
@@ -810,11 +869,6 @@ export class LostService {
       });
       clearedFineIds.push(fine.id);
     }
-
-    await tx.lostReport.update({
-      where: { id: report.id },
-      data: { status: 'FOUND', settledAt: now, settledByUserId: actorUserId },
-    });
 
     await tx.auditLog.create({
       data: {
@@ -872,23 +926,21 @@ export class LostService {
 
     await tx.copy.update({ where: { id: copy.id }, data: { status: 'LOST' } });
 
-    const report = await tx.lostReport.create({
-      data: {
-        orgId,
-        copyId: copy.id,
-        branchId: copy.branchId,
-        // Both null, together — the CHECK enforces it.
-        memberId: null,
-        issueId: null,
-        reportedByUserId: actorUserId,
-        selfReported: false,
-        reportedAt: now,
-        // Straight to CONFIRMED: there is no money to wait for and nobody to
-        // confirm it against.
-        status: 'CONFIRMED',
-        confirmedAt: now,
-        confirmedByUserId: actorUserId,
-      },
+    const report = await createLostReport(tx, {
+      orgId,
+      copyId: copy.id,
+      branchId: copy.branchId,
+      // Both null, together — the CHECK enforces it.
+      memberId: null,
+      issueId: null,
+      reportedByUserId: actorUserId,
+      selfReported: false,
+      reportedAt: now,
+      // Straight to CONFIRMED: there is no money to wait for and nobody to
+      // confirm it against.
+      status: 'CONFIRMED',
+      confirmedAt: now,
+      confirmedByUserId: actorUserId,
     });
 
     await tx.auditLog.create({
@@ -946,14 +998,23 @@ export class LostService {
         `Lost report is ${report.status}; this is for a loss that was already PAID — an unsettled one is simply "found"`,
       );
     }
-    if (report.refundOwedAmount !== null || report.refundedAt !== null) {
+    // The FAMILY_KEEPS branch used to write only `approvedByNote`, leaving both
+    // of the fields this guard reads still null — so a second call could follow
+    // it with REFUND_OWED and the school would hand back money for a book the
+    // family kept, while the copy went back into the availability count from a
+    // child's bag. `turnedUpAt` is the state the decision actually lands on.
+    if (report.turnedUpAt !== null) {
       throw new ConflictException('This loss has already been recorded as turned up');
     }
 
     if (outcome === 'FAMILY_KEEPS') {
       await tx.lostReport.update({
         where: { id: report.id },
-        data: { approvedByNote: 'Turned up; the family kept the book they paid for' },
+        data: {
+          turnedUpAt: now,
+          turnedUpOutcome: 'FAMILY_KEEPS',
+          approvedByNote: 'Turned up; the family kept the book they paid for',
+        },
       });
       await tx.auditLog.create({
         data: {
@@ -971,9 +1032,14 @@ export class LostService {
     // What they actually paid on this loss — read from the fines, not from the
     // report's own amounts, because a partial waiver or a price the librarian
     // edited means the two can legitimately differ.
+    // `kind: 'LOST'` only. The frozen late charge stands — the same rule
+    // `foundLost` obeys, and for the same reason: they were still late, and a
+    // book turning up must not become a way to get the late charge back.
+    // Without this filter the identical physical event produced opposite
+    // outcomes depending on whether the family had already paid.
     const paid = report.issueId
       ? await tx.fine.aggregate({
-          where: { issueId: report.issueId, status: 'PAID' },
+          where: { issueId: report.issueId, kind: 'LOST', status: 'PAID' },
           _sum: { paidAmount: true },
         })
       : { _sum: { paidAmount: null } };
@@ -985,7 +1051,7 @@ export class LostService {
 
     await tx.lostReport.update({
       where: { id: report.id },
-      data: { refundOwedAmount: refundOwed },
+      data: { turnedUpAt: now, turnedUpOutcome: 'REFUND_OWED', refundOwedAmount: refundOwed },
     });
 
     await tx.auditLog.create({
@@ -1045,6 +1111,55 @@ export class LostService {
     });
 
     return { lostReportId: report.id, refundedAt: now };
+  }
+
+  /**
+   * The lost-books queue.
+   *
+   * Without this, every settlement route was keyed by a `LostReport` id that no
+   * response ever handed out except the POST that created it — so a child's
+   * self-report landed in `REPORTED` and became unreachable: no screen could
+   * show it, no endpoint could find it, it could never be confirmed or
+   * rejected, and the copy stayed out of circulation forever while the child
+   * heard nothing. The phase's own stated failure mode, reached by omission.
+   *
+   * `acquiredAt` is included deliberately. When the price came from
+   * `PURCHASE_COST` the rule is that it must never be shown bare — always with
+   * its age ("the library paid ₹45 when this copy was bought") — and a console
+   * cannot render that from an amount and a source alone.
+   */
+  async listLostReports(
+    tx: LibraryTx,
+    orgId: string,
+    status: string | undefined,
+    allowedBranches: string[],
+  ) {
+    return tx.lostReport.findMany({
+      where: {
+        orgId,
+        ...(status ? { status: status as never } : {}),
+        ...(allowedBranches.length > 0 ? { branchId: { in: allowedBranches } } : {}),
+      },
+      // Oldest first: a report awaiting a librarian is the thing that should
+      // reach the top of the queue, not the newest event.
+      orderBy: [{ status: 'asc' }, { reportedAt: 'asc' }],
+      take: 200,
+      include: {
+        member: {
+          select: { id: true, code: true, firstName: true, lastName: true, classRef: true },
+        },
+        copy: {
+          select: {
+            accessionNumber: true,
+            // What the school paid, and WHEN — so a PURCHASE_COST suggestion can
+            // be shown with its age rather than presented as today's number.
+            acquisitionCost: true,
+            acquiredAt: true,
+            title: { select: { title: true, replacementPrice: true } },
+          },
+        },
+      },
+    });
   }
 
   /**

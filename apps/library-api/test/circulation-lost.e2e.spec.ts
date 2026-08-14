@@ -172,7 +172,6 @@ describeLive('circulation — reporting a book lost', () => {
         fines.listOverdue(tx, orgA.id, later, [orgA.branchId]),
       );
       expect(after.map((r) => r.accessionNumber)).not.toContain(accessionNumber);
-      expect(copy.id).toBeDefined();
     });
 
     it('is atomic: a failure leaves the issue open and the copy on the shelf', async () => {
@@ -451,7 +450,14 @@ describeLive('circulation — a child reports their own book lost', () => {
     // The incentive works from the tap: the clock has stopped.
     expect((await prisma.issue.findUnique({ where: { id: issue.id } }))!.returnedAt).not.toBeNull();
     expect((await prisma.copy.findUnique({ where: { id: copy.id } }))!.status).toBe('LOST');
-    expect(result.frozenLateAmount).toBeGreaterThan(0);
+    // The child is told only that the clock stopped. The FIGURE lives on the
+    // report, where a librarian will see it at confirm — read it from there.
+    expect(result.lateChargeFrozen).toBe(true);
+    const frozenOnReport = await prisma.lostReport.findUnique({
+      where: { id: result.lostReportId },
+      select: { frozenLateAmount: true },
+    });
+    expect(Number(frozenOnReport!.frozenLateAmount)).toBeGreaterThan(0);
 
     // But no money exists yet — the whole point of the confirm step.
     expect(await prisma.fine.count({ where: { memberId: childMemberId } })).toBe(owedBefore);
@@ -476,7 +482,12 @@ describeLive('circulation — a child reports their own book lost', () => {
   it('confirm creates both fines FROM THE FROZEN FIGURES, not recomputed', async () => {
     const { accessionNumber } = await issuedToChild(6);
     const reported = await selfReport(accessionNumber);
-    const frozen = reported.frozenLateAmount!;
+    const frozen = Number(
+      (await prisma.lostReport.findUnique({
+        where: { id: reported.lostReportId },
+        select: { frozenLateAmount: true },
+      }))!.frozenLateAmount,
+    );
 
     // Days pass before the librarian gets to it. The charge must not move.
     const muchLater = new Date(Date.now() + 30 * DAY);
@@ -577,7 +588,6 @@ describeLive('circulation — a child reports their own book lost', () => {
       const row = overdue.find((r) => r.accessionNumber === accessionNumber);
       expect(row).toBeDefined();
       expect(row!.daysOverdue).toBeGreaterThanOrEqual(10);
-      expect(issue.id).toBeDefined();
     });
 
     it('a confirmed report can no longer be rejected', async () => {
@@ -1120,7 +1130,11 @@ describeLive('circulation — the old copy turned up after payment', () => {
 
     const result = await turnedUp(loss.lostReportId, 'REFUND_OWED');
 
-    expect(result.refundOwedAmount).toBe(loss.totalPaid);
+    // 220 — this suite's title price, the BOOK charge only. Not the late fee:
+    // the frozen charge stands, the same rule `found` obeys, or the identical
+    // physical event would refund the late fee only when the family happened to
+    // have paid already.
+    expect(result.refundOwedAmount).toBe(220);
     expect(result.copyBackOnShelf).toBe(true);
     const copy = await prisma.copy.findUnique({ where: { id: loss.copy.id } });
     expect(copy!.status).toBe('AVAILABLE');
@@ -1130,7 +1144,7 @@ describeLive('circulation — the old copy turned up after payment', () => {
   it('changes NO FineStatus and invents no credit — the fine was paid, and it stays paid', async () => {
     const loss = await paidLoss();
     const before = await prisma.fine.findMany({
-      where: { issueId: loss.lostReportId ? undefined : undefined, orgId: org.id },
+      where: { orgId: org.id },
       select: { id: true, status: true },
     });
 
@@ -1139,8 +1153,10 @@ describeLive('circulation — the old copy turned up after payment', () => {
     const after = await prisma.fine.findMany({ where: { orgId: org.id }, select: { id: true, status: true } });
     const byId = Object.fromEntries(after.map((f) => [f.id, f.status]));
     for (const f of before) expect(byId[f.id]).toBe(f.status);
-    // And nothing has drifted into a status that did not exist before.
-    expect(new Set(after.map((f) => f.status)).size).toBeLessThanOrEqual(4);
+    // Every status is still one of the four that existed before this phase.
+    // (The `<= 4` version of this could not fail even if a fifth were added AND
+    // used, because FineStatus has exactly four members.)
+    for (const f of after) expect(['OPEN', 'PAID', 'WAIVED', 'PARTIAL']).toContain(f.status);
   });
 
   it('the obligation stays on the list until a human settles it', async () => {
@@ -1212,5 +1228,198 @@ describeLive('circulation — the old copy turned up after payment', () => {
     const loss = await paidLoss();
     await turnedUp(loss.lostReportId, 'REFUND_OWED');
     await expect(turnedUp(loss.lostReportId, 'REFUND_OWED')).rejects.toThrow(/already been recorded/);
+  });
+});
+
+/**
+ * The three defects QA found, each pinned by the scenario that produced it.
+ */
+describeLive('circulation — lost-book defects found in review', () => {
+  const lost = new LostService();
+  const prisma = getLibraryPlatformPrisma();
+
+  let org: SeededOrg;
+  let other: SeededOrg;
+  let titleId: string;
+  let staffId: string;
+  /** One child login for the whole block: `LibUser.memberId` is @unique, so a
+   *  per-test create collides on the second test that needs one. */
+  let childUserId: string;
+  const DAY = 24 * 60 * 60 * 1000;
+
+  beforeAll(async () => {
+    ({ orgA: org, orgB: other } = await seedTwoOrgs(`qa-${Date.now().toString(36)}`));
+    titleId = (await prisma.title.create({
+      data: { orgId: org.id, title: 'Wings of Fire', replacementPrice: 299 },
+    })).id;
+    staffId = (await prisma.libUser.create({
+      data: {
+        orgId: org.id, email: `qa-${Date.now()}@t.local`, passwordHash: 'x',
+        role: 'LIBRARIAN', branchIds: [org.branchId],
+      },
+    })).id;
+    await prisma.circulationPolicy.create({
+      data: {
+        orgId: org.id, memberType: 'STUDENT', maxBooks: 5, issueDays: 14, renewLimit: 2,
+        renewDays: 14, finePerDay: 5, graceDays: 1, maxFine: 500, maxReservations: 3,
+        reservedShelfDays: 3, maxOutstandingFine: 1000,
+      },
+    });
+    await prisma.librarySettings.upsert({
+      where: { orgId: org.id },
+      create: { orgId: org.id, chargeStudentFines: true },
+      update: { chargeStudentFines: true },
+    });
+    childUserId = (await prisma.libUser.create({
+      data: {
+        orgId: org.id, email: `qa-child-${Date.now()}@t.local`, passwordHash: 'x',
+        role: 'MEMBER', branchIds: [org.branchId], memberId: org.memberId,
+      },
+    })).id;
+  });
+
+  afterAll(async () => { await cleanupOrgs([org.id, other.id]); });
+
+  async function confirmedLoss() {
+    const accessionNumber = `QA-${Date.now()}-${Math.floor(process.hrtime()[1] / 1000)}`;
+    const copy = await prisma.copy.create({
+      data: { orgId: org.id, titleId, branchId: org.branchId, accessionNumber, status: 'ISSUED' },
+    });
+    await prisma.issue.create({
+      data: {
+        orgId: org.id, copyId: copy.id, branchId: org.branchId, memberId: org.memberId,
+        dueAt: new Date(Date.now() - 4 * DAY), status: 'ACTIVE',
+      },
+    });
+    const loss = await withOrg(org.id, (tx: LibraryTx) =>
+      lost.reportLost(tx, org.id, { accessionNumber }, staffId, new Date(), [org.branchId]),
+      undefined, LOST_TX_OPTIONS);
+    return { ...loss, copy, accessionNumber };
+  }
+
+  const pay = (id: string) => withOrg(org.id, (tx: LibraryTx) =>
+    lost.payLost(tx, org.id, id, 'CASH', undefined, staffId, new Date(), [org.branchId]),
+    undefined, LOST_TX_OPTIONS);
+  const writeOff = (id: string) => withOrg(org.id, (tx: LibraryTx) =>
+    lost.writeOffLost(tx, org.id, id, 'note', 'reason', staffId, new Date(), [org.branchId]),
+    undefined, LOST_TX_OPTIONS);
+
+  it('BLOCKER: one loss cannot be settled twice, even by two clerks at once', async () => {
+    // Without a compare-and-swap this booked the same rupees as BOTH collected
+    // and let off: paidAmount and waivedAmount each equal to the full amount,
+    // leaving amount - paid - waived negative and the collections screen
+    // reporting revenue as forgiveness.
+    const loss = await confirmedLoss();
+
+    const results = await Promise.allSettled([pay(loss.lostReportId), writeOff(loss.lostReportId)]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+
+    const fines = await prisma.fine.findMany({ where: { issueId: { not: null }, orgId: org.id } });
+    for (const f of fines) {
+      const over = Number(f.paidAmount) + Number(f.waivedAmount ?? 0) - Number(f.amount);
+      expect(over).toBeLessThanOrEqual(0);
+    }
+  });
+
+  it('BLOCKER: "the family keeps it" cannot be followed by "we owe them a refund"', async () => {
+    const loss = await confirmedLoss();
+    await pay(loss.lostReportId);
+
+    await withOrg(org.id, (tx: LibraryTx) =>
+      lost.turnedUpAfterSettlement(tx, org.id, loss.lostReportId, 'FAMILY_KEEPS', staffId, new Date(), [org.branchId]),
+      undefined, LOST_TX_OPTIONS);
+
+    await expect(
+      withOrg(org.id, (tx: LibraryTx) =>
+        lost.turnedUpAfterSettlement(tx, org.id, loss.lostReportId, 'REFUND_OWED', staffId, new Date(), [org.branchId]),
+        undefined, LOST_TX_OPTIONS),
+    ).rejects.toThrow(/already been recorded as turned up/);
+
+    // The copy stays retired and no money is owed for a book they kept.
+    expect((await prisma.copy.findUnique({ where: { id: loss.copy.id } }))!.status).toBe('LOST');
+    const owed = await withOrg(org.id, (tx: LibraryTx) => lost.outstandingRefunds(tx, org.id, []));
+    expect(owed.map((r) => r.id)).not.toContain(loss.lostReportId);
+  });
+
+  it("BLOCKER: a child's self-report is findable, so it can be confirmed at all", async () => {
+    const accessionNumber = `QA-SELF-${Date.now()}`;
+    const copy = await prisma.copy.create({
+      data: { orgId: org.id, titleId, branchId: org.branchId, accessionNumber, status: 'ISSUED' },
+    });
+    await prisma.issue.create({
+      data: {
+        orgId: org.id, copyId: copy.id, branchId: org.branchId, memberId: org.memberId,
+        dueAt: new Date(Date.now() - 2 * DAY), status: 'ACTIVE',
+      },
+    });
+    const reported = await withOrg(org.id, (tx: LibraryTx) =>
+      lost.selfReportLost(tx, org.id, accessionNumber, childUserId, new Date()),
+      undefined, LOST_TX_OPTIONS);
+
+    const queue = await withOrg(org.id, (tx: LibraryTx) =>
+      lost.listLostReports(tx, org.id, 'REPORTED', []));
+    expect(queue.map((r) => r.id)).toContain(reported.lostReportId);
+
+    // And the queue carries what a screen needs to show a PURCHASE_COST with
+    // its age, rather than presenting a 1998 price as today's number.
+    const row = queue.find((r) => r.id === reported.lostReportId)!;
+    expect(row.copy).toHaveProperty('acquiredAt');
+    expect(row.copy.title).toHaveProperty('replacementPrice');
+  });
+
+  it('tells the child the clock stopped, without naming a rupee figure', async () => {
+    const accessionNumber = `QA-QUIET-${Date.now()}`;
+    const copy = await prisma.copy.create({
+      data: { orgId: org.id, titleId, branchId: org.branchId, accessionNumber, status: 'ISSUED' },
+    });
+    await prisma.issue.create({
+      data: {
+        orgId: org.id, copyId: copy.id, branchId: org.branchId, memberId: org.memberId,
+        dueAt: new Date(Date.now() - 8 * DAY), status: 'ACTIVE',
+      },
+    });
+    const result = await withOrg(org.id, (tx: LibraryTx) =>
+      lost.selfReportLost(tx, org.id, accessionNumber, childUserId, new Date()),
+      undefined, LOST_TX_OPTIONS);
+
+    // The only party that tells a child what they owe is the library, after a
+    // librarian has confirmed and looked at the actual book.
+    // The exact shape, so an amount cannot be added back without this failing.
+    // (Asserting "no digits in the JSON" would be wrong — the id is a UUID.)
+    expect(result).toEqual({ lostReportId: expect.any(String), lateChargeFrozen: true });
+    expect(Object.keys(result).sort()).toEqual(['lateChargeFrozen', 'lostReportId']);
+  });
+
+  it('a genuine double-tap of report-lost is a 409, not a 500', async () => {
+    const accessionNumber = `QA-RACE-${Date.now()}`;
+    const copy = await prisma.copy.create({
+      data: { orgId: org.id, titleId, branchId: org.branchId, accessionNumber, status: 'ISSUED' },
+    });
+    await prisma.issue.create({
+      data: {
+        orgId: org.id, copyId: copy.id, branchId: org.branchId, memberId: org.memberId,
+        dueAt: new Date(Date.now() - DAY), status: 'ACTIVE',
+      },
+    });
+    const report = () => withOrg(org.id, (tx: LibraryTx) =>
+      lost.reportLost(tx, org.id, { accessionNumber }, staffId, new Date(), [org.branchId]),
+      undefined, LOST_TX_OPTIONS);
+
+    const results = await Promise.allSettled([report(), report()]);
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    // The loser of a race is not a server fault.
+    expect(rejected.reason.status).toBe(409);
+  });
+
+  it('a stock-take loss cannot be paid for — nobody had the book', async () => {
+    const accessionNumber = `QA-MISS-${Date.now()}`;
+    await prisma.copy.create({
+      data: { orgId: org.id, titleId, branchId: org.branchId, accessionNumber, status: 'AVAILABLE' },
+    });
+    const missing = await withOrg(org.id, (tx: LibraryTx) =>
+      lost.reportMissing(tx, org.id, accessionNumber, staffId, new Date(), [org.branchId]),
+      undefined, LOST_TX_OPTIONS);
+
+    await expect(pay(missing.lostReportId)).rejects.toThrow(/nothing to settle/);
   });
 });

@@ -655,6 +655,16 @@ enum WaiverReason {
 ///
 /// No value in this enum is time-derived, so `schema-shape.spec.ts` needs no
 /// new `FORBIDDEN_VALUE_EXCEPTIONS` entry.
+/// What was decided when a copy turned up AFTER the family had already paid.
+/// Set by a user action, never by a clock.
+enum TurnedUpOutcome {
+  /// The book goes back on the shelf and the school owes the family what they
+  /// paid, until a librarian settles it at the desk.
+  REFUND_OWED
+  /// They paid for it, so it is theirs. The copy stays retired.
+  FAMILY_KEEPS
+}
+
 enum LostReportStatus {
   /// Self-reported, awaiting a librarian. The late charge is ALREADY frozen and
   /// the copy is already out of circulation — only the money waits.
@@ -1022,6 +1032,12 @@ model LostReport {
   /// Null means no refund is owed: either nothing was ever paid, or the family
   /// chose to keep the book they paid for. `FineStatus` gains no REFUND/CREDIT
   /// value for this — see the migration's own comment.
+  /// The decision itself, which is ALSO the re-entry guard: without state of
+  /// its own, "the family keeps it" left nothing behind and could be followed
+  /// by "we owe them a refund", with both sticking.
+  turnedUpAt       DateTime?
+  turnedUpOutcome  TurnedUpOutcome?
+
   refundOwedAmount Decimal?  @db.Decimal(10, 2)
   refundedAt       DateTime?
   refundedByUserId String?   @db.Uuid
