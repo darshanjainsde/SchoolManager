@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type LibraryTx } from '@library/db';
 import { assertBranchInScope } from '../../../common/guards/assert-branch-in-scope';
+import { liveVisits, markAttendance, orgToday } from '@library/core';
 import type {
   CreatePeriodDto, ListPeriodsQueryDto, ListVisitsQueryDto,
   MarkAttendanceDto, OpenVisitDto, UpdateSettingsDto,
@@ -38,15 +39,11 @@ async function ensureSettings(tx: LibraryTx, orgId: string) {
   return row;
 }
 
-/** Today, in the ORG's timezone — never the server's. */
-async function orgToday(tx: LibraryTx, orgId: string): Promise<Date> {
-  const rows = await tx.$queryRaw<Array<{ d: Date }>>`
-    SELECT (now() AT TIME ZONE o."timezone")::date AS d
-    FROM "LibraryOrg" o WHERE o."id" = ${orgId}::uuid
-  `;
-  if (!rows[0]) throw new NotFoundException('Org not found');
-  return rows[0].d;
-}
+/**
+ * `orgToday` — "today, in the ORG's timezone, never the server's" — moved to
+ * `@library/core` (`periods/visits.ts`) with the two paths below that depend
+ * on it. `openVisit` still calls it, from there.
+ */
 
 @Injectable()
 export class PeriodsService {
@@ -187,94 +184,28 @@ export class PeriodsService {
   }
 
   /**
-   * Who is in the library right now, with the roster for each class: what each
-   * child holds, what is late, and whether they have been seen.
+   * Who is in the library right now, with the roster for each class.
    *
-   * One query per concern rather than one per child — a 40-child class would
-   * otherwise be 40 round trips to paint the screen the counter lives on.
+   * The implementation moved to `@library/core` (`periods/visits.ts`) so the
+   * librarian's counter inside Sckools can paint the same screen — `apps/api`
+   * cannot import this app. Why one query per concern rather than one per
+   * child, and why `seen` carries three states rather than a boolean, is
+   * documented there, at the code it explains.
    */
-  async liveVisits(tx: LibraryTx, orgId: string, allowedBranches: string[]) {
-    const date = await orgToday(tx, orgId);
-    const visits = await tx.classVisit.findMany({
-      where: {
-        orgId, date, closedAt: null,
-        ...(allowedBranches.length > 0 ? { branchId: { in: allowedBranches } } : {}),
-      },
-      include: { attendance: { select: { memberId: true, auto: true } } },
-      orderBy: { openedAt: 'asc' },
-    });
-    if (visits.length === 0) return { date: date.toISOString().slice(0, 10), visits: [] };
-
-    const classRefs = visits.map((v) => v.classRef);
-    const members = await tx.member.findMany({
-      where: { orgId, classRef: { in: classRefs } },
-      select: { id: true, code: true, firstName: true, lastName: true, classRef: true },
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-    });
-
-    const open = await tx.issue.findMany({
-      where: { orgId, returnedAt: null, memberId: { in: members.map((m) => m.id) } },
-      select: { memberId: true, dueAt: true, copy: { select: { accessionNumber: true, title: { select: { title: true } } } } },
-    });
-
-    const now = Date.now();
-    const byMember = new Map<string, typeof open>();
-    for (const i of open) {
-      const list = byMember.get(i.memberId) ?? [];
-      list.push(i);
-      byMember.set(i.memberId, list);
-    }
-
-    return {
-      date: date.toISOString().slice(0, 10),
-      visits: visits.map((v) => {
-        const seen = new Map(v.attendance.map((a) => [a.memberId, a.auto]));
-        const roster = members
-          .filter((m) => m.classRef === v.classRef)
-          .map((m) => {
-            const held = byMember.get(m.id) ?? [];
-            const late = held.filter((h) => h.dueAt.getTime() < now).length;
-            return {
-              id: m.id, code: m.code, firstName: m.firstName, lastName: m.lastName,
-              // 'auto' is the load-bearing distinction: it separates "attended
-              // but borrowed nothing" from "was not here".
-              seen: seen.has(m.id) ? (seen.get(m.id) ? 'auto' : 'hand') : 'no',
-              holding: held.length,
-              late,
-              books: held.map((h) => ({ title: h.copy.title.title, accessionNumber: h.copy.accessionNumber, dueAt: h.dueAt })),
-            };
-          });
-        return {
-          id: v.id, classRef: v.classRef, branchId: v.branchId, openedAt: v.openedAt,
-          strength: roster.length,
-          present: roster.filter((r) => r.seen !== 'no').length,
-          roster,
-        };
-      }),
-    };
+  liveVisits(tx: LibraryTx, orgId: string, allowedBranches: string[]) {
+    return liveVisits(tx, orgId, allowedBranches);
   }
 
-  /** Tick or untick by hand. The auto rows are written by circulation, not here. */
-  async markAttendance(tx: LibraryTx, orgId: string, visitId: string, dto: MarkAttendanceDto, allowedBranches: string[]) {
-    const visit = await tx.classVisit.findFirst({ where: { id: visitId, orgId }, select: { id: true, branchId: true } });
-    if (!visit) throw new NotFoundException('Visit not found');
-    assertBranchInScope(visit.branchId, allowedBranches);
-
-    const member = await tx.member.findFirst({ where: { id: dto.memberId, orgId }, select: { id: true } });
-    if (!member) throw new NotFoundException('Member not found');
-
-    if (dto.present === false) {
-      await tx.visitAttendance.deleteMany({ where: { visitId, memberId: dto.memberId } });
-      return { present: false };
-    }
-    await tx.visitAttendance.upsert({
-      where: { visitId_memberId: { visitId, memberId: dto.memberId } },
-      // A hand tick never downgrades an automatic one: the transaction is the
-      // stronger evidence and should survive a stray click.
-      update: {},
-      create: { orgId, visitId, memberId: dto.memberId, auto: false },
-    });
-    return { present: true };
+  /**
+   * Tick or untick by hand. The auto rows are written by circulation, not here.
+   *
+   * Moved to `@library/core` alongside `liveVisits` — the read that paints the
+   * roster and the write that ticks it are one feature, and splitting them
+   * across the two packages would let the counter tick against a roster the
+   * library console computes differently.
+   */
+  markAttendance(tx: LibraryTx, orgId: string, visitId: string, dto: MarkAttendanceDto, allowedBranches: string[]) {
+    return markAttendance(tx, orgId, visitId, dto, allowedBranches);
   }
 
   listVisits(tx: LibraryTx, orgId: string, query: ListVisitsQueryDto, allowedBranches: string[]) {

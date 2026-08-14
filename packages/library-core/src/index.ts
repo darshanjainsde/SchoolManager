@@ -65,3 +65,5 @@ export type { RenewBookInput, RenewResult } from './circulation/renew';
 export { loadPolicy } from './circulation/policy-loader';
 export { assertBranchInScope } from './branch-scope';
 export { markPresentByTransaction } from './attendance';
+export { liveVisits, markAttendance, orgToday } from './periods/visits';
+export type { LiveVisitsResult, MarkAttendanceInput } from './periods/visits';
