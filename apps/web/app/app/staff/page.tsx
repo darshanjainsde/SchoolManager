@@ -8,7 +8,13 @@ import { useHost } from '@/components/use-host';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'OTHER'] as const;
+/**
+ * Job titles a school actually hires for. LIBRARIAN is one of them, and it is
+ * the only role that also decides the LOGIN a person gets — see
+ * `staff.service.ts#createLogin`. Ordered as a school would read them, with
+ * Other last.
+ */
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'OTHER'] as const;
 type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 const ROLE_LABELS: Record<StaffRoleValue, string> = {
@@ -17,6 +23,7 @@ const ROLE_LABELS: Record<StaffRoleValue, string> = {
   DRIVER: 'Driver',
   HELPER: 'Helper',
   SECURITY: 'Security',
+  LIBRARIAN: 'Librarian',
   OTHER: 'Other',
 };
 
@@ -102,6 +109,13 @@ interface StaffFormProps {
   }) => void;
   isSaving: boolean;
   onCancel: () => void;
+  /**
+   * Which job titles this school may pick. Librarian is dropped for a school
+   * without the LIBRARY feature — otherwise an admin sets someone to Librarian,
+   * creates their login, and she lands on a counter that answers "this school
+   * does not have a library yet".
+   */
+  roles: readonly StaffRoleValue[];
 }
 
 /**
@@ -201,7 +215,7 @@ function InviteSentModal({
   );
 }
 
-function StaffForm({ title, initial = {}, onSave, isSaving, onCancel }: StaffFormProps) {
+function StaffForm({ title, initial = {}, onSave, isSaving, onCancel, roles }: StaffFormProps) {
   const [firstName, setFirstName] = useState(initial.firstName ?? '');
   const [lastName, setLastName] = useState(initial.lastName ?? '');
   const [role, setRole] = useState<StaffRoleValue>(initial.role ?? 'OTHER');
@@ -247,7 +261,7 @@ function StaffForm({ title, initial = {}, onSave, isSaving, onCancel }: StaffFor
             value={role}
             onChange={(e) => setRole(e.target.value as StaffRoleValue)}
           >
-            {STAFF_ROLES.map((r) => (
+            {roles.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABELS[r]}
               </option>
@@ -343,6 +357,10 @@ export default function StaffPage() {
     enabled: !!host,
   });
   const hasLibrary = meQuery.data?.features?.includes('LIBRARY') ?? false;
+  // Librarian only appears where the school has a library. Offering it
+  // otherwise creates a person whose login lands on a counter that refuses
+  // her, which reads as a bug in the product rather than a missing feature.
+  const allowedRoles = hasLibrary ? STAFF_ROLES : STAFF_ROLES.filter((r) => r !== 'LIBRARIAN');
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const addMutation = useMutation({
@@ -485,6 +503,7 @@ export default function StaffPage() {
       {showAdd && (
         <div style={{ marginBottom: 18 }}>
           <StaffForm
+            roles={allowedRoles}
             title="Add staff"
             onSave={({ firstName, lastName, role, email, phone }) =>
               addMutation.mutate({
@@ -517,6 +536,7 @@ export default function StaffPage() {
             editId === member.id ? (
               <StaffForm
                 key={member.id}
+                roles={allowedRoles}
                 title="Edit staff"
                 initial={member}
                 onSave={({ firstName, lastName, role, email, phone }) =>
@@ -543,17 +563,41 @@ export default function StaffPage() {
                 className={member.id === justAddedId ? 'sk-entity sk-pinin sk-in' : 'sk-entity'}
                 style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {/* `alignItems: flex-start` — the avatar sits with the NAME,
+                    not floating mid-card when an email line is present. That
+                    mismatch is why rows of cards looked staggered. */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <span className="av" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
                     {initials(member)}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="nm">{fullName(member)}</div>
-                    {member.email && <div className="meta">{member.email}</div>}
+                    {/* The JOB, on its own line under the name, where a reader
+                        looks for "what is this person?". It used to be one
+                        pill among several, so the answer sat beside login
+                        status and read as equally important — which it is not.
+                        Truncates rather than wrapping, so a long email can
+                        never push a card taller than its neighbours. */}
+                    <div
+                      className="meta"
+                      style={{
+                        marginTop: 2,
+                        fontWeight: 650,
+                        color: member.role === 'LIBRARIAN' ? 'var(--sk-brand-2)' : 'var(--sk-ink-2)',
+                      }}
+                    >
+                      {ROLE_LABELS[member.role]}
+                    </div>
+                    {member.email && (
+                      <div
+                        className="meta"
+                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={member.email}
+                      >
+                        {member.email}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                      <span className="sk-pill" data-tone="info">
-                        {ROLE_LABELS[member.role]}
-                      </span>
                       {!member.isActive && (
                         <span className="sk-pill" data-tone="warn">
                           Inactive
@@ -572,7 +616,12 @@ export default function StaffPage() {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {/* Pinned to the bottom by `marginTop: auto` so every card's
+                    action row sits on the same line regardless of whether the
+                    person above it has an email, an extra pill, or a longer
+                    name. That raggedness was the alignment problem: the cards
+                    were the same height but their contents were not. */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
                   {member.userId ? (
                     <button
                       className="sk-btn sk-press"
@@ -583,35 +632,31 @@ export default function StaffPage() {
                       Resend invite
                     </button>
                   ) : (
-                    <>
-                      <button
-                        className="sk-btn sk-press"
-                        data-variant="primary"
-                        disabled={createLoginMutation.isPending}
-                        onClick={() => createLoginMutation.mutate({ staffId: member.id })}
-                        title={member.email ? undefined : 'Add an email to this staff member first'}
-                      >
+                    // ONE button. The kind of login follows from the person's
+                    // ROLE — a librarian gets a LIBRARIAN login — because a
+                    // school thinks "she is the librarian", not "she needs a
+                    // librarian login". Two buttons asked the admin a question
+                    // they had no reason to hold an opinion about.
+                    <button
+                      className="sk-btn sk-press"
+                      data-variant="primary"
+                      disabled={createLoginMutation.isPending}
+                      onClick={() => createLoginMutation.mutate({ staffId: member.id })}
+                      title={
+                        member.email
+                          ? member.role === 'LIBRARIAN'
+                            ? 'Signs in at the school address and lands on the library counter'
+                            : undefined
+                          : 'Add an email to this staff member first'
+                      }
+                    >
+                      {member.role === 'LIBRARIAN' ? (
+                        <BookOpen className="h-3.5 w-3.5" />
+                      ) : (
                         <KeyRound className="h-3.5 w-3.5" />
-                        Create login
-                      </button>
-                      {/* Only where the school actually has a library. The two
-                          buttons differ in one thing — the role the login gets
-                          — so they say which role they make rather than
-                          hiding it behind a dropdown nobody opens. */}
-                      {hasLibrary ? (
-                        <button
-                          className="sk-btn sk-press"
-                          disabled={createLoginMutation.isPending}
-                          onClick={() =>
-                            createLoginMutation.mutate({ staffId: member.id, role: 'LIBRARIAN' })
-                          }
-                          title="Signs in at the school's normal address and lands on the library counter"
-                        >
-                          <BookOpen className="h-3.5 w-3.5" />
-                          Create librarian login
-                        </button>
-                      ) : null}
-                    </>
+                      )}
+                      {member.role === 'LIBRARIAN' ? 'Create librarian login' : 'Create login'}
+                    </button>
                   )}
                   <button
                     className="sk-btn sk-press"

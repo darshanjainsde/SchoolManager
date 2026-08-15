@@ -138,6 +138,12 @@ enum StaffRole {
   DRIVER
   HELPER
   SECURITY
+  /// A librarian is a job title, and the one staff role that also decides
+  /// which LOGIN the person gets: `createLogin` mints a LIBRARIAN user for
+  /// them rather than a STAFF one, so the admin picks the job and the access
+  /// follows. Adding more roles here does NOT grant logins — this is the only
+  /// one wired that way, deliberately.
+  LIBRARIAN
   OTHER
 }
 

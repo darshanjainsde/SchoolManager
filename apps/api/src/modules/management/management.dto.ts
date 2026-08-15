@@ -235,7 +235,13 @@ export class UpdateTeacherDto {
 
 // ── Staff (non-teaching) ────────────────────────────────────────────────────
 
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'OTHER'] as const;
+/**
+ * Mirrors the `StaffRole` enum in schema.prisma. LIBRARIAN is the one value
+ * that also decides a LOGIN: `staff.service.ts#createLogin` mints a LIBRARIAN
+ * user for a staff member with that job, so the admin picks what the person IS
+ * and their access follows.
+ */
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'OTHER'] as const;
 export type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 export class CreateStaffDto {

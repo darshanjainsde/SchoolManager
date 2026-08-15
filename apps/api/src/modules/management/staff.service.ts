@@ -86,10 +86,18 @@ export class StaffService {
       const placeholder = randomBytes(32).toString('base64url');
       const passwordHash = await this.passwords.hash(placeholder);
 
-      // STAFF unless the caller asked for a librarian. Constrained to those two
-      // by the DTO — a staff screen must not be able to mint a TEACHER or an
-      // admin. See CreateLoginDto.role.
-      const role = dto.role ?? 'STAFF';
+      // THE JOB DECIDES THE LOGIN. A staff member whose role is LIBRARIAN gets
+      // a LIBRARIAN user; everyone else gets STAFF. The admin picks what the
+      // person IS on the staff form, and their access follows — rather than
+      // being asked a second, separate question ("which kind of login?") that
+      // a school has no reason to think in terms of.
+      //
+      // `dto.role` still wins when given, so the API contract is unchanged for
+      // any caller that names it explicitly. Both paths are constrained to
+      // STAFF | LIBRARIAN by the DTO: this screen must never be able to mint a
+      // TEACHER or an admin, which is what would turn staff management into a
+      // privilege-escalation path.
+      const role = dto.role ?? (staff.role === 'LIBRARIAN' ? 'LIBRARIAN' : 'STAFF');
 
       let user: { id: string };
       try {

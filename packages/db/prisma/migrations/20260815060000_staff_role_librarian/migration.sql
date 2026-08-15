@@ -1,0 +1,11 @@
+-- The librarian is a JOB, not a special kind of login.
+--
+-- The console previously offered "Create login" and "Create librarian login"
+-- as two buttons on every staff card, which asked the admin the wrong
+-- question: a school does not think "this person needs a librarian login", it
+-- thinks "this person is the librarian". The job belongs in the ROLE field
+-- beside Office, Driver and Helper, and the login role then follows from it.
+--
+-- Additive only. Postgres cannot drop an enum value, and nothing is being
+-- reassigned — every existing Staff row keeps the role it has.
+ALTER TYPE "StaffRole" ADD VALUE IF NOT EXISTS 'LIBRARIAN';
