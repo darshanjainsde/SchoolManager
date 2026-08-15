@@ -29,6 +29,22 @@ interface SchoolDetail {
 
 // ── Tier → feature map (authoritative on the web side for labeling) ─────────
 
+/**
+ * Every feature key, mirroring `ALL_KEYS` in packages/db/src/features.ts.
+ *
+ * A COPY, not an import: `@skoolos/db`'s barrel exports PrismaClient, and
+ * importing it from a client component drags the database client into the
+ * browser bundle. `feature-keys.test.ts` parses that file as text and fails if
+ * these two lists ever disagree, which is what makes the copy safe.
+ *
+ * HIRING and LIBRARY were missing here for real reasons that both bit:
+ * anything absent from this list cannot be switched on for any school at all,
+ * because this is the only UI that writes `featureOverrides`. LIBRARY is in no
+ * tier's default set BY DESIGN — a school with a cupboard of books and no
+ * circulation should not be handed a Library tab — so the override path is the
+ * ONLY way it is ever enabled, and omitting it here made the entire library
+ * feature unreachable in production.
+ */
 const ALL_FEATURES = [
   'PUBLIC_SITE',
   'GALLERY',
@@ -38,17 +54,20 @@ const ALL_FEATURES = [
   'EVENTS',
   'MANAGEMENT',
   'BLOG',
+  'HIRING',
+  'LIBRARY',
 ] as const;
 
 type FeatureKey = (typeof ALL_FEATURES)[number];
 
-// Mirrors packages/db/src/features.ts's TIER_FEATURES (BLOG ships with
-// Standard & Pro by default; this local copy exists because the web app
-// can't import API/db-internal types — see the file header comment above).
+// Mirrors packages/db/src/features.ts's TIER_FEATURES, for the same reason and
+// under the same guard as ALL_FEATURES above. PRO grants HIRING — this copy
+// said it did not, so the badge beside HIRING would have read "override" for a
+// Pro school that gets it by plan. LIBRARY is in NO tier deliberately.
 const TIER_FEATURES: Record<SchoolDetail['tier'], ReadonlySet<FeatureKey>> = {
   BASIC: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL']),
   STANDARD: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'BLOG']),
-  PRO: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG']),
+  PRO: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG', 'HIRING']),
 };
 
 const TIER_TONE: Record<SchoolDetail['tier'], 'neutral' | 'info' | 'success'> = {
