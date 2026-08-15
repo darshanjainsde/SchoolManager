@@ -20,11 +20,21 @@ token, and `issue` had no mutual exclusion on the member borrowing limit.
 `git diff --stat a38896b~1..HEAD -- packages/db/prisma/schema.prisma
 packages/library-db/prisma/schema.prisma` is empty.
 
-**But the BRANCH is another matter.** `origin/main..HEAD` carries **33
-migrations** — 2 Sckools (`leave_policy`, `user_role_librarian`) and 31 library.
-The library ones are the whole service's history, because staging's library
-database predates P3. Deploying this branch is not "one new feature", it is
-bringing two databases forward.
+**The BRANCH carries 33** — 2 Sckools (`leave_policy`, `user_role_librarian`) and
+31 library. **That is not the number PENDING**, and conflating the two makes this
+look far more dangerous than it is: the library database is live and already has
+most of them applied. `migrate status` is the authority, and it is why that
+command comes before `migrate deploy` below. Expect a handful on the library side
+and one that matters on the Sckools side — `user_role_librarian` adds the
+`LIBRARIAN` enum value, without which a librarian login cannot work at all.
+
+**THERE IS ONE LIBRARY DATABASE.** `library-api`'s Production and Preview
+environment variables are byte-identical (hash-compared 2026-08-15) — same host,
+same project `eocxgzcfzwmbaivobzfx`, same credentials. So migrating "the library
+staging database" also migrates what `library.trackyour.in` and
+`api.library.trackyour.in` are serving right now. It is not an isolated
+environment, and the `LIBRARY_DATABASE_URL_*` now set on `skoolos-api` staging
+point at that same database.
 
 Trap 4 applies with force: migration folder names are the APPLY ORDER, not
 documentation. A migration timestamped before one it depends on passes on every
