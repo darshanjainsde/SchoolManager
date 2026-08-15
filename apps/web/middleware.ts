@@ -58,6 +58,14 @@ export const config = {
     '/me/:path*',
     '/teacher/:path*',
     '/portal/:path*',
+    // The counter holds borrowing history — which child has which book, and who
+    // owes what. It was added as a fourth top-level sibling to /portal,
+    // /teacher and /staff and missed here, so it fell back to the baseline in
+    // next.config.mjs, which sets only frame-ancestors: no connect-src, no
+    // object-src, no form-action. `console-segments.test.ts` now fails if a
+    // future sibling is forgotten the same way.
+    '/library/:path*',
+    '/staff/:path*',
     '/login',
     '/owner',
     '/account/:path*',
