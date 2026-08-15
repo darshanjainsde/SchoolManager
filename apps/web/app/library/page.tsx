@@ -429,6 +429,34 @@ export default function LibraryCounterPage(): React.JSX.Element {
 
   if (status.isPending) return <p className="sk-lib-empty">Loading…</p>;
 
+  // A FAILED status is not an empty library. Every first-run branch below is
+  // guarded by `status.data &&`, so without this the page skipped all of them
+  // and rendered the full counter with `status.data?.members` — which printed
+  // "signed up · books in the register" with no numbers in front of either.
+  //
+  // That is exactly what shipped: the query engine was missing from the lambda,
+  // every /manage/library/* route answered 500, and the screen said, in effect,
+  // that the library was fine and empty. A librarian would have started signing
+  // people up again. Say the true thing instead, and offer the one action that
+  // can help — try again.
+  if (status.isError || !status.data) {
+    return (
+      <section className="sk-lib">
+        <h1>Library</h1>
+        <h2 className="sk-lib-h2">Cannot reach the library right now</h2>
+        <p className="sk-lib-empty">
+          Nothing is lost and nothing has changed — the counter just cannot load. Try again in a
+          moment, and tell the office if it keeps happening.
+        </p>
+        <div className="sk-desk-actions">
+          <button className="sk-btn" data-variant="primary" onClick={() => void status.refetch()}>
+            Try again
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   // ── First run. Check in order and render the FIRST match: each state has one
   // next action, and she never sees a counter she cannot use. ────────────────
 

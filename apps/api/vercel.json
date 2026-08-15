@@ -6,7 +6,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "../libquery_engine-rhel-openssl-3.0.x.so.node"
+      "includeFiles": "{,generated/client/,.prisma/client/,apps/api/}libquery_engine-rhel-openssl-3.0.x.so.node"
     }
   },
   "routes": [

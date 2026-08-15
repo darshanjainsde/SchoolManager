@@ -35,3 +35,11 @@ apps/library-web/next-env.d.ts
 .vercel
 apps/library-api/api/
 .env*
+
+# Prisma query engines staged into apps/api by scripts/deref-pnpm-symlinks.mjs.
+# The script copies one ~15MB binary to four paths so the bundled @library/db
+# client can find it at runtime; all four are build output, never source.
+apps/api/libquery_engine-*.node
+apps/api/generated/
+apps/api/.prisma/
+apps/api/apps/

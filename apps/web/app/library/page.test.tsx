@@ -69,6 +69,52 @@ beforeEach(() => {
   vi.mocked(useHost).mockReturnValue('raffles.sckools.com');
 });
 
+describe('the counter — when the API is down', () => {
+  /**
+   * This shipped broken and was found by looking at it, not by a test.
+   *
+   * Every first-run branch is guarded by `status.data &&`. When the status call
+   * failed, all of them were skipped and the page fell through to the running
+   * counter, printing "signed up · books in the register" with no numbers —
+   * indistinguishable from a working, empty library. A librarian reading that
+   * would conclude the register had been wiped.
+   *
+   * The bug is in the SHAPE of the branch chain, so the test asserts on the
+   * shape: a failed status must not be able to reach the counter.
+   */
+  function failingStub(): ApiStub {
+    const s = stub();
+    vi.mocked(s.get).mockImplementation((path: string) =>
+      path.startsWith('/manage/library/status')
+        ? Promise.reject(new Error('500'))
+        : Promise.resolve([] as never),
+    );
+    return s;
+  }
+
+  it('says it cannot reach the library, instead of showing an empty one', async () => {
+    vi.mocked(useApi).mockReturnValue(failingStub() as never);
+    renderWithProviders(<LibraryCounterPage />);
+
+    expect(await screen.findByText(/cannot reach the library/i)).toBeInTheDocument();
+    // The reassurance is load-bearing: the first thing a librarian fears when a
+    // register screen breaks is that the register broke with it.
+    expect(screen.getByText(/nothing is lost and nothing has changed/i)).toBeInTheDocument();
+  });
+
+  it('never renders the counter or the register totals on a failed load', async () => {
+    vi.mocked(useApi).mockReturnValue(failingStub() as never);
+    renderWithProviders(<LibraryCounterPage />);
+    await screen.findByText(/cannot reach the library/i);
+
+    // The exact string that appeared with nothing in front of it.
+    expect(screen.queryByText(/books in the register/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/book number to take back/i)).not.toBeInTheDocument();
+    // And never the word that would send her to sign 400 children up a second time.
+    expect(screen.queryByText(/sign everyone up/i)).not.toBeInTheDocument();
+  });
+});
+
 describe('the counter — first run, in the order she needs it', () => {
   it('a school with no library at all is told to ask the office, not shown a desk', async () => {
     vi.mocked(useApi).mockReturnValue(
