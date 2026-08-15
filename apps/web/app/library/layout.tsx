@@ -54,6 +54,27 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
     queryFn: () => api.get<{ role: string }>('/auth/me'),
   });
 
+  // TEMPORARY DIAGNOSTIC — remove once the bounce is fixed.
+  //
+  // On staging a LIBRARIAN signs in, the router replaces to /library, and this
+  // segment immediately replaces to /login. Every remote instrument lied about
+  // why: cross-origin XHRs are not captured by the devtools bridge, and a
+  // window.fetch wrapper recorded nothing from a client that demonstrably uses
+  // fetch. So the answer has to come from inside the component that decides.
+  //
+  // Prints the three values the redirect below actually reads.
+  useEffect(() => {
+    console.log('[lib-gate]', JSON.stringify({
+      hydrated,
+      status,
+      audience,
+      host,
+      meFetching: me.isFetching,
+      meError: me.error ? String((me.error as Error).message) : null,
+      meRole: me.data?.role ?? null,
+    }));
+  }, [hydrated, status, audience, host, me.isFetching, me.error, me.data]);
+
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) router.replace('/login');
     // Depends on `me.data`, the object — not `me.data.role`. A dependency on
