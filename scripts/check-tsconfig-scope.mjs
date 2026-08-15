@@ -103,6 +103,30 @@ function checkVercelConfigs() {
       continue;
     }
 
+    // Vercel validates vercel.json against a CLOSED schema and rejects the
+    // whole deployment for an unknown top-level key — including a `"//"`-style
+    // comment, which this repo legitimately uses in tsconfig.json and which
+    // therefore looks safe. That exact mistake cost a staging deploy: a
+    // `"//installCommand"` note next to `installCommand` produced
+    // `should NOT have additional property "//installCommand"`, with NO build
+    // logs at all, because the build never started. Keep this list in step with
+    // https://vercel.com/docs/project-configuration when a new key is adopted.
+    const VERCEL_KEYS = new Set([
+      '$schema', 'buildCommand', 'cleanUrls', 'crons', 'devCommand', 'framework',
+      'functions', 'git', 'headers', 'ignoreCommand', 'images', 'installCommand',
+      'outputDirectory', 'public', 'redirects', 'regions', 'rewrites',
+      'trailingSlash', 'routes',
+    ]);
+    for (const key of Object.keys(config)) {
+      if (!VERCEL_KEYS.has(key)) {
+        problems.push(
+          `${relative(root, file)} — unknown top-level key "${key}". Vercel's schema is ` +
+            `CLOSED: it rejects the whole deployment with "should NOT have additional ` +
+            `property", and the build produces no logs. Comments do not belong here.`,
+        );
+      }
+    }
+
     for (const cron of config.crons ?? []) {
       // "m h ..." — anything with a step or a list in the first two fields runs
       // more than once a day.
