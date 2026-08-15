@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
 import {
   backByLongLabel,
   copyStateLabel,
@@ -86,7 +87,13 @@ interface PeriodNow {
  * reporting losses, and then the register is wrong forever.
  */
 export default function LibraryCounterPage(): React.JSX.Element {
-  const api = useApi();
+  // The tenant host is NOT optional. useApi() with no arguments sends no
+  // X-Skoolos-Host, so the API cannot tell which school is asking and every
+  // counter request fails — while the same URL succeeds from a plain fetch that
+  // does send it. That is exactly what shipped: the layout passed the host, the
+  // page did not, so she reached her counter and it could not load a thing.
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
   const queryClient = useQueryClient();
   const [term, setTerm] = useState('');
   const [number, setNumber] = useState('');

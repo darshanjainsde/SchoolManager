@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
 import { MyBooks } from '@/components/library/my-books';
 import type { ClassNotReturned, MyLibrary } from '@/lib/library';
 
@@ -28,7 +29,13 @@ import type { ClassNotReturned, MyLibrary } from '@/lib/library';
  * menu item.
  */
 export default function TeacherLibraryPage(): React.JSX.Element {
-  const api = useApi();
+  // The tenant host is required. useApi() with no arguments sends no
+  // X-Skoolos-Host, so the API cannot resolve which school is asking and every
+  // request from this screen fails — while the same URL succeeds from anything
+  // that does send it. Same defect as the librarian counter, found by the guard
+  // in app/tenant-host.test.ts once it was written.
+  const host = useHost();
+  const api = useApi({ audience: "school", hostHeader: host });
 
   const mine = useQuery({
     queryKey: ['library', 'mine'],
