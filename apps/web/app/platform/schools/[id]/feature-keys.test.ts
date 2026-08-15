@@ -29,6 +29,18 @@ const consoleSrc = readFileSync(
   resolve(process.cwd(), 'app/platform/schools/[id]/page.tsx'),
   'utf8',
 );
+/**
+ * The THIRD copy — the API's own `@IsIn` on SetFeatureDto.
+ *
+ * Fixing the console alone was not enough: the checkbox appeared and the save
+ * was then rejected by this list with "featureKey must be one of the following
+ * values". A guard that covers two of three copies just moves where the drift
+ * surfaces.
+ */
+const apiDtoSrc = readFileSync(
+  resolve(process.cwd(), '../api/src/modules/owner/internal/owner.dto.ts'),
+  'utf8',
+);
 
 /**
  * Pulls the quoted string literals out of a named array declaration.
@@ -67,6 +79,17 @@ describe('owner console feature list matches the source of truth', () => {
 
   it('includes LIBRARY, which no tier grants and only this screen can turn on', () => {
     expect(keysFrom(consoleSrc, 'const ALL_FEATURES')).toContain('LIBRARY');
+  });
+
+  it("the API's SetFeatureDto accepts every key the console can send", () => {
+    // Otherwise the checkbox renders, the save 400s, and the user is told the
+    // key they just clicked is not a valid key — which is exactly what shipped.
+    const truth = keysFrom(featuresSrc, 'const ALL_KEYS').sort();
+    // Anchored on the CLASS name: the @IsIn array precedes the field name on
+    // its own line, so searching forward from `featureKey` lands in the next
+    // DTO's array instead — it found ['APPROVE','REJECT'] the first time.
+    const accepted = keysFrom(apiDtoSrc, 'class SetFeatureDto').sort();
+    expect(accepted).toEqual(truth);
   });
 
   it("agrees with PRO's granted set, so the tier/override badge tells the truth", () => {
