@@ -8,7 +8,8 @@ import { OwnerAuthService } from './owner-auth.service';
 import { GateLoginDto, OwnerLoginDto, RefreshDto } from './owner.dto';
 import {
   OWNER_REFRESH_COOKIE,
-  resolveRefreshToken,
+  resolveRefreshTokens,
+  firstValidToken,
   setRefreshCookie,
 } from '../../../common/auth/refresh-cookie';
 
@@ -45,9 +46,11 @@ export class OwnerAuthController {
     @Body() dto: RefreshDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token = resolveRefreshToken(req, OWNER_REFRESH_COOKIE, dto?.refreshToken);
-    if (!token) throw new ForbiddenException('No refresh token');
-    const tokens = await this.auth.refresh(token);
+    // See auth.controller.ts — a stale duplicate cookie under the same name
+    // shadowed the live one and made every refresh fail.
+    const candidates = resolveRefreshTokens(req, OWNER_REFRESH_COOKIE, dto?.refreshToken);
+    if (candidates.length === 0) throw new ForbiddenException('No refresh token');
+    const tokens = await firstValidToken(candidates, (t) => this.auth.refresh(t));
     setRefreshCookie(res, OWNER_REFRESH_COOKIE, tokens.refreshToken, this.env);
     return tokens;
   }

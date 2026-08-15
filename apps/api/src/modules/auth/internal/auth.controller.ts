@@ -17,7 +17,8 @@ import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
 import {
   SCHOOL_REFRESH_COOKIE,
   clearRefreshCookie,
-  resolveRefreshToken,
+  resolveRefreshTokens,
+  firstValidToken,
   setRefreshCookie,
 } from '../../../common/auth/refresh-cookie';
 
@@ -69,9 +70,12 @@ export class AuthController {
     @Body() dto: RefreshDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token = resolveRefreshToken(req, SCHOOL_REFRESH_COOKIE, dto?.refreshToken);
-    if (!token) throw new ForbiddenException('No refresh token');
-    const tokens = await this.auth.refresh(token);
+    // EVERY cookie sent under this name, not just the first. A browser holding
+    // a stale copy under different attributes sends both, and picking the first
+    // meant a permanently unrefreshable session that signing out could not fix.
+    const candidates = resolveRefreshTokens(req, SCHOOL_REFRESH_COOKIE, dto?.refreshToken);
+    if (candidates.length === 0) throw new ForbiddenException('No refresh token');
+    const tokens = await firstValidToken(candidates, (t) => this.auth.refresh(t));
     // Rotation: the new token replaces the cookie. A session that arrived with
     // a body token leaves with a cookie — that is the migration path.
     setRefreshCookie(res, SCHOOL_REFRESH_COOKIE, tokens.refreshToken, this.env);
@@ -134,8 +138,11 @@ export class AuthController {
   ) {
     const ctx = this.tenantCtx.requireTenant();
     if (user.schoolId !== ctx.schoolId) throw new ForbiddenException();
-    const token = resolveRefreshToken(req, SCHOOL_REFRESH_COOKIE, dto?.refreshToken);
-    if (token) await this.auth.logout(ctx.schoolId, token);
+    // Revoke every token the browser offered, not just the first — otherwise a
+    // stale duplicate outlives the sign-out it was meant to end.
+    for (const token of resolveRefreshTokens(req, SCHOOL_REFRESH_COOKIE, dto?.refreshToken)) {
+      await this.auth.logout(ctx.schoolId, token).catch(() => undefined);
+    }
     clearRefreshCookie(res, SCHOOL_REFRESH_COOKIE, this.env);
     return { ok: true };
   }
