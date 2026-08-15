@@ -263,6 +263,12 @@ export default function LibraryCounterPage(): React.JSX.Element {
   // product could show her the list.
   const period = useQuery({
     queryKey: ['library-desk', 'period'],
+    // Not until the tenant host is known. useApi memoises its client on
+    // hostHeader, so a query that fires on the first render captures a client
+    // with no X-Skoolos-Host, the API cannot resolve the school, and the
+    // cached failure is what the counter then shows — permanently, because
+    // 4xx is not retried and refetch reuses the same dead client.
+    enabled: !!host,
     queryFn: () => api.get<PeriodNow>('/manage/library/period/now'),
     // A class arrives in the middle of a period she is standing through, and
     // she does not reload a page she works from all day. A minute is well
@@ -290,7 +296,7 @@ export default function LibraryCounterPage(): React.JSX.Element {
   // section further down, which answers a question rather than choosing anyone.
   const deskPeople = useQuery({
     queryKey: ['library-desk', 'members', childTerm],
-    enabled: mode === 'issue' && !child && childTerm.trim().length >= 2,
+    enabled: !!host && mode === 'issue' && !child && childTerm.trim().length >= 2,
     queryFn: () =>
       api.get<MemberCard[]>(`/manage/library/members?q=${encodeURIComponent(childTerm.trim())}`),
   });
@@ -309,6 +315,12 @@ export default function LibraryCounterPage(): React.JSX.Element {
 
   const status = useQuery({
     queryKey: ['library-desk', 'status'],
+    // Not until the tenant host is known. useApi memoises its client on
+    // hostHeader, so a query that fires on the first render captures a client
+    // with no X-Skoolos-Host, the API cannot resolve the school, and the
+    // cached failure is what the counter then shows — permanently, because
+    // 4xx is not retried and refetch reuses the same dead client.
+    enabled: !!host,
     queryFn: () => api.get<LibraryStatus>('/manage/library/status'),
   });
 
@@ -319,7 +331,7 @@ export default function LibraryCounterPage(): React.JSX.Element {
   // for it on a page load where she is issuing books.
   const suggested = useQuery({
     queryKey: ['library-desk', 'next-numbers', copyCount],
-    enabled: adding || status.data?.copies === 0,
+    enabled: !!host && (adding || status.data?.copies === 0),
     queryFn: () => api.get<string[]>(`/manage/library/next-numbers?count=${copyCount}`),
   });
 
@@ -332,24 +344,36 @@ export default function LibraryCounterPage(): React.JSX.Element {
   // costs a request per keystroke.
   const people = useQuery({
     queryKey: ['library-desk', 'members', term],
-    enabled: term.trim().length >= 2,
+    enabled: !!host && term.trim().length >= 2,
     queryFn: () => api.get<MemberCard[]>(`/manage/library/members?q=${encodeURIComponent(term.trim())}`),
   });
 
   const copy = useQuery({
     queryKey: ['library-desk', 'copy', number],
-    enabled: number.trim().length >= 1,
+    enabled: !!host && number.trim().length >= 1,
     queryFn: () =>
       api.get<CopyCard | null>(`/manage/library/copies/${encodeURIComponent(number.trim())}`),
   });
 
   const day = useQuery({
     queryKey: ['library-desk', 'day'],
+    // Not until the tenant host is known. useApi memoises its client on
+    // hostHeader, so a query that fires on the first render captures a client
+    // with no X-Skoolos-Host, the API cannot resolve the school, and the
+    // cached failure is what the counter then shows — permanently, because
+    // 4xx is not retried and refetch reuses the same dead client.
+    enabled: !!host,
     queryFn: () => api.get<DeskDayRow[]>('/manage/library/day'),
   });
 
   const late = useQuery({
     queryKey: ['library-desk', 'not-returned'],
+    // Not until the tenant host is known. useApi memoises its client on
+    // hostHeader, so a query that fires on the first render captures a client
+    // with no X-Skoolos-Host, the API cannot resolve the school, and the
+    // cached failure is what the counter then shows — permanently, because
+    // 4xx is not retried and refetch reuses the same dead client.
+    enabled: !!host,
     queryFn: () =>
       api.get<{ truncated: boolean; rows: NotReturnedRow[] }>('/manage/library/not-returned'),
   });
