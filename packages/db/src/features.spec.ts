@@ -25,6 +25,14 @@ describe('resolveFeatures', () => {
     for (const k of TIER_FEATURES.STANDARD) expect(f.has(k)).toBe(true);
   });
 
+  it('LIBRARY is PRO-only, overridable upward', () => {
+    expect(resolveFeatures('PRO', []).has('LIBRARY')).toBe(true);
+    expect(resolveFeatures('STANDARD', []).has('LIBRARY')).toBe(false);
+    expect(resolveFeatures('BASIC', []).has('LIBRARY')).toBe(false);
+    const f = resolveFeatures('BASIC', [{ featureKey: 'LIBRARY', enabled: true }]);
+    expect(f.has('LIBRARY')).toBe(true);
+  });
+
   it('an enabled override adds a feature above the tier', () => {
     const f = resolveFeatures('BASIC', [{ featureKey: 'EVENTS', enabled: true }]);
     expect(f.has('EVENTS')).toBe(true);

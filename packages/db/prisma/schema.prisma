@@ -129,6 +129,9 @@ enum StaffRole {
   HELPER
   SECURITY
   OTHER
+  /// Runs the school library — the only STAFF role that unlocks /library.
+  /// Appended last because ALTER TYPE … ADD VALUE appends in Postgres.
+  LIBRARIAN
 }
 
 enum LeaveType {
@@ -228,6 +231,13 @@ model School {
   diaryEntries           DiaryEntry[]
   attendanceNotices      AttendanceNotice[]
   jobPosts            JobPost[]
+  librarySettings        LibrarySettings?
+  libraryBookTitles      LibraryBookTitle[]
+  libraryBookCopies      LibraryBookCopy[]
+  libraryIssues          LibraryIssue[]
+  libraryFines           LibraryFine[]
+  libraryHallVisits      LibraryHallVisit[]
+  libraryHallMarks       LibraryHallMark[]
 
 }
 
@@ -671,6 +681,7 @@ model Teacher {
   timetableSlots   TimetableSlot[]
   featuredIn       FeaturedStaff[]
   messageThreads   MessageThread[]
+  libraryIssues    LibraryIssue[]
 
   @@index([schoolId])
 }
@@ -717,6 +728,7 @@ model Student {
   diaryReceipts     DiaryRecipient[]
   diaryAcks         DiaryAck[]
   attendanceNotices AttendanceNotice[]
+  libraryIssues     LibraryIssue[]
 
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
@@ -899,10 +911,14 @@ model NotificationOutbox {
   schoolId       String       @db.Uuid
   kind           String
   payload        Json
-  classSectionId String       @db.Uuid
+  /// Null only for single-reader kinds that have no section to broadcast to
+  /// (LIBRARY_NOTICE to a teacher). The drain reads it only when
+  /// targetUserId is null, so a null section never reaches a resolver.
+  classSectionId String?      @db.Uuid
   /// When set, the drain pushes to THIS single user only (a private message —
-  /// MESSAGE_RECEIVED), instead of resolving the whole classSectionId's
-  /// section recipients. Null for the broadcast kinds (exam/result/assignment).
+  /// MESSAGE_RECEIVED, or any LIBRARY_NOTICE), instead of resolving the whole
+  /// classSectionId's section recipients. Null for the broadcast kinds
+  /// (exam/result/assignment).
   targetUserId   String?      @db.Uuid
   createdAt      DateTime     @default(now())
   sentAt         DateTime?
@@ -910,8 +926,8 @@ model NotificationOutbox {
   /// or above its MAX_ATTEMPTS cap rather than retrying forever.
   attempts       Int          @default(0)
   lastError      String?
-  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  school         School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
 
   /// The drain's own query shape: unsent rows, oldest first.
   @@index([schoolId, sentAt])
@@ -1641,5 +1657,177 @@ model JobApplication {
   jobPost   JobPost              @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
 
   @@index([jobPostId])
+  @@index([schoolId])
+}
+
+// ── Library ──────────────────────────────────────────────
+//
+// The Library Wing: one librarian login (STAFF + StaffRole.LIBRARIAN) runs the
+// whole library from /library. Money is whole rupees (Int) — fines are small,
+// paise would be false precision. Fines ACCRUE while a book is out (computed,
+// never stored) and CRYSTALLIZE into a LibraryFine row at return or write-off.
+
+enum LibraryFineReason {
+  LATE
+  LOST
+}
+
+enum LibraryFineStatus {
+  DUE
+  PAID
+  WAIVED
+}
+
+enum LibraryHallSource {
+  /// Confirmed from the class teacher's register of the same day.
+  SYNCED
+  /// The librarian marked the class herself.
+  RETAKEN
+}
+
+/// One row per school, created on first read with the approved defaults. The
+/// librarian edits it from the portal gear; the school admin edits the same row
+/// from Admin → Settings → Library.
+model LibrarySettings {
+  id                  String   @id @default(uuid()) @db.Uuid
+  schoolId            String   @unique @db.Uuid
+  /// How many classes fit in the hall at the same time.
+  hallCapacityClasses Int      @default(2)
+  studentLoanLimit    Int      @default(2)
+  teacherLoanLimit    Int      @default(5)
+  /// dueOn = issuedOn + loanDays.
+  loanDays            Int      @default(14)
+  /// Per late day, applied after graceDays.
+  finePerDayRupees    Int      @default(5)
+  graceDays           Int      @default(1)
+  /// Flat replacement charge for a lost copy.
+  lostFeeRupees       Int      @default(120)
+  /// OFF ⇒ teachers never see or owe fines, and none accrue on their loans.
+  fineTeachers        Boolean  @default(false)
+  /// Email + push, 3 days before dueOn (the library-due-soon cron).
+  dueSoonReminders    Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  school              School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+model LibraryBookTitle {
+  id        String            @id @default(uuid()) @db.Uuid
+  schoolId  String            @db.Uuid
+  title     String
+  author    String
+  shelf     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  school    School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  copies    LibraryBookCopy[]
+
+  @@index([schoolId])
+}
+
+model LibraryBookCopy {
+  id          String           @id @default(uuid()) @db.Uuid
+  schoolId    String           @db.Uuid
+  titleId     String           @db.Uuid
+  /// The human book number printed on the sticker: B-00001, B-00002, …
+  /// Allocated like Student.code (lexicographic max + 1 inside the tx); the
+  /// unique index below is the race backstop.
+  accessionNo String
+  /// Set when the copy is written off (lost/damaged beyond repair). A lost
+  /// copy never counts as available and is never issuable again.
+  lostAt      DateTime?
+  createdAt   DateTime         @default(now())
+  school      School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  title       LibraryBookTitle @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  issues      LibraryIssue[]
+
+  @@unique([schoolId, accessionNo])
+  @@index([schoolId, titleId])
+}
+
+/// One loan. Exactly one of studentId/teacherId is set (the StaffAttendance
+/// XOR convention). An open loan is returnedOn = NULL — a partial unique index
+/// (migration SQL: one open issue per copy) makes double-issue of the same
+/// physical copy impossible regardless of application races.
+model LibraryIssue {
+  id           String          @id @default(uuid()) @db.Uuid
+  schoolId     String          @db.Uuid
+  copyId       String          @db.Uuid
+  studentId    String?         @db.Uuid
+  teacherId    String?         @db.Uuid
+  issuedOn     DateTime        @db.Date
+  dueOn        DateTime        @db.Date
+  returnedOn   DateTime?       @db.Date
+  /// This loan ended with the copy written off (see LibraryBookCopy.lostAt).
+  wasLost      Boolean         @default(false)
+  issuedById   String          @db.Uuid // User.id of the librarian at the counter
+  returnedById String?         @db.Uuid // User.id
+  createdAt    DateTime        @default(now())
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  copy         LibraryBookCopy @relation(fields: [copyId], references: [id], onDelete: Cascade)
+  student      Student?        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher      Teacher?        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  fines        LibraryFine[]
+
+  @@index([schoolId, returnedOn])
+  @@index([schoolId, studentId])
+  @@index([schoolId, teacherId])
+  @@index([schoolId, copyId])
+  @@index([schoolId, dueOn])
+}
+
+/// A crystallized amount owed — created at return time (LATE) or write-off
+/// (LOST), never while the book is still out. "Collect later" is simply a DUE
+/// row that outlives the return.
+model LibraryFine {
+  id           String            @id @default(uuid()) @db.Uuid
+  schoolId     String            @db.Uuid
+  issueId      String            @db.Uuid
+  /// Borrower copied from the issue so per-reader lists need no join.
+  studentId    String?           @db.Uuid
+  teacherId    String?           @db.Uuid
+  amountRupees Int
+  reason       LibraryFineReason
+  status       LibraryFineStatus @default(DUE)
+  settledById  String?           @db.Uuid // User.id of the librarian who collected/waived
+  settledAt    DateTime?
+  createdAt    DateTime          @default(now())
+  school       School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  issue        LibraryIssue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@index([schoolId, studentId])
+  @@index([schoolId, teacherId])
+}
+
+/// A class's library-period attendance, saved by the librarian — either
+/// confirmed from the class teacher's register (SYNCED) or taken fresh
+/// (RETAKEN). One visit per class per day.
+model LibraryHallVisit {
+  id             String            @id @default(uuid()) @db.Uuid
+  schoolId       String            @db.Uuid
+  classSectionId String            @db.Uuid // ClassSection.id (bare, as Attendance does)
+  date           DateTime          @db.Date
+  periodId       String?           @db.Uuid // Period.id when derived from the timetable
+  source         LibraryHallSource
+  savedById      String            @db.Uuid // User.id of the librarian
+  createdAt      DateTime          @default(now())
+  school         School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  marks          LibraryHallMark[]
+
+  @@unique([schoolId, classSectionId, date])
+  @@index([schoolId, date])
+}
+
+model LibraryHallMark {
+  id        String           @id @default(uuid()) @db.Uuid
+  schoolId  String           @db.Uuid
+  visitId   String           @db.Uuid
+  studentId String           @db.Uuid // Student.id (bare; roster names come from Student)
+  status    AttendanceStatus
+  school    School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  visit     LibraryHallVisit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@unique([visitId, studentId])
   @@index([schoolId])
 }
