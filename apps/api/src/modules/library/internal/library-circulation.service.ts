@@ -309,7 +309,11 @@ export class LibraryCirculationService {
       await this.resolveBorrower(tx, kind, borrowerId);
 
       // Serialise per-borrower BEFORE the count — see the class docstring.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${schoolId}), hashtext(${borrowerId}))`;
+      // ::text because pg_advisory_xact_lock returns SQL `void`, which
+      // $queryRaw cannot deserialize ("Failed to deserialize column of type
+      // 'void'") — it 500ed the first real issue on staging while every
+      // mocked unit test was green.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${schoolId}), hashtext(${borrowerId}))::text`;
 
       const borrowerWhere = kind === 'STUDENT' ? { studentId: borrowerId } : { teacherId: borrowerId };
       const openCount = await tx.libraryIssue.count({ where: { ...borrowerWhere, returnedOn: null } });
