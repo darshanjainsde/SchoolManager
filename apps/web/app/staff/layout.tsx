@@ -32,15 +32,21 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     enabled: status === 'authed' && audience === 'school' && !!host,
-    queryFn: () => api.get<{ role: string }>('/auth/me'),
+    queryFn: () => api.get<{ role: string; staffRole?: string | null }>('/auth/me'),
   });
 
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) router.replace('/login');
     // STAFF-only — a TEACHER/SCHOOL_ADMIN/STUDENT session that lands here
     // (direct navigation, a stale bookmark, ...) is sent to ITS OWN portal,
-    // never left inside this one.
-    if (me.data && me.data.role !== 'STAFF') router.replace(homeForRole(me.data.role));
+    // never left inside this one. The librarian is STAFF too, but her portal
+    // is the library: without this she opens /staff (an old tab, a bookmark,
+    // a pre-deploy login) and sees a Home with none of her tools, which reads
+    // as "the library is missing" — homeForRole knows the right door.
+    if (me.data) {
+      const target = homeForRole(me.data.role, me.data.staffRole);
+      if (target !== '/staff') router.replace(target);
+    }
   }, [hydrated, status, audience, me.data, router]);
 
   if (!hydrated) return null;
