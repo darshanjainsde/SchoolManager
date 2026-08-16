@@ -58,6 +58,7 @@ export const config = {
     '/me/:path*',
     '/teacher/:path*',
     '/portal/:path*',
+    '/library/:path*',
     '/login',
     '/owner',
     '/account/:path*',

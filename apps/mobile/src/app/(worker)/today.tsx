@@ -70,6 +70,7 @@ const STAFF_ROLE_LABEL: Record<string, string> = {
   DRIVER: 'Driver',
   HELPER: 'Helper',
   SECURITY: 'Security',
+  LIBRARIAN: 'Librarian',
   OTHER: 'Staff',
 };
 

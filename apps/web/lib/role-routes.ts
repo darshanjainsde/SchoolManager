@@ -12,14 +12,17 @@
  * role the API reports (`GET /auth/me`), exactly as the login page already
  * documents for itself.
  */
-export function homeForRole(role: string | undefined): string {
+export function homeForRole(role: string | undefined, staffRole?: string | null): string {
   switch (role) {
     case 'STUDENT':
       return '/portal';
     case 'TEACHER':
       return '/teacher';
     case 'STAFF':
-      return '/staff';
+      // Which KIND of staff decides the door: the librarian's home is the
+      // library; every other staff kind lands on /staff. `staffRole` comes
+      // from `GET /auth/me` (never from a client-chosen tab).
+      return staffRole === 'LIBRARIAN' ? '/library' : '/staff';
     case 'SCHOOL_ADMIN':
       return '/app';
     default:

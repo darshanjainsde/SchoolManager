@@ -8,7 +8,7 @@ import { useHost } from '@/components/use-host';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'OTHER'] as const;
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'OTHER'] as const;
 type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 const ROLE_LABELS: Record<StaffRoleValue, string> = {
@@ -17,6 +17,7 @@ const ROLE_LABELS: Record<StaffRoleValue, string> = {
   DRIVER: 'Driver',
   HELPER: 'Helper',
   SECURITY: 'Security',
+  LIBRARIAN: 'Librarian',
   OTHER: 'Other',
 };
 

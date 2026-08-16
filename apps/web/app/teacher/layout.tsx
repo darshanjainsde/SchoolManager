@@ -76,8 +76,15 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     enabled: status === 'authed' && audience === 'school' && !!host,
-    queryFn: () => api.get<{ role: string }>('/auth/me'),
+    queryFn: () => api.get<{ role: string; features?: string[] }>('/auth/me'),
   });
+
+  // Feature-gated entries (Library) hide once features load and say the plan
+  // lacks them — and show until then, so a slow fetch never blanks a tab the
+  // school does have (the same call the admin sidebar makes).
+  const navItems = NAV_ITEMS.filter(
+    (i) => !i.requiredFeature || !me.data?.features || me.data.features.includes(i.requiredFeature),
+  );
 
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) router.replace('/login');
@@ -193,7 +200,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
             </div>
             <div className="sk-navlabel">Classroom</div>
             <nav className="flex flex-col gap-[3px]">
-              {NAV_ITEMS.map(({ href, label, icon }) => (
+              {navItems.map(({ href, label, icon }) => (
                 <TeacherNavLink
                   key={href}
                   href={href}
@@ -236,7 +243,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
         </div>
         <div className="sk-navlabel">Classroom</div>
         <nav className="flex flex-col gap-[3px]">
-          {NAV_ITEMS.map(({ href, label, icon }) => (
+          {navItems.map(({ href, label, icon }) => (
             <TeacherNavLink key={href} href={href} label={label} icon={icon} isActive={isActive(href)} />
           ))}
         </nav>

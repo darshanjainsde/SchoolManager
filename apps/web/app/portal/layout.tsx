@@ -9,6 +9,7 @@ import {
   CalendarCheck,
   BookOpen,
   GraduationCap,
+  Library,
   Megaphone,
   MessageSquare,
   User,
@@ -28,13 +29,20 @@ import { NotificationBell } from '@/components/notifications/notification-bell';
 import { MobileNavButton, MobileNavDrawer } from '@/components/MobileNavDrawer';
 import '../sk-theme.css';
 
-const NAV_ITEMS = [
+const NAV_ITEMS: {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  /** Hidden when `/auth/me` reports the school's plan lacks this feature. */
+  requiredFeature?: string;
+}[] = [
   { href: '/portal', label: 'Home', icon: LayoutDashboard },
   { href: '/portal/timetable', label: 'Timetable', icon: CalendarDays },
   { href: '/portal/attendance', label: 'Attendance', icon: CalendarCheck },
   { href: '/portal/diary', label: 'Diary', icon: NotebookPen },
   { href: '/portal/assignments', label: 'Assignments', icon: BookOpen },
   { href: '/portal/results', label: 'Results', icon: GraduationCap },
+  { href: '/portal/library', label: 'Library', icon: Library, requiredFeature: 'LIBRARY' },
   { href: '/portal/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/portal/messages', label: 'Messages', icon: MessageSquare },
   { href: '/portal/profile', label: 'Profile', icon: User },
@@ -60,8 +68,15 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     enabled: status === 'authed' && audience === 'school' && !!host,
-    queryFn: () => probeApi.get<{ role: string }>('/auth/me'),
+    queryFn: () => probeApi.get<{ role: string; features?: string[] }>('/auth/me'),
   });
+
+  // Feature-gated entries (Library) hide once features load and say the plan
+  // lacks them — and show until then, so a slow fetch never blanks a tab the
+  // school does have.
+  const navItems = NAV_ITEMS.filter(
+    (i) => !i.requiredFeature || !me.data?.features || me.data.features.includes(i.requiredFeature),
+  );
 
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) {
@@ -129,7 +144,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
           />
         </div>
         <nav className="sk-tabs" aria-label="Portal sections">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+          {navItems.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} className="sk-tab" data-active={isActive(href)}>
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
               {label}
@@ -145,7 +160,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
         title="Student portal"
         host={host}
         sectionLabel="Sections"
-        items={NAV_ITEMS}
+        items={navItems}
         isActive={isActive}
         foot={
           // The bar hides these two on a phone (they do not fit), so the
