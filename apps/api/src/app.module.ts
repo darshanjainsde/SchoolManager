@@ -26,6 +26,7 @@ import { DirectoryModule } from './modules/directory/directory.module';
 import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
 import { BlogModule } from './modules/blog';
+import { LibraryModule } from './modules/library';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { BlogModule } from './modules/blog';
     DirectoryModule,
     MarketingModule,
     BlogModule,
+    LibraryModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

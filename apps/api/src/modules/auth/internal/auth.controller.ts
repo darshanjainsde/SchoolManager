@@ -142,7 +142,7 @@ export class AuthController {
   @UseGuards(SchoolJwtGuard)
   @Get('me')
   async me(@CurrentUser() user: SchoolJwtPayload) {
-    const [features, name] = await Promise.all([
+    const [features, name, staffRole] = await Promise.all([
       this.features.getFeatures(user.schoolId),
       // The clients have nowhere else to learn the signed-in person's NAME:
       // the login response carries none, and `User` has no name column. Without
@@ -150,12 +150,16 @@ export class AuthController {
       // teachers with their own email address. Null when no role record claims
       // the user yet — the client decides what to show instead.
       this.auth.displayNameFor(user.schoolId, user.sub, user.role),
+      // Which KIND of staff (LIBRARIAN, OFFICE, …) — how the web login lands a
+      // librarian on /library instead of /staff. Null for non-STAFF logins.
+      this.auth.staffRoleFor(user.schoolId, user.sub, user.role),
     ]);
     return {
       userId: user.sub,
       schoolId: user.schoolId,
       role: user.role,
       name,
+      staffRole,
       features: [...features],
     };
   }

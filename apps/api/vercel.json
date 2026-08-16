@@ -23,6 +23,10 @@
     {
       "path": "/internal/cron/notification-outbox",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/internal/cron/library-due-soon",
+      "schedule": "30 2 * * *"
     }
   ]
 }

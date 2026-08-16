@@ -53,6 +53,18 @@ export type ErrorCode =
   | 'NO_PROFILE'
   /** Teacher onboarding: this identity is an ACTIVE teacher at another school — release them there first. Pair with 409. */
   | 'ALREADY_AT_SCHOOL'
+  /** Caller's STAFF login has no Staff row with role LIBRARIAN — pair with 403. */
+  | 'NOT_LIBRARIAN'
+  /** Borrower is at their loan limit; re-send with `override: true` to issue anyway — pair with 409. */
+  | 'LIBRARY_LIMIT'
+  /** Borrower already holds an open copy of this title; `override: true` issues anyway — pair with 409. */
+  | 'LIBRARY_DUPLICATE_TITLE'
+  /** No free copy of the title (all out or lost) — pair with 409. */
+  | 'LIBRARY_UNAVAILABLE'
+  /** The issue is not in the state the action needs (already returned / not returned / written off) — pair with 409. */
+  | 'LIBRARY_NOT_OPEN'
+  /** The fine is not DUE (already collected or waived) — pair with 409. */
+  | 'LIBRARY_FINE_SETTLED'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

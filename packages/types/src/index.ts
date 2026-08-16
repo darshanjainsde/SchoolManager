@@ -517,7 +517,7 @@ export interface TeacherReplyInput {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**

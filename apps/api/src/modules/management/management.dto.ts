@@ -235,7 +235,7 @@ export class UpdateTeacherDto {
 
 // ── Staff (non-teaching) ────────────────────────────────────────────────────
 
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'OTHER'] as const;
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'OTHER', 'LIBRARIAN'] as const;
 export type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 export class CreateStaffDto {

@@ -7,6 +7,7 @@ import type {
   MessageReceivedOutboxPayload,
   AssignmentPostedOutboxPayload,
   ExamScheduledOutboxPayload,
+  LibraryNoticeOutboxPayload,
   NotificationMessage,
   ResultPublishedOutboxPayload,
 } from '../../common/notifications/notification.types';
@@ -67,6 +68,21 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
         schoolName: p.schoolName,
         subjectName: p.subjectName,
         examTitle: p.examTitle,
+      },
+    };
+  }
+  if (kind === 'LIBRARY_NOTICE') {
+    // Composed entirely at write time by the library module; renders through
+    // the EXISTING 'ANNOUNCEMENT' shape like the branches below. Always a
+    // single-reader row (targetUserId).
+    const p = payload as LibraryNoticeOutboxPayload;
+    return {
+      kind: 'ANNOUNCEMENT',
+      payload: {
+        schoolName: p.schoolName,
+        title: p.title,
+        body: p.body,
+        className: 'Library',
       },
     };
   }
@@ -165,7 +181,9 @@ export class NotificationOutboxService {
         // broadcast kinds resolve the whole class section as before.
         const recipients = row.targetUserId
           ? await resolveUserRecipients(db, row.schoolId, row.targetUserId)
-          : await resolveSectionRecipients(db, row.schoolId, row.classSectionId);
+          : row.classSectionId
+            ? await resolveSectionRecipients(db, row.schoolId, row.classSectionId)
+            : [];
 
         for (const email of recipients) {
           await this.push.send(email, message, row.schoolId);

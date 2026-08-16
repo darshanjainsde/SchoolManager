@@ -176,6 +176,7 @@ describe('shared portal contracts', () => {
     expect([...NOTIFICATION_OUTBOX_KINDS].sort()).toEqual([
       'ASSIGNMENT_POSTED',
       'EXAM_SCHEDULED',
+      'LIBRARY_NOTICE',
       'MESSAGE_RECEIVED',
       'RESULT_PUBLISHED',
     ]);
