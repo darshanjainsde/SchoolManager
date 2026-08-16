@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { withTenant, type TenantTx } from '@skoolos/db';
-import type { LibrarySettings } from '@prisma/client';
+// Types come via @skoolos/db, never '@prisma/client' directly: the Vercel
+// api build only guarantees the workspace-wrapped client (see prisma-errors.ts).
+import { withTenant, type TenantTx, type LibrarySettings } from '@skoolos/db';
 import { isP2002 } from '../../../common/errors/prisma-errors';
 import type { LibraryRules } from './library-policy';
 import type { UpdateLibrarySettingsDto } from './library.dto';

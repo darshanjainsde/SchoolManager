@@ -1,11 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { withTenant, type Prisma } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
 import { escapeHtml, MailService } from '../../../common/mail/mail.service';
 import { runInBackground } from '../../../common/notifications/run-in-background';
 import { emitNotifications } from '../../../common/notifications/notification-inbox';
 import type { LibraryNoticeOutboxPayload } from '../../../common/notifications/notification.types';
-import type { Prisma } from '@prisma/client';
 import { istTodayISO } from '../../management';
 import { LibrarySettingsService } from './library-settings.service';
 import { accruedFineRupees, dateOnlyISO, finesApply, type BorrowerKind } from './library-policy';
