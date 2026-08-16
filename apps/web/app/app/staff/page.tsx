@@ -9,10 +9,9 @@ import { useHost } from '@/components/use-host';
 // ── Types ────────────────────────────────────────────────────────────────────
 
 /**
- * Job titles a school actually hires for. LIBRARIAN is one of them, and it is
- * the only role that also decides the LOGIN a person gets — see
- * `staff.service.ts#createLogin`. Ordered as a school would read them, with
- * Other last.
+ * Job titles a school actually hires for, ordered as a school would read them.
+ * LIBRARIAN is a JOB — the login it gets is ordinary STAFF; the door follows
+ * from /auth/me's staffRole (see lib/role-routes.ts).
  */
 const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'OTHER'] as const;
 type StaffRoleValue = (typeof STAFF_ROLES)[number];

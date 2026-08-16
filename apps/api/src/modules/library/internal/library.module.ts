@@ -1,38 +1,38 @@
 import { Module } from '@nestjs/common';
 import { FeaturesModule } from '../../features';
-import { LibraryOrgService } from './library-org.service';
+import { TenancyModule } from '../../tenancy';
+import { LibrarianGuard } from './librarian.guard';
+import { LibraryCatalogService } from './library-catalog.service';
+import { LibraryCirculationService } from './library-circulation.service';
+import { LibraryDueSoonService } from './library-due-soon.service';
+import { LibraryFinesService } from './library-fines.service';
+import { LibraryHallService } from './library-hall.service';
 import { LibraryMeService } from './library-me.service';
-import { LibraryMeController } from './library-me.controller';
-import { LibraryEnrolmentService } from './library-enrolment.service';
-import { LibraryAdminController } from './library-admin.controller';
-import { LibraryDeskService } from './library-desk.service';
-import { LibraryDeskController } from './library-desk.controller';
-import { LibraryRemindersService } from './library-reminders.service';
-import { LibraryRemindersController } from './library-reminders.controller';
-import { CronSecretGuard } from '../../../common/auth/cron-secret.guard';
+import { LibrarySettingsService } from './library-settings.service';
+import {
+  LibraryController,
+  LibraryDueSoonController,
+  LibraryMeController,
+} from './library.controller';
 
 /**
- * The library inside Sckools.
- *
- * Keeps its own `internal/` boundary and its own Prisma client (`@library/db`)
- * rather than merging into `@skoolos/db`. That is what keeps the two separable
- * later: if the library ever needs a different scaling or availability profile,
- * splitting it back out stays a routing change instead of a rewrite.
- */
-/**
- * `CronSecretGuard` is listed as a PROVIDER here, not brought in by importing
- * `ManagementModule`. Importing that module creates a cycle — management
- * reaches the library through `LibraryOrgService` for the `libraryLive` flag on
- * `/auth/me` — and Nest fails every request in the app with "A circular
- * dependency between modules", not just this route. The guard is a stateless
- * class that reads `process.env.CRON_SECRET`; a second INSTANCE of the same
- * class cannot disagree with the first, which is the only thing worth
- * protecting against here.
+ * The Library Wing (see docs/superpowers/plans/2026-08-16-library-wing-build.md):
+ * one librarian login runs the whole library from /library; students and
+ * teachers read their own shelf at /me/library. Fully-encapsulated module —
+ * siblings import nothing from here except `LibraryModule` via ../index.ts.
  */
 @Module({
-  imports: [FeaturesModule],
-  controllers: [LibraryMeController, LibraryAdminController, LibraryDeskController, LibraryRemindersController],
-  providers: [LibraryOrgService, LibraryMeService, LibraryEnrolmentService, LibraryDeskService, LibraryRemindersService, CronSecretGuard],
-  exports: [LibraryOrgService],
+  imports: [FeaturesModule, TenancyModule],
+  controllers: [LibraryController, LibraryMeController, LibraryDueSoonController],
+  providers: [
+    LibrarianGuard,
+    LibrarySettingsService,
+    LibraryCatalogService,
+    LibraryCirculationService,
+    LibraryFinesService,
+    LibraryHallService,
+    LibraryMeService,
+    LibraryDueSoonService,
+  ],
 })
 export class LibraryModule {}

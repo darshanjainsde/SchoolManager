@@ -356,6 +356,21 @@ export class AuthService {
     }
     return null;
   }
+
+  /**
+   * The Staff row's role (LIBRARIAN, OFFICE, …) for a STAFF login — the one
+   * fact the web login needs to land a librarian on /library instead of
+   * /staff. Null for non-STAFF logins and for STAFF with no Staff row yet.
+   */
+  async staffRoleFor(schoolId: string, userId: string, role: UserRole): Promise<string | null> {
+    if (role !== 'STAFF') return null;
+    const platform = getPlatformPrisma();
+    const staff = await platform.staff.findFirst({
+      where: { schoolId, userId, isActive: true },
+      select: { role: true },
+    });
+    return staff?.role ?? null;
+  }
 }
 
 interface Named {

@@ -1,223 +1,114 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { getPlatformPrisma } from '@skoolos/db';
-import { withOrg, type LibraryTx } from '@library/db';
-import { selfReportLost } from '@library/core';
+import { Injectable } from '@nestjs/common';
+import { withTenant } from '@skoolos/db';
+import { ApiError } from '../../../common/errors/api-error';
+import { istTodayISO } from '../../management';
+import { LibrarySettingsService } from './library-settings.service';
+import {
+  accruedFineRupees,
+  dateOnlyISO,
+  finesApply,
+  loanLimitFor,
+  type BorrowerKind,
+} from './library-policy';
 
 /**
- * What a student or a teacher sees of the library, inside the portal they
- * already use.
- *
- * Responses are BUILT here, never returned as raw rows. Every field on the way
- * out is one somebody decided to show — which is what stops a replacement price
- * or another member's name reaching a child because a `select` grew.
+ * The reader's own view (`/me/library`) — what the student's phone ribbon and
+ * the teacher's Library tab render. Fines are simply absent (zero, empty)
+ * for teachers while fineTeachers is off; the client never has to know the
+ * rule, only the numbers.
  */
-
-export interface MyBook {
-  issueId: string;
-  title: string;
-  /** The number written inside the front cover. "Book number" at the counter. */
-  accessionNumber: string;
-  backBy: string;
-  /** Negative means late. The UI colours from this; it never re-derives it. */
-  daysLeft: number;
-  renewCount: number;
-}
-
-export interface MyLibrary {
-  books: MyBook[];
-  /**
-   * Absent (not zero) when nothing is owed. A permanent "₹0 owed" line teaches
-   * a family to expect a charge from a library that mostly charges nothing.
-   */
-  owed?: number;
-  /** False when this person is not a library member at all — no error, no tab. */
-  isMember: boolean;
-}
-
-export interface ShelfResult {
-  titleId: string;
-  title: string;
-  author: string | null;
-  /** Counted, never stored — a stored count drifts and then nobody trusts either number. */
-  availableCopies: number;
-  totalCopies: number;
-}
-
-/** Whole days between two instants, floored toward the past. */
-function daysBetween(from: Date, to: Date): number {
-  return Math.floor((to.getTime() - from.getTime()) / 86_400_000);
-}
-
 @Injectable()
 export class LibraryMeService {
-  /**
-   * The Sckools user's library membership, or null.
-   *
-   * `Member.externalRef` holds the Sckools `User.id`. Not `Student.id` or
-   * `Teacher.id`: `User.id` is what the JWT carries in `sub`, it is what every
-   * guard already has in hand, and it is the one id a teacher and a student
-   * both possess. Resolving `sub` to a Student or Teacher row would mean a
-   * query in the `public` schema, which the library's own database role is not
-   * granted — so this is forced by the schema isolation, not preferred.
-   */
-  private async member(tx: LibraryTx, orgId: string, userId: string) {
-    return tx.member.findFirst({
-      where: { orgId, externalRef: userId, status: 'ACTIVE' },
-      select: { id: true },
-    });
-  }
+  constructor(private readonly settings: LibrarySettingsService) {}
 
-  async mine(orgId: string, userId: string, now = new Date()): Promise<MyLibrary> {
-    return withOrg(orgId, async (tx) => {
-      const me = await this.member(tx, orgId, userId);
-      if (!me) return { books: [], isMember: false };
+  async forUser(schoolId: string, userId: string, role: string) {
+    const todayISO = istTodayISO();
+    return withTenant(schoolId, async (tx) => {
+      let kind: BorrowerKind;
+      let borrowerId: string;
+      if (role === 'STUDENT') {
+        const s = await tx.student.findFirst({ where: { userId }, select: { id: true } });
+        if (!s) throw new ApiError('NOT_A_STUDENT', 'No student record for this login.', 404);
+        kind = 'STUDENT';
+        borrowerId = s.id;
+      } else if (role === 'TEACHER') {
+        const t = await tx.teacher.findFirst({ where: { userId }, select: { id: true } });
+        if (!t) throw new ApiError('NOT_A_TEACHER', 'No teacher record for this login.', 404);
+        kind = 'TEACHER';
+        borrowerId = t.id;
+      } else {
+        throw new ApiError('NOT_FOUND', 'Only students and teachers have a library shelf.', 404);
+      }
 
-      const issues = await tx.issue.findMany({
-        where: { orgId, memberId: me.id, returnedAt: null },
-        select: {
-          id: true,
-          dueAt: true,
-          renewCount: true,
-          copy: { select: { accessionNumber: true, title: { select: { title: true } } } },
-        },
-        orderBy: { dueAt: 'asc' },
+      const settings = await this.settings.ensure(tx, schoolId);
+      const rules = this.settings.rules(settings);
+      const where = kind === 'STUDENT' ? { studentId: borrowerId } : { teacherId: borrowerId };
+      const showFines = finesApply(rules, kind);
+
+      const [open, history, fixedDue] = await Promise.all([
+        tx.libraryIssue.findMany({
+          where: { ...where, returnedOn: null },
+          orderBy: { dueOn: 'asc' },
+          include: { copy: { select: { accessionNo: true, title: { select: { title: true, author: true } } } } },
+        }),
+        tx.libraryIssue.findMany({
+          where: { ...where, returnedOn: { not: null } },
+          orderBy: { returnedOn: 'desc' },
+          take: 50,
+          include: { copy: { select: { accessionNo: true, title: { select: { title: true, author: true } } } } },
+        }),
+        tx.libraryFine.findMany({
+          where: { ...where, status: 'DUE' },
+          orderBy: { createdAt: 'asc' },
+          include: { issue: { select: { copy: { select: { title: { select: { title: true } } } } } } },
+        }),
+      ]);
+
+      const holdings = open.map((i) => {
+        const dueOn = dateOnlyISO(i.dueOn);
+        const daysLeft = Math.round(
+          (Date.parse(`${dueOn}T00:00:00.000Z`) - Date.parse(`${todayISO}T00:00:00.000Z`)) / 86_400_000,
+        );
+        return {
+          issueId: i.id,
+          title: i.copy.title.title,
+          author: i.copy.title.author,
+          accessionNo: i.copy.accessionNo,
+          issuedOn: dateOnlyISO(i.issuedOn),
+          dueOn,
+          daysLeft,
+          accruedFineRupees: showFines ? accruedFineRupees(rules, kind, dueOn, todayISO) : 0,
+        };
       });
 
-      const books: MyBook[] = issues.map((i) => ({
-        issueId: i.id,
-        title: i.copy.title.title,
-        accessionNumber: i.copy.accessionNumber,
-        backBy: i.dueAt.toISOString(),
-        daysLeft: daysBetween(now, i.dueAt),
-        renewCount: i.renewCount,
-      }));
+      const fines = showFines
+        ? fixedDue.map((f) => ({
+            id: f.id,
+            title: f.issue.copy.title.title,
+            reason: f.reason,
+            amountRupees: f.amountRupees,
+          }))
+        : [];
 
-      // Only OPEN fines, and only the outstanding part. A paid or waived fine is
-      // not something the family still owes, and showing it would have them
-      // paying twice.
-      const owed = await tx.fine.aggregate({
-        where: { orgId, memberId: me.id, status: 'OPEN' },
-        _sum: { amount: true },
-      });
-      const total = Number(owed._sum.amount ?? 0);
-
-      return { books, isMember: true, ...(total > 0 ? { owed: total } : {}) };
-    });
-  }
-
-  /**
-   * "I have lost this book."
-   *
-   * The API for this has existed since P3 and the button was deliberately held
-   * back: shipping it before a librarian could see the report would have left
-   * children owning up into a void. The counter is that screen, so it ships now.
-   *
-   * NO RUPEE FIGURE goes back, and no `Fine` is created. What the child is told
-   * is that the clock has stopped — which is the entire reason owning up is
-   * safe, and the reason a library hears about losses at all. The amount is
-   * decided later by a librarian looking at the actual book.
-   *
-   * `libUserId` is null: a Sckools student has a `User` row and no `LibUser`
-   * row, and both `Issue.returnedByUserId` and `LostReport.reportedByUserId`
-   * are foreign keys to that table. Their Sckools id still reaches the audit
-   * row, which carries no FK.
-   */
-  async reportLost(orgId: string, userId: string, accessionNumber: string, now = new Date()) {
-    return withOrg(
-      orgId,
-      async (tx) => {
-        const me = await this.member(tx, orgId, userId);
-        // Identical shape to "no active issue for this copy" on purpose: a
-        // child who is not a member must not be able to tell the difference
-        // between that and a book somebody else is holding.
-        if (!me) throw new NotFoundException('No active issue for this copy');
-        return selfReportLost(tx, orgId, accessionNumber.trim(), me.id, userId, now, null);
-      },
-      undefined,
-      // Reporting a loss touches the issue, the copy, the report and the audit
-      // row; the default 5s is the same bet the counter's writes declined.
-      { maxWait: 5_000, timeout: 15_000 },
-    );
-  }
-
-  /**
-   * "Is this book on the shelf" — the third question a child ever asks the
-   * library, after what do I have and when is it back.
-   *
-   * Availability is COUNTED from copy status, never read from a stored total.
-   */
-  async shelf(orgId: string, q: string, limit = 20): Promise<ShelfResult[]> {
-    const term = q.trim();
-    if (term.length < 2) return [];
-
-    return withOrg(orgId, async (tx) =>
-      tx.$queryRaw<ShelfResult[]>`
-        SELECT t."id" AS "titleId",
-               t."title",
-               NULLIF(string_agg(DISTINCT a."name", ', '), '') AS "author",
-               COUNT(DISTINCT c."id") FILTER (WHERE c."status" = 'AVAILABLE')::int AS "availableCopies",
-               COUNT(DISTINCT c."id")::int AS "totalCopies"
-        FROM "Title" t
-        JOIN "Copy" c ON c."titleId" = t."id"
-        LEFT JOIN "TitleAuthor" ta ON ta."titleId" = t."id"
-        LEFT JOIN "Author" a ON a."id" = ta."authorId"
-        WHERE t."orgId" = ${orgId}::uuid
-          AND t."title" ILIKE ${'%' + term + '%'}
-        GROUP BY t."id", t."title"
-        ORDER BY "availableCopies" DESC, t."title" ASC
-        LIMIT ${limit}
-      `,
-    );
-  }
-
-  /**
-   * Which of a class has not brought a book back.
-   *
-   * Names and titles only — never amounts, even when fines are on. The moment a
-   * staffroom screen shows what children owe, this stops being a nudge list and
-   * becomes fee collection, and the teacher stops opening it. It is also the
-   * only mechanism in the product that actually recovers a book from a
-   * ten-year-old: the librarian has no authority over a child, the class
-   * teacher does.
-   */
-  /**
-   * The caller's OWN classes, resolved from their Sckools teacher record.
-   *
-   * Returns [] for a teacher who is nobody's class teacher — a subject teacher
-   * has no register to chase, and an empty list is the honest answer rather
-   * than an error.
-   */
-  async myClassNotReturned(orgId: string, schoolId: string, userId: string, now = new Date()) {
-    const sections = await getPlatformPrisma().classSection.findMany({
-      where: { schoolId, classTeacher: { userId } },
-      select: { name: true, grade: { select: { name: true } } },
-    });
-    if (sections.length === 0) return [];
-
-    const classRefs = sections.map((s) => `${s.grade.name}-${s.name}`);
-    const all = await Promise.all(
-      classRefs.map((ref) => this.classNotReturned(orgId, ref, now)),
-    );
-    return all.flat();
-  }
-
-  async classNotReturned(orgId: string, classRef: string, now = new Date()) {
-    return withOrg(orgId, async (tx) => {
-      const rows = await tx.issue.findMany({
-        where: { orgId, returnedAt: null, dueAt: { lt: now }, member: { classRef } },
-        select: {
-          dueAt: true,
-          member: { select: { firstName: true, lastName: true } },
-          copy: { select: { title: { select: { title: true } } } },
-        },
-        orderBy: { dueAt: 'asc' },
-      });
-
-      return rows.map((r) => ({
-        name: `${r.member.firstName} ${r.member.lastName}`.trim(),
-        title: r.copy.title.title,
-        daysLate: -daysBetween(now, r.dueAt),
-      }));
+      return {
+        kind,
+        limit: loanLimitFor(rules, kind),
+        loanDays: rules.loanDays,
+        finesEnabled: showFines,
+        holdings,
+        history: history.map((i) => ({
+          issueId: i.id,
+          title: i.copy.title.title,
+          author: i.copy.title.author,
+          returnedOn: dateOnlyISO(i.returnedOn!),
+          wasLost: i.wasLost,
+        })),
+        fines,
+        finesDueRupees:
+          fines.reduce((n, f) => n + f.amountRupees, 0) +
+          holdings.reduce((n, h) => n + h.accruedFineRupees, 0),
+        today: todayISO,
+      };
     });
   }
 }

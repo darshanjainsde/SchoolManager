@@ -33,20 +33,16 @@ describe('student nav honesty', () => {
     }
   });
 
-  it('lists Library, and gates it on BOTH the feature and the library being live', () => {
-    // Stage 1 alone is not enough. The weeks between an admin enabling Library
-    // and a librarian shelving the first book are exactly when a tab would open
-    // onto nothing, and that is the impression a student forms once.
+  it('lists Library, gated on the LIBRARY feature', () => {
     const lib = NAV_ITEMS.find((i) => i.href === '/portal/library');
     expect(lib?.label).toBe('Library');
     expect(lib?.requiredFeature).toBe('LIBRARY');
-    expect(lib?.requiresLibraryLive).toBe(true);
   });
 
   it('gates nothing else on the library', () => {
-    // A stray requiresLibraryLive on Timetable would hide a core tab for every
-    // school without a library, and it would look like a data bug.
-    const gated = NAV_ITEMS.filter((i) => i.requiresLibraryLive).map((i) => i.href);
+    // A stray requiredFeature on Timetable would hide a core tab for every
+    // school below PRO, and it would look like a data bug.
+    const gated = NAV_ITEMS.filter((i) => i.requiredFeature).map((i) => i.href);
     expect(gated).toEqual(['/portal/library']);
   });
 });

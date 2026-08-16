@@ -126,6 +126,21 @@ export interface AssignmentPostedOutboxPayload {
  * joins back to Message/MessageThread. Renders through the existing
  * `ANNOUNCEMENT` push template (no dedicated NotificationKind).
  */
+/**
+ * Payload STORED in a `NotificationOutbox` row for kind `LIBRARY_NOTICE`
+ * (`@skoolos/types` `NotificationOutboxKind`). One generic shape covers every
+ * library push (due-soon nudge, fine reminder) — the title/body are composed
+ * at write time by the library module, and the drain renders through the
+ * EXISTING 'ANNOUNCEMENT' template, the same reuse move as
+ * ASSIGNMENT_POSTED/MESSAGE_RECEIVED below. Rows always target a single
+ * reader via `targetUserId`.
+ */
+export interface LibraryNoticeOutboxPayload {
+  schoolName: string;
+  title: string;
+  body: string;
+}
+
 export interface MessageReceivedOutboxPayload {
   schoolName: string;
   /** Display name of whoever sent the message (the OTHER party to the recipient). */

@@ -237,9 +237,10 @@ export class UpdateTeacherDto {
 
 /**
  * Mirrors the `StaffRole` enum in schema.prisma. LIBRARIAN is the one value
- * that also decides a LOGIN: `staff.service.ts#createLogin` mints a LIBRARIAN
- * user for a staff member with that job, so the admin picks what the person IS
- * and their access follows.
+ * that also decides a DOOR: a staff member with that job signs in as ordinary
+ * STAFF and lands on /library (homeForRole reads `staffRole` from /auth/me).
+ * The login role stays STAFF — the job title, not the account type, is what
+ * makes a librarian.
  */
 const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'OTHER'] as const;
 export type StaffRoleValue = (typeof STAFF_ROLES)[number];
@@ -445,21 +446,6 @@ export class CreateLoginDto {
   @IsString()
   @Length(1, 60)
   username?: string;
-
-  /**
-   * Which kind of staff login this is. Omitted means `STAFF`, so every existing
-   * caller keeps its current behaviour.
-   *
-   * `LIBRARIAN` is the only other value on purpose. This route creates a login
-   * for a `Staff` record, and the two things a school hires that need a login
-   * of their own are general non-teaching staff and the librarian. Teachers
-   * come through their own route with their own record; letting this one mint
-   * a TEACHER or SCHOOL_ADMIN would make a staff-management screen into a
-   * privilege-escalation path.
-   */
-  @IsOptional()
-  @IsIn(['STAFF', 'LIBRARIAN'])
-  role?: 'STAFF' | 'LIBRARIAN';
 }
 
 // ── TimetableSlot ─────────────────────────────────────────────────────────────

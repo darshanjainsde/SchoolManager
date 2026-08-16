@@ -14,6 +14,15 @@ describe('homeForRole', () => {
     expect(homeForRole('STAFF')).toBe('/staff');
   });
 
+  it('routes the librarian (STAFF + staffRole LIBRARIAN) to /library', () => {
+    expect(homeForRole('STAFF', 'LIBRARIAN')).toBe('/library');
+    // Any other staff kind — or an unknown/missing staffRole — stays on /staff.
+    expect(homeForRole('STAFF', 'OFFICE')).toBe('/staff');
+    expect(homeForRole('STAFF', null)).toBe('/staff');
+    // staffRole never redirects other roles.
+    expect(homeForRole('TEACHER', 'LIBRARIAN')).toBe('/teacher');
+  });
+
   it('routes SCHOOL_ADMIN to /app', () => {
     expect(homeForRole('SCHOOL_ADMIN')).toBe('/app');
   });
@@ -23,10 +32,13 @@ describe('homeForRole', () => {
     expect(homeForRole(undefined)).toBe('/login');
   });
 
-  it('sends a LIBRARIAN to the library counter, never the admin console', () => {
-    // The whole point of LIBRARIAN being its own role: she must not land on
-    // /app and see students, staff and fees.
-    expect(homeForRole('LIBRARIAN')).toBe('/library');
+  it('treats the retired LIBRARIAN login role as unroutable', () => {
+    // The first library line modelled the librarian as a UserRole. The Library
+    // Wing replaced that: the librarian is ordinary STAFF whose Staff.role is
+    // LIBRARIAN (asserted above), and the library_wing migration folds any
+    // legacy LIBRARIAN users back to STAFF. A token still carrying the old
+    // role gets no portal — /login, where a fresh sign-in mints the new shape.
+    expect(homeForRole('LIBRARIAN')).toBe('/login');
   });
 
   it('keeps the counter OUTSIDE the /app segment', () => {

@@ -3,19 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  LayoutDashboard,
-  CalendarDays,
-  CalendarCheck,
-  BookOpen,
-  GraduationCap,
-  Megaphone,
-  MessageSquare,
-  User,
-  LogOut,
-  NotebookPen,
-  Library,
-} from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useApi } from '@/lib/use-api';
@@ -51,20 +39,15 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     enabled: status === 'authed' && audience === 'school' && !!host,
-    queryFn: () =>
-      probeApi.get<{ role: string; features?: string[]; libraryLive?: boolean }>('/auth/me'),
+    queryFn: () => probeApi.get<{ role: string; features?: string[] }>('/auth/me'),
   });
 
-  /**
-   * Until /auth/me answers, show only the ungated items. The opposite default
-   * (show everything, hide later) would flash a Library tab at every student in
-   * every school that does not have one, on every page load.
-   */
-  const navItems = NAV_ITEMS.filter((i) => {
-    if (i.requiredFeature && !me.data?.features?.includes(i.requiredFeature)) return false;
-    if (i.requiresLibraryLive && !me.data?.libraryLive) return false;
-    return true;
-  });
+  // Feature-gated entries (Library) hide once features load and say the plan
+  // lacks them — and show until then, so a slow fetch never blanks a tab the
+  // school does have.
+  const navItems = NAV_ITEMS.filter(
+    (i) => !i.requiredFeature || !me.data?.features || me.data.features.includes(i.requiredFeature),
+  );
 
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) {

@@ -139,14 +139,16 @@ export default function GatehouseLogin({ theme }: { theme: LoginTheme }) {
         password: values.password,
       });
       setTokens({ ...res, audience: 'school' });
-      const me = await api.get<{ userId: string; schoolId?: string; role?: string }>('/auth/me');
+      const me = await api.get<{ userId: string; schoolId?: string; role?: string; staffRole?: string | null }>(
+        '/auth/me',
+      );
 
       setMe(me);
       // Never trust the selector — the API's role decides where the user
       // lands. The gate-open line reads the API's answer for the same reason.
-      setDestination(DESTINATION[me.role ?? ''] ?? 'Opening your portal');
+      const target = homeForRole(me.role, me.staffRole);
+      setDestination(target === '/library' ? 'Opening the library' : (DESTINATION[me.role ?? ''] ?? 'Opening your portal'));
       setPhase('open');
-      const target = homeForRole(me.role);
       // Let the flood play one beat; routing happens under it.
       setTimeout(() => router.replace(target), 900);
     } catch (e) {

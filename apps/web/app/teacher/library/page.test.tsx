@@ -1,109 +1,70 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
-import { renderWithProviders } from '@/test/render';
+import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
+import type { MeLibraryPayload } from '@/lib/library-types';
 import TeacherLibraryPage from './page';
-import type { ClassNotReturned, MyLibrary } from '@/lib/library';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
+vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
 
-function stub(mine: MyLibrary, klass: ClassNotReturned[] = []): ReturnType<typeof useApi> {
-  return {
-    get: vi.fn((path: string) => {
-      if (path === '/me/library') return Promise.resolve(mine);
-      if (path === '/me/library/class') return Promise.resolve(klass);
-      return Promise.resolve([]);
-    }),
-    post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn(),
-    // Typed as what `mockReturnValue` expects rather than as ApiStub, so no
-    // per-call cast is needed. vitest never runs tsc, so a test file that is
-    // green under the runner can still fail the typecheck gate — this shape
-    // keeps the two agreeing.
-  } as unknown as ReturnType<typeof useApi>;
-}
-
-const teacherBook = {
-  issueId: 't1',
-  title: 'Sapiens',
-  accessionNumber: '2201',
-  // 30-day loan — the teacher's longer limit, from CirculationPolicy.
-  backBy: '2026-09-12T00:00:00.000Z',
-  daysLeft: 18,
-  renewCount: 0,
+const BASE: MeLibraryPayload = {
+  kind: 'TEACHER',
+  limit: 5,
+  loanDays: 14,
+  finesEnabled: false,
+  holdings: [
+    {
+      issueId: 'i1', title: 'A Brief History of Time', author: 'Stephen Hawking', accessionNo: 'B-00901',
+      issuedOn: '2026-08-05', dueOn: '2026-08-19', daysLeft: 3, accruedFineRupees: 0,
+    },
+  ],
+  history: [
+    { issueId: 'i2', title: 'Wings of Fire', author: 'A.P.J. Abdul Kalam', returnedOn: '2026-08-02', wasLost: false },
+  ],
+  fines: [],
+  finesDueRupees: 0,
+  today: '2026-08-16',
 };
 
-describe('the teacher library screen', () => {
-  beforeEach(() => vi.clearAllMocks());
+function stub(payload: MeLibraryPayload): ApiStub {
+  return {
+    get: vi.fn(() => Promise.resolve(payload)),
+    post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn(),
+  } as unknown as ApiStub;
+}
 
-  it('shows the teacher their own borrowed books, same shape as a student', async () => {
-    vi.mocked(useApi).mockReturnValue(stub({ isMember: true, books: [teacherBook] }));
+beforeEach(() => {
+  vi.mocked(useHost).mockReturnValue('raffles.sckools.com');
+});
+
+describe('the teacher library tab', () => {
+  it('shows holdings and history, and NO fines section while teacher fines are off', async () => {
+    vi.mocked(useApi).mockReturnValue(stub(BASE) as never);
     renderWithProviders(<TeacherLibraryPage />);
 
-    expect(await screen.findByText('Sapiens')).toBeInTheDocument();
-    expect(screen.getByText('no. 2201')).toBeInTheDocument();
-    expect(screen.getByText('18 days left')).toBeInTheDocument();
+    expect(await screen.findByText(/A Brief History of Time/)).toBeInTheDocument();
+    expect(screen.getByText('Holding now · 1 of 5')).toBeInTheDocument();
+    expect(screen.getByText(/Wings of Fire/)).toBeInTheDocument();
+    // The rule, not just an empty list: the section itself is absent.
+    expect(screen.queryByText('Fines')).not.toBeInTheDocument();
   });
 
-  it('lists which children have not brought a book back', async () => {
-    // The only mechanism in the product that actually recovers a book from a
-    // ten-year-old: the librarian has no authority over a child, the class
-    // teacher does.
+  it('grows a fines section — with amounts — the moment the librarian turns teacher fines on', async () => {
     vi.mocked(useApi).mockReturnValue(
-      stub({ isMember: true, books: [] }, [
-        { name: 'Meera Nair', title: 'Panchatantra', daysLate: 4 },
-        { name: 'Kabir Shah', title: 'Matilda', daysLate: 11 },
-      ]),
+      stub({
+        ...BASE,
+        finesEnabled: true,
+        fines: [{ id: 'f1', title: 'Godaan', reason: 'LATE', amountRupees: 15 }],
+        finesDueRupees: 15,
+      }) as never,
     );
     renderWithProviders(<TeacherLibraryPage />);
 
-    expect(await screen.findByText('Meera Nair')).toBeInTheDocument();
-    expect(screen.getByText('Kabir Shah')).toBeInTheDocument();
-    expect(screen.getByText('Panchatantra')).toBeInTheDocument();
-    expect(screen.getByText('2 books not returned')).toBeInTheDocument();
-  });
-
-  it('NEVER shows an amount against a child, even when fines are on', async () => {
-    // The load-bearing assertion. A staffroom is a public place, and the moment
-    // this screen shows what children owe it becomes fee collection — the
-    // teacher stops opening it, and then nothing recovers the books at all.
-    vi.mocked(useApi).mockReturnValue(
-      stub({ isMember: true, books: [], owed: 40 }, [
-        { name: 'Meera Nair', title: 'Panchatantra', daysLate: 4 },
-      ]),
-    );
-    renderWithProviders(<TeacherLibraryPage />);
-
-    await screen.findByText('Meera Nair');
-    // Word-boundary anchored. `/owe/i` was the first attempt and it matched
-    // "Nothing b-orrowe-d right now", failing on correct code — a loose
-    // substring in an absence-assertion fails wrongly, and the same looseness
-    // in a presence-assertion passes wrongly and says nothing.
-    expect(screen.queryByText(/₹/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/\bowe[sd]?\b/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/\bfines?\b/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/\brupees?\b/i)).not.toBeInTheDocument();
-  });
-
-  it('offers NO issue or return controls — a teacher borrows, they do not run the counter', async () => {
-    vi.mocked(useApi).mockReturnValue(
-      stub({ isMember: true, books: [teacherBook] }, [
-        { name: 'Meera Nair', title: 'Panchatantra', daysLate: 4 },
-      ]),
-    );
-    renderWithProviders(<TeacherLibraryPage />);
-
-    await screen.findByText('Sapiens');
-    expect(screen.queryByRole('button', { name: /issue/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /return/i })).not.toBeInTheDocument();
-  });
-
-  it('shows no class block at all when everything is back', async () => {
-    // An empty "0 books not returned" heading is noise on a screen a teacher
-    // opens between lessons.
-    vi.mocked(useApi).mockReturnValue(stub({ isMember: true, books: [teacherBook] }, []));
-    renderWithProviders(<TeacherLibraryPage />);
-
-    await screen.findByText('Sapiens');
-    expect(screen.queryByText(/not returned/i)).not.toBeInTheDocument();
+    expect(await screen.findByText('Fines')).toBeInTheDocument();
+    expect(screen.getByText('Godaan')).toBeInTheDocument();
+    expect(screen.getByText('₹15')).toBeInTheDocument();
+    expect(screen.getByText(/₹15 due/)).toBeInTheDocument();
   });
 });

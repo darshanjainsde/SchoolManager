@@ -247,108 +247,93 @@ describe('management authorization', () => {
     });
   });
 
-  // ── The librarian's counter ───────────────────────────────────────────────
+  // ── The Library Wing ──────────────────────────────────────────────────────
   //
-  // `apps/api` has NO route-coverage check — `apps/library-api` enumerates its
-  // mounted routes and fails on an uncovered one, but this app does not, so a
-  // new controller here is caught by nothing unless someone writes the case.
-  // Every route on `LibraryDeskController` is listed below by hand for that
-  // reason; adding a route without adding a line is a silent gap.
-  //
-  // These assert the ROLE gate only. A STUDENT and a TEACHER both hold a valid
-  // school token and both have their own library surface at `/me/library`,
-  // whose shapes are deliberately redacted — the counter's are not. The
-  // feature gate (`@RequireFeature('LIBRARY')`) and the "no library
-  // provisioned" path also answer 403, which is why these use the two roles
-  // that must be refused no matter how the school is configured.
-  describe('library counter — LIBRARIAN and SCHOOL_ADMIN only', () => {
-    const deskRoutes = [
-      '/manage/library/members?q=aa',
-      '/manage/library/copies/1142',
-      '/manage/library/not-returned',
-      '/manage/library/day',
-      '/manage/library/status',
-      '/manage/library/next-numbers',
-      // The class in the library right now, with every child's name, borrower
-      // number and how many books they hold. A whole class list, which is
-      // exactly what no student or teacher token may read here.
-      '/manage/library/period/now',
+  // Class-level guards: `SchoolJwtGuard, RequireFeatureGuard, RolesGuard,
+  // LibrarianGuard` with `@Roles('STAFF','SCHOOL_ADMIN')`. These assert the
+  // ROLE decision for every mounted /library route (the manifest lists them as
+  // REVIEWED on the strength of these cases): STUDENT and TEACHER are refused
+  // everywhere on the counter, and a STAFF login whose Staff row is NOT
+  // LIBRARIAN — the office clerk — is refused by LibrarianGuard even though
+  // RolesGuard admits STAFF.
+  describe('library wing — librarian STAFF and SCHOOL_ADMIN only', () => {
+    const ID = '00000000-0000-0000-0000-000000000001';
+    const librarianReads = [
+      '/library/dashboard',
+      '/library/settings',
+      '/library/titles?q=aa',
+      `/library/titles/${ID}`,
+      '/library/members?q=aa',
+      `/library/members/student/${ID}`,
+      '/library/fines',
+      '/library/hall',
     ];
 
-    it.each(deskRoutes)('a STUDENT cannot reach %s', async (route) => {
+    it.each(librarianReads)('a STUDENT cannot reach %s', async (route) => {
       await request(app.getHttpServer()).get(route).set(as(studentToken)).expect(403);
     });
 
-    it.each(deskRoutes)('a TEACHER cannot reach %s', async (route) => {
+    it.each(librarianReads)('a TEACHER cannot reach %s', async (route) => {
       await request(app.getHttpServer()).get(route).set(as(teacherToken)).expect(403);
     });
 
-    // The borrower's own side. `POST /me/library/lost` is the mirror image of
-    // the counter routes: STUDENT and TEACHER may reach it, and the people who
-    // RUN the library may not — a librarian reporting a loss does it from the
-    // counter, where the amount and its source are in front of a human.
-    it('a SCHOOL_ADMIN cannot report a loss through the borrower route', async () => {
-      await request(app.getHttpServer())
-        .post('/me/library/lost')
-        .set(as(adminToken))
-        .send({ accessionNumber: '1142' })
-        .expect(403);
+    it.each(librarianReads)('a non-librarian STAFF cannot reach %s', async (route) => {
+      const res = await request(app.getHttpServer()).get(route).set(as(staffToken)).expect(403);
+      expect(res.body.code).toBe('NOT_LIBRARIAN');
     });
 
-    it('a STAFF login cannot report a loss through the borrower route', async () => {
-      await request(app.getHttpServer())
-        .post('/me/library/lost')
-        .set(as(staffToken))
-        .send({ accessionNumber: '1142' })
-        .expect(403);
-    });
-
-    it('a STUDENT cannot enrol the school into the library', async () => {
-      await request(app.getHttpServer())
-        .post('/manage/library/enrol')
-        .set(as(studentToken))
-        .expect(403);
-    });
-
-    // The writes matter more than the reads here: a student who could reach
-    // POST /issue could put a book on another child's account, and one who
-    // could reach POST /return could clear their own late charge by returning
-    // a book they still hold.
-    const deskWrites: Array<[string, object]> = [
-      ['/manage/library/return', { accessionNumber: '1142' }],
-      ['/manage/library/issue', { accessionNumber: '1142', memberId: '00000000-0000-0000-0000-000000000001' }],
-      ['/manage/library/renew', { accessionNumber: '1142' }],
-      // Undo DELETES an issue row. A student reaching it could erase the loan
-      // that says they are holding a book.
-      ['/manage/library/undo', { issueId: '00000000-0000-0000-0000-000000000001', reason: 'x' }],
-      ['/manage/library/damage', { accessionNumber: '1142', condition: 'POOR', note: 'torn' }],
-      // Nudge writes into other people's inboxes. A student reaching it could
-      // message every class teacher in the school.
-      ['/manage/library/nudge', { classRefs: ['6-B'] }],
-      ['/manage/library/books', { title: 'X', accessionNumbers: ['9001'] }],
-      // Attendance is a record about a child that a parent may later be shown.
-      // A student reaching this could mark himself present at a library period
-      // he never attended, or unmark a classmate who was.
-      [
-        '/manage/library/period/present',
-        {
-          visitId: '00000000-0000-0000-0000-000000000001',
-          memberId: '00000000-0000-0000-0000-000000000002',
-          present: true,
-        },
-      ],
+    // The writes matter more than the reads: a student who could reach
+    // POST /library/issues could put a book on another child's account, and
+    // one who could reach /return could clear their own late fine.
+    const librarianWrites: Array<['post' | 'patch' | 'delete', string, object]> = [
+      ['patch', '/library/settings', { loanDays: 7 }],
+      ['post', '/library/titles', { title: 'X', author: 'Y' }],
+      ['post', `/library/titles/${ID}/copies`, {}],
+      ['post', '/library/issues', { titleId: ID, studentId: ID }],
+      ['post', `/library/issues/${ID}/return`, {}],
+      ['post', `/library/issues/${ID}/reopen`, {}],
+      ['post', `/library/issues/${ID}/lost`, {}],
+      ['post', `/library/issues/${ID}/unlose`, {}],
+      ['delete', `/library/issues/${ID}`, {}],
+      ['post', `/library/fines/${ID}/collect`, {}],
+      ['post', `/library/fines/${ID}/waive`, {}],
+      ['post', `/library/fines/${ID}/reopen`, {}],
+      ['post', '/library/fines/remind', { staff: true }],
+      ['post', '/library/hall/visits', { classSectionId: ID, source: 'SYNCED', marks: [] }],
     ];
 
-    it.each(deskWrites)('a STUDENT cannot POST %s', async (route, body) => {
-      await request(app.getHttpServer()).post(route).set(as(studentToken)).send(body).expect(403);
+    it.each(librarianWrites)('a STUDENT cannot %s %s', async (method, route, body) => {
+      await request(app.getHttpServer())[method](route).set(as(studentToken)).send(body).expect(403);
     });
 
-    it.each(deskWrites)('a TEACHER cannot POST %s', async (route, body) => {
-      await request(app.getHttpServer()).post(route).set(as(teacherToken)).send(body).expect(403);
+    it.each(librarianWrites)('a TEACHER cannot %s %s', async (method, route, body) => {
+      await request(app.getHttpServer())[method](route).set(as(teacherToken)).send(body).expect(403);
     });
 
-    it.each(deskWrites)('a STAFF login cannot POST %s', async (route, body) => {
-      await request(app.getHttpServer()).post(route).set(as(staffToken)).send(body).expect(403);
+    it.each(librarianWrites)('a non-librarian STAFF cannot %s %s', async (method, route, body) => {
+      await request(app.getHttpServer())[method](route).set(as(staffToken)).send(body).expect(403);
+    });
+
+    // The admin oversees the library like everything else.
+    it('a SCHOOL_ADMIN can read the dashboard', async () => {
+      await request(app.getHttpServer()).get('/library/dashboard').set(as(adminToken)).expect(200);
+    });
+
+    // The borrower's own shelf: STUDENT and TEACHER are admitted past the role
+    // gate (404 NOT_A_STUDENT — this fixture seeds no person rows — proves the
+    // gate opened and the person lookup ran); the roles that run the counter
+    // are refused outright.
+    it('a STUDENT is admitted to /me/library (role gate opens)', async () => {
+      const res = await request(app.getHttpServer()).get('/me/library').set(as(studentToken)).expect(404);
+      expect(res.body.code).toBe('NOT_A_STUDENT');
+    });
+
+    it('a SCHOOL_ADMIN cannot read the borrower shelf', async () => {
+      await request(app.getHttpServer()).get('/me/library').set(as(adminToken)).expect(403);
+    });
+
+    it('a STAFF login cannot read the borrower shelf', async () => {
+      await request(app.getHttpServer()).get('/me/library').set(as(staffToken)).expect(403);
     });
   });
 
@@ -369,13 +354,13 @@ describe('management authorization', () => {
     // than inheriting confidence from the sibling route above.
     it('401s the library reminder cron with no secret header', async () => {
       const res = await request(app.getHttpServer())
-        .get('/internal/cron/library-reminders')
+        .get('/internal/cron/library-due-soon')
         .expect(401);
       expect(res.body.code).toBe('UNAUTHORIZED');
     });
 
     it('401s a POST to the library reminder cron with no secret header', async () => {
-      await request(app.getHttpServer()).post('/internal/cron/library-reminders').expect(401);
+      await request(app.getHttpServer()).post('/internal/cron/library-due-soon').expect(401);
     });
 
     it('401s a GET with no cron secret header', async () => {

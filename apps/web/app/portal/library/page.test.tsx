@@ -1,108 +1,80 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
-import { renderWithProviders } from '@/test/render';
+import { screen } from '@testing-library/react';
+import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
-import StudentLibraryPage from './page';
-import type { MyLibrary } from '@/lib/library';
+import { useHost } from '@/components/use-host';
+import { ApiError } from '@/lib/api';
+import type { MeLibraryPayload } from '@/lib/library-types';
+import PortalLibraryPage from './page';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
+vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
 
-function stub(mine: MyLibrary): ReturnType<typeof useApi> {
+const SHELF: MeLibraryPayload = {
+  kind: 'STUDENT',
+  limit: 2,
+  loanDays: 14,
+  finesEnabled: true,
+  holdings: [
+    {
+      issueId: 'i1', title: 'Matilda', author: 'Roald Dahl', accessionNo: 'B-00042',
+      issuedOn: '2026-08-04', dueOn: '2026-08-18', daysLeft: 2, accruedFineRupees: 0,
+    },
+    {
+      issueId: 'i2', title: 'Wonder', author: 'R.J. Palacio', accessionNo: 'B-00077',
+      issuedOn: '2026-07-30', dueOn: '2026-08-13', daysLeft: -3, accruedFineRupees: 10,
+    },
+  ],
+  history: [
+    { issueId: 'i3', title: 'The BFG', author: 'Roald Dahl', returnedOn: '2026-07-28', wasLost: false },
+  ],
+  fines: [{ id: 'f1', title: 'Hatchet', reason: 'LOST', amountRupees: 120 }],
+  finesDueRupees: 130,
+  today: '2026-08-16',
+};
+
+function stub(payload: MeLibraryPayload | Error): ApiStub {
   return {
-    get: vi.fn((path: string) => {
-      if (path === '/me/library') return Promise.resolve(mine);
-      return Promise.resolve([]);
-    }),
+    get: vi.fn(() => (payload instanceof Error ? Promise.reject(payload) : Promise.resolve(payload))),
     post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn(),
-    // Typed as what `mockReturnValue` expects rather than as ApiStub, so no
-    // per-call cast is needed. vitest never runs tsc, so a test file that is
-    // green under the runner can still fail the typecheck gate — this shape
-    // keeps the two agreeing.
-  } as unknown as ReturnType<typeof useApi>;
+  } as unknown as ApiStub;
 }
 
-const book = (over: Partial<MyLibrary['books'][number]> = {}) => ({
-  issueId: 'i1',
-  title: 'The Hungry Tide',
-  accessionNumber: '1042',
-  backBy: '2026-08-26T00:00:00.000Z',
-  daysLeft: 3,
-  renewCount: 0,
-  ...over,
+beforeEach(() => {
+  vi.mocked(useHost).mockReturnValue('raffles.sckools.com');
 });
 
-describe('the student library screen', () => {
-  beforeEach(() => vi.clearAllMocks());
+describe('the student library shelf', () => {
+  it('shows the limit, each book with its time-left chip, fines pinned to the shelf', async () => {
+    vi.mocked(useApi).mockReturnValue(stub(SHELF) as never);
+    renderWithProviders(<PortalLibraryPage />);
 
-  it('shows a borrowed book with its number and when it goes back', async () => {
-    vi.mocked(useApi).mockReturnValue(stub({ isMember: true, books: [book()] }));
-    renderWithProviders(<StudentLibraryPage />);
-
-    // Scoped to the borrowed-books LIST. The title now legitimately appears
-    // twice on this screen — once as the book she is holding, and once as an
-    // option in "I have lost a book…", which must list her own books by name
-    // because a child does not know them by number. `getByText` across the
-    // whole screen would match both and throw.
-    const books = await screen.findByRole('list');
-    expect(within(books).getByText('The Hungry Tide')).toBeInTheDocument();
-    // "no. 1042", not "accession number" — that word survives only in the
-    // register, which is the auditor's document.
-    expect(screen.getByText('no. 1042')).toBeInTheDocument();
-    expect(screen.getByText(/back by 26 Aug/)).toBeInTheDocument();
-    expect(screen.getByText('3 days left')).toBeInTheDocument();
+    expect(await screen.findByText('Holding 2 of 2')).toBeInTheDocument();
+    expect(screen.getByText('return one to borrow more')).toBeInTheDocument();
+    // Soon (2 days) and late (3 days · fine-so-far) chips carry the words, not just colour.
+    expect(screen.getByText(/2 days left — due/)).toBeInTheDocument();
+    expect(screen.getByText(/3 days late · ₹10 so far/)).toBeInTheDocument();
+    // The fine banner totals fixed + accruing.
+    expect(screen.getByTestId('fine-banner')).toHaveTextContent('₹130 to clear at the counter');
+    // History names the returned book.
+    expect(screen.getByText('The BFG')).toBeInTheDocument();
   });
 
-  it('NEVER renders a bare "Late" badge on an overdue book', async () => {
-    // `Late` is already an attendance chip meaning "arrived late to class" in
-    // four screens of this product. A child reading it here would reasonably
-    // think it was a mark against their attendance.
+  it('hides the fine banner entirely when nothing is owed', async () => {
     vi.mocked(useApi).mockReturnValue(
-      stub({ isMember: true, books: [book({ daysLeft: -6 })] }),
+      stub({ ...SHELF, finesDueRupees: 0, fines: [], holdings: [SHELF.holdings[0]] }) as never,
     );
-    renderWithProviders(<StudentLibraryPage />);
-
-    expect(await screen.findByText('6 days late')).toBeInTheDocument();
-    expect(screen.queryByText(/^late$/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/overdue/i)).not.toBeInTheDocument();
+    renderWithProviders(<PortalLibraryPage />);
+    expect(await screen.findByText('Holding 1 of 2')).toBeInTheDocument();
+    expect(screen.queryByTestId('fine-banner')).not.toBeInTheDocument();
+    expect(screen.getByText('you can borrow 1 more')).toBeInTheDocument();
   });
 
-  it('shows NOTHING about money when nothing is owed', async () => {
-    // Absent, not "₹0". A permanent zero teaches a family to expect a charge
-    // from a library that mostly charges nothing.
-    vi.mocked(useApi).mockReturnValue(stub({ isMember: true, books: [book()] }));
-    renderWithProviders(<StudentLibraryPage />);
-
-    // Waits on the book NUMBER, which appears once — the title is now also an
-    // option in the lost-a-book control. What this test is about is what is
-    // absent, so it only needs the screen to have settled.
-    await screen.findByText('no. 1042');
-    expect(screen.queryByText(/what i owe/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/₹/)).not.toBeInTheDocument();
-  });
-
-  it('shows what is owed only when something is', async () => {
+  it('says so quietly when the plan has no library (403), instead of erroring', async () => {
     vi.mocked(useApi).mockReturnValue(
-      stub({ isMember: true, books: [book()], owed: 6 }),
+      stub(new ApiError(403, 'forbidden', { code: 'FORBIDDEN_FEATURE' })) as never,
     );
-    renderWithProviders(<StudentLibraryPage />);
-
-    expect(await screen.findByText('₹6')).toBeInTheDocument();
-  });
-
-  it('says plainly when the child is not enrolled yet, without sounding like an error', async () => {
-    // Schools enrol class by class, so a child can legitimately arrive here
-    // before their turn. This must not read as a failure or a permission wall.
-    vi.mocked(useApi).mockReturnValue(stub({ isMember: false, books: [] }));
-    renderWithProviders(<StudentLibraryPage />);
-
-    expect(await screen.findByText(/not signed up at the library yet/i)).toBeInTheDocument();
-    expect(screen.queryByText(/error|denied|forbidden/i)).not.toBeInTheDocument();
-  });
-
-  it('handles having borrowed nothing', async () => {
-    vi.mocked(useApi).mockReturnValue(stub({ isMember: true, books: [] }));
-    renderWithProviders(<StudentLibraryPage />);
-
-    expect(await screen.findByText(/nothing borrowed right now/i)).toBeInTheDocument();
+    renderWithProviders(<PortalLibraryPage />);
+    expect(await screen.findByText(/isn’t part of your school’s plan/)).toBeInTheDocument();
   });
 });

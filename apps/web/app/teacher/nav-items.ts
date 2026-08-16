@@ -9,9 +9,9 @@ import {
   CalendarDays,
   CalendarOff,
   CalendarRange,
+  Library,
   StickyNote,
   NotebookPen,
-  Library,
 } from 'lucide-react';
 
 /**
@@ -35,10 +35,8 @@ export const NAV_ITEMS: {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
-  /** Hidden unless the school has this feature. */
+  /** Hidden when `/auth/me` reports the school's plan lacks this feature. */
   requiredFeature?: string;
-  /** Hidden until the library actually has a book in it. See /portal/layout.tsx. */
-  requiresLibraryLive?: boolean;
 }[] = [
   { href: '/teacher', label: 'Today', icon: LayoutDashboard },
   { href: '/teacher/timetable', label: 'Timetable', icon: CalendarDays },
@@ -50,13 +48,7 @@ export const NAV_ITEMS: {
   { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/teacher/notes', label: 'Notes', icon: StickyNote },
   { href: '/teacher/inbox', label: 'Inbox', icon: MessageSquare },
+  { href: '/teacher/library', label: 'Library', icon: Library, requiredFeature: 'LIBRARY' },
   { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
   { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },
-  {
-    href: '/teacher/library',
-    label: 'Library',
-    icon: Library,
-    requiredFeature: 'LIBRARY',
-    requiresLibraryLive: true,
-  },
 ];

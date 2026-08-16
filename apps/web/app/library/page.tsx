@@ -1,1067 +1,119 @@
 'use client';
-
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import {
-  backByLongLabel,
-  copyStateLabel,
-  memberLine,
-  returnLine,
-  timeLabel,
-  type CopyCard,
-  type DeskDayRow,
-  type EnrolmentReport,
-  type IssueReceipt,
-  type LibraryStatus,
-  type MemberCard,
-  type NotReturnedRow,
-  type ReturnReceipt,
-} from '@/lib/library-desk';
+  Card,
+  DuePill,
+  EmptyRow,
+  ListRow,
+  Pill,
+  StatCard,
+  rupees,
+  type DashboardPayload,
+} from './ui';
 
-/**
- * The library period, as `GET /manage/library/period/now` returns it.
- *
- * Transcribed from `apps/api/src/modules/library/internal/library-desk.service.ts`
- * — read from that file, not recalled. These three live here rather than in
- * `lib/library-desk.ts` because only this screen speaks about a period.
- */
-interface PeriodChild {
-  memberId: string;
-  code: string;
-  name: string;
-  /**
-   * `auto` — a book crossed the counter, so the transaction proves it;
-   * `hand` — she ticked them; `no` — nobody has said they were here.
-   */
-  seen: 'auto' | 'hand' | 'no';
-  holding: number;
-  late: number;
-}
+type Drill = 'out' | 'soon' | null;
 
-interface PeriodClass {
-  visitId: string;
-  classRef: string;
-  strength: number;
-  present: number;
-  roster: PeriodChild[];
-}
-
-interface PeriodNow {
-  date: string;
-  /** False when the school has no library periods on the timetable at all. */
-  periodsConfigured: boolean;
-  attendanceOn: boolean;
-  classes: PeriodClass[];
-  /** The room is over-filled. Null the rest of the time. */
-  warning: string | null;
-}
-
-/**
- * The counter.
- *
- * ONE scrolling screen, ordered by how often a librarian does each thing — not
- * a dashboard, and not a tab bar. She has this open all day and will not
- * navigate; anything below the fold that is not urgent is never seen.
- *
- * RETURN IS THE DEFAULT MODE. It is the higher-volume action AND the cheaper
- * one — a return needs no member, just the number inside the front cover, so
- * it is one field and one keystroke pattern. Defaulting to Issue would cost a
- * mode switch on every burst of forty returns at the start of a period.
- *
- * The child stays CHOSEN between issues. She picks Aarav once and then types
- * number after number; clearing him is deliberate. Re-picking per book is the
- * difference between a counter that keeps up with a queue and one that does
- * not.
- *
- * Issue and return call `@library/core` — the same functions the library
- * console runs, not a second implementation. That is what stops the two
- * consoles disagreeing about what a child owes.
- *
- * NO MONEY ANYWHERE ON THIS SCREEN. Not a fine stamp on a late row, not a
- * total, not ₹0. A `LOST` fine is only ever created by a deliberate human
- * action with the amount and its source visible at that moment; if a number a
- * parent pays can appear on a screen nobody opened for that purpose, the
- * failure is not an angry parent — it is the librarian quietly stopping
- * reporting losses, and then the register is wrong forever.
- */
-export default function LibraryCounterPage(): React.JSX.Element {
-  // The tenant host is NOT optional. useApi() with no arguments sends no
-  // X-Skoolos-Host, so the API cannot tell which school is asking and every
-  // counter request fails — while the same URL succeeds from a plain fetch that
-  // does send it. That is exactly what shipped: the layout passed the host, the
-  // page did not, so she reached her counter and it could not load a thing.
+export default function LibraryDashboardPage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
-  const queryClient = useQueryClient();
-  const [term, setTerm] = useState('');
-  const [number, setNumber] = useState('');
+  const router = useRouter();
+  const [drill, setDrill] = useState<Drill>(null);
 
-  // ── The counter ──────────────────────────────────────────────────────────
-  const [mode, setMode] = useState<'return' | 'issue'>('return');
-  const [child, setChild] = useState<MemberCard | null>(null);
-  const [deskNumber, setDeskNumber] = useState('');
-  const [childTerm, setChildTerm] = useState('');
-  const [receipt, setReceipt] = useState<
-    { kind: 'returned'; r: ReturnReceipt } | { kind: 'issued'; r: IssueReceipt } | null
-  >(null);
-  const [deskError, setDeskError] = useState<string | null>(null);
-
-  /** Everything the counter touches, refetched after any write. */
-  function refreshDesk() {
-    void queryClient.invalidateQueries({ queryKey: ['library-desk'] });
-  }
-
-  const takeBack = useMutation({
-    mutationFn: (accessionNumber: string) =>
-      api.post<ReturnReceipt>('/manage/library/return', { accessionNumber }),
-    onSuccess: (r) => {
-      setReceipt({ kind: 'returned', r });
-      setDeskError(null);
-      setDeskNumber('');
-      refreshDesk();
-    },
-    onError: (e: Error) => {
-      setReceipt(null);
-      setDeskError(e.message);
-    },
-  });
-
-  const giveOut = useMutation({
-    mutationFn: ({ accessionNumber, memberId }: { accessionNumber: string; memberId: string }) =>
-      api.post<IssueReceipt>('/manage/library/issue', { accessionNumber, memberId }),
-    onSuccess: (r) => {
-      setReceipt({ kind: 'issued', r });
-      setDeskError(null);
-      setDeskNumber('');
-      refreshDesk();
-    },
-    onError: (e: Error) => {
-      setReceipt(null);
-      setDeskError(e.message);
-    },
-  });
-
-  const deskBusy = takeBack.isPending || giveOut.isPending;
-
-  // ── Add a book ───────────────────────────────────────────────────────────
-  const [adding, setAdding] = useState(false);
-  const [bookTitle, setBookTitle] = useState('');
-  const [bookAuthor, setBookAuthor] = useState('');
-  const [copyCount, setCopyCount] = useState(1);
-  const [numbers, setNumbers] = useState('');
-  const [added, setAdded] = useState<string | null>(null);
-
-  // Suggestions, not assignments. Empty for a fresh register or a scheme the
-  // server cannot read — she types her own, which is what she does today.
-
-  const addBook = useMutation({
-    mutationFn: (body: { title: string; author?: string; accessionNumbers: string[] }) =>
-      api.post<{ title: string; copies: Array<{ accessionNumber: string }> }>(
-        '/manage/library/books',
-        body,
-      ),
-    onSuccess: (r) => {
-      const written = r.copies.map((c) => c.accessionNumber).join(', ');
-      // Tells her what to WRITE, because the number only means anything once
-      // it is inside the front cover.
-      setAdded(`Added. Write ${written} inside the front cover${r.copies.length > 1 ? 's' : ''}.`);
-      setAdding(false);
-      setBookTitle('');
-      setBookAuthor('');
-      setNumbers('');
-      refreshDesk();
-    },
-    onError: (e: Error) => setDeskError(e.message),
-  });
-
-  /** The numbers she will actually use: what she typed, else the suggestion. */
-  function numbersToSubmit(): string[] {
-    const typed = numbers
-      .split(',')
-      .map((n) => n.trim())
-      .filter(Boolean);
-    return typed.length > 0 ? typed : (suggested.data ?? []);
-  }
-
-  // ── Nudge ────────────────────────────────────────────────────────────────
-  const [nudged, setNudged] = useState<string | null>(null);
-  const nudge = useMutation({
-    mutationFn: (classRefs: string[]) =>
-      api.post<{
-        notified: Array<{ classRef: string; teacherName: string; books: number }>;
-        unmatched: string[];
-      }>('/manage/library/nudge', { classRefs }),
-    onSuccess: (r) => {
-      const sent = r.notified.map((n) => `${n.teacherName} (${n.classRef})`).join(', ');
-      // The unmatched classes are REPORTED, not swallowed. A class whose
-      // teacher is unset would otherwise look nudged and never be.
-      const missed =
-        r.unmatched.length > 0
-          ? ` No class teacher is set for ${r.unmatched.join(', ')} — the office can add one.`
-          : '';
-      setNudged(sent ? `Sent to ${sent}.${missed}` : `Nothing sent.${missed}`);
-    },
-    onError: (e: Error) => setDeskError(e.message),
-  });
-
-  // ── Damage ───────────────────────────────────────────────────────────────
-  // Opened from the return receipt, because that is the moment she is holding
-  // the book and can see the torn page.
-  const [damaging, setDamaging] = useState<string | null>(null);
-  const [condition, setCondition] = useState<'GOOD' | 'FAIR' | 'POOR'>('FAIR');
-  const [damageNote, setDamageNote] = useState('');
-  const [damageDone, setDamageDone] = useState<string | null>(null);
-
-  const damage = useMutation({
-    mutationFn: (body: { accessionNumber: string; condition: string; note: string }) =>
-      api.post<{ title: string }>('/manage/library/damage', body),
-    onSuccess: () => {
-      setDamaging(null);
-      setDamageNote('');
-      // Said EVERY time, not once. It is the sentence that keeps her willing to
-      // record damage at all — the moment she suspects a note might bill a
-      // family, she stops writing them and the condition column dies.
-      setDamageDone('Noted. No charge has been made.');
-      refreshDesk();
-    },
-    onError: (e: Error) => setDeskError(e.message),
-  });
-
-  // ── Undo ─────────────────────────────────────────────────────────────────
-  // Only an issue can be undone, and only while it is still out. `undoing`
-  // holds the row being confirmed — the reason is typed, never assumed.
-  const [undoing, setUndoing] = useState<DeskDayRow | null>(null);
-  const [undoReason, setUndoReason] = useState('');
-  const [undone, setUndone] = useState<string | null>(null);
-
-  const undo = useMutation({
-    mutationFn: ({ issueId, reason }: { issueId: string; reason: string }) =>
-      api.post<{ memberName: string; attendanceRemovedFor: string | null }>(
-        '/manage/library/undo',
-        { issueId, reason },
-      ),
-    onSuccess: (r) => {
-      setUndoing(null);
-      setUndoReason('');
-      // She is TOLD when the automatic attendance mark went with it, rather
-      // than discovering later that a child's register changed.
-      setUndone(
-        r.attendanceRemovedFor
-          ? `Undone. ${r.attendanceRemovedFor} is no longer marked present.`
-          : 'Undone.',
-      );
-      refreshDesk();
-    },
-    onError: (e: Error) => setDeskError(e.message),
-  });
-
-  // ── The library period ───────────────────────────────────────────────────
-  // The class that is in the room right now. Six to eight times a day a whole
-  // class arrives together, and until this section existed no screen in the
-  // product could show her the list.
-  const period = useQuery({
-    queryKey: ['library-desk', 'period'],
-    // Not until the tenant host is known. useApi memoises its client on
-    // hostHeader, so a query that fires on the first render captures a client
-    // with no X-Skoolos-Host, the API cannot resolve the school, and the
-    // cached failure is what the counter then shows — permanently, because
-    // 4xx is not retried and refetch reuses the same dead client.
+  const dash = useQuery({
+    queryKey: ['library-dashboard', host],
     enabled: !!host,
-    queryFn: () => api.get<PeriodNow>('/manage/library/period/now'),
-    // A class arrives in the middle of a period she is standing through, and
-    // she does not reload a page she works from all day. A minute is well
-    // inside the 35 a period lasts.
-    refetchInterval: 60_000,
+    queryFn: () => api.get<DashboardPayload>('/library/dashboard'),
+    staleTime: 30_000,
   });
 
-  const tick = useMutation({
-    mutationFn: (v: { visitId: string; memberId: string; present: boolean }) =>
-      api.post<{ visitId: string; memberId: string; present: boolean }>(
-        '/manage/library/period/present',
-        v,
-      ),
-    // Refetched rather than assumed. The screen shows what the server says a
-    // child's register holds — a tick that only looked saved is exactly the
-    // false positive this whole section is careful about.
-    onSuccess: () => {
-      setDeskError(null);
-      refreshDesk();
-    },
-    onError: (e: Error) => setDeskError(e.message),
-  });
-
-  // Searching for the child to issue to — separate from the "find a child"
-  // section further down, which answers a question rather than choosing anyone.
-  const deskPeople = useQuery({
-    queryKey: ['library-desk', 'members', childTerm],
-    enabled: !!host && mode === 'issue' && !child && childTerm.trim().length >= 2,
-    queryFn: () =>
-      api.get<MemberCard[]>(`/manage/library/members?q=${encodeURIComponent(childTerm.trim())}`),
-  });
-
-  function submitCounter(e: React.FormEvent) {
-    e.preventDefault();
-    const n = deskNumber.trim();
-    if (!n || deskBusy) return;
-    if (mode === 'return') {
-      takeBack.mutate(n);
-      return;
-    }
-    if (!child) return;
-    giveOut.mutate({ accessionNumber: n, memberId: child.memberId });
+  if (dash.isLoading || !dash.data) {
+    return <p className="py-10 text-center text-sm text-[var(--sk-ink-3)]">Opening the library…</p>;
   }
+  const { counts, outNow, dueSoon, today } = dash.data;
 
-  const status = useQuery({
-    queryKey: ['library-desk', 'status'],
-    // Not until the tenant host is known. useApi memoises its client on
-    // hostHeader, so a query that fires on the first render captures a client
-    // with no X-Skoolos-Host, the API cannot resolve the school, and the
-    // cached failure is what the counter then shows — permanently, because
-    // 4xx is not retried and refetch reuses the same dead client.
-    enabled: !!host,
-    queryFn: () => api.get<LibraryStatus>('/manage/library/status'),
-  });
-
-  // Declared after `status` because it depends on it: the empty-shelves state
-  // renders the add form unconditionally, so the suggestion must load there
-  // too. Everywhere else it waits until she opens the form — the query is a
-  // MAX() with a regex filter over every copy, and there is no reason to pay
-  // for it on a page load where she is issuing books.
-  const suggested = useQuery({
-    queryKey: ['library-desk', 'next-numbers', copyCount],
-    enabled: !!host && (adding || status.data?.copies === 0),
-    queryFn: () => api.get<string[]>(`/manage/library/next-numbers?count=${copyCount}`),
-  });
-
-  const enrol = useMutation({
-    mutationFn: () => api.post<EnrolmentReport>('/manage/library/enrol', {}),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['library-desk'] }),
-  });
-
-  // Two characters is the API's own floor; asking earlier returns [] anyway and
-  // costs a request per keystroke.
-  const people = useQuery({
-    queryKey: ['library-desk', 'members', term],
-    enabled: !!host && term.trim().length >= 2,
-    queryFn: () => api.get<MemberCard[]>(`/manage/library/members?q=${encodeURIComponent(term.trim())}`),
-  });
-
-  const copy = useQuery({
-    queryKey: ['library-desk', 'copy', number],
-    enabled: !!host && number.trim().length >= 1,
-    queryFn: () =>
-      api.get<CopyCard | null>(`/manage/library/copies/${encodeURIComponent(number.trim())}`),
-  });
-
-  const day = useQuery({
-    queryKey: ['library-desk', 'day'],
-    // Not until the tenant host is known. useApi memoises its client on
-    // hostHeader, so a query that fires on the first render captures a client
-    // with no X-Skoolos-Host, the API cannot resolve the school, and the
-    // cached failure is what the counter then shows — permanently, because
-    // 4xx is not retried and refetch reuses the same dead client.
-    enabled: !!host,
-    queryFn: () => api.get<DeskDayRow[]>('/manage/library/day'),
-  });
-
-  const late = useQuery({
-    queryKey: ['library-desk', 'not-returned'],
-    // Not until the tenant host is known. useApi memoises its client on
-    // hostHeader, so a query that fires on the first render captures a client
-    // with no X-Skoolos-Host, the API cannot resolve the school, and the
-    // cached failure is what the counter then shows — permanently, because
-    // 4xx is not retried and refetch reuses the same dead client.
-    enabled: !!host,
-    queryFn: () =>
-      api.get<{ truncated: boolean; rows: NotReturnedRow[] }>('/manage/library/not-returned'),
-  });
-
-  /**
-   * The same form in two places — the empty-shelves state, where it IS the
-   * page, and behind a quiet button once she is running. One definition, so
-   * the two cannot drift into asking for different things.
-   */
-  function addBookForm(): React.JSX.Element {
-    const willUse = numbersToSubmit();
-    return (
-      <div className="sk-desk-receipt" data-tone="calm">
-        <input
-          className="sk-lib-search"
-          value={bookTitle}
-          onChange={(e) => setBookTitle(e.target.value)}
-          placeholder="Name of the book"
-          aria-label="Name of the book"
-        />
-        <input
-          className="sk-lib-search"
-          value={bookAuthor}
-          onChange={(e) => setBookAuthor(e.target.value)}
-          placeholder="Author (if you want)"
-          aria-label="Author"
-        />
-        <label className="sk-lib-nudge">
-          How many copies{' '}
-          <input
-            type="number"
-            min={1}
-            max={50}
-            value={copyCount}
-            onChange={(e) => setCopyCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-            aria-label="How many copies"
-            style={{ width: 64 }}
-          />
-        </label>
-        <input
-          className="sk-lib-search"
-          value={numbers}
-          onChange={(e) => setNumbers(e.target.value)}
-          placeholder={
-            suggested.data && suggested.data.length > 0
-              ? suggested.data.join(', ')
-              : 'Book numbers, separated by commas'
-          }
-          aria-label="Book numbers"
-        />
-        {suggested.data && suggested.data.length > 0 && !numbers.trim() ? (
-          <span className="sk-lib-nudge">
-            Next free numbers: {suggested.data.join(', ')}. Leave this empty to use them.
-          </span>
-        ) : (
-          <span className="sk-lib-nudge">
-            Type the number written inside each front cover, separated by commas.
-          </span>
-        )}
-        <div className="sk-desk-actions">
-          <button
-            className="sk-btn"
-            data-variant="primary"
-            disabled={addBook.isPending || !bookTitle.trim() || willUse.length === 0}
-            onClick={() =>
-              addBook.mutate({
-                title: bookTitle.trim(),
-                ...(bookAuthor.trim() ? { author: bookAuthor.trim() } : {}),
-                accessionNumbers: willUse,
-              })
-            }
-          >
-            {addBook.isPending ? 'Adding…' : 'Add to the register'}
-          </button>
-          {adding ? (
-            <button className="sk-btn" onClick={() => setAdding(false)}>
-              Cancel
-            </button>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  if (status.isPending) return <p className="sk-lib-empty">Loading…</p>;
-
-  // A FAILED status is not an empty library. Every first-run branch below is
-  // guarded by `status.data &&`, so without this the page skipped all of them
-  // and rendered the full counter with `status.data?.members` — which printed
-  // "signed up · books in the register" with no numbers in front of either.
-  //
-  // That is exactly what shipped: the query engine was missing from the lambda,
-  // every /manage/library/* route answered 500, and the screen said, in effect,
-  // that the library was fine and empty. A librarian would have started signing
-  // people up again. Say the true thing instead, and offer the one action that
-  // can help — try again.
-  if (status.isError || !status.data) {
-    return (
-      <section className="sk-lib">
-        <h1>Library</h1>
-        <h2 className="sk-lib-h2">Cannot reach the library right now</h2>
-        <p className="sk-lib-empty">
-          Nothing is lost and nothing has changed — the counter just cannot load. Try again in a
-          moment, and tell the office if it keeps happening.
-        </p>
-        <div className="sk-desk-actions">
-          <button className="sk-btn" data-variant="primary" onClick={() => void status.refetch()}>
-            Try again
-          </button>
-        </div>
-      </section>
-    );
-  }
-
-  // ── First run. Check in order and render the FIRST match: each state has one
-  // next action, and she never sees a counter she cannot use. ────────────────
-
-  if (status.data && !status.data.provisioned) {
-    return (
-      <section className="sk-lib">
-        <h1>Library</h1>
-        <h2 className="sk-lib-h2">Not set up yet</h2>
-        <p className="sk-lib-empty">
-          Your school has not switched the library on. Ask the office to set it up, then sign in
-          again.
-        </p>
-      </section>
-    );
-  }
-
-  // Members before books, deliberately: signing everyone up is one button and
-  // instant, while stocking the shelves takes an afternoon. Put the cheap
-  // unblock first so the members are already there when the books arrive.
-  if (status.data && status.data.members === 0) {
-    return (
-      <section className="sk-lib">
-        <h1>Library</h1>
-        <h2 className="sk-lib-h2">Nobody is signed up yet</h2>
-        <p className="sk-lib-empty">
-          Sign up every student and teacher from the school&rsquo;s own list. You can press this
-          again in April when the new children join — it never changes anyone already signed up.
-        </p>
-        <div className="sk-desk-actions">
-          <button className="sk-btn" data-variant="primary" onClick={() => enrol.mutate()} disabled={enrol.isPending}>
-            {enrol.isPending ? 'Signing everyone up…' : 'Sign everyone up'}
-          </button>
-        </div>
-        {enrol.data ? (
-          <p className="sk-lib-nudge">
-            {enrol.data.enrolled} signed up.
-            {enrol.data.skippedNoLogin > 0
-              ? ` ${enrol.data.skippedNoLogin} do not have a login yet — the office can add those.`
-              : ''}
-          </p>
-        ) : null}
-        {enrol.isError ? <p className="sk-lib-empty">That did not save. Nothing has been changed.</p> : null}
-      </section>
-    );
-  }
-
-  if (status.data && status.data.copies === 0) {
-    return (
-      <section className="sk-lib">
-        <h1>Library</h1>
-        <h2 className="sk-lib-h2">The shelves are empty</h2>
-        {/* Saying this converts "why is nothing working" into "the children
-            cannot see it yet either", which is both true and the motivation to
-            add the books: `statusFor()` sets live = copies > 0 precisely so a
-            student never opens a Library tab onto an empty shelf. */}
-        <p className="sk-lib-empty">
-          Add your first book and the counter opens. Until there is at least one book, the children
-          do not see a Library tab either. Books are added in the library console for now.
-        </p>
-        <p className="sk-lib-nudge">
-          The counter is hidden rather than greyed out — a field that takes a book number when
-          there are no books would only ever answer &ldquo;that number is not in the register&rdquo;.
-        </p>
-        {addBookForm()}
-        {added ? <p className="sk-lib-nudge">{added}</p> : null}
-      </section>
-    );
-  }
-
-  const lateRows = late.data?.rows ?? [];
-  // Never presented as the whole truth when it is not — a cut list would make
-  // a school believe it has 200 books out when it has 900, and the nudge would
-  // quietly skip every class past the cut.
-  const lateTruncated = late.data?.truncated ?? false;
-  const dayRows = day.data ?? [];
-  // The distinct classes with something outstanding — one nudge each.
-  const lateClasses = Array.from(
-    new Set(lateRows.map((r) => r.classRef).filter((c): c is string => !!c)),
-  );
+  const drillRows = drill === 'out' ? outNow : drill === 'soon' ? dueSoon : [];
+  const drillTitle =
+    drill === 'out'
+      ? `Out right now · ${counts.outNow}`
+      : `Due in the next 7 days · ${counts.dueSoon}`;
 
   return (
-    <section className="sk-lib">
-      <h1>Library</h1>
-      <p className="sk-lib-nudge">
-        {status.data?.members} signed up · {status.data?.copies} books in the register
-        {' · '}
-        {/* Quiet in steady state: cataloguing is a weekly burst, not a daily
-            job, and this must never compete with the counter for her eye. */}
-        <button type="button" className="sk-desk-clear" onClick={() => setAdding((v) => !v)}>
-          {adding ? 'Not now' : 'Add a book'}
-        </button>
-      </p>
-      {adding ? addBookForm() : null}
-      {added ? <p className="sk-lib-nudge">{added}</p> : null}
-
-      {/* ── The counter ────────────────────────────────────────────────────── */}
-      <div className="sk-desk-modes" role="group" aria-label="What are you doing?">
-        <button
-          type="button"
-          className="sk-desk-mode"
-          data-on={mode === 'return'}
-          onClick={() => {
-            setMode('return');
-            setReceipt(null);
-            setDeskError(null);
-          }}
-        >
-          Take back
-        </button>
-        <button
-          type="button"
-          className="sk-desk-mode"
-          data-on={mode === 'issue'}
-          onClick={() => {
-            setMode('issue');
-            setReceipt(null);
-            setDeskError(null);
-          }}
-        >
-          Give out
-        </button>
+    <div>
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h1 className="font-serif text-xl font-semibold" style={{ fontFamily: 'var(--sk-serif)' }}>
+          Dashboard
+        </h1>
+        <span className="text-xs text-[var(--sk-ink-3)]">Click any number to open its list</span>
       </div>
 
-      {/* Choosing the child comes BEFORE the number, and only in issue mode.
-          She stays chosen until cleared — book after book without re-picking. */}
-      {mode === 'issue' ? (
-        child ? (
-          <p className="sk-desk-child">
-            <strong>{child.name}</strong>
-            {child.classRef ? ` · ${child.classRef}` : ''} ·{' '}
-            {child.booksOut === 1 ? '1 book out' : `${child.booksOut} books out`}
-            <button
-              type="button"
-              className="sk-desk-clear"
-              onClick={() => {
-                setChild(null);
-                setChildTerm('');
-              }}
-            >
-              Change
-            </button>
-          </p>
-        ) : (
-          <>
-            <input
-              className="sk-lib-search"
-              type="search"
-              value={childTerm}
-              onChange={(e) => setChildTerm(e.target.value)}
-              placeholder="Name, class or borrower number"
-              aria-label="Choose the child"
-            />
-            {deskPeople.data && deskPeople.data.length > 0 ? (
-              <ul className="sk-lib-shelf">
-                {deskPeople.data.map((m) => (
-                  <li key={m.memberId} className="sk-lib-shelf-row">
-                    <button
-                      type="button"
-                      className="sk-desk-pick"
-                      onClick={() => {
-                        setChild(m);
-                        setChildTerm('');
-                      }}
-                    >
-                      <span className="sk-lib-child">{m.name}</span>
-                      <span className="sk-lib-author">{memberLine(m)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {deskPeople.isFetched && childTerm.trim().length >= 2 && deskPeople.data?.length === 0 ? (
-              <p className="sk-lib-empty">Nobody by that name.</p>
-            ) : null}
-          </>
-        )
-      ) : null}
-
-      <form onSubmit={submitCounter} className="sk-desk-form">
-        <input
-          className="sk-lib-search"
-          type="text"
-          value={deskNumber}
-          onChange={(e) => setDeskNumber(e.target.value)}
-          // Autofocus is right here and almost nowhere else: this field is the
-          // reason the page exists, and she works from a queue, not a mouse.
-          autoFocus
-          disabled={mode === 'issue' && !child}
-          placeholder={mode === 'issue' && !child ? 'Choose a child first' : 'Book number'}
-          aria-label={mode === 'return' ? 'Book number to take back' : 'Book number to give out'}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard
+          label="Books"
+          value={counts.totalCopies.toLocaleString('en-IN')}
+          detail={`${counts.totalTitles} titles${counts.lostCopies ? ` · ${counts.lostCopies} lost` : ''}`}
+          onClick={() => router.push('/library/books')}
         />
-        <button
-          className="sk-btn"
-          data-variant="primary"
-          type="submit"
-          disabled={deskBusy || !deskNumber.trim() || (mode === 'issue' && !child)}
-        >
-          {deskBusy ? 'Saving…' : mode === 'return' ? 'Take back' : 'Give out'}
-        </button>
-      </form>
-      <p className="sk-lib-nudge">The number written inside the front cover.</p>
+        <StatCard
+          label="Out now"
+          value={String(counts.outNow)}
+          detail="with readers"
+          onClick={() => setDrill(drill === 'out' ? null : 'out')}
+          active={drill === 'out'}
+        />
+        <StatCard
+          label="Due soon"
+          value={String(counts.dueSoon)}
+          detail="next 7 days"
+          tone="amber"
+          onClick={() => setDrill(drill === 'soon' ? null : 'soon')}
+          active={drill === 'soon'}
+        />
+        <StatCard
+          label="Fines collected"
+          value={rupees(counts.finesCollectedRupees)}
+          detail="this term"
+          tone="good"
+          onClick={() => router.push('/library/fines')}
+        />
+        <StatCard
+          label="Fines due"
+          value={rupees(counts.finesDueRupees)}
+          detail="open the fines tab"
+          tone="bad"
+          onClick={() => router.push('/library/fines')}
+        />
+      </div>
 
-      {/* The receipt. One line, the same place every time, so she can work
-          without reading — the shape of the line is the confirmation. */}
-      {receipt?.kind === 'returned' ? (
-        <div className="sk-desk-receipt" data-tone={receipt.r.daysLate > 0 ? 'late' : 'calm'}>
-          <span className="sk-lib-title">{receipt.r.title}</span>
-          <span className="sk-lib-author">
-            {receipt.r.memberName}
-            {receipt.r.classRef ? `, ${receipt.r.classRef}` : ''}
-          </span>
-          <span className="sk-lib-state" data-tone={receipt.r.daysLate > 0 ? 'late' : 'calm'}>
-            {returnLine(receipt.r)}
-          </span>
-          {/* Where the next child is waiting for this exact copy. */}
-          {receipt.r.promotedReservationId ? (
-            <span className="sk-desk-aside">Keep this one aside — it is reserved.</span>
-          ) : null}
-          <button
-            type="button"
-            className="sk-desk-clear"
-            onClick={() => {
-              setDamaging(receipt.r.accessionNumber);
-              setDamageNote('');
-              setDamageDone(null);
-            }}
-          >
-            Book is damaged
-          </button>
-        </div>
-      ) : null}
-
-      {damaging ? (
-        <div className="sk-desk-receipt" data-tone="calm">
-          <span className="sk-lib-title">What is the damage?</span>
-          <div className="sk-desk-modes">
-            {(['GOOD', 'FAIR', 'POOR'] as const).map((c) => (
-              <button
-                key={c}
-                type="button"
-                className="sk-desk-mode"
-                data-on={condition === c}
-                onClick={() => setCondition(c)}
+      {drill ? (
+        <Card className="mt-4 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[var(--sk-line)] bg-[var(--sk-bg-2)] px-4 py-2 text-xs font-bold">
+            {drillTitle}
+            <span className="font-normal text-[var(--sk-ink-3)]">click the card again to close</span>
+          </div>
+          {drillRows.length ? (
+            drillRows.map((i) => (
+              <ListRow
+                key={i.id}
+                primary={
+                  <>
+                    {i.title} <span className="font-normal text-[var(--sk-ink-3)]">— {i.author}</span>
+                  </>
+                }
+                secondary={`${i.accessionNo} · ${i.borrower.name}${i.borrower.code ? ` · ${i.borrower.code}` : ''}${i.borrower.className ? ` · ${i.borrower.className}` : ''}`}
               >
-                {/* Her words, not the enum's. "POOR" is a database value. */}
-                {c === 'GOOD' ? 'A little worn' : c === 'FAIR' ? 'Damaged' : 'Badly damaged'}
-              </button>
-            ))}
-          </div>
-          <input
-            className="sk-lib-search"
-            value={damageNote}
-            onChange={(e) => setDamageNote(e.target.value)}
-            placeholder="Last twenty pages torn"
-            aria-label="What is the damage?"
-          />
-          <div className="sk-desk-actions">
-            <button
-              className="sk-btn"
-              data-variant="primary"
-              disabled={damage.isPending || !damageNote.trim()}
-              onClick={() =>
-                damage.mutate({ accessionNumber: damaging, condition, note: damageNote.trim() })
-              }
-            >
-              {damage.isPending ? 'Saving…' : 'Save the note'}
-            </button>
-            <button className="sk-btn" onClick={() => setDamaging(null)}>
-              Cancel
-            </button>
-          </div>
-          <span className="sk-lib-nudge">Noting this does not charge the family anything.</span>
-        </div>
+                <DuePill dueOn={i.dueOn} today={today} />
+                {i.accruedFineRupees > 0 ? <Pill tone="bad">{rupees(i.accruedFineRupees)} so far</Pill> : null}
+              </ListRow>
+            ))
+          ) : (
+            <EmptyRow>{drill === 'out' ? 'Every book is home.' : 'Nothing due this week.'}</EmptyRow>
+          )}
+        </Card>
       ) : null}
-      {damageDone ? <p className="sk-lib-nudge">{damageDone}</p> : null}
-      {receipt?.kind === 'issued' ? (
-        <div className="sk-desk-receipt" data-tone="calm">
-          <span className="sk-lib-title">{receipt.r.title}</span>
-          <span className="sk-lib-author">
-            {receipt.r.memberName}
-            {receipt.r.classRef ? `, ${receipt.r.classRef}` : ''}
-          </span>
-          <span className="sk-lib-state" data-tone="calm">{backByLongLabel(receipt.r.backBy)}</span>
-        </div>
-      ) : null}
-      {deskError ? <p className="sk-lib-empty" role="alert">{deskError}</p> : null}
-
-      {/* ── The class in the library now ────────────────────────────────────
-          High on the page, under the counter, because it is the context for
-          everything she does for the next thirty-five minutes. */}
-      <h2 className="sk-lib-h2">In the library now</h2>
-      {period.data ? (
-        !period.data.periodsConfigured ? (
-          // A setup answer, and it needs the office rather than her: the
-          // library period lives on the school timetable, which she does not
-          // write.
-          <p className="sk-lib-empty">
-            No library periods are set up yet. Ask the office to add them to the timetable.
-          </p>
-        ) : period.data.classes.length === 0 ? (
-          // RESTING, not broken. A library is empty between periods, and a
-          // screen that treats its ordinary state as a problem teaches her to
-          // ignore the times it is one.
-          <p className="sk-lib-empty">No class is due right now.</p>
-        ) : (
-          <>
-            {period.data.warning ? <p className="sk-desk-warn">{period.data.warning}</p> : null}
-            {!period.data.attendanceOn ? (
-              <p className="sk-lib-nudge">
-                This library is set not to keep attendance, so nothing here is being recorded. The
-                office can turn it back on.
-              </p>
-            ) : null}
-            {period.data.classes.map((c) => {
-              const holding = c.roster.filter((r) => r.holding > 0).length;
-              return (
-                <div key={c.visitId}>
-                  <p className="sk-desk-classline">
-                    <span className="sk-lib-child">{c.classRef}</span>
-                    <span className="sk-lib-nudge">
-                      {c.present} of {c.strength} here
-                      {holding > 0
-                        ? ` · ${holding === 1 ? '1 child has a book' : `${holding} children have books`}`
-                        : ''}
-                    </span>
-                  </p>
-                  <div className="sk-desk-roster">
-                    {c.roster.map((child) =>
-                      child.seen === 'auto' ? (
-                        // Not a button. A book crossed the counter, which is
-                        // stronger evidence than a tap — undoing it means
-                        // undoing the issue, which removes the mark and says so.
-                        <span
-                          key={child.memberId}
-                          className="sk-desk-seat"
-                          data-seen="auto"
-                          title="Borrowed or returned a book today"
-                        >
-                          {child.name}
-                          {child.late > 0 ? (
-                            <span className="sk-lib-no">
-                              {child.late === 1 ? '1 late' : `${child.late} late`}
-                            </span>
-                          ) : null}
-                        </span>
-                      ) : (
-                        <button
-                          key={child.memberId}
-                          type="button"
-                          className="sk-desk-seat"
-                          data-seen={child.seen}
-                          // Pressed IS ticked, so a screen reader hears the
-                          // state rather than only the name.
-                          aria-pressed={child.seen === 'hand'}
-                          // Only the chip being saved goes quiet.
-                          disabled={tick.isPending && tick.variables?.memberId === child.memberId}
-                          // Ticking is reversible: a second press takes it back.
-                          // A child marked present who was not there is a
-                          // register that quietly lies, and a mis-tap on a list
-                          // of forty names is only harmless while it can be undone.
-                          onClick={() =>
-                            tick.mutate({
-                              visitId: c.visitId,
-                              memberId: child.memberId,
-                              present: child.seen !== 'hand',
-                            })
-                          }
-                        >
-                          {child.name}
-                          {child.late > 0 ? (
-                            <span className="sk-lib-no">
-                              {child.late === 1 ? '1 late' : `${child.late} late`}
-                            </span>
-                          ) : null}
-                        </button>
-                      ),
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            <p className="sk-lib-nudge">
-              Green means they borrowed or brought back a book, so they are already counted. Tick
-              the ones who came and only browsed — press again to take a tick back.
-            </p>
-          </>
-        )
-      ) : null}
-
-      {/* ── Find a book, or find out who has one ───────────────────────────── */}
-      <h2 className="sk-lib-h2">Find a book</h2>
-      <input
-        className="sk-lib-search"
-        type="search"
-        value={number}
-        onChange={(e) => setNumber(e.target.value)}
-        placeholder="Book number"
-        aria-label="Find a book by its number"
-      />
-      <p className="sk-lib-nudge">The number written inside the front cover.</p>
-      {copy.data ? (
-        <ul className="sk-lib-shelf">
-          <li className="sk-lib-shelf-row">
-            <span className="sk-lib-no">{copy.data.accessionNumber}</span>
-            <span className="sk-lib-title">{copy.data.title}</span>
-            {copy.data.author ? <span className="sk-lib-author">{copy.data.author}</span> : null}
-            {copy.data.out ? (
-              <span className="sk-lib-avail" data-out="true">
-                with {copy.data.out.memberName}
-                {copy.data.out.classRef ? `, ${copy.data.out.classRef}` : ''} ·{' '}
-                {copyStateLabel(copy.data.out)}
-              </span>
-            ) : (
-              <span className="sk-lib-avail" data-out="false">
-                on the shelf
-              </span>
-            )}
-          </li>
-        </ul>
-      ) : null}
-      {copy.isFetched && number.trim().length >= 1 && !copy.data ? (
-        <p className="sk-lib-empty">That number is not in the register.</p>
-      ) : null}
-
-      {/* ── Find a child ───────────────────────────────────────────────────── */}
-      <h2 className="sk-lib-h2">Find a child</h2>
-      <input
-        className="sk-lib-search"
-        type="search"
-        value={term}
-        onChange={(e) => setTerm(e.target.value)}
-        placeholder="Name, class or borrower number"
-        aria-label="Find a member"
-      />
-      {people.data && people.data.length > 0 ? (
-        <ul className="sk-lib-shelf">
-          {people.data.map((m) => (
-            <li key={m.memberId} className="sk-lib-shelf-row">
-              <span className="sk-lib-child">{m.name}</span>
-              {/* Class, books out and borrower number — never what they owe.
-                  Money at a counter is a deliberate act, not a search result. */}
-              <span className="sk-lib-author">{memberLine(m)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {people.isFetched && term.trim().length >= 2 && people.data?.length === 0 ? (
-        <p className="sk-lib-empty">Nobody by that name.</p>
-      ) : null}
-
-      {/* ── Today ──────────────────────────────────────────────────────────── */}
-      <h2 className="sk-lib-h2">Today</h2>
-      {undone ? <p className="sk-lib-nudge">{undone}</p> : null}
-      {dayRows.length > 0 ? (
-        <ul className="sk-lib-shelf">
-          {dayRows.map((r, i) => (
-            <li key={`${r.issueId}-${r.kind}-${i}`} className="sk-lib-shelf-row">
-              <span className="sk-lib-no">{timeLabel(r.at)}</span>
-              <span className="sk-lib-title">{r.title}</span>
-              <span className="sk-lib-author">{r.memberName}</span>
-              <span className="sk-lib-avail" data-out={r.kind === 'ISSUED' ? 'true' : 'false'}>
-                {r.kind === 'ISSUED' ? 'given out' : 'taken back'}
-              </span>
-              {/* Only what was GIVEN OUT can be undone. A return is undone by
-                  giving the book out again, which is a real counter action —
-                  and the API refuses a returned issue anyway. */}
-              {r.kind === 'ISSUED' ? (
-                <button
-                  type="button"
-                  className="sk-desk-clear"
-                  onClick={() => {
-                    setUndoing(r);
-                    setUndoReason('');
-                    setUndone(null);
-                  }}
-                >
-                  Undo
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="sk-lib-empty">Nothing yet today.</p>
-      )}
-
-      {undoing ? (
-        <div className="sk-desk-receipt" data-tone="late">
-          <span className="sk-lib-title">Undo &ldquo;{undoing.title}&rdquo;?</span>
-          <span className="sk-lib-author">
-            The book goes back on the shelf and nothing is counted.
-          </span>
-          <input
-            className="sk-lib-search"
-            value={undoReason}
-            onChange={(e) => setUndoReason(e.target.value)}
-            placeholder="Wrong number typed"
-            aria-label="Why are you undoing this?"
-          />
-          <div className="sk-desk-actions">
-            <button
-              className="sk-btn"
-              data-variant="primary"
-              disabled={undo.isPending || !undoReason.trim()}
-              onClick={() => undo.mutate({ issueId: undoing.issueId, reason: undoReason.trim() })}
-            >
-              {undo.isPending ? 'Undoing…' : 'Undo it'}
-            </button>
-            <button className="sk-btn" onClick={() => setUndoing(null)}>
-              Keep it
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ── Not returned ───────────────────────────────────────────────────── */}
-      <h2 className="sk-lib-h2">
-        {lateRows.length === 0
-          ? 'Not returned'
-          : lateRows.length === 1
-            ? '1 book not returned'
-            : `${lateRows.length} books not returned`}
-      </h2>
-      {lateRows.length > 0 ? (
-        <>
-          <ul className="sk-lib-class">
-            {lateRows.map((r) => (
-              <li key={r.issueId} className="sk-lib-class-row">
-                <span className="sk-lib-child">{r.memberName}</span>
-                {r.classRef ? <span className="sk-lib-no">{r.classRef}</span> : null}
-                <span className="sk-lib-title">{r.title}</span>
-                <span className="sk-lib-no">no. {r.accessionNumber}</span>
-                {/* Days, never rupees — a staffroom is a public place, and the
-                    moment this shows what a child owes it stops being a nudge
-                    list and becomes fee collection. */}
-                <span className="sk-lib-state" data-tone="late">
-                  {r.daysLate === 1 ? '1 day late' : `${r.daysLate} days late`}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="sk-lib-nudge">
-            A word from the class teacher is what brings these back.
-          </p>
-          {lateTruncated ? (
-            <p className="sk-lib-nudge">
-              Showing the {lateRows.length} longest overdue. There are more — the full list
-              is in the library console.
-            </p>
-          ) : null}
-          {/* One message per CLASS, not per book. A teacher who gets nine
-              separate notices about nine children stops reading the ninth,
-              and the point is that they act on the list. */}
-          {lateClasses.length > 0 ? (
-            <div className="sk-desk-actions">
-              <button
-                className="sk-btn"
-                data-variant="primary"
-                disabled={nudge.isPending}
-                onClick={() => nudge.mutate(lateClasses)}
-              >
-                {nudge.isPending
-                  ? 'Sending…'
-                  : lateClasses.length === 1
-                    ? `Tell the class teacher of ${lateClasses[0]}`
-                    : `Tell ${lateClasses.length} class teachers`}
-              </button>
-            </div>
-          ) : null}
-          {nudged ? <p className="sk-lib-nudge">{nudged}</p> : null}
-        </>
-      ) : (
-        <p className="sk-lib-empty">Nothing is late. Every book is back or still in time.</p>
-      )}
-    </section>
+    </div>
   );
 }

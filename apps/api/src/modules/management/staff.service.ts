@@ -86,23 +86,15 @@ export class StaffService {
       const placeholder = randomBytes(32).toString('base64url');
       const passwordHash = await this.passwords.hash(placeholder);
 
-      // THE JOB DECIDES THE LOGIN. A staff member whose role is LIBRARIAN gets
-      // a LIBRARIAN user; everyone else gets STAFF. The admin picks what the
-      // person IS on the staff form, and their access follows — rather than
-      // being asked a second, separate question ("which kind of login?") that
-      // a school has no reason to think in terms of.
-      //
-      // `dto.role` still wins when given, so the API contract is unchanged for
-      // any caller that names it explicitly. Both paths are constrained to
-      // STAFF | LIBRARIAN by the DTO: this screen must never be able to mint a
-      // TEACHER or an admin, which is what would turn staff management into a
-      // privilege-escalation path.
-      const role = dto.role ?? (staff.role === 'LIBRARIAN' ? 'LIBRARIAN' : 'STAFF');
-
+      // The login role is ALWAYS STAFF. The JOB (Staff.role — librarian, office,
+      // driver) decides which door the person lands on via /auth/me's
+      // `staffRole`, never the account type: one staff login model, no second
+      // UserRole to keep in sync. (The Library Wing migration flips any legacy
+      // LIBRARIAN-role users from the earlier modelling back to STAFF.)
       let user: { id: string };
       try {
         user = await tx.user.create({
-          data: { schoolId, email, username, passwordHash, role },
+          data: { schoolId, email, username, passwordHash, role: 'STAFF' },
         });
       } catch (e) {
         if (isP2002(e)) throw this.conflictFor(e);

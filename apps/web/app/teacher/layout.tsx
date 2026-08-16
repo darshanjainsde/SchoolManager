@@ -76,18 +76,15 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     enabled: status === 'authed' && audience === 'school' && !!host,
-    queryFn: () =>
-      api.get<{ role: string; features?: string[]; libraryLive?: boolean }>('/auth/me'),
+    queryFn: () => api.get<{ role: string; features?: string[] }>('/auth/me'),
   });
 
-  // Two-stage gate, same as /portal: the school has a library AND there is a
-  // book in it. Until /auth/me answers, gated items stay hidden rather than
-  // flashing and vanishing.
-  const navItems = NAV_ITEMS.filter((i) => {
-    if (i.requiredFeature && !me.data?.features?.includes(i.requiredFeature)) return false;
-    if (i.requiresLibraryLive && !me.data?.libraryLive) return false;
-    return true;
-  });
+  // Feature-gated entries (Library) hide once features load and say the plan
+  // lacks them — and show until then, so a slow fetch never blanks a tab the
+  // school does have (the same call the admin sidebar makes).
+  const navItems = NAV_ITEMS.filter(
+    (i) => !i.requiredFeature || !me.data?.features || me.data.features.includes(i.requiredFeature),
+  );
 
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) router.replace('/login');
