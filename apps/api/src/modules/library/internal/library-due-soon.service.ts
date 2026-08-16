@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { getPlatformPrisma, resolveFeatures } from '@skoolos/db';
-import type { Prisma } from '@prisma/client';
+import { getPlatformPrisma, resolveFeatures, type Prisma } from '@skoolos/db';
 import { MailService, escapeHtml } from '../../../common/mail/mail.service';
 import type { LibraryNoticeOutboxPayload } from '../../../common/notifications/notification.types';
 import { istTodayISO } from '../../management';
