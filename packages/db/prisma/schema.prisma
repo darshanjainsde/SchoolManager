@@ -244,6 +244,8 @@ model School {
   attendanceNotices      AttendanceNotice[]
   jobPosts            JobPost[]
   librarySettings        LibrarySettings?
+  designDrafts           DesignDraft[]
+  sitePages              SchoolPage[]
   libraryBookTitles      LibraryBookTitle[]
   libraryBookCopies      LibraryBookCopy[]
   libraryIssues          LibraryIssue[]
@@ -423,6 +425,36 @@ model SchoolProfile {
   /// derive from the bar's own text colour, so neither can be configured into
   /// invisibility on a dark or brand bar.
   navLoginStyle       String  @default("LINK")
+  /// How the page MOVES as a visitor scrolls — a fourth style axis beside
+  /// shape, gesture and texture. CLASSIC (default, exactly today's behaviour) |
+  /// GLIDE (weighted inertial scroll) | SNAP (sections click into place) |
+  /// DECK (sections stack over one another like cards).
+  scrollFeel          String  @default("CLASSIC")
+  /// How an open nav menu arrives: FADE (default — today's ps-menu-in) |
+  /// SLIDE (drops in from the tab) | SCALE (grows from the tab corner).
+  navDropdownAnim     String  @default("FADE")
+  /// First-screen background medium. IMAGE (default) keeps today's photo
+  /// slots; VIDEO plays heroVideoUrl muted on loop with the photo slots as
+  /// poster/fallback for slow connections and reduced-motion visitors.
+  heroMedia           String  @default("IMAGE")
+  heroVideoUrl        String?
+  /// Per-section layout + entrance overrides, keyed by section id
+  /// (stats/about/courses/admissions/gallery/staff), each value
+  /// { layout?, gesture? }. Null = every section at its default — today's page.
+  sectionVariants     Json?
+  /// Festive overlay: { festival, variant, intensity, ribbon, recolor }.
+  /// A doodle layer OVER the base design, never a rewrite of it. Null = none.
+  festiveTheme        Json?
+  /// Footer arrangement: { layout, color, social, contact, tagline }.
+  /// Null = the built-in three-column footer every school renders today.
+  footerConfig        Json?
+  /// Operator escape hatch: per-section CSS overrides keyed by section id.
+  /// Values are sanitized on write (site-content.service) and scoped to their
+  /// section at render (scopeSectionCss) — never emitted raw.
+  customSectionCss    Json?
+  /// One sanitized HTML block rendered before the footer. Allow-listed tags
+  /// only; sanitized server-side on write, never trusted at render.
+  customHtmlBlock     String?
   blogLayout          String  @default("HERO_GRID")
   blogHeroLimit       Int     @default(1)
   phone               String?
@@ -462,6 +494,46 @@ model HomepageContent {
   showEvents            Boolean  @default(true)
   showContact           Boolean  @default(true)
   school                School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+/// A saved website look — the design subset of SchoolProfile as one JSON blob.
+/// "Preview" renders it client-side without touching the live site; "Publish"
+/// copies it into SchoolProfile. A [publishAt, revertAt] window is a READ-TIME
+/// overlay: the public projection merges the config while now() is inside the
+/// window, so a festival edition applies and removes itself with no scheduler
+/// and no state transition (see docs/superpowers/plans/2026-08-19-website-studio.md).
+model DesignDraft {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @db.Uuid
+  name      String
+  config    Json
+  publishAt DateTime?
+  revertAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, publishAt])
+}
+
+/// An admin-built extra page (Transport, Scholarships, Alumni…): typed content
+/// blocks, never raw HTML. The slug is FROZEN at creation like nav slugs —
+/// shared links survive renames. Reached at /p/<slug> and placed in the menu
+/// through navConfig with the page key "page:<slug>".
+model SchoolPage {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  slug      String
+  title     String
+  blocks    Json
+  published Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, slug])
+  @@index([schoolId, order])
 }
 
 model StatItem {
