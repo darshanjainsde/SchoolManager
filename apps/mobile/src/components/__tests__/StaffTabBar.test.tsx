@@ -14,6 +14,11 @@ jest.mock('expo-secure-store', () => {
   };
 });
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn() } }));
+let mockFeatures: string[] | null = ['LIBRARY'];
+jest.mock('@/lib/use-features', () => ({
+  useFeatures: () => mockFeatures,
+  hasFeature: (f: string[] | null, k: string) => f !== null && f.includes(k),
+}));
 
 function makeProps(overrides: Partial<StaffTabBarProps> = {}): StaffTabBarProps {
   return {
@@ -23,6 +28,7 @@ function makeProps(overrides: Partial<StaffTabBarProps> = {}): StaffTabBarProps 
         { key: 'home-1', name: 'home' },
         { key: 'attendance-1', name: 'attendance' },
         { key: 'timetable-1', name: 'timetable' },
+        { key: 'library-1', name: 'library' },
         { key: 'post-1', name: 'post' },
       ],
     },
@@ -36,12 +42,21 @@ function makeProps(overrides: Partial<StaffTabBarProps> = {}): StaffTabBarProps 
   } as unknown as StaffTabBarProps;
 }
 
-it('renders the four core tabs, and nothing between them', () => {
+it('renders the five core tabs, and nothing between them', () => {
+  mockFeatures = ['LIBRARY'];
   const { getByText } = render(<StaffTabBar {...makeProps()} />);
   for (const { title } of VISIBLE_TABS) {
     expect(getByText(title)).toBeTruthy();
   }
-  expect(VISIBLE_TABS).toHaveLength(4);
+  expect(VISIBLE_TABS).toHaveLength(5);
+});
+
+it('hides Library for a school whose plan lacks it — and while features are unknown', () => {
+  mockFeatures = [];
+  expect(render(<StaffTabBar {...makeProps()} />).queryByText('Library')).toBeNull();
+  mockFeatures = null;
+  expect(render(<StaffTabBar {...makeProps()} />).queryByText('Library')).toBeNull();
+  mockFeatures = ['LIBRARY'];
 });
 
 it('tapping an unfocused tab navigates to it', () => {

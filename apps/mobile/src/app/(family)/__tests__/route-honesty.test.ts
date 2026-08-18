@@ -46,12 +46,14 @@ describe('family route honesty', () => {
     }
   });
 
-  it('shows exactly the four core tabs — no "More" tab (it became the tools drawer)', () => {
+  it('shows exactly the five core tabs — no "More" tab (it became the tools drawer)', () => {
     // Menu-drawer revision: the "More" tab is gone; its contents moved into
     // the chevron-FAB bottom sheet (FamilyToolsDrawer), driven by MORE_ITEMS.
     // Profile replaced Notices in the bar — Notices lives in the drawer now
     // (which also kills the two-line "Notices/Announcements" tab-label bug).
-    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['home', 'attendance', 'results', 'profile']);
+    // Library is the one PLAN-GATED tab: listed here (the file must exist),
+    // hidden at runtime by FamilyTabBar unless /auth/me carries LIBRARY.
+    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['home', 'attendance', 'library', 'results', 'profile']);
     expect(VISIBLE_TABS.some((t) => t.name === 'more')).toBe(false);
     expect(routeFileExists('more')).toBe(false);
   });

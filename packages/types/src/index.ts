@@ -758,3 +758,35 @@ export interface NotifyLowAttendanceResult {
   /** Days a family must wait before the same nudge can be sent again. */
   cooldownDays: number;
 }
+
+// ── Library Wing: the reader's own shelf ─────────────────────────────────────
+// The `GET /me/library` contract, shared by the web portal tabs and the mobile
+// Library tab so the two clients can never drift — both render exactly what
+// the server computed (apps/api modules/library/internal/library-me.service.ts).
+
+export interface MeLibraryHolding {
+  issueId: string;
+  title: string;
+  author: string;
+  accessionNo: string;
+  issuedOn: string;
+  dueOn: string;
+  /** Whole calendar days until dueOn — negative when overdue. */
+  daysLeft: number;
+  /** Fine earned so far on this open loan; always 0 when fines don't apply. */
+  accruedFineRupees: number;
+}
+
+export interface MeLibraryPayload {
+  kind: 'STUDENT' | 'TEACHER';
+  limit: number;
+  loanDays: number;
+  /** False for teachers while the librarian's fineTeachers setting is off. */
+  finesEnabled: boolean;
+  holdings: MeLibraryHolding[];
+  history: { issueId: string; title: string; author: string; returnedOn: string; wasLost: boolean }[];
+  fines: { id: string; title: string; reason: 'LATE' | 'LOST'; amountRupees: number }[];
+  finesDueRupees: number;
+  /** IST calendar day the server computed everything against. */
+  today: string;
+}

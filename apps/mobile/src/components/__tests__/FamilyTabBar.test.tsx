@@ -14,6 +14,13 @@ jest.mock('expo-secure-store', () => {
   };
 });
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn() } }));
+// The bar plan-gates the Library tab off /auth/me's features. Tests pin the
+// answer instead of fetching: LIBRARY on unless a test flips it.
+let mockFeatures: string[] | null = ['LIBRARY'];
+jest.mock('@/lib/use-features', () => ({
+  useFeatures: () => mockFeatures,
+  hasFeature: (f: string[] | null, k: string) => f !== null && f.includes(k),
+}));
 
 function makeProps(overrides: Partial<FamilyTabBarProps> = {}): FamilyTabBarProps {
   return {
@@ -22,6 +29,7 @@ function makeProps(overrides: Partial<FamilyTabBarProps> = {}): FamilyTabBarProp
       routes: [
         { key: 'home-1', name: 'home' },
         { key: 'attendance-1', name: 'attendance' },
+        { key: 'library-1', name: 'library' },
         { key: 'results-1', name: 'results' },
         { key: 'profile-1', name: 'profile' },
       ],
@@ -36,12 +44,21 @@ function makeProps(overrides: Partial<FamilyTabBarProps> = {}): FamilyTabBarProp
   } as unknown as FamilyTabBarProps;
 }
 
-it('renders the four core tabs, and nothing between them', () => {
+it('renders the five core tabs, and nothing between them', () => {
+  mockFeatures = ['LIBRARY'];
   const { getByText } = render(<FamilyTabBar {...makeProps()} />);
   for (const { title } of VISIBLE_TABS) {
     expect(getByText(title)).toBeTruthy();
   }
-  expect(VISIBLE_TABS).toHaveLength(4);
+  expect(VISIBLE_TABS).toHaveLength(5);
+});
+
+it('hides Library for a school whose plan lacks it — and while features are unknown', () => {
+  mockFeatures = [];
+  expect(render(<FamilyTabBar {...makeProps()} />).queryByText('Library')).toBeNull();
+  mockFeatures = null; // cold start / offline: hidden, never a flash
+  expect(render(<FamilyTabBar {...makeProps()} />).queryByText('Library')).toBeNull();
+  mockFeatures = ['LIBRARY'];
 });
 
 it('shows Profile in the bar and NOT Notices (Notices moved to the drawer)', () => {

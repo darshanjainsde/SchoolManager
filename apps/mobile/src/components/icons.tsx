@@ -25,7 +25,8 @@ export type IconName =
   | 'holidays'
   | 'notes'
   | 'home'
-  | 'person';
+  | 'person'
+  | 'library';
 
 /** `body` is the filled silhouette; `lines` are the strokes drawn over it. */
 const PATHS: Record<IconName, { body: string; lines: string[] }> = {
@@ -93,6 +94,18 @@ const PATHS: Record<IconName, { body: string; lines: string[] }> = {
     lines: [
       'M12 4.8a3.4 3.4 0 1 1 0 6.8 3.4 3.4 0 0 1 0-6.8Z',
       'M5.6 19.8c.7-3.5 3.2-5.4 6.4-5.4s5.7 1.9 6.4 5.4',
+    ],
+  },
+
+  // Three books on a shelf — two standing, one leaning: the Library tab's
+  // duotone twin of the bar's Ionicons 'library-outline'.
+  library: {
+    body: 'M4.5 5.5h3.4v13H4.5Z M9.4 5.5h3.4v13H9.4Z M14.2 6.7l3.2 1-3.7 12.3-3.2-1Z',
+    lines: [
+      'M4.5 5.5h3.4v13H4.5Z',
+      'M9.4 5.5h3.4v13H9.4Z',
+      'M14.2 6.7l3.2 1-3.7 12.3-3.2-1Z',
+      'M4.5 15.4h3.4M9.4 15.4h3.4',
     ],
   },
 };

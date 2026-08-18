@@ -40,6 +40,9 @@ export const VISIBLE_TABS = [
   { name: 'home', title: 'Home', icon: 'today-outline' as const },
   { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
   { name: 'timetable', title: 'Timetable', icon: 'calendar-outline' as const },
+  // Plan-gated: StaffTabBar hides it unless /auth/me lists LIBRARY (see
+  // lib/use-features.ts). Kept in the array so route-honesty sees the file.
+  { name: 'library', title: 'Library', icon: 'library-outline' as const },
   { name: 'profile', title: 'Profile', icon: 'person-outline' as const },
 ];
 

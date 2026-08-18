@@ -58,7 +58,9 @@ describe('staff route honesty', () => {
     // quarter-width tab and wrapped to two lines on narrower phones, dropping
     // that label off the bar's shared baseline. The family bar hit the same
     // problem and fixed it the same way on 2026-08-02.
-    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['home', 'attendance', 'timetable', 'profile']);
+    // Library is plan-gated: listed here (the file must exist), hidden at
+    // runtime by StaffTabBar unless /auth/me carries LIBRARY.
+    expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['home', 'attendance', 'timetable', 'library', 'profile']);
     expect(VISIBLE_TABS.some((t) => t.name === 'more')).toBe(false);
     expect(routeFileExists('more')).toBe(false);
   });

@@ -19,6 +19,10 @@
 export const VISIBLE_TABS = [
   { name: 'home', title: 'Home', icon: 'home-outline' as const },
   { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
+  // Library is the one PLAN-GATED tab: FamilyTabBar hides it unless /auth/me
+  // lists the LIBRARY feature (see lib/use-features.ts). It stays in this
+  // array — route-honesty checks the file exists — and the bar decides.
+  { name: 'library', title: 'Library', icon: 'library-outline' as const },
   { name: 'results', title: 'Results', icon: 'stats-chart-outline' as const },
   { name: 'profile', title: 'Profile', icon: 'person-outline' as const },
 ];
