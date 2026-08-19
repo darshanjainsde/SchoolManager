@@ -13,6 +13,10 @@ import { AdmissionsService } from './admissions.service';
 import { AdmissionsController } from './admissions.controller';
 import { HallOfFameService } from './hall-of-fame.service';
 import { HallOfFameController } from './hall-of-fame.controller';
+import { DesignDraftsService } from './design-drafts.service';
+import { DesignDraftsController } from './design-drafts.controller';
+import { SchoolPagesService } from './school-pages.service';
+import { SchoolPagesController } from './school-pages.controller';
 
 @Module({
   imports: [TenancyModule, StorageModule],
@@ -23,6 +27,8 @@ import { HallOfFameController } from './hall-of-fame.controller';
     CoursesService,
     AdmissionsService,
     HallOfFameService,
+    DesignDraftsService,
+    SchoolPagesService,
   ],
   controllers: [
     SiteContentController,
@@ -31,6 +37,8 @@ import { HallOfFameController } from './hall-of-fame.controller';
     CoursesController,
     AdmissionsController,
     HallOfFameController,
+    DesignDraftsController,
+    SchoolPagesController,
   ],
   exports: [SiteContentService, MediaService, StaffService, CoursesService, AdmissionsService, HallOfFameService],
 })

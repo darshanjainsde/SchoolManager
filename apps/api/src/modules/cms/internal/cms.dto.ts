@@ -71,6 +71,40 @@ export class UpdateProfileDto {
   @IsOptional() @IsBoolean() navShowCta?: boolean;
   @IsOptional() @IsString() @Length(1, 40) navLoginLabel?: string;
   @IsOptional() @IsBoolean() navShowLogin?: boolean;
+  /** ── Website-studio axes. Vocabulary mirrors apps/web site-variants.ts. ── */
+  @IsOptional() @IsIn(['CLASSIC', 'GLIDE', 'SNAP', 'DECK']) scrollFeel?: string;
+  @IsOptional() @IsIn(['FADE', 'SLIDE', 'SCALE']) navDropdownAnim?: string;
+  @IsOptional() @IsIn(['IMAGE', 'VIDEO']) heroMedia?: string;
+  /** Direct mp4/webm URL; empty string clears it. */
+  @IsOptional() @IsString() @Length(0, 800) heroVideoUrl?: string;
+  /** Shapes validated on the WEB side (normalizeSectionVariants et al.), same
+   *  contract as navConfig — product rules with admin-readable messages. */
+  @IsOptional() @IsObject() sectionVariants?: Record<string, unknown>;
+  @IsOptional() @IsObject() festiveTheme?: Record<string, unknown>;
+  @IsOptional() @IsObject() footerConfig?: Record<string, unknown>;
+  /** Sanitized server-side on write (custom-code.ts), scoped on render. */
+  @IsOptional() @IsObject() customSectionCss?: Record<string, unknown>;
+  @IsOptional() @IsString() @Length(0, 20000) customHtmlBlock?: string;
+}
+
+/* ── Design drafts (saved looks; window = read-time overlay) ── */
+export class UpsertDesignDraftDto {
+  @IsString() @Length(1, 80) name!: string;
+  /** The design subset of the profile; whitelisted in the service. */
+  @IsObject() config!: Record<string, unknown>;
+  /** ISO datetimes; null clears. Window semantics live in the service. */
+  @IsOptional() @IsString() publishAt?: string | null;
+  @IsOptional() @IsString() revertAt?: string | null;
+}
+
+/* ── Admin-built pages ── */
+export class UpsertSchoolPageDto {
+  @IsString() @Length(1, 120) title!: string;
+  /** Frozen at creation; ignored on update. */
+  @IsOptional() @IsString() @Length(1, 80) slug?: string;
+  @IsArray() @ArrayMaxSize(40) blocks!: unknown[];
+  @IsOptional() @IsBoolean() published?: boolean;
+  @IsOptional() @IsInt() @Min(0) order?: number;
 }
 
 export class UpdateHomepageDto {

@@ -67,6 +67,17 @@ export interface PublicSiteData {
     navShowCta: boolean;
     navShowLogin: boolean;
     navLoginLabel: string;
+    navLoginStyle: string;
+    /** Website-studio axes. */
+    scrollFeel: string;
+    navDropdownAnim: string;
+    heroMedia: string;
+    heroVideoUrl: string | null;
+    sectionVariants: unknown;
+    festiveTheme: unknown;
+    footerConfig: unknown;
+    customSectionCss: unknown;
+    customHtmlBlock: string | null;
   } | null;
   homepage: {
     headline: string;
@@ -93,6 +104,8 @@ export interface PublicSiteData {
     showFees: boolean;
     feeNote: string | null;
   };
+  /** Admin-built pages (published only), served at /p/<slug>. */
+  pages: { slug: string; title: string; blocks: unknown }[];
   events: PublicEvent[];
 }
 

@@ -1,6 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, withTenant } from '@skoolos/db';
 import type { UpdateProfileDto, UpdateHomepageDto, StatItemDto, SocialLinkDto } from './cms.dto';
+import { sanitizeCustomCssMap, sanitizeHtmlBlock } from './custom-code';
+
+/** SchoolProfile's Json columns. Prisma types Json input as InputJsonValue, so
+ *  none of them can ride along in the scalar spread (see updateProfile). */
+const PROFILE_JSON_KEYS = [
+  'navConfig',
+  'sectionVariants',
+  'festiveTheme',
+  'footerConfig',
+  'customSectionCss',
+] as const;
 
 @Injectable()
 export class SiteContentService {
@@ -36,11 +47,29 @@ export class SiteContentService {
         data.heroLayout = data.heroStyle === 'PHOTO' ? 'FULL_BLEED' : data.heroStyle;
       }
     }
-    // navConfig is the profile's only JSON column, and Prisma types JSON input
-    // as InputJsonValue rather than a plain object — so it cannot ride along in
-    // the spread the way every scalar field does.
-    const { navConfig, ...scalars } = data;
-    const jsonPart = navConfig === undefined ? {} : { navConfig: navConfig as Prisma.InputJsonValue };
+    // The custom-code escape hatch is sanitized ON WRITE — the renderer scopes
+    // and re-sanitizes on read, and neither side trusts the stored value alone.
+    if (data.customSectionCss !== undefined) {
+      data.customSectionCss = sanitizeCustomCssMap(data.customSectionCss);
+    }
+    if (typeof data.customHtmlBlock === 'string') {
+      data.customHtmlBlock = data.customHtmlBlock.trim() ? sanitizeHtmlBlock(data.customHtmlBlock) : '';
+    }
+    // Json columns cannot ride along in the spread the way every scalar field
+    // does — Prisma types their input as InputJsonValue, not a plain object.
+    const { navConfig, sectionVariants, festiveTheme, footerConfig, customSectionCss, ...scalars } = data;
+    const jsonValues: Record<(typeof PROFILE_JSON_KEYS)[number], unknown> = {
+      navConfig,
+      sectionVariants,
+      festiveTheme,
+      footerConfig,
+      customSectionCss,
+    };
+    const jsonPart: Record<string, Prisma.InputJsonValue> = {};
+    for (const key of PROFILE_JSON_KEYS) {
+      const value = jsonValues[key];
+      if (value !== undefined) jsonPart[key] = value as Prisma.InputJsonValue;
+    }
     await withTenant(schoolId, (tx) =>
       tx.schoolProfile.upsert({
         where: { schoolId },

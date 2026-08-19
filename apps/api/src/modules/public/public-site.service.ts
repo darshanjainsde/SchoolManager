@@ -3,6 +3,7 @@ import { withTenant, type FeatureKey } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import { PublicEventsService } from '../community';
+import { pickDesignConfig } from '../cms/internal/design-config';
 import type { PublicSiteData } from './public.dto';
 
 @Injectable()
@@ -27,7 +28,8 @@ export class PublicSiteService {
       // public site 404s until the owner publishes it (PATCH /owner/schools/:id/status).
       if (school.status !== 'LIVE') throw new NotFoundException('Site not found');
 
-      const [profile, homepage, stats, socials, galleryAssets, staff, courses, admissionSteps, admissionsSettings] =
+      const now = new Date();
+      const [rawProfile, homepage, stats, socials, galleryAssets, staff, courses, admissionSteps, admissionsSettings, sitePages, scheduledLook] =
         await Promise.all([
           tx.schoolProfile.findUnique({ where: { schoolId } }),
           tx.homepageContent.findUnique({ where: { schoolId } }),
@@ -42,7 +44,28 @@ export class PublicSiteService {
           }),
           tx.admissionStep.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
           tx.admissionsSettings.findUnique({ where: { schoolId } }),
+          tx.schoolPage.findMany({
+            where: { schoolId, published: true },
+            orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+            select: { slug: true, title: true, blocks: true },
+          }),
+          // A scheduled look whose window contains NOW. Applied as a read-time
+          // overlay — it reverts itself when the window closes, with no
+          // scheduler and no state transition (see DesignDraft in the schema).
+          tx.designDraft.findFirst({
+            where: {
+              schoolId,
+              publishAt: { lte: now },
+              OR: [{ revertAt: null }, { revertAt: { gt: now } }],
+            },
+            orderBy: { publishAt: 'desc' },
+          }),
         ]);
+
+      const profile =
+        rawProfile && scheduledLook
+          ? { ...rawProfile, ...pickDesignConfig((scheduledLook.config ?? {}) as Record<string, unknown>) }
+          : rawProfile;
 
       // Resolve all asset ids referenced by profile/homepage/staff/courses in one query.
       const ids = [
@@ -111,6 +134,15 @@ export class PublicSiteService {
               navShowLogin: profile.navShowLogin,
               navLoginLabel: profile.navLoginLabel,
               navLoginStyle: profile.navLoginStyle,
+              scrollFeel: profile.scrollFeel,
+              navDropdownAnim: profile.navDropdownAnim,
+              heroMedia: profile.heroMedia,
+              heroVideoUrl: profile.heroVideoUrl,
+              sectionVariants: profile.sectionVariants,
+              festiveTheme: profile.festiveTheme,
+              footerConfig: profile.footerConfig,
+              customSectionCss: profile.customSectionCss,
+              customHtmlBlock: profile.customHtmlBlock,
             }
           : null,
         homepage: homepage
@@ -164,6 +196,7 @@ export class PublicSiteService {
           showFees,
           feeNote: showFees ? (admissionsSettings?.feeNote ?? null) : null,
         },
+        pages: sitePages.map((p) => ({ slug: p.slug, title: p.title, blocks: p.blocks })),
         events,
       };
     });
