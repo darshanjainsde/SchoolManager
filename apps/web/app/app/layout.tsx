@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, X } from 'lucide-react';
+import { BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ChevronsLeft, ChevronsRight, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -66,12 +66,15 @@ function AdminNavLink({
   label,
   icon: Icon,
   pathname,
+  collapsed,
   onNavigate,
 }: {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
   pathname: string;
+  /** Icon-only rail: hide the label, centre the icon, name it via a tooltip. */
+  collapsed?: boolean;
   onNavigate?: () => void;
 }) {
   const active = href === '/app' ? pathname === '/app' : pathname === href || pathname.startsWith(href + '/');
@@ -79,13 +82,16 @@ function AdminNavLink({
     <Link
       href={href}
       onClick={onNavigate}
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
       className={cn(
-        'flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
+        'flex items-center rounded-lg transition-colors',
+        collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
         active ? 'bg-emerald-400/15 font-semibold text-emerald-300' : 'hover:bg-white/5',
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
-      {label}
+      <Icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+      {!collapsed && label}
     </Link>
   );
 }
@@ -103,6 +109,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   useSessionProbe(api, 'school', !!host);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
+  // Collapse the desktop sidebar to an icons-only rail, so the main editor gets
+  // the horizontal space. Remembered across sessions.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('sk-sidebar-collapsed') === '1';
+  });
+  useEffect(() => {
+    localStorage.setItem('sk-sidebar-collapsed', collapsed ? '1' : '0');
+  }, [collapsed]);
 
   // Impersonation sessions carry an access token only — no refresh token and
   // no cookie — so they count as a session even though the probe cannot
@@ -229,7 +244,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    // h-screen + overflow-hidden makes the shell a fixed viewport: the sidebar
+    // and the main area each scroll on their OWN, so scrolling the sidebar's
+    // menu no longer drags the whole page up with it.
+    <div className="flex h-screen flex-col overflow-hidden">
       {impersonated && (
         <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 bg-violet-600 px-3 py-1.5 text-center text-xs font-bold text-white sm:px-4">
           ⚡ Owner view — you are signed in as this school&rsquo;s admin via the owner console. The session ends automatically.
@@ -326,30 +344,55 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       )}
 
       <div className="flex min-h-0 flex-1">
-      {/* Sidebar */}
-      <aside className="hidden w-60 flex-col bg-slate-900 text-slate-300 sm:flex">
-        {/* Logo */}
-        <div className="flex flex-col gap-1 p-5">
-          <SckoolsLogo theme="dark" size={28} />
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">School Admin</span>
+      {/* Sidebar — min-h-0 so its nav can own the overflow instead of the page. */}
+      <aside
+        className={cn(
+          'hidden min-h-0 flex-col bg-slate-900 text-slate-300 transition-[width] duration-200 sm:flex',
+          collapsed ? 'w-16' : 'w-60',
+        )}
+      >
+        {/* Logo + collapse toggle */}
+        <div className={cn('flex p-4', collapsed ? 'flex-col items-center gap-3' : 'items-start justify-between')}>
+          {collapsed ? (
+            <SckoolsLogo theme="dark" size={26} />
+          ) : (
+            <div className="flex flex-col gap-1">
+              <SckoolsLogo theme="dark" size={28} />
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">School Admin</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="flex h-8 w-8 flex-none items-center justify-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
+          >
+            {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+          </button>
         </div>
 
-        {/* Nav */}
-        <nav className="mt-2 flex flex-1 flex-col gap-1 px-3 text-sm">
+        {/* Nav — scrolls on its own; a long menu never scrolls the page. */}
+        <nav className={cn('mt-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto text-sm', collapsed ? 'px-2' : 'px-3')}>
           {navItems.map((item) => (
-            <AdminNavLink key={item.href} {...item} pathname={pathname} />
+            <AdminNavLink key={item.href} {...item} pathname={pathname} collapsed={collapsed} />
           ))}
         </nav>
 
         {/* Logout */}
-        <div className="border-t border-white/10 p-4">
-          <div className="skosx mb-3"><ThemeToggle /></div>
+        <div className={cn('border-t border-white/10', collapsed ? 'p-2' : 'p-4')}>
+          {!collapsed && <div className="skosx mb-3"><ThemeToggle /></div>}
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm hover:bg-white/5"
+            title={collapsed ? 'Log out' : undefined}
+            aria-label={collapsed ? 'Log out' : undefined}
+            className={cn(
+              'flex w-full items-center rounded-lg text-sm hover:bg-white/5',
+              collapsed ? 'justify-center py-2' : 'gap-3 px-3 py-2',
+            )}
           >
             <LogOut className="h-4 w-4 shrink-0" />
-            Log out
+            {!collapsed && 'Log out'}
           </button>
         </div>
       </aside>
