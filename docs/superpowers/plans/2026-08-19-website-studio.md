@@ -58,10 +58,14 @@ emits no class; shipping repaints zero schools.
 - Never `git add -A`; never migrate/seed staging DB from a task.
 
 ## Status log (update as phases land — record the commit hash when each is DONE)
-- [ ] P1 DB schema + migration + generate
-- [ ] P2 site-variants + tests
-- [ ] P3 renderer
-- [ ] P4 API
-- [ ] P5 studio tab + preview
-- [ ] P6 worker
-- [ ] P7 gates green
+- [x] P1 DB schema + migration + generate — commit 2d60927
+- [x] P2 site-variants + tests — commit 218ada8
+- [x] P3 renderer — commit c4415dc
+- [x] P4 API (incl. read-time schedule overlay = old P6) — commit c5eeb16
+- [x] P5 studio tab + preview — commit 42bcd59
+- [x] P6 folded into P4 (read-time overlay; no worker job needed)
+- [x] P7 gates green — commit 5a7028d + this
+  - web typecheck clean, 735 tests pass (78 files); api typecheck clean, 739 tests pass (68 suites)
+  - boundary clean; web + api builds succeed; all migrations replay on empty PG16; RLS verified on new tables
+  - two adversarial reviews (api+db, web) run: 2 blockers + 9 majors + minors all fixed, regressions tested
+  - NOT done (deploy-time, needs live staging): DB migrate on staging, visual QA in a browser, real device responsive check
