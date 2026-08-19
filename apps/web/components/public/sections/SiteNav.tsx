@@ -278,7 +278,9 @@ export default function SiteNav({
     courses: data.courses,
     onAcademicsPage,
     config: data.profile?.navConfig ?? null,
-    pages: (data.pages ?? []).map((p) => ({ slug: p.slug, title: p.title })),
+    // Footer-only pages (showInNav === false) are excluded from the navbar;
+    // the footer's link list still carries every published page.
+    pages: (data.pages ?? []).filter((p) => p.showInNav !== false).map((p) => ({ slug: p.slug, title: p.title })),
   });
 
   // Mobile menu open/close state, shared across every layout branch below.

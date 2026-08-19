@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Monitor, Smartphone, RotateCw, ChevronRight, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, X, Upload, CornerLeftUp } from 'lucide-react';
@@ -63,7 +63,7 @@ interface SiteContent {
   courses?: unknown[];
 }
 interface DesignDraft { id: string; name: string; config: Record<string, unknown>; publishAt: string | null; revertAt: string | null; }
-interface SchoolPage { id: string; slug: string; title: string; blocks: unknown[]; published: boolean; }
+interface SchoolPage { id: string; slug: string; title: string; blocks: unknown[]; published: boolean; showInNav?: boolean; }
 interface MediaAsset { id: string; url: string }
 
 function pickLook(profile: Record<string, unknown> | null | undefined): Look {
@@ -131,6 +131,38 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <div className="mb-1.5 mt-3 text-[11px] font-bold uppercase tracking-wide text-slate-400 first:mt-0">{children}</div>;
 }
 
+/**
+ * The collapsible group. Defined at MODULE level (reading open state through a
+ * context) — NOT inside the render — so it is a stable component type. A group
+ * defined inside render is a new function every keystroke, which remounts the
+ * whole group: that reset the rail's scroll to the top on every edit and
+ * detached the logo file-input mid-pick so the chosen file never registered.
+ */
+const GroupCtx = createContext<{ open: Record<string, boolean>; toggle: (id: string) => void }>({ open: {}, toggle: () => {} });
+function Group({ id, title, summary, children }: { id: string; title: string; summary?: string; children: React.ReactNode }) {
+  const { open, toggle } = useContext(GroupCtx);
+  const isOpen = !!open[id];
+  return (
+    <Card>
+      <button type="button" onClick={() => toggle(id)} aria-expanded={isOpen} className="sk-press flex w-full items-center gap-2 px-3.5 py-3 text-left">
+        <ChevronRight className={`h-4 w-4 flex-none text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+        <span className="flex-1">
+          <span className="block text-sm font-semibold text-slate-800">{title}</span>
+          {summary && !isOpen && <span className="block truncate text-xs text-slate-400">{summary}</span>}
+        </span>
+      </button>
+      {isOpen && <div className="border-t border-slate-100 px-3.5 py-3">{children}</div>}
+    </Card>
+  );
+}
+
+/** Which section of the site each group's controls affect — the preview
+ *  scrolls here when you open the group, so it follows what you're editing. */
+const GROUP_FOCUS: Record<string, string> = {
+  brand: 'top', hero: 'hero', looks: 'stats', 'sections-style': 'stats', variants: 'stats',
+  nav: 'top', festive: 'top', footer: 'footer', pages: 'top', code: 'top',
+};
+
 export default function StudioTab() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
@@ -179,13 +211,33 @@ export default function StudioTab() {
     setCodeSeeded(true);
   }, [profile, codeSeeded]);
 
+  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [mobilePane, setMobilePane] = useState<'edit' | 'preview'>('edit');
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [focus, setFocus] = useState<string>('top');
+  const toggle = useCallback((id: string) => {
+    setOpen((o) => {
+      const next = { ...o, [id]: !o[id] };
+      if (next[id]) setFocus(GROUP_FOCUS[id] ?? 'top'); // opening → scroll the preview there
+      return next;
+    });
+  }, []);
+  const groupCtx = useMemo(() => ({ open, toggle }), [open, toggle]);
+
   // ── live preview ──
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const reloadPreview = useCallback(() => { const f = iframeRef.current; if (f) f.src = '/preview'; }, []);
+  // The page currently being edited, sent to the preview so it shows that page
+  // live (new pages included) and returns home when the editor closes.
+  const [editingPage, setEditingPage] = useState<{ id: string | null; title: string; blocks: Block[]; published: boolean; showInNav: boolean } | null>(null);
   const postPreview = useCallback(() => {
     const overrides = { ...current, customSectionCss: cssDrafts };
-    iframeRef.current?.contentWindow?.postMessage({ type: 'sk-studio-preview', overrides }, window.location.origin);
-  }, [current, cssDrafts]);
+    const page = editingPage ? { title: editingPage.title, blocks: editingPage.blocks } : null;
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'sk-studio-preview', overrides, focus: page ? 'page' : focus, page },
+      window.location.origin,
+    );
+  }, [current, cssDrafts, focus, editingPage]);
   useEffect(() => { postPreview(); }, [postPreview]);
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -195,11 +247,6 @@ export default function StudioTab() {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [postPreview]);
-
-  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
-  const [mobilePane, setMobilePane] = useState<'edit' | 'preview'>('edit');
-  const [open, setOpen] = useState<Record<string, boolean>>({});
-  const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
   // ── mutations ──
   const invalidateContent = () => void queryClient.invalidateQueries({ queryKey: ['site-content'] });
@@ -231,19 +278,22 @@ export default function StudioTab() {
 
   // ── assets: logo + hero photos (instant save; reload the preview) ──
   const [uploading, setUploading] = useState<string | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const heroSlotFile = useRef<HTMLInputElement>(null);
   const pendingSlot = useRef(0);
   const slotIds = (data?.homepage?.heroImageAssetIds ?? []) as string[];
   const heroUrlOf = (id: string) => heroMedia.data?.find((m) => m.id === id)?.url ?? null;
-  async function uploadLogo(file: File) {
+  const uploadLogo = useCallback(async (file: File) => {
     setUploading('logo');
     try {
       const fd = new FormData(); fd.append('file', file);
       const asset = await api.request<MediaAsset>('/site/media?kind=LOGO', { method: 'POST', body: fd });
       await api.put('/site/profile', { logoAssetId: asset.id });
-      invalidateContent(); reloadPreview(); toast.success('Logo uploaded');
+      setLogoPreview(asset.url);
+      void queryClient.invalidateQueries({ queryKey: ['site-content'] });
+      reloadPreview(); toast.success('Logo uploaded');
     } catch (err) { toast.error(`Logo upload failed: ${(err as Error).message}`); } finally { setUploading(null); }
-  }
+  }, [api, queryClient, reloadPreview]);
   async function saveSlots(ids: string[]) {
     await api.put('/site/homepage', { heroImageAssetIds: ids });
     void queryClient.invalidateQueries({ queryKey: ['site-content'] });
@@ -261,11 +311,10 @@ export default function StudioTab() {
   }
 
   // ── custom pages ──
-  const [editingPage, setEditingPage] = useState<{ id: string | null; title: string; blocks: Block[]; published: boolean } | null>(null);
   const pageMutation = useMutation({
-    mutationFn: (p: { id: string | null; title: string; blocks: Block[]; published: boolean }) =>
-      p.id ? api.put(`/site/pages/${p.id}`, { title: p.title, blocks: p.blocks, published: p.published })
-           : api.post('/site/pages', { title: p.title, blocks: p.blocks, published: p.published }),
+    mutationFn: (p: { id: string | null; title: string; blocks: Block[]; published: boolean; showInNav: boolean }) =>
+      p.id ? api.put(`/site/pages/${p.id}`, { title: p.title, blocks: p.blocks, published: p.published, showInNav: p.showInNav })
+           : api.post('/site/pages', { title: p.title, blocks: p.blocks, published: p.published, showInNav: p.showInNav }),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['school-pages'] }); setEditingPage(null); toast.success('Page saved'); },
     onError: (err: Error) => toast.error(`Could not save the page: ${err.message}`),
   });
@@ -322,25 +371,8 @@ export default function StudioTab() {
 
   const PAGE_LABELS: Record<string, string> = { about: 'About', hof: 'Hall of Fame', gallery: 'Gallery', academics: 'Academics', admissions: 'Admissions', connect: 'Connect', blog: 'Blog', contact: 'Contact' };
 
-  // ── a collapsible group ──
-  function Group({ id, title, summary, children }: { id: string; title: string; summary?: string; children: React.ReactNode }) {
-    const isOpen = !!open[id];
-    return (
-      <Card>
-        <button type="button" onClick={() => toggle(id)} aria-expanded={isOpen}
-          className="sk-press flex w-full items-center gap-2 px-3.5 py-3 text-left">
-          <ChevronRight className={`h-4 w-4 flex-none text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-          <span className="flex-1">
-            <span className="block text-sm font-semibold text-slate-800">{title}</span>
-            {summary && !isOpen && <span className="block truncate text-xs text-slate-400">{summary}</span>}
-          </span>
-        </button>
-        {isOpen && <div className="border-t border-slate-100 px-3.5 py-3">{children}</div>}
-      </Card>
-    );
-  }
-
   const rail = (
+    <GroupCtx.Provider value={groupCtx}>
     <div className="flex flex-col gap-2.5">
       {/* Publish / drafts — always visible */}
       <Card className="p-3.5">
@@ -422,7 +454,7 @@ export default function StudioTab() {
         <FieldLabel>Logo</FieldLabel>
         <div className="rounded-lg border border-slate-200 p-2.5">
           <ImageUploader label="School logo" hint="PNG or SVG. Max 8 MB. Saves and updates the preview immediately."
-            previewUrl={null} hasExistingAsset={!!profile?.logoAssetId} isUploading={uploading === 'logo'} onFile={uploadLogo} />
+            previewUrl={logoPreview} hasExistingAsset={!!profile?.logoAssetId} isUploading={uploading === 'logo'} onFile={uploadLogo} />
         </div>
       </Group>
 
@@ -627,6 +659,7 @@ export default function StudioTab() {
         <div className="mt-2.5 flex flex-col gap-1.5">
           <Toggle checked={footer.social} onChange={(v) => setLook({ footerConfig: { ...footer, social: v } })} label="Show social icons" />
           <Toggle checked={footer.contact} onChange={(v) => setLook({ footerConfig: { ...footer, contact: v } })} label="Show contact details" />
+          <Toggle checked={footer.twoCols} onChange={(v) => setLook({ footerConfig: { ...footer, twoCols: v } })} label="Split links into two columns" />
         </div>
         <FieldLabel>Tagline</FieldLabel>
         <Input value={footer.tagline ?? ''} maxLength={160} placeholder="Nurturing confident, compassionate lifelong learners." onChange={(e) => setLook({ footerConfig: { ...footer, tagline: e.target.value || null } })} className="h-9 text-sm" />
@@ -638,11 +671,11 @@ export default function StudioTab() {
           <div key={p.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-2.5">
             <span className="flex-1 text-sm font-semibold text-slate-700">{p.title}</span>
             <span className="text-[11px] text-slate-400">/p/{p.slug}</span>
-            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditingPage({ id: p.id, title: p.title, published: p.published, blocks: ((p.blocks ?? []) as Block[]).filter((b) => b && (b.t in BLOCK_NAMES)) })}>Edit</Button>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditingPage({ id: p.id, title: p.title, published: p.published, showInNav: p.showInNav !== false, blocks: ((p.blocks ?? []) as Block[]).filter((b) => b && (b.t in BLOCK_NAMES)) })}>Edit</Button>
             <button type="button" aria-label={`Delete ${p.title}`} className="text-xs text-rose-500 hover:text-rose-700" onClick={() => pageDelete.mutate(p.id)}>✕</button>
           </div>
         ))}
-        {!editingPage && <Button size="sm" variant="outline" onClick={() => setEditingPage({ id: null, title: '', blocks: [{ t: 'h', text: '' }, { t: 'p', text: '' }], published: true })}>+ New page</Button>}
+        {!editingPage && <Button size="sm" variant="outline" onClick={() => setEditingPage({ id: null, title: '', blocks: [{ t: 'h', text: '' }, { t: 'p', text: '' }], published: true, showInNav: true })}>+ New page</Button>}
         {editingPage && (
           <div className="flex flex-col gap-2.5 rounded-lg border border-teal-200 bg-teal-50/40 p-3">
             <div><Label className="text-xs">Page title (its address is fixed on first save)</Label>
@@ -676,6 +709,7 @@ export default function StudioTab() {
               ))}
             </div>
             <Toggle checked={editingPage.published} onChange={(v) => setEditingPage({ ...editingPage, published: v })} label="Published (visible on your site)" />
+            <Toggle checked={editingPage.showInNav} onChange={(v) => setEditingPage({ ...editingPage, showInNav: v })} label="Show in the navbar (off = footer only)" />
             <div className="flex gap-2">
               <Button size="sm" onClick={() => pageMutation.mutate(editingPage)} disabled={!editingPage.title.trim() || pageMutation.isPending}>{pageMutation.isPending ? 'Saving…' : 'Save page'}</Button>
               <Button size="sm" variant="outline" onClick={() => setEditingPage(null)}>Cancel</Button>
@@ -699,6 +733,7 @@ export default function StudioTab() {
         <Button size="sm" variant="outline" className="mt-1.5" onClick={() => codeMutation.mutate({ customHtmlBlock: htmlDraft })} disabled={codeMutation.isPending}>Save HTML block</Button>
       </Group>
     </div>
+    </GroupCtx.Provider>
   );
 
   const preview = (

@@ -16,11 +16,14 @@ import type { PublicSiteData } from '@/lib/public-api';
  */
 
 type Overrides = Record<string, unknown>;
+interface PageDraft { title: string; blocks: unknown }
 
 export default function StudioPreviewPage() {
   const [data, setData] = useState<PublicSiteData | null>(null);
   const [failed, setFailed] = useState<number | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
+  const [focus, setFocus] = useState<string>('top');
+  const [pageDraft, setPageDraft] = useState<PageDraft | null>(null);
 
   useEffect(() => {
     const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -43,9 +46,11 @@ export default function StudioPreviewPage() {
     const onMessage = (e: MessageEvent) => {
       // Same-origin only: the studio and this canvas share the school host.
       if (e.origin !== window.location.origin) return;
-      const m = e.data as { type?: string; overrides?: unknown } | null;
+      const m = e.data as { type?: string; overrides?: unknown; focus?: unknown; page?: unknown } | null;
       if (m?.type === 'sk-studio-preview' && m.overrides && typeof m.overrides === 'object') {
         setOverrides(m.overrides as Overrides);
+        if (typeof m.focus === 'string') setFocus(m.focus);
+        setPageDraft(m.page && typeof m.page === 'object' ? (m.page as PageDraft) : null);
       }
     };
     window.addEventListener('message', onMessage);
@@ -79,9 +84,14 @@ export default function StudioPreviewPage() {
       : data.profile,
   };
 
+  // When the studio is editing a page, show THAT page live (new pages too) so
+  // the admin never has to leave the editor to see it; it returns home the
+  // moment the editor closes.
+  const showPage = pageDraft ? { slug: '__preview__', title: pageDraft.title || 'New page', blocks: pageDraft.blocks } : null;
+
   return (
-    <SettledCanvas overridesKey={JSON.stringify(overrides)}>
-      <ClickInertPublicSite data={merged} />
+    <SettledCanvas settleKey={JSON.stringify(overrides) + (showPage ? JSON.stringify(showPage) : '')} focus={showPage ? 'page' : focus}>
+      <ClickInertPublicSite data={merged} page={showPage} />
     </SettledCanvas>
   );
 }
@@ -93,7 +103,7 @@ export default function StudioPreviewPage() {
  * the design, not re-scrolling to reveal it — so after every override change
  * we settle the whole canvas to its end state.
  */
-function SettledCanvas({ overridesKey, children }: { overridesKey: string; children: React.ReactNode }) {
+function SettledCanvas({ settleKey, focus, children }: { settleKey: string; focus: string; children: React.ReactNode }) {
   useLayoutEffect(() => {
     let raf = 0;
     const settle = () => {
@@ -102,15 +112,21 @@ function SettledCanvas({ overridesKey, children }: { overridesKey: string; child
         const to = Number(el.dataset.to);
         if (!Number.isNaN(to)) el.textContent = (to >= 1000 ? to.toLocaleString() : String(to)) + (el.dataset.suffix ?? '');
       });
+      // Follow the studio: scroll the section being edited into view.
+      if (focus === 'top' || focus === 'page') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        const el = document.querySelector(`[data-sec="${focus}"]`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     };
-    // Two rAFs: let PublicSite's own mount effect run first, then override it.
     raf = requestAnimationFrame(() => { raf = requestAnimationFrame(settle); });
     return () => cancelAnimationFrame(raf);
-  }, [overridesKey]);
+  }, [settleKey, focus]);
   return <>{children}</>;
 }
 
-function ClickInertPublicSite({ data }: { data: PublicSiteData }) {
+function ClickInertPublicSite({ data, page }: { data: PublicSiteData; page: { slug: string; title: string; blocks: unknown } | null }) {
   return (
     // Links stay inert inside the canvas: navigating the iframe to a real
     // public page would drop the unsaved overrides mid-review.
@@ -119,7 +135,7 @@ function ClickInertPublicSite({ data }: { data: PublicSiteData }) {
         if ((e.target as HTMLElement).closest('a')) e.preventDefault();
       }}
     >
-      <PublicSite data={data} />
+      {page ? <PublicSite data={data} view="page" page={page} /> : <PublicSite data={data} />}
     </div>
   );
 }

@@ -47,7 +47,7 @@ export class PublicSiteService {
           tx.schoolPage.findMany({
             where: { schoolId, published: true },
             orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
-            select: { slug: true, title: true, blocks: true },
+            select: { slug: true, title: true, blocks: true, showInNav: true },
           }),
           // A scheduled look whose window contains NOW. Applied as a read-time
           // overlay — it reverts itself when the window closes, with no
@@ -196,7 +196,7 @@ export class PublicSiteService {
           showFees,
           feeNote: showFees ? (admissionsSettings?.feeNote ?? null) : null,
         },
-        pages: sitePages.map((p) => ({ slug: p.slug, title: p.title, blocks: p.blocks })),
+        pages: sitePages.map((p) => ({ slug: p.slug, title: p.title, blocks: p.blocks, showInNav: p.showInNav })),
         events,
       };
     });

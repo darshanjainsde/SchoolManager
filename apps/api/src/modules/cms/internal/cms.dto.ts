@@ -104,6 +104,8 @@ export class UpsertSchoolPageDto {
   @IsOptional() @IsString() @Length(1, 80) slug?: string;
   @IsArray() @ArrayMaxSize(40) blocks!: unknown[];
   @IsOptional() @IsBoolean() published?: boolean;
+  /** false = reachable only from the footer, not the navbar. Default true. */
+  @IsOptional() @IsBoolean() showInNav?: boolean;
   @IsOptional() @IsInt() @Min(0) order?: number;
 }
 

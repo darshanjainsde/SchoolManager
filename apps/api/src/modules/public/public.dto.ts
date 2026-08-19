@@ -105,7 +105,7 @@ export interface PublicSiteData {
     feeNote: string | null;
   };
   /** Admin-built pages (published only), served at /p/<slug>. */
-  pages: { slug: string; title: string; blocks: unknown }[];
+  pages: { slug: string; title: string; blocks: unknown; showInNav: boolean }[];
   events: PublicEvent[];
 }
 

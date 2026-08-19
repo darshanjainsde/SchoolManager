@@ -63,7 +63,7 @@ describe('defaults emit no class', () => {
 
   it('footer: null config is COLUMNS on paper with no classes', () => {
     const cfg = normalizeFooterConfig(null);
-    expect(cfg).toEqual({ layout: 'COLUMNS', color: 'PAPER', social: false, contact: true, tagline: null });
+    expect(cfg).toEqual({ layout: 'COLUMNS', color: 'PAPER', social: false, contact: true, tagline: null, twoCols: false });
     expect(footerClasses(cfg)).toBe('');
     expect(footerClasses(normalizeFooterConfig({ layout: 'CENTER', color: 'DARK' }))).toBe(
       'ps-foot-center ps-footc-dark',

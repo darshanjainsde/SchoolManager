@@ -75,7 +75,7 @@ export default function FooterSection({
   const explore = (
     <div>
       <div className="ps-head font-bold mb-3">Explore</div>
-      <ul className={`space-y-2 text-sm ${muted}`}>
+      <ul className={`space-y-2 text-sm ${muted} ${cfg.twoCols ? 'sm:columns-2 sm:gap-x-8 [&>li]:break-inside-avoid' : ''}`}>
         {flags.hasAbout && <li><a href={`${base}#about`} className={linkCls}>About</a></li>}
         {flags.hasAcademics && <li><a href="/academics" className={linkCls}>Academics</a></li>}
         {flags.hasAdmissions && <li><a href="/admissions" className={linkCls}>Admissions</a></li>}

@@ -59,6 +59,7 @@ export class SchoolPagesService {
           title: dto.title,
           blocks: normalizeBlocks(dto.blocks),
           published: dto.published ?? true,
+          showInNav: dto.showInNav ?? true,
           order: dto.order ?? count,
         },
       });
@@ -76,6 +77,7 @@ export class SchoolPagesService {
           title: dto.title,
           blocks: normalizeBlocks(dto.blocks),
           ...(dto.published === undefined ? {} : { published: dto.published }),
+          ...(dto.showInNav === undefined ? {} : { showInNav: dto.showInNav }),
           ...(dto.order === undefined ? {} : { order: dto.order }),
         },
       });

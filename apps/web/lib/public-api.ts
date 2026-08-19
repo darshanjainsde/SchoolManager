@@ -81,7 +81,7 @@ export interface PublicSiteData {
     feeNote: string | null;
   };
   /** Admin-built pages (published only). Optional: older api payloads lack it. */
-  pages?: { slug: string; title: string; blocks: unknown }[];
+  pages?: { slug: string; title: string; blocks: unknown; showInNav?: boolean }[];
   events: {
     id: string;
     title: string;

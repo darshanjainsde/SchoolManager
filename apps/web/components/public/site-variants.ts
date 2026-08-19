@@ -207,6 +207,8 @@ export interface FooterConfig {
   contact: boolean;
   /** Replaces the built-in one-line blurb; null keeps it. */
   tagline: string | null;
+  /** Split the Explore link list into two columns when it grows long. */
+  twoCols: boolean;
 }
 export const FOOTER_LAYOUTS: StyleOption<FooterLayout>[] = [
   { value: 'COLUMNS', label: 'Link columns', hint: 'Brand, Explore and Contact columns — today’s footer.' },
@@ -228,6 +230,7 @@ export function normalizeFooterConfig(raw: unknown): FooterConfig {
     social: r.social === true,
     contact: r.contact !== false,
     tagline: typeof r.tagline === 'string' && r.tagline.trim() ? r.tagline.slice(0, 160) : null,
+    twoCols: r.twoCols === true,
   };
 }
 export function footerClasses(cfg: FooterConfig): string {
