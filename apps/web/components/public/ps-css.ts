@@ -450,10 +450,15 @@ export const PS_CSS = `
   /* ── Scroll feel ── */
   html:has(.ps-scroll-snap) { scroll-snap-type: y proximity; }
   .ps-scroll-snap [data-sec] { scroll-snap-align: start; scroll-margin-top: 4.5rem; }
-  /* Deck: each band takes the whole viewport-ish and the next slides over it.
-     Solid paper behind every band is what makes the cover read as a card. */
-  .ps-scroll-deck [data-sec] { position: sticky; top: 0; background: var(--paper);
+  /* Deck: each band sticks and the next slides over it. EVERY top-level band
+     participates and gets a solid paper ground — not just the data-sec ones —
+     so a transparent band (Hall of Fame, Events, Contact) can never show the
+     stuck band through it. Where sticky does not engage it degrades to a normal
+     paper-backed scroll, never to overlapping text. */
+  .ps-scroll-deck > section, .ps-scroll-deck > div[data-sec], .ps-scroll-deck > footer {
+    position: sticky; top: 0; background: var(--paper);
     box-shadow: 0 -18px 44px rgba(15,23,20,.14); }
+  .ps-scroll-deck > #ps-nav, .ps-scroll-deck > header { position: sticky; }
 
   /* ── Nav menu open animation (FADE = the shipped ps-menu-in, no class) ── */
   @keyframes ps-menu-in-slide { from { opacity: 0; transform: translateY(calc(-16px * var(--motion) - 2px)); } to { opacity: 1; transform: none; } }
@@ -504,7 +509,7 @@ export const PS_CSS = `
     -webkit-overflow-scrolling: touch; }
   .ps-v-courses-carousel .ps-courses-grid > .reveal { flex: 0 0 min(78%, 320px); scroll-snap-align: start; }
   .ps-v-courses-rows .ps-courses-grid { grid-template-columns: minmax(0, 1fr) !important;
-    max-width: 42rem; }
+    max-width: 42rem; margin-inline: auto; }
 
   /* ── Admissions TILES (JOURNEY and STEPPER reuse the shipped variants) ── */
   .ps-v-admissions-tiles .ps-jline { display: none; }
@@ -541,7 +546,11 @@ export const PS_CSS = `
   .ps-footc-dark { background: color-mix(in srgb, var(--ink) 94%, #000); color: rgba(255,255,255,.72); }
   .ps-footc-brand { background: var(--ps1); color: rgba(255,255,255,.8); }
   .ps-footc-dark .ps-head, .ps-footc-brand .ps-head { color: #fff; }
-  .ps-footc-dark a:hover, .ps-footc-brand a:hover { color: #fff !important; }
+  /* The muted text is slate on paper (matching the shipped footer) and light
+     on a dark/brand band — the class beats the slate utility by specificity so
+     no !important is needed and the paper default is untouched. */
+  .ps-footc-dark .ps-foot-muted, .ps-footc-brand .ps-foot-muted { color: rgba(255,255,255,.72); }
+  .ps-footc-dark .ps-foot-link:hover, .ps-footc-brand .ps-foot-link:hover { color: #fff; }
   .ps-foot-center { text-align: center; }
   .ps-foot-center .ps-foot-cols { display: grid; grid-template-columns: 1fr; gap: 1.25rem; justify-items: center; }
   .ps-foot-social { display: flex; gap: .5rem; margin-top: .8rem; }
@@ -633,6 +642,8 @@ export const PS_CSS = `
   @media (prefers-reduced-motion: reduce) {
     .ps-root .ps-sg-rise .reveal, .ps-root .ps-sg-fade .reveal, .ps-root .ps-sg-draw .reveal {
       opacity: 1; transform: none; clip-path: none; transition: none; }
+    /* Two-class specificity so these beat the .ps-menuanim-* longhands that
+       come later in the sheet — the shipped single-class rule did not. */
     .ps-menuanim-slide .ps-menu-card, .ps-menuanim-scale .ps-menu-card { animation: none; }
     .ps-fx-bulb, .ps-fx-diya, .ps-fx-burst, .ps-fx-blob, .ps-fx-fall, .ps-fx-lantern,
     .ps-fx-star, .ps-fx-kite { animation: none; }
@@ -642,6 +653,12 @@ export const PS_CSS = `
   }
   .ps-motion-off .ps-sg-rise .reveal, .ps-motion-off .ps-sg-fade .reveal,
   .ps-motion-off .ps-sg-draw .reveal { opacity: 1; transform: none; clip-path: none; transition: none; }
+  /* Menu open animations: the shipped '.ps-motion-off .ps-menu-card' is beaten
+     by the later equal-specificity .ps-menuanim-* longhands, so silence them
+     with a three-class selector that wins. */
+  .ps-motion-off.ps-menuanim-slide .ps-menu-card, .ps-motion-off.ps-menuanim-scale .ps-menu-card,
+  .ps-motion-off .ps-menuanim-slide .ps-menu-card, .ps-motion-off .ps-menuanim-scale .ps-menu-card {
+    animation: none; }
   .ps-motion-off .ps-fx-bulb, .ps-motion-off .ps-fx-diya, .ps-motion-off .ps-fx-burst,
   .ps-motion-off .ps-fx-blob, .ps-motion-off .ps-fx-fall, .ps-motion-off .ps-fx-lantern,
   .ps-motion-off .ps-fx-star, .ps-motion-off .ps-fx-kite { animation: none; }

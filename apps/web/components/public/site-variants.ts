@@ -105,7 +105,7 @@ export const SECTION_VARIANT_DEFS: Record<
     layouts: [
       { value: 'GRID', label: 'Flip-card grid', hint: 'Cards that flip to their highlights — today’s look.' },
       { value: 'CAROUSEL', label: 'Carousel', hint: 'One swipeable row that snaps card to card.' },
-      { value: 'ROWS', label: 'List rows', hint: 'Full-width rows, image beside the text.' },
+      { value: 'ROWS', label: 'Single column', hint: 'One full-width card per row.' },
     ],
   },
   admissions: {
@@ -123,7 +123,7 @@ export const SECTION_VARIANT_DEFS: Record<
     layouts: [
       { value: 'GRID', label: 'Grid', hint: 'Even photo grid — today’s look.' },
       { value: 'MASONRY', label: 'Masonry', hint: 'Staggered column heights, like a pinboard.' },
-      { value: 'FILMSTRIP', label: 'Film strip', hint: 'One slowly drifting row of photos.' },
+      { value: 'FILMSTRIP', label: 'Film strip', hint: 'A single swipeable row of photos.' },
     ],
   },
   staff: {
@@ -387,10 +387,28 @@ export function festiveClasses(f: FestiveTheme | null): string {
    read — neither side trusts the stored value alone. */
 export const CUSTOM_CSS_MAX = 20_000;
 
+/**
+ * Decode CSS escapes and drop comments before any keyword match — the browser
+ * reads `@\69mport` as `@import` and `u\72l(` as `url(`, so a sanitizer that
+ * regexes the literal words is matching a surface the browser never sees.
+ * Kept in lockstep with the API's normalizeCssForScan (custom-code.ts).
+ */
+function normalizeCssForScan(css: string): string {
+  let out = css.replace(/\/\*[\s\S]*?(\*\/|$)/g, ' ');
+  out = out.replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\([^\n\r\f0-9a-fA-F])/g, (_m, hex, ch) => {
+    if (hex) {
+      const code = parseInt(hex, 16);
+      if (code === 0 || code > 0x10ffff) return '';
+      return String.fromCodePoint(code);
+    }
+    return ch;
+  });
+  return out;
+}
+
 export function sanitizeSectionCss(css: string): string {
   return (
-    css
-      .slice(0, CUSTOM_CSS_MAX)
+    normalizeCssForScan(css.slice(0, CUSTOM_CSS_MAX))
       // No markup of any kind inside a stylesheet — this is what makes a
       // literal style-tag breakout impossible rather than merely unlikely.
       .replace(/</g, ' ')
@@ -399,6 +417,7 @@ export function sanitizeSectionCss(css: string): string {
       // Legacy IE expression() executed JS from CSS; nothing modern needs it.
       .replace(/expression\s*\(/gi, 'no-expression(')
       .replace(/javascript\s*:/gi, 'blocked:')
+      .replace(/-moz-binding\s*:/gi, 'blocked:')
       // External fetches (tracking pixels, remote fonts) are not what a
       // per-section override is for. data: URIs stay — gradients and inline
       // SVG backgrounds are legitimate design material.

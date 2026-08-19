@@ -154,6 +154,15 @@ describe('custom CSS: sanitize', () => {
     expect(out).not.toMatch(/(^|[^-])expression\s*\(/i);
     expect(out).not.toMatch(/javascript\s*:/i);
   });
+  it('CSS hex escapes cannot hide @import or url() from the scanner', () => {
+    expect(sanitizeSectionCss('@\\69mport "https://evil.example/x.css";').toLowerCase()).not.toContain('@import');
+    expect(sanitizeSectionCss('@\\69mport "https://evil.example/x.css";')).not.toContain('evil.example');
+    // url() is neutralized to an inert about:invalid fragment — the external
+    // target may survive as text after the '#', but it can never be fetched.
+    const u = sanitizeSectionCss('.a{background:u\\72l(https://evil.example/p.png)}');
+    expect(u).toContain('url(about:invalid#');
+    expect(u).not.toMatch(/url\(\s*['"]?https?:/i);
+  });
 });
 
 describe('custom CSS: scope', () => {

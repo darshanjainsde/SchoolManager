@@ -170,14 +170,28 @@ export default function StudioTab() {
 
   const profile = data?.profile ?? null;
   const savedLook = useMemo(() => pickLook(profile), [profile]);
+  // Order-stable signature — the server may echo the design keys in a different
+  // order than we sent them, and a raw JSON.stringify would then read as dirty.
+  const sig = useCallback((l: Look) => JSON.stringify(Object.entries(l).sort(([a], [b]) => a.localeCompare(b))), []);
+  const savedSig = sig(savedLook);
 
-  // The look under edit. null = "seed me from the profile when it arrives".
+  // The look under edit. null = "seed me from the saved look when it arrives".
   const [look, setLookState] = useState<Look | null>(null);
+  const seededRef = useRef<string | null>(null);
   useEffect(() => {
-    if (profile && look === null) setLookState(pickLook(profile));
-  }, [profile, look]);
+    if (!profile) return;
+    // Seed on first load; RE-seed after a save whenever the admin has no
+    // pending edits (the current look still equals the one we last seeded).
+    // This is what stops a publish from reading as "unpublished changes" once
+    // its refetch lands — without it, the seed effect reseeds from a stale
+    // cache and the badge sticks on dirty.
+    if (look === null || (seededRef.current !== null && sig(look) === seededRef.current && seededRef.current !== savedSig)) {
+      setLookState(savedLook);
+      seededRef.current = savedSig;
+    }
+  }, [profile, look, savedSig, savedLook, sig]);
   const current: Look = look ?? savedLook;
-  const dirty = look !== null && JSON.stringify(look) !== JSON.stringify(savedLook);
+  const dirty = look !== null && sig(look) !== savedSig;
   const setLook = useCallback((patch: Look) => {
     setLookState((prev) => ({ ...(prev ?? savedLook), ...patch }));
   }, [savedLook]);
@@ -199,16 +213,20 @@ export default function StudioTab() {
   // ── Live preview plumbing ──
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const postPreview = useCallback(() => {
+    // CSS previews live — it is scoped + sanitized client-side and cannot run
+    // script. The HTML block deliberately does NOT: rendering the raw textarea
+    // in a same-origin console frame would be a stored-XSS-to-self vector, so
+    // the block only appears once it is SAVED and server-sanitized (its saved
+    // value rides in on the preview's own fetch, untouched by these overrides).
     const overrides = {
       ...current,
       customSectionCss: cssDrafts,
-      customHtmlBlock: htmlDraft,
     };
     iframeRef.current?.contentWindow?.postMessage(
       { type: 'sk-studio-preview', overrides },
       window.location.origin,
     );
-  }, [current, cssDrafts, htmlDraft]);
+  }, [current, cssDrafts]);
   useEffect(() => {
     postPreview();
   }, [postPreview]);
@@ -386,26 +404,29 @@ export default function StudioTab() {
                     <span>📅 Auto-publish</span>
                     <input
                       type="date"
-                      defaultValue={d.publishAt ? d.publishAt.slice(0, 10) : ''}
+                      value={d.publishAt ? d.publishAt.slice(0, 10) : ''}
                       aria-label={`Publish date for ${d.name}`}
                       className="rounded border border-slate-200 px-1.5 py-0.5"
                       onChange={(e) =>
+                        // Send only the field that changed; the API leaves the
+                        // other untouched, so the two inputs cannot clobber each
+                        // other while a refetch is in flight.
                         draftOp.mutate({
                           id: d.id, op: 'schedule',
-                          body: { name: d.name, config: d.config, publishAt: e.target.value || null, revertAt: d.revertAt },
+                          body: { name: d.name, config: d.config, publishAt: e.target.value || null },
                         })
                       }
                     />
                     <span>revert</span>
                     <input
                       type="date"
-                      defaultValue={d.revertAt ? d.revertAt.slice(0, 10) : ''}
+                      value={d.revertAt ? d.revertAt.slice(0, 10) : ''}
                       aria-label={`Revert date for ${d.name}`}
                       className="rounded border border-slate-200 px-1.5 py-0.5"
                       onChange={(e) =>
                         draftOp.mutate({
                           id: d.id, op: 'schedule',
-                          body: { name: d.name, config: d.config, publishAt: d.publishAt, revertAt: e.target.value || null },
+                          body: { name: d.name, config: d.config, revertAt: e.target.value || null },
                         })
                       }
                     />
@@ -593,7 +614,12 @@ export default function StudioTab() {
               <span className="flex-1 text-sm font-semibold text-slate-700">{p.title}</span>
               <span className="text-[11px] text-slate-400">/p/{p.slug}</span>
               <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                onClick={() => setEditingPage({ id: p.id, title: p.title, blocks: (p.blocks ?? []) as Block[], published: p.published })}>
+                onClick={() => setEditingPage({
+                  id: p.id, title: p.title, published: p.published,
+                  // Keep only blocks the editor knows how to render — a stored
+                  // unknown type would otherwise show a header-less row.
+                  blocks: ((p.blocks ?? []) as Block[]).filter((b) => b && (b.t in BLOCK_NAMES)),
+                })}>
                 Edit
               </Button>
               <button type="button" aria-label={`Delete ${p.title}`} className="text-xs text-rose-500 hover:text-rose-700"
@@ -653,8 +679,13 @@ export default function StudioTab() {
               ))}
               <div className="flex flex-wrap gap-1.5">
                 {(Object.keys(BLOCK_NAMES) as Block['t'][]).map((t) => (
-                  <button key={t} type="button" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700"
-                    onClick={() =>
+                  <button key={t} type="button"
+                    disabled={editingPage.blocks.length >= 40}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40"
+                    onClick={() => {
+                      // Match the API's ArrayMaxSize(40) so the cap is a quiet
+                      // disabled button, never a raw 400 toast.
+                      if (editingPage.blocks.length >= 40) return;
                       setEditingPage({
                         ...editingPage,
                         blocks: [
@@ -663,8 +694,8 @@ export default function StudioTab() {
                             : t === 'img' ? { t, url: '' } : t === 'imgtext' ? { t, url: null, text: '' }
                             : { t, label: 'Learn more' },
                         ],
-                      })
-                    }>
+                      });
+                    }}>
                     + {BLOCK_NAMES[t]}
                   </button>
                 ))}
@@ -718,6 +749,10 @@ export default function StudioTab() {
             <Textarea id="studio-html" value={htmlDraft} rows={4} spellCheck={false}
               placeholder='<div class="ps-panel" style="padding:1.5rem"><h2 class="ps-head">Our toppers</h2>…</div>'
               onChange={(e) => setHtmlDraft(e.target.value)} className="font-mono text-xs" />
+            <p className="text-[11px] text-slate-400">
+              The HTML block appears on the preview once you save it — it is sanitized on the server
+              first, so it is never rendered here straight from the box.
+            </p>
             <div className="flex gap-2">
               <Button size="sm" variant="outline"
                 onClick={() => codeMutation.mutate({ customHtmlBlock: htmlDraft })}

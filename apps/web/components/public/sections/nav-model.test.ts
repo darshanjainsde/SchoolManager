@@ -249,3 +249,52 @@ describe('a school that has arranged its own menu', () => {
     );
   });
 });
+
+describe('admin-built custom pages reach the menu', () => {
+  const PAGES = [{ slug: 'scholarships', title: 'Scholarships' }, { slug: 'transport', title: 'Transport' }];
+
+  it('appends an unarranged page as a top-level link (default model)', () => {
+    const nodes = navModel({ flags: ALL_ON, base: '', courses: COURSES, pages: PAGES });
+    expect(labels(nodes)).toContain('Scholarships');
+    const p = nodes.find((n) => n.label === 'Scholarships');
+    expect(p?.kind === 'link' && p.href).toBe('/p/scholarships');
+  });
+
+  it('never overflows NAV_CAP even with many pages', () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ slug: `p${i}`, title: `Page ${i}` }));
+    const nodes = navModel({ flags: ALL_ON, base: '', courses: COURSES, pages: many });
+    expect(nodes.length).toBeLessThanOrEqual(NAV_CAP);
+  });
+
+  it('places an ARRANGED page where the school put it, and only appends the rest', () => {
+    const nodes = navModel({
+      flags: ALL_ON,
+      base: '',
+      courses: COURSES,
+      pages: PAGES,
+      config: {
+        items: [
+          {
+            key: 'our-school',
+            slug: 'our-school',
+            label: 'Our school',
+            behaviour: 'menu',
+            children: [
+              { key: 'about', label: 'About' },
+              { key: 'page:scholarships', label: 'Scholarships' },
+            ],
+          },
+          { key: 'contact', slug: 'contact', label: 'Contact', behaviour: 'page', children: [] },
+        ],
+      },
+    });
+    // Scholarships sits inside the group where it was placed…
+    const group = nodes.find((n) => n.label === 'Our school');
+    if (group?.kind !== 'group') throw new Error('expected a group');
+    expect(group.children.map((c) => c.href)).toContain('/p/scholarships');
+    // …and Transport, never arranged, is appended as a top-level link.
+    expect(nodes.some((n) => n.kind === 'link' && n.href === '/p/transport')).toBe(true);
+    // Scholarships is not ALSO appended top-level (placed once).
+    expect(nodes.filter((n) => n.kind === 'link' && n.href === '/p/scholarships')).toHaveLength(0);
+  });
+});

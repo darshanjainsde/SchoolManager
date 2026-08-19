@@ -38,8 +38,10 @@ export function middleware(req: NextRequest) {
     // URLs on hosts we do not control.
     `img-src 'self' data: blob: https:${dev ? ' http:' : ''}`,
     `connect-src 'self' https://api.sckools.com https://api.test.sckools.com http://127.0.0.1:3001 http://localhost:3001${dev ? ' http://127.0.0.1:* http://localhost:*' : ''}`,
-    // Contact pages embed a Google Maps iframe.
-    `frame-src https://www.google.com https://maps.google.com`,
+    // Contact pages embed a Google Maps iframe; the Website Studio embeds the
+    // same-origin /preview canvas (frame-src does NOT fall back to default-src,
+    // so 'self' has to be listed explicitly or the studio frame is refused).
+    `frame-src 'self' https://www.google.com https://maps.google.com`,
     `frame-ancestors 'self' https://sckools.com https://*.sckools.com`,
     `base-uri 'self'`,
     `form-action 'self'`,

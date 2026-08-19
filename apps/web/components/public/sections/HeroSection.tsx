@@ -26,8 +26,11 @@ export function resolveHeroLayout(data: PublicSiteData): string {
     p?.heroLayout ?? (p?.heroStyle === 'PHOTO' ? 'FULL_BLEED' : (p?.heroStyle ?? 'ILLUSTRATION'));
   const count = heroImagesOf(data).length;
   // A background video stands in for the missing photo: the media IS the
-  // full-bleed backdrop, so the no-image downgrade must not fire.
-  const hasVideo = p?.heroMedia === 'VIDEO' && !!p?.heroVideoUrl;
+  // full-bleed backdrop, so the no-image downgrade must not fire — but ONLY
+  // for a video that can actually render (a real http(s) URL). A half-typed
+  // URL must still degrade to the illustrated hero, never a blank band.
+  const hasVideo =
+    p?.heroMedia === 'VIDEO' && typeof p?.heroVideoUrl === 'string' && /^https?:\/\//i.test(p.heroVideoUrl);
   if (PHOTO_LAYOUTS.has(declared) && count === 0) return hasVideo ? 'FULL_BLEED' : 'ILLUSTRATION';
   if (declared === 'SLIDESHOW' && count === 1) return 'FULL_BLEED';
   return declared;
@@ -339,8 +342,13 @@ export default function HeroSection({
         <div className="absolute inset-0" aria-hidden="true">
           {slideshow ? (
             <Slides images={images} motionOff={motionOff} />
-          ) : (
+          ) : heroUrl ? (
             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${heroUrl}')` }} />
+          ) : (
+            // No poster (a video-only hero): a branded backdrop stands behind
+            // the video and IS the fallback when the video is hidden for
+            // reduced-motion / Animation=Off, instead of a blank washed band.
+            <div className="absolute inset-0 ps-brandgrad" />
           )}
           {/* Video sits OVER the photo layer: when the stylesheet hides it
               (reduced-motion, Animation=Off) the photo behind is the render. */}

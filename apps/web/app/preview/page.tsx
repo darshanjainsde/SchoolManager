@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import PublicSite from '@/components/public/PublicSite';
 import type { PublicSiteData } from '@/lib/public-api';
 
@@ -80,6 +80,38 @@ export default function StudioPreviewPage() {
   };
 
   return (
+    <SettledCanvas overridesKey={JSON.stringify(overrides)}>
+      <ClickInertPublicSite data={merged} />
+    </SettledCanvas>
+  );
+}
+
+/**
+ * PublicSite's reveal/count observers run once at mount and unobserve. When an
+ * override re-renders a band, its fresh `.reveal`/`.count` nodes are never
+ * observed and would sit at opacity 0 / "0" forever. The studio is for SEEING
+ * the design, not re-scrolling to reveal it — so after every override change
+ * we settle the whole canvas to its end state.
+ */
+function SettledCanvas({ overridesKey, children }: { overridesKey: string; children: React.ReactNode }) {
+  useLayoutEffect(() => {
+    let raf = 0;
+    const settle = () => {
+      document.querySelectorAll('.reveal, .ps-journey, .ps-rail').forEach((el) => el.classList.add('in'));
+      document.querySelectorAll<HTMLElement>('.count').forEach((el) => {
+        const to = Number(el.dataset.to);
+        if (!Number.isNaN(to)) el.textContent = (to >= 1000 ? to.toLocaleString() : String(to)) + (el.dataset.suffix ?? '');
+      });
+    };
+    // Two rAFs: let PublicSite's own mount effect run first, then override it.
+    raf = requestAnimationFrame(() => { raf = requestAnimationFrame(settle); });
+    return () => cancelAnimationFrame(raf);
+  }, [overridesKey]);
+  return <>{children}</>;
+}
+
+function ClickInertPublicSite({ data }: { data: PublicSiteData }) {
+  return (
     // Links stay inert inside the canvas: navigating the iframe to a real
     // public page would drop the unsaved overrides mid-review.
     <div
@@ -87,7 +119,7 @@ export default function StudioPreviewPage() {
         if ((e.target as HTMLElement).closest('a')) e.preventDefault();
       }}
     >
-      <PublicSite data={merged} />
+      <PublicSite data={data} />
     </div>
   );
 }

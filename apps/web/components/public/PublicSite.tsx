@@ -350,7 +350,9 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
       ) : (
         <>
       {/* ── HERO (layout selected by the school admin) ── */}
-      <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
+      <div data-sec="hero">
+        <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
+      </div>
 
       {/* ── STATS ── */}
       {data.stats.length > 0 && (
@@ -379,7 +381,10 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
                 style={{ transitionDelay: `${i * 0.08}s` }}
               >
                 {rings ? (
-                  <div className="ps-ring" style={{ '--ps-ring-p': 68 + ((i * 9) % 30) } as React.CSSProperties}>
+                  // The ring is decorative — a school stat like "1,200 students"
+                  // has no denominator, so a value-derived percentage would be a
+                  // lie. A consistent three-quarter arc reads as an accent.
+                  <div className="ps-ring" style={{ '--ps-ring-p': 75 } as React.CSSProperties}>
                     <span>{num}</span>
                   </div>
                 ) : (

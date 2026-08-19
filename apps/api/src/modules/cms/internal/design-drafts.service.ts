@@ -16,8 +16,12 @@ import { pickDesignConfig } from './design-config';
  *    a festival edition therefore reverts itself even if every worker is down.
  */
 
-function parseWhen(value: string | null | undefined, field: string): Date | null {
-  if (value === undefined || value === null || value === '') return null;
+const DRAFT_CAP = 30;
+
+/** undefined = field omitted (leave untouched on update); null/'' = clear. */
+function parseWhen(value: string | null | undefined, field: string): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) throw new BadRequestException(`${field} is not a valid date`);
   return d;
@@ -39,8 +43,12 @@ export class DesignDraftsService {
     if (publishAt && revertAt && revertAt <= publishAt) {
       throw new BadRequestException('The revert date has to come after the publish date.');
     }
-    return withTenant(schoolId, (tx) =>
-      tx.designDraft.create({
+    return withTenant(schoolId, async (tx) => {
+      const count = await tx.designDraft.count({ where: { schoolId } });
+      if (count >= DRAFT_CAP) {
+        throw new BadRequestException(`A school can keep ${DRAFT_CAP} saved looks. Delete one to save another.`);
+      }
+      return tx.designDraft.create({
         data: {
           schoolId,
           name: dto.name,
@@ -48,26 +56,29 @@ export class DesignDraftsService {
           publishAt,
           revertAt,
         },
-      }),
-    );
+      });
+    });
   }
 
   async update(schoolId: string, id: string, dto: UpsertDesignDraftDto) {
+    // undefined = the field was omitted, so leave it as stored; null clears it.
     const publishAt = parseWhen(dto.publishAt, 'publishAt');
     const revertAt = parseWhen(dto.revertAt, 'revertAt');
-    if (publishAt && revertAt && revertAt <= publishAt) {
-      throw new BadRequestException('The revert date has to come after the publish date.');
-    }
     return withTenant(schoolId, async (tx) => {
       const existing = await tx.designDraft.findFirst({ where: { id, schoolId } });
       if (!existing) throw new NotFoundException('Draft not found');
+      const effPublish = publishAt === undefined ? existing.publishAt : publishAt;
+      const effRevert = revertAt === undefined ? existing.revertAt : revertAt;
+      if (effPublish && effRevert && effRevert <= effPublish) {
+        throw new BadRequestException('The revert date has to come after the publish date.');
+      }
       return tx.designDraft.update({
         where: { id },
         data: {
           name: dto.name,
           config: pickDesignConfig(dto.config) as Prisma.InputJsonValue,
-          publishAt,
-          revertAt,
+          ...(publishAt === undefined ? {} : { publishAt }),
+          ...(revertAt === undefined ? {} : { revertAt }),
         },
       });
     });

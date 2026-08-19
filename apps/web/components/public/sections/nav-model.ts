@@ -94,6 +94,15 @@ export function pageTable(
  */
 function fromConfig(config: NavConfig, input: NavModelInput): NavNode[] {
   const pages = pageTable(input.flags, input.base, input.pages);
+  // Which page keys the school already placed somewhere in its arrangement —
+  // a custom page created AFTER the admin last arranged the menu is not in
+  // config.items yet, and a page nobody can reach is the one failure the menu
+  // system refuses. So the unplaced ones are appended below.
+  const placed = new Set<string>();
+  for (const item of config.items) {
+    placed.add(item.key);
+    for (const c of item.children) placed.add(c.key);
+  }
   const nodes: (NavNode | null)[] = config.items.map((item) => {
     const children: NavLeaf[] = item.children
       .filter((c) => pages[c.key]?.has)
@@ -121,7 +130,18 @@ function fromConfig(config: NavConfig, input: NavModelInput): NavNode[] {
       children,
     });
   });
-  return nodes.filter((n): n is NavNode => n !== null);
+  const built = nodes.filter((n): n is NavNode => n !== null);
+
+  // Append any custom page the arrangement did not place, up to the cap. Past
+  // the cap they still reach via the footer's Explore list rather than being
+  // lost, but the bar itself refuses to overflow.
+  for (const p of input.pages ?? []) {
+    const key = `page:${p.slug}`;
+    if (placed.has(key)) continue;
+    if (built.length >= NAV_CAP) break;
+    built.push({ kind: 'link', key, label: p.title, href: `/p/${p.slug}` });
+  }
+  return built;
 }
 
 /** A group earns its slot only if it opens onto more than one thing. */
@@ -181,5 +201,7 @@ export function navModel(input: NavModelInput): NavNode[] {
     ),
   ];
 
-  return nodes.filter((n): n is NavNode => n !== null);
+  // The bar refuses to overflow the cap; beyond it, pages still reach via the
+  // footer's Explore list.
+  return nodes.filter((n): n is NavNode => n !== null).slice(0, NAV_CAP);
 }
