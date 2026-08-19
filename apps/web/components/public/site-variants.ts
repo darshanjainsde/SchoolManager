@@ -261,6 +261,12 @@ export interface FestivalDef {
   accent: string;
   /** FULL palette: retints both brand stops for the takeover. */
   full: { ps1: string; ps2: string };
+  /**
+   * FULL surface for night festivals: the page paper and heading ink go dark.
+   * Absent = the takeover keeps the light paper (Holi, Independence Day).
+   * Presence also switches body text via the ps-fest-dark class.
+   */
+  fullSurface?: { paper: string; ink: string };
   greeting: string;
   variants: StyleOption<string>[];
   /** Decoration sets layered IN ADDITION to the chosen one at FULL. */
@@ -272,7 +278,8 @@ export const FESTIVALS: FestivalDef[] = [
     label: 'Diwali',
     emoji: '🪔',
     accent: '#e8a020',
-    full: { ps1: '#8a5a10', ps2: '#e8a020' },
+    full: { ps1: '#e8a020', ps2: '#ff9d5c' },
+    fullSurface: { paper: '#1b1129', ink: '#f6e9cd' },
     greeting: 'Happy Diwali from all of us — may the season glow bright',
     variants: [
       { value: 'DIYAS', label: 'Diyas & string lights', hint: 'Glowing lamps in the corners, lights along the top.' },
@@ -299,7 +306,8 @@ export const FESTIVALS: FestivalDef[] = [
     label: 'Eid',
     emoji: '🌙',
     accent: '#2e9d6b',
-    full: { ps1: '#1d5f43', ps2: '#e8c76a' },
+    full: { ps1: '#3ecf8e', ps2: '#e8c76a' },
+    fullSurface: { paper: '#0e2b26', ink: '#eaf5ef' },
     greeting: 'Eid Mubarak from our whole school family',
     variants: [
       { value: 'LANTERNS', label: 'Hanging lanterns', hint: 'Lanterns swinging gently from the top edge.' },
@@ -325,7 +333,8 @@ export const FESTIVALS: FestivalDef[] = [
     label: 'Christmas',
     emoji: '🎄',
     accent: '#c0392b',
-    full: { ps1: '#1d5f43', ps2: '#c0392b' },
+    full: { ps1: '#4cc38a', ps2: '#e46a5d' },
+    fullSurface: { paper: '#12291d', ink: '#f2f7f0' },
     greeting: 'Merry Christmas and a joyful winter break',
     variants: [
       { value: 'SNOW', label: 'Snowfall', hint: 'Flakes drifting gently down the page.' },

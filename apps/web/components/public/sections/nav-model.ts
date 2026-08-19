@@ -48,6 +48,12 @@ export interface NavModelInput {
    * admin touches the editor — means the default model below.
    */
   config?: NavConfig | null;
+  /**
+   * Admin-built pages (published only). Each enters the page table under the
+   * key "page:<slug>" so the menu editor can place it anywhere a built-in page
+   * can go; without an arrangement they append as top-level links.
+   */
+  pages?: { slug: string; title: string }[];
 }
 
 /**
@@ -57,8 +63,12 @@ export interface NavModelInput {
  * page the same way: a school that renames "Gallery" to "Photos" moves a label,
  * never a URL.
  */
-function pageTable(flags: NavFlags, base: string): Record<string, { href: string; has: boolean; label: string }> {
-  return {
+export function pageTable(
+  flags: NavFlags,
+  base: string,
+  pages: { slug: string; title: string }[] = [],
+): Record<string, { href: string; has: boolean; label: string }> {
+  const table: Record<string, { href: string; has: boolean; label: string }> = {
     about: { href: `${base}#about`, has: flags.hasAbout, label: 'About' },
     hof: { href: `${base}#hall-of-fame`, has: flags.hasHof, label: 'Hall of Fame' },
     gallery: { href: '/gallery', has: flags.hasGallery, label: 'Gallery' },
@@ -68,6 +78,11 @@ function pageTable(flags: NavFlags, base: string): Record<string, { href: string
     blog: { href: '/blog', has: flags.hasBlog, label: 'Blog' },
     contact: { href: '/contact', has: flags.hasContact || flags.hasEnquiry, label: 'Contact' },
   };
+  // Admin-built pages resolve exactly like built-ins: one table, one URL rule.
+  for (const p of pages) {
+    table[`page:${p.slug}`] = { href: `/p/${p.slug}`, has: true, label: p.title };
+  }
+  return table;
 }
 
 /**
@@ -78,7 +93,7 @@ function pageTable(flags: NavFlags, base: string): Record<string, { href: string
  * arranging its menu, and the menu has to survive that.
  */
 function fromConfig(config: NavConfig, input: NavModelInput): NavNode[] {
-  const pages = pageTable(input.flags, input.base);
+  const pages = pageTable(input.flags, input.base, input.pages);
   const nodes: (NavNode | null)[] = config.items.map((item) => {
     const children: NavLeaf[] = item.children
       .filter((c) => pages[c.key]?.has)
@@ -158,6 +173,12 @@ export function navModel(input: NavModelInput): NavNode[] {
     flags.hasContact || flags.hasEnquiry
       ? { kind: 'link' as const, key: 'contact', label: 'Contact', href: '/contact' }
       : null,
+    // Custom pages a school built but has not yet arranged: they append as
+    // top-level links, because a page nobody can reach is the one failure the
+    // menu system refuses (same rule validateNavConfig enforces).
+    ...(input.pages ?? []).map(
+      (p): NavNode => ({ kind: 'link', key: `page:${p.slug}`, label: p.title, href: `/p/${p.slug}` }),
+    ),
   ];
 
   return nodes.filter((n): n is NavNode => n !== null);

@@ -25,7 +25,10 @@ export function resolveHeroLayout(data: PublicSiteData): string {
   const declared =
     p?.heroLayout ?? (p?.heroStyle === 'PHOTO' ? 'FULL_BLEED' : (p?.heroStyle ?? 'ILLUSTRATION'));
   const count = heroImagesOf(data).length;
-  if (PHOTO_LAYOUTS.has(declared) && count === 0) return 'ILLUSTRATION';
+  // A background video stands in for the missing photo: the media IS the
+  // full-bleed backdrop, so the no-image downgrade must not fire.
+  const hasVideo = p?.heroMedia === 'VIDEO' && !!p?.heroVideoUrl;
+  if (PHOTO_LAYOUTS.has(declared) && count === 0) return hasVideo ? 'FULL_BLEED' : 'ILLUSTRATION';
   if (declared === 'SLIDESHOW' && count === 1) return 'FULL_BLEED';
   return declared;
 }
@@ -202,6 +205,37 @@ function IllustratedCluster({ heroUrl }: { heroUrl: string | null }) {
   );
 }
 
+// ── Background video (heroMedia=VIDEO) ──────────────────────────────────────
+// Muted autoplay loop with the first photo slot as poster. The stylesheet
+// hides it under reduced-motion / Animation=Off (.ps-hero-video rules), which
+// leaves the poster's sibling photo layer as the fallback — the video is an
+// enhancement on top of the image, never a replacement for it.
+function HeroVideo({ url, poster }: { url: string; poster: string | null }) {
+  return (
+    <video
+      className="ps-hero-video"
+      src={url}
+      poster={poster ?? undefined}
+      autoPlay
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      aria-hidden="true"
+      tabIndex={-1}
+    />
+  );
+}
+
+/** Whether this payload asks for a background video that can actually play. */
+export function heroWantsVideo(data: PublicSiteData): boolean {
+  return (
+    data.profile?.heroMedia === 'VIDEO' &&
+    typeof data.profile?.heroVideoUrl === 'string' &&
+    /^https?:\/\//i.test(data.profile.heroVideoUrl)
+  );
+}
+
 // ── Slideshow (crossfade + Ken Burns, motion-aware) ─────────────────────────
 function Slides({ images, motionOff }: { images: string[]; motionOff: boolean }) {
   const [idx, setIdx] = useState(0);
@@ -308,6 +342,11 @@ export default function HeroSection({
           ) : (
             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${heroUrl}')` }} />
           )}
+          {/* Video sits OVER the photo layer: when the stylesheet hides it
+              (reduced-motion, Animation=Off) the photo behind is the render. */}
+          {heroWantsVideo(data) && !motionOff && (
+            <HeroVideo url={data.profile!.heroVideoUrl as string} poster={heroUrl} />
+          )}
           <div className="absolute inset-0" style={{ background: overlay.background }} />
           <div
             className="absolute inset-x-0 bottom-0 h-24"
@@ -340,6 +379,9 @@ export default function HeroSection({
               }`}
             >
               <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${heroUrl}')` }} />
+              {heroWantsVideo(data) && !motionOff && (
+                <HeroVideo url={data.profile!.heroVideoUrl as string} poster={heroUrl} />
+              )}
               <div className="absolute inset-0" style={{ background: overlay.background }} />
               <div className={`relative p-8 md:p-12 w-full ${center ? 'text-center' : ''}`}>
                 <HeroCopy {...copyProps} light={overlay.light} center={center} headlineSize="text-4xl md:text-5xl" />
@@ -376,9 +418,13 @@ export default function HeroSection({
             <HeroCopy {...copyProps} light={false} center={center} />
           </div>
           <div
-            className="reveal rounded-3xl ps-soft ps-tile min-h-[320px]"
+            className="reveal relative overflow-hidden rounded-3xl ps-soft ps-tile min-h-[320px]"
             style={{ backgroundImage: `url('${heroUrl}')` }}
-          />
+          >
+            {heroWantsVideo(data) && !motionOff && (
+              <HeroVideo url={data.profile!.heroVideoUrl as string} poster={heroUrl} />
+            )}
+          </div>
         </div>
       </section>
     );

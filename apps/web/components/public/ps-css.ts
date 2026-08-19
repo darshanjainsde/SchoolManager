@@ -441,6 +441,215 @@ export const PS_CSS = `
     .ps-jbody, .ps-rstep { opacity: 1; transform: none; }
     .ps-rail-fill { height: calc(100% - 16px); }
   }
+  /* ═══════════════ WEBSITE STUDIO ADDITIONS ═══════════════
+     Every rule below belongs to a NON-DEFAULT choice: the classes only exist
+     when an admin picked something, so none of this affects a school that has
+     not opened the studio. Panels keep using the shape tokens — a variant may
+     rearrange a band, never re-skin it. */
+
+  /* ── Scroll feel ── */
+  html:has(.ps-scroll-snap) { scroll-snap-type: y proximity; }
+  .ps-scroll-snap [data-sec] { scroll-snap-align: start; scroll-margin-top: 4.5rem; }
+  /* Deck: each band takes the whole viewport-ish and the next slides over it.
+     Solid paper behind every band is what makes the cover read as a card. */
+  .ps-scroll-deck [data-sec] { position: sticky; top: 0; background: var(--paper);
+    box-shadow: 0 -18px 44px rgba(15,23,20,.14); }
+
+  /* ── Nav menu open animation (FADE = the shipped ps-menu-in, no class) ── */
+  @keyframes ps-menu-in-slide { from { opacity: 0; transform: translateY(calc(-16px * var(--motion) - 2px)); } to { opacity: 1; transform: none; } }
+  @keyframes ps-menu-in-scale { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
+  .ps-menuanim-slide .ps-menu-card { animation-name: ps-menu-in-slide; animation-duration: .26s; }
+  .ps-menuanim-scale .ps-menu-card { animation-name: ps-menu-in-scale; animation-duration: .2s; }
+
+  /* ── Per-section entrance override (ps-sg-*) ──
+     Beats the page-wide gesture by specificity; loses, on purpose, to the
+     reduced-motion and motion-off blocks at the end of this stylesheet. */
+  .ps-root .ps-sg-rise .reveal { opacity: 0; clip-path: none;
+    transform: translateY(calc(26px * var(--motion) + 4px));
+    transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .ps-root .ps-sg-rise .reveal.in { opacity: 1; transform: none; }
+  .ps-root .ps-sg-fade .reveal { opacity: 0; transform: none; clip-path: none;
+    transition: opacity .7s cubic-bezier(.2,.7,.2,1); }
+  .ps-root .ps-sg-fade .reveal.in { opacity: 1; }
+  .ps-root .ps-sg-draw .reveal { opacity: 1; transform: none;
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path .85s cubic-bezier(.2,.7,.2,1); }
+  .ps-root .ps-sg-draw .reveal.in { clip-path: inset(0 0 0 0); }
+
+  /* ── Stats variants ── */
+  .ps-v-stats-strip .ps-statcard { background: transparent; border: 0; box-shadow: none;
+    border-radius: 0; border-left: 1px solid rgba(28,45,36,.14); }
+  .ps-v-stats-strip .ps-statcard:first-child { border-left: 0; }
+  .ps-v-stats-strip.ps-stats-grid { gap: 0; border-block: 1px solid rgba(28,45,36,.14);
+    padding-top: 1.6rem; padding-bottom: 1.6rem; }
+  .ps-ring { width: 7rem; height: 7rem; border-radius: 999px; margin: 0 auto .6rem;
+    display: grid; place-items: center;
+    background: conic-gradient(var(--ps2) calc(var(--ps-ring-p, 80) * 1%), color-mix(in srgb, var(--ps1) 14%, transparent) 0); }
+  .ps-ring > span { width: 5.4rem; height: 5.4rem; border-radius: 999px; background: var(--paper);
+    display: grid; place-items: center; }
+  .ps-v-stats-rings .ps-statcard { background: transparent; border: 0; box-shadow: none; }
+
+  /* ── About variants ── */
+  .ps-v-about-overlap .ps-about-img-wrap::before { content: ""; position: absolute;
+    inset: -14px 14px 14px -14px; border: 2px solid var(--ps2);
+    border-radius: var(--ps-radius); opacity: .55; }
+  .ps-v-about-center.ps-about-grid { grid-template-columns: 1fr !important;
+    text-align: center; max-width: 46rem; margin-inline: auto; }
+  .ps-v-about-center .ps-about-img-wrap { order: 2; max-width: 34rem; margin-inline: auto; width: 100%; }
+  .ps-v-about-center .ps-about-copy blockquote { border-left: 0; padding-left: 0; }
+
+  /* ── Courses variants ── */
+  .ps-v-courses-carousel .ps-courses-grid { display: flex; overflow-x: auto; gap: 1.25rem;
+    scroll-snap-type: x mandatory; padding-bottom: .75rem;
+    -webkit-overflow-scrolling: touch; }
+  .ps-v-courses-carousel .ps-courses-grid > .reveal { flex: 0 0 min(78%, 320px); scroll-snap-align: start; }
+  .ps-v-courses-rows .ps-courses-grid { grid-template-columns: minmax(0, 1fr) !important;
+    max-width: 42rem; }
+
+  /* ── Admissions TILES (JOURNEY and STEPPER reuse the shipped variants) ── */
+  .ps-v-admissions-tiles .ps-jline { display: none; }
+  .ps-v-admissions-tiles .ps-journey .grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 1.4rem; }
+  .ps-v-admissions-tiles .ps-journey .grid > div { position: relative; }
+  .ps-v-admissions-tiles .ps-jbadge { position: absolute; top: -12px; left: -8px; z-index: 2;
+    box-shadow: 0 0 0 4px var(--paper); }
+  .ps-v-admissions-tiles .ps-jbody { margin-top: 0; padding-top: 1.6rem; }
+  @media (max-width: 640px) {
+    .ps-v-admissions-tiles .ps-journey .grid { grid-template-columns: 1fr !important; }
+  }
+
+  /* ── Gallery variants ── */
+  .ps-v-gallery-masonry .ps-gallery-grid { display: block; columns: 2; column-gap: 1rem; }
+  @media (min-width: 768px) { .ps-v-gallery-masonry .ps-gallery-grid { columns: 3; } }
+  .ps-v-gallery-masonry .ps-gallery-grid > button { display: block; width: 100%; margin-bottom: 1rem;
+    break-inside: avoid; }
+  .ps-v-gallery-masonry .ps-gallery-grid > button:nth-child(3n+1) img { height: 15rem; }
+  .ps-v-gallery-masonry .ps-gallery-grid > button:nth-child(3n) img { height: 10rem; }
+  .ps-v-gallery-filmstrip .ps-gallery-grid { display: flex; overflow-x: auto; gap: 1rem;
+    scroll-snap-type: x proximity; padding-bottom: .75rem; -webkit-overflow-scrolling: touch; }
+  .ps-v-gallery-filmstrip .ps-gallery-grid > button { flex: 0 0 16rem; scroll-snap-align: start; }
+
+  /* ── Staff LIST variant ── */
+  .ps-v-staff-list .ps-staff-grid { grid-template-columns: minmax(0, 1fr) !important;
+    max-width: 40rem; margin-inline: auto; gap: .75rem; }
+  .ps-v-staff-list .ps-staffcard { display: flex; align-items: center; gap: 1rem;
+    text-align: left; padding: .9rem 1.1rem; }
+  .ps-v-staff-list .ps-staffcard > div:first-child { margin: 0; height: 3.2rem; width: 3.2rem;
+    font-size: 1.1rem; flex: none; }
+  .ps-v-staff-list .ps-staffcard .ps-head { margin-top: 0; }
+
+  /* ── Footer variants (FooterSection; COLUMNS on paper = shipped, no class) ── */
+  .ps-footc-dark { background: color-mix(in srgb, var(--ink) 94%, #000); color: rgba(255,255,255,.72); }
+  .ps-footc-brand { background: var(--ps1); color: rgba(255,255,255,.8); }
+  .ps-footc-dark .ps-head, .ps-footc-brand .ps-head { color: #fff; }
+  .ps-footc-dark a:hover, .ps-footc-brand a:hover { color: #fff !important; }
+  .ps-foot-center { text-align: center; }
+  .ps-foot-center .ps-foot-cols { display: grid; grid-template-columns: 1fr; gap: 1.25rem; justify-items: center; }
+  .ps-foot-social { display: flex; gap: .5rem; margin-top: .8rem; }
+  .ps-foot-center .ps-foot-social { justify-content: center; }
+  .ps-foot-social a { display: grid; place-items: center; width: 2rem; height: 2rem;
+    border-radius: 999px; border: 1px solid currentColor; opacity: .75; font-size: .7rem;
+    font-weight: 700; transition: opacity .2s; }
+  .ps-foot-social a:hover { opacity: 1; }
+
+  /* ── Hero background video ── */
+  .ps-hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+  /* ── Custom-page blocks ── */
+  .ps-pgblocks { display: grid; gap: 1.4rem; max-width: 48rem; }
+  .ps-pgblock-imgtext { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+    gap: 1.25rem; align-items: center; padding: var(--ps-card-pad); }
+  @media (max-width: 640px) { .ps-pgblock-imgtext { grid-template-columns: 1fr; } }
+
+  /* ── Festive overlay ──
+     A decoration layer OVER the page (fixed, pointer-events none, under the
+     nav's z-50). Positions are constants, not randomness — the server and the
+     hydration render must agree. Every animation answers to --motion and is
+     silenced by motion-off / reduced-motion at the end of this sheet. */
+  .ps-fest-ribbon { position: relative; z-index: 51; text-align: center; font-size: .8rem;
+    font-weight: 700; letter-spacing: .02em; padding: .45rem .9rem;
+    background: color-mix(in srgb, var(--ps2) 24%, var(--paper)); color: var(--ink); }
+  .ps-fx { position: fixed; inset: 0; pointer-events: none; z-index: 49; overflow: hidden; }
+  .ps-fx-lightrow { position: absolute; top: 0; left: 0; right: 0; display: flex;
+    justify-content: space-around; }
+  .ps-fx-bulb { width: 9px; height: 9px; border-radius: 999px; margin-top: 12px;
+    animation: ps-fx-twinkle calc(1.9s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-twinkle { from { opacity: .45; transform: scale(.85); } to { opacity: 1; transform: scale(1.2); } }
+  .ps-fx-diya { position: absolute; bottom: 12px; font-size: 30px;
+    animation: ps-fx-glow calc(2.3s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-glow { from { filter: drop-shadow(0 0 4px rgba(255,170,60,.5)); }
+    to { filter: drop-shadow(0 0 16px rgba(255,170,60,.95)); } }
+  .ps-fx-burst { position: absolute; width: 130px; height: 130px; border-radius: 999px; opacity: 0;
+    background: repeating-conic-gradient(rgba(255,205,120,.95) 0 3deg, transparent 3deg 22deg);
+    -webkit-mask: radial-gradient(circle, transparent 40%, #000 41%, #000 54%, transparent 55%);
+    mask: radial-gradient(circle, transparent 40%, #000 41%, #000 54%, transparent 55%);
+    animation: ps-fx-boom 3.1s ease-out infinite; }
+  @keyframes ps-fx-boom { 0% { transform: scale(.05); opacity: 0; } 12% { opacity: calc(.9 * var(--motion) + .1); }
+    48% { transform: scale(1); opacity: 0; } 100% { opacity: 0; } }
+  .ps-fx-rangoli { position: absolute; width: 180px; height: 180px; border-radius: 999px; opacity: .4;
+    background: repeating-conic-gradient(var(--ps2) 0 12deg, var(--ps1) 12deg 24deg);
+    -webkit-mask: radial-gradient(circle, #000 0 28%, transparent 29% 44%, #000 45% 58%, transparent 59%);
+    mask: radial-gradient(circle, #000 0 28%, transparent 29% 44%, #000 45% 58%, transparent 59%); }
+  .ps-fx-blob { position: absolute; width: 200px; height: 200px; border-radius: 999px;
+    filter: blur(34px); opacity: .34;
+    animation: ps-fx-blob calc(6.5s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-blob { from { transform: scale(.9); } to { transform: scale(1.15); } }
+  .ps-fx-fall { position: absolute; top: -4%;
+    animation: ps-fx-fall linear infinite; }
+  @keyframes ps-fx-fall { to { top: 104%; transform: rotate(320deg); } }
+  .ps-fx-lantern { position: absolute; top: -2px; font-size: 28px; transform-origin: top center;
+    animation: ps-fx-swing calc(3.2s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-swing { from { transform: rotate(calc(-9deg * var(--motion))); }
+    to { transform: rotate(calc(9deg * var(--motion))); } }
+  .ps-fx-moon { position: absolute; top: 70px; right: 28px; font-size: 34px;
+    filter: drop-shadow(0 0 10px rgba(255,255,200,.65)); }
+  .ps-fx-star { position: absolute; font-size: 12px;
+    animation: ps-fx-twinkle calc(2.1s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  .ps-fx-bunting { position: absolute; top: 0; left: 0; right: 0; display: flex; }
+  .ps-fx-flag { flex: 1; height: 20px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+  .ps-fx-kite { position: absolute; font-size: 28px; animation: ps-fx-kite 16s linear infinite; }
+  @keyframes ps-fx-kite { 0% { left: -6%; top: 58%; transform: rotate(12deg); }
+    50% { top: 22%; transform: rotate(-8deg); } 100% { left: 104%; top: 6%; transform: rotate(14deg); } }
+
+  /* FULL takeover on a night festival: panels and body text follow the dark
+     paper via the same tokens the shape control owns. */
+  .ps-fest-dark { --ps-card-bg: color-mix(in srgb, var(--paper) 82%, #fff);
+    --ps-card-border: 1px solid color-mix(in srgb, var(--ps2) 26%, transparent);
+    --ps-card-shadow: 0 18px 40px -20px rgba(0,0,0,.65);
+    color: color-mix(in srgb, var(--ink) 72%, var(--paper)); }
+  .ps-fest-dark .text-slate-500, .ps-fest-dark .text-slate-600, .ps-fest-dark .text-slate-400,
+  .ps-fest-dark .text-slate-700 { color: color-mix(in srgb, var(--ink) 70%, var(--paper)); }
+  .ps-fest-dark .ps-card { background: var(--ps-card-bg); border: var(--ps-card-border); }
+  .ps-fest-dark .ps-navc-paper { background: color-mix(in srgb, var(--paper) 92%, transparent); }
+  .ps-fest-dark .ps-nav-link, .ps-fest-dark .ps-nav-name { color: var(--ink); }
+  .ps-fest-dark .ps-menu-card { background: color-mix(in srgb, var(--paper) 88%, #fff);
+    border-color: color-mix(in srgb, var(--ps2) 30%, transparent); }
+  .ps-fest-dark .ps-menu-card::before { background: color-mix(in srgb, var(--paper) 88%, #fff); }
+  .ps-fest-dark .ps-menu-row-label { color: var(--ink); }
+  .ps-fest-dark footer { border-color: color-mix(in srgb, var(--ps2) 25%, transparent); }
+
+  /* ── Studio additions: motion kill-switches ──
+     Same contract as everything above them: reduced-motion and Animation=Off
+     collapse to the END state, never to an invisible half-state. */
+  @media (prefers-reduced-motion: reduce) {
+    .ps-root .ps-sg-rise .reveal, .ps-root .ps-sg-fade .reveal, .ps-root .ps-sg-draw .reveal {
+      opacity: 1; transform: none; clip-path: none; transition: none; }
+    .ps-menuanim-slide .ps-menu-card, .ps-menuanim-scale .ps-menu-card { animation: none; }
+    .ps-fx-bulb, .ps-fx-diya, .ps-fx-burst, .ps-fx-blob, .ps-fx-fall, .ps-fx-lantern,
+    .ps-fx-star, .ps-fx-kite { animation: none; }
+    .ps-fx-burst { opacity: 0; }
+    .ps-fx-fall { top: 104%; }
+    .ps-hero-video { display: none; }
+  }
+  .ps-motion-off .ps-sg-rise .reveal, .ps-motion-off .ps-sg-fade .reveal,
+  .ps-motion-off .ps-sg-draw .reveal { opacity: 1; transform: none; clip-path: none; transition: none; }
+  .ps-motion-off .ps-fx-bulb, .ps-motion-off .ps-fx-diya, .ps-motion-off .ps-fx-burst,
+  .ps-motion-off .ps-fx-blob, .ps-motion-off .ps-fx-fall, .ps-motion-off .ps-fx-lantern,
+  .ps-motion-off .ps-fx-star, .ps-motion-off .ps-fx-kite { animation: none; }
+  .ps-motion-off .ps-fx-burst { opacity: 0; }
+  .ps-motion-off .ps-fx-fall { top: 104%; }
+  .ps-motion-off .ps-hero-video { display: none; }
+  /* ═══════════════ END WEBSITE STUDIO ADDITIONS ═══════════════ */
+
   /* Animation level = Off — same statics as reduced-motion, admin-driven. */
   .ps-motion-off .ps-marker { animation: none; background-size: 100% .38em; }
   .ps-motion-off .ps-accent-grow { animation: none; transform: scaleX(1); }

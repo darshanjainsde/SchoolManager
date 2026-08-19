@@ -278,6 +278,7 @@ export default function SiteNav({
     courses: data.courses,
     onAcademicsPage,
     config: data.profile?.navConfig ?? null,
+    pages: (data.pages ?? []).map((p) => ({ slug: p.slug, title: p.title })),
   });
 
   // Mobile menu open/close state, shared across every layout branch below.

@@ -21,7 +21,8 @@ export default function CoursesFeatured({ courses }: { courses: PublicCourse[] }
           Tap a programme to see what&rsquo;s inside — or leave a number and admissions will call you back.
         </p>
       </div>
-      <div className="mt-10 grid md:grid-cols-3 gap-6">
+      {/* ps-courses-grid is the stable hook the layout variants restyle. */}
+      <div className="ps-courses-grid mt-10 grid md:grid-cols-3 gap-6">
         {featured.map((c, i) => (
           <FlipCard key={c.id} course={c} delay={i * 0.07} />
         ))}

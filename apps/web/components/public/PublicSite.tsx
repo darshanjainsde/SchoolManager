@@ -17,13 +17,27 @@ import { SUBPAGES } from './subpages';
 import { PS_CSS } from './ps-css';
 import { themeRootProps } from './site-theme';
 import ContactSection from './sections/ContactSection';
+import FooterSection from './sections/FooterSection';
+import FestiveLayer, { FestiveRibbon } from './sections/FestiveLayer';
+import PageBlocks from './sections/PageBlocks';
+import {
+  buildCustomCss,
+  normalizeFestiveTheme,
+  normalizeSectionVariants,
+  sectionGestureClass,
+  sectionLayoutClass,
+  sectionLayoutOf,
+  type SectionKey,
+} from './site-variants';
 
-export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'contact';
+export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'contact' | 'page';
 
 interface Props {
   data: PublicSiteData;
   /** 'home' = full landing page; anything else = a dedicated section page with the same chrome. */
   view?: SiteView;
+  /** The admin-built page rendered when view = 'page'. */
+  page?: { slug: string; title: string; blocks: unknown };
 }
 
 
@@ -37,10 +51,25 @@ function parseStatValue(val: string): { numeric: boolean; num: number; suffix: s
 }
 
 
-export default function PublicSite({ data, view = 'home' }: Props) {
+export default function PublicSite({ data, view = 'home', page }: Props) {
   const onAcademicsPage = view === 'academics';
   // Section anchors live on the homepage; from other pages they need the "/" prefix.
   const base = view !== 'home' ? '/' : '';
+
+  // ── Website-studio config, normalized once ──
+  const variants = normalizeSectionVariants(data.profile?.sectionVariants);
+  const fest = normalizeFestiveTheme(data.profile?.festiveTheme);
+  const customCss = buildCustomCss(data.profile?.customSectionCss);
+  const secCls = (key: SectionKey) =>
+    [
+      sectionLayoutClass(key, sectionLayoutOf(variants, key)),
+      sectionGestureClass(variants[key]?.gesture),
+    ]
+      .filter(Boolean)
+      .join(' ');
+  const glideOn =
+    (data.profile?.scrollFeel ?? 'CLASSIC') === 'GLIDE' &&
+    (data.profile?.animationLevel ?? 'FULL') !== 'NONE';
 
   const brandColor = data.profile?.brandColorPrimary ?? '#2f6b4f';
   // Secondary drives the second gradient stop. If a school leaves it near-white
@@ -154,6 +183,50 @@ export default function PublicSite({ data, view = 'home' }: Props) {
     };
   }, []);
 
+  // ── Scroll feel: GLIDE ──
+  // A weighted wheel: input moves a target, the page eases toward it. Wheel
+  // only (trackpads and touch keep their native inertia — hijacking those
+  // fights the OS), and never under reduced-motion or Animation=Off.
+  useEffect(() => {
+    if (!glideOn) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let target = window.scrollY;
+    let raf = 0;
+    let animating = false;
+    const maxY = () => document.documentElement.scrollHeight - window.innerHeight;
+    const loop = () => {
+      const cur = window.scrollY;
+      const next = cur + (target - cur) * 0.12;
+      if (Math.abs(target - next) < 1) {
+        window.scrollTo(0, target);
+        animating = false;
+        raf = 0;
+        return;
+      }
+      window.scrollTo(0, next);
+      raf = requestAnimationFrame(loop);
+    };
+    const onWheel = (e: WheelEvent) => {
+      // Pinch-zoom (ctrl+wheel) and horizontal scrolling stay native.
+      if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      target = Math.max(0, Math.min(maxY(), target + e.deltaY));
+      animating = true;
+      if (!raf) raf = requestAnimationFrame(loop);
+    };
+    const onScroll = () => {
+      // Scrollbar drags and keyboard scrolling re-anchor the target.
+      if (!animating) target = window.scrollY;
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [glideOn]);
+
   // One definition of what a school looks like, shared with the blog's chrome.
   const themeRoot = themeRootProps(data);
 
@@ -161,6 +234,12 @@ export default function PublicSite({ data, view = 'home' }: Props) {
     <div className={themeRoot.className} style={themeRoot.style}>
       {/* Injected theme CSS */}
       <style dangerouslySetInnerHTML={{ __html: PS_CSS }} />
+      {/* Per-section overrides: sanitized on write, scoped here on render. */}
+      {customCss && <style dangerouslySetInnerHTML={{ __html: customCss }} />}
+      {/* Festive decoration layer + greeting strip (palette work lives in
+          themeRootProps; removing these removes every trace). */}
+      {fest && <FestiveLayer fest={fest} />}
+      {fest && <FestiveRibbon fest={fest} />}
 
       {/* The hero photo is the LCP element and is painted from a CSS
           background, which the browser cannot discover until the stylesheet
@@ -211,7 +290,22 @@ export default function PublicSite({ data, view = 'home' }: Props) {
                 </div>
               </div>
             )}
+            {view === 'page' && page && (
+              <div className="ps-masthead reveal mt-6">
+                <div className="ps-masthead-eyebrow" style={{ color: 'var(--ps1)' }}>
+                  {schoolName}
+                </div>
+                <div className="ps-masthead-split">
+                  <h1 className="ps-head ps-masthead-title">{page.title}</h1>
+                </div>
+              </div>
+            )}
           </section>
+          {view === 'page' && page && (
+            <section data-sec="page" className="max-w-6xl mx-auto px-6 pt-10 pb-16">
+              <PageBlocks blocks={page.blocks} />
+            </section>
+          )}
           {view === 'academics' && <AcademicsSection courses={data.courses} onOwnPage />}
           {view === 'admissions' && (
             // The ONE caller that shows fees. See AdmissionsSection's
@@ -260,25 +354,36 @@ export default function PublicSite({ data, view = 'home' }: Props) {
 
       {/* ── STATS ── */}
       {data.stats.length > 0 && (
-        <section className="max-w-6xl mx-auto px-6 py-16 grid grid-cols-2 md:grid-cols-4 gap-6">
+        <section
+          data-sec="stats"
+          className={`ps-stats-grid ${secCls('stats')} max-w-6xl mx-auto px-6 py-16 grid grid-cols-2 md:grid-cols-4 gap-6`}
+        >
           {data.stats.map((stat, i) => {
             const parsed = parseStatValue(stat.value);
+            const rings = sectionLayoutOf(variants, 'stats') === 'RINGS';
+            const num = parsed.numeric ? (
+              <div
+                className={`ps-head font-bold ps-grad-text count ${rings ? 'text-2xl' : 'text-4xl'}`}
+                data-to={String(parsed.num)}
+                data-suffix={parsed.suffix}
+              >
+                0
+              </div>
+            ) : (
+              <div className={`ps-head font-bold ps-grad-text ${rings ? 'text-2xl' : 'text-4xl'}`}>{stat.value}</div>
+            );
             return (
               <div
                 key={i}
-                className="reveal ps-card ps-soft rounded-2xl p-6 text-center"
+                className="ps-statcard reveal ps-card ps-soft rounded-2xl p-6 text-center"
                 style={{ transitionDelay: `${i * 0.08}s` }}
               >
-                {parsed.numeric ? (
-                  <div
-                    className="ps-head text-4xl font-bold ps-grad-text count"
-                    data-to={String(parsed.num)}
-                    data-suffix={parsed.suffix}
-                  >
-                    0
+                {rings ? (
+                  <div className="ps-ring" style={{ '--ps-ring-p': 68 + ((i * 9) % 30) } as React.CSSProperties}>
+                    <span>{num}</span>
                   </div>
                 ) : (
-                  <div className="ps-head text-4xl font-bold ps-grad-text">{stat.value}</div>
+                  num
                 )}
                 <div className="text-sm text-slate-500 mt-1">{stat.label}</div>
               </div>
@@ -289,10 +394,14 @@ export default function PublicSite({ data, view = 'home' }: Props) {
 
       {/* ── ABOUT ── */}
       {hasAbout && (
-        <section id="about" className="max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-2 gap-14 items-center">
-          <div className="reveal relative">
+        <section
+          id="about"
+          data-sec="about"
+          className={`ps-about-grid ${secCls('about')} max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-2 gap-14 items-center`}
+        >
+          <div className="ps-about-img-wrap reveal relative">
             <div className="absolute -inset-4 ps-about-glow rounded-3xl" />
-            <div className="relative rounded-3xl overflow-hidden h-80 ps-card ps-soft">
+            <div className="ps-about-img relative rounded-3xl overflow-hidden h-80 ps-card ps-soft">
               {aboutImageUrl || principalPhotoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -319,7 +428,7 @@ export default function PublicSite({ data, view = 'home' }: Props) {
             )}
           </div>
 
-          <div className="reveal">
+          <div className="ps-about-copy reveal">
             <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: brandColor }}>
               About
             </div>
@@ -337,21 +446,37 @@ export default function PublicSite({ data, view = 'home' }: Props) {
       )}
 
       {/* ── FEATURED COURSES (homepage flip cards) ── */}
-      <CoursesFeatured courses={data.courses} />
-      {/* Full catalogue lives on its own page now */}
-      {hasAcademics && (
-        <div className="max-w-6xl mx-auto px-6 -mt-8 pb-14">
-          <a href="/academics" className="text-sm font-semibold hover:opacity-80 transition" style={{ color: 'var(--ps1)' }}>
-            View all programmes →
-          </a>
+      <div data-sec="courses" className={secCls('courses') || undefined}>
+        <CoursesFeatured courses={data.courses} />
+        {/* Full catalogue lives on its own page now */}
+        {hasAcademics && (
+          <div className="max-w-6xl mx-auto px-6 -mt-8 pb-14">
+            <a href="/academics" className="text-sm font-semibold hover:opacity-80 transition" style={{ color: 'var(--ps1)' }}>
+              View all programmes →
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* ── ADMISSIONS (process + fee structure) ── */}
+      {hasAdmissions && show.admissions && (
+        <div data-sec="admissions" className={secCls('admissions') || undefined}>
+          <AdmissionsSection
+            admissions={data.admissions}
+            courses={data.courses}
+            // STEPPER maps to the vertical rail the /admissions page already
+            // renders; TILES restyles the journey grid from the stylesheet.
+            variant={sectionLayoutOf(variants, 'admissions') === 'STEPPER' ? 'rail' : 'journey'}
+          />
         </div>
       )}
 
-      {/* ── ADMISSIONS (process + fee structure) ── */}
-      {hasAdmissions && show.admissions && <AdmissionsSection admissions={data.admissions} courses={data.courses} />}
-
       {/* ── GALLERY ── */}
-      {hasGallery && show.gallery && <GallerySection gallery={data.gallery} schoolName={schoolName} />}
+      {hasGallery && show.gallery && (
+        <div data-sec="gallery" className={secCls('gallery') || undefined}>
+          <GallerySection gallery={data.gallery} schoolName={schoolName} />
+        </div>
+      )}
 
       {/* ── HALL OF FAME (class-wise toppers) ── */}
       {hasHof && <HallOfFame courses={data.courses} />}
@@ -361,18 +486,18 @@ export default function PublicSite({ data, view = 'home' }: Props) {
 
       {/* ── EDUCATORS / STAFF ── */}
       {data.staff.length > 0 && (
-        <section id="staff" className="max-w-6xl mx-auto px-6 py-20">
+        <section id="staff" data-sec="staff" className={`${secCls('staff')} max-w-6xl mx-auto px-6 py-20`}>
           <div className="reveal text-center max-w-2xl mx-auto">
             <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: brandColor }}>
               Our people
             </div>
             <h2 className="ps-head text-4xl font-bold mt-3">Meet our educators</h2>
           </div>
-          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="ps-staff-grid mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
             {data.staff.map((person, i) => (
               <div
                 key={i}
-                className="reveal ps-lift ps-card ps-soft rounded-3xl p-6 text-center"
+                className="ps-staffcard reveal ps-lift ps-card ps-soft rounded-3xl p-6 text-center"
                 style={{ transitionDelay: `${i * 0.05}s` }}
               >
                 <div className="mx-auto h-20 w-20 rounded-full overflow-hidden ps-logo-bg grid place-items-center text-2xl font-semibold text-white">
@@ -404,55 +529,22 @@ export default function PublicSite({ data, view = 'home' }: Props) {
         </>
       )}
 
-      {/* ── FOOTER ── */}
-      <footer className="border-t border-black/10 mt-8">
-        <div className="max-w-6xl mx-auto px-6 py-14 grid md:grid-cols-3 gap-8">
-          <div>
-            <div className="flex items-center gap-2.5">
-              {logoUrl ? (
-                <img src={logoUrl} alt={schoolName} className="h-9 w-auto" loading="lazy" decoding="async" />
-              ) : (
-                <>
-                  <span className="h-9 w-9 rounded-xl ps-logo-bg grid place-items-center font-bold text-white text-sm ps-head">
-                    {schoolName.charAt(0)}
-                  </span>
-                  <span className="ps-head font-bold">{schoolName}</span>
-                </>
-              )}
-            </div>
-            <p className="text-sm text-slate-500 mt-3">Nurturing confident, compassionate lifelong learners.</p>
-          </div>
-          <div>
-            <div className="ps-head font-bold mb-3">Explore</div>
-            <ul className="space-y-2 text-sm text-slate-500">
-              {hasAbout && <li><a href={`${base}#about`} className="hover:text-slate-900 transition">About</a></li>}
-              {hasAcademics && <li><a href="/academics" className="hover:text-slate-900 transition">Academics</a></li>}
-              {hasAdmissions && <li><a href="/admissions" className="hover:text-slate-900 transition">Admissions</a></li>}
-              {hasHof && <li><a href={`${base}#hall-of-fame`} className="hover:text-slate-900 transition">Hall of Fame</a></li>}
-              {hasGallery && <li><a href="/gallery" className="hover:text-slate-900 transition">Gallery</a></li>}
-              {hasEvents && <li><a href="/connect" className="hover:text-slate-900 transition">Connect</a></li>}
-              {hasBlog && <li><Link href="/blog" className="hover:text-slate-900 transition">Blog</Link></li>}
-              <li><a href="/contact" className="hover:text-slate-900 transition">Enquire</a></li>
-            </ul>
-          </div>
-          <div>
-            <div className="ps-head font-bold mb-3">Contact</div>
-            <ul className="space-y-2 text-sm text-slate-500">
-              {data.profile?.phone && <li>📞 {data.profile.phone}</li>}
-              {data.profile?.email && <li>✉️ {data.profile.email}</li>}
-              {data.profile?.city && (
-                <li>📍 {data.profile.city}{data.profile.region ? `, ${data.profile.region}` : ''}</li>
-              )}
-              {!data.profile?.phone && !data.profile?.email && !data.profile?.city && (
-                <li className="text-slate-400">—</li>
-              )}
-            </ul>
-          </div>
-        </div>
-        <div className="border-t border-black/10 text-center text-xs text-slate-400 py-4">
-          © {new Date().getFullYear()} {schoolName} · Powered by Sckools
-        </div>
-      </footer>
+      {/* ── CUSTOM HTML BLOCK (operator escape hatch; sanitized on write) ── */}
+      {view === 'home' && data.profile?.customHtmlBlock && (
+        <section
+          data-sec="custom"
+          className="reveal max-w-6xl mx-auto px-6 py-14"
+          dangerouslySetInnerHTML={{ __html: data.profile.customHtmlBlock }}
+        />
+      )}
+
+      {/* ── FOOTER (extracted; answers to footerConfig) ── */}
+      <FooterSection
+        data={data}
+        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasBlog, hasContact, hasEnquiry }}
+        base={base}
+        year={new Date().getFullYear()}
+      />
     </div>
   );
 }

@@ -4,6 +4,13 @@ import { isNearWhite, lighten, mix } from './site-utils';
 import { fontVars, FONT_STACK } from '@/lib/fonts';
 import { sectionShapeClass } from './section-shape';
 import { accentClass, backgroundTextureClass, motionGestureClass } from './site-style';
+import {
+  festiveClasses,
+  festivalDef,
+  navDropdownAnimClass,
+  normalizeFestiveTheme,
+  scrollFeelClass,
+} from './site-variants';
 
 const MOTION_MAP: Record<string, number> = { FULL: 1, SUBTLE: 0.5, NONE: 0 };
 
@@ -23,7 +30,6 @@ export function themeRootProps(data: PublicSiteData): { className: string; style
   // A school that left the secondary near-white gets a lightened primary
   // instead: two near-identical stops make every gradient look broken.
   const brandColor2 = isNearWhite(rawSecondary) ? lighten(brandColor, 0.4) : rawSecondary;
-  const ink = mix(brandColor, '#14261d', 0.55);
   const fontHead = FONT_STACK[data.profile?.headingFont ?? 'INTER'] ?? FONT_STACK.INTER;
   const motion = MOTION_MAP[data.profile?.animationLevel ?? 'FULL'] ?? 1;
 
@@ -32,6 +38,31 @@ export function themeRootProps(data: PublicSiteData): { className: string; style
     (data.profile?.heroStyle === 'PHOTO' ? 'FULL_BLEED' : (data.profile?.heroStyle ?? 'ILLUSTRATION'));
   const minimal = declaredLayout === 'MINIMAL';
 
+  // Festive overlay. LAYER only swaps the accent (when the school kept
+  // recolor on); FULL retints the brand stops, and a night festival also
+  // takes the paper and ink dark. All resolved HERE because these are the
+  // inline variables the whole stylesheet reads — a class alone cannot beat
+  // an inline style.
+  const fest = normalizeFestiveTheme(data.profile?.festiveTheme);
+  const festDef = fest ? festivalDef(fest.festival) : null;
+  let ps1 = brandColor;
+  let ps2 = brandColor2;
+  let paper = '#f7f5ef';
+  if (fest && festDef) {
+    if (fest.intensity === 'FULL') {
+      ps1 = festDef.full.ps1;
+      ps2 = festDef.full.ps2;
+      if (festDef.fullSurface) paper = festDef.fullSurface.paper;
+    } else if (fest.recolor) {
+      ps2 = festDef.accent;
+    }
+  }
+  const ink =
+    fest?.intensity === 'FULL' && festDef?.fullSurface
+      ? festDef.fullSurface.ink
+      : mix(brandColor, '#14261d', 0.55);
+  const festDark = fest?.intensity === 'FULL' && !!festDef?.fullSurface;
+
   // Each axis contributes nothing when it is at its default, which is why
   // shipping these columns repainted no existing school.
   const styleClasses = [
@@ -39,6 +70,10 @@ export function themeRootProps(data: PublicSiteData): { className: string; style
     motionGestureClass(data.profile?.motionGesture),
     backgroundTextureClass(data.profile?.backgroundTexture),
     accentClass(data.profile?.headlineAccent),
+    scrollFeelClass(data.profile?.scrollFeel),
+    navDropdownAnimClass(data.profile?.navDropdownAnim),
+    festiveClasses(fest),
+    festDark ? 'ps-fest-dark' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -48,12 +83,12 @@ export function themeRootProps(data: PublicSiteData): { className: string; style
       styleClasses ? ` ${styleClasses}` : ''
     }`,
     style: {
-      '--ps1': brandColor,
-      '--ps2': brandColor2,
+      '--ps1': ps1,
+      '--ps2': ps2,
       '--ink': ink,
       '--font-head': fontHead,
       '--motion': minimal ? 0.25 : motion,
-      '--paper': '#f7f5ef',
+      '--paper': paper,
     } as CSSProperties,
   };
 }

@@ -81,7 +81,7 @@ export default function GallerySection({
           </p>
         </div>
       ) : (
-        <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="ps-gallery-grid mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
           {gallery.map((img, i) => (
             <button
               key={i}

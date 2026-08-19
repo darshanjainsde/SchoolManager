@@ -43,6 +43,17 @@ export interface PublicSiteData {
     navShowLogin: boolean;
     navLoginLabel: string;
     navLoginStyle?: string;
+    /** Website-studio axes. All optional: the api may predate them on deploy. */
+    scrollFeel?: string;
+    navDropdownAnim?: string;
+    heroMedia?: string;
+    heroVideoUrl?: string | null;
+    sectionVariants?: unknown;
+    festiveTheme?: unknown;
+    footerConfig?: unknown;
+    customSectionCss?: unknown;
+    /** Sanitized server-side on write; rendered as-is before the footer. */
+    customHtmlBlock?: string | null;
   } | null;
   homepage: {
     headline: string;
@@ -69,6 +80,8 @@ export interface PublicSiteData {
     showFees: boolean;
     feeNote: string | null;
   };
+  /** Admin-built pages (published only). Optional: older api payloads lack it. */
+  pages?: { slug: string; title: string; blocks: unknown }[];
   events: {
     id: string;
     title: string;
