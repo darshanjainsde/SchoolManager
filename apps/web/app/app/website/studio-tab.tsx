@@ -241,12 +241,7 @@ export default function StudioTab() {
 
   const [draftName, setDraftName] = useState('');
   const saveDraftMutation = useMutation({
-    mutationFn: () =>
-      api.request('/site/design-drafts', {
-        method: 'POST',
-        body: JSON.stringify({ name: draftName.trim() || 'Untitled look', config: current }),
-        headers: { 'Content-Type': 'application/json' },
-      }),
+    mutationFn: () => api.post('/site/design-drafts', { name: draftName.trim() || 'Untitled look', config: current }),
     onSuccess: () => {
       setDraftName('');
       void queryClient.invalidateQueries({ queryKey: ['design-drafts'] });
@@ -256,13 +251,9 @@ export default function StudioTab() {
   });
   const draftOp = useMutation({
     mutationFn: ({ id, op, body }: { id: string; op: 'publish' | 'delete' | 'schedule'; body?: unknown }) => {
-      if (op === 'publish') return api.request(`/site/design-drafts/${id}/publish`, { method: 'POST' });
-      if (op === 'delete') return api.request(`/site/design-drafts/${id}`, { method: 'DELETE' });
-      return api.request(`/site/design-drafts/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(body),
-        headers: { 'Content-Type': 'application/json' },
-      });
+      if (op === 'publish') return api.post(`/site/design-drafts/${id}/publish`);
+      if (op === 'delete') return api.del(`/site/design-drafts/${id}`);
+      return api.put(`/site/design-drafts/${id}`, body);
     },
     onSuccess: (_d, vars) => {
       void queryClient.invalidateQueries({ queryKey: ['design-drafts'] });
@@ -289,16 +280,8 @@ export default function StudioTab() {
   const pageMutation = useMutation({
     mutationFn: (p: { id: string | null; title: string; blocks: Block[]; published: boolean }) =>
       p.id
-        ? api.request(`/site/pages/${p.id}`, {
-            method: 'PUT',
-            body: JSON.stringify({ title: p.title, blocks: p.blocks, published: p.published }),
-            headers: { 'Content-Type': 'application/json' },
-          })
-        : api.request('/site/pages', {
-            method: 'POST',
-            body: JSON.stringify({ title: p.title, blocks: p.blocks, published: p.published }),
-            headers: { 'Content-Type': 'application/json' },
-          }),
+        ? api.put(`/site/pages/${p.id}`, { title: p.title, blocks: p.blocks, published: p.published })
+        : api.post('/site/pages', { title: p.title, blocks: p.blocks, published: p.published }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['school-pages'] });
       setEditingPage(null);
@@ -307,7 +290,7 @@ export default function StudioTab() {
     onError: (err: Error) => toast.error(`Could not save the page: ${err.message}`),
   });
   const pageDelete = useMutation({
-    mutationFn: (id: string) => api.request(`/site/pages/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api.del(`/site/pages/${id}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['school-pages'] });
       toast.success('Page removed');
