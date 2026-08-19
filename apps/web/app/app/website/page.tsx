@@ -1,8 +1,6 @@
 'use client';
 import { useState } from 'react';
 import { useSiteForm } from './site-form';
-import BrandingTab from './branding-tab';
-import ThemeTab from './theme-tab';
 import HomepageTab from './homepage-tab';
 import AboutTab from './about-tab';
 import ContactTab from './contact-tab';
@@ -11,8 +9,6 @@ import StaffTab from './staff-tab';
 import CoursesTab from './courses-tab';
 import AdmissionsTab from './admissions-tab';
 import HallOfFameTab from './hof-tab';
-import DesignTab from './design-tab';
-import MenuTab from './menu-tab';
 import StudioTab from './studio-tab';
 
 /**
@@ -24,10 +20,6 @@ import StudioTab from './studio-tab';
 
 type Tab =
   | 'studio'
-  | 'branding'
-  | 'theme'
-  | 'design'
-  | 'menu'
   | 'homepage'
   | 'about'
   | 'contact'
@@ -37,14 +29,13 @@ type Tab =
   | 'gallery'
   | 'staff';
 
+// Studio is DESIGN (colours, theme, first screen, sections, navbar + menu,
+// scroll feel, festive, footer, custom pages & code) — all against a live
+// preview, in one place. The remaining tabs are CONTENT: the words, people
+// and photos that fill those sections. Branding/Theme/Design/Menu used to be
+// four separate design tabs; they now live inside Studio.
 const TABS: { id: Tab; label: string }[] = [
-  // The studio leads: it is the only tab with a live preview, and everything
-  // it saves goes through the same endpoints the older tabs use.
   { id: 'studio', label: 'Studio' },
-  { id: 'branding', label: 'Branding' },
-  { id: 'theme', label: 'Theme' },
-  { id: 'design', label: 'Design' },
-  { id: 'menu', label: 'Menu' },
   { id: 'homepage', label: 'Homepage' },
   { id: 'about', label: 'About' },
   { id: 'contact', label: 'Contact & address' },
@@ -99,13 +90,9 @@ export default function WebsitePage() {
           changes no lifecycle. Reduced motion simply shows the new tab. */}
       <div className="sk-wfade" key={activeTab}>
       {activeTab === 'studio' && <StudioTab />}
-      {activeTab === 'branding' && <BrandingTab form={form} />}
-      {activeTab === 'theme' && <ThemeTab form={form} onGoToDesign={() => setActiveTab('design')} />}
-      {activeTab === 'homepage' && <HomepageTab form={form} onGoToDesign={() => setActiveTab('design')} />}
+      {activeTab === 'homepage' && <HomepageTab form={form} onGoToDesign={() => setActiveTab('studio')} />}
       {activeTab === 'about' && <AboutTab form={form} />}
       {activeTab === 'contact' && <ContactTab form={form} />}
-      {activeTab === 'design' && <DesignTab />}
-      {activeTab === 'menu' && <MenuTab />}
       {activeTab === 'courses' && <CoursesTab />}
       {activeTab === 'admissions' && <AdmissionsTab />}
       {activeTab === 'hof' && <HallOfFameTab />}

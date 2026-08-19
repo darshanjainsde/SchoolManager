@@ -70,7 +70,7 @@ export default function HomepageTab({ form, onGoToDesign }: { form: SiteForm; on
             </span>
             <span className="block text-xs text-slate-500">
               First-screen layouts, more image slots and overlay controls now live in the{' '}
-              <span className="font-semibold text-teal-700">Design</span> tab →
+              <span className="font-semibold text-teal-700">Studio</span> tab →
             </span>
           </button>
 

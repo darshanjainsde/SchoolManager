@@ -2,49 +2,54 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Monitor, Smartphone, RotateCw } from 'lucide-react';
+import { Monitor, Smartphone, RotateCw, ChevronRight, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, X, Upload, CornerLeftUp } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import ImageUploader from './image-uploader';
+import { THEME_PRESETS, FONT_OPTIONS, MOTION_OPTIONS } from '@/lib/theme-presets';
+import { STYLE_PRESETS, MOTION_GESTURES, BACKGROUND_TEXTURES } from '@/components/public/site-style';
+import { SECTION_SHAPES } from '@/components/public/section-shape';
 import {
-  SCROLL_FEELS,
-  NAV_DROPDOWN_ANIMS,
-  HERO_MEDIA_OPTIONS,
-  SECTION_KEYS,
-  SECTION_VARIANT_DEFS,
-  FESTIVALS,
-  FOOTER_LAYOUTS,
-  FOOTER_COLORS,
-  normalizeFooterConfig,
-  normalizeFestiveTheme,
-  normalizeSectionVariants,
-  type SectionKey,
+  SCROLL_FEELS, NAV_DROPDOWN_ANIMS, HERO_MEDIA_OPTIONS, SECTION_KEYS, SECTION_VARIANT_DEFS,
+  FESTIVALS, FOOTER_LAYOUTS, FOOTER_COLORS,
+  normalizeFooterConfig, normalizeFestiveTheme, normalizeSectionVariants, type SectionKey,
 } from '@/components/public/site-variants';
+import { defaultNavConfig, validateNavConfig, type NavConfig, type NavConfigItem } from '@/components/public/sections/nav-config';
+import {
+  HERO_LAYOUTS, HEADLINE_ACCENTS, HERO_ALIGN, HERO_OVERLAY, HERO_HEIGHT,
+  NAV_STYLES, NAV_COLORS, NAV_TEXT, LOGIN_STYLES, OVERLAY_LAYOUTS, VIDEO_LAYOUTS, type Opt,
+} from './studio-catalogues';
 
 /**
- * THE STUDIO: every look-and-motion control against a LIVE preview.
+ * THE STUDIO — the one place to design the whole website, against a live
+ * preview. Everything that decides how the site LOOKS lives here: brand
+ * colours, theme, the first screen, section styling, the navbar and its menu,
+ * scroll feel, festive mode, the footer, custom pages and the code escape
+ * hatch. Content (Homepage text, About, Courses, Gallery…) stays in its own
+ * tabs — this is design, not words.
  *
  * The preview iframe is /preview — the real PublicSite fed the real payload —
- * and edits reach it by postMessage, so nothing an admin tries here touches
- * the live site until they press Publish. That is the whole difference from
- * the Design tab's instant-save model, and why this tab exists.
+ * and edits reach it by postMessage, so nothing touches the live site until
+ * Publish. Assets (logo, hero photos) upload immediately because a file can't
+ * be previewed before it exists; the preview reloads to pick them up.
  *
- * Responsive contract: ≥lg the rail and canvas sit side by side; below lg an
- * Edit/Preview toggle swaps them full-width (the portal chrome already gives
- * the sidebar a drawer on mobile).
+ * Layout: the preview is FROZEN on the right (its column never scrolls) while
+ * the control rail scrolls on its own, and the rail's groups are collapsible
+ * so every group is visible at a glance and you open only the one you want.
  */
 
-// ── The design subset a look carries (mirror of the api's design-config.ts;
-//    the api re-whitelists on every write, so drift fails safe). ──
+// The design subset a saved look carries — mirror of the api's design-config.ts.
 const DESIGN_KEYS = [
   'brandColorPrimary', 'brandColorSecondary', 'headingFont', 'animationLevel', 'themePreset',
   'heroLayout', 'heroTextAlign', 'heroOverlayStyle', 'heroOverlayOpacity', 'heroHeight',
   'headlineAccent', 'sectionShape', 'motionGesture', 'backgroundTexture',
   'navStyle', 'navColor', 'navTextColor', 'navLoginStyle',
+  'navCtaLabel', 'navShowCta', 'navLoginLabel', 'navShowLogin', 'navConfig',
   'scrollFeel', 'navDropdownAnim', 'heroMedia', 'heroVideoUrl',
   'sectionVariants', 'festiveTheme', 'footerConfig',
 ] as const;
@@ -53,80 +58,67 @@ type Look = Record<string, unknown>;
 
 interface SiteContent {
   profile: Record<string, unknown> | null;
+  homepage?: { heroImageAssetIds?: string[] | null } | null;
+  school?: { features?: string[] } | null;
+  courses?: unknown[];
 }
-interface DesignDraft {
-  id: string;
-  name: string;
-  config: Record<string, unknown>;
-  publishAt: string | null;
-  revertAt: string | null;
-  updatedAt: string;
-}
-interface SchoolPage {
-  id: string;
-  slug: string;
-  title: string;
-  blocks: unknown[];
-  published: boolean;
-}
-interface MediaAsset {
-  id: string;
-  url: string;
-}
+interface DesignDraft { id: string; name: string; config: Record<string, unknown>; publishAt: string | null; revertAt: string | null; }
+interface SchoolPage { id: string; slug: string; title: string; blocks: unknown[]; published: boolean; }
+interface MediaAsset { id: string; url: string }
 
 function pickLook(profile: Record<string, unknown> | null | undefined): Look {
   const out: Look = {};
   if (!profile) return out;
-  for (const key of DESIGN_KEYS) {
-    if (profile[key] !== undefined) out[key] = profile[key];
-  }
+  for (const k of DESIGN_KEYS) if (profile[k] !== undefined) out[k] = profile[k];
   return out;
 }
 
 type Block =
-  | { t: 'h'; text: string }
-  | { t: 'p'; text: string }
+  | { t: 'h'; text: string } | { t: 'p'; text: string }
   | { t: 'img'; url: string; caption?: string | null }
   | { t: 'imgtext'; url: string | null; text: string }
   | { t: 'cta'; label: string; href?: string | null };
+const BLOCK_NAMES: Record<Block['t'], string> = { h: 'Heading', p: 'Text', img: 'Image', imgtext: 'Image & text', cta: 'Button' };
 
-const BLOCK_NAMES: Record<Block['t'], string> = {
-  h: 'Heading', p: 'Text', img: 'Image', imgtext: 'Image & text', cta: 'Button',
-};
+const AVAIL_ALWAYS = ['about', 'hof', 'admissions', 'contact'];
+function availablePages(c: SiteContent | undefined): string[] {
+  const f = c?.school?.features ?? [];
+  const has: Record<string, boolean> = {
+    about: true, hof: true, admissions: true, contact: true,
+    gallery: f.includes('GALLERY'), connect: f.includes('EVENTS'), blog: f.includes('BLOG'),
+    academics: (c?.courses?.length ?? 0) > 0,
+  };
+  return Object.keys(has).filter((k) => has[k] || AVAIL_ALWAYS.includes(k));
+}
 
-// ── Small control primitives (portal-styled, keyboardable) ──
-function Chips<T extends string>({
-  options,
-  value,
-  onPick,
-}: {
-  options: readonly { value: T; label: string; hint?: string }[];
-  value: string | null | undefined;
-  onPick: (v: T) => void;
-}) {
+// ── control primitives ──────────────────────────────────────────────────────
+function Chips({ options, value, onPick }: { options: readonly Opt[]; value: string | null | undefined; onPick: (v: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          title={o.hint}
-          onClick={() => onPick(o.value)}
-          aria-pressed={value === o.value}
-          className={[
-            'sk-press rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors',
-            value === o.value
-              ? 'border-teal-600 bg-teal-50 text-teal-700'
-              : 'border-slate-200 bg-white text-slate-500 hover:text-slate-700',
-          ].join(' ')}
-        >
+        <button key={o.value} type="button" title={o.hint} onClick={() => onPick(o.value)} aria-pressed={value === o.value}
+          className={['sk-press rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors',
+            value === o.value ? 'border-teal-600 bg-teal-50 text-teal-700' : 'border-slate-200 bg-white text-slate-500 hover:text-slate-700'].join(' ')}>
           {o.label}
         </button>
       ))}
     </div>
   );
 }
-
+function Stack({ options, value, onPick }: { options: readonly Opt[]; value: string | null | undefined; onPick: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {options.map((o) => (
+        <button key={o.value} type="button" onClick={() => onPick(o.value)} aria-pressed={value === o.value}
+          className={['sk-press rounded-lg border px-3 py-2 text-left transition-colors',
+            value === o.value ? 'border-teal-600 bg-teal-50' : 'border-slate-200 hover:border-slate-300'].join(' ')}>
+          <span className="block text-sm font-semibold text-slate-700">{o.label}</span>
+          {o.hint && <span className="block text-xs text-slate-500">{o.hint}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-600">
@@ -135,56 +127,30 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
     </label>
   );
 }
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <div className="mb-1.5 mt-3 text-[11px] font-bold uppercase tracking-wide text-slate-400 first:mt-0">{children}</div>;
+}
 
 export default function StudioTab() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
   const queryClient = useQueryClient();
 
-  const { data } = useQuery({
-    queryKey: ['site-content'],
-    queryFn: () => api.get<SiteContent>('/site/content'),
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    enabled: !!host,
-  });
-  const drafts = useQuery({
-    queryKey: ['design-drafts'],
-    queryFn: () => api.get<DesignDraft[]>('/site/design-drafts'),
-    refetchOnWindowFocus: false,
-    enabled: !!host,
-  });
-  const pages = useQuery({
-    queryKey: ['school-pages'],
-    queryFn: () => api.get<SchoolPage[]>('/site/pages'),
-    refetchOnWindowFocus: false,
-    enabled: !!host,
-  });
-  const galleryMedia = useQuery({
-    queryKey: ['site-media-gallery'],
-    queryFn: () => api.get<MediaAsset[]>('/site/media?kind=GALLERY'),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-    enabled: !!host,
-  });
+  const { data } = useQuery({ queryKey: ['site-content'], queryFn: () => api.get<SiteContent>('/site/content'), staleTime: Infinity, refetchOnWindowFocus: false, enabled: !!host });
+  const drafts = useQuery({ queryKey: ['design-drafts'], queryFn: () => api.get<DesignDraft[]>('/site/design-drafts'), refetchOnWindowFocus: false, enabled: !!host });
+  const pages = useQuery({ queryKey: ['school-pages'], queryFn: () => api.get<SchoolPage[]>('/site/pages'), refetchOnWindowFocus: false, enabled: !!host });
+  const galleryMedia = useQuery({ queryKey: ['site-media-gallery'], queryFn: () => api.get<MediaAsset[]>('/site/media?kind=GALLERY'), staleTime: 30_000, refetchOnWindowFocus: false, enabled: !!host });
+  const heroMedia = useQuery({ queryKey: ['site-media-hero'], queryFn: () => api.get<MediaAsset[]>('/site/media?kind=HERO'), staleTime: 30_000, refetchOnWindowFocus: false, enabled: !!host });
 
   const profile = data?.profile ?? null;
   const savedLook = useMemo(() => pickLook(profile), [profile]);
-  // Order-stable signature — the server may echo the design keys in a different
-  // order than we sent them, and a raw JSON.stringify would then read as dirty.
   const sig = useCallback((l: Look) => JSON.stringify(Object.entries(l).sort(([a], [b]) => a.localeCompare(b))), []);
   const savedSig = sig(savedLook);
 
-  // The look under edit. null = "seed me from the saved look when it arrives".
   const [look, setLookState] = useState<Look | null>(null);
   const seededRef = useRef<string | null>(null);
   useEffect(() => {
     if (!profile) return;
-    // Seed on first load; RE-seed after a save whenever the admin has no
-    // pending edits (the current look still equals the one we last seeded).
-    // This is what stops a publish from reading as "unpublished changes" once
-    // its refetch lands — without it, the seed effect reseeds from a stale
-    // cache and the badge sticks on dirty.
     if (look === null || (seededRef.current !== null && sig(look) === seededRef.current && seededRef.current !== savedSig)) {
       setLookState(savedLook);
       seededRef.current = savedSig;
@@ -192,15 +158,18 @@ export default function StudioTab() {
   }, [profile, look, savedSig, savedLook, sig]);
   const current: Look = look ?? savedLook;
   const dirty = look !== null && sig(look) !== savedSig;
-  const setLook = useCallback((patch: Look) => {
-    setLookState((prev) => ({ ...(prev ?? savedLook), ...patch }));
-  }, [savedLook]);
+  const setLook = useCallback((patch: Look) => setLookState((prev) => ({ ...(prev ?? savedLook), ...patch })), [savedLook]);
 
-  // Custom code is separate from the look (it is content-adjacent and saves
-  // through its own Apply buttons) but still previews live.
-  const [cssSection, setCssSection] = useState<string>('stats');
+  // Menu arrangement lives in the look (live-previews + publishes with it),
+  // gated by the same validator the standalone editor used.
+  const navConfig = (current.navConfig as NavConfig | null | undefined) ?? defaultNavConfig();
+  const availPages = useMemo(() => availablePages(data), [data]);
+  const navCheck = useMemo(() => validateNavConfig(navConfig, availPages), [navConfig, availPages]);
+
+  // Custom code (previews live for CSS; HTML only after a sanitized save).
+  const [cssSection, setCssSection] = useState('stats');
   const [cssDrafts, setCssDrafts] = useState<Record<string, string>>({});
-  const [htmlDraft, setHtmlDraft] = useState<string>('');
+  const [htmlDraft, setHtmlDraft] = useState('');
   const [codeSeeded, setCodeSeeded] = useState(false);
   useEffect(() => {
     if (!profile || codeSeeded) return;
@@ -210,26 +179,14 @@ export default function StudioTab() {
     setCodeSeeded(true);
   }, [profile, codeSeeded]);
 
-  // ── Live preview plumbing ──
+  // ── live preview ──
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const reloadPreview = useCallback(() => { const f = iframeRef.current; if (f) f.src = '/preview'; }, []);
   const postPreview = useCallback(() => {
-    // CSS previews live — it is scoped + sanitized client-side and cannot run
-    // script. The HTML block deliberately does NOT: rendering the raw textarea
-    // in a same-origin console frame would be a stored-XSS-to-self vector, so
-    // the block only appears once it is SAVED and server-sanitized (its saved
-    // value rides in on the preview's own fetch, untouched by these overrides).
-    const overrides = {
-      ...current,
-      customSectionCss: cssDrafts,
-    };
-    iframeRef.current?.contentWindow?.postMessage(
-      { type: 'sk-studio-preview', overrides },
-      window.location.origin,
-    );
+    const overrides = { ...current, customSectionCss: cssDrafts };
+    iframeRef.current?.contentWindow?.postMessage({ type: 'sk-studio-preview', overrides }, window.location.origin);
   }, [current, cssDrafts]);
-  useEffect(() => {
-    postPreview();
-  }, [postPreview]);
+  useEffect(() => { postPreview(); }, [postPreview]);
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
@@ -241,584 +198,539 @@ export default function StudioTab() {
 
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [mobilePane, setMobilePane] = useState<'edit' | 'preview'>('edit');
-  const reloadPreview = () => {
-    const f = iframeRef.current;
-    if (f) f.src = '/preview';
-  };
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
-  // ── Mutations ──
+  // ── mutations ──
+  const invalidateContent = () => void queryClient.invalidateQueries({ queryKey: ['site-content'] });
   const publishMutation = useMutation({
     mutationFn: () => api.put('/site/profile', current),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['site-content'] });
-      setLookState(null);
-      toast.success('Published — visitors now see this look');
-    },
+    onSuccess: () => { invalidateContent(); setLookState(null); toast.success('Published — visitors now see this look'); },
     onError: (err: Error) => toast.error(`Publish failed: ${err.message}`),
   });
-
   const [draftName, setDraftName] = useState('');
   const saveDraftMutation = useMutation({
     mutationFn: () => api.post('/site/design-drafts', { name: draftName.trim() || 'Untitled look', config: current }),
-    onSuccess: () => {
-      setDraftName('');
-      void queryClient.invalidateQueries({ queryKey: ['design-drafts'] });
-      toast.success('Look saved as a draft');
-    },
+    onSuccess: () => { setDraftName(''); void queryClient.invalidateQueries({ queryKey: ['design-drafts'] }); toast.success('Look saved as a draft'); },
     onError: (err: Error) => toast.error(`Could not save the draft: ${err.message}`),
   });
   const draftOp = useMutation({
-    mutationFn: ({ id, op, body }: { id: string; op: 'publish' | 'delete' | 'schedule'; body?: unknown }) => {
-      if (op === 'publish') return api.post(`/site/design-drafts/${id}/publish`);
-      if (op === 'delete') return api.del(`/site/design-drafts/${id}`);
-      return api.put(`/site/design-drafts/${id}`, body);
-    },
+    mutationFn: ({ id, op, body }: { id: string; op: 'publish' | 'delete' | 'schedule'; body?: unknown }) =>
+      op === 'publish' ? api.post(`/site/design-drafts/${id}/publish`) : op === 'delete' ? api.del(`/site/design-drafts/${id}`) : api.put(`/site/design-drafts/${id}`, body),
     onSuccess: (_d, vars) => {
       void queryClient.invalidateQueries({ queryKey: ['design-drafts'] });
-      if (vars.op === 'publish') {
-        void queryClient.invalidateQueries({ queryKey: ['site-content'] });
-        setLookState(null);
-        toast.success('Draft published — it is the live look now');
-      }
+      if (vars.op === 'publish') { invalidateContent(); setLookState(null); toast.success('Draft published — it is the live look now'); }
     },
     onError: (err: Error) => toast.error(err.message),
   });
-
   const codeMutation = useMutation({
     mutationFn: (patch: Record<string, unknown>) => api.put('/site/profile', patch),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['site-content'] });
-      toast.success('Custom code saved (sanitized server-side)');
-    },
+    onSuccess: () => { invalidateContent(); toast.success('Custom code saved (sanitized server-side)'); },
     onError: (err: Error) => toast.error(`Could not save: ${err.message}`),
   });
 
-  // ── Pages editor ──
+  // ── assets: logo + hero photos (instant save; reload the preview) ──
+  const [uploading, setUploading] = useState<string | null>(null);
+  const heroSlotFile = useRef<HTMLInputElement>(null);
+  const pendingSlot = useRef(0);
+  const slotIds = (data?.homepage?.heroImageAssetIds ?? []) as string[];
+  const heroUrlOf = (id: string) => heroMedia.data?.find((m) => m.id === id)?.url ?? null;
+  async function uploadLogo(file: File) {
+    setUploading('logo');
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const asset = await api.request<MediaAsset>('/site/media?kind=LOGO', { method: 'POST', body: fd });
+      await api.put('/site/profile', { logoAssetId: asset.id });
+      invalidateContent(); reloadPreview(); toast.success('Logo uploaded');
+    } catch (err) { toast.error(`Logo upload failed: ${(err as Error).message}`); } finally { setUploading(null); }
+  }
+  async function saveSlots(ids: string[]) {
+    await api.put('/site/homepage', { heroImageAssetIds: ids });
+    void queryClient.invalidateQueries({ queryKey: ['site-content'] });
+    void queryClient.invalidateQueries({ queryKey: ['site-media-hero'] });
+    reloadPreview();
+  }
+  async function uploadSlot(index: number, file: File) {
+    setUploading('hero');
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const asset = await api.request<MediaAsset>('/site/media?kind=HERO', { method: 'POST', body: fd });
+      const ids = [...slotIds]; ids[index] = asset.id;
+      await saveSlots(ids.filter(Boolean).slice(0, 5));
+    } catch (err) { toast.error(`Image upload failed: ${(err as Error).message}`); } finally { setUploading(null); }
+  }
+
+  // ── custom pages ──
   const [editingPage, setEditingPage] = useState<{ id: string | null; title: string; blocks: Block[]; published: boolean } | null>(null);
   const pageMutation = useMutation({
     mutationFn: (p: { id: string | null; title: string; blocks: Block[]; published: boolean }) =>
-      p.id
-        ? api.put(`/site/pages/${p.id}`, { title: p.title, blocks: p.blocks, published: p.published })
-        : api.post('/site/pages', { title: p.title, blocks: p.blocks, published: p.published }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['school-pages'] });
-      setEditingPage(null);
-      toast.success('Page saved — it appears in your menu and at its /p/ address');
-    },
+      p.id ? api.put(`/site/pages/${p.id}`, { title: p.title, blocks: p.blocks, published: p.published })
+           : api.post('/site/pages', { title: p.title, blocks: p.blocks, published: p.published }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['school-pages'] }); setEditingPage(null); toast.success('Page saved'); },
     onError: (err: Error) => toast.error(`Could not save the page: ${err.message}`),
   });
   const pageDelete = useMutation({
     mutationFn: (id: string) => api.del(`/site/pages/${id}`),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['school-pages'] });
-      toast.success('Page removed');
-    },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['school-pages'] }); toast.success('Page removed'); },
     onError: (err: Error) => toast.error(err.message),
   });
 
+  // derived look helpers
   const festive = normalizeFestiveTheme(current.festiveTheme);
   const festiveDef = festive ? FESTIVALS.find((f) => f.value === festive.festival) : null;
   const footer = normalizeFooterConfig(current.footerConfig);
   const variants = normalizeSectionVariants(current.sectionVariants);
-  const setVariant = (key: SectionKey, patch: { layout?: string; gesture?: string }) => {
+  const setVariant = (key: SectionKey, patch: { layout?: string; gesture?: string }) =>
     setLook({ sectionVariants: { ...variants, [key]: { ...(variants[key] ?? {}), ...patch } } });
+  const heroLayout = (current.heroLayout as string) ?? 'ILLUSTRATION';
+  const heroSpec = HERO_LAYOUTS.find((l) => l.value === heroLayout) ?? HERO_LAYOUTS[0];
+  const overlayOn = OVERLAY_LAYOUTS.includes(heroLayout);
+  const brand1 = (current.brandColorPrimary as string) ?? '#2f6b4f';
+  const brand2 = (current.brandColorSecondary as string) ?? '#e8b04b';
+
+  // theme preset match
+  const applyPreset = (key: string) => {
+    const p = THEME_PRESETS[key];
+    if (!p) return;
+    setLook({ brandColorPrimary: p.primary, brandColorSecondary: p.secondary, headingFont: p.headingFont, themePreset: key });
   };
 
-  const editBlock = (i: number, patch: Partial<Block>) => {
-    setEditingPage((p) =>
-      p ? { ...p, blocks: p.blocks.map((b, j) => (j === i ? ({ ...b, ...patch } as Block) : b)) } : p,
+  // menu edit helpers (operate on the look's navConfig)
+  const editMenu = (fn: (items: NavConfigItem[]) => NavConfigItem[]) =>
+    setLook({ navConfig: { items: fn(navConfig.items.map((i) => ({ ...i, children: [...i.children] }))) } });
+  const moveMenu = (index: number, by: number) => editMenu((items) => {
+    const to = index + by; if (to < 0 || to >= items.length) return items;
+    const [row] = items.splice(index, 1); items.splice(to, 0, row); return items;
+  });
+  const promoteMenu = (itemIndex: number, childKey: string) => editMenu((items) => {
+    const item = items[itemIndex]; const child = item.children.find((c) => c.key === childKey); if (!child) return items;
+    item.children = item.children.filter((c) => c.key !== childKey);
+    items.push({ key: child.key, slug: child.key, label: child.label, behaviour: 'page', children: [] });
+    return items.filter((i) => i.behaviour !== 'menu' || i.children.length > 0);
+  });
+  const demoteMenu = (itemIndex: number, intoIndex: number) => editMenu((items) => {
+    const item = items[itemIndex]; const into = items[intoIndex]; if (!item || !into || item === into) return items;
+    into.children.push({ key: item.key, label: item.label });
+    return items.filter((_, i) => i !== itemIndex);
+  });
+
+  const editBlock = (i: number, patch: Partial<Block>) => setEditingPage((p) => p ? { ...p, blocks: p.blocks.map((b, j) => j === i ? ({ ...b, ...patch } as Block) : b) } : p);
+  const moveBlock = (i: number, dir: -1 | 1) => setEditingPage((p) => {
+    if (!p) return p; const next = [...p.blocks]; const j = i + dir; if (j < 0 || j >= next.length) return p;
+    [next[i], next[j]] = [next[j], next[i]]; return { ...p, blocks: next };
+  });
+
+  const PAGE_LABELS: Record<string, string> = { about: 'About', hof: 'Hall of Fame', gallery: 'Gallery', academics: 'Academics', admissions: 'Admissions', connect: 'Connect', blog: 'Blog', contact: 'Contact' };
+
+  // ── a collapsible group ──
+  function Group({ id, title, summary, children }: { id: string; title: string; summary?: string; children: React.ReactNode }) {
+    const isOpen = !!open[id];
+    return (
+      <Card>
+        <button type="button" onClick={() => toggle(id)} aria-expanded={isOpen}
+          className="sk-press flex w-full items-center gap-2 px-3.5 py-3 text-left">
+          <ChevronRight className={`h-4 w-4 flex-none text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+          <span className="flex-1">
+            <span className="block text-sm font-semibold text-slate-800">{title}</span>
+            {summary && !isOpen && <span className="block truncate text-xs text-slate-400">{summary}</span>}
+          </span>
+        </button>
+        {isOpen && <div className="border-t border-slate-100 px-3.5 py-3">{children}</div>}
+      </Card>
     );
-  };
-  const moveBlock = (i: number, dir: -1 | 1) => {
-    setEditingPage((p) => {
-      if (!p) return p;
-      const next = [...p.blocks];
-      const j = i + dir;
-      if (j < 0 || j >= next.length) return p;
-      [next[i], next[j]] = [next[j], next[i]];
-      return { ...p, blocks: next };
-    });
-  };
+  }
 
   const rail = (
-    <div className="flex flex-col gap-4">
-      {/* ── Go live ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between text-base">
-            <span>Your look</span>
-            <span
-              className={[
-                'rounded-full border px-2.5 py-0.5 text-[11px] font-bold',
-                dirty ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-400',
-              ].join(' ')}
-            >
-              {dirty ? '● Unpublished changes' : '✓ Matches live'}
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <p className="text-xs text-slate-500">
-            Everything below previews instantly on the right and touches your live site only when you publish.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => publishMutation.mutate()} disabled={!dirty || publishMutation.isPending}>
-              {publishMutation.isPending ? 'Publishing…' : 'Publish changes'}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setLookState(pickLook(profile))} disabled={!dirty}>
-              Discard
-            </Button>
+    <div className="flex flex-col gap-2.5">
+      {/* Publish / drafts — always visible */}
+      <Card className="p-3.5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">Your look</h3>
+          <span className={['rounded-full border px-2.5 py-0.5 text-[11px] font-bold',
+            dirty ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-400'].join(' ')}>
+            {dirty ? '● Unpublished changes' : '✓ Matches live'}
+          </span>
+        </div>
+        <p className="mt-1.5 text-xs text-slate-500">Everything below previews on the right and goes live only when you publish.</p>
+        {!navCheck.ok && (
+          <div role="alert" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800">
+            <b>The menu needs fixing before you can publish:</b>
+            <ul className="mt-1 list-disc pl-4">{navCheck.errors.map((e) => <li key={e}>{e}</li>)}</ul>
           </div>
-          <div className="flex gap-2">
-            <Input
-              value={draftName}
-              onChange={(e) => setDraftName(e.target.value)}
-              placeholder="e.g. Diwali Edition ✨"
-              maxLength={80}
-              className="h-9 text-sm"
-            />
-            <Button size="sm" variant="outline" onClick={() => saveDraftMutation.mutate()} disabled={saveDraftMutation.isPending}>
-              Save draft
-            </Button>
-          </div>
-          {(drafts.data ?? []).length > 0 && (
-            <ul className="flex flex-col gap-2">
-              {(drafts.data ?? []).map((d) => (
-                <li key={d.id} className="rounded-lg border border-slate-200 p-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex-1 truncate text-sm font-semibold text-slate-700">{d.name}</span>
-                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                      onClick={() => { setLookState({ ...savedLook, ...pickLook(d.config) }); toast.success(`Previewing “${d.name}” — publish to make it live`); }}>
-                      Preview
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                      onClick={() => draftOp.mutate({ id: d.id, op: 'publish' })}>
-                      Publish now
-                    </Button>
-                    <button type="button" aria-label={`Delete ${d.name}`} className="text-xs text-rose-500 hover:text-rose-700"
-                      onClick={() => draftOp.mutate({ id: d.id, op: 'delete' })}>
-                      ✕
-                    </button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                    <span>📅 Auto-publish</span>
-                    <input
-                      type="date"
-                      value={d.publishAt ? d.publishAt.slice(0, 10) : ''}
-                      aria-label={`Publish date for ${d.name}`}
-                      className="rounded border border-slate-200 px-1.5 py-0.5"
-                      onChange={(e) =>
-                        // Send only the field that changed; the API leaves the
-                        // other untouched, so the two inputs cannot clobber each
-                        // other while a refetch is in flight.
-                        draftOp.mutate({
-                          id: d.id, op: 'schedule',
-                          body: { name: d.name, config: d.config, publishAt: e.target.value || null },
-                        })
-                      }
-                    />
-                    <span>revert</span>
-                    <input
-                      type="date"
-                      value={d.revertAt ? d.revertAt.slice(0, 10) : ''}
-                      aria-label={`Revert date for ${d.name}`}
-                      className="rounded border border-slate-200 px-1.5 py-0.5"
-                      onChange={(e) =>
-                        draftOp.mutate({
-                          id: d.id, op: 'schedule',
-                          body: { name: d.name, config: d.config, revertAt: e.target.value || null },
-                        })
-                      }
-                    />
-                    {d.publishAt && (
-                      <span className="basis-full text-slate-400">
-                        Applies itself through that window and reverts after — no clicks needed.
-                      </span>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
+        )}
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => publishMutation.mutate()} disabled={!dirty || !navCheck.ok || publishMutation.isPending}>
+            {publishMutation.isPending ? 'Publishing…' : 'Publish changes'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setLookState(pickLook(profile))} disabled={!dirty}>Discard</Button>
+        </div>
+        <div className="mt-2.5 flex gap-2">
+          <Input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="e.g. Diwali Edition ✨" maxLength={80} className="h-9 text-sm" />
+          <Button size="sm" variant="outline" onClick={() => saveDraftMutation.mutate()} disabled={saveDraftMutation.isPending}>Save draft</Button>
+        </div>
+        {(drafts.data ?? []).length > 0 && (
+          <ul className="mt-2.5 flex flex-col gap-2">
+            {(drafts.data ?? []).map((d) => (
+              <li key={d.id} className="rounded-lg border border-slate-200 p-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex-1 truncate text-sm font-semibold text-slate-700">{d.name}</span>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                    onClick={() => { setLookState({ ...savedLook, ...pickLook(d.config) }); toast.success(`Previewing “${d.name}”`); }}>Preview</Button>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => draftOp.mutate({ id: d.id, op: 'publish' })}>Publish now</Button>
+                  <button type="button" aria-label={`Delete ${d.name}`} className="text-xs text-rose-500 hover:text-rose-700" onClick={() => draftOp.mutate({ id: d.id, op: 'delete' })}>✕</button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                  <span>📅 Auto-publish</span>
+                  <input type="date" value={d.publishAt ? d.publishAt.slice(0, 10) : ''} aria-label={`Publish date for ${d.name}`} className="rounded border border-slate-200 px-1.5 py-0.5"
+                    onChange={(e) => draftOp.mutate({ id: d.id, op: 'schedule', body: { name: d.name, config: d.config, publishAt: e.target.value || null } })} />
+                  <span>revert</span>
+                  <input type="date" value={d.revertAt ? d.revertAt.slice(0, 10) : ''} aria-label={`Revert date for ${d.name}`} className="rounded border border-slate-200 px-1.5 py-0.5"
+                    onChange={(e) => draftOp.mutate({ id: d.id, op: 'schedule', body: { name: d.name, config: d.config, revertAt: e.target.value || null } })} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
-      {/* ── Scroll feel ── */}
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Scroll feel</CardTitle></CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {SCROLL_FEELS.map((o) => (
-            <button key={o.value} type="button" onClick={() => setLook({ scrollFeel: o.value })}
-              aria-pressed={(current.scrollFeel ?? 'CLASSIC') === o.value}
-              className={[
-                'sk-press rounded-lg border px-3 py-2 text-left transition-colors',
-                (current.scrollFeel ?? 'CLASSIC') === o.value ? 'border-teal-600 bg-teal-50' : 'border-slate-200 hover:border-slate-300',
-              ].join(' ')}
-            >
-              <span className="block text-sm font-semibold text-slate-700">{o.label}</span>
-              <span className="block text-xs text-slate-500">{o.hint}</span>
+      {/* ── Brand & theme ── */}
+      <Group id="brand" title="Brand & theme" summary="Colours, font, animation">
+        <FieldLabel>Ready-made theme</FieldLabel>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {Object.entries(THEME_PRESETS).map(([key, p]) => (
+            <button key={key} type="button" onClick={() => applyPreset(key)} aria-pressed={current.themePreset === key}
+              className={['rounded-xl border p-2 text-left transition', current.themePreset === key ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300'].join(' ')}>
+              <span className="flex gap-1"><span className="h-4 w-4 rounded-full" style={{ background: p.primary }} /><span className="h-4 w-4 rounded-full" style={{ background: p.secondary }} /></span>
+              <span className="mt-1.5 block text-[11px] font-semibold capitalize">{key.toLowerCase()}</span>
             </button>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+        <FieldLabel>Primary colour</FieldLabel>
+        <div className="flex items-center gap-2">
+          <input type="color" aria-label="Primary colour" value={brand1} onChange={(e) => setLook({ brandColorPrimary: e.target.value, themePreset: 'CUSTOM' })} className="h-9 w-12 cursor-pointer rounded border border-slate-300 p-0.5" />
+          <Input value={brand1} onChange={(e) => setLook({ brandColorPrimary: e.target.value, themePreset: 'CUSTOM' })} maxLength={7} className="h-9 font-mono text-sm" />
+        </div>
+        <FieldLabel>Accent colour</FieldLabel>
+        <div className="flex items-center gap-2">
+          <input type="color" aria-label="Accent colour" value={brand2} onChange={(e) => setLook({ brandColorSecondary: e.target.value, themePreset: 'CUSTOM' })} className="h-9 w-12 cursor-pointer rounded border border-slate-300 p-0.5" />
+          <Input value={brand2} onChange={(e) => setLook({ brandColorSecondary: e.target.value, themePreset: 'CUSTOM' })} maxLength={7} className="h-9 font-mono text-sm" />
+        </div>
+        <FieldLabel>Heading font</FieldLabel>
+        <Chips options={FONT_OPTIONS} value={(current.headingFont as string) ?? 'INTER'} onPick={(v) => setLook({ headingFont: v, themePreset: 'CUSTOM' })} />
+        <FieldLabel>Animation level</FieldLabel>
+        <Chips options={MOTION_OPTIONS} value={(current.animationLevel as string) ?? 'FULL'} onPick={(v) => setLook({ animationLevel: v })} />
+        <FieldLabel>Logo</FieldLabel>
+        <div className="rounded-lg border border-slate-200 p-2.5">
+          <ImageUploader label="School logo" hint="PNG or SVG. Max 8 MB. Saves and updates the preview immediately."
+            previewUrl={null} hasExistingAsset={!!profile?.logoAssetId} isUploading={uploading === 'logo'} onFile={uploadLogo} />
+        </div>
+      </Group>
 
-      {/* ── First screen extras ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">First screen media</CardTitle>
-          <p className="text-xs text-slate-500">Layout, images and overlays stay in the Design tab — this adds what plays behind them.</p>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <Chips options={HERO_MEDIA_OPTIONS} value={(current.heroMedia as string) ?? 'IMAGE'}
-            onPick={(v) => setLook({ heroMedia: v })} />
-          {current.heroMedia === 'VIDEO' && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="studio-video-url" className="text-xs">Video URL (mp4/webm)</Label>
-              <Input id="studio-video-url" value={(current.heroVideoUrl as string) ?? ''} placeholder="https://…/campus.mp4"
-                onChange={(e) => setLook({ heroVideoUrl: e.target.value })} className="h-9 text-sm" />
-              <p className="text-[11px] text-slate-400">
-                Plays muted on loop. Your first photo slot stays the poster and the fallback on slow
-                connections and for reduced-motion visitors.
-              </p>
+      {/* ── First screen ── */}
+      <Group id="hero" title="First screen" summary={heroSpec.label}>
+        <FieldLabel>Layout</FieldLabel>
+        <Chips options={HERO_LAYOUTS} value={heroLayout} onPick={(v) => setLook({ heroLayout: v })} />
+        <p className="mt-1.5 rounded-lg border border-teal-100 bg-teal-50 px-2.5 py-1.5 text-[11px] text-teal-800">{heroSpec.hint}</p>
+        {heroSpec.slots > 0 && (
+          <>
+            <FieldLabel>Photos ({heroSpec.slots} for this layout)</FieldLabel>
+            <input ref={heroSlotFile} type="file" accept="image/*" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadSlot(pendingSlot.current, f); e.target.value = ''; }} />
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: heroSpec.slots }).map((_, i) => {
+                const id = slotIds[i]; const url = id ? heroUrlOf(id) : null;
+                return (
+                  <div key={i} className="w-28">
+                    {id ? (
+                      <div className="group relative h-20 w-28 overflow-hidden rounded-lg border border-slate-200">
+                        {url ? (/* eslint-disable-next-line @next/next/no-img-element */ <img src={url} alt={`Hero ${i + 1}`} className="h-full w-full object-cover" />) : <div className="grid h-full w-full place-items-center bg-slate-100 text-[10px] text-slate-400">image {i + 1}</div>}
+                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/45 px-1 py-0.5 opacity-0 transition group-hover:opacity-100">
+                          <button type="button" aria-label="Move image left" disabled={i === 0} onClick={() => { const ids = [...slotIds]; [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; void saveSlots(ids); }} className="rounded p-0.5 text-white hover:bg-white/20 disabled:opacity-30"><ArrowLeft className="h-3 w-3" /></button>
+                          <button type="button" aria-label="Remove image" onClick={() => void saveSlots(slotIds.filter((_, j) => j !== i))} className="rounded p-0.5 text-white hover:bg-rose-500/60"><X className="h-3 w-3" /></button>
+                          <button type="button" aria-label="Move image right" disabled={i >= slotIds.length - 1} onClick={() => { const ids = [...slotIds]; [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]]; void saveSlots(ids); }} className="rounded p-0.5 text-white hover:bg-white/20 disabled:opacity-30"><ArrowRight className="h-3 w-3" /></button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" disabled={uploading === 'hero' || i > slotIds.length} onClick={() => { pendingSlot.current = i; heroSlotFile.current?.click(); }}
+                        className="grid h-20 w-28 place-items-center rounded-lg border-2 border-dashed border-slate-300 text-[10px] font-medium text-slate-500 hover:border-slate-400 disabled:opacity-40">
+                        <span className="flex items-center gap-1"><Upload className="h-3 w-3" />{uploading === 'hero' ? 'Uploading…' : `Add ${i + 1}`}</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          )}
-          <div>
-            <Label className="text-xs">Menu open animation</Label>
-            <div className="mt-1.5"><Chips options={NAV_DROPDOWN_ANIMS} value={(current.navDropdownAnim as string) ?? 'FADE'}
-              onPick={(v) => setLook({ navDropdownAnim: v })} /></div>
+            <p className="mt-1 text-[11px] text-slate-400">Wide landscape photos. Max 4 MB. First image is the main one. Saves immediately.</p>
+          </>
+        )}
+        <FieldLabel>Background media</FieldLabel>
+        <Chips options={HERO_MEDIA_OPTIONS} value={(current.heroMedia as string) ?? 'IMAGE'} onPick={(v) => {
+          setLook({ heroMedia: v, ...(v === 'VIDEO' && !VIDEO_LAYOUTS.includes(heroLayout) ? { heroLayout: 'FULL_BLEED' } : {}) });
+          if (v === 'VIDEO' && !VIDEO_LAYOUTS.includes(heroLayout)) toast.success('Background video needs a photo layout — switched to Full canvas');
+        }} />
+        {current.heroMedia === 'VIDEO' && (
+          <>
+            <FieldLabel>Video URL (mp4/webm)</FieldLabel>
+            <Input value={(current.heroVideoUrl as string) ?? ''} placeholder="https://…/campus.mp4" onChange={(e) => setLook({ heroVideoUrl: e.target.value })} className="h-9 text-sm" />
+            <p className="mt-1 text-[11px] text-slate-400">Muted loop; your first photo is the poster and the reduced-motion fallback.</p>
+          </>
+        )}
+        <FieldLabel>Headline accent</FieldLabel>
+        <Chips options={HEADLINE_ACCENTS} value={(current.headlineAccent as string) ?? 'DRAW'} onPick={(v) => setLook({ headlineAccent: v })} />
+        <FieldLabel>Text alignment</FieldLabel>
+        <Chips options={HERO_ALIGN} value={(current.heroTextAlign as string) ?? 'LEFT'} onPick={(v) => setLook({ heroTextAlign: v })} />
+        <FieldLabel>Height</FieldLabel>
+        <Chips options={HERO_HEIGHT} value={(current.heroHeight as string) ?? 'FULL'} onPick={(v) => setLook({ heroHeight: v })} />
+        <div className={overlayOn ? '' : 'opacity-50'}>
+          <FieldLabel>Overlay on photos</FieldLabel>
+          <Chips options={HERO_OVERLAY} value={(current.heroOverlayStyle as string) ?? 'WASH'} onPick={(v) => overlayOn && setLook({ heroOverlayStyle: v })} />
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-[11px] text-slate-500">Overlay strength</span>
+            <input type="range" min={10} max={95} step={5} disabled={!overlayOn} value={(current.heroOverlayOpacity as number) ?? 65}
+              onChange={(e) => setLook({ heroOverlayOpacity: Number(e.target.value) })} className="flex-1 accent-teal-600" aria-label="Overlay strength" />
+            <span className="w-9 text-right text-[11px] font-semibold tabular-nums text-slate-600">{(current.heroOverlayOpacity as number) ?? 65}%</span>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </Group>
 
-      {/* ── Per-section variants ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Sections</CardTitle>
-          <p className="text-xs text-slate-500">Each band gets its own arrangement and its own entrance.</p>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {SECTION_KEYS.map((key) => {
-            const def = SECTION_VARIANT_DEFS[key];
+      {/* ── Ready-made looks ── */}
+      <Group id="looks" title="Ready-made looks" summary="Shape · motion · texture · accent in one click">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {STYLE_PRESETS.map((p) => {
+            const on = (current.sectionShape ?? 'SOFT') === p.values.sectionShape && (current.motionGesture ?? 'RISE') === p.values.motionGesture
+              && (current.backgroundTexture ?? 'NONE') === p.values.backgroundTexture && (current.headlineAccent ?? 'DRAW') === p.values.headlineAccent;
             return (
-              <div key={key} className="border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                <div className="text-sm font-semibold text-slate-700">{def.label}</div>
-                <div className="mt-1.5"><Chips options={def.layouts as { value: string; label: string; hint?: string }[]}
-                  value={variants[key]?.layout ?? def.layouts[0].value}
-                  onPick={(v) => setVariant(key, { layout: v })} /></div>
-                <div className="mt-1.5"><Chips
-                  options={[
-                    { value: 'DEFAULT', label: 'Page default' },
-                    { value: 'RISE', label: 'Rise' },
-                    { value: 'FADE', label: 'Fade' },
-                    { value: 'DRAW', label: 'Draw' },
-                  ]}
-                  value={variants[key]?.gesture ?? 'DEFAULT'}
-                  onPick={(v) => setVariant(key, { gesture: v })} /></div>
-              </div>
+              <button key={p.value} type="button" onClick={() => setLook({ ...p.values })} aria-pressed={on}
+                className={['rounded-xl border p-2.5 text-left transition', on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300'].join(' ')}>
+                <span className="block text-sm font-semibold text-slate-800">{p.label}</span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-slate-400">{p.hint}</span>
+                {on && <span className="mt-1 block text-[11px] font-semibold text-teal-700">In use</span>}
+              </button>
             );
           })}
-        </CardContent>
-      </Card>
+        </div>
+      </Group>
 
-      {/* ── Festive mode ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Festive mode</CardTitle>
-          <p className="text-xs text-slate-500">
-            A decoration layer over your design — like a seasonal doodle. Full takeover retints the
-            whole site for the festival. Save it as a dated draft and it applies and reverts itself.
-          </p>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <Chips
-            options={[{ value: 'NONE', label: 'None' }, ...FESTIVALS.map((f) => ({ value: f.value, label: `${f.emoji} ${f.label}` }))]}
-            value={festive?.festival ?? 'NONE'}
-            onPick={(v) =>
-              setLook({
-                festiveTheme:
-                  v === 'NONE'
-                    ? null
-                    : { festival: v, variant: FESTIVALS.find((f) => f.value === v)?.variants[0].value, intensity: 'LAYER', ribbon: true, recolor: true },
-              })
-            }
-          />
-          {festive && festiveDef && (
-            <>
-              <div>
-                <Label className="text-xs">Decorations</Label>
-                <div className="mt-1.5"><Chips options={festiveDef.variants as { value: string; label: string; hint?: string }[]}
-                  value={festive.variant}
-                  onPick={(v) => setLook({ festiveTheme: { ...festive, variant: v } })} /></div>
+      {/* ── Section styling ── */}
+      <Group id="sections-style" title="Section styling" summary="Shape, arrival, background">
+        <FieldLabel>Section shape (below the hero)</FieldLabel>
+        <Chips options={SECTION_SHAPES} value={(current.sectionShape as string) ?? 'SOFT'} onPick={(v) => setLook({ sectionShape: v })} />
+        <FieldLabel>How sections arrive</FieldLabel>
+        <Chips options={MOTION_GESTURES} value={(current.motionGesture as string) ?? 'RISE'} onPick={(v) => setLook({ motionGesture: v })} />
+        <FieldLabel>Page background</FieldLabel>
+        <Chips options={BACKGROUND_TEXTURES} value={(current.backgroundTexture as string) ?? 'NONE'} onPick={(v) => setLook({ backgroundTexture: v })} />
+        <FieldLabel>Scroll feel</FieldLabel>
+        <Stack options={SCROLL_FEELS} value={(current.scrollFeel as string) ?? 'CLASSIC'} onPick={(v) => setLook({ scrollFeel: v })} />
+      </Group>
+
+      {/* ── Per-section variants ── */}
+      <Group id="variants" title="Per-section layout" summary="A layout & entrance for each band">
+        {SECTION_KEYS.map((key) => {
+          const def = SECTION_VARIANT_DEFS[key];
+          return (
+            <div key={key} className="border-b border-slate-100 pb-2.5 pt-2.5 first:pt-0 last:border-0 last:pb-0">
+              <div className="text-sm font-semibold text-slate-700">{def.label}</div>
+              <div className="mt-1.5"><Chips options={def.layouts} value={variants[key]?.layout ?? def.layouts[0].value} onPick={(v) => setVariant(key, { layout: v })} /></div>
+              <div className="mt-1.5"><Chips options={[{ value: 'DEFAULT', label: 'Page default' }, { value: 'RISE', label: 'Rise' }, { value: 'FADE', label: 'Fade' }, { value: 'DRAW', label: 'Draw' }]} value={variants[key]?.gesture ?? 'DEFAULT'} onPick={(v) => setVariant(key, { gesture: v })} /></div>
+            </div>
+          );
+        })}
+      </Group>
+
+      {/* ── Navigation ── */}
+      <Group id="nav" title="Navigation" summary={`${(current.navStyle as string) ?? 'CLASSIC'} bar · menu`}>
+        <FieldLabel>Navbar style</FieldLabel>
+        <Chips options={NAV_STYLES} value={(current.navStyle as string) ?? 'CLASSIC'} onPick={(v) => setLook({ navStyle: v })} />
+        <FieldLabel>Bar colour</FieldLabel>
+        <Chips options={NAV_COLORS} value={(current.navColor as string) ?? 'PAPER'} onPick={(v) => setLook({ navColor: v })} />
+        <FieldLabel>Text colour</FieldLabel>
+        <Chips options={NAV_TEXT} value={(current.navTextColor as string) ?? 'AUTO'} onPick={(v) => setLook({ navTextColor: v })} />
+        <FieldLabel>Sign-in button</FieldLabel>
+        <Chips options={LOGIN_STYLES} value={(current.navLoginStyle as string) ?? 'LINK'} onPick={(v) => setLook({ navLoginStyle: v })} />
+        <FieldLabel>Dropdown open animation</FieldLabel>
+        <Chips options={NAV_DROPDOWN_ANIMS} value={(current.navDropdownAnim as string) ?? 'FADE'} onPick={(v) => setLook({ navDropdownAnim: v })} />
+        <div className="mt-3 grid grid-cols-1 gap-2">
+          <div className="flex items-end gap-2">
+            <div className="flex-1"><Label className="text-xs">Enquiry button text</Label>
+              <Input value={(current.navCtaLabel as string) ?? 'Enquire'} maxLength={40} onChange={(e) => setLook({ navCtaLabel: e.target.value })} className="mt-1 h-9 text-sm" /></div>
+          </div>
+          <Toggle checked={(current.navShowCta as boolean) ?? true} onChange={(v) => setLook({ navShowCta: v })} label="Show the enquiry button" />
+          <div className="flex items-end gap-2">
+            <div className="flex-1"><Label className="text-xs">Login link text</Label>
+              <Input value={(current.navLoginLabel as string) ?? 'Login'} maxLength={40} onChange={(e) => setLook({ navLoginLabel: e.target.value })} className="mt-1 h-9 text-sm" /></div>
+          </div>
+          <Toggle checked={(current.navShowLogin as boolean) ?? true} onChange={(v) => setLook({ navShowLogin: v })} label="Show the Login button" />
+        </div>
+        {/* Menu arrangement */}
+        <FieldLabel>Menu items</FieldLabel>
+        <p className="mb-2 text-[11px] text-slate-400">Rename any heading (its web address never changes), reorder, or group items into dropdowns.</p>
+        <div className="flex flex-col gap-1.5">
+          {navConfig.items.map((item, i) => (
+            <div key={`${item.slug}-${i}`} className="rounded-lg border border-slate-200 p-2">
+              <div className="flex items-center gap-1.5">
+                <div className="flex flex-col">
+                  <button type="button" aria-label={`Move ${item.label} up`} disabled={i === 0} onClick={() => moveMenu(i, -1)} className="rounded p-0.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+                  <button type="button" aria-label={`Move ${item.label} down`} disabled={i === navConfig.items.length - 1} onClick={() => moveMenu(i, 1)} className="rounded p-0.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+                </div>
+                <Input aria-label={`Name of ${item.label}`} value={item.label} onChange={(e) => editMenu((items) => { items[i] = { ...items[i], label: e.target.value }; return items; })} className="h-8 flex-1 text-sm" />
+                <span className="whitespace-nowrap text-[10px] text-slate-400">/{item.slug}</span>
+                {item.children.length > 0 && (
+                  <select aria-label={`What ${item.label} does`} value={item.behaviour} onChange={(e) => editMenu((items) => { items[i] = { ...items[i], behaviour: e.target.value as NavConfigItem['behaviour'] }; return items; })} className="rounded-md border border-slate-200 px-1.5 py-1 text-[11px]">
+                    <option value="menu">Opens a menu</option><option value="page">Is a page too</option><option value="overview">Overview page</option>
+                  </select>
+                )}
+                {item.children.length === 0 && navConfig.items.length > 1 && (
+                  <select aria-label={`Move ${item.label} under another heading`} value="" onChange={(e) => e.target.value && demoteMenu(i, Number(e.target.value))} className="rounded-md border border-slate-200 px-1.5 py-1 text-[11px]">
+                    <option value="">Move under…</option>
+                    {navConfig.items.map((o, oi) => oi === i ? null : <option key={o.slug} value={oi}>{o.label}</option>)}
+                  </select>
+                )}
               </div>
-              <div>
-                <Label className="text-xs">Intensity</Label>
-                <div className="mt-1.5"><Chips
-                  options={[
-                    { value: 'LAYER', label: 'Decorations layer' },
-                    { value: 'FULL', label: 'Full festive takeover' },
-                  ]}
-                  value={festive.intensity}
-                  onPick={(v) => setLook({ festiveTheme: { ...festive, intensity: v } })} /></div>
-              </div>
-              <Toggle checked={festive.ribbon} onChange={(v) => setLook({ festiveTheme: { ...festive, ribbon: v } })}
-                label="Greeting ribbon above the navbar" />
-              {festive.intensity === 'LAYER' && (
-                <Toggle checked={festive.recolor} onChange={(v) => setLook({ festiveTheme: { ...festive, recolor: v } })}
-                  label="Festive accent colour" />
+              {item.children.length > 0 && (
+                <ul className="mt-1.5 space-y-1 pl-6">
+                  {item.children.map((child) => (
+                    <li key={child.key} className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <span>{child.label}</span><span className="text-[10px] text-slate-400">({PAGE_LABELS[child.key] ?? child.key})</span>
+                      <button type="button" aria-label={`Move ${child.label} out of ${item.label}`} onClick={() => promoteMenu(i, child.key)} className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-slate-500 hover:bg-slate-100"><CornerLeftUp className="h-3 w-3" /> Top-level</button>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Footer ── */}
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Footer</CardTitle></CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div>
-            <Label className="text-xs">Layout</Label>
-            <div className="mt-1.5"><Chips options={FOOTER_LAYOUTS} value={footer.layout}
-              onPick={(v) => setLook({ footerConfig: { ...footer, layout: v } })} /></div>
-          </div>
-          <div>
-            <Label className="text-xs">Colour</Label>
-            <div className="mt-1.5"><Chips options={FOOTER_COLORS} value={footer.color}
-              onPick={(v) => setLook({ footerConfig: { ...footer, color: v } })} /></div>
-          </div>
-          <Toggle checked={footer.social} onChange={(v) => setLook({ footerConfig: { ...footer, social: v } })}
-            label="Show social icons (from Contact & address)" />
-          <Toggle checked={footer.contact} onChange={(v) => setLook({ footerConfig: { ...footer, contact: v } })}
-            label="Show contact details" />
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="studio-tagline" className="text-xs">Tagline</Label>
-            <Input id="studio-tagline" value={footer.tagline ?? ''} maxLength={160}
-              placeholder="Nurturing confident, compassionate lifelong learners."
-              onChange={(e) => setLook({ footerConfig: { ...footer, tagline: e.target.value || null } })}
-              className="h-9 text-sm" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Custom pages ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Custom pages</CardTitle>
-          <p className="text-xs text-slate-500">
-            Need one more page — Transport, Scholarships, Alumni? Build it from simple blocks. It joins
-            your menu automatically; arrange where it sits in the Menu tab.
-          </p>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2.5">
-          {(pages.data ?? []).map((p) => (
-            <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-2.5">
-              <span className="flex-1 text-sm font-semibold text-slate-700">{p.title}</span>
-              <span className="text-[11px] text-slate-400">/p/{p.slug}</span>
-              <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                onClick={() => setEditingPage({
-                  id: p.id, title: p.title, published: p.published,
-                  // Keep only blocks the editor knows how to render — a stored
-                  // unknown type would otherwise show a header-less row.
-                  blocks: ((p.blocks ?? []) as Block[]).filter((b) => b && (b.t in BLOCK_NAMES)),
-                })}>
-                Edit
-              </Button>
-              <button type="button" aria-label={`Delete ${p.title}`} className="text-xs text-rose-500 hover:text-rose-700"
-                onClick={() => pageDelete.mutate(p.id)}>
-                ✕
-              </button>
             </div>
           ))}
-          {!editingPage && (
-            <Button size="sm" variant="outline"
-              onClick={() => setEditingPage({ id: null, title: '', blocks: [{ t: 'h', text: '' }, { t: 'p', text: '' }], published: true })}>
-              + New page
-            </Button>
-          )}
-          {editingPage && (
-            <div className="flex flex-col gap-2.5 rounded-lg border border-teal-200 bg-teal-50/40 p-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="studio-page-title" className="text-xs">Page title (its address is fixed when first saved)</Label>
-                <Input id="studio-page-title" value={editingPage.title} maxLength={120} placeholder="Scholarships"
-                  onChange={(e) => setEditingPage({ ...editingPage, title: e.target.value })} className="h-9 bg-white text-sm" />
-              </div>
-              {editingPage.blocks.map((b, i) => (
-                <div key={i} className="rounded-md border border-slate-200 bg-white p-2">
-                  <div className="flex items-center gap-1">
-                    <span className="flex-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{BLOCK_NAMES[b.t]}</span>
-                    <button type="button" aria-label="Move up" disabled={i === 0} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBlock(i, -1)}>▲</button>
-                    <button type="button" aria-label="Move down" disabled={i === editingPage.blocks.length - 1} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBlock(i, 1)}>▼</button>
-                    <button type="button" aria-label="Remove block" className="px-1 text-xs text-rose-400 hover:text-rose-600"
-                      onClick={() => setEditingPage({ ...editingPage, blocks: editingPage.blocks.filter((_, j) => j !== i) })}>✕</button>
-                  </div>
-                  {(b.t === 'h' || b.t === 'cta') && (
-                    <Input value={b.t === 'h' ? b.text : b.label} maxLength={b.t === 'h' ? 200 : 80}
-                      placeholder={b.t === 'h' ? 'Heading' : 'Button label'}
-                      onChange={(e) => editBlock(i, b.t === 'h' ? { text: e.target.value } : { label: e.target.value })}
-                      className="mt-1 h-8 text-sm" />
-                  )}
-                  {(b.t === 'p' || b.t === 'imgtext') && (
-                    <Textarea value={b.text} rows={2} placeholder="Write something…"
-                      onChange={(e) => editBlock(i, { text: e.target.value })} className="mt-1 text-sm" />
-                  )}
-                  {(b.t === 'img' || b.t === 'imgtext') && (
-                    <div className="mt-1 flex gap-1.5">
-                      <Input value={b.url ?? ''} placeholder="https://… image URL"
-                        onChange={(e) => editBlock(i, { url: e.target.value })} className="h-8 flex-1 text-xs" />
-                      {(galleryMedia.data ?? []).length > 0 && (
-                        <select aria-label="Use a gallery photo" className="h-8 rounded-md border border-slate-200 text-xs text-slate-500"
-                          value="" onChange={(e) => e.target.value && editBlock(i, { url: e.target.value })}>
-                          <option value="">Gallery…</option>
-                          {(galleryMedia.data ?? []).map((m, j) => (
-                            <option key={m.id} value={m.url}>Photo {j + 1}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  )}
+          <button type="button" onClick={() => setLook({ navConfig: defaultNavConfig() })} className="self-start text-[11px] font-semibold text-slate-500 hover:text-slate-700">Reset to the standard menu</button>
+        </div>
+      </Group>
+
+      {/* ── Festive mode ── */}
+      <Group id="festive" title="Festive mode" summary={festiveDef ? `${festiveDef.emoji} ${festiveDef.label}` : 'Off'}>
+        <Chips options={[{ value: 'NONE', label: 'None' }, ...FESTIVALS.map((f) => ({ value: f.value, label: `${f.emoji} ${f.label}` }))]} value={festive?.festival ?? 'NONE'}
+          onPick={(v) => setLook({ festiveTheme: v === 'NONE' ? null : { festival: v, variant: FESTIVALS.find((f) => f.value === v)?.variants[0].value, intensity: 'LAYER', ribbon: true, recolor: true } })} />
+        {festive && festiveDef && (
+          <>
+            <FieldLabel>Decorations</FieldLabel>
+            <Chips options={festiveDef.variants} value={festive.variant} onPick={(v) => setLook({ festiveTheme: { ...festive, variant: v } })} />
+            <FieldLabel>Intensity</FieldLabel>
+            <Chips options={[{ value: 'LAYER', label: 'Decorations layer' }, { value: 'FULL', label: 'Full takeover' }]} value={festive.intensity} onPick={(v) => setLook({ festiveTheme: { ...festive, intensity: v } })} />
+            <div className="mt-2.5"><Toggle checked={festive.ribbon} onChange={(v) => setLook({ festiveTheme: { ...festive, ribbon: v } })} label="Greeting ribbon above the navbar" /></div>
+            {festive.intensity === 'LAYER' && <div className="mt-1.5"><Toggle checked={festive.recolor} onChange={(v) => setLook({ festiveTheme: { ...festive, recolor: v } })} label="Festive accent colour" /></div>}
+          </>
+        )}
+      </Group>
+
+      {/* ── Footer ── */}
+      <Group id="footer" title="Footer" summary={`${footer.layout.toLowerCase()} · ${footer.color.toLowerCase()}`}>
+        <FieldLabel>Layout</FieldLabel>
+        <Chips options={FOOTER_LAYOUTS} value={footer.layout} onPick={(v) => setLook({ footerConfig: { ...footer, layout: v } })} />
+        <FieldLabel>Colour</FieldLabel>
+        <Chips options={FOOTER_COLORS} value={footer.color} onPick={(v) => setLook({ footerConfig: { ...footer, color: v } })} />
+        <div className="mt-2.5 flex flex-col gap-1.5">
+          <Toggle checked={footer.social} onChange={(v) => setLook({ footerConfig: { ...footer, social: v } })} label="Show social icons" />
+          <Toggle checked={footer.contact} onChange={(v) => setLook({ footerConfig: { ...footer, contact: v } })} label="Show contact details" />
+        </div>
+        <FieldLabel>Tagline</FieldLabel>
+        <Input value={footer.tagline ?? ''} maxLength={160} placeholder="Nurturing confident, compassionate lifelong learners." onChange={(e) => setLook({ footerConfig: { ...footer, tagline: e.target.value || null } })} className="h-9 text-sm" />
+      </Group>
+
+      {/* ── Custom pages ── */}
+      <Group id="pages" title="Custom pages" summary={`${(pages.data ?? []).length} page${(pages.data ?? []).length === 1 ? '' : 's'}`}>
+        {(pages.data ?? []).map((p) => (
+          <div key={p.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-2.5">
+            <span className="flex-1 text-sm font-semibold text-slate-700">{p.title}</span>
+            <span className="text-[11px] text-slate-400">/p/{p.slug}</span>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditingPage({ id: p.id, title: p.title, published: p.published, blocks: ((p.blocks ?? []) as Block[]).filter((b) => b && (b.t in BLOCK_NAMES)) })}>Edit</Button>
+            <button type="button" aria-label={`Delete ${p.title}`} className="text-xs text-rose-500 hover:text-rose-700" onClick={() => pageDelete.mutate(p.id)}>✕</button>
+          </div>
+        ))}
+        {!editingPage && <Button size="sm" variant="outline" onClick={() => setEditingPage({ id: null, title: '', blocks: [{ t: 'h', text: '' }, { t: 'p', text: '' }], published: true })}>+ New page</Button>}
+        {editingPage && (
+          <div className="flex flex-col gap-2.5 rounded-lg border border-teal-200 bg-teal-50/40 p-3">
+            <div><Label className="text-xs">Page title (its address is fixed on first save)</Label>
+              <Input value={editingPage.title} maxLength={120} placeholder="Scholarships" onChange={(e) => setEditingPage({ ...editingPage, title: e.target.value })} className="mt-1 h-9 bg-white text-sm" /></div>
+            {editingPage.blocks.map((b, i) => (
+              <div key={i} className="rounded-md border border-slate-200 bg-white p-2">
+                <div className="flex items-center gap-1">
+                  <span className="flex-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{BLOCK_NAMES[b.t]}</span>
+                  <button type="button" aria-label="Move up" disabled={i === 0} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBlock(i, -1)}>▲</button>
+                  <button type="button" aria-label="Move down" disabled={i === editingPage.blocks.length - 1} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBlock(i, 1)}>▼</button>
+                  <button type="button" aria-label="Remove block" className="px-1 text-xs text-rose-400 hover:text-rose-600" onClick={() => setEditingPage({ ...editingPage, blocks: editingPage.blocks.filter((_, j) => j !== i) })}>✕</button>
                 </div>
+                {(b.t === 'h' || b.t === 'cta') && <Input value={b.t === 'h' ? b.text : b.label} maxLength={b.t === 'h' ? 200 : 80} placeholder={b.t === 'h' ? 'Heading' : 'Button label'} onChange={(e) => editBlock(i, b.t === 'h' ? { text: e.target.value } : { label: e.target.value })} className="mt-1 h-8 text-sm" />}
+                {(b.t === 'p' || b.t === 'imgtext') && <Textarea value={b.text} rows={2} placeholder="Write something…" onChange={(e) => editBlock(i, { text: e.target.value })} className="mt-1 text-sm" />}
+                {(b.t === 'img' || b.t === 'imgtext') && (
+                  <div className="mt-1 flex gap-1.5">
+                    <Input value={b.url ?? ''} placeholder="https://… image URL" onChange={(e) => editBlock(i, { url: e.target.value })} className="h-8 flex-1 text-xs" />
+                    {(galleryMedia.data ?? []).length > 0 && (
+                      <select aria-label="Use a gallery photo" className="h-8 rounded-md border border-slate-200 text-xs text-slate-500" value="" onChange={(e) => e.target.value && editBlock(i, { url: e.target.value })}>
+                        <option value="">Gallery…</option>{(galleryMedia.data ?? []).map((m, j) => <option key={m.id} value={m.url}>Photo {j + 1}</option>)}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(BLOCK_NAMES) as Block['t'][]).map((t) => (
+                <button key={t} type="button" disabled={editingPage.blocks.length >= 40} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40"
+                  onClick={() => { if (editingPage.blocks.length >= 40) return; setEditingPage({ ...editingPage, blocks: [...editingPage.blocks, t === 'h' ? { t, text: '' } : t === 'p' ? { t, text: '' } : t === 'img' ? { t, url: '' } : t === 'imgtext' ? { t, url: null, text: '' } : { t, label: 'Learn more' }] }); }}>+ {BLOCK_NAMES[t]}</button>
               ))}
-              <div className="flex flex-wrap gap-1.5">
-                {(Object.keys(BLOCK_NAMES) as Block['t'][]).map((t) => (
-                  <button key={t} type="button"
-                    disabled={editingPage.blocks.length >= 40}
-                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40"
-                    onClick={() => {
-                      // Match the API's ArrayMaxSize(40) so the cap is a quiet
-                      // disabled button, never a raw 400 toast.
-                      if (editingPage.blocks.length >= 40) return;
-                      setEditingPage({
-                        ...editingPage,
-                        blocks: [
-                          ...editingPage.blocks,
-                          t === 'h' ? { t, text: '' } : t === 'p' ? { t, text: '' }
-                            : t === 'img' ? { t, url: '' } : t === 'imgtext' ? { t, url: null, text: '' }
-                            : { t, label: 'Learn more' },
-                        ],
-                      });
-                    }}>
-                    + {BLOCK_NAMES[t]}
-                  </button>
-                ))}
-              </div>
-              <Toggle checked={editingPage.published} onChange={(v) => setEditingPage({ ...editingPage, published: v })} label="Published (visible on your site)" />
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => pageMutation.mutate(editingPage)}
-                  disabled={!editingPage.title.trim() || pageMutation.isPending}>
-                  {pageMutation.isPending ? 'Saving…' : 'Save page'}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setEditingPage(null)}>Cancel</Button>
-              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <Toggle checked={editingPage.published} onChange={(v) => setEditingPage({ ...editingPage, published: v })} label="Published (visible on your site)" />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => pageMutation.mutate(editingPage)} disabled={!editingPage.title.trim() || pageMutation.isPending}>{pageMutation.isPending ? 'Saving…' : 'Save page'}</Button>
+              <Button size="sm" variant="outline" onClick={() => setEditingPage(null)}>Cancel</Button>
+            </div>
+          </div>
+        )}
+      </Group>
 
       {/* ── Custom code ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Custom code</CardTitle>
-          <p className="text-xs text-slate-500">
-            The escape hatch for one-school requests: paste CSS scoped to one section, or an HTML
-            block shown before the footer. Both are sanitized on save — no scripts, no external
-            fetches — and preview live before you save.
-          </p>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="studio-css-section" className="text-xs">Section</Label>
-            <select id="studio-css-section" value={cssSection} onChange={(e) => setCssSection(e.target.value)}
-              className="h-8 rounded-md border border-slate-200 text-xs text-slate-600">
-              {['hero', ...SECTION_KEYS, 'footer', 'page'].map((k) => (
-                <option key={k} value={k}>{k}</option>
-              ))}
-            </select>
-          </div>
-          <Textarea value={cssDrafts[cssSection] ?? ''} rows={5} spellCheck={false}
-            placeholder={'.ps-panel { border: 2px dashed gold; }\n@keyframes spinIn { … }'}
-            onChange={(e) => setCssDrafts({ ...cssDrafts, [cssSection]: e.target.value })}
-            className="font-mono text-xs" />
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline"
-              onClick={() => codeMutation.mutate({ customSectionCss: cssDrafts })}
-              disabled={codeMutation.isPending}>
-              Save section CSS
-            </Button>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="studio-html" className="text-xs">HTML block (before the footer)</Label>
-            <Textarea id="studio-html" value={htmlDraft} rows={4} spellCheck={false}
-              placeholder='<div class="ps-panel" style="padding:1.5rem"><h2 class="ps-head">Our toppers</h2>…</div>'
-              onChange={(e) => setHtmlDraft(e.target.value)} className="font-mono text-xs" />
-            <p className="text-[11px] text-slate-400">
-              The HTML block appears on the preview once you save it — it is sanitized on the server
-              first, so it is never rendered here straight from the box.
-            </p>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline"
-                onClick={() => codeMutation.mutate({ customHtmlBlock: htmlDraft })}
-                disabled={codeMutation.isPending}>
-                Save HTML block
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Group id="code" title="Custom code" summary="CSS & HTML escape hatch">
+        <p className="text-[11px] text-slate-400">Paste CSS scoped to one section, or an HTML block before the footer. Both are sanitized on save.</p>
+        <FieldLabel>Section CSS</FieldLabel>
+        <select value={cssSection} onChange={(e) => setCssSection(e.target.value)} className="mb-1.5 h-8 rounded-md border border-slate-200 text-xs text-slate-600">
+          {['hero', ...SECTION_KEYS, 'footer', 'page'].map((k) => <option key={k} value={k}>{k}</option>)}
+        </select>
+        <Textarea value={cssDrafts[cssSection] ?? ''} rows={4} spellCheck={false} placeholder={'.ps-panel { border: 2px dashed gold; }'} onChange={(e) => setCssDrafts({ ...cssDrafts, [cssSection]: e.target.value })} className="font-mono text-xs" />
+        <Button size="sm" variant="outline" className="mt-1.5" onClick={() => codeMutation.mutate({ customSectionCss: cssDrafts })} disabled={codeMutation.isPending}>Save section CSS</Button>
+        <FieldLabel>HTML block (before the footer)</FieldLabel>
+        <Textarea value={htmlDraft} rows={3} spellCheck={false} placeholder='<div class="ps-panel" style="padding:1.5rem">…</div>' onChange={(e) => setHtmlDraft(e.target.value)} className="font-mono text-xs" />
+        <p className="mt-1 text-[11px] text-slate-400">Appears on the preview after you save it (sanitized on the server first).</p>
+        <Button size="sm" variant="outline" className="mt-1.5" onClick={() => codeMutation.mutate({ customHtmlBlock: htmlDraft })} disabled={codeMutation.isPending}>Save HTML block</Button>
+      </Group>
     </div>
   );
 
   const preview = (
-    <div className="lg:sticky lg:top-4">
-      <div className="mb-2 flex items-center gap-2">
+    <div className="flex h-full flex-col">
+      <div className="mb-2 flex flex-none items-center gap-2">
         <div className="flex overflow-hidden rounded-lg border border-slate-200">
-          <button type="button" aria-label="Desktop preview" aria-pressed={device === 'desktop'}
-            onClick={() => setDevice('desktop')}
-            className={`px-2.5 py-1.5 ${device === 'desktop' ? 'bg-teal-50 text-teal-700' : 'text-slate-400'}`}>
-            <Monitor className="h-4 w-4" />
-          </button>
-          <button type="button" aria-label="Mobile preview" aria-pressed={device === 'mobile'}
-            onClick={() => setDevice('mobile')}
-            className={`px-2.5 py-1.5 ${device === 'mobile' ? 'bg-teal-50 text-teal-700' : 'text-slate-400'}`}>
-            <Smartphone className="h-4 w-4" />
-          </button>
+          <button type="button" aria-label="Desktop preview" aria-pressed={device === 'desktop'} onClick={() => setDevice('desktop')} className={`px-2.5 py-1.5 ${device === 'desktop' ? 'bg-teal-50 text-teal-700' : 'text-slate-400'}`}><Monitor className="h-4 w-4" /></button>
+          <button type="button" aria-label="Mobile preview" aria-pressed={device === 'mobile'} onClick={() => setDevice('mobile')} className={`px-2.5 py-1.5 ${device === 'mobile' ? 'bg-teal-50 text-teal-700' : 'text-slate-400'}`}><Smartphone className="h-4 w-4" /></button>
         </div>
-        <button type="button" onClick={reloadPreview}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700">
-          <RotateCw className="h-3.5 w-3.5" /> Reload
-        </button>
-        <span className="ml-auto flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-emerald-600">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> LIVE PREVIEW
-        </span>
+        <button type="button" onClick={reloadPreview} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700"><RotateCw className="h-3.5 w-3.5" /> Reload</button>
+        <span className="ml-auto flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> LIVE PREVIEW</span>
       </div>
-      <div className={device === 'mobile' ? 'mx-auto w-[390px] max-w-full' : ''}>
-        <iframe
-          ref={iframeRef}
-          src="/preview"
-          title="Live preview of your website"
-          className="h-[70vh] min-h-[480px] w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100vh-11rem)]"
-        />
+      <div className={`min-h-0 flex-1 ${device === 'mobile' ? 'mx-auto w-[390px] max-w-full' : ''}`}>
+        <iframe ref={iframeRef} src="/preview" title="Live preview of your website" className="h-[70vh] w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:h-full" />
       </div>
     </div>
   );
 
   return (
     <div>
-      {/* Mobile/tablet: one pane at a time, swapped by this toggle. */}
+      {/* Mobile/tablet: one pane at a time. */}
       <div className="sticky top-0 z-10 -mx-1 mb-3 flex gap-1 rounded-lg bg-white/90 p-1 shadow-sm backdrop-blur lg:hidden">
         {(['edit', 'preview'] as const).map((p) => (
-          <button key={p} type="button" aria-pressed={mobilePane === p}
-            onClick={() => setMobilePane(p)}
-            className={[
-              'flex-1 rounded-md px-3 py-2 text-sm font-semibold capitalize',
-              mobilePane === p ? 'bg-teal-600 text-white' : 'text-slate-500',
-            ].join(' ')}
-          >
-            {p === 'edit' ? 'Edit' : 'Preview'}
-          </button>
+          <button key={p} type="button" aria-pressed={mobilePane === p} onClick={() => setMobilePane(p)} className={['flex-1 rounded-md px-3 py-2 text-sm font-semibold capitalize', mobilePane === p ? 'bg-teal-600 text-white' : 'text-slate-500'].join(' ')}>{p === 'edit' ? 'Edit' : 'Preview'}</button>
         ))}
       </div>
-      <div className="lg:grid lg:grid-cols-[minmax(340px,400px)_minmax(0,1fr)] lg:gap-6">
-        <div className={mobilePane === 'preview' ? 'hidden lg:block' : ''}>{rail}</div>
-        <div className={`mt-4 lg:mt-0 ${mobilePane === 'edit' ? 'hidden lg:block' : ''}`}>{preview}</div>
+      {/* Desktop: fixed-height two-pane. The rail scrolls INTERNALLY; the preview
+          column is full-height and never moves, so it stays frozen while you
+          work down the controls. */}
+      <div className="lg:grid lg:h-[calc(100dvh-13rem)] lg:grid-cols-[minmax(340px,400px)_minmax(0,1fr)] lg:gap-6">
+        <div className={`lg:overflow-y-auto lg:pr-1 ${mobilePane === 'preview' ? 'hidden lg:block' : ''}`}>{rail}</div>
+        <div className={`mt-4 lg:mt-0 lg:h-full ${mobilePane === 'edit' ? 'hidden lg:block' : ''}`}>{preview}</div>
       </div>
     </div>
   );

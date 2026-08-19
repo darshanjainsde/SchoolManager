@@ -12,23 +12,24 @@ describe('pickDesignConfig', () => {
       brandColorPrimary: '#123456',
       scrollFeel: 'DECK',
       festiveTheme: { festival: 'DIWALI' },
+      navConfig: { items: [] },
       // None of these belong to a "look":
       customHtmlBlock: '<script>alert(1)</script>',
       customSectionCss: { stats: '.x{}' },
       logoAssetId: 'asset-1',
       phone: '+91 00000',
-      navConfig: { items: [] },
       email: 'x@y.z',
     });
     expect(out).toEqual({
       brandColorPrimary: '#123456',
       scrollFeel: 'DECK',
       festiveTheme: { festival: 'DIWALI' },
+      navConfig: { items: [] },
     });
     expect(out).not.toHaveProperty('customHtmlBlock');
     expect(out).not.toHaveProperty('customSectionCss');
     expect(out).not.toHaveProperty('logoAssetId');
-    expect(out).not.toHaveProperty('navConfig');
+    expect(out).not.toHaveProperty('phone');
   });
 
   it('the whitelist covers every studio design axis', () => {
