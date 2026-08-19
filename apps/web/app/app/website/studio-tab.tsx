@@ -131,6 +131,11 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <div className="mb-1.5 mt-3 text-[11px] font-bold uppercase tracking-wide text-slate-400 first:mt-0">{children}</div>;
 }
 
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
 /**
  * The collapsible group. Defined at MODULE level (reading open state through a
  * context) — NOT inside the render — so it is a stable component type. A group
@@ -177,20 +182,36 @@ export default function StudioTab() {
   const profile = data?.profile ?? null;
   const savedLook = useMemo(() => pickLook(profile), [profile]);
   const sig = useCallback((l: Look) => JSON.stringify(Object.entries(l).sort(([a], [b]) => a.localeCompare(b))), []);
-  const savedSig = sig(savedLook);
 
-  const [look, setLookState] = useState<Look | null>(null);
-  const seededRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!profile) return;
-    if (look === null || (seededRef.current !== null && sig(look) === seededRef.current && seededRef.current !== savedSig)) {
-      setLookState(savedLook);
-      seededRef.current = savedSig;
-    }
-  }, [profile, look, savedSig, savedLook, sig]);
-  const current: Look = look ?? savedLook;
-  const dirty = look !== null && sig(look) !== savedSig;
-  const setLook = useCallback((patch: Look) => setLookState((prev) => ({ ...(prev ?? savedLook), ...patch })), [savedLook]);
+  // ── Theme manager ──
+  // You edit ONE theme at a time — the Live site or a saved draft. Its id is
+  // editingId. In-progress edits live in `working[id]`, kept per theme so
+  // switching never loses anything; Save/Publish is what persists them.
+  const [editingId, setEditingId] = useState<string>('live');
+  const [working, setWorking] = useState<Record<string, Look>>({});
+  const draftsById = useMemo(
+    () => Object.fromEntries((drafts.data ?? []).map((d) => [d.id, d])),
+    [drafts.data],
+  );
+  // Fall back to Live if the edited draft was deleted elsewhere.
+  const activeId = editingId !== 'live' && drafts.data && !draftsById[editingId] ? 'live' : editingId;
+  const baseLook = useCallback(
+    (id: string): Look => (id === 'live' ? savedLook : pickLook((draftsById[id]?.config ?? {}) as Record<string, unknown>)),
+    [savedLook, draftsById],
+  );
+  const base = baseLook(activeId);
+  const current: Look = working[activeId] ?? base;
+  const dirty = !!working[activeId] && sig(working[activeId]) !== sig(base);
+  const setLook = useCallback(
+    (patch: Look) => setWorking((w) => ({ ...w, [activeId]: { ...(w[activeId] ?? base), ...patch } })),
+    [activeId, base],
+  );
+  const clearWorking = useCallback(
+    (id: string) => setWorking((w) => { const n = { ...w }; delete n[id]; return n; }),
+    [],
+  );
+  const editingName = activeId === 'live' ? 'Live site' : (draftsById[activeId]?.name ?? 'Draft');
+  const [showSchedule, setShowSchedule] = useState(false);
 
   // Menu arrangement lives in the look (live-previews + publishes with it),
   // gated by the same validator the standalone editor used.
@@ -250,24 +271,50 @@ export default function StudioTab() {
 
   // ── mutations ──
   const invalidateContent = () => void queryClient.invalidateQueries({ queryKey: ['site-content'] });
-  const publishMutation = useMutation({
+  const invalidateDrafts = () => void queryClient.invalidateQueries({ queryKey: ['design-drafts'] });
+
+  // Editing the LIVE theme: push the working changes to the public site.
+  const publishLive = useMutation({
     mutationFn: () => api.put('/site/profile', current),
-    onSuccess: () => { invalidateContent(); setLookState(null); toast.success('Published — visitors now see this look'); },
+    onSuccess: () => { invalidateContent(); clearWorking('live'); toast.success('Published — visitors now see this look'); },
     onError: (err: Error) => toast.error(`Publish failed: ${err.message}`),
   });
-  const [draftName, setDraftName] = useState('');
-  const saveDraftMutation = useMutation({
-    mutationFn: () => api.post('/site/design-drafts', { name: draftName.trim() || 'Untitled look', config: current }),
-    onSuccess: () => { setDraftName(''); void queryClient.invalidateQueries({ queryKey: ['design-drafts'] }); toast.success('Look saved as a draft'); },
-    onError: (err: Error) => toast.error(`Could not save the draft: ${err.message}`),
+  // Save the working changes to the DRAFT being edited (keeps its name/schedule).
+  const saveDraftMut = useMutation({
+    mutationFn: (id: string) => api.put(`/site/design-drafts/${id}`, { name: draftsById[id]?.name ?? 'Draft', config: working[id] ?? base }),
+    onSuccess: (_d, id) => { invalidateDrafts(); clearWorking(id); toast.success('Saved to this draft'); },
+    onError: (err: Error) => toast.error(`Could not save: ${err.message}`),
   });
-  const draftOp = useMutation({
-    mutationFn: ({ id, op, body }: { id: string; op: 'publish' | 'delete' | 'schedule'; body?: unknown }) =>
-      op === 'publish' ? api.post(`/site/design-drafts/${id}/publish`) : op === 'delete' ? api.del(`/site/design-drafts/${id}`) : api.put(`/site/design-drafts/${id}`, body),
-    onSuccess: (_d, vars) => {
-      void queryClient.invalidateQueries({ queryKey: ['design-drafts'] });
-      if (vars.op === 'publish') { invalidateContent(); setLookState(null); toast.success('Draft published — it is the live look now'); }
+  // Create a NEW draft from whatever is currently being edited, and switch to it.
+  const [newName, setNewName] = useState('');
+  const newDraftMut = useMutation({
+    mutationFn: () => api.post<{ id: string }>('/site/design-drafts', { name: newName.trim() || 'New theme', config: current }),
+    onSuccess: (created) => {
+      setNewName('');
+      invalidateDrafts();
+      if (created?.id) { clearWorking(activeId); setEditingId(created.id); }
+      toast.success('New draft created — you are editing it now');
     },
+    onError: (err: Error) => toast.error(`Could not create the draft: ${err.message}`),
+  });
+  const publishDraftMut = useMutation({
+    mutationFn: (id: string) => api.post(`/site/design-drafts/${id}/publish`),
+    onSuccess: (_d, id) => { invalidateContent(); invalidateDrafts(); clearWorking(id); setEditingId('live'); toast.success('Published — this theme is now live'); },
+    onError: (err: Error) => toast.error(err.message),
+  });
+  const renameDraftMut = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => api.put(`/site/design-drafts/${id}`, { name, config: draftsById[id]?.config ?? {} }),
+    onSuccess: () => invalidateDrafts(),
+    onError: (err: Error) => toast.error(err.message),
+  });
+  const scheduleDraftMut = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Record<string, unknown> }) => api.put(`/site/design-drafts/${id}`, body),
+    onSuccess: () => invalidateDrafts(),
+    onError: (err: Error) => toast.error(err.message),
+  });
+  const deleteDraftMut = useMutation({
+    mutationFn: (id: string) => api.del(`/site/design-drafts/${id}`),
+    onSuccess: (_d, id) => { invalidateDrafts(); clearWorking(id); if (activeId === id) setEditingId('live'); toast.success('Draft deleted'); },
     onError: (err: Error) => toast.error(err.message),
   });
   const codeMutation = useMutation({
@@ -374,55 +421,105 @@ export default function StudioTab() {
   const rail = (
     <GroupCtx.Provider value={groupCtx}>
     <div className="flex flex-col gap-2.5">
-      {/* Publish / drafts — always visible */}
+      {/* Theme manager — always visible. You edit ONE theme; it's obvious which. */}
       <Card className="p-3.5">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Your look</h3>
+          <h3 className="text-sm font-semibold text-slate-800">Themes</h3>
           <span className={['rounded-full border px-2.5 py-0.5 text-[11px] font-bold',
             dirty ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-400'].join(' ')}>
-            {dirty ? '● Unpublished changes' : '✓ Matches live'}
+            {dirty ? (activeId === 'live' ? '● Unpublished changes' : '● Unsaved changes') : (activeId === 'live' ? '✓ Matches live' : '✓ Saved')}
           </span>
         </div>
-        <p className="mt-1.5 text-xs text-slate-500">Everything below previews on the right and goes live only when you publish.</p>
-        {!navCheck.ok && (
-          <div role="alert" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800">
-            <b>The menu needs fixing before you can publish:</b>
-            <ul className="mt-1 list-disc pl-4">{navCheck.errors.map((e) => <li key={e}>{e}</li>)}</ul>
+        <p className="mt-1 text-xs text-slate-500">Pick a theme to edit — your live site or a saved draft. Everything below changes the one you&rsquo;re editing, live on the right.</p>
+
+        {/* The list of themes to choose from */}
+        <div className="mt-2.5 flex flex-col gap-1.5">
+          {[{ id: 'live', name: 'Live site', publishAt: null as string | null }, ...(drafts.data ?? [])].map((t) => {
+            const selected = activeId === t.id;
+            const hasEdits = !!working[t.id] && sig(working[t.id]) !== sig(baseLook(t.id));
+            return (
+              <button key={t.id} type="button" onClick={() => { setEditingId(t.id); setShowSchedule(false); }} aria-pressed={selected}
+                className={['sk-press flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors',
+                  selected ? 'border-teal-600 bg-teal-50' : 'border-slate-200 hover:border-slate-300'].join(' ')}>
+                <span className={`h-2 w-2 flex-none rounded-full ${t.id === 'live' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                <span className="flex-1 truncate text-sm font-semibold text-slate-700">{t.name}</span>
+                {t.id === 'live' && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">LIVE</span>}
+                {(t as { publishAt?: string | null }).publishAt && <span className="text-[10px] text-slate-400">📅 {fmtDate((t as { publishAt: string }).publishAt)}</span>}
+                {hasEdits && <span className="h-1.5 w-1.5 flex-none rounded-full bg-amber-400" title="Unsaved edits" />}
+              </button>
+            );
+          })}
+          <div className="mt-0.5 flex gap-2">
+            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New theme name (e.g. Diwali ✨)" maxLength={80} className="h-8 text-sm" />
+            <Button size="sm" variant="outline" onClick={() => newDraftMut.mutate()} disabled={newDraftMut.isPending}>+ New draft</Button>
           </div>
-        )}
-        <div className="mt-2.5 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => publishMutation.mutate()} disabled={!dirty || !navCheck.ok || publishMutation.isPending}>
-            {publishMutation.isPending ? 'Publishing…' : 'Publish changes'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setLookState(pickLook(profile))} disabled={!dirty}>Discard</Button>
         </div>
-        <div className="mt-2.5 flex gap-2">
-          <Input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="e.g. Diwali Edition ✨" maxLength={80} className="h-9 text-sm" />
-          <Button size="sm" variant="outline" onClick={() => saveDraftMutation.mutate()} disabled={saveDraftMutation.isPending}>Save draft</Button>
+
+        {/* Actions for the theme you're editing */}
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Editing</div>
+          {activeId === 'live' ? (
+            <div className="text-sm font-semibold text-slate-800">Live site</div>
+          ) : (
+            // Uncontrolled + commit on blur: renaming on every keystroke would
+            // round-trip to the server and jump the cursor. key resets it per theme.
+            <Input key={activeId} defaultValue={draftsById[activeId]?.name ?? ''} maxLength={80} aria-label="Theme name"
+              onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== draftsById[activeId]?.name) renameDraftMut.mutate({ id: activeId, name: v }); }}
+              className="mt-0.5 h-8 text-sm font-semibold" />
+          )}
+
+          {!navCheck.ok && (
+            <div role="alert" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800">
+              <b>The menu needs fixing before you can publish:</b>
+              <ul className="mt-1 list-disc pl-4">{navCheck.errors.map((e) => <li key={e}>{e}</li>)}</ul>
+            </div>
+          )}
+
+          {activeId === 'live' ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => publishLive.mutate()} disabled={!dirty || !navCheck.ok || publishLive.isPending}>
+                {publishLive.isPending ? 'Publishing…' : 'Publish changes'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => clearWorking('live')} disabled={!dirty}>Discard</Button>
+            </div>
+          ) : (
+            <>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => saveDraftMut.mutate(activeId)} disabled={!dirty || saveDraftMut.isPending}>
+                  {saveDraftMut.isPending ? 'Saving…' : 'Save'}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => clearWorking(activeId)} disabled={!dirty}>Discard</Button>
+                <Button size="sm" variant="outline" onClick={() => publishDraftMut.mutate(activeId)} disabled={!navCheck.ok || publishDraftMut.isPending}>Publish now → live</Button>
+                <button type="button" className="text-xs font-semibold text-rose-500 hover:text-rose-700" onClick={() => deleteDraftMut.mutate(activeId)}>Delete</button>
+              </div>
+              <button type="button" onClick={() => setShowSchedule((s) => !s)} aria-expanded={showSchedule}
+                className="mt-2 text-[11px] font-semibold text-slate-500 hover:text-slate-700">
+                {showSchedule ? '▾' : '▸'} Schedule this theme (festival editions)
+              </button>
+              {showSchedule && (
+                <div className="mt-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-[11px] text-slate-500">Go live on</label>
+                      <input type="date" aria-label="Go live date"
+                        value={draftsById[activeId]?.publishAt ? draftsById[activeId]!.publishAt!.slice(0, 10) : ''}
+                        onChange={(e) => scheduleDraftMut.mutate({ id: activeId, body: { name: draftsById[activeId]?.name ?? 'Draft', config: draftsById[activeId]?.config ?? {}, publishAt: e.target.value || null } })}
+                        className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] text-slate-500">Revert on</label>
+                      <input type="date" aria-label="Revert date"
+                        value={draftsById[activeId]?.revertAt ? draftsById[activeId]!.revertAt!.slice(0, 10) : ''}
+                        onChange={(e) => scheduleDraftMut.mutate({ id: activeId, body: { name: draftsById[activeId]?.name ?? 'Draft', config: draftsById[activeId]?.config ?? {}, revertAt: e.target.value || null } })}
+                        className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs" />
+                    </div>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-400">This theme goes live by itself on the go-live date and reverts after the revert date — no clicks needed. Save your edits first so the scheduled version includes them.</p>
+                </div>
+              )}
+            </>
+          )}
         </div>
-        {(drafts.data ?? []).length > 0 && (
-          <ul className="mt-2.5 flex flex-col gap-2">
-            {(drafts.data ?? []).map((d) => (
-              <li key={d.id} className="rounded-lg border border-slate-200 p-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="flex-1 truncate text-sm font-semibold text-slate-700">{d.name}</span>
-                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
-                    onClick={() => { setLookState({ ...savedLook, ...pickLook(d.config) }); toast.success(`Previewing “${d.name}”`); }}>Preview</Button>
-                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => draftOp.mutate({ id: d.id, op: 'publish' })}>Publish now</Button>
-                  <button type="button" aria-label={`Delete ${d.name}`} className="text-xs text-rose-500 hover:text-rose-700" onClick={() => draftOp.mutate({ id: d.id, op: 'delete' })}>✕</button>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                  <span>📅 Auto-publish</span>
-                  <input type="date" value={d.publishAt ? d.publishAt.slice(0, 10) : ''} aria-label={`Publish date for ${d.name}`} className="rounded border border-slate-200 px-1.5 py-0.5"
-                    onChange={(e) => draftOp.mutate({ id: d.id, op: 'schedule', body: { name: d.name, config: d.config, publishAt: e.target.value || null } })} />
-                  <span>revert</span>
-                  <input type="date" value={d.revertAt ? d.revertAt.slice(0, 10) : ''} aria-label={`Revert date for ${d.name}`} className="rounded border border-slate-200 px-1.5 py-0.5"
-                    onChange={(e) => draftOp.mutate({ id: d.id, op: 'schedule', body: { name: d.name, config: d.config, revertAt: e.target.value || null } })} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
       </Card>
 
       {/* ── Brand & theme ── */}
