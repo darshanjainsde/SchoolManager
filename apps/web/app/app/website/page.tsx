@@ -13,6 +13,7 @@ import AdmissionsTab from './admissions-tab';
 import HallOfFameTab from './hof-tab';
 import DesignTab from './design-tab';
 import MenuTab from './menu-tab';
+import StudioTab from './studio-tab';
 
 /**
  * Website console shell: the tab bar, plus the one shared settings form the
@@ -22,6 +23,7 @@ import MenuTab from './menu-tab';
  */
 
 type Tab =
+  | 'studio'
   | 'branding'
   | 'theme'
   | 'design'
@@ -36,6 +38,9 @@ type Tab =
   | 'staff';
 
 const TABS: { id: Tab; label: string }[] = [
+  // The studio leads: it is the only tab with a live preview, and everything
+  // it saves goes through the same endpoints the older tabs use.
+  { id: 'studio', label: 'Studio' },
   { id: 'branding', label: 'Branding' },
   { id: 'theme', label: 'Theme' },
   { id: 'design', label: 'Design' },
@@ -51,7 +56,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function WebsitePage() {
-  const [activeTab, setActiveTab] = useState<Tab>('branding');
+  const [activeTab, setActiveTab] = useState<Tab>('studio');
   const form = useSiteForm();
 
   return (
@@ -93,6 +98,7 @@ export default function WebsitePage() {
           for "this view changed". The bodies already mount per tab, so the key
           changes no lifecycle. Reduced motion simply shows the new tab. */}
       <div className="sk-wfade" key={activeTab}>
+      {activeTab === 'studio' && <StudioTab />}
       {activeTab === 'branding' && <BrandingTab form={form} />}
       {activeTab === 'theme' && <ThemeTab form={form} onGoToDesign={() => setActiveTab('design')} />}
       {activeTab === 'homepage' && <HomepageTab form={form} onGoToDesign={() => setActiveTab('design')} />}
