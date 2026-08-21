@@ -120,11 +120,15 @@ export const PS_CSS = `
   .ps-gesture-fade .reveal { transform: none; }
   .ps-gesture-fade .reveal.in { transform: none; }
   /* DRAW uncovers the section left to right, the way the headline motif draws
-     itself — the same gesture at section scale, not a second idea. */
+     itself — the same gesture at section scale, not a second idea.
+     The static edges sit at -3rem (not 0): an inset(0) end-state clips the
+     element to its border box FOREVER, amputating anything that overhangs it —
+     the principal signature card, glows, soft shadows. Negative insets keep
+     the wipe while leaving overhangs untouched. */
   .ps-gesture-draw .reveal { opacity: 1; transform: none;
-    clip-path: inset(0 100% 0 0);
+    clip-path: inset(-3rem 100% -3rem -3rem);
     transition: clip-path .85s cubic-bezier(.2,.7,.2,1); }
-  .ps-gesture-draw .reveal.in { clip-path: inset(0 0 0 0); }
+  .ps-gesture-draw .reveal.in { clip-path: inset(-3rem); }
   .ps-motion-off .ps-gesture-draw .reveal, .ps-gesture-draw.ps-motion-off .reveal {
     clip-path: none; transition: none; }
   /* SLIDE: sections enter from the side (distance scales with the volume knob). */
@@ -133,11 +137,11 @@ export const PS_CSS = `
   /* ZOOM: sections scale up into place. */
   .ps-gesture-zoom .reveal { transform: scale(calc(1 - 0.12 * var(--motion))); }
   .ps-gesture-zoom .reveal.in { transform: none; }
-  /* CURTAIN: uncovers top to bottom. */
+  /* CURTAIN: uncovers top to bottom (static edges at -3rem — see DRAW). */
   .ps-gesture-curtain .reveal { opacity: 1; transform: none;
-    clip-path: inset(0 0 100% 0);
+    clip-path: inset(-3rem -3rem 100% -3rem);
     transition: clip-path .8s cubic-bezier(.4,0,.1,1); }
-  .ps-gesture-curtain .reveal.in { clip-path: inset(0 0 0 0); }
+  .ps-gesture-curtain .reveal.in { clip-path: inset(-3rem); }
   /* FLIP: tips up on a 3D hinge (travel scales with the volume knob). */
   .ps-gesture-flip .reveal { opacity: 0; transform-origin: top center;
     transform: perspective(900px) rotateX(calc(-18deg * var(--motion)));
@@ -567,6 +571,12 @@ export const PS_CSS = `
   .ps-scroll-deck > footer:not(.ps-footc-dark):not(.ps-footc-brand) {
     background: var(--paper); }
   .ps-scroll-deck > #ps-nav, .ps-scroll-deck > header { position: sticky; }
+  /* Deck just forced an overlaying (fixed) floating nav into the flow, so the
+     hero's reserved padding for a bar that would sit ON TOP of it turns into a
+     double gap between the navbar and the first screen. Collapse it back to
+     the in-flow values the hero uses when the nav never overlays. */
+  .ps-scroll-deck [data-sec="hero"] .pt-24 { padding-top: 1.5rem; }
+  .ps-scroll-deck [data-sec="hero"] .pt-28 { padding-top: 3.5rem; }
   /* Side-scroll: the home bands become full-viewport panels in a horizontal
      track. Desktop + motion-allowed only — on phones and under reduced-motion
      the track stays a normal column, so the page can never break there. Touch
@@ -609,8 +619,10 @@ export const PS_CSS = `
         100% { transform: scale(.86); opacity: .5; }
       }
       @keyframes ps-sf-reveal {
-        from { clip-path: inset(0 100% 0 0); }
-        to   { clip-path: inset(0 0 0 0); }
+        /* Static edges at -3rem: an inset(0) fill state would clip each band
+           to its box forever, amputating panel shadows and card overhangs. */
+        from { clip-path: inset(-3rem 100% -3rem -3rem); }
+        to   { clip-path: inset(-3rem); }
       }
       @keyframes ps-sf-tilt {
         0%   { transform: perspective(1100px) rotateX(11deg);  opacity: .55; }
@@ -645,9 +657,9 @@ export const PS_CSS = `
     transition: opacity .7s cubic-bezier(.2,.7,.2,1); }
   .ps-root .ps-sg-fade .reveal.in { opacity: 1; }
   .ps-root .ps-sg-draw .reveal { opacity: 1; transform: none;
-    clip-path: inset(0 100% 0 0);
+    clip-path: inset(-3rem 100% -3rem -3rem);
     transition: clip-path .85s cubic-bezier(.2,.7,.2,1); }
-  .ps-root .ps-sg-draw .reveal.in { clip-path: inset(0 0 0 0); }
+  .ps-root .ps-sg-draw .reveal.in { clip-path: inset(-3rem); }
   .ps-root .ps-sg-slide .reveal { opacity: 0; clip-path: none;
     transform: translateX(calc(-44px * var(--motion) - 6px));
     transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
@@ -657,9 +669,9 @@ export const PS_CSS = `
     transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
   .ps-root .ps-sg-zoom .reveal.in { opacity: 1; transform: none; }
   .ps-root .ps-sg-curtain .reveal { opacity: 1; transform: none;
-    clip-path: inset(0 0 100% 0);
+    clip-path: inset(-3rem -3rem 100% -3rem);
     transition: clip-path .8s cubic-bezier(.4,0,.1,1); }
-  .ps-root .ps-sg-curtain .reveal.in { clip-path: inset(0 0 0 0); }
+  .ps-root .ps-sg-curtain .reveal.in { clip-path: inset(-3rem); }
   .ps-root .ps-sg-flip .reveal { opacity: 0; clip-path: none; transform-origin: top center;
     transform: perspective(900px) rotateX(calc(-18deg * var(--motion)));
     transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }

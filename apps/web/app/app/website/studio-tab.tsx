@@ -237,6 +237,21 @@ export default function StudioTab() {
   }, [profile, codeSeeded]);
 
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
+  // The preview renders at a REAL viewport width (desktop 1280 / mobile 390)
+  // and is scaled down to fit its column — otherwise the iframe inherits the
+  // rail's leftover width, the site renders its tablet layout, and what the
+  // admin sees is not what any visitor gets.
+  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const [previewBox, setPreviewBox] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = previewBoxRef.current;
+    if (!el) return;
+    const measure = () => setPreviewBox({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [mobilePane, setMobilePane] = useState<'edit' | 'preview'>('edit');
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [focus, setFocus] = useState<string>('top');
@@ -1010,8 +1025,31 @@ export default function StudioTab() {
         <button type="button" onClick={reloadPreview} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700"><RotateCw className="h-3.5 w-3.5" /> Reload</button>
         <span className="ml-auto flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> LIVE PREVIEW</span>
       </div>
-      <div className={`min-h-0 flex-1 ${device === 'mobile' ? 'mx-auto w-[390px] max-w-full' : ''}`}>
-        <iframe ref={iframeRef} src="/preview" title="Live preview of your website" className="h-[70vh] w-full rounded-xl border border-slate-200 bg-white shadow-sm lg:h-full" />
+      <div ref={previewBoxRef} className="min-h-0 h-[70vh] flex-1 lg:h-auto">
+        {(() => {
+          const logicalW = device === 'mobile' ? 390 : 1280;
+          const scale = previewBox.w ? Math.min(1, previewBox.w / logicalW) : 1;
+          return (
+            <div
+              className="mx-auto h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+              style={{ width: Math.round(logicalW * scale) }}
+            >
+              <iframe
+                ref={iframeRef}
+                src="/preview"
+                title="Live preview of your website"
+                className="bg-white"
+                style={{
+                  width: logicalW,
+                  height: previewBox.h ? Math.round(previewBox.h / scale) : '100%',
+                  transform: `scale(${scale})`,
+                  transformOrigin: 'top left',
+                  border: 0,
+                }}
+              />
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
