@@ -159,54 +159,55 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
   const aboutImageUrl = data.homepage?.aboutImageUrl;
 
   useEffect(() => {
-    // Nav elevate on scroll
     const nav = document.getElementById('ps-nav');
-    const handleScroll = () => {
-      if (!nav) return;
-      nav.classList.toggle('ps-nav-scrolled', window.scrollY > 30);
+
+    // Reveal-on-scroll and the count-up are POSITION-based, not driven by an
+    // IntersectionObserver. Content is hidden until it gets `.in`, so a starved
+    // observer — the page opened in a BACKGROUND tab (rAF + IO callbacks are
+    // paused until it's shown), an engine that defers the first frame — left the
+    // ENTIRE page permanently blank. A synchronous rect sweep on mount, plus on
+    // scroll/resize/visibility, can never do that: whatever is on screen reveals
+    // at once, the rest as it scrolls in, and nothing depends on an async frame.
+    const reveals = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
+    const counts = Array.from(document.querySelectorAll<HTMLElement>('.count'));
+    const runCount = (el: HTMLElement) => {
+      const to = Number(el.dataset.to);
+      if (isNaN(to)) return;
+      const suffix = el.dataset.suffix ?? '';
+      let n = 0;
+      const step = Math.max(1, Math.round(to / 60));
+      const timer = setInterval(() => {
+        n += step;
+        if (n >= to) { n = to; clearInterval(timer); }
+        el.textContent = (to >= 1000 ? n.toLocaleString() : String(n)) + suffix;
+      }, 18);
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    // Reveal on scroll
-    const revealObs = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            (e.target as HTMLElement).classList.add('in');
-            revealObs.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.15 }
-    );
-    document.querySelectorAll('.reveal').forEach((el) => revealObs.observe(el));
-
-    // Count-up
-    const countObs = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            const el = e.target as HTMLElement;
-            const to = Number(el.dataset.to);
-            if (isNaN(to)) return;
-            const suffix = el.dataset.suffix ?? '';
-            let n = 0;
-            const step = Math.max(1, Math.round(to / 60));
-            const timer = setInterval(() => {
-              n += step;
-              if (n >= to) {
-                n = to;
-                clearInterval(timer);
-              }
-              el.textContent = (to >= 1000 ? n.toLocaleString() : String(n)) + suffix;
-            }, 18);
-            countObs.unobserve(el);
-          }
-        });
-      },
-      { threshold: 0.6 }
-    );
-    document.querySelectorAll('.count').forEach((el) => countObs.observe(el));
+    const sweep = () => {
+      const vh = window.innerHeight || 800;
+      if (nav) nav.classList.toggle('ps-nav-scrolled', window.scrollY > 30);
+      for (let i = reveals.length - 1; i >= 0; i--) {
+        if (reveals[i].getBoundingClientRect().top < vh * 0.92) {
+          reveals[i].classList.add('in');
+          reveals.splice(i, 1);
+        }
+      }
+      for (let i = counts.length - 1; i >= 0; i--) {
+        if (counts[i].getBoundingClientRect().top < vh * 0.85) {
+          runCount(counts[i]);
+          counts.splice(i, 1);
+        }
+      }
+    };
+    let raf = 0;
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; sweep(); });
+    };
+    sweep(); // reveal whatever is already on screen, synchronously
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    // Opened in a background tab? Sweep again the moment it becomes visible.
+    const onVis = () => { if (!document.hidden) sweep(); };
+    document.addEventListener('visibilitychange', onVis);
 
     // Magnetic glow buttons
     const handleMouseMove = (e: MouseEvent) => {
@@ -219,9 +220,10 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
     btns.forEach((b) => b.addEventListener('mousemove', handleMouseMove));
 
     return () => {
-      window.removeEventListener('scroll', handleScroll);
-      revealObs.disconnect();
-      countObs.disconnect();
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      document.removeEventListener('visibilitychange', onVis);
+      if (raf) cancelAnimationFrame(raf);
       btns.forEach((b) => b.removeEventListener('mousemove', handleMouseMove));
     };
   }, []);

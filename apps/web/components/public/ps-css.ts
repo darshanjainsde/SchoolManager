@@ -252,7 +252,12 @@ export const PS_CSS = `
   .ps-shape-panels > section,
   .ps-shape-panels > div[data-sec]:not([data-sec="hero"]) {
     border-radius: 22px;
-    margin: 16px clamp(10px, 2vw, 20px) 0;
+    /* Centre every panel at a consistent width. A bare side-margin left the
+       max-w-6xl bands (which centre via mx-auto) stuck to the left with a gap
+       on the right; margin-inline:auto + a shared max-width fixes that and makes
+       every panel the same size on the tinted ground. */
+    max-width: min(76rem, calc(100% - clamp(20px, 5vw, 48px)));
+    margin: 16px auto 0;
     box-shadow: 0 8px 26px -20px rgba(17,20,28,.25);
   }
   /* Paper fill ONLY for bands that don't bring their own colour. A white-text

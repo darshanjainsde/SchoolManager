@@ -116,7 +116,11 @@ function Logo({ data, small }: { data: PublicSiteData; small?: boolean }) {
   const logoUrl = data.profile?.logoUrl;
   const schoolName = data.school.name;
   return (
-    <div className="flex items-center gap-2.5 min-w-0">
+    <Link
+      href="/"
+      aria-label={`${schoolName} — home`}
+      className="flex items-center gap-2.5 min-w-0 flex-none rounded-lg transition hover:opacity-90"
+    >
       {logoUrl ? (
         <img src={logoUrl} alt={schoolName} decoding="async" className={small ? 'h-9 w-auto' : 'h-10 w-auto'} />
       ) : (
@@ -127,7 +131,7 @@ function Logo({ data, small }: { data: PublicSiteData; small?: boolean }) {
         </span>
       )}
       <span className="ps-nav-name ps-head font-bold text-lg truncate">{schoolName}</span>
-    </div>
+    </Link>
   );
 }
 
