@@ -251,10 +251,16 @@ export const PS_CSS = `
   .ps-shape-panels { background: color-mix(in srgb, #10131a 4.5%, var(--paper)); }
   .ps-shape-panels > section,
   .ps-shape-panels > div[data-sec]:not([data-sec="hero"]) {
-    background: var(--paper);
     border-radius: 22px;
     margin: 16px clamp(10px, 2vw, 20px) 0;
     box-shadow: 0 8px 26px -20px rgba(17,20,28,.25);
+  }
+  /* Paper fill ONLY for bands that don't bring their own colour. A white-text
+     band (events, hall of fame) keeps its own dark/brand background — forcing
+     paper onto it put white text on a white panel, i.e. an invisible band. */
+  .ps-shape-panels > section:not(.text-white),
+  .ps-shape-panels > div[data-sec]:not([data-sec="hero"]) {
+    background: var(--paper);
   }
   .ps-shape-panels > section:last-of-type,
   .ps-shape-panels > div[data-sec]:not([data-sec="hero"]):last-of-type { margin-bottom: 18px; }

@@ -588,19 +588,25 @@ export default function SiteNav({
         {strip}
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-2">
           <Logo data={data} />
-          {/* Priority row: as many links as fit, measured against the ghost. */}
+          {/* Priority row: as many links as fit, measured against the ghost.
+              The nav itself must NOT clip (overflow visible) or it would cut off
+              the dropdown menus, which hang BELOW the bar — that regression made
+              every group menu invisible. The ghost's full-width copy is clipped
+              in its own bar-height layer instead, so it still can't spill and
+              cause page overflow. */}
           <nav
             ref={overflow.wrapRef}
             aria-label="Primary"
-            className="relative flex-1 min-w-0 overflow-hidden flex items-center gap-1 text-sm text-slate-600"
+            className="relative flex-1 min-w-0 flex items-center gap-1 text-sm text-slate-600"
           >
-            <div
-              ref={overflow.ghostRef}
-              aria-hidden="true"
-              className="absolute left-0 top-1/2 -translate-y-1/2 w-max flex items-center gap-1 whitespace-nowrap pointer-events-none"
-              style={{ visibility: 'hidden' }}
-            >
-              <NavItems nodes={nodes} />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div
+                ref={overflow.ghostRef}
+                className="absolute left-0 top-1/2 -translate-y-1/2 w-max flex items-center gap-1 whitespace-nowrap"
+                style={{ visibility: 'hidden' }}
+              >
+                <NavItems nodes={nodes} />
+              </div>
             </div>
             <NavItems nodes={primaryNodes} />
           </nav>
