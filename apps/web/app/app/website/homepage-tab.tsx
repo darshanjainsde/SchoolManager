@@ -27,11 +27,15 @@ export default function HomepageTab({ form, onGoToDesign }: { form: SiteForm; on
   } = form;
 
   return (
-      <Card className="max-w-2xl">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle>Homepage content</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-5">
+        {/* Two columns on wide screens: the words & imagery on the left, the
+            page make-up (sections + stats) on the right. */}
+        <CardContent>
+          <div className="grid gap-x-10 gap-y-5 lg:grid-cols-2">
+          <div className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="headline">Headline</Label>
             <Input
@@ -73,7 +77,9 @@ export default function HomepageTab({ form, onGoToDesign }: { form: SiteForm; on
               <span className="font-semibold text-teal-700">Studio</span> tab →
             </span>
           </button>
+          </div>
 
+          <div className="space-y-5">
           <div className="rounded-lg border border-slate-200 p-3 space-y-2">
             <p className="text-sm font-medium text-slate-800">Sections on the homepage</p>
             <p className="text-xs text-slate-500">
@@ -132,6 +138,8 @@ export default function HomepageTab({ form, onGoToDesign }: { form: SiteForm; on
                 </Button>
               </div>
             ))}
+          </div>
+          </div>
           </div>
         </CardContent>
         <CardFooter>

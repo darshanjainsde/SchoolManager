@@ -26,11 +26,15 @@ export default function AboutTab({ form }: { form: SiteForm }) {
   } = form;
 
   return (
-      <Card className="max-w-2xl">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle>About &amp; principal</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-5">
+        {/* Two columns on wide screens: the words on the left, the imagery on
+            the right. */}
+        <CardContent>
+          <div className="grid gap-x-10 gap-y-5 lg:grid-cols-2">
+          <div className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="about-text">About text</Label>
             <Textarea
@@ -60,6 +64,8 @@ export default function AboutTab({ form }: { form: SiteForm }) {
               placeholder="A welcome message from the principal…"
             />
           </div>
+          </div>
+          <div className="space-y-5">
           <ImageUploader
             label="About image"
             hint="Wide photo shown beside the About text (campus, classrooms, community). Saves immediately. Max 4 MB."
@@ -76,6 +82,8 @@ export default function AboutTab({ form }: { form: SiteForm }) {
             isUploading={isUploadingPrincipalPhoto}
             onFile={uploadPrincipalPhoto}
           />
+          </div>
+          </div>
         </CardContent>
         <CardFooter>
           <Button

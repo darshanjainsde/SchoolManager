@@ -105,7 +105,7 @@ export default function EditorTab({
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="w-full max-w-5xl space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>{editingPost ? 'Edit post' : 'New post'}</CardTitle>

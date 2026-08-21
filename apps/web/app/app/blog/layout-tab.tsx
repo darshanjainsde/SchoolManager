@@ -132,7 +132,7 @@ export default function LayoutTab({
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 w-full">
       <Card>
         <CardHeader>
           <CardTitle>Blog layout</CardTitle>

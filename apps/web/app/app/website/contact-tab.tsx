@@ -36,11 +36,15 @@ export default function ContactTab({ form }: { form: SiteForm }) {
   } = form;
 
   return (
-      <Card className="max-w-2xl">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle>Contact &amp; address</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-5">
+        {/* Two columns on wide screens: reachability on the left, the map and
+            social presence on the right. */}
+        <CardContent>
+          <div className="grid gap-x-10 gap-y-5 lg:grid-cols-2">
+          <div className="space-y-5">
           {/* Phone + email */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -124,6 +128,9 @@ export default function ContactTab({ form }: { form: SiteForm }) {
               />
             </div>
           </div>
+          </div>
+
+          <div className="space-y-5">
           <div className="space-y-2">
             <Label
               htmlFor="map-embed"
@@ -179,6 +186,8 @@ export default function ContactTab({ form }: { form: SiteForm }) {
                 </Button>
               </div>
             ))}
+          </div>
+          </div>
           </div>
         </CardContent>
         <CardFooter>

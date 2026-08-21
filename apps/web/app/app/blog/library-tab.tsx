@@ -38,7 +38,7 @@ export default function LibraryTab({ libraryQuery }: { libraryQuery: UseQueryRes
   const posts = libraryQuery.data ?? [];
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 w-full">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Global library</h2>
         <p className="text-sm text-slate-500">
