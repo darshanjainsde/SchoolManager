@@ -88,6 +88,9 @@ export const SECTION_VARIANT_DEFS: Record<
       { value: 'CARDS', label: 'Cards', hint: 'Four floating cards — today’s look.' },
       { value: 'STRIP', label: 'Inline strip', hint: 'One ruled row with dividers, no cards.' },
       { value: 'RINGS', label: 'Progress rings', hint: 'Each number sits inside a drawn ring.' },
+      { value: 'ODOMETER', label: 'Odometer', hint: 'Numbers roll up on dark counter tiles.' },
+      { value: 'BARS', label: 'Bar fill', hint: 'Each figure grows a coloured bar as it scrolls in.' },
+      { value: 'BIGNUM', label: 'Big numerals', hint: 'Oversized bare numbers, no cards — quiet and confident.' },
     ],
   },
   about: {

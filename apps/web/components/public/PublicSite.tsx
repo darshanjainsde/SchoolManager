@@ -70,6 +70,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
   const glideOn =
     (data.profile?.scrollFeel ?? 'CLASSIC') === 'GLIDE' &&
     (data.profile?.animationLevel ?? 'FULL') !== 'NONE';
+  const statsLayout = sectionLayoutOf(variants, 'stats');
 
   const brandColor = data.profile?.brandColorPrimary ?? '#2f6b4f';
   // Secondary drives the second gradient stop. If a school leaves it near-white
@@ -362,18 +363,32 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
         >
           {data.stats.map((stat, i) => {
             const parsed = parseStatValue(stat.value);
-            const rings = sectionLayoutOf(variants, 'stats') === 'RINGS';
+            const rings = statsLayout === 'RINGS';
+            // ODOMETER paints its numerals solid on a dark tile, so it opts out
+            // of the brand gradient; every other layout keeps it. Size follows
+            // the layout — big for BIGNUM, compact where a ring or bar shares
+            // the cell. CARDS stays byte-for-byte the shipped look.
+            const gradient = statsLayout !== 'ODOMETER';
+            const sizeCls =
+              statsLayout === 'BIGNUM'
+                ? 'text-6xl'
+                : statsLayout === 'ODOMETER'
+                  ? 'text-3xl'
+                  : rings || statsLayout === 'BARS'
+                    ? 'text-2xl'
+                    : 'text-4xl';
+            const numCls = `ps-statnum ps-head font-bold ${gradient ? 'ps-grad-text ' : ''}${sizeCls}`;
             const num = parsed.numeric ? (
-              <div
-                className={`ps-head font-bold ps-grad-text count ${rings ? 'text-2xl' : 'text-4xl'}`}
-                data-to={String(parsed.num)}
-                data-suffix={parsed.suffix}
-              >
+              <div className={`${numCls} count`} data-to={String(parsed.num)} data-suffix={parsed.suffix}>
                 0
               </div>
             ) : (
-              <div className={`ps-head font-bold ps-grad-text ${rings ? 'text-2xl' : 'text-4xl'}`}>{stat.value}</div>
+              <div className={numCls}>{stat.value}</div>
             );
+            // A school figure has no denominator, so a value-derived percentage
+            // would be a lie — only a real "%" stat fills to its own value; the
+            // rest take a pleasant fixed length (same reasoning as the ring arc).
+            const barW = parsed.numeric && parsed.suffix === '%' ? Math.min(100, parsed.num) : [82, 68, 90, 74][i % 4];
             return (
               <div
                 key={i}
@@ -381,16 +396,20 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
                 style={{ transitionDelay: `${i * 0.08}s` }}
               >
                 {rings ? (
-                  // The ring is decorative — a school stat like "1,200 students"
-                  // has no denominator, so a value-derived percentage would be a
-                  // lie. A consistent three-quarter arc reads as an accent.
                   <div className="ps-ring" style={{ '--ps-ring-p': 75 } as React.CSSProperties}>
                     <span>{num}</span>
                   </div>
+                ) : statsLayout === 'BARS' ? (
+                  <>
+                    {num}
+                    <div className="ps-bar-track">
+                      <span className="ps-bar-fill" style={{ '--ps-bar-w': `${barW}%` } as React.CSSProperties} />
+                    </div>
+                  </>
                 ) : (
                   num
                 )}
-                <div className="text-sm text-slate-500 mt-1">{stat.label}</div>
+                <div className="ps-statlabel text-sm text-slate-500 mt-1">{stat.label}</div>
               </div>
             );
           })}

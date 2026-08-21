@@ -493,6 +493,22 @@ export const PS_CSS = `
   .ps-ring > span { width: 5.4rem; height: 5.4rem; border-radius: 999px; background: var(--paper);
     display: grid; place-items: center; }
   .ps-v-stats-rings .ps-statcard { background: transparent; border: 0; box-shadow: none; }
+  /* Odometer: numerals roll up (the count-up hook) on a dark counter tile. */
+  .ps-v-stats-odometer .ps-statcard { background: #141a17; border: 0;
+    box-shadow: 0 12px 30px -18px rgba(0,0,0,.75); }
+  .ps-v-stats-odometer .ps-statnum { color: var(--ps2); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+  .ps-v-stats-odometer .ps-statlabel { color: rgba(255,255,255,.6); }
+  /* Big numerals: oversized, bare, no card. */
+  .ps-v-stats-bignum .ps-statcard { background: transparent; border: 0; box-shadow: none; padding: .5rem; }
+  .ps-v-stats-bignum .ps-statnum { line-height: .92; letter-spacing: -.03em; }
+  /* Bar fill: a figure over a track that grows to its width as the card arrives. */
+  .ps-v-stats-bars .ps-statcard { background: transparent; border: 0; box-shadow: none; text-align: left; }
+  .ps-bar-track { height: .5rem; border-radius: 999px; margin: .55rem 0 .1rem; overflow: hidden;
+    background: color-mix(in srgb, var(--ps1) 12%, transparent); }
+  .ps-bar-fill { display: block; height: 100%; width: 0; border-radius: 999px;
+    background: linear-gradient(90deg, var(--ps1), var(--ps2));
+    transition: width 1s cubic-bezier(.2,.7,.2,1); }
+  .ps-statcard.in .ps-bar-fill { width: var(--ps-bar-w, 75%); }
 
   /* ── About variants ── */
   .ps-v-about-overlap .ps-about-img-wrap::before { content: ""; position: absolute;
@@ -650,6 +666,8 @@ export const PS_CSS = `
     .ps-fx-burst { opacity: 0; }
     .ps-fx-fall { top: 104%; }
     .ps-hero-video { display: none; }
+    /* Bar fill collapses to its final width, not an empty track. */
+    .ps-bar-fill { transition: none; width: var(--ps-bar-w, 75%); }
   }
   .ps-motion-off .ps-sg-rise .reveal, .ps-motion-off .ps-sg-fade .reveal,
   .ps-motion-off .ps-sg-draw .reveal { opacity: 1; transform: none; clip-path: none; transition: none; }
@@ -679,4 +697,5 @@ export const PS_CSS = `
   .ps-motion-off .ps-jbadge { transform: scale(1); }
   .ps-motion-off .ps-jbody, .ps-motion-off .ps-rstep { opacity: 1; transform: none; }
   .ps-motion-off .ps-rail-fill { height: calc(100% - 16px); }
+  .ps-motion-off .ps-bar-fill { transition: none; width: var(--ps-bar-w, 75%); }
 `;
