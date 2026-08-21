@@ -1,0 +1,46 @@
+# Launch-gate #6: pushes within minutes, not tomorrow.
+#
+# A notification that misses its inline send lands in the outbox — and the
+# only drain was the daily 02:00 Vercel cron (Hobby's ceiling), so a missed
+# diary push could arrive the NEXT MORNING. This workflow is the free external
+# scheduler from the launch-gate plan: every 10 minutes it calls the drain
+# endpoint the API already ships (`@Public()` + CronSecretGuard — built for
+# exactly this caller).
+#
+# Setup (repo → Settings → Secrets and variables → Actions):
+#   CRON_SECRET — must equal the API's CRON_SECRET env on Vercel.
+#   CRON_API_BASE (variable, optional) — defaults to the production API.
+#
+# GitHub schedules are best-effort (a run can slip a few minutes under load);
+# that is fine here — the guarantee we need is "minutes, not tomorrow".
+# Remove this workflow once the project moves to Vercel Pro and a native
+# `*/5` cron replaces it (checkpoint-1 item).
+
+name: Drain notification outbox
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call the drain endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          API_BASE: ${{ vars.CRON_API_BASE || 'https://api.sckools.com' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET secret is not configured" >&2; exit 1
+          fi
+          code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 55 \
+            -X POST "${API_BASE}/internal/cron/notification-outbox" \
+            -H "Authorization: Bearer ${CRON_SECRET}")
+          echo "HTTP ${code}"; cat /tmp/body; echo
+          [ "${code}" = "200" ] || [ "${code}" = "201" ]

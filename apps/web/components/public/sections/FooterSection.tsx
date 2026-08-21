@@ -109,7 +109,12 @@ export default function FooterSection({
 
   const copyright = (
     <div className="border-t border-black/10 text-center text-xs ps-foot-muted text-slate-400 py-4">
-      © {year} {schoolName} · Powered by Sckools
+      © {year} {schoolName} · Powered by Sckools ·{' '}
+      {/* Launch-gate #8 (DPDP): the platform's policy must be one click away
+          from every page a parent sees, school sites included. */}
+      <a href="https://sckools.com/privacy" className="underline-offset-2 hover:underline">Privacy</a>
+      {' · '}
+      <a href="https://sckools.com/terms" className="underline-offset-2 hover:underline">Terms</a>
     </div>
   );
 

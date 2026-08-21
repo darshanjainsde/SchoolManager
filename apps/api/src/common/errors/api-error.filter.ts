@@ -7,8 +7,9 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { ApiError, type ApiErrorBody } from './api-error';
+import { captureError } from '../observability/sentry-lite';
 
 /**
  * The filter's output is a superset of `ApiErrorBody` — `ApiError`s and
@@ -48,6 +49,13 @@ export class ApiErrorFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
 
     const { status, body } = this.normalize(exception);
+    // Launch-gate #4: an unhandled 500 must reach a pager, not just a log
+    // stream nobody is watching. Route + method only — never request bodies
+    // or user identifiers.
+    if (status === HttpStatus.INTERNAL_SERVER_ERROR && body.code === 'INTERNAL') {
+      const req = ctx.getRequest<Request>();
+      captureError(exception, { method: req?.method ?? '', path: req?.path ?? '' });
+    }
     response.status(status).json(body);
   }
 

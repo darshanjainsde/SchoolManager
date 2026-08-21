@@ -27,6 +27,8 @@ import { DirectoryModule } from './modules/directory/directory.module';
 import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
 import { BlogModule } from './modules/blog';
+import { RedisThrottlerModule } from './common/throttler/redis-throttler.module';
+import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 
 @Module({
   imports: [
@@ -45,9 +47,19 @@ import { BlogModule } from './modules/blog';
     // tighter limits via @Throttle(). `skipIf` short-circuits the guard in tests
     // (per-endpoint @Throttle overrides the module limits but `skipIf` is
     // honoured by the guard before any limit is checked).
-    ThrottlerModule.forRoot({
-      throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
-      skipIf: () => process.env.DISABLE_THROTTLER === 'true',
+    //
+    // The counter lives in Redis (shared across every lambda instance) when
+    // REDIS_URL is configured; without it (local dev, unit tests) the guard
+    // falls back to the in-memory store. See RedisThrottlerStorage for the
+    // fail-open policy.
+    ThrottlerModule.forRootAsync({
+      imports: [RedisThrottlerModule],
+      inject: [RedisThrottlerStorage],
+      useFactory: (storage: RedisThrottlerStorage) => ({
+        throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
+        skipIf: () => process.env.DISABLE_THROTTLER === 'true',
+        ...(storage.shared ? { storage } : {}),
+      }),
     }),
 
     CommonAuthModule,

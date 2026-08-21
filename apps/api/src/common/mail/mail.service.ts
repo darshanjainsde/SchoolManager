@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createTransport, type Transporter } from 'nodemailer';
 import { loadEnv } from '@skoolos/config';
+import { captureError } from '../observability/sentry-lite';
 import type {
   AbsenceNoticePayload,
   AnnouncementPayload,
@@ -66,6 +67,11 @@ export class MailService {
       return true;
     } catch (e) {
       this.logger.error(`Mail to ${to} failed: ${(e as Error).message}`);
+      // Launch-gate #2/#4: a transport failure must be VISIBLE — a school
+      // half-invited by a silent mail outage looks identical to a finished
+      // one. Recipient privacy: only the mail domain travels, never the
+      // address.
+      captureError(e, { kind: 'mail', domain: to.split('@')[1] ?? 'unknown', subject: subject.slice(0, 60) });
       return false;
     }
   }
