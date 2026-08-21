@@ -429,8 +429,16 @@ export default function StudioTab() {
 
   // Apply a whole ready-made theme as the starting point (every axis at once);
   // themePreset stays a valid CUSTOM so the profile PUT never 400s, and the
-  // theme highlights via a signature-field match instead.
-  const applyTheme = (t: StartTheme) => setLook({ ...t.config, themePreset: 'CUSTOM' });
+  // theme highlights via a signature-field match instead. A theme replaces the
+  // per-band variants but must never delete the admin's own sections or their
+  // saved order — those are content, not styling — so re-embed the reserved keys.
+  const applyTheme = (t: StartTheme) => {
+    const blob: Record<string, unknown> = { ...t.config.sectionVariants };
+    if (homeSecs.length) blob[HOME_SECTIONS_KEY] = homeSecs;
+    const ids = homeSecs.map((s) => s.id);
+    if (order.join('|') !== normalizeSectionOrder(undefined, ids).join('|')) blob[SECTION_ORDER_KEY] = order;
+    setLook({ ...t.config, sectionVariants: blob, themePreset: 'CUSTOM' });
+  };
 
   // menu edit helpers (operate on the look's navConfig)
   const editMenu = (fn: (items: NavConfigItem[]) => NavConfigItem[]) =>
