@@ -1025,7 +1025,12 @@ export default function StudioTab() {
         <button type="button" onClick={reloadPreview} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700"><RotateCw className="h-3.5 w-3.5" /> Reload</button>
         <span className="ml-auto flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> LIVE PREVIEW</span>
       </div>
-      <div ref={previewBoxRef} className="min-h-0 h-[70vh] flex-1 lg:h-auto">
+      {/* The box's height MUST be viewport-derived, never content-derived: the
+          iframe's pixel height is computed FROM this box's measured size, so a
+          content-driven height (the grid row is auto) feeds back into itself
+          and the preview balloons to thousands of pixels. The max-h breaks
+          that loop no matter how the flex/grid chain resolves. */}
+      <div ref={previewBoxRef} className="min-h-0 h-[70vh] flex-1 overflow-hidden lg:h-auto lg:max-h-[calc(100dvh-15.5rem)]">
         {(() => {
           const logicalW = device === 'mobile' ? 390 : 1280;
           const scale = previewBox.w ? Math.min(1, previewBox.w / logicalW) : 1;
