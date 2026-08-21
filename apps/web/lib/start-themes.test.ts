@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { START_THEMES, themeInUse } from './start-themes';
+import { normalizeSectionVariants } from '@/components/public/site-variants';
 
 /**
  * A theme is published by PUTting its config to /site/profile, so every value
@@ -47,6 +48,10 @@ describe('start themes are all publish-safe', () => {
     // Footer within its normalizer's shapes.
     expect(['COLUMNS', 'SIMPLE', 'CENTER']).toContain(theme.config.footerConfig.layout);
     expect(['PAPER', 'DARK', 'BRAND']).toContain(theme.config.footerConfig.color);
+    // Every per-section layout the theme picks must survive normalization —
+    // an invalid layout would be silently dropped, so a round-trip that changes
+    // the object means the theme referenced a band variant that does not exist.
+    expect(normalizeSectionVariants(theme.config.sectionVariants)).toEqual(theme.config.sectionVariants);
   });
 
   it('themeInUse matches an exactly-applied theme and rejects a different one', () => {

@@ -15,6 +15,8 @@
  * keep them in step with cms.dto.ts and site-variants.ts.
  */
 
+import type { SectionVariants } from '@/components/public/site-variants';
+
 export interface FooterCfg {
   layout: 'COLUMNS' | 'SIMPLE' | 'CENTER';
   color: 'PAPER' | 'DARK' | 'BRAND';
@@ -44,6 +46,13 @@ export interface ThemeConfig {
   navTextColor: 'AUTO' | 'LIGHT' | 'DARK';
   navLoginStyle: 'LINK' | 'OUTLINE' | 'SOLID';
   footerConfig: FooterCfg;
+  /**
+   * Per-band layout choices that give each theme its own treatment — most
+   * visibly the stats band (rings / odometer / bars / big numerals / strip).
+   * Values are validated by normalizeSectionVariants, so an unknown one is
+   * silently ignored rather than shipped.
+   */
+  sectionVariants: SectionVariants;
 }
 
 export interface StartTheme {
@@ -78,6 +87,7 @@ export const START_THEMES: StartTheme[] = [
       sectionShape: 'EDITORIAL', motionGesture: 'FADE', backgroundTexture: 'PAPER', scrollFeel: 'CLASSIC',
       navStyle: 'CLASSIC', navColor: 'PAPER', navTextColor: 'AUTO', navLoginStyle: 'OUTLINE',
       footerConfig: footer('COLUMNS', 'DARK'),
+      sectionVariants: { stats: { layout: 'STRIP' }, about: { layout: 'OVERLAP' } },
     },
   },
   {
@@ -91,6 +101,7 @@ export const START_THEMES: StartTheme[] = [
       sectionShape: 'CRISP', motionGesture: 'RISE', backgroundTexture: 'GRID', scrollFeel: 'GLIDE',
       navStyle: 'PILL', navColor: 'WHITE', navTextColor: 'AUTO', navLoginStyle: 'SOLID',
       footerConfig: footer('COLUMNS', 'DARK'),
+      sectionVariants: { stats: { layout: 'RINGS' }, courses: { layout: 'CAROUSEL' }, gallery: { layout: 'MASONRY' } },
     },
   },
   {
@@ -104,6 +115,7 @@ export const START_THEMES: StartTheme[] = [
       sectionShape: 'SOFT', motionGesture: 'RISE', backgroundTexture: 'DOTS', scrollFeel: 'CLASSIC',
       navStyle: 'CENTER', navColor: 'PAPER', navTextColor: 'AUTO', navLoginStyle: 'LINK',
       footerConfig: footer('CENTER', 'BRAND'),
+      sectionVariants: { courses: { layout: 'CAROUSEL' } },
     },
   },
   {
@@ -117,6 +129,7 @@ export const START_THEMES: StartTheme[] = [
       sectionShape: 'EDITORIAL', motionGesture: 'FADE', backgroundTexture: 'NONE', scrollFeel: 'CLASSIC',
       navStyle: 'CENTER', navColor: 'PAPER', navTextColor: 'AUTO', navLoginStyle: 'LINK',
       footerConfig: footer('COLUMNS', 'PAPER', { twoCols: true }),
+      sectionVariants: { stats: { layout: 'STRIP' }, about: { layout: 'CENTER' } },
     },
   },
   {
@@ -130,6 +143,7 @@ export const START_THEMES: StartTheme[] = [
       sectionShape: 'CRISP', motionGesture: 'RISE', backgroundTexture: 'NONE', scrollFeel: 'CLASSIC',
       navStyle: 'CLASSIC', navColor: 'WHITE', navTextColor: 'AUTO', navLoginStyle: 'LINK',
       footerConfig: footer('SIMPLE', 'PAPER'),
+      sectionVariants: { stats: { layout: 'BIGNUM' }, gallery: { layout: 'MASONRY' } },
     },
   },
   {
@@ -143,6 +157,7 @@ export const START_THEMES: StartTheme[] = [
       sectionShape: 'CRISP', motionGesture: 'RISE', backgroundTexture: 'NONE', scrollFeel: 'SNAP',
       navStyle: 'GHOST', navColor: 'DARK', navTextColor: 'LIGHT', navLoginStyle: 'SOLID',
       footerConfig: footer('SIMPLE', 'DARK'),
+      sectionVariants: { stats: { layout: 'ODOMETER' }, gallery: { layout: 'FILMSTRIP' }, admissions: { layout: 'TILES' } },
     },
   },
   {
@@ -156,6 +171,7 @@ export const START_THEMES: StartTheme[] = [
       sectionShape: 'SOFT', motionGesture: 'RISE', backgroundTexture: 'PAPER', scrollFeel: 'CLASSIC',
       navStyle: 'CLASSIC', navColor: 'BRAND', navTextColor: 'LIGHT', navLoginStyle: 'LINK',
       footerConfig: footer('CENTER', 'BRAND'),
+      sectionVariants: { stats: { layout: 'BARS' }, about: { layout: 'CENTER' }, gallery: { layout: 'MASONRY' } },
     },
   },
 ];
