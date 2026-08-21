@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import ImageUploader from './image-uploader';
-import { THEME_PRESETS, FONT_OPTIONS, MOTION_OPTIONS } from '@/lib/theme-presets';
+import { FONT_OPTIONS, MOTION_OPTIONS } from '@/lib/theme-presets';
+import { START_THEMES, themeInUse, type StartTheme } from '@/lib/start-themes';
 import { STYLE_PRESETS, MOTION_GESTURES, BACKGROUND_TEXTURES } from '@/components/public/site-style';
 import { SECTION_SHAPES } from '@/components/public/section-shape';
 import {
@@ -164,7 +165,7 @@ function Group({ id, title, summary, children }: { id: string; title: string; su
 /** Which section of the site each group's controls affect — the preview
  *  scrolls here when you open the group, so it follows what you're editing. */
 const GROUP_FOCUS: Record<string, string> = {
-  brand: 'top', hero: 'hero', looks: 'stats', 'sections-style': 'stats', variants: 'stats',
+  'start-theme': 'top', brand: 'top', hero: 'hero', looks: 'stats', 'sections-style': 'stats', variants: 'stats',
   nav: 'top', festive: 'top', footer: 'footer', pages: 'top', code: 'top',
 };
 
@@ -384,12 +385,10 @@ export default function StudioTab() {
   const brand1 = (current.brandColorPrimary as string) ?? '#2f6b4f';
   const brand2 = (current.brandColorSecondary as string) ?? '#e8b04b';
 
-  // theme preset match
-  const applyPreset = (key: string) => {
-    const p = THEME_PRESETS[key];
-    if (!p) return;
-    setLook({ brandColorPrimary: p.primary, brandColorSecondary: p.secondary, headingFont: p.headingFont, themePreset: key });
-  };
+  // Apply a whole ready-made theme as the starting point (every axis at once);
+  // themePreset stays a valid CUSTOM so the profile PUT never 400s, and the
+  // theme highlights via a signature-field match instead.
+  const applyTheme = (t: StartTheme) => setLook({ ...t.config, themePreset: 'CUSTOM' });
 
   // menu edit helpers (operate on the look's navConfig)
   const editMenu = (fn: (items: NavConfigItem[]) => NavConfigItem[]) =>
@@ -523,17 +522,32 @@ export default function StudioTab() {
       </Card>
 
       {/* ── Brand & theme ── */}
-      <Group id="brand" title="Brand & theme" summary="Colours, font, animation">
-        <FieldLabel>Ready-made theme</FieldLabel>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {Object.entries(THEME_PRESETS).map(([key, p]) => (
-            <button key={key} type="button" onClick={() => applyPreset(key)} aria-pressed={current.themePreset === key}
-              className={['rounded-xl border p-2 text-left transition', current.themePreset === key ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300'].join(' ')}>
-              <span className="flex gap-1"><span className="h-4 w-4 rounded-full" style={{ background: p.primary }} /><span className="h-4 w-4 rounded-full" style={{ background: p.secondary }} /></span>
-              <span className="mt-1.5 block text-[11px] font-semibold capitalize">{key.toLowerCase()}</span>
-            </button>
-          ))}
+      {/* ── Start from a theme ── */}
+      <Group id="start-theme" title="Start from a theme" summary="A complete, ready-made design to begin from">
+        <p className="mb-2 text-[11px] text-slate-500">Pick a complete design as your starting point — colours, font, first screen, section style, navbar and footer, all at once. Then change anything below; it&rsquo;s still your look.</p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {START_THEMES.map((t) => {
+            const on = themeInUse(t, current);
+            return (
+              <button key={t.id} type="button" onClick={() => applyTheme(t)} aria-pressed={on}
+                className={['rounded-xl border p-2.5 text-left transition', on ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200 hover:border-slate-300'].join(' ')}>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-4 w-4 rounded-full border border-black/10" style={{ background: t.config.brandColorPrimary }} />
+                  <span className="h-4 w-4 rounded-full border border-black/10" style={{ background: t.config.brandColorSecondary }} />
+                  <span className="ml-1 text-sm font-semibold text-slate-800">{t.name}</span>
+                  {on && <span className="ml-auto text-[10px] font-bold text-teal-700">STARTED FROM</span>}
+                </div>
+                <div className="mt-1 text-[11px] font-semibold text-teal-700/80">{t.audience}</div>
+                <div className="mt-0.5 text-[11px] leading-snug text-slate-400">{t.blurb}</div>
+              </button>
+            );
+          })}
         </div>
+        <p className="mt-2 text-[11px] text-slate-400">Applying a theme replaces the design fields below (not your logo, photos or written content). More themes — including premium scroll-motion ones — are on the way.</p>
+      </Group>
+
+      {/* ── Brand & theme (fine-tuning) ── */}
+      <Group id="brand" title="Brand & theme" summary="Colours, font, animation">
         <FieldLabel>Primary colour</FieldLabel>
         <div className="flex items-center gap-2">
           <input type="color" aria-label="Primary colour" value={brand1} onChange={(e) => setLook({ brandColorPrimary: e.target.value, themePreset: 'CUSTOM' })} className="h-9 w-12 cursor-pointer rounded border border-slate-300 p-0.5" />
