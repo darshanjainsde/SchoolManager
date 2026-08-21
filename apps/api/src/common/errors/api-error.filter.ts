@@ -65,9 +65,13 @@ export class ApiErrorFilter implements ExceptionFilter {
     }
 
     // Unknown/unhandled — never leak internals or a stack trace to the client.
-    this.logger.error(
-      exception instanceof Error ? exception.stack ?? exception.message : String(exception),
-    );
+    // Log via BOTH the Nest logger and console.error: on serverless only the
+    // console stream is reliably retained, so a bare logger.error left these
+    // 500s with no recoverable cause.
+    const detail = exception instanceof Error ? (exception.stack ?? exception.message) : String(exception);
+    this.logger.error(detail);
+    // eslint-disable-next-line no-console
+    console.error('[api] unhandled exception', detail);
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       body: { code: 'INTERNAL', message: 'Something went wrong' },

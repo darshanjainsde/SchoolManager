@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { StorageService } from '../../../common/storage/storage.service';
 
@@ -7,6 +13,8 @@ type Kind = (typeof KINDS)[number];
 
 @Injectable()
 export class MediaService {
+  private readonly logger = new Logger(MediaService.name);
+
   constructor(private readonly storage: StorageService) {}
 
   async upload(
@@ -14,23 +22,54 @@ export class MediaService {
     kind: Kind,
     file: { originalname: string; buffer: Buffer; mimetype: string },
   ) {
-    const { key, url } = await this.storage.upload(
-      `schools/${schoolId}/${kind.toLowerCase()}`,
-      file.originalname,
-      file.buffer,
-      file.mimetype,
-    );
-    return withTenant(schoolId, (tx) =>
-      tx.mediaAsset.create({
-        data: {
-          schoolId,
-          kind,
-          storageKey: key,
-          url,
-          byteSize: file.buffer.length,
-        },
-      }),
-    );
+    // Storage and the DB row are separate failure domains, and until now both
+    // collapsed into one opaque 500 ("Something went wrong"). Split them so the
+    // admin sees which step failed and the real cause is captured in the logs
+    // (console.* is what the serverless log pipeline actually keeps).
+    let stored: { key: string; url: string };
+    try {
+      stored = await this.storage.upload(
+        `schools/${schoolId}/${kind.toLowerCase()}`,
+        file.originalname,
+        file.buffer,
+        file.mimetype,
+      );
+    } catch (err) {
+      const e = err as { name?: string; message?: string; Code?: string; $metadata?: unknown };
+      // eslint-disable-next-line no-console
+      console.error('[media.upload] storage failed', {
+        schoolId,
+        kind,
+        name: e?.name,
+        code: e?.Code,
+        message: e?.message,
+        meta: e?.$metadata,
+      });
+      this.logger.error(`storage.upload failed for ${schoolId}/${kind}: ${e?.name} ${e?.message}`);
+      throw new ServiceUnavailableException(`Image storage failed (${e?.Code ?? e?.name ?? 'error'})`);
+    }
+
+    try {
+      return await withTenant(schoolId, (tx) =>
+        tx.mediaAsset.create({
+          data: {
+            schoolId,
+            kind,
+            storageKey: stored.key,
+            url: stored.url,
+            byteSize: file.buffer.length,
+          },
+        }),
+      );
+    } catch (err) {
+      const e = err as { name?: string; message?: string; code?: string };
+      // eslint-disable-next-line no-console
+      console.error('[media.upload] db create failed', { schoolId, kind, name: e?.name, code: e?.code, message: e?.message });
+      this.logger.error(`mediaAsset.create failed for ${schoolId}/${kind}: ${e?.code ?? e?.name} ${e?.message}`);
+      // The object is already in storage; drop it so a retry doesn't orphan it.
+      await this.storage.delete(stored.key);
+      throw new InternalServerErrorException(`Saving the image record failed (${e?.code ?? e?.name ?? 'error'})`);
+    }
   }
 
   async list(schoolId: string, kind?: Kind) {
