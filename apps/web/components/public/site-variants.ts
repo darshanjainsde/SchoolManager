@@ -391,7 +391,21 @@ export function footerClasses(cfg: FooterConfig): string {
    base design (Google-doodle model); FULL intensity additionally retints the
    page with the festival palette. Decorations are CSS-only and every one of
    them answers to --motion and ps-motion-off. */
-export type FestivalKey = 'DIWALI' | 'HOLI' | 'EID' | 'INDEPENDENCE' | 'CHRISTMAS';
+export type FestivalKey =
+  | 'DIWALI'
+  | 'HOLI'
+  | 'EID'
+  | 'NAVRATRI'
+  | 'GANESH'
+  | 'JANMASHTAMI'
+  | 'ONAM'
+  | 'SANKRANTI'
+  | 'INDEPENDENCE'
+  | 'REPUBLIC'
+  | 'CHILDRENS'
+  | 'TEACHERS'
+  | 'CHRISTMAS'
+  | 'NEWYEAR';
 export type FestiveIntensity = 'LAYER' | 'FULL';
 export interface FestiveTheme {
   festival: FestivalKey;
@@ -459,8 +473,79 @@ export const FESTIVALS: FestivalDef[] = [
     variants: [
       { value: 'LANTERNS', label: 'Hanging lanterns', hint: 'Lanterns swinging gently from the top edge.' },
       { value: 'CRESCENT', label: 'Crescent & stars', hint: 'A glowing crescent with drifting stars.' },
+      { value: 'GLOW', label: 'Golden glow lights', hint: 'A warm gold light string along the top.' },
     ],
     fullExtras: ['LANTERNS', 'CRESCENT'],
+  },
+  {
+    value: 'NAVRATRI',
+    label: 'Navratri & Dussehra',
+    emoji: '🪘',
+    accent: '#c41e3a',
+    full: { ps1: '#c41e3a', ps2: '#e8b923' },
+    greeting: 'Shubh Navratri — nine nights of colour, music and devotion',
+    variants: [
+      { value: 'MARIGOLD', label: 'Marigold garland', hint: 'A genda-phool garland swaying along the top.' },
+      { value: 'GARBA', label: 'Garba colours', hint: 'Red, gold and pink flecks drifting like twirling dancers.' },
+      { value: 'RANGOLI', label: 'Rangoli corners', hint: 'Patterned rings tucked into the page corners.' },
+    ],
+    fullExtras: ['MARIGOLD', 'GARBA'],
+  },
+  {
+    value: 'GANESH',
+    label: 'Ganesh Chaturthi',
+    emoji: '🌺',
+    accent: '#f4772e',
+    full: { ps1: '#f4772e', ps2: '#d3492f' },
+    greeting: 'Ganpati Bappa Morya — a blessed Ganesh Chaturthi to every family',
+    variants: [
+      { value: 'PETALS', label: 'Falling petals', hint: 'Hibiscus and marigold petals drifting down.' },
+      { value: 'MARIGOLD', label: 'Marigold garland', hint: 'A flower garland swaying along the top.' },
+      { value: 'DIYAS', label: 'Diyas & string lights', hint: 'Glowing lamps in the corners, lights along the top.' },
+    ],
+    fullExtras: ['PETALS', 'MARIGOLD'],
+  },
+  {
+    value: 'JANMASHTAMI',
+    label: 'Janmashtami',
+    emoji: '🦚',
+    accent: '#2e5eaa',
+    full: { ps1: '#2e5eaa', ps2: '#ffc93c' },
+    fullSurface: { paper: '#101a33', ink: '#e9eefb' },
+    greeting: 'Happy Janmashtami — celebrating the joy of little Krishna',
+    variants: [
+      { value: 'PEACOCK', label: 'Peacock feathers', hint: 'Feathers in the corners with a gentle drift of plumes.' },
+      { value: 'CRESCENT', label: 'Midnight sky', hint: 'The midnight moon and stars of Krishna’s birth.' },
+    ],
+    fullExtras: ['PEACOCK', 'CRESCENT'],
+  },
+  {
+    value: 'ONAM',
+    label: 'Onam',
+    emoji: '🌼',
+    accent: '#c9a227',
+    full: { ps1: '#1e7a46', ps2: '#c9a227' },
+    greeting: 'Happy Onam — wishing every family a joyous Thiruvonam',
+    variants: [
+      { value: 'RANGOLI', label: 'Pookalam rings', hint: 'Flower-carpet rings blooming in the page corners.' },
+      { value: 'PETALS', label: 'Falling petals', hint: 'Pookalam flowers drifting gently down.' },
+      { value: 'MARIGOLD', label: 'Flower garland', hint: 'A floral garland swaying along the top.' },
+    ],
+    fullExtras: ['RANGOLI', 'PETALS'],
+  },
+  {
+    value: 'SANKRANTI',
+    label: 'Sankranti & Pongal',
+    emoji: '🪁',
+    accent: '#e8862a',
+    full: { ps1: '#1978a5', ps2: '#e8862a' },
+    greeting: 'Happy Sankranti & Pongal — may the harvest bring abundance',
+    variants: [
+      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
+      { value: 'SUN', label: 'Morning sun', hint: 'A warm rising sun with gentle sparkle.' },
+      { value: 'HARVEST', label: 'Harvest corners', hint: 'Wheat sheaves in the corners with a soft shimmer.' },
+    ],
+    fullExtras: ['KITES', 'SUN'],
   },
   {
     value: 'INDEPENDENCE',
@@ -472,8 +557,50 @@ export const FESTIVALS: FestivalDef[] = [
     variants: [
       { value: 'BUNTING', label: 'Tricolour bunting', hint: 'A flag garland along the top of the page.' },
       { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
+      { value: 'TRICOLOR', label: 'Tricolour drift', hint: 'Saffron, white and green flecks drifting down.' },
     ],
     fullExtras: ['BUNTING', 'KITES'],
+  },
+  {
+    value: 'REPUBLIC',
+    label: 'Republic Day',
+    emoji: '🇮🇳',
+    accent: '#2e5eaa',
+    full: { ps1: '#c26a1a', ps2: '#2e9d6b' },
+    greeting: 'Happy Republic Day — celebrating our constitution, Jai Hind',
+    variants: [
+      { value: 'BUNTING', label: 'Tricolour bunting', hint: 'A flag garland along the top of the page.' },
+      { value: 'TRICOLOR', label: 'Tricolour drift', hint: 'Saffron, white and green flecks drifting down.' },
+      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
+    ],
+    fullExtras: ['BUNTING', 'TRICOLOR'],
+  },
+  {
+    value: 'CHILDRENS',
+    label: 'Children’s Day',
+    emoji: '🎈',
+    accent: '#e91e8c',
+    full: { ps1: '#2196f3', ps2: '#ffc107' },
+    greeting: 'Happy Children’s Day — today the school belongs to you',
+    variants: [
+      { value: 'BALLOONS', label: 'Rising balloons', hint: 'Balloons floating up the page.' },
+      { value: 'DOODLES', label: 'Doodle rain', hint: 'Stars, rockets and crayons drifting down.' },
+      { value: 'CRAYONS', label: 'Crayon lights', hint: 'A bright crayon-colour light string along the top.' },
+    ],
+    fullExtras: ['BALLOONS', 'DOODLES'],
+  },
+  {
+    value: 'TEACHERS',
+    label: 'Teacher’s Day',
+    emoji: '🍎',
+    accent: '#c0392b',
+    full: { ps1: '#1f3a5f', ps2: '#c0392b' },
+    greeting: 'Happy Teacher’s Day — thank you for lighting the way',
+    variants: [
+      { value: 'BOOKS', label: 'Books & apples', hint: 'Books, pencils and apples drifting gently down.' },
+      { value: 'GOLDDUST', label: 'Gold sparkle', hint: 'A quiet drift of golden sparkles.' },
+    ],
+    fullExtras: ['BOOKS', 'GOLDDUST'],
   },
   {
     value: 'CHRISTMAS',
@@ -486,8 +613,24 @@ export const FESTIVALS: FestivalDef[] = [
     variants: [
       { value: 'SNOW', label: 'Snowfall', hint: 'Flakes drifting gently down the page.' },
       { value: 'LIGHTS', label: 'Fairy lights', hint: 'A multicolour light string along the top.' },
+      { value: 'GIFTS', label: 'Gifts & stars', hint: 'Presents and stars drifting down the page.' },
     ],
     fullExtras: ['SNOW', 'LIGHTS'],
+  },
+  {
+    value: 'NEWYEAR',
+    label: 'New Year',
+    emoji: '🎉',
+    accent: '#b8912f',
+    full: { ps1: '#5b2fb8', ps2: '#e5c77b' },
+    fullSurface: { paper: '#12101f', ink: '#f1ead6' },
+    greeting: 'Happy New Year — to a bright year of learning ahead',
+    variants: [
+      { value: 'FIREWORKS', label: 'Midnight fireworks', hint: 'Slow celebratory bursts over the page.' },
+      { value: 'GOLDDUST', label: 'Champagne sparkle', hint: 'Gold and silver sparkles drifting down.' },
+      { value: 'GLOW', label: 'Golden glow lights', hint: 'A warm gold light string along the top.' },
+    ],
+    fullExtras: ['FIREWORKS', 'GOLDDUST'],
   },
 ];
 export function festivalDef(key: string | null | undefined): FestivalDef | null {

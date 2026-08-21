@@ -49,6 +49,41 @@ function FallField({ glyphs, colors }: { glyphs?: string[]; colors?: string[] })
   );
 }
 
+function RiseField({ glyphs, count = 10 }: { glyphs: string[]; count?: number }) {
+  return (
+    <>
+      {FALL_SPOTS.slice(0, count).map((left, i) => (
+        <span
+          key={i}
+          className="ps-fx-rise"
+          style={{
+            left: `${left}%`,
+            fontSize: `${16 + (i % 3) * 6}px`,
+            animationDuration: `${FALL_DUR[i] + 2}s`,
+            animationDelay: `${FALL_DELAY[i]}s`,
+          }}
+          aria-hidden="true"
+        >
+          {glyphs[i % glyphs.length]}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** A swaying garland of glyphs strung along the top edge (marigold torans). */
+function GarlandRow({ glyphs }: { glyphs: string[] }) {
+  return (
+    <span className="ps-fx-garland" aria-hidden="true">
+      {Array.from({ length: 14 }, (_, i) => (
+        <i key={i} className="ps-fx-gitem" style={{ animationDelay: `${(i % 4) * 0.45}s` }}>
+          {glyphs[i % glyphs.length]}
+        </i>
+      ))}
+    </span>
+  );
+}
+
 function LightRow({ colors }: { colors: string[] }) {
   return (
     <span className="ps-fx-lightrow" aria-hidden="true">
@@ -66,6 +101,15 @@ function LightRow({ colors }: { colors: string[] }) {
     </span>
   );
 }
+
+/** Every set the switch below can draw — guard-tested against FESTIVALS so a
+ *  festival can never declare a variant that silently renders nothing. */
+export const DECORATION_SETS = [
+  'DIYAS', 'FIREWORKS', 'RANGOLI', 'SPLASH', 'CONFETTI', 'LANTERNS', 'CRESCENT',
+  'BUNTING', 'KITES', 'SNOW', 'LIGHTS', 'MARIGOLD', 'GARBA', 'PETALS', 'TRICOLOR',
+  'GOLDDUST', 'BALLOONS', 'SUN', 'PEACOCK', 'DOODLES', 'BOOKS', 'HARVEST',
+  'CRAYONS', 'GLOW', 'GIFTS',
+] as const;
 
 function Decoration({ set }: { set: string }) {
   switch (set) {
@@ -154,6 +198,55 @@ function Decoration({ set }: { set: string }) {
       return <FallField glyphs={['❄', '❅', '•']} colors={['#cfe3f0', '#e8f2fa', '#bcd6e8']} />;
     case 'LIGHTS':
       return <LightRow colors={['#e74c3c', '#f1c40f', '#2ecc71', '#3498db']} />;
+    case 'MARIGOLD':
+      return <GarlandRow glyphs={['🌼', '🌺', '🌼', '🍃']} />;
+    case 'GARBA':
+      return <FallField colors={['#c41e3a', '#e8b923', '#ff4e88', '#0e7c4a']} />;
+    case 'PETALS':
+      return <FallField glyphs={['🌸', '🌼', '🌺']} colors={['#e8862a', '#e0558a', '#d3492f']} />;
+    case 'TRICOLOR':
+      return <FallField colors={['#e8862a', '#f6f4ef', '#2e9d6b']} />;
+    case 'GOLDDUST':
+      return <FallField glyphs={['✦', '✨', '•']} colors={['#e5c77b', '#c0c0c0', '#b8912f']} />;
+    case 'BALLOONS':
+      return <RiseField glyphs={['🎈', '🎈', '🎉']} />;
+    case 'SUN':
+      return (
+        <>
+          <span className="ps-fx-sun" aria-hidden="true">☀️</span>
+          {STAR_SPOTS.slice(0, 4).map(([l, t], i) => (
+            <span key={i} className="ps-fx-star" style={{ left: `${l}%`, top: `${t + 6}%`, animationDelay: `${i * 0.5}s` }} aria-hidden="true">✨</span>
+          ))}
+        </>
+      );
+    case 'PEACOCK':
+      return (
+        <>
+          <span className="ps-fx-perch" style={{ left: 16 }} aria-hidden="true">🦚</span>
+          <span className="ps-fx-perch" style={{ right: 16, animationDelay: '1.2s' }} aria-hidden="true">🦚</span>
+          <FallField glyphs={['🪶']} colors={['#1b6ca8', '#0f9b8e']} />
+        </>
+      );
+    case 'DOODLES':
+      return <FallField glyphs={['⭐', '🚀', '✏️', '🖍️', '⚽']} colors={['#e74c3c', '#2196f3', '#ffc107', '#2ecc71']} />;
+    case 'BOOKS':
+      return <FallField glyphs={['📚', '✏️', '🍎', '⭐']} colors={['#1f3a5f', '#c0392b', '#b8912f']} />;
+    case 'HARVEST':
+      return (
+        <>
+          <span className="ps-fx-perch" style={{ left: 14 }} aria-hidden="true">🌾</span>
+          <span className="ps-fx-perch" style={{ right: 14, animationDelay: '.9s' }} aria-hidden="true">🌾</span>
+          {STAR_SPOTS.slice(0, 4).map(([l, t], i) => (
+            <span key={i} className="ps-fx-star" style={{ left: `${l}%`, top: `${t + 8}%`, animationDelay: `${i * 0.45}s` }} aria-hidden="true">✨</span>
+          ))}
+        </>
+      );
+    case 'CRAYONS':
+      return <LightRow colors={['#e74c3c', '#2196f3', '#ffc107', '#2ecc71', '#e91e8c']} />;
+    case 'GLOW':
+      return <LightRow colors={['#e5c77b', '#f2d789', '#d9b45e']} />;
+    case 'GIFTS':
+      return <FallField glyphs={['🎁', '⭐', '❄']} colors={['#c0392b', '#e8b923', '#cfe3f0']} />;
     default:
       return null;
   }

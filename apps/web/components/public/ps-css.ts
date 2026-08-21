@@ -945,6 +945,25 @@ export const PS_CSS = `
   .ps-fx-kite { position: absolute; font-size: 28px; animation: ps-fx-kite 16s linear infinite; }
   @keyframes ps-fx-kite { 0% { left: -6%; top: 58%; transform: rotate(12deg); }
     50% { top: 22%; transform: rotate(-8deg); } 100% { left: 104%; top: 6%; transform: rotate(14deg); } }
+  /* Garland: a toran of glyphs strung along the top edge, each swaying on its
+     own phase (marigold rows for Navratri/Onam/Ganesh Chaturthi). */
+  .ps-fx-garland { position: absolute; top: 0; left: 0; right: 0; display: flex;
+    justify-content: space-around; }
+  .ps-fx-gitem { font-size: 19px; font-style: normal; margin-top: 2px; transform-origin: top center;
+    animation: ps-fx-swing calc(3s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  /* Rise: the fall field mirrored upward (balloons on Children's Day). */
+  .ps-fx-rise { position: absolute; top: 104%;
+    animation: ps-fx-rise linear infinite; }
+  @keyframes ps-fx-rise { to { top: -8%; transform: rotate(-14deg); } }
+  /* Sun: a warm morning sun in the top corner (Sankranti/Pongal). */
+  .ps-fx-sun { position: absolute; top: 66px; left: 26px; font-size: 36px;
+    animation: ps-fx-glow calc(2.6s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  /* Perch: a large glyph resting in a bottom corner with a gentle bob
+     (peacock feathers, wheat sheaves). */
+  .ps-fx-perch { position: absolute; bottom: 12px; font-size: 34px;
+    animation: ps-fx-bob calc(3.4s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-bob { from { transform: translateY(0) rotate(-2deg); }
+    to { transform: translateY(calc(-7px * var(--motion))) rotate(2deg); } }
 
   /* FULL takeover on a night festival: panels and body text follow the dark
      paper via the same tokens the shape control owns. */
@@ -975,9 +994,10 @@ export const PS_CSS = `
        come later in the sheet — the shipped single-class rule did not. */
     .ps-menuanim-slide .ps-menu-card, .ps-menuanim-scale .ps-menu-card { animation: none; }
     .ps-fx-bulb, .ps-fx-diya, .ps-fx-burst, .ps-fx-blob, .ps-fx-fall, .ps-fx-lantern,
-    .ps-fx-star, .ps-fx-kite { animation: none; }
+    .ps-fx-star, .ps-fx-kite, .ps-fx-gitem, .ps-fx-rise, .ps-fx-sun, .ps-fx-perch { animation: none; }
     .ps-fx-burst { opacity: 0; }
     .ps-fx-fall { top: 104%; }
+    .ps-fx-rise { top: -8%; }
     .ps-hero-video { display: none; }
     /* Bar fill collapses to its final width, not an empty track. */
     .ps-bar-fill { transition: none; width: var(--ps-bar-w, 75%); }

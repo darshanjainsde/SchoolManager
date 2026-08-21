@@ -347,3 +347,19 @@ describe('admin-built homepage sections', () => {
     ]);
   });
 });
+
+/**
+ * A festival variant is only real if the FestiveLayer switch can draw it — an
+ * unknown set name renders nothing, silently. Every variant and every
+ * fullExtra must therefore name a set the renderer implements.
+ */
+describe('every festival decoration set has a renderer', () => {
+  it('variants and fullExtras all map to DECORATION_SETS', async () => {
+    const { DECORATION_SETS } = await import('./sections/FestiveLayer');
+    const known = new Set<string>(DECORATION_SETS);
+    for (const f of FESTIVALS) {
+      for (const v of f.variants) expect(known, `${f.value}.${v.value}`).toContain(v.value);
+      for (const x of f.fullExtras) expect(known, `${f.value} extra ${x}`).toContain(x);
+    }
+  });
+});
