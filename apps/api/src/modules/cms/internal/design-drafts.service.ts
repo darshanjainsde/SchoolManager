@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, withTenant } from '@skoolos/db';
 import { SiteContentService } from './site-content.service';
 import type { UpsertDesignDraftDto } from './cms.dto';
-import { pickDesignConfig } from './design-config';
+import { mergeSectionVariantContent, pickDesignConfig } from './design-config';
 
 /**
  * Saved website looks. A draft is the DESIGN subset of the profile as one
@@ -99,6 +99,16 @@ export class DesignDraftsService {
     const draft = await withTenant(schoolId, (tx) => tx.designDraft.findFirst({ where: { id, schoolId } }));
     if (!draft) throw new NotFoundException('Draft not found');
     const config = pickDesignConfig((draft.config ?? {}) as Record<string, unknown>);
+    // A look styles the bands; the admin's own homepage sections and their
+    // order (reserved keys inside sectionVariants) are content. Publishing a
+    // draft — especially one saved before those existed — must not delete
+    // them, so carry the live profile's values through the copy.
+    if (config.sectionVariants !== undefined) {
+      const live = await withTenant(schoolId, (tx) =>
+        tx.schoolProfile.findUnique({ where: { schoolId }, select: { sectionVariants: true } }),
+      );
+      config.sectionVariants = mergeSectionVariantContent(config.sectionVariants, live?.sectionVariants);
+    }
     // Routed through updateProfile so the heroStyle/heroLayout shim and the
     // Json-column handling apply exactly as they do for a direct save.
     const content = await this.content.updateProfile(schoolId, config);

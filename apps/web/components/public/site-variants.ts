@@ -269,7 +269,10 @@ export function normalizeHomeSections(raw: unknown): HomeSection[] {
   if (!Array.isArray(raw)) return [];
   const out: HomeSection[] = [];
   const seen = new Set<string>();
-  for (const s of raw.slice(0, HOME_SECTION_MAX)) {
+  // Filter first, cap after — junk entries must not consume the slots of
+  // valid sections behind them.
+  for (const s of raw) {
+    if (out.length >= HOME_SECTION_MAX) break;
     if (!s || typeof s !== 'object') continue;
     const r = s as Record<string, unknown>;
     const id = typeof r.id === 'string' ? r.id.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40) : '';
@@ -697,6 +700,12 @@ export function normalizePageBlocks(raw: unknown): PageBlock[] {
     }
   }
   return out;
+}
+
+/** Exported so block editors can refuse a URL the renderer would drop,
+    instead of letting the block silently vanish on the next normalize. */
+export function isSafeBlockUrl(u: string): boolean {
+  return safeUrl(u);
 }
 
 function safeUrl(u: string): boolean {

@@ -3,7 +3,7 @@ import { withTenant, type FeatureKey } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import { PublicEventsService } from '../community';
-import { pickDesignConfig } from '../cms';
+import { mergeSectionVariantContent, pickDesignConfig } from '../cms';
 import type { PublicSiteData } from './public.dto';
 
 @Injectable()
@@ -62,10 +62,19 @@ export class PublicSiteService {
           }),
         ]);
 
-      const profile =
-        rawProfile && scheduledLook
-          ? { ...rawProfile, ...pickDesignConfig((scheduledLook.config ?? {}) as Record<string, unknown>) }
-          : rawProfile;
+      // A scheduled look overlays STYLING only: if it carries sectionVariants,
+      // the admin's own homepage sections and band order (reserved keys) must
+      // still come from the live profile, or the window would hide them.
+      const scheduledConfig = scheduledLook
+        ? pickDesignConfig((scheduledLook.config ?? {}) as Record<string, unknown>)
+        : null;
+      if (scheduledConfig && scheduledConfig.sectionVariants !== undefined) {
+        scheduledConfig.sectionVariants = mergeSectionVariantContent(
+          scheduledConfig.sectionVariants,
+          rawProfile?.sectionVariants,
+        );
+      }
+      const profile = rawProfile && scheduledConfig ? { ...rawProfile, ...scheduledConfig } : rawProfile;
 
       // Resolve all asset ids referenced by profile/homepage/staff/courses in one query.
       const ids = [

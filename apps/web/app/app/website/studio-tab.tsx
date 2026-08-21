@@ -20,7 +20,8 @@ import {
   FESTIVALS, FOOTER_LAYOUTS, FOOTER_COLORS,
   normalizeFooterConfig, normalizeFestiveTheme, normalizeSectionVariants, type SectionKey,
   ORDERABLE_HOME_SECTIONS, HOME_SECTIONS_KEY, SECTION_ORDER_KEY, HOME_SECTION_MAX,
-  homeSectionsOf, sectionOrderOf, normalizeSectionOrder, type HomeSection, type SectionVariants,
+  homeSectionsOf, sectionOrderOf, normalizeSectionOrder, normalizeHomeSections, isSafeBlockUrl,
+  type HomeSection, type SectionVariants,
 } from '@/components/public/site-variants';
 import { defaultNavConfig, validateNavConfig, type NavConfig, type NavConfigItem } from '@/components/public/sections/nav-config';
 import {
@@ -257,14 +258,28 @@ export default function StudioTab() {
   // An admin-built homepage section being edited (lives in the look, not a page).
   const [editingSection, setEditingSection] = useState<{ id: string; title: string; blocks: Block[] } | null>(null);
   const postPreview = useCallback(() => {
-    const overrides = { ...current, customSectionCss: cssDrafts };
+    let overrides: Record<string, unknown> = { ...current, customSectionCss: cssDrafts };
+    // Live-preview an in-progress custom section the same way page edits
+    // preview: upsert the buffer into the blob the preview renders from.
+    if (editingSection) {
+      const blob = { ...((current.sectionVariants ?? {}) as Record<string, unknown>) };
+      const list = normalizeHomeSections(blob[HOME_SECTIONS_KEY]);
+      const exists = list.some((s) => s.id === editingSection.id);
+      blob[HOME_SECTIONS_KEY] = exists
+        ? list.map((s) => (s.id === editingSection.id ? editingSection : s))
+        : [...list, editingSection];
+      overrides = { ...overrides, sectionVariants: blob };
+    }
     const page = editingPage ? { title: editingPage.title, blocks: editingPage.blocks } : null;
     iframeRef.current?.contentWindow?.postMessage(
       { type: 'sk-studio-preview', overrides, focus: page ? 'page' : focus, page },
       window.location.origin,
     );
-  }, [current, cssDrafts, focus, editingPage]);
+  }, [current, cssDrafts, focus, editingPage, editingSection]);
   useEffect(() => { postPreview(); }, [postPreview]);
+  // A section buffer belongs to the look it was opened on — switching looks
+  // must not let a Save land the section in a different look's config.
+  useEffect(() => { setEditingSection(null); }, [activeId]);
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
@@ -408,8 +423,12 @@ export default function StudioTab() {
   };
   const removeSection = (id: string) =>
     writeSectionConfig({ custom: homeSecs.filter((s) => s.id !== id), order: order.filter((k) => k !== `x:${id}`) });
+  // A section that would not survive normalization (no title and no valid
+  // block) must not be saveable — it would silently vanish from the list and
+  // the next config write would erase it for good.
+  const sectionSaveable = !!editingSection && normalizeHomeSections([editingSection]).length === 1;
   const saveSection = () => {
-    if (!editingSection) return;
+    if (!editingSection || !sectionSaveable) return;
     const next = editingSection as unknown as HomeSection;
     const exists = homeSecs.some((s) => s.id === next.id);
     writeSectionConfig({ custom: exists ? homeSecs.map((s) => (s.id === next.id ? next : s)) : [...homeSecs, next] });
@@ -730,8 +749,13 @@ export default function StudioTab() {
         })}
       </Group>
 
-      {/* ── Homepage structure: band order + admin-built sections ── */}
-      <Group id="structure" title="Homepage structure" summary={`${order.length} bands · ${homeSecs.length} custom`}>
+      {/* ── Homepage structure: band order + admin-built sections. These are
+          CONTENT, not styling, so they are edited on the live site only —
+          a saved look neither carries nor deletes them. ── */}
+      <Group id="structure" title="Homepage structure" summary={homeSecs.length ? `Band order · ${homeSecs.length} custom section${homeSecs.length === 1 ? '' : 's'}` : 'Band order & your own sections'}>
+        {activeId !== 'live' ? (
+          <p className="text-[11px] text-slate-400">The section order and your own sections belong to the live site (they’re content, not styling), so a saved look never changes them. Switch to <span className="font-semibold">Live site</span> to edit them.</p>
+        ) : (<>
         <FieldLabel>Section order (top to bottom)</FieldLabel>
         <p className="mb-2 text-[11px] text-slate-400">The hero stays first and the footer last. A band with nothing to show is skipped automatically, so reordering never leaves a hole.</p>
         <div className="flex flex-col gap-1.5">
@@ -781,13 +805,16 @@ export default function StudioTab() {
                 {(b.t === 'p' || b.t === 'imgtext') && <Textarea value={b.text} rows={2} placeholder="Write something…" onChange={(e) => editSecBlock(i, { text: e.target.value })} className="mt-1 text-sm" />}
                 {(b.t === 'img' || b.t === 'imgtext') && (
                   <div className="mt-1 flex gap-1.5">
-                    <Input value={b.url ?? ''} placeholder="https://… image URL" onChange={(e) => editSecBlock(i, { url: e.target.value })} className="h-8 flex-1 text-xs" />
+                    <Input value={b.url ?? ''} placeholder="https://… image URL" onChange={(e) => editSecBlock(i, { url: e.target.value })} className={`h-8 flex-1 text-xs${b.url && !isSafeBlockUrl(b.url) ? ' border-rose-300' : ''}`} />
                     {(galleryMedia.data ?? []).length > 0 && (
                       <select aria-label="Use a gallery photo" className="h-8 rounded-md border border-slate-200 text-xs text-slate-500" value="" onChange={(e) => e.target.value && editSecBlock(i, { url: e.target.value })}>
                         <option value="">Gallery…</option>{(galleryMedia.data ?? []).map((m, j) => <option key={m.id} value={m.url}>Photo {j + 1}</option>)}
                       </select>
                     )}
                   </div>
+                )}
+                {(b.t === 'img' || b.t === 'imgtext') && !!b.url && !isSafeBlockUrl(b.url) && (
+                  <p className="mt-1 text-[10px] text-rose-500">Use a full https:// address (or a /path on your site) — anything else is dropped.</p>
                 )}
               </div>
             ))}
@@ -798,11 +825,12 @@ export default function StudioTab() {
               ))}
             </div>
             <div className="flex gap-2">
-              <Button size="sm" onClick={saveSection} disabled={!editingSection.title.trim() && !editingSection.blocks.some((b) => (b.t === 'h' || b.t === 'p' || b.t === 'imgtext' ? b.text.trim() : b.t === 'img' ? !!b.url : !!b.label.trim()))}>Save section</Button>
+              <Button size="sm" onClick={saveSection} disabled={!sectionSaveable}>Save section</Button>
               <Button size="sm" variant="outline" onClick={() => setEditingSection(null)}>Cancel</Button>
             </div>
           </div>
         )}
+        </>)}
       </Group>
 
       {/* ── Navigation ── */}

@@ -47,3 +47,24 @@ export function pickDesignConfig(raw: Record<string, unknown>): Record<string, u
   }
   return out;
 }
+
+/** sectionVariants keys that are CONTENT, not styling: the admin-built
+ *  homepage sections and their band order (see the web side's
+ *  site-variants.ts). A look carries per-band styling only, so when a draft
+ *  is published — or a scheduled look overlays the profile at read time —
+ *  its sectionVariants must never delete or hide these: strip them from the
+ *  look's copy and carry the live profile's values forward unchanged. */
+const SECTION_CONTENT_KEYS = ['__order', '__custom'] as const;
+
+export function mergeSectionVariantContent(incoming: unknown, live: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> =
+    incoming && typeof incoming === 'object' ? { ...(incoming as Record<string, unknown>) } : {};
+  for (const k of SECTION_CONTENT_KEYS) delete out[k];
+  if (live && typeof live === 'object') {
+    for (const k of SECTION_CONTENT_KEYS) {
+      const v = (live as Record<string, unknown>)[k];
+      if (v !== undefined) out[k] = v;
+    }
+  }
+  return out;
+}
