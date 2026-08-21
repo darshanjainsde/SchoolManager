@@ -493,7 +493,7 @@ export default function SiteNav({
         <header
           id="ps-nav"
           className={`${
-            pillOverlay ? 'fixed inset-x-0 top-0' : 'sticky top-0 ps-nav-pill-flow'
+            pillOverlay ? 'fixed inset-x-0 top-0 ps-nav-float-over' : 'sticky top-0 ps-nav-pill-flow'
           } z-50 px-4 pt-3 transition-all duration-300 [&.ps-nav-scrolled_.ps-pill-bar]:shadow-xl`}
         >
           {/* w-fit + nowrap: the pill hugs its content and grows in WIDTH only —
@@ -585,7 +585,7 @@ export default function SiteNav({
         id="ps-nav"
         className={
           ghost
-            ? `${color.bar}${onDarkCls}${ghostCls} fixed top-0 inset-x-0 z-50 transition-all duration-300 border-b border-transparent [&.ps-nav-scrolled]:shadow-sm`
+            ? `${color.bar}${onDarkCls}${ghostCls} ps-nav-float-over fixed top-0 inset-x-0 z-50 transition-all duration-300 border-b border-transparent [&.ps-nav-scrolled]:shadow-sm`
             : `sticky top-0 z-50 transition-all duration-300 ${color.bar}${onDarkCls} backdrop-blur border-b border-black/5 [&.ps-nav-scrolled]:shadow-sm`
         }
       >

@@ -296,13 +296,22 @@ export const PS_CSS = `
 
   /* Panels tints the whole page ground, which then shows through anything that
      sits on it with no fill of its own — including the hero and the transparent
-     strip behind a floating (pill) nav. That left a faint darker band at the very
-     top, behind the navbar. Give the top region paper so the page starts clean:
-     the hero floats on paper (not the tinted ground), and the pill's transparent
-     shell shows paper AT REST. On scroll the pill drops back to transparent
-     (:not below) so page content still passes behind its sides as intended. */
+     strip behind a floating nav. That left a faint darker band at the very top,
+     behind the navbar. Give the top region paper so the page starts clean.
+
+     1) The hero floats on paper (not the tinted ground) — this alone covers a
+        floating nav that overlays the hero (fixed): behind it is the hero.
+     2) A NON-overlay pill (sticky, no hero behind it) shows paper AT REST via its
+        marker. On scroll it drops back to transparent (:not) so page content
+        still passes behind its sides as intended.
+     3) DECK forces every floating nav to position:sticky (see .ps-scroll-deck >
+        #ps-nav below), so an OVERLAY pill/ghost is no longer over the hero — it
+        takes flow space and its transparent shell reveals the ground strip. Under
+        deck, paper that strip too (at rest; the hero sits below it, so nothing is
+        covered). Scoped to deck because that's the only feel that relocates it. */
   .ps-shape-panels > [data-sec="hero"] { background: var(--paper); }
   .ps-shape-panels #ps-nav.ps-nav-pill-flow:not(.ps-nav-scrolled) { background: var(--paper); }
+  .ps-shape-panels.ps-scroll-deck #ps-nav.ps-nav-float-over:not(.ps-nav-scrolled) { background: var(--paper); }
 
   /* ── Ambient header layer (/connect) ──
      Two blurred brand-coloured drifts. No canvas and no library: two divs and
