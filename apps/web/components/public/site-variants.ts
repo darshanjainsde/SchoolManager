@@ -101,8 +101,8 @@ export const HERO_MEDIA_OPTIONS: StyleOption<HeroMedia>[] = [
    sectionVariants (SchoolProfile Json) = { [sectionKey]: { layout?, gesture? } }.
    Layout changes the arrangement of one band; gesture overrides the page-wide
    motionGesture for that one band. DEFAULT everywhere = today's page. */
-export type SectionKey = 'stats' | 'about' | 'courses' | 'admissions' | 'gallery' | 'staff';
-export const SECTION_KEYS: SectionKey[] = ['stats', 'about', 'courses', 'admissions', 'gallery', 'staff'];
+export type SectionKey = 'stats' | 'about' | 'courses' | 'admissions' | 'gallery' | 'staff' | 'contact';
+export const SECTION_KEYS: SectionKey[] = ['stats', 'about', 'courses', 'admissions', 'gallery', 'staff', 'contact'];
 
 export interface SectionVariantChoice {
   layout?: string;
@@ -179,6 +179,15 @@ export const SECTION_VARIANT_DEFS: Record<
       { value: 'MINIMAL', label: 'Portraits only', hint: 'Bare ringed portraits, no cards — quiet and warm.' },
     ],
   },
+  contact: {
+    label: 'Contact & enquiry',
+    hint: 'The Ready-to-join band with the enquiry form.',
+    layouts: [
+      { value: 'SPLIT', label: 'Side by side', hint: 'Contact details beside the form — today’s look.' },
+      { value: 'WIZARD', label: 'Conversational', hint: 'One friendly question at a time, with progress and a finale.' },
+      { value: 'FLOAT', label: 'Floating card', hint: 'The form floats on a brand-colour band, details as chips.' },
+    ],
+  },
 };
 
 const SECTION_DEFAULT_LAYOUT: Record<SectionKey, string> = {
@@ -188,6 +197,7 @@ const SECTION_DEFAULT_LAYOUT: Record<SectionKey, string> = {
   admissions: 'JOURNEY',
   gallery: 'GRID',
   staff: 'GRID',
+  contact: 'SPLIT',
 };
 
 export function sectionLayoutOf(variants: SectionVariants | null | undefined, key: SectionKey): string {

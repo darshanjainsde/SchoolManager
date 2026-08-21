@@ -534,6 +534,8 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
         hasEnquiry={hasEnquiry}
         courses={data.courses.map((c) => c.name)}
         schoolName={schoolName}
+        variant={sectionLayoutOf(variants, 'contact')}
+        bandClass={secCls('contact')}
       />
     ),
   };

@@ -869,6 +869,61 @@ export const PS_CSS = `
   .ps-v-staff-minimal .ps-staffcard > div:first-child { height: 6.2rem; width: 6.2rem; font-size: 1.9rem;
     box-shadow: 0 0 0 4px var(--paper), 0 0 0 6px color-mix(in srgb, var(--ps1) 35%, transparent); }
 
+  /* ── Contact variants ──
+     WIZARD: a conversational form — progress thread, one question per screen
+     sliding in, underline inputs, pill options, and a drawn-check finale.
+     FLOAT: the form floats on a brand band inside a lit white card. */
+  .ps-wiz-track { display: block; height: 6px; border-radius: 999px; overflow: hidden;
+    background: color-mix(in srgb, var(--ps1) 14%, transparent); }
+  .ps-wiz-fill { display: block; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--ps1), var(--ps2));
+    transition: width .45s cubic-bezier(.2,.7,.2,1); }
+  .ps-wiz-step { animation: ps-wiz-in .38s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes ps-wiz-in {
+    from { opacity: 0; transform: translateX(calc(28px * var(--motion))); }
+    to { opacity: 1; transform: none; } }
+  .ps-wiz-input { border: 0; border-bottom: 2px solid color-mix(in srgb, var(--ps1) 24%, transparent);
+    border-radius: 0; background: transparent; color: var(--ink); transition: border-color .25s; }
+  .ps-wiz-input:focus { outline: none; border-bottom-color: var(--ps1); }
+  .ps-wiz-input::placeholder { color: #94a3b8; }
+  .ps-wiz-opt { border: 1.5px solid color-mix(in srgb, var(--ps1) 32%, transparent); border-radius: 999px;
+    padding: .55rem 1.15rem; font-size: .9rem; font-weight: 600; color: var(--ink);
+    transition: transform .2s, border-color .2s, background .2s, color .2s; }
+  .ps-wiz-opt:hover { transform: translateY(calc(-2px * var(--motion))); border-color: var(--ps1); }
+  .ps-wiz-opt-on { background: var(--ps1); border-color: var(--ps1); color: #fff; }
+  .ps-wiz-done { animation: ps-wiz-in .4s ease-out both; }
+  .ps-wiz-check circle { stroke-dasharray: 183; stroke-dashoffset: 183;
+    animation: ps-wiz-draw .7s ease-out forwards; }
+  .ps-wiz-check path { stroke-dasharray: 40; stroke-dashoffset: 40;
+    animation: ps-wiz-draw .45s ease-out .55s forwards; }
+  @keyframes ps-wiz-draw { to { stroke-dashoffset: 0; } }
+  .ps-motion-off .ps-wiz-step, .ps-motion-off .ps-wiz-done { animation: none; }
+  .ps-motion-off .ps-wiz-check circle, .ps-motion-off .ps-wiz-check path {
+    animation: none; stroke-dashoffset: 0; }
+
+  .ps-cf-band { border-radius: var(--ps-radius);
+    background: linear-gradient(130deg, var(--ps1), color-mix(in srgb, var(--ps1) 55%, var(--ps2)));
+    box-shadow: 0 30px 60px -32px color-mix(in srgb, var(--ps1) 60%, transparent); }
+  .ps-cf-underline { width: 74px; height: 4px; border-radius: 999px; background: var(--ps2); }
+  .ps-cf-chip { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28); color: #fff; }
+  .ps-cf-card { position: relative; isolation: isolate; background: #fff; border-radius: 18px;
+    padding: 1.6rem; box-shadow: 0 26px 52px -26px rgba(15, 20, 40, .5); }
+  .ps-cf-card::before { content: ""; position: absolute; inset: -2px; border-radius: 20px; z-index: -1;
+    background: linear-gradient(120deg, var(--ps2), rgba(255,255,255,.7), var(--ps2));
+    background-size: 220% 220%;
+    animation: ps-cf-border 6s linear infinite; }
+  @keyframes ps-cf-border { to { background-position: 220% 50%; } }
+  .ps-cf-card input:focus, .ps-cf-card textarea:focus, .ps-cf-card select:focus {
+    transform: translateY(calc(-2px * var(--motion)));
+    box-shadow: 0 12px 24px -16px color-mix(in srgb, var(--ps1) 60%, transparent); }
+  .ps-cf-card input, .ps-cf-card textarea, .ps-cf-card select {
+    transition: transform .2s, box-shadow .2s; }
+  .ps-motion-off .ps-cf-card::before { animation: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .ps-wiz-step, .ps-wiz-done, .ps-cf-card::before { animation: none; }
+    .ps-wiz-check circle, .ps-wiz-check path { animation: none; stroke-dashoffset: 0; }
+  }
+
   /* ── Footer variants (FooterSection; COLUMNS on paper = shipped, no class) ── */
   .ps-footc-dark { background: color-mix(in srgb, var(--ink) 94%, #000); color: rgba(255,255,255,.72); }
   .ps-footc-brand { background: var(--ps1); color: rgba(255,255,255,.8); }
