@@ -703,6 +703,65 @@ export const PS_CSS = `
   .ps-v-about-center .ps-about-img-wrap { order: 2; max-width: 34rem; margin-inline: auto; width: 100%; }
   .ps-v-about-center .ps-about-copy blockquote { border-left: 0; padding-left: 0; }
 
+  /* LETTER: the note reads as a sheet of school stationery — bordered paper,
+     a brand letterhead rule on top, the principal's line closing it like a
+     sign-off, and the campus photo tucked quietly below the sheet. */
+  .ps-v-about-letter.ps-about-grid { grid-template-columns: 1fr !important;
+    max-width: 46rem; margin-inline: auto; gap: 2.2rem; }
+  .ps-v-about-letter .ps-about-copy { position: relative; background: var(--paper);
+    border: 1px solid color-mix(in srgb, var(--ps1) 16%, transparent);
+    border-radius: 6px; padding: clamp(1.6rem, 4.5vw, 3rem);
+    box-shadow: 0 26px 50px -34px rgba(17, 20, 28, .4); }
+  .ps-v-about-letter .ps-about-copy::before { content: ""; position: absolute;
+    top: 0; left: 0; right: 0; height: 4px; border-radius: 6px 6px 0 0;
+    background: linear-gradient(90deg, var(--ps1), var(--ps2)); }
+  .ps-v-about-letter .ps-about-copy h2 { font-size: 1.85rem; }
+  .ps-v-about-letter .ps-about-copy blockquote { border-left: 0; padding: 1.1rem 0 0;
+    margin-top: 1.5rem; font-size: .95rem;
+    border-top: 1px dashed color-mix(in srgb, var(--ps1) 30%, transparent); }
+  .ps-v-about-letter .ps-about-img-wrap { order: 2; }
+  .ps-v-about-letter .ps-about-img { height: 15rem; }
+  .ps-v-about-letter .ps-about-glow { display: none; }
+
+  /* QUOTE: the principal's message IS the band — set display-size in the
+     heading face under an oversized quote mark; the stock headline demotes to
+     a small subhead and the photo becomes a wide strip with the signature card
+     centred beneath it. Without a message it gracefully reads as Narrative. */
+  .ps-v-about-quote.ps-about-grid { grid-template-columns: 1fr !important;
+    max-width: 52rem; margin-inline: auto; text-align: center; }
+  .ps-v-about-quote .ps-about-copy { display: flex; flex-direction: column; align-items: center; }
+  .ps-v-about-quote .ps-about-copy blockquote { order: 1; border-left: 0; padding-left: 0;
+    margin-top: 1.1rem; max-width: 46rem; font-style: normal;
+    font-family: var(--font-head); color: var(--ink);
+    font-size: clamp(1.45rem, 3.2vw, 2.05rem); line-height: 1.35; font-weight: 600; }
+  .ps-v-about-quote .ps-about-copy blockquote::before { content: "“"; display: block;
+    font-family: Georgia, 'Times New Roman', serif; font-size: 3.8rem; line-height: .55;
+    color: var(--ps2); margin-bottom: .55rem; }
+  .ps-v-about-quote .ps-about-copy h2 { order: 2; font-size: 1.1rem; margin-top: 2.1rem;
+    letter-spacing: .02em; opacity: .85; }
+  .ps-v-about-quote .ps-about-copy p { order: 3; font-size: .95rem; max-width: 40rem; margin-top: .8rem; }
+  .ps-v-about-quote .ps-about-img-wrap { order: 2; margin-bottom: 1.6rem; }
+  .ps-v-about-quote .ps-about-img { height: 16rem; }
+  .ps-v-about-quote .ps-about-img-wrap > .ps-card.absolute { right: auto; left: 50%;
+    transform: translateX(-50%); bottom: -1.55rem; }
+
+  /* EDITORIAL: magazine spread — full-width photo as the opening image, the
+     story flowing in two columns behind a drop cap, and the principal's line
+     as a centred pull-quote between hairline rules. */
+  .ps-v-about-editorial.ps-about-grid { grid-template-columns: 1fr !important;
+    max-width: 56rem; margin-inline: auto; gap: 2.6rem; }
+  .ps-v-about-editorial .ps-about-img { height: 20rem; border-radius: var(--ps-radius); }
+  .ps-v-about-editorial .ps-about-glow { display: none; }
+  .ps-v-about-editorial .ps-about-copy p { margin-top: 1.5rem; column-gap: 2.6rem; }
+  @media (min-width: 768px) { .ps-v-about-editorial .ps-about-copy p { columns: 2; } }
+  .ps-v-about-editorial .ps-about-copy p::first-letter { float: left; font-weight: 700;
+    font-family: var(--font-head); color: var(--ps1);
+    font-size: 3.4rem; line-height: .82; padding: .06em .14em 0 0; }
+  .ps-v-about-editorial .ps-about-copy blockquote { border-left: 0; padding: 1.1rem 0;
+    margin-top: 1.7rem; text-align: center; font-size: 1.08rem; max-width: 34rem; margin-inline: auto;
+    border-top: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
+
   /* ── Courses variants ── */
   .ps-v-courses-carousel .ps-courses-grid { display: flex; overflow-x: auto; gap: 1.25rem;
     scroll-snap-type: x mandatory; padding-bottom: .75rem;

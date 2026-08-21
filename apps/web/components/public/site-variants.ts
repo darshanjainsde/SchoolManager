@@ -133,6 +133,9 @@ export const SECTION_VARIANT_DEFS: Record<
       { value: 'SPLIT', label: 'Image left', hint: 'Photo beside the story — today’s look.' },
       { value: 'OVERLAP', label: 'Overlap frame', hint: 'An offset accent frame behind the photo.' },
       { value: 'CENTER', label: 'Narrative', hint: 'Centered story with the photo below it.' },
+      { value: 'LETTER', label: 'Letter', hint: 'The note as a stationery sheet under a letterhead rule — signed by the principal.' },
+      { value: 'QUOTE', label: 'Statement quote', hint: 'The principal’s words set large and centre; everything else supports them.' },
+      { value: 'EDITORIAL', label: 'Magazine', hint: 'Wide photo, two-column story with a drop cap and a ruled pull-quote.' },
     ],
   },
   courses: {
