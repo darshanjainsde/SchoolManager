@@ -12,7 +12,19 @@ import {
   scrollFeelClass,
 } from './site-variants';
 
-const MOTION_MAP: Record<string, number> = { FULL: 1, SUBTLE: 0.5, NONE: 0 };
+// The animation "volume knob": every keyframe and reveal in the stylesheet is
+// written as `calc(x * var(--motion))`, so one scalar dials the whole page.
+// NONE (0) additionally adds ps-motion-off, which hard-stops the ambient loops.
+// LIVELY (>1) amplifies within safe bounds (translations/rotations grow ~30%,
+// durations shorten); it stays under the point where any motion inverts.
+const MOTION_MAP: Record<string, number> = {
+  LIVELY: 1.3,
+  FULL: 1,
+  BALANCED: 0.75,
+  SUBTLE: 0.5,
+  MINIMAL: 0.35,
+  NONE: 0,
+};
 
 /**
  * Everything that makes a page LOOK like a particular school: the class list

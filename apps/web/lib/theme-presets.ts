@@ -8,10 +8,14 @@ export const THEME_PRESETS: Record<string, ThemePreset> = {
 };
 
 export const FONT_OPTIONS = [
-  { value: 'INTER',    label: 'Inter (neutral)' },
-  { value: 'FRAUNCES', label: 'Fraunces (academic serif)' },
-  { value: 'POPPINS',  label: 'Poppins (rounded)' },
-  { value: 'NUNITO',   label: 'Nunito (friendly)' },
+  { value: 'INTER',         label: 'Inter (neutral)' },
+  { value: 'FRAUNCES',      label: 'Fraunces (academic serif)' },
+  { value: 'POPPINS',       label: 'Poppins (rounded)' },
+  { value: 'NUNITO',        label: 'Nunito (friendly)' },
+  { value: 'PLAYFAIR',      label: 'Playfair (elegant serif)' },
+  { value: 'LORA',          label: 'Lora (warm serif)' },
+  { value: 'MONTSERRAT',    label: 'Montserrat (geometric)' },
+  { value: 'SPACE_GROTESK', label: 'Space Grotesk (modern)' },
 ];
 
 export const HERO_OPTIONS = [
@@ -21,7 +25,10 @@ export const HERO_OPTIONS = [
 ];
 
 export const MOTION_OPTIONS = [
-  { value: 'FULL',   label: 'Full' },
-  { value: 'SUBTLE', label: 'Subtle' },
-  { value: 'NONE',   label: 'Off' },
+  { value: 'LIVELY',   label: 'Lively' },
+  { value: 'FULL',     label: 'Full' },
+  { value: 'BALANCED', label: 'Balanced' },
+  { value: 'SUBTLE',   label: 'Subtle' },
+  { value: 'MINIMAL',  label: 'Minimal' },
+  { value: 'NONE',     label: 'Off' },
 ];

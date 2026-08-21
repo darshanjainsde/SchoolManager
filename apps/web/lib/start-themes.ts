@@ -29,8 +29,8 @@ export interface FooterCfg {
 export interface ThemeConfig {
   brandColorPrimary: string;
   brandColorSecondary: string;
-  headingFont: 'INTER' | 'FRAUNCES' | 'POPPINS' | 'NUNITO';
-  animationLevel: 'FULL' | 'SUBTLE' | 'NONE';
+  headingFont: 'INTER' | 'FRAUNCES' | 'POPPINS' | 'NUNITO' | 'PLAYFAIR' | 'LORA' | 'MONTSERRAT' | 'SPACE_GROTESK';
+  animationLevel: 'LIVELY' | 'FULL' | 'BALANCED' | 'SUBTLE' | 'MINIMAL' | 'NONE';
   heroLayout: 'ILLUSTRATION' | 'FULL_BLEED' | 'SPLIT_MOSAIC' | 'SPLIT_EDITORIAL' | 'COLLAGE' | 'SLIDESHOW' | 'MINIMAL';
   heroTextAlign: 'LEFT' | 'CENTER';
   heroOverlayStyle: 'WASH' | 'TINT' | 'DARK';

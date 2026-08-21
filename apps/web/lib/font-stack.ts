@@ -12,4 +12,8 @@ export const FONT_STACK: Record<string, string> = {
   FRAUNCES: `var(--f-fraunces), serif`,
   POPPINS: `var(--f-poppins), sans-serif`,
   NUNITO: `var(--f-nunito), sans-serif`,
+  PLAYFAIR: `var(--f-playfair), Georgia, serif`,
+  SPACE_GROTESK: `var(--f-space-grotesk), sans-serif`,
+  MONTSERRAT: `var(--f-montserrat), sans-serif`,
+  LORA: `var(--f-lora), Georgia, serif`,
 };

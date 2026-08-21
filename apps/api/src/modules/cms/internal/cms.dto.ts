@@ -39,9 +39,11 @@ export class UpdateProfileDto {
   @IsOptional() @IsString() @Length(0, 500) mapEmbedUrl?: string;
   @IsOptional() @IsString() logoAssetId?: string;
   @IsOptional() @IsString() faviconAssetId?: string;
-  @IsOptional() @IsIn(['INTER', 'FRAUNCES', 'POPPINS', 'NUNITO']) headingFont?: string;
+  @IsOptional()
+  @IsIn(['INTER', 'FRAUNCES', 'POPPINS', 'NUNITO', 'PLAYFAIR', 'LORA', 'MONTSERRAT', 'SPACE_GROTESK'])
+  headingFont?: string;
   @IsOptional() @IsIn(['ILLUSTRATION', 'PHOTO', 'MINIMAL']) heroStyle?: string;
-  @IsOptional() @IsIn(['FULL', 'SUBTLE', 'NONE']) animationLevel?: string;
+  @IsOptional() @IsIn(['LIVELY', 'FULL', 'BALANCED', 'SUBTLE', 'MINIMAL', 'NONE']) animationLevel?: string;
   @IsOptional() @IsIn(['ACADEMIC', 'MODERN', 'PLAYFUL', 'ELEGANT', 'CUSTOM']) themePreset?: string;
   @IsOptional()
   @IsIn(['ILLUSTRATION', 'FULL_BLEED', 'SPLIT_MOSAIC', 'SPLIT_EDITORIAL', 'COLLAGE', 'SLIDESHOW', 'MINIMAL'])
