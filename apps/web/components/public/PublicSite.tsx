@@ -170,6 +170,14 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
     // at once, the rest as it scrolls in, and nothing depends on an async frame.
     const reveals = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
     const counts = Array.from(document.querySelectorAll<HTMLElement>('.count'));
+    // Side-scroll relocates the bands into a horizontal track where each panel
+    // has its own vertical scroller, so the window-scroll position gate below
+    // can't reach anything past the first screen of a panel. Reveal everything
+    // up front there rather than leave the lower half of tall panels blank.
+    if (horizontalOn) {
+      reveals.forEach((el) => el.classList.add('in'));
+      reveals.length = 0;
+    }
     const runCount = (el: HTMLElement) => {
       const to = Number(el.dataset.to);
       if (isNaN(to)) return;

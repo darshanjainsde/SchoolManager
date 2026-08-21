@@ -87,6 +87,11 @@ export const PS_CSS = `
   /* reveal on scroll */
   .reveal { opacity: 0; transform: translateY(calc(26px * var(--motion) + 4px)); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
   .reveal.in { opacity: 1; transform: none; }
+  /* No JavaScript (or a crawler): the reveal sweep never runs, so nothing would
+     ever get .in. Content must never depend on JS to be VISIBLE — show it all. */
+  @media (scripting: none) {
+    .reveal { opacity: 1 !important; transform: none !important; clip-path: none !important; }
+  }
 
   /* hand-drawn underline draws itself once */
   @keyframes ps-draw { to { stroke-dashoffset: 0; } }
@@ -525,8 +530,16 @@ export const PS_CSS = `
      stuck band through it. Where sticky does not engage it degrades to a normal
      paper-backed scroll, never to overlapping text. */
   .ps-scroll-deck > section, .ps-scroll-deck > div[data-sec], .ps-scroll-deck > footer {
-    position: sticky; top: 0; background: var(--paper);
+    position: sticky; top: 0;
     box-shadow: 0 -18px 44px rgba(15,23,20,.14); }
+  /* The opaque ground the deck needs goes on TRANSPARENT bands only. A band that
+     brings its own colour + light text (Events = .ps-brandgrad.text-white, a
+     dark/brand footer) already has an opaque background — forcing paper onto it
+     put white text on a white band, i.e. an invisible section/footer. */
+  .ps-scroll-deck > section:not(.text-white),
+  .ps-scroll-deck > div[data-sec],
+  .ps-scroll-deck > footer:not(.ps-footc-dark):not(.ps-footc-brand) {
+    background: var(--paper); }
   .ps-scroll-deck > #ps-nav, .ps-scroll-deck > header { position: sticky; }
   /* Side-scroll: the home bands become full-viewport panels in a horizontal
      track. Desktop + motion-allowed only — on phones and under reduced-motion
