@@ -636,8 +636,8 @@ export default function StudioTab() {
         </div>
       </Group>
 
-      {/* ── Style presets ── */}
-      <Group id="looks" title="Style presets" summary="Sets shape, motion, texture & accent in one tap">
+      {/* ── Quick styles ── */}
+      <Group id="looks" title="Quick styles" summary="Sets shape, motion, texture & accent in one tap">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {STYLE_PRESETS.map((p) => {
             const on = (current.sectionShape ?? 'SOFT') === p.values.sectionShape && (current.motionGesture ?? 'RISE') === p.values.motionGesture
@@ -660,7 +660,7 @@ export default function StudioTab() {
         <Chips options={SECTION_SHAPES} value={(current.sectionShape as string) ?? 'SOFT'} onPick={(v) => setLook({ sectionShape: v })} />
         <FieldLabel>How sections arrive</FieldLabel>
         <Chips options={MOTION_GESTURES} value={(current.motionGesture as string) ?? 'RISE'} onPick={(v) => setLook({ motionGesture: v })} />
-        <FieldLabel>Page background</FieldLabel>
+        <FieldLabel>Background texture</FieldLabel>
         <Chips options={BACKGROUND_TEXTURES} value={(current.backgroundTexture as string) ?? 'NONE'} onPick={(v) => setLook({ backgroundTexture: v })} />
         <FieldLabel>Scroll feel</FieldLabel>
         <Stack options={SCROLL_FEELS} value={(current.scrollFeel as string) ?? 'CLASSIC'} onPick={(v) => setLook({ scrollFeel: v })} />

@@ -245,13 +245,16 @@ export const PS_CSS = `
      corner; content keeps overflowing freely (no clip), so an overlapping
      badge or a hover-lift is never cut. A band that carries its own colour
      (events, hall of fame) simply becomes a coloured panel. */
-  .ps-shape-panels { background: color-mix(in srgb, var(--ink) 7%, var(--paper)); }
+  /* Ground is a NEUTRAL darkening of the paper (not the brand ink, which cast a
+     greenish tint), and the shadow is soft, even and neutral so the rounded
+     corners don't show an uneven shade. */
+  .ps-shape-panels { background: color-mix(in srgb, #10131a 4.5%, var(--paper)); }
   .ps-shape-panels > section,
   .ps-shape-panels > div[data-sec]:not([data-sec="hero"]) {
     background: var(--paper);
-    border-radius: 30px;
-    margin: 18px clamp(10px, 2vw, 22px) 0;
-    box-shadow: 0 26px 64px -36px rgba(20,30,25,.55);
+    border-radius: 22px;
+    margin: 16px clamp(10px, 2vw, 20px) 0;
+    box-shadow: 0 8px 26px -20px rgba(17,20,28,.25);
   }
   .ps-shape-panels > section:last-of-type,
   .ps-shape-panels > div[data-sec]:not([data-sec="hero"]):last-of-type { margin-bottom: 18px; }
@@ -520,19 +523,25 @@ export const PS_CSS = `
      keeps its native horizontal swipe; the wheel-to-sideways effect is layered
      on top. Each band keeps its own vertical scroll for content over one screen. */
   @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+    /* Pinned horizontal: the sticky viewport holds still while the JS reserves
+       vertical scroll room on the wrapper and slides the track sideways as the
+       page scrolls down. Off this media (phones, reduced-motion) every element
+       is a plain block, so the bands fall back to a normal vertical column. */
+    .ps-scroll-horizontal .ps-hwrap { position: relative; }
+    .ps-scroll-horizontal .ps-hsticky {
+      position: sticky; top: 0;
+      height: 100vh; height: 100dvh;
+      overflow: hidden;
+      display: flex; align-items: stretch;
+    }
     .ps-scroll-horizontal .ps-htrack {
       display: flex; flex-wrap: nowrap; align-items: stretch;
-      height: 100vh; height: 100dvh;
-      overflow-x: auto; overflow-y: hidden;
-      scroll-snap-type: x mandatory;
-      overscroll-behavior-x: contain;
-      scrollbar-width: none; -ms-overflow-style: none;
+      height: 100%;
+      will-change: transform;
     }
-    .ps-scroll-horizontal .ps-htrack::-webkit-scrollbar { width: 0; height: 0; }
     .ps-scroll-horizontal .ps-htrack > * {
       flex: 0 0 100vw; max-width: 100vw; height: 100%;
       overflow-y: auto; overflow-x: hidden;
-      scroll-snap-align: start;
     }
   }
 

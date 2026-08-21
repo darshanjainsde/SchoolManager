@@ -42,23 +42,33 @@ interface Props {
 
 
 /**
- * Wraps the home bands in a horizontal-scroll track when side-scroll is on, and
- * is a no-op fragment otherwise — so a school on any other scroll feel keeps the
- * exact DOM it renders today (which matters: the Deck feel relies on the bands
- * being direct children of the root).
+ * Wraps the home bands for side-scroll, and is a no-op fragment otherwise — so a
+ * school on any other scroll feel keeps the exact DOM it renders today (which
+ * matters: the Deck feel relies on the bands being direct children of the root).
+ *
+ * Side-scroll is a PINNED horizontal scroll: the outer wrapper reserves the
+ * vertical scroll distance, the sticky viewport pins to the screen, and the
+ * track slides sideways as the visitor scrolls DOWN — so ordinary vertical
+ * scrolling drives the horizontal motion (no separate sideways gesture).
  */
 function HomeShell({
   horizontal,
+  wrapRef,
   trackRef,
   children,
 }: {
   horizontal: boolean;
+  wrapRef: React.RefObject<HTMLDivElement | null>;
   trackRef: React.RefObject<HTMLDivElement | null>;
   children: React.ReactNode;
 }) {
   return horizontal ? (
-    <div className="ps-htrack" ref={trackRef}>
-      {children}
+    <div className="ps-hwrap" ref={wrapRef}>
+      <div className="ps-hsticky">
+        <div className="ps-htrack" ref={trackRef}>
+          {children}
+        </div>
+      </div>
     </div>
   ) : (
     <>{children}</>
@@ -100,6 +110,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
   // vertical flow on small screens and reduced-motion; the wheel translation is
   // desktop-only and gated inside its own effect.
   const horizontalOn = view === 'home' && (data.profile?.scrollFeel ?? 'CLASSIC') === 'HORIZONTAL';
+  const hwrapRef = useRef<HTMLDivElement | null>(null);
   const htrackRef = useRef<HTMLDivElement | null>(null);
   const statsLayout = sectionLayoutOf(variants, 'stats');
 
@@ -259,38 +270,61 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
     };
   }, [glideOn]);
 
-  // ── Scroll feel: HORIZONTAL ──
-  // Turn vertical wheel into sideways movement across the panels. Only on wide
-  // screens with motion allowed (the CSS reverts the panels to a normal column
-  // otherwise, and touch keeps its native horizontal swipe). At either end the
-  // wheel is released so the page can scroll past the track to the footer.
+  // ── Scroll feel: HORIZONTAL (pinned) ──
+  // The wrapper reserves vertical scroll distance equal to the track's overflow;
+  // while it's on screen the sticky viewport is pinned and the track is slid
+  // sideways in step with how far the visitor has scrolled DOWN. So normal
+  // vertical scrolling — wheel, trackpad, scrollbar, keyboard, touch — moves the
+  // page sideways; the visitor never changes gesture. Desktop + motion only; on
+  // phones and reduced-motion the CSS keeps a normal vertical column and this
+  // effect clears any inline height/transform it might have set.
   useEffect(() => {
-    if (!horizontalOn) return;
+    const wrap = hwrapRef.current;
     const track = htrackRef.current;
-    if (!track) return;
+    if (!horizontalOn || !wrap || !track) return;
     const wide = window.matchMedia('(min-width: 768px)');
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onWheel = (e: WheelEvent) => {
-      if (!wide.matches || reduce.matches) return;
-      if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      // A panel taller than the viewport keeps its own vertical scroll: only
-      // once it's at the top/bottom edge does the wheel move sideways.
-      let panel: HTMLElement | null = e.target as HTMLElement | null;
-      while (panel && panel.parentElement !== track) panel = panel.parentElement;
-      if (panel && panel.scrollHeight > panel.clientHeight + 1) {
-        const atTop = panel.scrollTop <= 0;
-        const atBottom = panel.scrollTop >= panel.scrollHeight - panel.clientHeight - 1;
-        if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) return;
+    let raf = 0;
+    let overflow = 0;
+
+    const layout = () => {
+      if (!wide.matches || reduce.matches) {
+        wrap.style.height = '';
+        track.style.transform = '';
+        overflow = 0;
+        return;
       }
-      const max = track.scrollWidth - track.clientWidth;
-      const atStart = track.scrollLeft <= 0;
-      const atEnd = track.scrollLeft >= max - 1;
-      if ((e.deltaY < 0 && atStart) || (e.deltaY > 0 && atEnd)) return;
-      e.preventDefault();
-      track.scrollLeft = Math.max(0, Math.min(max, track.scrollLeft + e.deltaY));
+      overflow = Math.max(0, track.scrollWidth - window.innerWidth);
+      // Extra vertical room = the horizontal overflow, so one screen of vertical
+      // scroll ≈ one screen of sideways travel.
+      wrap.style.height = `${window.innerHeight + overflow}px`;
+      apply();
     };
-    window.addEventListener('wheel', onWheel, { passive: false });
-    return () => window.removeEventListener('wheel', onWheel);
+    const apply = () => {
+      if (overflow <= 0) {
+        track.style.transform = '';
+        return;
+      }
+      const scrolled = Math.min(Math.max(0, -wrap.getBoundingClientRect().top), overflow);
+      track.style.transform = `translate3d(${-scrolled}px,0,0)`;
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; apply(); });
+    };
+
+    layout();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', layout);
+    // Panel widths settle after fonts/images load — re-measure then.
+    const fonts = (document as unknown as { fonts?: { ready?: Promise<unknown> } }).fonts;
+    fonts?.ready?.then(layout).catch(() => {});
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', layout);
+      if (raf) cancelAnimationFrame(raf);
+      wrap.style.height = '';
+      track.style.transform = '';
+    };
   }, [horizontalOn]);
 
   // One definition of what a school looks like, shared with the blog's chrome.
@@ -414,7 +448,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
           )}
         </>
       ) : (
-        <HomeShell horizontal={horizontalOn} trackRef={htrackRef}>
+        <HomeShell horizontal={horizontalOn} wrapRef={hwrapRef} trackRef={htrackRef}>
       {/* ── HERO (layout selected by the school admin) ── */}
       <div data-sec="hero">
         <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
