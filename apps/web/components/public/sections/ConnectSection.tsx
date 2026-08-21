@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { PublicSiteData } from '@/lib/public-api';
 import { eventDateParts, safeHttpUrl } from '../site-utils';
 import { probeSignedIn, submitRegistration, submitRegistrationAsStudent, type SessionProbe } from '../registration-client';
@@ -310,8 +311,15 @@ export default function ConnectSection({
         )}
       </div>
 
-      {joining && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      {/* The dialog PORTALS out of this band: the reveal/scroll-feel system
+          animates the band with transforms, and a transformed ancestor becomes
+          the containing block for position:fixed — the "fixed" overlay was
+          pinned to the SECTION, so it scrolled away and clipped with it
+          instead of covering the viewport. It portals into the .ps-root NODE
+          (not <body>) so the theme's CSS variables still reach the dialog;
+          the root itself carries no transform, so fixed means the viewport. */}
+      {joining && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setJoining(null)} aria-hidden="true" />
           <div
             role="dialog"
@@ -408,7 +416,8 @@ export default function ConnectSection({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.querySelector('.ps-root') ?? document.body,
       )}
     </section>
   );
