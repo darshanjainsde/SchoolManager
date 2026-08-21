@@ -79,12 +79,15 @@ export async function fetchGlobalPost(globalSlug: string): Promise<BlogPostFull 
   }
 }
 
-/** School (tenant) blog index — <school>.sckools.com/blog. 404s upstream when BLOG feature is off. */
+/** School (tenant) blog index — <school>.sckools.com/blog. 404s upstream when BLOG feature is off.
+ *  60 s (not the platform blog's 300): an admin who just hit Publish checks
+ *  their own site straight away, and five minutes of "No posts yet" reads as
+ *  a broken publish, not a cache. */
 export async function fetchSchoolBlog(host: string): Promise<SchoolBlogResponse | null> {
   try {
     const res = await fetch(`${apiBase()}/public/blog`, {
       headers: { 'X-Forwarded-Host': host, 'X-Skoolos-Host': host },
-      next: { revalidate: 300 },
+      next: { revalidate: 60 },
     });
     if (!res.ok) return null;
     return (await res.json()) as SchoolBlogResponse;
@@ -98,7 +101,7 @@ export async function fetchSchoolPost(host: string, slug: string): Promise<Schoo
   try {
     const res = await fetch(`${apiBase()}/public/blog/${slug}`, {
       headers: { 'X-Forwarded-Host': host, 'X-Skoolos-Host': host },
-      next: { revalidate: 300 },
+      next: { revalidate: 60 },
     });
     if (!res.ok) return null;
     return (await res.json()) as SchoolBlogPostFull;
