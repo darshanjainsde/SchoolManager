@@ -493,7 +493,7 @@ export default function SiteNav({
         <header
           id="ps-nav"
           className={`${
-            pillOverlay ? 'fixed inset-x-0 top-0' : 'sticky top-0'
+            pillOverlay ? 'fixed inset-x-0 top-0' : 'sticky top-0 ps-nav-pill-flow'
           } z-50 px-4 pt-3 transition-all duration-300 [&.ps-nav-scrolled_.ps-pill-bar]:shadow-xl`}
         >
           {/* w-fit + nowrap: the pill hugs its content and grows in WIDTH only —

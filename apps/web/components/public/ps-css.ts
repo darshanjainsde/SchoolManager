@@ -294,6 +294,16 @@ export const PS_CSS = `
   .ps-shape-panels.ps-scroll-deck > div[data-sec],
   .ps-shape-panels.ps-scroll-deck > footer { box-shadow: none; }
 
+  /* Panels tints the whole page ground, which then shows through anything that
+     sits on it with no fill of its own — including the hero and the transparent
+     strip behind a floating (pill) nav. That left a faint darker band at the very
+     top, behind the navbar. Give the top region paper so the page starts clean:
+     the hero floats on paper (not the tinted ground), and the pill's transparent
+     shell shows paper AT REST. On scroll the pill drops back to transparent
+     (:not below) so page content still passes behind its sides as intended. */
+  .ps-shape-panels > [data-sec="hero"] { background: var(--paper); }
+  .ps-shape-panels #ps-nav.ps-nav-pill-flow:not(.ps-nav-scrolled) { background: var(--paper); }
+
   /* ── Ambient header layer (/connect) ──
      Two blurred brand-coloured drifts. No canvas and no library: two divs and
      one keyframe, scaled by the school's own --motion so a NONE school gets a
