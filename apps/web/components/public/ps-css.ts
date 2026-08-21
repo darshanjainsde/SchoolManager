@@ -314,8 +314,12 @@ export const PS_CSS = `
         deck, paper that strip too (at rest; the hero sits below it, so nothing is
         covered). Scoped to deck because that's the only feel that relocates it. */
   .ps-shape-panels > [data-sec="hero"] { background: var(--paper); }
-  .ps-shape-panels #ps-nav.ps-nav-pill-flow:not(.ps-nav-scrolled) { background: var(--paper); }
-  .ps-shape-panels.ps-scroll-deck #ps-nav.ps-nav-float-over:not(.ps-nav-scrolled) { background: var(--paper); }
+  /* The paper backdrop FADES into the tinted ground rather than stopping at
+     the header's bottom edge — a solid rectangle drew a visible seam where
+     paper met the ground strip above the first panel. */
+  .ps-shape-panels #ps-nav.ps-nav-pill-flow:not(.ps-nav-scrolled),
+  .ps-shape-panels.ps-scroll-deck #ps-nav.ps-nav-float-over:not(.ps-nav-scrolled) {
+    background: linear-gradient(to bottom, var(--paper) 58%, transparent); }
 
   /* ── Ambient header layer (/connect) ──
      Two blurred brand-coloured drifts. No canvas and no library: two divs and

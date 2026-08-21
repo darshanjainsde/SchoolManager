@@ -312,3 +312,62 @@
   font-style: italic;
   font-family: var(--blog-sans);
 }
+
+/* ── Inside a school's chrome (.ps-root) the blog wears THE SCHOOL'S theme ──
+   Every token remaps to the site's own custom properties and the OS dark flip
+   is disabled — a school site is single-theme by design, and half the page
+   going near-black beside a cream navbar read as a different product. The
+   extra selectors out-rank the :root[data-theme] blocks above. */
+.ps-root .blog,
+:root[data-theme='dark'] .ps-root .blog,
+:root[data-theme='light'] .ps-root .blog {
+  --blog-paper: transparent;
+  --blog-ink: var(--ink);
+  --blog-muted: #64748b;
+  --blog-dim: #94a3b8;
+  --blog-line: color-mix(in srgb, var(--ps1) 16%, transparent);
+  --blog-card: var(--paper);
+  --blog-teal: var(--ps1);
+  --blog-teal-hi: var(--ps2);
+  --blog-violet: var(--ps1);
+  --blog-quiz-bg: color-mix(in srgb, var(--ps1) 8%, var(--paper));
+  --blog-shadow: 0 14px 34px -22px rgba(17, 20, 28, 0.3);
+  /* The site body font everywhere — the blog's own serif/system stacks are
+     the platform blog's identity, not the school's. */
+  --blog-sans: 'Inter', sans-serif;
+  --blog-serif: 'Inter', sans-serif;
+  background: transparent;
+  color: var(--ink);
+  min-height: 0;
+}
+/* Type follows the school: body text in the site's own font, headings in the
+   school's heading face. (The font-family:inherit chain walks up to .ps-root.) */
+.ps-root .blog,
+.ps-root .blog .blog-head,
+.ps-root .blog .blog-hero-grid,
+.ps-root .blog .blog-grid,
+.ps-root .blog .blog-list,
+.ps-root .blog .blog-empty,
+.ps-root .blog .blog-article h1 {
+  font-family: inherit;
+}
+.ps-root .blog h1,
+.ps-root .blog h2,
+.ps-root .blog h3,
+.ps-root .blog .blog-card-body b,
+.ps-root .blog .blog-list-body b {
+  font-family: var(--font-head);
+  color: var(--ink);
+}
+.ps-root .blog .blog-hero-cover-text h1 { color: #fff; }
+.ps-root .blog .blog-hero-cover-text .blog-byline a { color: var(--ps2); }
+/* Cards lift like every other school panel. */
+.ps-root .blog .blog-card { transition: border-color 0.2s, transform 0.25s, box-shadow 0.25s; }
+.ps-root .blog .blog-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--ps1);
+  box-shadow: 0 20px 40px -22px color-mix(in srgb, var(--ps1) 45%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ps-root .blog .blog-card:hover { transform: none; }
+}

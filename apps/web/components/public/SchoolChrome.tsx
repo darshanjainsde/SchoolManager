@@ -36,14 +36,40 @@ export default function SchoolChrome({
   });
 
   // The nav elevates on scroll on every other page; without this the blog's
-  // bar would be the one that never does.
+  // bar would be the one that never does. The same pass reveals `.reveal`
+  // content — PS_CSS hides it until the `.in` class arrives, and this chrome
+  // had no revealer at all, so anything marked reveal stayed invisible
+  // forever (the blog index header shipped blank). Position-based, exactly
+  // like PublicSite: no IntersectionObserver, so a background tab still shows
+  // everything the moment it is foregrounded.
   useEffect(() => {
     const nav = document.getElementById('ps-nav');
-    if (!nav) return;
-    const onScroll = () => nav.classList.toggle('ps-nav-scrolled', window.scrollY > 30);
-    onScroll();
+    const reveals = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
+    const sweep = () => {
+      const vh = window.innerHeight || 800;
+      if (nav) nav.classList.toggle('ps-nav-scrolled', window.scrollY > 30);
+      for (let i = reveals.length - 1; i >= 0; i--) {
+        if (reveals[i].getBoundingClientRect().top < vh * 0.92) {
+          reveals[i].classList.add('in');
+          reveals.splice(i, 1);
+        }
+      }
+    };
+    let raf = 0;
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; sweep(); });
+    };
+    sweep();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    window.addEventListener('resize', onScroll);
+    const onVis = () => { if (!document.hidden) sweep(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      document.removeEventListener('visibilitychange', onVis);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
 
   return (
