@@ -8,18 +8,29 @@
 #      provider-level disaster (account lockout, region loss, billing acc-
 #      idents). Coarse (24 h) by design; PITR covers the fine-grained cases.
 #
+# ENCRYPTION IS NOT OPTIONAL. This repository is PUBLIC, and artifacts on a
+# public repo are downloadable by any logged-in GitHub user — an unencrypted
+# dump here would publish every student's data. The dump is therefore
+# gpg-encrypted (AES256, symmetric) on the runner before ANYTHING is
+# uploaded, and the workflow refuses to run without the passphrase.
+#
 # Setup (repo → Settings → Secrets and variables → Actions):
 #   DB_BACKUP_URL — the SESSION pooler connection string (port 5432). The
 #     transaction pooler (:6543) breaks pg_dump; use the session string that
 #     migrations already use.
-#   Optional offsite S3 (recommended once available):
+#   BACKUP_PASSPHRASE — a long random string. STORE A COPY IN YOUR PASSWORD
+#     MANAGER: without it every backup this workflow ever made is unreadable.
+#   Optional offsite S3 (recommended):
 #     BACKUP_S3_BUCKET / BACKUP_S3_ACCESS_KEY / BACKUP_S3_SECRET_KEY /
-#     BACKUP_S3_ENDPOINT — any S3-compatible store OUTSIDE Supabase.
-#     Without them the dump is kept as a private repo artifact (30 days),
-#     which is already an independent copy under a different account system.
+#     BACKUP_S3_ENDPOINT — any S3-compatible store OUTSIDE Supabase. The
+#     object uploaded is the ENCRYPTED file.
 #
-# The restore path is written down and REHEARSED — see docs/RUNBOOK.md
-# ("Restore drill"). A backup nobody has restored is a hope, not a backup.
+# NOTE: scheduled workflows run from the DEFAULT branch only — this file does
+# nothing until it is merged to main, and GitHub pauses schedules after 60
+# days of repo inactivity (see RUNBOOK).
+#
+# Restore path: docs/RUNBOOK.md "Restore drill" —
+#   gpg -d skoolos-<stamp>.dump.gz.gpg | gunzip | pg_restore -d <db> --no-owner
 
 name: Nightly database backup
 
@@ -41,20 +52,28 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y --no-install-recommends postgresql-client-17
 
-      - name: Dump
+      - name: Dump and encrypt
         env:
           DB_BACKUP_URL: ${{ secrets.DB_BACKUP_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [ -z "${DB_BACKUP_URL}" ]; then
             echo "DB_BACKUP_URL secret is not configured" >&2; exit 1
+          fi
+          if [ -z "${BACKUP_PASSPHRASE}" ]; then
+            echo "BACKUP_PASSPHRASE secret is not configured — refusing to produce an unencrypted dump on a public repo" >&2; exit 1
           fi
           stamp=$(date -u +%Y%m%d-%H%M)
           pg_dump "${DB_BACKUP_URL}" \
             --format=custom --no-owner --no-privileges \
             --file="skoolos-${stamp}.dump"
           gzip -9 "skoolos-${stamp}.dump"
-          ls -lh skoolos-*.dump.gz
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "${BACKUP_PASSPHRASE}" \
+            --output "skoolos-${stamp}.dump.gz.gpg" "skoolos-${stamp}.dump.gz"
+          rm -f "skoolos-${stamp}.dump.gz"
+          ls -lh skoolos-*.gpg
           echo "STAMP=${stamp}" >> "$GITHUB_ENV"
 
       - name: Offsite upload (S3), when configured
@@ -66,15 +85,15 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${BUCKET:-}" ]; then
-            echo "No S3 bucket configured — keeping the artifact copy only."
+            echo "No S3 bucket configured — keeping the encrypted artifact copy only."
             exit 0
           fi
-          aws s3 cp "skoolos-${STAMP}.dump.gz" "s3://${BUCKET}/nightly/skoolos-${STAMP}.dump.gz"
+          aws s3 cp "skoolos-${STAMP}.dump.gz.gpg" "s3://${BUCKET}/nightly/skoolos-${STAMP}.dump.gz.gpg"
 
-      - name: Keep as private artifact (30 days)
+      - name: Keep encrypted copy as artifact (30 days)
         uses: actions/upload-artifact@v4
         with:
           name: db-backup-${{ env.STAMP }}
-          path: skoolos-*.dump.gz
+          path: skoolos-*.dump.gz.gpg
           retention-days: 30
           if-no-files-found: error

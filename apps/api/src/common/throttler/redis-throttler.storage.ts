@@ -45,8 +45,18 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
       this.redis = client;
     } else {
       const url = loadEnv().REDIS_URL;
+      // enableOfflineQueue:false is load-bearing (LIBRARY-TRAPS #8): without
+      // it, a Redis outage makes every request on every route queue commands
+      // through connect-timeout cycles — seconds of stall API-wide, because
+      // this guard is global. With it, commands reject instantly while
+      // disconnected and the catch above fails open with no added latency.
       this.redis = url
-        ? new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1, connectTimeout: 2000 })
+        ? new Redis(url, {
+            lazyConnect: true,
+            maxRetriesPerRequest: 1,
+            connectTimeout: 2000,
+            enableOfflineQueue: false,
+          })
         : null;
     }
   }
@@ -67,9 +77,10 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
       // INCR + PTTL in one round trip; set the window only when the key is new
       // (PTTL < 0) so an attacker's stream of requests cannot keep renewing it.
       const replies = await this.redis.multi().incr(k).pttl(k).exec();
-      if (!replies) return failOpen;
+      if (!replies || replies[0][0] || replies[1][0]) return failOpen;
       const totalHits = Number(replies[0][1]);
       let pttl = Number(replies[1][1]);
+      if (!Number.isFinite(totalHits) || !Number.isFinite(pttl)) return failOpen;
       if (pttl < 0) {
         await this.redis.pexpire(k, ttl);
         pttl = ttl;

@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import type { MarketingConfig, MarketingLead } from '@skoolos/db';
 import { MailService } from '../../common/mail/mail.service';
+import { runInBackground } from '../../common/notifications/run-in-background';
 import { CreateLeadDto, PublicMarketingConfig, UpdateMarketingConfigDto } from './marketing.dto';
 
 /**
@@ -51,8 +52,13 @@ export class MarketingService {
       },
     });
     // Notification is best-effort: the lead is already stored either way.
+    // runInBackground, not a bare void — on Vercel a floating promise can be
+    // frozen the moment the response returns, silently losing the send.
     const config = await this.getConfigRow();
-    void this.mail.sendLeadNotification(config.contactEmail, lead);
+    runInBackground(
+      () => this.mail.sendLeadNotification(config.contactEmail, lead),
+      () => undefined,
+    );
     return { ok: true };
   }
 

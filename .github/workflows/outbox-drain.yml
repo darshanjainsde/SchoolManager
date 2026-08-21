@@ -15,12 +15,20 @@
 # that is fine here — the guarantee we need is "minutes, not tomorrow".
 # Remove this workflow once the project moves to Vercel Pro and a native
 # `*/5` cron replaces it (checkpoint-1 item).
+#
+# Two caveats that live in the RUNBOOK too:
+# - Scheduled workflows run from the DEFAULT branch only — inert until this
+#   file is on main — and GitHub pauses schedules after 60 days of repo
+#   inactivity (Actions shows "This scheduled workflow is disabled").
+# - The minute offset (3,13,…,53) is deliberate: the outbox drain has no
+#   row-claiming, so this must never fire at the same minute as the API's
+#   own 02:00 UTC Vercel cron — simultaneous drains would double-send.
 
 name: Drain notification outbox
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '3-59/10 * * * *'
   workflow_dispatch: {}
 
 permissions: {}

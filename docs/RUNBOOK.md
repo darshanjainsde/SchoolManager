@@ -8,13 +8,21 @@ honest — when an incident teaches you something, write it in the same day.
 
 ## Part 1 · One-time setup (the launch-gate switches)
 
+> **Merge to `main` first.** GitHub runs scheduled workflows from the
+> DEFAULT branch only — until the launch-gate work is merged, the backup and
+> outbox-drain workflows do not exist as far as the scheduler is concerned.
+> After merging, run each once by hand (Actions → workflow → Run workflow)
+> and watch it go green. GitHub also pauses schedules after ~60 days of repo
+> inactivity — if a schedule seems dead, look for the "This scheduled
+> workflow is disabled" banner on the workflow page.
+
 Do these once, before school #1. Code for all of them is already in `main`
 once the launch-gate branch lands; each needs an account-side switch:
 
 | # | Gate | Where | What to do |
 |---|------|-------|------------|
 | 2 | Real email | ESP + DNS | Create a Resend (or SES) account → add sending domain `mail.sckools.com` → set the DKIM/SPF/Return-Path DNS records it gives you → copy the SMTP credentials into Vercel (`skoolos-api` env): `SMTP_HOST`, `SMTP_PORT=465`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM="Sckools <no-reply@mail.sckools.com>"`. MailService is transport-agnostic — env only, no deploy needed beyond the env change. Send a test invite to yourself and check Gmail's "show original" for `dkim=pass spf=pass`. |
-| 3 | Backups | Supabase + GitHub | Supabase dashboard → Database → enable **PITR**. GitHub repo → Settings → Secrets → add `DB_BACKUP_URL` (the SESSION pooler string, port 5432 — the transaction pooler breaks pg_dump). Optionally add the `BACKUP_S3_*` secrets for a true offsite copy. Then run the **Restore drill** below once. |
+| 3 | Backups | Supabase + GitHub | Supabase dashboard → Database → enable **PITR**. GitHub repo → Settings → Secrets → add `DB_BACKUP_URL` (the SESSION pooler string, port 5432 — the transaction pooler breaks pg_dump) **and `BACKUP_PASSPHRASE`** (long random string — keep a copy in your password manager; the repo is public, so every dump is gpg-encrypted with it before upload and is unreadable without it). Optionally add the `BACKUP_S3_*` secrets for a true offsite copy. Then run the **Restore drill** below once. |
 | 4 | Alerts | Sentry + UptimeRobot | Create a Sentry project (Node) → copy the DSN into Vercel env `SENTRY_DSN` on BOTH `skoolos-api` and `skoolos-web`. Create two UptimeRobot monitors: `https://api.sckools.com/ready` and the school's homepage, alerting your phone/email at 2-minute intervals. |
 | 5 | Rate limits | — | Nothing to do — ships with the code (`REDIS_URL` already set). Verify below. |
 | 6 | Fast outbox | GitHub | Repo → Settings → Secrets → add `CRON_SECRET` (same value as the Vercel env). The `outbox-drain` workflow then runs every 10 minutes. Verify: Actions tab shows green runs; `SELECT count(*) FROM "NotificationOutbox" WHERE "sentAt" IS NULL` stays near zero. |
@@ -65,7 +73,9 @@ Half a day of work when the school's data arrives clean. Order matters.
 
 ### "Parents didn't get the push / got it a day late"
 - **Check**: GitHub → Actions → `Drain notification outbox` — green in the
-  last 10 min? `NotificationOutbox` unsent count. Expo push receipts in logs.
+  last 10 min? Watch for the "This scheduled workflow is disabled" banner
+  (GitHub pauses schedules after ~60 days of repo inactivity — re-enable
+  with one click). `NotificationOutbox` unsent count. Expo push receipts in logs.
 - **Action**: If the workflow is red: check `CRON_SECRET` matches Vercel.
   Run it manually (workflow_dispatch). If Expo errors: the device token may
   be stale — the next app open refreshes it.
@@ -107,9 +117,10 @@ Half a day of work when the school's data arrives clean. Order matters.
 
 ### Restore drill (do once at setup, then after any schema epoch)
 1. Nightly backup artifact (or S3 object) → download the latest
-   `skoolos-*.dump.gz`.
+   `skoolos-*.dump.gz.gpg`.
 2. Create a THROWAWAY Postgres (local Docker or a scratch Supabase project):
-   `createdb restore_drill && gunzip -c skoolos-….dump.gz | pg_restore -d restore_drill --no-owner`
+   `createdb restore_drill && gpg -d skoolos-….dump.gz.gpg | gunzip | pg_restore -d restore_drill --no-owner`
+   (gpg asks for `BACKUP_PASSPHRASE`)
 3. Sanity queries: counts on `School`, `Student`, `User`, `AttendanceRecord`
    match production's same-day counts (±the day's writes).
 4. Time it. Write the number here: restore takes ≈ ____ minutes.

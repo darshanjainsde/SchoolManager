@@ -86,7 +86,9 @@ const norm = (s) => String(s ?? '').trim();
 const key = (s) => norm(s).toLowerCase().replace(/[\s_-]+/g, '');
 
 // ── load + validate the file ────────────────────────────────────────────────
-const raw = parseCsv(readFileSync(file, 'utf8'));
+// Excel's "CSV UTF-8" option prepends a BOM, which would corrupt the first
+// header into "﻿admission_no" and fail the required-column check.
+const raw = parseCsv(readFileSync(file, 'utf8').replace(/^﻿/, ''));
 if (raw.length < 2) {
   console.error('The file has no data rows.');
   process.exit(1);
@@ -132,7 +134,7 @@ if (problems.length) {
 
 // ── API helpers ─────────────────────────────────────────────────────────────
 let token = '';
-async function call(method, path, body) {
+async function rawCall(method, path, body) {
   const res = await fetch(API + path, {
     method,
     headers: {
@@ -152,38 +154,58 @@ async function call(method, path, body) {
   }
   return json;
 }
+async function signIn() {
+  const r = await rawCall('POST', '/auth/login', { identifier: email, password });
+  token = r.accessToken;
+}
+/** A 600-row commit outlives the ~15-minute access token — on the first 401,
+ *  sign in again and retry the call once, so the run never dies mid-school. */
+async function call(method, path, body) {
+  try {
+    return await rawCall(method, path, body);
+  } catch (e) {
+    if (e.status !== 401 || path === '/auth/login') throw e;
+    await signIn();
+    return rawCall(method, path, body);
+  }
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── run ─────────────────────────────────────────────────────────────────────
-const login = await call('POST', '/auth/login', { identifier: email, password });
-token = login.accessToken;
+await signIn();
 console.log(`✓ Signed in to ${host} as ${email}`);
 
 const [sections, existing] = await Promise.all([
   call('GET', '/manage/classes'),
   call('GET', '/manage/students'),
 ]);
+// Only the COMPOSITE "grade name + section name" is indexed. A bare section
+// name ("A") exists in every grade — matching it would silently drop a child
+// into an arbitrary grade's section, which is worse than stopping.
 const sectionByName = new Map();
 for (const s of sections) {
   const grade = s.grade?.name ?? '';
   sectionByName.set(key(`${grade} ${s.name}`), s.id);
-  sectionByName.set(key(s.name), s.id);
 }
-const existingAdmission = new Set(
-  (Array.isArray(existing) ? existing : (existing?.items ?? [])).map((s) => s.admissionNo),
-);
+const existingRows = Array.isArray(existing) ? existing : (existing?.items ?? []);
+const existingByAdmission = new Map(existingRows.map((s) => [s.admissionNo, s]));
 
-const plan = { create: [], skip: [], missingSection: new Map() };
+const plan = { create: [], skip: [], reinvite: [], missingSection: new Map() };
 for (const s of students) {
-  if (existingAdmission.has(s.admissionNo)) {
-    plan.skip.push(s);
+  const already = existingByAdmission.get(s.admissionNo);
+  if (already) {
+    // Re-run recovery: a previous run may have created the student but died
+    // before (or failed at) the login/invite step. If this row has an email
+    // and the existing student has NO login yet, finish the job.
+    if (s.email && !already.userId) plan.reinvite.push({ ...s, id: already.id });
+    else plan.skip.push(s);
     continue;
   }
   let classSectionId;
   const wanted = key(`${s.klass} ${s.section}`);
   if (wanted) {
-    classSectionId = sectionByName.get(wanted) ?? sectionByName.get(key(s.klass));
+    classSectionId = sectionByName.get(wanted);
     if (!classSectionId) {
       const label = `${s.klass}${s.section ? ' ' + s.section : ''}`;
       plan.missingSection.set(label, (plan.missingSection.get(label) ?? 0) + 1);
@@ -195,7 +217,8 @@ for (const s of students) {
 
 console.log(`\nFile: ${students.length} students`);
 console.log(`  will create: ${plan.create.length}`);
-console.log(`  already exist (same admission_no), skipped: ${plan.skip.length}`);
+console.log(`  exist without a login — will create login + invite: ${plan.reinvite.length}`);
+console.log(`  already exist with a login, skipped: ${plan.skip.length}`);
 if (plan.missingSection.size) {
   console.log(`  BLOCKED — these class sections do not exist yet:`);
   for (const [label, n] of plan.missingSection) console.log(`    "${label}" (${n} students)`);
@@ -210,6 +233,19 @@ if (!args.commit) {
 
 const results = [];
 let n = 0;
+for (const s of plan.reinvite) {
+  n++;
+  const label = `${s.admissionNo} ${s.firstName} ${s.lastName}`;
+  try {
+    const r = await call('POST', `/manage/students/${s.id}/login`, { email: s.email });
+    results.push({ ...s, ok: true, invite: { emailSent: r.emailSent === true, loginName: r.loginName ?? null } });
+    console.log(`  [reinvite] ${r.emailSent ? '✓' : '⚠ INVITE EMAIL FAILED'} ${label}`);
+  } catch (e) {
+    results.push({ ...s, ok: false, error: e.message });
+    console.log(`  [reinvite] ✕ ${label} — ${e.message}`);
+  }
+  await sleep(750);
+}
 for (const s of plan.create) {
   n++;
   const label = `${s.admissionNo} ${s.firstName} ${s.lastName}`;

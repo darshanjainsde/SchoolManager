@@ -45,6 +45,14 @@ export function resetSentryLite(): void {
   cached = undefined;
 }
 
+function safeString(value: unknown): string {
+  try {
+    return String(value);
+  } catch {
+    return '[unstringifiable error]';
+  }
+}
+
 const FRAME_RE = /^\s*at\s+(?:(.+?)\s+\()?(?:(.+?):(\d+):(\d+)|([^)]+))\)?\s*$/;
 
 function frames(stack: string | undefined) {
@@ -71,9 +79,19 @@ function frames(stack: string | undefined) {
  * no latency to the caller, no-ops without a DSN.
  */
 export function captureError(err: unknown, context: Record<string, string | number | boolean> = {}): void {
+  try {
+    captureErrorInner(err, context);
+  } catch {
+    // The reporter runs inside exception filters and catch blocks — a
+    // pathological error object (throwing toString, non-string name) must
+    // never turn "report the 500" into "hang the response".
+  }
+}
+
+function captureErrorInner(err: unknown, context: Record<string, string | number | boolean>): void {
   const ep = endpoint();
   if (!ep) return;
-  const e = err instanceof Error ? err : new Error(String(err));
+  const e = err instanceof Error ? err : new Error(safeString(err));
   const event = {
     event_id: randomUUID().replace(/-/g, ''),
     timestamp: new Date().toISOString(),
@@ -84,9 +102,9 @@ export function captureError(err: unknown, context: Record<string, string | numb
     exception: {
       values: [
         {
-          type: e.name.slice(0, 100),
-          value: e.message.slice(0, 800),
-          stacktrace: frames(e.stack),
+          type: safeString(e.name).slice(0, 100),
+          value: safeString(e.message).slice(0, 800),
+          stacktrace: frames(typeof e.stack === 'string' ? e.stack : undefined),
         },
       ],
     },

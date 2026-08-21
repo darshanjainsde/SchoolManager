@@ -69,9 +69,11 @@ export class MailService {
       this.logger.error(`Mail to ${to} failed: ${(e as Error).message}`);
       // Launch-gate #2/#4: a transport failure must be VISIBLE — a school
       // half-invited by a silent mail outage looks identical to a finished
-      // one. Recipient privacy: only the mail domain travels, never the
-      // address.
-      captureError(e, { kind: 'mail', domain: to.split('@')[1] ?? 'unknown', subject: subject.slice(0, 60) });
+      // one. PII discipline: only the recipient's mail DOMAIN travels — the
+      // subject must not, because composed subjects embed student names
+      // ("Absence notice: <name>"), and a morning outage would otherwise
+      // hand a third-party processor a list of named absent minors.
+      captureError(e, { kind: 'mail', domain: to.split('@')[1] ?? 'unknown' });
       return false;
     }
   }
@@ -82,12 +84,15 @@ export class MailService {
   ): Promise<boolean> {
     const who = lead.name ?? 'Someone';
     const subject = `New Sckools lead: ${who}${lead.school ? ` — ${lead.school}` : ''}`;
+    // Every value here is typed by an anonymous visitor on the public form —
+    // it MUST go through escapeHtml before landing in the owner's inbox as
+    // markup, like every other interpolation in this file.
     const lines = [
-      `Name: ${lead.name ?? '—'}`,
-      `Phone: ${lead.phone}`,
-      `School: ${lead.school ?? '—'}`,
-      `Interested in: ${lead.interest ?? '—'}`,
-      `Source: ${lead.source}`,
+      `Name: ${escapeHtml(lead.name ?? '—')}`,
+      `Phone: ${escapeHtml(lead.phone)}`,
+      `School: ${escapeHtml(lead.school ?? '—')}`,
+      `Interested in: ${escapeHtml(lead.interest ?? '—')}`,
+      `Source: ${escapeHtml(lead.source)}`,
     ];
     const text = `New callback request from sckools.com\n\n${lines.join('\n')}\n\nOpen the owner console to follow up.`;
     const html = `
@@ -112,7 +117,7 @@ export class MailService {
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
         <h2 style="color:#134e4a;margin:0 0 12px">Reset your password</h2>
-        <p style="color:#334155;line-height:1.6">Someone requested a password reset for your <b>${schoolName}</b> account.</p>
+        <p style="color:#334155;line-height:1.6">Someone requested a password reset for your <b>${escapeHtml(schoolName)}</b> account.</p>
         <p style="margin:24px 0">
           <a href="${resetUrl}" style="background:#0d9488;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold;display:inline-block">
             Set a new password
