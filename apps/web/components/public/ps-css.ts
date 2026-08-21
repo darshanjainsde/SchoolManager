@@ -122,6 +122,15 @@ export const PS_CSS = `
   .ps-gesture-draw .reveal.in { clip-path: inset(0 0 0 0); }
   .ps-motion-off .ps-gesture-draw .reveal, .ps-gesture-draw.ps-motion-off .reveal {
     clip-path: none; transition: none; }
+  /* SLIDE: sections enter from the side (distance scales with the volume knob). */
+  .ps-gesture-slide .reveal { transform: translateX(calc(-44px * var(--motion) - 6px)); }
+  .ps-gesture-slide .reveal.in { transform: none; }
+  /* ZOOM: sections scale up into place. */
+  .ps-gesture-zoom .reveal { transform: scale(calc(1 - 0.12 * var(--motion))); }
+  .ps-gesture-zoom .reveal.in { transform: none; }
+  /* Animation=Off snaps both to their resting state (RISE already does via --motion 0). */
+  .ps-motion-off .ps-gesture-slide .reveal, .ps-motion-off .ps-gesture-zoom .reveal {
+    transform: none; transition: none; }
 
   /* ── Background texture ──────────────────────────────────────────────────
      Drawn from the school's own --ps1 at low alpha, so a texture can never
@@ -425,6 +434,8 @@ export const PS_CSS = `
     .ps-underline path { stroke-dashoffset: 0; }
     .ps-flip-inner { transition: none; }
     .ps-gesture-draw .reveal { clip-path: none; transition: none; }
+    /* These out-specify the .reveal reset above, so re-state their end state. */
+    .ps-gesture-slide .reveal, .ps-gesture-zoom .reveal { transform: none; transition: none; }
     .ps-accent-mark::after { transition: none; transform: scaleX(1); }
     .ps-menu-card, .ps-menu-row { animation: none; }
     .ps-menu-row, .ps-menu-row-arrow { transition: none; }
@@ -501,6 +512,14 @@ export const PS_CSS = `
     clip-path: inset(0 100% 0 0);
     transition: clip-path .85s cubic-bezier(.2,.7,.2,1); }
   .ps-root .ps-sg-draw .reveal.in { clip-path: inset(0 0 0 0); }
+  .ps-root .ps-sg-slide .reveal { opacity: 0; clip-path: none;
+    transform: translateX(calc(-44px * var(--motion) - 6px));
+    transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .ps-root .ps-sg-slide .reveal.in { opacity: 1; transform: none; }
+  .ps-root .ps-sg-zoom .reveal { opacity: 0; clip-path: none;
+    transform: scale(calc(1 - 0.12 * var(--motion)));
+    transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .ps-root .ps-sg-zoom .reveal.in { opacity: 1; transform: none; }
 
   /* ── Stats variants ── */
   .ps-v-stats-strip .ps-statcard { background: transparent; border: 0; box-shadow: none;
@@ -677,7 +696,8 @@ export const PS_CSS = `
      Same contract as everything above them: reduced-motion and Animation=Off
      collapse to the END state, never to an invisible half-state. */
   @media (prefers-reduced-motion: reduce) {
-    .ps-root .ps-sg-rise .reveal, .ps-root .ps-sg-fade .reveal, .ps-root .ps-sg-draw .reveal {
+    .ps-root .ps-sg-rise .reveal, .ps-root .ps-sg-fade .reveal, .ps-root .ps-sg-draw .reveal,
+    .ps-root .ps-sg-slide .reveal, .ps-root .ps-sg-zoom .reveal {
       opacity: 1; transform: none; clip-path: none; transition: none; }
     /* Two-class specificity so these beat the .ps-menuanim-* longhands that
        come later in the sheet — the shipped single-class rule did not. */
@@ -691,7 +711,8 @@ export const PS_CSS = `
     .ps-bar-fill { transition: none; width: var(--ps-bar-w, 75%); }
   }
   .ps-motion-off .ps-sg-rise .reveal, .ps-motion-off .ps-sg-fade .reveal,
-  .ps-motion-off .ps-sg-draw .reveal { opacity: 1; transform: none; clip-path: none; transition: none; }
+  .ps-motion-off .ps-sg-draw .reveal, .ps-motion-off .ps-sg-slide .reveal,
+  .ps-motion-off .ps-sg-zoom .reveal { opacity: 1; transform: none; clip-path: none; transition: none; }
   /* Menu open animations: the shipped '.ps-motion-off .ps-menu-card' is beaten
      by the later equal-specificity .ps-menuanim-* longhands, so silence them
      with a three-class selector that wins. */

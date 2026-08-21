@@ -25,10 +25,12 @@ export interface StyleOption<T extends string> {
  * switch away from a school that asked for stillness: NONE still silences the
  * whole page, whichever gesture is chosen.
  */
-export type MotionGesture = 'RISE' | 'FADE' | 'DRAW';
+export type MotionGesture = 'RISE' | 'FADE' | 'DRAW' | 'SLIDE' | 'ZOOM';
 export const MOTION_GESTURES: StyleOption<MotionGesture>[] = [
-  { value: 'RISE', label: 'Rise', hint: 'Sections lift into place from just below. The current default.' },
-  { value: 'FADE', label: 'Fade', hint: 'Sections appear without moving — the calmest of the three.' },
+  { value: 'RISE', label: 'Rise & fade', hint: 'Sections lift and fade into place from just below. The current default.' },
+  { value: 'SLIDE', label: 'Slide in', hint: 'Sections slide in from the side as they arrive.' },
+  { value: 'ZOOM', label: 'Zoom', hint: 'Sections scale up into place — punchy, pairs well with a lively motion level.' },
+  { value: 'FADE', label: 'Fade', hint: 'Sections appear without moving — the calmest of all.' },
   { value: 'DRAW', label: 'Draw', hint: 'Sections are uncovered left to right, like ink crossing the page.' },
 ];
 
@@ -40,9 +42,20 @@ export const BACKGROUND_TEXTURES: StyleOption<BackgroundTexture>[] = [
   { value: 'PAPER', label: 'Paper', hint: 'A soft mottled wash, closest to printed stock.' },
 ];
 
-/** RISE and NONE are the base stylesheet; only the others need a class. */
+/** RISE is the base stylesheet (the shipped .reveal); only the others need a class. */
 export function motionGestureClass(gesture: string | null | undefined): string {
-  return gesture === 'FADE' ? 'ps-gesture-fade' : gesture === 'DRAW' ? 'ps-gesture-draw' : '';
+  switch (gesture) {
+    case 'FADE':
+      return 'ps-gesture-fade';
+    case 'DRAW':
+      return 'ps-gesture-draw';
+    case 'SLIDE':
+      return 'ps-gesture-slide';
+    case 'ZOOM':
+      return 'ps-gesture-zoom';
+    default:
+      return '';
+  }
 }
 
 export function backgroundTextureClass(texture: string | null | undefined): string {

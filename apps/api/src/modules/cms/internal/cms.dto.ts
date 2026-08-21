@@ -57,7 +57,7 @@ export class UpdateProfileDto {
   @IsOptional() @IsIn(['LINK', 'OUTLINE', 'SOLID']) navLoginStyle?: string;
   @IsOptional() @IsIn(['SOFT', 'EDITORIAL', 'CRISP']) sectionShape?: string;
   /** WHAT a section does as it arrives; animationLevel stays the volume. */
-  @IsOptional() @IsIn(['RISE', 'FADE', 'DRAW']) motionGesture?: string;
+  @IsOptional() @IsIn(['RISE', 'FADE', 'DRAW', 'SLIDE', 'ZOOM']) motionGesture?: string;
   @IsOptional() @IsIn(['NONE', 'GRID', 'DOTS', 'PAPER']) backgroundTexture?: string;
   /**
    * The school's menu arrangement. Shape is validated on the WEB side by

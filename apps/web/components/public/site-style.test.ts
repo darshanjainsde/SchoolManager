@@ -21,8 +21,8 @@ import { SECTION_SHAPES } from './section-shape';
  * shipping a column must repaint nobody.
  */
 describe('motion is a gesture, not a volume knob', () => {
-  it('offers the three gestures a section can make', () => {
-    expect(MOTION_GESTURES.map((g) => g.value)).toEqual(['RISE', 'FADE', 'DRAW']);
+  it('offers the gestures a section can make, RISE first', () => {
+    expect(MOTION_GESTURES.map((g) => g.value)).toEqual(['RISE', 'SLIDE', 'ZOOM', 'FADE', 'DRAW']);
   });
 
   it('adds no class for RISE — that is the reveal every site already does', () => {
@@ -33,6 +33,8 @@ describe('motion is a gesture, not a volume knob', () => {
   it('names a class for the gestures that change something', () => {
     expect(motionGestureClass('FADE')).toBe('ps-gesture-fade');
     expect(motionGestureClass('DRAW')).toBe('ps-gesture-draw');
+    expect(motionGestureClass('SLIDE')).toBe('ps-gesture-slide');
+    expect(motionGestureClass('ZOOM')).toBe('ps-gesture-zoom');
   });
 
   it('is a separate axis from animationLevel, which still silences everything', () => {

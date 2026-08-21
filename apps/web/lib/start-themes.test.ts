@@ -16,7 +16,7 @@ const ALLOWED = {
   heroHeight: ['FULL', 'COMPACT'],
   headlineAccent: ['DRAW', 'MARKER', 'GROW', 'NONE'],
   sectionShape: ['SOFT', 'EDITORIAL', 'CRISP'],
-  motionGesture: ['RISE', 'FADE', 'DRAW'],
+  motionGesture: ['RISE', 'FADE', 'DRAW', 'SLIDE', 'ZOOM'],
   backgroundTexture: ['NONE', 'GRID', 'DOTS', 'PAPER'],
   scrollFeel: ['CLASSIC', 'GLIDE', 'SNAP', 'DECK', 'HORIZONTAL'],
   navStyle: ['CLASSIC', 'CENTER', 'PILL', 'STRIP', 'GHOST'],

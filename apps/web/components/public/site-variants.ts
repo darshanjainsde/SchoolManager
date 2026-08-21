@@ -171,7 +171,9 @@ export function sectionLayoutClass(key: SectionKey, layout: string | null | unde
 }
 
 /** A one-band override of the page-wide motion gesture. DEFAULT → no class. */
-export type SectionGesture = 'DEFAULT' | 'RISE' | 'FADE' | 'DRAW';
+export type SectionGesture = 'DEFAULT' | 'RISE' | 'FADE' | 'DRAW' | 'SLIDE' | 'ZOOM';
+/** The gestures a per-section override may hold — mirrors motionGesture + DEFAULT. */
+export const SECTION_GESTURES = ['DEFAULT', 'RISE', 'SLIDE', 'ZOOM', 'FADE', 'DRAW'] as const;
 export function sectionGestureClass(gesture: string | null | undefined): string {
   switch (gesture) {
     case 'RISE':
@@ -180,6 +182,10 @@ export function sectionGestureClass(gesture: string | null | undefined): string 
       return 'ps-sg-fade';
     case 'DRAW':
       return 'ps-sg-draw';
+    case 'SLIDE':
+      return 'ps-sg-slide';
+    case 'ZOOM':
+      return 'ps-sg-zoom';
     default:
       return '';
   }
@@ -197,7 +203,7 @@ export function normalizeSectionVariants(raw: unknown): SectionVariants {
     if (typeof layout === 'string' && SECTION_VARIANT_DEFS[key].layouts.some((l) => l.value === layout)) {
       entry.layout = layout;
     }
-    if (typeof gesture === 'string' && ['DEFAULT', 'RISE', 'FADE', 'DRAW'].includes(gesture)) {
+    if (typeof gesture === 'string' && (SECTION_GESTURES as readonly string[]).includes(gesture)) {
       entry.gesture = gesture;
     }
     if (Object.keys(entry).length) out[key] = entry;

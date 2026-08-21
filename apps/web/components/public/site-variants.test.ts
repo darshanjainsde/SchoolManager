@@ -60,6 +60,8 @@ describe('defaults emit no class', () => {
     expect(sectionGestureClass('DEFAULT')).toBe('');
     expect(sectionGestureClass(undefined)).toBe('');
     expect(sectionGestureClass('DRAW')).toBe('ps-sg-draw');
+    expect(sectionGestureClass('SLIDE')).toBe('ps-sg-slide');
+    expect(sectionGestureClass('ZOOM')).toBe('ps-sg-zoom');
   });
 
   it('footer: null config is COLUMNS on paper with no classes', () => {
