@@ -126,3 +126,22 @@ describe('RedisThrottlerStorage', () => {
     await storage.onModuleDestroy();
   });
 });
+
+/**
+ * REGRESSION — the staging outage of 2026-08-22: an @Injectable() constructor
+ * parameter without an injection token makes Nest try to resolve its emitted
+ * design type (`Object`), and one unresolvable provider aborts the ENTIRE app
+ * bootstrap — every route 500s. Direct `new` in unit tests can never catch
+ * that; only DI construction does. This spec builds the module through Nest
+ * exactly like production bootstrap.
+ */
+describe('RedisThrottlerModule (DI construction)', () => {
+  it('compiles through the Nest injector and provides the storage', async () => {
+    const { Test } = await import('@nestjs/testing');
+    const { RedisThrottlerModule } = await import('./redis-throttler.module');
+    const ref = await Test.createTestingModule({ imports: [RedisThrottlerModule] }).compile();
+    const storage = ref.get(RedisThrottlerStorage);
+    expect(storage).toBeInstanceOf(RedisThrottlerStorage);
+    await ref.close();
+  });
+});

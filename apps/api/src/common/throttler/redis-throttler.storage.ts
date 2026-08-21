@@ -1,8 +1,16 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import type { ThrottlerStorage } from '@nestjs/throttler';
 import type { ThrottlerStorageRecord } from '@nestjs/throttler/dist/throttler-storage-record.interface';
 import Redis from 'ioredis';
 import { loadEnv } from '@skoolos/config';
+
+/** Test seam: no provider binds this token in production, so the constructor
+ *  falls through to the env-built client. A BARE optional parameter is not
+ *  enough — @Injectable() makes Nest try to inject its emitted design type
+ *  (`Object`), and an unresolvable parameter aborts the WHOLE app bootstrap.
+ *  That exact failure took the staging API down; the token + @Optional() is
+ *  the load-bearing part of this file, not a nicety. */
+export const REDIS_THROTTLER_CLIENT = Symbol('REDIS_THROTTLER_CLIENT');
 
 /**
  * Launch-gate #5: rate limits that really limit.
@@ -32,7 +40,7 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
   private readonly redis: Redis | null;
 
   /** Pass a client for tests; pass null for an explicit no-op storage. */
-  constructor(client?: Redis | null) {
+  constructor(@Optional() @Inject(REDIS_THROTTLER_CLIENT) client?: Redis | null) {
     if (client !== undefined) {
       this.redis = client;
     } else {
