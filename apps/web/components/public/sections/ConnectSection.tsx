@@ -347,7 +347,7 @@ export default function ConnectSection({
                   <input
                     value={name}
                     onChange={(ev) => setName(ev.target.value)}
-                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 font-normal"
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 font-normal text-slate-800"
                     autoComplete="name"
                   />
                 </label>
@@ -357,7 +357,7 @@ export default function ConnectSection({
                     type="email"
                     value={email}
                     onChange={(ev) => setEmail(ev.target.value)}
-                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 font-normal"
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 font-normal text-slate-800"
                     autoComplete="email"
                   />
                 </label>
@@ -366,7 +366,7 @@ export default function ConnectSection({
                   <input
                     value={phone}
                     onChange={(ev) => setPhone(ev.target.value)}
-                    className="mt-1 w-full rounded-xl border border-black/10 px-3 py-2 font-normal"
+                    className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 font-normal text-slate-800"
                     autoComplete="tel"
                   />
                 </label>
@@ -382,7 +382,7 @@ export default function ConnectSection({
                 max={20}
                 value={quantity}
                 onChange={(ev) => setQuantity(Math.max(1, Math.min(20, Number(ev.target.value) || 1)))}
-                className="mt-1 w-24 rounded-xl border border-black/10 px-3 py-2 font-normal"
+                className="mt-1 w-24 rounded-xl border border-black/10 bg-white px-3 py-2 font-normal text-slate-800"
               />
             </label>
             )}

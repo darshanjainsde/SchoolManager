@@ -10,7 +10,11 @@
  * one closes the string and the compiler reads the rest of the CSS as JS.
  */
 export const PS_CSS = `
-  .ps-root { font-family: 'Inter', sans-serif; background: var(--paper); color: #43514a; overflow-x: hidden; min-height: 100vh; }
+  /* color-scheme: a school site is single-theme light by design, and without
+     this the BROWSER paints every unstyled form control (inputs, selects,
+     number spinners, date pickers, scrollbars) in the visitor's OS dark theme
+     — near-black boxes in the middle of a cream page. */
+  .ps-root { font-family: 'Inter', sans-serif; background: var(--paper); color: #43514a; overflow-x: hidden; min-height: 100vh; color-scheme: light; }
   .ps-head { font-family: var(--font-head); color: var(--ink); letter-spacing: -.01em; }
   /* This stylesheet loads after Tailwind, so .ps-head's ink color silently beat
      Tailwind's .text-white on dark sections (invisible headings/names on the
