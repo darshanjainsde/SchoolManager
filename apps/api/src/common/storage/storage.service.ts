@@ -44,14 +44,33 @@ export class StorageService {
   ): Promise<UploadResult> {
     const safe = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
     const key = `${prefix}/${randomUUID()}-${safe}`.replace(/^\/+/, '');
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.env.S3_BUCKET,
-        Key: key,
-        Body: buffer,
-        ContentType: contentType,
-      }),
-    );
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.env.S3_BUCKET,
+          Key: key,
+          Body: buffer,
+          ContentType: contentType,
+        }),
+      );
+    } catch (err) {
+      // Log the effective (non-secret) target so a storage failure names the
+      // exact endpoint/bucket the request went to — an HTTP 410 or a non-XML
+      // body here means the S3/Supabase endpoint is wrong, gone, or paused,
+      // which is config, not code. Access keys are never logged.
+      const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+      // eslint-disable-next-line no-console
+      console.error('[storage.upload] PutObject failed', {
+        endpoint: this.env.S3_ENDPOINT,
+        bucket: this.env.S3_BUCKET,
+        region: this.env.S3_REGION,
+        forcePathStyle: this.env.S3_FORCE_PATH_STYLE,
+        key,
+        httpStatus: e?.$metadata?.httpStatusCode,
+        name: e?.name,
+      });
+      throw err;
+    }
     return { key, url: this.publicUrl(key) };
   }
 

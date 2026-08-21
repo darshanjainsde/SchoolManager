@@ -35,18 +35,28 @@ export class MediaService {
         file.mimetype,
       );
     } catch (err) {
-      const e = err as { name?: string; message?: string; Code?: string; $metadata?: unknown };
+      const e = err as {
+        name?: string;
+        message?: string;
+        Code?: string;
+        code?: string;
+        $metadata?: { httpStatusCode?: number };
+      };
+      const status = e?.$metadata?.httpStatusCode;
       // eslint-disable-next-line no-console
       console.error('[media.upload] storage failed', {
         schoolId,
         kind,
         name: e?.name,
-        code: e?.Code,
+        code: e?.Code ?? e?.code,
+        httpStatus: status,
         message: e?.message,
-        meta: e?.$metadata,
       });
       this.logger.error(`storage.upload failed for ${schoolId}/${kind}: ${e?.name} ${e?.message}`);
-      throw new ServiceUnavailableException(`Image storage failed (${e?.Code ?? e?.name ?? 'error'})`);
+      // Prefer the HTTP status (e.g. "HTTP 410" = endpoint gone/misconfigured);
+      // fall back to the error code/name.
+      const detail = status ? `HTTP ${status}` : (e?.Code ?? e?.code ?? e?.name ?? 'error');
+      throw new ServiceUnavailableException(`Image storage failed (${detail})`);
     }
 
     try {
