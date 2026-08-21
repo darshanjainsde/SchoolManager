@@ -37,6 +37,9 @@ describe('defaults emit no class', () => {
     expect(scrollFeelClass('DECK')).toBe('ps-scroll-deck');
     expect(scrollFeelClass('GLIDE')).toBe('ps-scroll-glide');
     expect(scrollFeelClass('HORIZONTAL')).toBe('ps-scroll-horizontal');
+    expect(scrollFeelClass('ZOOM')).toBe('ps-scroll-zoom');
+    expect(scrollFeelClass('REVEAL')).toBe('ps-scroll-reveal');
+    expect(scrollFeelClass('TILT')).toBe('ps-scroll-tilt');
   });
 
   it('nav menu animation: FADE is silent', () => {
@@ -62,6 +65,8 @@ describe('defaults emit no class', () => {
     expect(sectionGestureClass('DRAW')).toBe('ps-sg-draw');
     expect(sectionGestureClass('SLIDE')).toBe('ps-sg-slide');
     expect(sectionGestureClass('ZOOM')).toBe('ps-sg-zoom');
+    expect(sectionGestureClass('CURTAIN')).toBe('ps-sg-curtain');
+    expect(sectionGestureClass('FLIP')).toBe('ps-sg-flip');
   });
 
   it('footer: null config is COLUMNS on paper with no classes', () => {

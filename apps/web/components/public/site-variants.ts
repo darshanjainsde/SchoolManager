@@ -18,10 +18,25 @@ import type { StyleOption } from './site-style';
    gesture and texture. Distinct from motionGesture (what one section does as
    it arrives) and from animationLevel (the volume knob, which still silences
    everything at NONE). */
-export type ScrollFeel = 'CLASSIC' | 'GLIDE' | 'SNAP' | 'DECK' | 'HORIZONTAL';
+export type ScrollFeel = 'CLASSIC' | 'GLIDE' | 'SNAP' | 'DECK' | 'HORIZONTAL' | 'ZOOM' | 'REVEAL' | 'TILT';
 export const SCROLL_FEELS: StyleOption<ScrollFeel>[] = [
   { value: 'CLASSIC', label: 'Classic', hint: 'Sections scroll normally, one after another — today’s behaviour.' },
   { value: 'GLIDE', label: 'Glide', hint: 'Weighted, inertial scrolling. The page eases to a stop — a premium feel.' },
+  {
+    value: 'ZOOM',
+    label: 'Zoom-through',
+    hint: 'Sections scale up as they enter and ease back as they leave, like moving through them. Tied to scroll, not a one-off.',
+  },
+  {
+    value: 'REVEAL',
+    label: 'Reveal',
+    hint: 'Each section is uncovered by a wipe as you scroll it into view — continuous, driven by scroll position.',
+  },
+  {
+    value: 'TILT',
+    label: 'Tilt deck',
+    hint: 'Sections tip in 3D perspective as they pass through the viewport — the boldest, most eye-catching feel.',
+  },
   { value: 'SNAP', label: 'Snap', hint: 'Each section clicks gently into place as you scroll.' },
   { value: 'DECK', label: 'Deck', hint: 'Sections stack over one another like a deck of cards.' },
   {
@@ -44,6 +59,15 @@ export function scrollFeelClass(v: string | null | undefined): string {
     // desktop + motion only); a small effect adds wheel-to-sideways on top.
     case 'HORIZONTAL':
       return 'ps-scroll-horizontal';
+    // ZOOM / REVEAL / TILT: scroll-driven band effects via CSS view() timelines
+    // — no JS, and browsers without scroll-timeline support just render the
+    // bands statically (a safe no-op).
+    case 'ZOOM':
+      return 'ps-scroll-zoom';
+    case 'REVEAL':
+      return 'ps-scroll-reveal';
+    case 'TILT':
+      return 'ps-scroll-tilt';
     default:
       return '';
   }
@@ -171,9 +195,9 @@ export function sectionLayoutClass(key: SectionKey, layout: string | null | unde
 }
 
 /** A one-band override of the page-wide motion gesture. DEFAULT → no class. */
-export type SectionGesture = 'DEFAULT' | 'RISE' | 'FADE' | 'DRAW' | 'SLIDE' | 'ZOOM';
+export type SectionGesture = 'DEFAULT' | 'RISE' | 'FADE' | 'DRAW' | 'SLIDE' | 'ZOOM' | 'CURTAIN' | 'FLIP';
 /** The gestures a per-section override may hold — mirrors motionGesture + DEFAULT. */
-export const SECTION_GESTURES = ['DEFAULT', 'RISE', 'SLIDE', 'ZOOM', 'FADE', 'DRAW'] as const;
+export const SECTION_GESTURES = ['DEFAULT', 'RISE', 'SLIDE', 'ZOOM', 'DRAW', 'CURTAIN', 'FLIP', 'FADE'] as const;
 export function sectionGestureClass(gesture: string | null | undefined): string {
   switch (gesture) {
     case 'RISE':
@@ -186,6 +210,10 @@ export function sectionGestureClass(gesture: string | null | undefined): string 
       return 'ps-sg-slide';
     case 'ZOOM':
       return 'ps-sg-zoom';
+    case 'CURTAIN':
+      return 'ps-sg-curtain';
+    case 'FLIP':
+      return 'ps-sg-flip';
     default:
       return '';
   }

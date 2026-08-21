@@ -25,13 +25,15 @@ export interface StyleOption<T extends string> {
  * switch away from a school that asked for stillness: NONE still silences the
  * whole page, whichever gesture is chosen.
  */
-export type MotionGesture = 'RISE' | 'FADE' | 'DRAW' | 'SLIDE' | 'ZOOM';
+export type MotionGesture = 'RISE' | 'FADE' | 'DRAW' | 'SLIDE' | 'ZOOM' | 'CURTAIN' | 'FLIP';
 export const MOTION_GESTURES: StyleOption<MotionGesture>[] = [
   { value: 'RISE', label: 'Rise & fade', hint: 'Sections lift and fade into place from just below. The current default.' },
   { value: 'SLIDE', label: 'Slide in', hint: 'Sections slide in from the side as they arrive.' },
   { value: 'ZOOM', label: 'Zoom', hint: 'Sections scale up into place — punchy, pairs well with a lively motion level.' },
+  { value: 'DRAW', label: 'Wipe', hint: 'Sections are uncovered left to right, like ink crossing the page.' },
+  { value: 'CURTAIN', label: 'Curtain', hint: 'Sections unveil top to bottom, like a curtain lifting.' },
+  { value: 'FLIP', label: 'Flip', hint: 'Sections tip up into place on a 3D hinge — the boldest of the set.' },
   { value: 'FADE', label: 'Fade', hint: 'Sections appear without moving — the calmest of all.' },
-  { value: 'DRAW', label: 'Draw', hint: 'Sections are uncovered left to right, like ink crossing the page.' },
 ];
 
 export type BackgroundTexture = 'NONE' | 'GRID' | 'DOTS' | 'PAPER';
@@ -53,6 +55,10 @@ export function motionGestureClass(gesture: string | null | undefined): string {
       return 'ps-gesture-slide';
     case 'ZOOM':
       return 'ps-gesture-zoom';
+    case 'CURTAIN':
+      return 'ps-gesture-curtain';
+    case 'FLIP':
+      return 'ps-gesture-flip';
     default:
       return '';
   }

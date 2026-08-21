@@ -15,7 +15,7 @@
  * that a test reaching into a component module drags `next/font` with it.
  */
 export interface SectionShape {
-  value: 'SOFT' | 'EDITORIAL' | 'CRISP' | 'PANELS';
+  value: 'SOFT' | 'EDITORIAL' | 'CRISP' | 'PANELS' | 'SLANT' | 'NOTCH' | 'WAVE';
   label: string;
   /** What CHANGES, in words an admin can choose between — not how it feels. */
   hint: string;
@@ -42,6 +42,21 @@ export const SECTION_SHAPES: SectionShape[] = [
     label: 'Panels',
     hint: 'Every section becomes its own wide rounded panel floating on a tinted page — the whole page reshapes, not just the cards inside it.',
   },
+  {
+    value: 'SLANT',
+    label: 'Slant',
+    hint: 'Panels with diagonally-cut tops on a tinted page — the sections meet at angled edges instead of flat lines.',
+  },
+  {
+    value: 'NOTCH',
+    label: 'Notch',
+    hint: 'Panels with a chevron notch cut into the top edge — a precise, architectural detail between sections.',
+  },
+  {
+    value: 'WAVE',
+    label: 'Wave',
+    hint: 'Panels with a soft wavy top edge on a tinted page — friendly and organic, good for younger schools.',
+  },
 ];
 
 /**
@@ -57,6 +72,12 @@ export function sectionShapeClass(shape: string | null | undefined): string {
       return 'ps-shape-crisp';
     case 'PANELS':
       return 'ps-shape-panels';
+    case 'SLANT':
+      return 'ps-shape-panels ps-edge-slant';
+    case 'NOTCH':
+      return 'ps-shape-panels ps-edge-notch';
+    case 'WAVE':
+      return 'ps-shape-panels ps-edge-wave';
     default:
       return '';
   }

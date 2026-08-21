@@ -128,9 +128,21 @@ export const PS_CSS = `
   /* ZOOM: sections scale up into place. */
   .ps-gesture-zoom .reveal { transform: scale(calc(1 - 0.12 * var(--motion))); }
   .ps-gesture-zoom .reveal.in { transform: none; }
-  /* Animation=Off snaps both to their resting state (RISE already does via --motion 0). */
-  .ps-motion-off .ps-gesture-slide .reveal, .ps-motion-off .ps-gesture-zoom .reveal {
+  /* CURTAIN: uncovers top to bottom. */
+  .ps-gesture-curtain .reveal { opacity: 1; transform: none;
+    clip-path: inset(0 0 100% 0);
+    transition: clip-path .8s cubic-bezier(.4,0,.1,1); }
+  .ps-gesture-curtain .reveal.in { clip-path: inset(0 0 0 0); }
+  /* FLIP: tips up on a 3D hinge (travel scales with the volume knob). */
+  .ps-gesture-flip .reveal { opacity: 0; transform-origin: top center;
+    transform: perspective(900px) rotateX(calc(-18deg * var(--motion)));
+    transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .ps-gesture-flip .reveal.in { opacity: 1; transform: none; }
+  /* Animation=Off snaps them all to their resting state (RISE already does via --motion 0). */
+  .ps-motion-off .ps-gesture-slide .reveal, .ps-motion-off .ps-gesture-zoom .reveal,
+  .ps-motion-off .ps-gesture-flip .reveal {
     transform: none; transition: none; }
+  .ps-motion-off .ps-gesture-curtain .reveal { clip-path: none; transition: none; }
 
   /* ── Background texture ──────────────────────────────────────────────────
      Drawn from the school's own --ps1 at low alpha, so a texture can never
@@ -243,6 +255,18 @@ export const PS_CSS = `
   }
   .ps-shape-panels > section:last-of-type,
   .ps-shape-panels > div[data-sec]:not([data-sec="hero"]):last-of-type { margin-bottom: 18px; }
+
+  /* Panel EDGES: shape only the TOP ~24px of each panel — which sits inside the
+     band's top padding — so the tinted ground shows through an angled, notched
+     or wavy cut and no content is ever clipped. clip-path supersedes the panel
+     radius/shadow, so these read as shaped section dividers rather than cards. */
+  .ps-edge-slant > section, .ps-edge-slant > div[data-sec]:not([data-sec="hero"]) {
+    clip-path: polygon(0 26px, 100% 0, 100% 100%, 0 100%); }
+  .ps-edge-notch > section, .ps-edge-notch > div[data-sec]:not([data-sec="hero"]) {
+    clip-path: polygon(0 0, 44% 0, 50% 22px, 56% 0, 100% 0, 100% 100%, 0 100%); }
+  .ps-edge-wave > section, .ps-edge-wave > div[data-sec]:not([data-sec="hero"]) {
+    clip-path: polygon(0 12px, 10% 5px, 20% 13px, 30% 20px, 40% 13px, 50% 5px, 60% 13px,
+      70% 20px, 80% 13px, 90% 5px, 100% 12px, 100% 100%, 0 100%); }
 
   /* ── Ambient header layer (/connect) ──
      Two blurred brand-coloured drifts. No canvas and no library: two divs and
@@ -453,8 +477,9 @@ export const PS_CSS = `
     .ps-underline path { stroke-dashoffset: 0; }
     .ps-flip-inner { transition: none; }
     .ps-gesture-draw .reveal { clip-path: none; transition: none; }
+    .ps-gesture-curtain .reveal { clip-path: none; transition: none; }
     /* These out-specify the .reveal reset above, so re-state their end state. */
-    .ps-gesture-slide .reveal, .ps-gesture-zoom .reveal { transform: none; transition: none; }
+    .ps-gesture-slide .reveal, .ps-gesture-zoom .reveal, .ps-gesture-flip .reveal { transform: none; transition: none; }
     .ps-accent-mark::after { transition: none; transform: scaleX(1); }
     .ps-menu-card, .ps-menu-row { animation: none; }
     .ps-menu-row, .ps-menu-row-arrow { transition: none; }
@@ -511,6 +536,39 @@ export const PS_CSS = `
     }
   }
 
+  /* ── Scroll-driven feels (Zoom-through / Reveal / Tilt) ──
+     Continuous, tied to each band's position in the viewport via CSS view()
+     scroll-timelines — no JS, GPU-driven by the browser. Guarded by @supports:
+     a browser without scroll-timelines simply skips the whole block and renders
+     the bands normally (never stuck mid-animation). Off for reduced-motion and
+     for Animation=Off. The hero is left alone. */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      @keyframes ps-sf-zoom {
+        0%   { transform: scale(.86); opacity: .5; }
+        50%  { transform: none;       opacity: 1; }
+        100% { transform: scale(.86); opacity: .5; }
+      }
+      @keyframes ps-sf-reveal {
+        from { clip-path: inset(0 100% 0 0); }
+        to   { clip-path: inset(0 0 0 0); }
+      }
+      @keyframes ps-sf-tilt {
+        0%   { transform: perspective(1100px) rotateX(11deg);  opacity: .55; }
+        50%  { transform: perspective(1100px) rotateX(0);      opacity: 1; }
+        100% { transform: perspective(1100px) rotateX(-11deg); opacity: .55; }
+      }
+      .ps-scroll-zoom:not(.ps-motion-off) [data-sec]:not([data-sec="hero"]) {
+        animation: ps-sf-zoom linear both; animation-timeline: view(); }
+      .ps-scroll-reveal:not(.ps-motion-off) [data-sec]:not([data-sec="hero"]) {
+        animation: ps-sf-reveal linear both; animation-timeline: view();
+        animation-range: entry 8% cover 34%; }
+      .ps-scroll-tilt:not(.ps-motion-off) [data-sec]:not([data-sec="hero"]) {
+        animation: ps-sf-tilt linear both; animation-timeline: view();
+        transform-style: preserve-3d; }
+    }
+  }
+
   /* ── Nav menu open animation (FADE = the shipped ps-menu-in, no class) ── */
   @keyframes ps-menu-in-slide { from { opacity: 0; transform: translateY(calc(-16px * var(--motion) - 2px)); } to { opacity: 1; transform: none; } }
   @keyframes ps-menu-in-scale { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
@@ -539,6 +597,14 @@ export const PS_CSS = `
     transform: scale(calc(1 - 0.12 * var(--motion)));
     transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
   .ps-root .ps-sg-zoom .reveal.in { opacity: 1; transform: none; }
+  .ps-root .ps-sg-curtain .reveal { opacity: 1; transform: none;
+    clip-path: inset(0 0 100% 0);
+    transition: clip-path .8s cubic-bezier(.4,0,.1,1); }
+  .ps-root .ps-sg-curtain .reveal.in { clip-path: inset(0 0 0 0); }
+  .ps-root .ps-sg-flip .reveal { opacity: 0; clip-path: none; transform-origin: top center;
+    transform: perspective(900px) rotateX(calc(-18deg * var(--motion)));
+    transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .ps-root .ps-sg-flip .reveal.in { opacity: 1; transform: none; }
 
   /* ── Stats variants ── */
   .ps-v-stats-strip .ps-statcard { background: transparent; border: 0; box-shadow: none;
@@ -716,7 +782,8 @@ export const PS_CSS = `
      collapse to the END state, never to an invisible half-state. */
   @media (prefers-reduced-motion: reduce) {
     .ps-root .ps-sg-rise .reveal, .ps-root .ps-sg-fade .reveal, .ps-root .ps-sg-draw .reveal,
-    .ps-root .ps-sg-slide .reveal, .ps-root .ps-sg-zoom .reveal {
+    .ps-root .ps-sg-slide .reveal, .ps-root .ps-sg-zoom .reveal,
+    .ps-root .ps-sg-curtain .reveal, .ps-root .ps-sg-flip .reveal {
       opacity: 1; transform: none; clip-path: none; transition: none; }
     /* Two-class specificity so these beat the .ps-menuanim-* longhands that
        come later in the sheet — the shipped single-class rule did not. */
@@ -731,7 +798,8 @@ export const PS_CSS = `
   }
   .ps-motion-off .ps-sg-rise .reveal, .ps-motion-off .ps-sg-fade .reveal,
   .ps-motion-off .ps-sg-draw .reveal, .ps-motion-off .ps-sg-slide .reveal,
-  .ps-motion-off .ps-sg-zoom .reveal { opacity: 1; transform: none; clip-path: none; transition: none; }
+  .ps-motion-off .ps-sg-zoom .reveal, .ps-motion-off .ps-sg-curtain .reveal,
+  .ps-motion-off .ps-sg-flip .reveal { opacity: 1; transform: none; clip-path: none; transition: none; }
   /* Menu open animations: the shipped '.ps-motion-off .ps-menu-card' is beaten
      by the later equal-specificity .ps-menuanim-* longhands, so silence them
      with a three-class selector that wins. */

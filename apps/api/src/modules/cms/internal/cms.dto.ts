@@ -55,9 +55,9 @@ export class UpdateProfileDto {
   @IsOptional() @IsIn(['DRAW', 'MARKER', 'GROW', 'NONE']) headlineAccent?: string;
   /** How every band below the fold is drawn. See SECTION_SHAPES on the web. */
   @IsOptional() @IsIn(['LINK', 'OUTLINE', 'SOLID']) navLoginStyle?: string;
-  @IsOptional() @IsIn(['SOFT', 'EDITORIAL', 'CRISP', 'PANELS']) sectionShape?: string;
+  @IsOptional() @IsIn(['SOFT', 'EDITORIAL', 'CRISP', 'PANELS', 'SLANT', 'NOTCH', 'WAVE']) sectionShape?: string;
   /** WHAT a section does as it arrives; animationLevel stays the volume. */
-  @IsOptional() @IsIn(['RISE', 'FADE', 'DRAW', 'SLIDE', 'ZOOM']) motionGesture?: string;
+  @IsOptional() @IsIn(['RISE', 'FADE', 'DRAW', 'SLIDE', 'ZOOM', 'CURTAIN', 'FLIP']) motionGesture?: string;
   @IsOptional() @IsIn(['NONE', 'GRID', 'DOTS', 'PAPER']) backgroundTexture?: string;
   /**
    * The school's menu arrangement. Shape is validated on the WEB side by
@@ -74,7 +74,7 @@ export class UpdateProfileDto {
   @IsOptional() @IsString() @Length(1, 40) navLoginLabel?: string;
   @IsOptional() @IsBoolean() navShowLogin?: boolean;
   /** ── Website-studio axes. Vocabulary mirrors apps/web site-variants.ts. ── */
-  @IsOptional() @IsIn(['CLASSIC', 'GLIDE', 'SNAP', 'DECK', 'HORIZONTAL']) scrollFeel?: string;
+  @IsOptional() @IsIn(['CLASSIC', 'GLIDE', 'SNAP', 'DECK', 'HORIZONTAL', 'ZOOM', 'REVEAL', 'TILT']) scrollFeel?: string;
   @IsOptional() @IsIn(['FADE', 'SLIDE', 'SCALE']) navDropdownAnim?: string;
   @IsOptional() @IsIn(['IMAGE', 'VIDEO']) heroMedia?: string;
   /** Direct mp4/webm URL; empty string clears it. */

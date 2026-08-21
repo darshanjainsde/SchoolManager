@@ -674,7 +674,7 @@ export default function StudioTab() {
             <div key={key} className="border-b border-slate-100 pb-2.5 pt-2.5 first:pt-0 last:border-0 last:pb-0">
               <div className="text-sm font-semibold text-slate-700">{def.label}</div>
               <div className="mt-1.5"><Chips options={def.layouts} value={variants[key]?.layout ?? def.layouts[0].value} onPick={(v) => setVariant(key, { layout: v })} /></div>
-              <div className="mt-1.5"><Chips options={[{ value: 'DEFAULT', label: 'Page default' }, { value: 'RISE', label: 'Rise' }, { value: 'SLIDE', label: 'Slide' }, { value: 'ZOOM', label: 'Zoom' }, { value: 'FADE', label: 'Fade' }, { value: 'DRAW', label: 'Draw' }]} value={variants[key]?.gesture ?? 'DEFAULT'} onPick={(v) => setVariant(key, { gesture: v })} /></div>
+              <div className="mt-1.5"><Chips options={[{ value: 'DEFAULT', label: 'Page default' }, { value: 'RISE', label: 'Rise' }, { value: 'SLIDE', label: 'Slide' }, { value: 'ZOOM', label: 'Zoom' }, { value: 'DRAW', label: 'Wipe' }, { value: 'CURTAIN', label: 'Curtain' }, { value: 'FLIP', label: 'Flip' }, { value: 'FADE', label: 'Fade' }]} value={variants[key]?.gesture ?? 'DEFAULT'} onPick={(v) => setVariant(key, { gesture: v })} /></div>
             </div>
           );
         })}

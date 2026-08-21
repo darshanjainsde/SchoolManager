@@ -22,7 +22,7 @@ import { SECTION_SHAPES } from './section-shape';
  */
 describe('motion is a gesture, not a volume knob', () => {
   it('offers the gestures a section can make, RISE first', () => {
-    expect(MOTION_GESTURES.map((g) => g.value)).toEqual(['RISE', 'SLIDE', 'ZOOM', 'FADE', 'DRAW']);
+    expect(MOTION_GESTURES.map((g) => g.value)).toEqual(['RISE', 'SLIDE', 'ZOOM', 'DRAW', 'CURTAIN', 'FLIP', 'FADE']);
   });
 
   it('adds no class for RISE — that is the reveal every site already does', () => {
@@ -35,6 +35,8 @@ describe('motion is a gesture, not a volume knob', () => {
     expect(motionGestureClass('DRAW')).toBe('ps-gesture-draw');
     expect(motionGestureClass('SLIDE')).toBe('ps-gesture-slide');
     expect(motionGestureClass('ZOOM')).toBe('ps-gesture-zoom');
+    expect(motionGestureClass('CURTAIN')).toBe('ps-gesture-curtain');
+    expect(motionGestureClass('FLIP')).toBe('ps-gesture-flip');
   });
 
   it('is a separate axis from animationLevel, which still silences everything', () => {

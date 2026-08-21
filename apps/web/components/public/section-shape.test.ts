@@ -16,13 +16,17 @@ import { SECTION_SHAPES, sectionShapeClass } from './section-shape';
  */
 describe('choosing a shape', () => {
   it('offers exactly the shapes the admin can pick', () => {
-    expect(SECTION_SHAPES.map((s) => s.value)).toEqual(['SOFT', 'EDITORIAL', 'CRISP', 'PANELS']);
+    expect(SECTION_SHAPES.map((s) => s.value)).toEqual(['SOFT', 'EDITORIAL', 'CRISP', 'PANELS', 'SLANT', 'NOTCH', 'WAVE']);
   });
 
   it('gives each one a root class the stylesheet can hang tokens off', () => {
     expect(sectionShapeClass('EDITORIAL')).toBe('ps-shape-editorial');
     expect(sectionShapeClass('CRISP')).toBe('ps-shape-crisp');
     expect(sectionShapeClass('PANELS')).toBe('ps-shape-panels');
+    // The edge shapes build on the Panels foundation, plus their edge modifier.
+    expect(sectionShapeClass('SLANT')).toBe('ps-shape-panels ps-edge-slant');
+    expect(sectionShapeClass('NOTCH')).toBe('ps-shape-panels ps-edge-notch');
+    expect(sectionShapeClass('WAVE')).toBe('ps-shape-panels ps-edge-wave');
   });
 
   it('adds no class for SOFT, because SOFT is what the base tokens already say', () => {
