@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SiteNav, { type NavFlags } from './SiteNav';
@@ -140,6 +140,23 @@ describe.each(['CLASSIC', 'PILL', 'CENTER', 'GHOST', 'STRIP'])('the %s bar', (na
 });
 
 describe('the mobile drawer', () => {
+  // The drawer only exists when links overflow the bar. jsdom does no layout,
+  // so force a narrow bar with wide links: the hamburger appears and the whole
+  // menu falls into the drawer — the tightest-screen case this feature targets.
+  let origClientWidth: PropertyDescriptor | undefined;
+  let origRect: typeof HTMLElement.prototype.getBoundingClientRect;
+  beforeEach(() => {
+    origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 10 });
+    origRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = () =>
+      ({ width: 200, height: 20, top: 0, left: 0, right: 200, bottom: 20, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  });
+  afterEach(() => {
+    if (origClientWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', origClientWidth);
+    HTMLElement.prototype.getBoundingClientRect = origRect;
+  });
+
   it('renders the groups as expandable sections rather than the old flat list', async () => {
     const user = userEvent.setup({ delay: null });
     renderNav('CLASSIC');

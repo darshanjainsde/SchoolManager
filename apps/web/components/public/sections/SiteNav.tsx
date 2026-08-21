@@ -1,11 +1,83 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { heroIsPhotoLayout } from './HeroSection';
 import { navModel, type NavNode } from './nav-model';
 import NavGroup from './NavGroup';
+
+// useLayoutEffect warns during SSR; a client component still renders on the
+// server, so fall back to useEffect there. The measure below only matters on
+// the client anyway.
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+/**
+ * Priority navigation: how many of the bar's links fit on one line right now.
+ * A hidden ghost row (rendered by the caller with these refs) holds ALL the
+ * links at full width so we can measure each; the visible row shows the first
+ * `visible` of them and the rest fall into the hamburger. Recomputes on resize
+ * and after web fonts load (which changes text widths). Returns Infinity until
+ * measured, so the first paint — and SSR — shows every link.
+ */
+function useNavOverflow(count: number): {
+  wrapRef: React.RefObject<HTMLElement | null>;
+  ghostRef: React.RefObject<HTMLDivElement | null>;
+  visible: number;
+} {
+  const wrapRef = useRef<HTMLElement | null>(null);
+  const ghostRef = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(Number.POSITIVE_INFINITY);
+
+  useIsoLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const ghost = ghostRef.current;
+    if (!wrap || !ghost) return;
+    const setFit = (fit: number) => setVisible((prev) => (prev === fit ? prev : fit));
+    const compute = () => {
+      const items = Array.from(ghost.children) as HTMLElement[];
+      const n = items.length;
+      const avail = wrap.clientWidth;
+      // Not laid out yet (0-width, SSR/jsdom, or a hidden ancestor): show every
+      // link rather than guess — the next measure corrects it before paint.
+      if (avail <= 1) {
+        setFit(n);
+        return;
+      }
+      const styles = getComputedStyle(ghost);
+      const gap = parseFloat(styles.columnGap || styles.gap || '') || 4;
+      const widths = items.map((el) => el.getBoundingClientRect().width);
+      const total = widths.reduce((a, b) => a + b, 0) + gap * Math.max(0, n - 1);
+      let fit = n;
+      if (total - avail > 0.5) {
+        let used = 0;
+        fit = 0;
+        for (let i = 0; i < n; i++) {
+          used += widths[i] + (i ? gap : 0);
+          if (used <= avail + 0.5) fit = i + 1;
+          else break;
+        }
+      }
+      setFit(fit);
+    };
+    compute();
+    let cancelled = false;
+    // ResizeObserver is absent in jsdom (tests) and old runtimes; the one-shot
+    // measure above still runs, so the bar is never left crashed or empty.
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(compute) : null;
+    ro?.observe(wrap);
+    const fonts = (document as unknown as { fonts?: { ready?: Promise<unknown> } }).fonts;
+    fonts?.ready?.then(() => {
+      if (!cancelled) compute();
+    });
+    return () => {
+      cancelled = true;
+      ro?.disconnect();
+    };
+  }, [count]);
+
+  return { wrapRef, ghostRef, visible };
+}
 
 // Mobile menu enter animation + reduced-motion handling. Scoped to this file
 // (rendered once, only from the branch that's actually active) rather than
@@ -166,10 +238,14 @@ function HamburgerButton({
   open,
   onClick,
   buttonRef,
+  responsive = true,
 }: {
   open: boolean;
   onClick: () => void;
   buttonRef: React.RefObject<HTMLButtonElement | null>;
+  /** true → only below lg (breakpoint bars); false → whenever the caller shows
+   * it (the priority bar shows it exactly when links overflow, at any width). */
+  responsive?: boolean;
 }) {
   return (
     <button
@@ -179,7 +255,7 @@ function HamburgerButton({
       aria-label={open ? 'Close menu' : 'Open menu'}
       aria-expanded={open}
       aria-controls="ps-mobile-menu"
-      className="ps-nav-link lg:hidden inline-flex h-11 w-11 flex-none items-center justify-center rounded-lg hover:bg-black/5 transition"
+      className={`ps-nav-link ${responsive ? 'lg:hidden ' : ''}inline-flex h-11 w-11 flex-none items-center justify-center rounded-lg hover:bg-black/5 transition`}
     >
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
         {open ? (
@@ -213,6 +289,7 @@ function MobileMenu({
   barCls,
   onClose,
   panelRef,
+  responsive = true,
 }: {
   data: PublicSiteData;
   nodes: NavNode[];
@@ -225,12 +302,15 @@ function MobileMenu({
   barCls: string;
   onClose: () => void;
   panelRef: React.RefObject<HTMLDivElement | null>;
+  /** Mirrors HamburgerButton: false lets the priority bar open the drawer at
+   * any width, not just below lg. */
+  responsive?: boolean;
 }) {
   return (
     <div
       id="ps-mobile-menu"
       ref={panelRef}
-      className={`ps-mmenu-panel lg:hidden absolute inset-x-0 top-full z-40 ${barCls} border-t border-black/5 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto`}
+      className={`ps-mmenu-panel ${responsive ? 'lg:hidden ' : ''}absolute inset-x-0 top-full z-40 ${barCls} border-t border-black/5 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto`}
     >
       <nav
         aria-label="Mobile"
@@ -270,6 +350,8 @@ export default function SiteNav({
   const profile = data.profile;
   const ghost = style === 'GHOST';
   const pill = style === 'PILL';
+  // CLASSIC/STRIP/GHOST use the priority row; CENTER/PILL keep their breakpoint.
+  const isPriorityBar = !pill && style !== 'CENTER';
 
   // The one model every bar below reads.
   const nodes = navModel({
@@ -338,13 +420,30 @@ export default function SiteNav({
   }, [mobileOpen]);
 
   const closeMobileMenu = () => setMobileOpen(false);
-  const mobileMenuScrim = mobileOpen && (
-    <div
-      className="ps-mmenu-scrim fixed inset-0 z-30 bg-black/30 lg:hidden"
-      aria-hidden="true"
-      onClick={closeMobileMenu}
-    />
-  );
+  const renderScrim = (responsive: boolean) =>
+    mobileOpen && (
+      <div
+        className={`ps-mmenu-scrim fixed inset-0 z-30 bg-black/30${responsive ? ' lg:hidden' : ''}`}
+        aria-hidden="true"
+        onClick={closeMobileMenu}
+      />
+    );
+
+  // Priority nav for the CLASSIC/STRIP/GHOST bar: measure how many links fit
+  // and overflow the rest into the hamburger. (CENTER's split-around-crest and
+  // PILL's hug-to-content bars keep their lg breakpoint — the refs below simply
+  // never attach in those branches, so the hook no-ops there.)
+  const overflow = useNavOverflow(nodes.length);
+  const shownCount = Math.min(overflow.visible, nodes.length);
+  const primaryNodes = nodes.slice(0, shownCount);
+  const overflowNodes = nodes.slice(shownCount);
+  const hasOverflow = isPriorityBar && overflowNodes.length > 0;
+
+  // If the bar widens until nothing overflows, close the drawer — otherwise a
+  // stale open state would keep body scroll locked behind an invisible panel.
+  useEffect(() => {
+    if (mobileOpen && isPriorityBar && !hasOverflow) setMobileOpen(false);
+  }, [mobileOpen, isPriorityBar, hasOverflow]);
 
   // Admin-picked bar colour. `onDark` flips link/name colours via ps-nav-ondark.
   const navColor = profile?.navColor ?? 'PAPER';
@@ -386,7 +485,7 @@ export default function SiteNav({
     return (
       <>
         <style>{MOBILE_MENU_CSS}</style>
-        {mobileMenuScrim}
+        {renderScrim(true)}
         <header
           id="ps-nav"
           className={`${
@@ -428,7 +527,7 @@ export default function SiteNav({
     return (
       <>
         <style>{MOBILE_MENU_CSS}</style>
-        {mobileMenuScrim}
+        {renderScrim(true)}
         <header
           id="ps-nav"
           className={`sticky top-0 z-50 transition-all duration-300 ${color.bar}${onDarkCls} backdrop-blur border-b border-black/5 [&.ps-nav-scrolled]:shadow-sm`}
@@ -477,7 +576,7 @@ export default function SiteNav({
   return (
     <>
       <style>{MOBILE_MENU_CSS}</style>
-      {mobileMenuScrim}
+      {renderScrim(false)}
       <header
         id="ps-nav"
         className={
@@ -487,25 +586,46 @@ export default function SiteNav({
         }
       >
         {strip}
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-2">
           <Logo data={data} />
-          <nav aria-label="Primary" className="hidden lg:flex items-center gap-1 text-sm text-slate-600">
-            <NavItems nodes={nodes} />
+          {/* Priority row: as many links as fit, measured against the ghost. */}
+          <nav
+            ref={overflow.wrapRef}
+            aria-label="Primary"
+            className="relative flex-1 min-w-0 overflow-hidden flex items-center gap-1 text-sm text-slate-600"
+          >
+            <div
+              ref={overflow.ghostRef}
+              aria-hidden="true"
+              className="absolute left-0 top-1/2 -translate-y-1/2 w-max flex items-center gap-1 whitespace-nowrap pointer-events-none"
+              style={{ visibility: 'hidden' }}
+            >
+              <NavItems nodes={nodes} />
+            </div>
+            <NavItems nodes={primaryNodes} />
           </nav>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-none">
             <NavActions data={data} enquireHref={enquireHref} ink={ink} />
-            <HamburgerButton open={mobileOpen} onClick={() => setMobileOpen((o) => !o)} buttonRef={menuButtonRef} />
+            {hasOverflow && (
+              <HamburgerButton
+                open={mobileOpen}
+                onClick={() => setMobileOpen((o) => !o)}
+                buttonRef={menuButtonRef}
+                responsive={false}
+              />
+            )}
           </div>
         </div>
-        {mobileOpen && (
+        {mobileOpen && hasOverflow && (
           <MobileMenu
             data={data}
-            nodes={nodes}
+            nodes={overflowNodes}
             enquireHref={enquireHref}
             ink={ink}
             barCls={`${color.bar}${onDarkCls}`}
             onClose={closeMobileMenu}
             panelRef={menuPanelRef}
+            responsive={false}
           />
         )}
       </header>
