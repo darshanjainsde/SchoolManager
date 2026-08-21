@@ -7,6 +7,12 @@ import { rgba } from '../site-utils';
 // Layouts that put text on top of a photo and therefore need images + overlay.
 const PHOTO_LAYOUTS = new Set(['FULL_BLEED', 'SPLIT_MOSAIC', 'SPLIT_EDITORIAL', 'COLLAGE', 'SLIDESHOW']);
 
+// A photo hero cycles at most this many images as a background carousel. The
+// top slots take priority, so a school can add anywhere from 1 to 10 images and
+// the hero stays calm — one still image, several a gentle rotation, more than
+// this the leading ones. Keeps a long album from becoming an endless slideshow.
+const HERO_SLIDES_MAX = 6;
+
 /** Ordered hero images; falls back to the legacy single heroUrl. */
 export function heroImagesOf(data: PublicSiteData): string[] {
   const imgs = data.homepage?.heroImages;
@@ -240,7 +246,7 @@ export function heroWantsVideo(data: PublicSiteData): boolean {
 }
 
 // ── Slideshow (crossfade + Ken Burns, motion-aware) ─────────────────────────
-function Slides({ images, motionOff }: { images: string[]; motionOff: boolean }) {
+function Slides({ images, motionOff, showDots = true }: { images: string[]; motionOff: boolean; showDots?: boolean }) {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     if (motionOff || images.length < 2) return;
@@ -258,7 +264,7 @@ function Slides({ images, motionOff }: { images: string[]; motionOff: boolean })
           aria-hidden="true"
         />
       ))}
-      {images.length > 1 && (
+      {showDots && images.length > 1 && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[3] flex gap-2">
           {images.map((_, i) => (
             <span
@@ -328,10 +334,15 @@ export default function HeroSection({
 
   // ── FULL_BLEED — photo fills the viewport behind the copy ──
   if (layout === 'FULL_BLEED' || layout === 'SLIDESHOW') {
-    const slideshow = layout === 'SLIDESHOW';
+    // A photo hero with more than one image now cycles them as a background
+    // carousel (crossfade + Ken Burns), whatever the layout — so the extra
+    // images a school uploads earn their place instead of sitting unused. One
+    // image stays a calm still; the top HERO_SLIDES_MAX take priority.
+    const slidesImages = images.slice(0, HERO_SLIDES_MAX);
+    const useSlides = layout === 'SLIDESHOW' || images.length >= 2;
     // The original PHOTO hero kept the illustrated cluster over a left-washed
-    // photo; that exact rendering survives as WASH + LEFT on a single image.
-    const legacyWash = !slideshow && ovStyle === 'WASH' && !center;
+    // photo; that exact rendering survives as WASH + LEFT on a SINGLE image.
+    const legacyWash = images.length < 2 && ovStyle === 'WASH' && !center;
     return (
       <section
         id="home"
@@ -340,8 +351,8 @@ export default function HeroSection({
         } flex items-center`}
       >
         <div className="absolute inset-0" aria-hidden="true">
-          {slideshow ? (
-            <Slides images={images} motionOff={motionOff} />
+          {useSlides ? (
+            <Slides images={slidesImages} motionOff={motionOff} />
           ) : heroUrl ? (
             <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${heroUrl}')` }} />
           ) : (
@@ -427,8 +438,13 @@ export default function HeroSection({
           </div>
           <div
             className="reveal relative overflow-hidden rounded-3xl ps-soft ps-tile min-h-[320px]"
-            style={{ backgroundImage: `url('${heroUrl}')` }}
+            style={images.length < 2 ? { backgroundImage: `url('${heroUrl}')` } : undefined}
           >
+            {/* Two or more images crossfade in the side panel (dots omitted —
+                the panel is a frame, not a gallery); one stays a still. */}
+            {images.length >= 2 && (
+              <Slides images={images.slice(0, HERO_SLIDES_MAX)} motionOff={motionOff} showDots={false} />
+            )}
             {heroWantsVideo(data) && !motionOff && (
               <HeroVideo url={data.profile!.heroVideoUrl as string} poster={heroUrl} />
             )}
