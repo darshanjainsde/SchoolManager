@@ -459,6 +459,27 @@ export const PS_CSS = `
     position: sticky; top: 0; background: var(--paper);
     box-shadow: 0 -18px 44px rgba(15,23,20,.14); }
   .ps-scroll-deck > #ps-nav, .ps-scroll-deck > header { position: sticky; }
+  /* Side-scroll: the home bands become full-viewport panels in a horizontal
+     track. Desktop + motion-allowed only — on phones and under reduced-motion
+     the track stays a normal column, so the page can never break there. Touch
+     keeps its native horizontal swipe; the wheel-to-sideways effect is layered
+     on top. Each band keeps its own vertical scroll for content over one screen. */
+  @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+    .ps-scroll-horizontal .ps-htrack {
+      display: flex; flex-wrap: nowrap; align-items: stretch;
+      height: 100vh; height: 100dvh;
+      overflow-x: auto; overflow-y: hidden;
+      scroll-snap-type: x mandatory;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none; -ms-overflow-style: none;
+    }
+    .ps-scroll-horizontal .ps-htrack::-webkit-scrollbar { width: 0; height: 0; }
+    .ps-scroll-horizontal .ps-htrack > * {
+      flex: 0 0 100vw; max-width: 100vw; height: 100%;
+      overflow-y: auto; overflow-x: hidden;
+      scroll-snap-align: start;
+    }
+  }
 
   /* ── Nav menu open animation (FADE = the shipped ps-menu-in, no class) ── */
   @keyframes ps-menu-in-slide { from { opacity: 0; transform: translateY(calc(-16px * var(--motion) - 2px)); } to { opacity: 1; transform: none; } }

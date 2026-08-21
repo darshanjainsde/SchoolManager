@@ -36,6 +36,7 @@ describe('defaults emit no class', () => {
     expect(scrollFeelClass('SNAP')).toBe('ps-scroll-snap');
     expect(scrollFeelClass('DECK')).toBe('ps-scroll-deck');
     expect(scrollFeelClass('GLIDE')).toBe('ps-scroll-glide');
+    expect(scrollFeelClass('HORIZONTAL')).toBe('ps-scroll-horizontal');
   });
 
   it('nav menu animation: FADE is silent', () => {

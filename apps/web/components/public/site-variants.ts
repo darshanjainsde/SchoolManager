@@ -18,12 +18,17 @@ import type { StyleOption } from './site-style';
    gesture and texture. Distinct from motionGesture (what one section does as
    it arrives) and from animationLevel (the volume knob, which still silences
    everything at NONE). */
-export type ScrollFeel = 'CLASSIC' | 'GLIDE' | 'SNAP' | 'DECK';
+export type ScrollFeel = 'CLASSIC' | 'GLIDE' | 'SNAP' | 'DECK' | 'HORIZONTAL';
 export const SCROLL_FEELS: StyleOption<ScrollFeel>[] = [
   { value: 'CLASSIC', label: 'Classic', hint: 'Sections scroll normally, one after another — today’s behaviour.' },
   { value: 'GLIDE', label: 'Glide', hint: 'Weighted, inertial scrolling. The page eases to a stop — a premium feel.' },
   { value: 'SNAP', label: 'Snap', hint: 'Each section clicks gently into place as you scroll.' },
   { value: 'DECK', label: 'Deck', hint: 'Sections stack over one another like a deck of cards.' },
+  {
+    value: 'HORIZONTAL',
+    label: 'Side-scroll',
+    hint: 'The homepage bands become full-screen panels you move through sideways. Reverts to a normal column on phones and for reduced-motion visitors.',
+  },
 ];
 export function scrollFeelClass(v: string | null | undefined): string {
   switch (v) {
@@ -35,6 +40,10 @@ export function scrollFeelClass(v: string | null | undefined): string {
     // so the effect hook can find its own switch without re-reading the data.
     case 'GLIDE':
       return 'ps-scroll-glide';
+    // HORIZONTAL: the class flips the home track to a horizontal panel row (CSS,
+    // desktop + motion only); a small effect adds wheel-to-sideways on top.
+    case 'HORIZONTAL':
+      return 'ps-scroll-horizontal';
     default:
       return '';
   }

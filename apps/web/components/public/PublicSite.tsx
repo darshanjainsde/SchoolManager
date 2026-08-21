@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
 import HeroSection, { heroImagesOf, heroIsPhotoLayout } from './sections/HeroSection';
@@ -41,6 +41,31 @@ interface Props {
 }
 
 
+/**
+ * Wraps the home bands in a horizontal-scroll track when side-scroll is on, and
+ * is a no-op fragment otherwise — so a school on any other scroll feel keeps the
+ * exact DOM it renders today (which matters: the Deck feel relies on the bands
+ * being direct children of the root).
+ */
+function HomeShell({
+  horizontal,
+  trackRef,
+  children,
+}: {
+  horizontal: boolean;
+  trackRef: React.RefObject<HTMLDivElement | null>;
+  children: React.ReactNode;
+}) {
+  return horizontal ? (
+    <div className="ps-htrack" ref={trackRef}>
+      {children}
+    </div>
+  ) : (
+    <>{children}</>
+  );
+}
+
+
 function parseStatValue(val: string): { numeric: boolean; num: number; suffix: string } {
   const clean = val.trim();
   const match = clean.match(/^(\d+(?:\.\d+)?)\s*([%+]?)$/);
@@ -70,6 +95,12 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
   const glideOn =
     (data.profile?.scrollFeel ?? 'CLASSIC') === 'GLIDE' &&
     (data.profile?.animationLevel ?? 'FULL') !== 'NONE';
+  // Side-scroll: the home bands become full-viewport panels the visitor moves
+  // through sideways. Structural (a wrapper) so the CSS can fall back to normal
+  // vertical flow on small screens and reduced-motion; the wheel translation is
+  // desktop-only and gated inside its own effect.
+  const horizontalOn = view === 'home' && (data.profile?.scrollFeel ?? 'CLASSIC') === 'HORIZONTAL';
+  const htrackRef = useRef<HTMLDivElement | null>(null);
   const statsLayout = sectionLayoutOf(variants, 'stats');
 
   const brandColor = data.profile?.brandColorPrimary ?? '#2f6b4f';
@@ -228,6 +259,40 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
     };
   }, [glideOn]);
 
+  // ── Scroll feel: HORIZONTAL ──
+  // Turn vertical wheel into sideways movement across the panels. Only on wide
+  // screens with motion allowed (the CSS reverts the panels to a normal column
+  // otherwise, and touch keeps its native horizontal swipe). At either end the
+  // wheel is released so the page can scroll past the track to the footer.
+  useEffect(() => {
+    if (!horizontalOn) return;
+    const track = htrackRef.current;
+    if (!track) return;
+    const wide = window.matchMedia('(min-width: 768px)');
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onWheel = (e: WheelEvent) => {
+      if (!wide.matches || reduce.matches) return;
+      if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      // A panel taller than the viewport keeps its own vertical scroll: only
+      // once it's at the top/bottom edge does the wheel move sideways.
+      let panel: HTMLElement | null = e.target as HTMLElement | null;
+      while (panel && panel.parentElement !== track) panel = panel.parentElement;
+      if (panel && panel.scrollHeight > panel.clientHeight + 1) {
+        const atTop = panel.scrollTop <= 0;
+        const atBottom = panel.scrollTop >= panel.scrollHeight - panel.clientHeight - 1;
+        if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) return;
+      }
+      const max = track.scrollWidth - track.clientWidth;
+      const atStart = track.scrollLeft <= 0;
+      const atEnd = track.scrollLeft >= max - 1;
+      if ((e.deltaY < 0 && atStart) || (e.deltaY > 0 && atEnd)) return;
+      e.preventDefault();
+      track.scrollLeft = Math.max(0, Math.min(max, track.scrollLeft + e.deltaY));
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
+  }, [horizontalOn]);
+
   // One definition of what a school looks like, shared with the blog's chrome.
   const themeRoot = themeRootProps(data);
 
@@ -349,7 +414,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
           )}
         </>
       ) : (
-        <>
+        <HomeShell horizontal={horizontalOn} trackRef={htrackRef}>
       {/* ── HERO (layout selected by the school admin) ── */}
       <div data-sec="hero">
         <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
@@ -550,7 +615,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
           schoolName={schoolName}
         />
       )}
-        </>
+        </HomeShell>
       )}
 
       {/* ── CUSTOM HTML BLOCK (operator escape hatch; sanitized on write) ── */}

@@ -72,7 +72,7 @@ export class UpdateProfileDto {
   @IsOptional() @IsString() @Length(1, 40) navLoginLabel?: string;
   @IsOptional() @IsBoolean() navShowLogin?: boolean;
   /** ── Website-studio axes. Vocabulary mirrors apps/web site-variants.ts. ── */
-  @IsOptional() @IsIn(['CLASSIC', 'GLIDE', 'SNAP', 'DECK']) scrollFeel?: string;
+  @IsOptional() @IsIn(['CLASSIC', 'GLIDE', 'SNAP', 'DECK', 'HORIZONTAL']) scrollFeel?: string;
   @IsOptional() @IsIn(['FADE', 'SLIDE', 'SCALE']) navDropdownAnim?: string;
   @IsOptional() @IsIn(['IMAGE', 'VIDEO']) heroMedia?: string;
   /** Direct mp4/webm URL; empty string clears it. */

@@ -17,7 +17,7 @@ const ALLOWED = {
   sectionShape: ['SOFT', 'EDITORIAL', 'CRISP'],
   motionGesture: ['RISE', 'FADE', 'DRAW'],
   backgroundTexture: ['NONE', 'GRID', 'DOTS', 'PAPER'],
-  scrollFeel: ['CLASSIC', 'GLIDE', 'SNAP', 'DECK'],
+  scrollFeel: ['CLASSIC', 'GLIDE', 'SNAP', 'DECK', 'HORIZONTAL'],
   navStyle: ['CLASSIC', 'CENTER', 'PILL', 'STRIP', 'GHOST'],
   navColor: ['PAPER', 'WHITE', 'DARK', 'BRAND'],
   navTextColor: ['AUTO', 'LIGHT', 'DARK'],
