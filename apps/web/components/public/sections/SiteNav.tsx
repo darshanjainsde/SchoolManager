@@ -179,7 +179,7 @@ function HamburgerButton({
       aria-label={open ? 'Close menu' : 'Open menu'}
       aria-expanded={open}
       aria-controls="ps-mobile-menu"
-      className="ps-nav-link md:hidden inline-flex h-11 w-11 flex-none items-center justify-center rounded-lg hover:bg-black/5 transition"
+      className="ps-nav-link lg:hidden inline-flex h-11 w-11 flex-none items-center justify-center rounded-lg hover:bg-black/5 transition"
     >
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
         {open ? (
@@ -230,7 +230,7 @@ function MobileMenu({
     <div
       id="ps-mobile-menu"
       ref={panelRef}
-      className={`ps-mmenu-panel md:hidden absolute inset-x-0 top-full z-40 ${barCls} border-t border-black/5 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto`}
+      className={`ps-mmenu-panel lg:hidden absolute inset-x-0 top-full z-40 ${barCls} border-t border-black/5 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto`}
     >
       <nav
         aria-label="Mobile"
@@ -340,7 +340,7 @@ export default function SiteNav({
   const closeMobileMenu = () => setMobileOpen(false);
   const mobileMenuScrim = mobileOpen && (
     <div
-      className="ps-mmenu-scrim fixed inset-0 z-30 bg-black/30 md:hidden"
+      className="ps-mmenu-scrim fixed inset-0 z-30 bg-black/30 lg:hidden"
       aria-hidden="true"
       onClick={closeMobileMenu}
     />
@@ -399,7 +399,7 @@ export default function SiteNav({
             className={`ps-pill-bar${onDarkCls} ${color.bar} w-fit max-w-full mx-auto px-5 h-14 flex flex-nowrap items-center gap-4 rounded-full backdrop-blur border border-black/5 shadow-lg transition-shadow`}
           >
             <Logo data={data} small />
-            <nav aria-label="Primary" className="hidden md:flex items-center gap-1 text-sm text-slate-600">
+            <nav aria-label="Primary" className="hidden lg:flex items-center gap-1 text-sm text-slate-600">
               <NavItems nodes={nodes} />
             </nav>
             <div className="flex items-center gap-1.5">
@@ -438,7 +438,7 @@ export default function SiteNav({
               there is no Home control to spend a slot on. */}
           <nav
             aria-label="Primary"
-            className="max-w-6xl mx-auto px-6 h-16 hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-sm text-slate-600"
+            className="max-w-6xl mx-auto px-6 h-16 hidden lg:grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-sm text-slate-600"
           >
             <span className="flex items-center justify-end gap-1">
               <NavItems nodes={nodes.slice(0, Math.ceil(nodes.length / 2))} />
@@ -449,7 +449,7 @@ export default function SiteNav({
               <span className="ml-2"><NavActions data={data} enquireHref={enquireHref} ink={ink} /></span>
             </span>
           </nav>
-          <div className="max-w-6xl mx-auto px-6 h-16 flex md:hidden items-center justify-between">
+          <div className="max-w-6xl mx-auto px-6 h-16 flex lg:hidden items-center justify-between">
             <Logo data={data} />
             <div className="flex items-center gap-1.5">
               <NavActions data={data} enquireHref={enquireHref} ink={ink} />
@@ -489,7 +489,7 @@ export default function SiteNav({
         {strip}
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <Logo data={data} />
-          <nav aria-label="Primary" className="hidden md:flex items-center gap-1 text-sm text-slate-600">
+          <nav aria-label="Primary" className="hidden lg:flex items-center gap-1 text-sm text-slate-600">
             <NavItems nodes={nodes} />
           </nav>
           <div className="flex items-center gap-1.5">

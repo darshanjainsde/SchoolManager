@@ -35,7 +35,7 @@ describe('start themes are all publish-safe', () => {
 
   it.each(START_THEMES)('$name uses only allowed enum values', (theme) => {
     for (const [key, allowed] of Object.entries(ALLOWED)) {
-      const v = (theme.config as Record<string, unknown>)[key];
+      const v = (theme.config as unknown as Record<string, unknown>)[key];
       expect(allowed as readonly string[], `${theme.name}.${key} = ${String(v)}`).toContain(v);
     }
     // Colours must be valid hex (the API's @IsHexColor).
