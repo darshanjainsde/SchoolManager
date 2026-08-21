@@ -15,13 +15,14 @@ import { SECTION_SHAPES, sectionShapeClass } from './section-shape';
  * template, because per-school templates do not survive at network scale.
  */
 describe('choosing a shape', () => {
-  it('offers exactly the three the admin can pick', () => {
-    expect(SECTION_SHAPES.map((s) => s.value)).toEqual(['SOFT', 'EDITORIAL', 'CRISP']);
+  it('offers exactly the shapes the admin can pick', () => {
+    expect(SECTION_SHAPES.map((s) => s.value)).toEqual(['SOFT', 'EDITORIAL', 'CRISP', 'PANELS']);
   });
 
   it('gives each one a root class the stylesheet can hang tokens off', () => {
     expect(sectionShapeClass('EDITORIAL')).toBe('ps-shape-editorial');
     expect(sectionShapeClass('CRISP')).toBe('ps-shape-crisp');
+    expect(sectionShapeClass('PANELS')).toBe('ps-shape-panels');
   });
 
   it('adds no class for SOFT, because SOFT is what the base tokens already say', () => {

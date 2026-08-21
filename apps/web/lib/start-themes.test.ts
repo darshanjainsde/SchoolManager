@@ -15,7 +15,7 @@ const ALLOWED = {
   heroOverlayStyle: ['WASH', 'TINT', 'DARK'],
   heroHeight: ['FULL', 'COMPACT'],
   headlineAccent: ['DRAW', 'MARKER', 'GROW', 'NONE'],
-  sectionShape: ['SOFT', 'EDITORIAL', 'CRISP'],
+  sectionShape: ['SOFT', 'EDITORIAL', 'CRISP', 'PANELS'],
   motionGesture: ['RISE', 'FADE', 'DRAW', 'SLIDE', 'ZOOM'],
   backgroundTexture: ['NONE', 'GRID', 'DOTS', 'PAPER'],
   scrollFeel: ['CLASSIC', 'GLIDE', 'SNAP', 'DECK', 'HORIZONTAL'],

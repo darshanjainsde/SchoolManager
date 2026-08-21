@@ -225,6 +225,25 @@ export const PS_CSS = `
     --ps-card-pad: 1rem;
     --ps-band-pad: 4rem; }
 
+  /* PANELS: the SECTION becomes the card. Every content band (not the hero,
+     not the footer/nav) lifts onto a paper panel with big rounded corners and
+     a soft shadow, floating on a lightly tinted page ground — so the whole
+     page reshapes, not just the tiles inside it. Inner cards keep the Soft
+     tokens. border-radius clips each band's own background to the rounded
+     corner; content keeps overflowing freely (no clip), so an overlapping
+     badge or a hover-lift is never cut. A band that carries its own colour
+     (events, hall of fame) simply becomes a coloured panel. */
+  .ps-shape-panels { background: color-mix(in srgb, var(--ink) 7%, var(--paper)); }
+  .ps-shape-panels > section,
+  .ps-shape-panels > div[data-sec]:not([data-sec="hero"]) {
+    background: var(--paper);
+    border-radius: 30px;
+    margin: 18px clamp(10px, 2vw, 22px) 0;
+    box-shadow: 0 26px 64px -36px rgba(20,30,25,.55);
+  }
+  .ps-shape-panels > section:last-of-type,
+  .ps-shape-panels > div[data-sec]:not([data-sec="hero"]):last-of-type { margin-bottom: 18px; }
+
   /* ── Ambient header layer (/connect) ──
      Two blurred brand-coloured drifts. No canvas and no library: two divs and
      one keyframe, scaled by the school's own --motion so a NONE school gets a

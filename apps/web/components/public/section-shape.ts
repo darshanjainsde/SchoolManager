@@ -15,7 +15,7 @@
  * that a test reaching into a component module drags `next/font` with it.
  */
 export interface SectionShape {
-  value: 'SOFT' | 'EDITORIAL' | 'CRISP';
+  value: 'SOFT' | 'EDITORIAL' | 'CRISP' | 'PANELS';
   label: string;
   /** What CHANGES, in words an admin can choose between — not how it feels. */
   hint: string;
@@ -37,6 +37,11 @@ export const SECTION_SHAPES: SectionShape[] = [
     label: 'Crisp',
     hint: 'Square-ish cards with a drawn border, no shadow, and tighter spacing.',
   },
+  {
+    value: 'PANELS',
+    label: 'Panels',
+    hint: 'Every section becomes its own wide rounded panel floating on a tinted page — the whole page reshapes, not just the cards inside it.',
+  },
 ];
 
 /**
@@ -50,6 +55,8 @@ export function sectionShapeClass(shape: string | null | undefined): string {
       return 'ps-shape-editorial';
     case 'CRISP':
       return 'ps-shape-crisp';
+    case 'PANELS':
+      return 'ps-shape-panels';
     default:
       return '';
   }

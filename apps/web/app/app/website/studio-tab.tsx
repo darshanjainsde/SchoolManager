@@ -636,8 +636,8 @@ export default function StudioTab() {
         </div>
       </Group>
 
-      {/* ── Ready-made looks ── */}
-      <Group id="looks" title="Ready-made looks" summary="Shape · motion · texture · accent in one click">
+      {/* ── Style presets ── */}
+      <Group id="looks" title="Style presets" summary="Sets shape, motion, texture & accent in one tap">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {STYLE_PRESETS.map((p) => {
             const on = (current.sectionShape ?? 'SOFT') === p.values.sectionShape && (current.motionGesture ?? 'RISE') === p.values.motionGesture
