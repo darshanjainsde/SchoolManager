@@ -780,6 +780,34 @@ export const PS_CSS = `
   @media (max-width: 640px) {
     .ps-v-admissions-tiles .ps-journey .grid { grid-template-columns: 1fr !important; }
   }
+  /* CARDS: no path — each step is a lifted card with a brand rule on top and an
+     oversized ghost step-number in its corner. The badge's ink/accent colours
+     are inline on the element, hence the !important overrides. */
+  .ps-v-admissions-cards .ps-jline { display: none; }
+  .ps-v-admissions-cards .ps-journey .grid { gap: 1.3rem; }
+  .ps-v-admissions-cards .ps-journey .grid > div { position: relative; }
+  .ps-v-admissions-cards .ps-jbadge { position: absolute; top: .55rem; right: 1rem; z-index: 1;
+    background: transparent !important; color: color-mix(in srgb, var(--ps1) 24%, transparent) !important;
+    box-shadow: none; border: 0; padding: 0; font-size: 3.2rem; font-weight: 800;
+    letter-spacing: -.04em; line-height: 1; }
+  .ps-v-admissions-cards .ps-jbody { margin-top: 0; position: relative; overflow: hidden;
+    padding: 1.5rem 1.25rem 1.35rem; border: 0; box-shadow: 0 20px 40px -26px rgba(17,20,28,.45); }
+  .ps-v-admissions-cards .ps-jbody::before { content: ""; position: absolute; top: 0; left: 0; right: 0;
+    height: 4px; background: linear-gradient(90deg, var(--ps1), var(--ps2)); }
+  /* BLOCKS: every step a brand-gradient panel with light text; the number badge
+     rides the top edge on a paper ring. Even steps reverse the gradient so the
+     row alternates without ever putting text on the light accent alone. */
+  .ps-v-admissions-blocks .ps-jline { display: none; }
+  .ps-v-admissions-blocks .ps-journey .grid { gap: 1.4rem; }
+  .ps-v-admissions-blocks .ps-journey .grid > div { position: relative; }
+  .ps-v-admissions-blocks .ps-jbadge { position: absolute; top: -12px; left: 14px; z-index: 2;
+    box-shadow: 0 0 0 4px var(--paper); }
+  .ps-v-admissions-blocks .ps-jbody { margin-top: 0; padding: 1.7rem 1.25rem 1.4rem; border: 0;
+    background: linear-gradient(135deg, var(--ps1), color-mix(in srgb, var(--ps1) 55%, var(--ps2))); }
+  .ps-v-admissions-blocks .ps-jbody h3 { color: #fff; }
+  .ps-v-admissions-blocks .ps-jbody p { color: rgba(255,255,255,.82); }
+  .ps-v-admissions-blocks .ps-journey .grid > div:nth-child(even) .ps-jbody {
+    background: linear-gradient(315deg, var(--ps1), color-mix(in srgb, var(--ps1) 55%, var(--ps2))); }
 
   /* ── Gallery variants ── */
   .ps-v-gallery-masonry .ps-gallery-grid { display: block; columns: 2; column-gap: 1rem; }
@@ -791,6 +819,21 @@ export const PS_CSS = `
   .ps-v-gallery-filmstrip .ps-gallery-grid { display: flex; overflow-x: auto; gap: 1rem;
     scroll-snap-type: x proximity; padding-bottom: .75rem; -webkit-overflow-scrolling: touch; }
   .ps-v-gallery-filmstrip .ps-gallery-grid > button { flex: 0 0 16rem; scroll-snap-align: start; }
+  /* MOSAIC: the first photo is the feature — a two-cell span both ways; the rest
+     keep the even grid and dense flow backfills any hole. */
+  .ps-v-gallery-mosaic .ps-gallery-grid { grid-auto-flow: dense; }
+  .ps-v-gallery-mosaic .ps-gallery-grid > button:first-child { grid-column: span 2; grid-row: span 2; }
+  .ps-v-gallery-mosaic .ps-gallery-grid > button:first-child img { height: 25rem; }
+  /* POLAROID: white print borders with a deep chin, pinned at alternating tilts;
+     hover straightens the print. Respect reduced motion by keeping tilts static. */
+  .ps-v-gallery-polaroid .ps-gallery-grid { gap: 1.5rem; }
+  .ps-v-gallery-polaroid .ps-gallery-grid > button { background: #fff; border: 0; border-radius: 4px;
+    padding: .55rem .55rem 2.1rem; box-shadow: 0 16px 32px -20px rgba(17,20,28,.5);
+    transform: rotate(-1.6deg); transition: transform .25s ease; }
+  .ps-v-gallery-polaroid .ps-gallery-grid > button:nth-child(even) { transform: rotate(1.4deg); }
+  .ps-v-gallery-polaroid .ps-gallery-grid > button:nth-child(3n) { transform: rotate(-.5deg); }
+  .ps-v-gallery-polaroid .ps-gallery-grid > button:hover { transform: rotate(0) scale(1.03); z-index: 2; }
+  .ps-v-gallery-polaroid .ps-gallery-grid > button img { border-radius: 2px; height: 10.5rem; }
 
   /* ── Staff LIST variant ── */
   .ps-v-staff-list .ps-staff-grid { grid-template-columns: minmax(0, 1fr) !important;
@@ -800,6 +843,19 @@ export const PS_CSS = `
   .ps-v-staff-list .ps-staffcard > div:first-child { margin: 0; height: 3.2rem; width: 3.2rem;
     font-size: 1.1rem; flex: none; }
   .ps-v-staff-list .ps-staffcard .ps-head { margin-top: 0; }
+  /* SPOTLIGHT: the first educator (usually the head) becomes a full-width
+     feature row; the rest keep the portrait grid beneath. */
+  .ps-v-staff-spotlight .ps-staff-grid > .ps-staffcard:first-child { grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 1.6rem; text-align: left;
+    padding: 1.6rem clamp(1.2rem, 4vw, 2.2rem); }
+  .ps-v-staff-spotlight .ps-staff-grid > .ps-staffcard:first-child > div:first-child {
+    margin: 0; height: 6.5rem; width: 6.5rem; font-size: 2.2rem; flex: none; }
+  .ps-v-staff-spotlight .ps-staff-grid > .ps-staffcard:first-child .ps-head {
+    margin-top: 0; font-size: 1.45rem; }
+  /* MINIMAL: no cards at all — ringed round portraits on the page itself. */
+  .ps-v-staff-minimal .ps-staffcard { background: transparent; border: 0; box-shadow: none; padding: .9rem .5rem; }
+  .ps-v-staff-minimal .ps-staffcard > div:first-child { height: 6.2rem; width: 6.2rem; font-size: 1.9rem;
+    box-shadow: 0 0 0 4px var(--paper), 0 0 0 6px color-mix(in srgb, var(--ps1) 35%, transparent); }
 
   /* ── Footer variants (FooterSection; COLUMNS on paper = shipped, no class) ── */
   .ps-footc-dark { background: color-mix(in srgb, var(--ink) 94%, #000); color: rgba(255,255,255,.72); }

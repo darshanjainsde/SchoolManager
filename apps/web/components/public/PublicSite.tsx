@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
 import HeroSection, { heroImagesOf, heroIsPhotoLayout } from './sections/HeroSection';
@@ -22,11 +22,13 @@ import FestiveLayer, { FestiveRibbon } from './sections/FestiveLayer';
 import PageBlocks from './sections/PageBlocks';
 import {
   buildCustomCss,
+  homeSectionsOf,
   normalizeFestiveTheme,
   normalizeSectionVariants,
   sectionGestureClass,
   sectionLayoutClass,
   sectionLayoutOf,
+  sectionOrderOf,
   type SectionKey,
 } from './site-variants';
 
@@ -93,6 +95,10 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
 
   // ── Website-studio config, normalized once ──
   const variants = normalizeSectionVariants(data.profile?.sectionVariants);
+  // Admin-built homepage sections + the band order both ride inside the same
+  // sectionVariants Json (reserved keys) — see site-variants.ts.
+  const homeSections = homeSectionsOf(data.profile?.sectionVariants);
+  const bandOrder = sectionOrderOf(data.profile?.sectionVariants, homeSections.map((s) => s.id));
   const fest = normalizeFestiveTheme(data.profile?.festiveTheme);
   const customCss = buildCustomCss(data.profile?.customSectionCss);
   const secCls = (key: SectionKey) =>
@@ -337,6 +343,219 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
     };
   }, [horizontalOn]);
 
+  // ── Home bands, keyed for admin ordering ────────────────────────────────
+  // Every band keeps its exact markup and its exact visibility condition; the
+  // saved order only decides the sequence. With nothing saved the resolved
+  // order IS today's order, so the default page does not change by one byte.
+  const homeBands: Record<string, ReactNode> = {
+    stats: data.stats.length > 0 && (
+      <section
+        data-sec="stats"
+        className={`ps-stats-grid ${secCls('stats')} max-w-6xl mx-auto px-6 py-16 grid grid-cols-2 md:grid-cols-4 gap-6`}
+      >
+        {data.stats.map((stat, i) => {
+          const parsed = parseStatValue(stat.value);
+          const rings = statsLayout === 'RINGS';
+          // ODOMETER paints its numerals solid on a dark tile, so it opts out
+          // of the brand gradient; every other layout keeps it. Size follows
+          // the layout — big for BIGNUM, compact where a ring or bar shares
+          // the cell. CARDS stays byte-for-byte the shipped look.
+          const gradient = statsLayout !== 'ODOMETER';
+          const sizeCls =
+            statsLayout === 'BIGNUM'
+              ? 'text-6xl'
+              : statsLayout === 'ODOMETER'
+                ? 'text-3xl'
+                : rings || statsLayout === 'BARS'
+                  ? 'text-2xl'
+                  : 'text-4xl';
+          const numCls = `ps-statnum ps-head font-bold ${gradient ? 'ps-grad-text ' : ''}${sizeCls}`;
+          const num = parsed.numeric ? (
+            <div className={`${numCls} count`} data-to={String(parsed.num)} data-suffix={parsed.suffix}>
+              0
+            </div>
+          ) : (
+            <div className={numCls}>{stat.value}</div>
+          );
+          // A school figure has no denominator, so a value-derived percentage
+          // would be a lie — only a real "%" stat fills to its own value; the
+          // rest take a pleasant fixed length (same reasoning as the ring arc).
+          const barW = parsed.numeric && parsed.suffix === '%' ? Math.min(100, parsed.num) : [82, 68, 90, 74][i % 4];
+          return (
+            <div
+              key={i}
+              className="ps-statcard reveal ps-card ps-soft rounded-2xl p-6 text-center"
+              style={{ transitionDelay: `${i * 0.08}s` }}
+            >
+              {rings ? (
+                <div className="ps-ring" style={{ '--ps-ring-p': 75 } as React.CSSProperties}>
+                  <span>{num}</span>
+                </div>
+              ) : statsLayout === 'BARS' ? (
+                <>
+                  {num}
+                  <div className="ps-bar-track">
+                    <span className="ps-bar-fill" style={{ '--ps-bar-w': `${barW}%` } as React.CSSProperties} />
+                  </div>
+                </>
+              ) : (
+                num
+              )}
+              <div className="ps-statlabel text-sm text-slate-500 mt-1">{stat.label}</div>
+            </div>
+          );
+        })}
+      </section>
+    ),
+
+    about: hasAbout && (
+      <section
+        id="about"
+        data-sec="about"
+        className={`ps-about-grid ${secCls('about')} max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-2 gap-14 items-center`}
+      >
+        <div className="ps-about-img-wrap reveal relative">
+          <div className="absolute -inset-4 ps-about-glow rounded-3xl" />
+          <div className="ps-about-img relative rounded-3xl overflow-hidden h-80 ps-card ps-soft">
+            {aboutImageUrl || principalPhotoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={(aboutImageUrl ?? principalPhotoUrl)!}
+                alt={aboutImageUrl ? `About ${schoolName}` : principalName ?? 'Principal'}
+                className="w-full h-full object-cover"
+              loading="lazy" decoding="async" />
+            ) : (
+              <div className="w-full h-full ps-brandgrad grid place-items-center text-6xl text-white">🏫</div>
+            )}
+          </div>
+          {principalName && (
+            <div className="ps-card ps-soft absolute -bottom-6 -right-4 rounded-2xl p-4 w-56">
+              <div className="flex items-center gap-3">
+                {principalPhotoUrl && (
+                  <img src={principalPhotoUrl} alt={principalName} className="h-11 w-11 rounded-full object-cover flex-shrink-0" loading="lazy" decoding="async" />
+                )}
+                <div>
+                  <div className="ps-head text-sm font-bold">{principalName}</div>
+                  <div className="text-xs text-slate-500">Principal</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="ps-about-copy reveal">
+          <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: brandColor }}>
+            About
+          </div>
+          <h2 className="ps-head text-4xl font-bold mt-3">
+            A community built on <span className="ps-grad-text">care &amp; curiosity</span>
+          </h2>
+          <p className="mt-5 text-slate-600 leading-relaxed">{aboutText}</p>
+          {principalMessage && (
+            <blockquote className="mt-5 text-slate-600 italic border-l-2 pl-4 text-sm" style={{ borderColor: brandColor }}>
+              &ldquo;{principalMessage}&rdquo;
+            </blockquote>
+          )}
+        </div>
+      </section>
+    ),
+
+    courses: (
+      <div data-sec="courses" className={secCls('courses') || undefined}>
+        <CoursesFeatured courses={data.courses} />
+        {/* Full catalogue lives on its own page now */}
+        {hasAcademics && (
+          <div className="max-w-6xl mx-auto px-6 -mt-8 pb-14">
+            <a href="/academics" className="text-sm font-semibold hover:opacity-80 transition" style={{ color: 'var(--ps1)' }}>
+              View all programmes →
+            </a>
+          </div>
+        )}
+      </div>
+    ),
+
+    admissions: hasAdmissions && show.admissions && (
+      <div data-sec="admissions" className={secCls('admissions') || undefined}>
+        <AdmissionsSection
+          admissions={data.admissions}
+          courses={data.courses}
+          // STEPPER maps to the vertical rail the /admissions page already
+          // renders; TILES restyles the journey grid from the stylesheet.
+          variant={sectionLayoutOf(variants, 'admissions') === 'STEPPER' ? 'rail' : 'journey'}
+        />
+      </div>
+    ),
+
+    gallery: hasGallery && show.gallery && (
+      <div data-sec="gallery" className={secCls('gallery') || undefined}>
+        <GallerySection gallery={data.gallery} schoolName={schoolName} />
+      </div>
+    ),
+
+    hof: hasHof && <HallOfFame courses={data.courses} />,
+
+    events: hasEvents && show.events && <EventsSection events={data.events} timezone={data.school.timezone} />,
+
+    staff: data.staff.length > 0 && (
+      <section id="staff" data-sec="staff" className={`${secCls('staff')} max-w-6xl mx-auto px-6 py-20`}>
+        <div className="reveal text-center max-w-2xl mx-auto">
+          <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: brandColor }}>
+            Our people
+          </div>
+          <h2 className="ps-head text-4xl font-bold mt-3">Meet our educators</h2>
+        </div>
+        <div className="ps-staff-grid mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
+          {data.staff.map((person, i) => (
+            <div
+              key={i}
+              className="ps-staffcard reveal ps-lift ps-card ps-soft rounded-3xl p-6 text-center"
+              style={{ transitionDelay: `${i * 0.05}s` }}
+            >
+              <div className="mx-auto h-20 w-20 rounded-full overflow-hidden ps-logo-bg grid place-items-center text-2xl font-semibold text-white">
+                {person.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={person.photoUrl} alt={person.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                ) : (
+                  person.name.charAt(0)
+                )}
+              </div>
+              <div className="ps-head mt-4 font-bold">{person.name}</div>
+              <div className="text-sm text-slate-500 mt-0.5">{person.role}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+    ),
+
+    contact: (hasContact || hasEnquiry) && show.contact && (
+      <ContactSection
+        profile={data.profile}
+        socialLinks={data.socialLinks}
+        hasEnquiry={hasEnquiry}
+        courses={data.courses.map((c) => c.name)}
+        schoolName={schoolName}
+      />
+    ),
+  };
+  // Admin-built sections: the same closed block set custom pages use, drawn
+  // with the site's own primitives, so they wear the theme automatically.
+  for (const s of homeSections) {
+    homeBands[`x:${s.id}`] = (
+      <section id={`sec-${s.id}`} data-sec={`x:${s.id}`} className="max-w-6xl mx-auto px-6 py-16">
+        {s.title && (
+          <h2 className="reveal ps-head text-4xl font-bold text-center">
+            <span className="ps-accent-mark">{s.title}</span>
+          </h2>
+        )}
+        {s.blocks.length > 0 && (
+          <div className={s.title ? 'mt-10' : undefined}>
+            <PageBlocks blocks={s.blocks} />
+          </div>
+        )}
+      </section>
+    );
+  }
+
   // One definition of what a school looks like, shared with the blog's chrome.
   const themeRoot = themeRootProps(data);
 
@@ -464,201 +683,11 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
         <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
       </div>
 
-      {/* ── STATS ── */}
-      {data.stats.length > 0 && (
-        <section
-          data-sec="stats"
-          className={`ps-stats-grid ${secCls('stats')} max-w-6xl mx-auto px-6 py-16 grid grid-cols-2 md:grid-cols-4 gap-6`}
-        >
-          {data.stats.map((stat, i) => {
-            const parsed = parseStatValue(stat.value);
-            const rings = statsLayout === 'RINGS';
-            // ODOMETER paints its numerals solid on a dark tile, so it opts out
-            // of the brand gradient; every other layout keeps it. Size follows
-            // the layout — big for BIGNUM, compact where a ring or bar shares
-            // the cell. CARDS stays byte-for-byte the shipped look.
-            const gradient = statsLayout !== 'ODOMETER';
-            const sizeCls =
-              statsLayout === 'BIGNUM'
-                ? 'text-6xl'
-                : statsLayout === 'ODOMETER'
-                  ? 'text-3xl'
-                  : rings || statsLayout === 'BARS'
-                    ? 'text-2xl'
-                    : 'text-4xl';
-            const numCls = `ps-statnum ps-head font-bold ${gradient ? 'ps-grad-text ' : ''}${sizeCls}`;
-            const num = parsed.numeric ? (
-              <div className={`${numCls} count`} data-to={String(parsed.num)} data-suffix={parsed.suffix}>
-                0
-              </div>
-            ) : (
-              <div className={numCls}>{stat.value}</div>
-            );
-            // A school figure has no denominator, so a value-derived percentage
-            // would be a lie — only a real "%" stat fills to its own value; the
-            // rest take a pleasant fixed length (same reasoning as the ring arc).
-            const barW = parsed.numeric && parsed.suffix === '%' ? Math.min(100, parsed.num) : [82, 68, 90, 74][i % 4];
-            return (
-              <div
-                key={i}
-                className="ps-statcard reveal ps-card ps-soft rounded-2xl p-6 text-center"
-                style={{ transitionDelay: `${i * 0.08}s` }}
-              >
-                {rings ? (
-                  <div className="ps-ring" style={{ '--ps-ring-p': 75 } as React.CSSProperties}>
-                    <span>{num}</span>
-                  </div>
-                ) : statsLayout === 'BARS' ? (
-                  <>
-                    {num}
-                    <div className="ps-bar-track">
-                      <span className="ps-bar-fill" style={{ '--ps-bar-w': `${barW}%` } as React.CSSProperties} />
-                    </div>
-                  </>
-                ) : (
-                  num
-                )}
-                <div className="ps-statlabel text-sm text-slate-500 mt-1">{stat.label}</div>
-              </div>
-            );
-          })}
-        </section>
-      )}
-
-      {/* ── ABOUT ── */}
-      {hasAbout && (
-        <section
-          id="about"
-          data-sec="about"
-          className={`ps-about-grid ${secCls('about')} max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-2 gap-14 items-center`}
-        >
-          <div className="ps-about-img-wrap reveal relative">
-            <div className="absolute -inset-4 ps-about-glow rounded-3xl" />
-            <div className="ps-about-img relative rounded-3xl overflow-hidden h-80 ps-card ps-soft">
-              {aboutImageUrl || principalPhotoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={(aboutImageUrl ?? principalPhotoUrl)!}
-                  alt={aboutImageUrl ? `About ${schoolName}` : principalName ?? 'Principal'}
-                  className="w-full h-full object-cover"
-                loading="lazy" decoding="async" />
-              ) : (
-                <div className="w-full h-full ps-brandgrad grid place-items-center text-6xl text-white">🏫</div>
-              )}
-            </div>
-            {principalName && (
-              <div className="ps-card ps-soft absolute -bottom-6 -right-4 rounded-2xl p-4 w-56">
-                <div className="flex items-center gap-3">
-                  {principalPhotoUrl && (
-                    <img src={principalPhotoUrl} alt={principalName} className="h-11 w-11 rounded-full object-cover flex-shrink-0" loading="lazy" decoding="async" />
-                  )}
-                  <div>
-                    <div className="ps-head text-sm font-bold">{principalName}</div>
-                    <div className="text-xs text-slate-500">Principal</div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="ps-about-copy reveal">
-            <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: brandColor }}>
-              About
-            </div>
-            <h2 className="ps-head text-4xl font-bold mt-3">
-              A community built on <span className="ps-grad-text">care &amp; curiosity</span>
-            </h2>
-            <p className="mt-5 text-slate-600 leading-relaxed">{aboutText}</p>
-            {principalMessage && (
-              <blockquote className="mt-5 text-slate-600 italic border-l-2 pl-4 text-sm" style={{ borderColor: brandColor }}>
-                &ldquo;{principalMessage}&rdquo;
-              </blockquote>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* ── FEATURED COURSES (homepage flip cards) ── */}
-      <div data-sec="courses" className={secCls('courses') || undefined}>
-        <CoursesFeatured courses={data.courses} />
-        {/* Full catalogue lives on its own page now */}
-        {hasAcademics && (
-          <div className="max-w-6xl mx-auto px-6 -mt-8 pb-14">
-            <a href="/academics" className="text-sm font-semibold hover:opacity-80 transition" style={{ color: 'var(--ps1)' }}>
-              View all programmes →
-            </a>
-          </div>
-        )}
-      </div>
-
-      {/* ── ADMISSIONS (process + fee structure) ── */}
-      {hasAdmissions && show.admissions && (
-        <div data-sec="admissions" className={secCls('admissions') || undefined}>
-          <AdmissionsSection
-            admissions={data.admissions}
-            courses={data.courses}
-            // STEPPER maps to the vertical rail the /admissions page already
-            // renders; TILES restyles the journey grid from the stylesheet.
-            variant={sectionLayoutOf(variants, 'admissions') === 'STEPPER' ? 'rail' : 'journey'}
-          />
-        </div>
-      )}
-
-      {/* ── GALLERY ── */}
-      {hasGallery && show.gallery && (
-        <div data-sec="gallery" className={secCls('gallery') || undefined}>
-          <GallerySection gallery={data.gallery} schoolName={schoolName} />
-        </div>
-      )}
-
-      {/* ── HALL OF FAME (class-wise toppers) ── */}
-      {hasHof && <HallOfFame courses={data.courses} />}
-
-      {/* ── CONNECT / EVENTS ── */}
-      {hasEvents && show.events && <EventsSection events={data.events} timezone={data.school.timezone} />}
-
-      {/* ── EDUCATORS / STAFF ── */}
-      {data.staff.length > 0 && (
-        <section id="staff" data-sec="staff" className={`${secCls('staff')} max-w-6xl mx-auto px-6 py-20`}>
-          <div className="reveal text-center max-w-2xl mx-auto">
-            <div className="text-sm font-semibold uppercase tracking-widest" style={{ color: brandColor }}>
-              Our people
-            </div>
-            <h2 className="ps-head text-4xl font-bold mt-3">Meet our educators</h2>
-          </div>
-          <div className="ps-staff-grid mt-12 grid grid-cols-2 md:grid-cols-4 gap-6">
-            {data.staff.map((person, i) => (
-              <div
-                key={i}
-                className="ps-staffcard reveal ps-lift ps-card ps-soft rounded-3xl p-6 text-center"
-                style={{ transitionDelay: `${i * 0.05}s` }}
-              >
-                <div className="mx-auto h-20 w-20 rounded-full overflow-hidden ps-logo-bg grid place-items-center text-2xl font-semibold text-white">
-                  {person.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={person.photoUrl} alt={person.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
-                  ) : (
-                    person.name.charAt(0)
-                  )}
-                </div>
-                <div className="ps-head mt-4 font-bold">{person.name}</div>
-                <div className="text-sm text-slate-500 mt-0.5">{person.role}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── CONTACT + ENQUIRY ── */}
-      {(hasContact || hasEnquiry) && show.contact && (
-        <ContactSection
-          profile={data.profile}
-          socialLinks={data.socialLinks}
-          hasEnquiry={hasEnquiry}
-          courses={data.courses.map((c) => c.name)}
-          schoolName={schoolName}
-        />
-      )}
+      {/* ── HOME BANDS (each defined once in homeBands; the admin's saved
+          order — plus their custom sections — decides the sequence) ── */}
+      {bandOrder.map((k) => (
+        <Fragment key={k}>{homeBands[k]}</Fragment>
+      ))}
         </HomeShell>
       )}
 

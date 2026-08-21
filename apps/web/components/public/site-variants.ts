@@ -154,6 +154,8 @@ export const SECTION_VARIANT_DEFS: Record<
       { value: 'JOURNEY', label: 'Journey line', hint: 'Steps along a drawn path — today’s look.' },
       { value: 'STEPPER', label: 'Vertical steps', hint: 'A single column down a dashed line.' },
       { value: 'TILES', label: 'Numbered tiles', hint: 'A two-by-two grid of numbered tiles.' },
+      { value: 'CARDS', label: 'Step cards', hint: 'Each step on its own lifted card beneath a big ghost number.' },
+      { value: 'BLOCKS', label: 'Colour blocks', hint: 'Bold brand-gradient step panels — high energy.' },
     ],
   },
   gallery: {
@@ -163,6 +165,8 @@ export const SECTION_VARIANT_DEFS: Record<
       { value: 'GRID', label: 'Grid', hint: 'Even photo grid — today’s look.' },
       { value: 'MASONRY', label: 'Masonry', hint: 'Staggered column heights, like a pinboard.' },
       { value: 'FILMSTRIP', label: 'Film strip', hint: 'A single swipeable row of photos.' },
+      { value: 'MOSAIC', label: 'Mosaic feature', hint: 'The first photo leads large; the rest tile around it.' },
+      { value: 'POLAROID', label: 'Polaroid', hint: 'White-framed prints, each pinned at a slight tilt.' },
     ],
   },
   staff: {
@@ -171,6 +175,8 @@ export const SECTION_VARIANT_DEFS: Record<
     layouts: [
       { value: 'GRID', label: 'Portrait grid', hint: 'Four-across portrait cards — today’s look.' },
       { value: 'LIST', label: 'List rows', hint: 'Compact rows, photo beside name and role.' },
+      { value: 'SPOTLIGHT', label: 'Lead spotlight', hint: 'The first educator featured full-width; the team beneath.' },
+      { value: 'MINIMAL', label: 'Portraits only', hint: 'Bare ringed portraits, no cards — quiet and warm.' },
     ],
   },
 };
@@ -240,6 +246,92 @@ export function normalizeSectionVariants(raw: unknown): SectionVariants {
     if (Object.keys(entry).length) out[key] = entry;
   }
   return out;
+}
+
+/* ── Custom homepage sections + band order ────────────────────────────────
+   Both live INSIDE the sectionVariants Json under reserved keys (no schema
+   change, and they ride the existing profile/draft/publish plumbing for
+   free). normalizeSectionVariants above only reads SECTION_KEYS, so the
+   reserved keys never leak into per-band variants; these readers only read
+   the reserved keys. The renderer re-normalizes on read and never trusts
+   the stored value — same contract as PageBlocks. */
+export const SECTION_ORDER_KEY = '__order';
+export const HOME_SECTIONS_KEY = '__custom';
+
+export interface HomeSection {
+  id: string;
+  title: string;
+  blocks: PageBlock[];
+}
+export const HOME_SECTION_MAX = 6;
+
+export function normalizeHomeSections(raw: unknown): HomeSection[] {
+  if (!Array.isArray(raw)) return [];
+  const out: HomeSection[] = [];
+  const seen = new Set<string>();
+  for (const s of raw.slice(0, HOME_SECTION_MAX)) {
+    if (!s || typeof s !== 'object') continue;
+    const r = s as Record<string, unknown>;
+    const id = typeof r.id === 'string' ? r.id.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40) : '';
+    const title = typeof r.title === 'string' ? r.title.trim().slice(0, 120) : '';
+    if (!id || seen.has(id)) continue;
+    const blocks = normalizePageBlocks(r.blocks);
+    if (!title && blocks.length === 0) continue;
+    seen.add(id);
+    out.push({ id, title, blocks });
+  }
+  return out;
+}
+
+/** Reads the custom sections out of the raw sectionVariants blob. */
+export function homeSectionsOf(variantsRaw: unknown): HomeSection[] {
+  if (!variantsRaw || typeof variantsRaw !== 'object') return [];
+  return normalizeHomeSections((variantsRaw as Record<string, unknown>)[HOME_SECTIONS_KEY]);
+}
+
+/** Home bands an admin may reorder. Hero stays pinned first and the footer
+    last; this list IS today's render order, so no saved order → today's page. */
+export const ORDERABLE_HOME_SECTIONS: { key: string; label: string }[] = [
+  { key: 'stats', label: 'Quick stats' },
+  { key: 'about', label: 'About & principal' },
+  { key: 'courses', label: 'Programmes' },
+  { key: 'admissions', label: 'Admissions steps' },
+  { key: 'gallery', label: 'Gallery' },
+  { key: 'hof', label: 'Hall of fame' },
+  { key: 'events', label: 'News & events' },
+  { key: 'staff', label: 'Educators' },
+  { key: 'contact', label: 'Contact & enquiry' },
+];
+
+/** Resolve the final band order: saved keys first (only known ones, deduped),
+    then every unsaved band in its default position. Custom sections use
+    `x:<id>` keys and default to the end of the page. */
+export function normalizeSectionOrder(raw: unknown, customIds: string[] = []): string[] {
+  const known = new Set<string>([
+    ...ORDERABLE_HOME_SECTIONS.map((s) => s.key),
+    ...customIds.map((id) => `x:${id}`),
+  ]);
+  const out: string[] = [];
+  if (Array.isArray(raw)) {
+    for (const k of raw) {
+      if (typeof k === 'string' && known.has(k) && !out.includes(k)) out.push(k);
+    }
+  }
+  for (const s of ORDERABLE_HOME_SECTIONS) if (!out.includes(s.key)) out.push(s.key);
+  for (const id of customIds) {
+    const k = `x:${id}`;
+    if (!out.includes(k)) out.push(k);
+  }
+  return out;
+}
+
+/** Reads the band order out of the raw sectionVariants blob. */
+export function sectionOrderOf(variantsRaw: unknown, customIds: string[] = []): string[] {
+  const raw =
+    variantsRaw && typeof variantsRaw === 'object'
+      ? (variantsRaw as Record<string, unknown>)[SECTION_ORDER_KEY]
+      : undefined;
+  return normalizeSectionOrder(raw, customIds);
 }
 
 /* ── Footer ───────────────────────────────────────────────────────────────

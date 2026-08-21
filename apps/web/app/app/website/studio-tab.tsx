@@ -19,6 +19,8 @@ import {
   SCROLL_FEELS, NAV_DROPDOWN_ANIMS, HERO_MEDIA_OPTIONS, SECTION_KEYS, SECTION_VARIANT_DEFS,
   FESTIVALS, FOOTER_LAYOUTS, FOOTER_COLORS,
   normalizeFooterConfig, normalizeFestiveTheme, normalizeSectionVariants, type SectionKey,
+  ORDERABLE_HOME_SECTIONS, HOME_SECTIONS_KEY, SECTION_ORDER_KEY, HOME_SECTION_MAX,
+  homeSectionsOf, sectionOrderOf, normalizeSectionOrder, type HomeSection, type SectionVariants,
 } from '@/components/public/site-variants';
 import { defaultNavConfig, validateNavConfig, type NavConfig, type NavConfigItem } from '@/components/public/sections/nav-config';
 import {
@@ -252,6 +254,8 @@ export default function StudioTab() {
   // The page currently being edited, sent to the preview so it shows that page
   // live (new pages included) and returns home when the editor closes.
   const [editingPage, setEditingPage] = useState<{ id: string | null; title: string; blocks: Block[]; published: boolean; showInNav: boolean } | null>(null);
+  // An admin-built homepage section being edited (lives in the look, not a page).
+  const [editingSection, setEditingSection] = useState<{ id: string; title: string; blocks: Block[] } | null>(null);
   const postPreview = useCallback(() => {
     const overrides = { ...current, customSectionCss: cssDrafts };
     const page = editingPage ? { title: editingPage.title, blocks: editingPage.blocks } : null;
@@ -377,8 +381,46 @@ export default function StudioTab() {
   const festiveDef = festive ? FESTIVALS.find((f) => f.value === festive.festival) : null;
   const footer = normalizeFooterConfig(current.footerConfig);
   const variants = normalizeSectionVariants(current.sectionVariants);
+  // Custom sections + band order share the sectionVariants Json under reserved
+  // keys, so EVERY write goes through one composer that re-embeds all three —
+  // a plain per-band save must never silently drop the admin's order/sections.
+  const homeSecs = homeSectionsOf(current.sectionVariants);
+  const order = sectionOrderOf(current.sectionVariants, homeSecs.map((s) => s.id));
+  const writeSectionConfig = (patch: { v?: SectionVariants; order?: string[]; custom?: HomeSection[] }) => {
+    const v = patch.v ?? variants;
+    const c = patch.custom ?? homeSecs;
+    const ids = c.map((s) => s.id);
+    const o = normalizeSectionOrder(patch.order ?? order, ids);
+    const blob: Record<string, unknown> = { ...v };
+    if (c.length) blob[HOME_SECTIONS_KEY] = c;
+    // Only store an order that differs from the default, so an untouched page
+    // keeps a byte-identical config (and theme "In use" matching keeps working).
+    if (o.join('|') !== normalizeSectionOrder(undefined, ids).join('|')) blob[SECTION_ORDER_KEY] = o;
+    setLook({ sectionVariants: blob });
+  };
   const setVariant = (key: SectionKey, patch: { layout?: string; gesture?: string }) =>
-    setLook({ sectionVariants: { ...variants, [key]: { ...(variants[key] ?? {}), ...patch } } });
+    writeSectionConfig({ v: { ...variants, [key]: { ...(variants[key] ?? {}), ...patch } } });
+  const moveBand = (i: number, by: number) => {
+    const next = [...order]; const j = i + by;
+    if (j < 0 || j >= next.length) return;
+    const [row] = next.splice(i, 1); next.splice(j, 0, row);
+    writeSectionConfig({ order: next });
+  };
+  const removeSection = (id: string) =>
+    writeSectionConfig({ custom: homeSecs.filter((s) => s.id !== id), order: order.filter((k) => k !== `x:${id}`) });
+  const saveSection = () => {
+    if (!editingSection) return;
+    const next = editingSection as unknown as HomeSection;
+    const exists = homeSecs.some((s) => s.id === next.id);
+    writeSectionConfig({ custom: exists ? homeSecs.map((s) => (s.id === next.id ? next : s)) : [...homeSecs, next] });
+    setEditingSection(null);
+  };
+  const editSecBlock = (i: number, patch: Partial<Block>) =>
+    setEditingSection((p) => (p ? { ...p, blocks: p.blocks.map((b, j) => (j === i ? ({ ...b, ...patch } as Block) : b)) } : p));
+  const moveSecBlock = (i: number, dir: -1 | 1) => setEditingSection((p) => {
+    if (!p) return p; const next = [...p.blocks]; const j = i + dir; if (j < 0 || j >= next.length) return p;
+    const [b] = next.splice(i, 1); next.splice(j, 0, b); return { ...p, blocks: next };
+  });
   const heroLayout = (current.heroLayout as string) ?? 'ILLUSTRATION';
   const heroSpec = HERO_LAYOUTS.find((l) => l.value === heroLayout) ?? HERO_LAYOUTS[0];
   const overlayOn = OVERLAY_LAYOUTS.includes(heroLayout);
@@ -678,6 +720,81 @@ export default function StudioTab() {
             </div>
           );
         })}
+      </Group>
+
+      {/* ── Homepage structure: band order + admin-built sections ── */}
+      <Group id="structure" title="Homepage structure" summary={`${order.length} bands · ${homeSecs.length} custom`}>
+        <FieldLabel>Section order (top to bottom)</FieldLabel>
+        <p className="mb-2 text-[11px] text-slate-400">The hero stays first and the footer last. A band with nothing to show is skipped automatically, so reordering never leaves a hole.</p>
+        <div className="flex flex-col gap-1.5">
+          {order.map((k, i) => {
+            const custom = k.startsWith('x:');
+            const label = custom
+              ? (homeSecs.find((s) => `x:${s.id}` === k)?.title || 'Custom section')
+              : (ORDERABLE_HOME_SECTIONS.find((s) => s.key === k)?.label ?? k);
+            return (
+              <div key={k} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5">
+                <span className="flex-1 truncate text-sm text-slate-700">{label}{custom && <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-teal-600">custom</span>}</span>
+                <button type="button" aria-label={`Move ${label} up`} disabled={i === 0} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBand(i, -1)}>▲</button>
+                <button type="button" aria-label={`Move ${label} down`} disabled={i === order.length - 1} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBand(i, 1)}>▼</button>
+              </div>
+            );
+          })}
+        </div>
+        <FieldLabel>Your own sections</FieldLabel>
+        <p className="mb-2 text-[11px] text-slate-400">Add a band of your own — heading, text, images, a button — then place it anywhere above. It wears your theme automatically.</p>
+        {homeSecs.map((s) => (
+          <div key={s.id} className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-2.5">
+            <span className="flex-1 truncate text-sm font-semibold text-slate-700">{s.title || 'Untitled section'}</span>
+            <span className="text-[11px] text-slate-400">{s.blocks.length} block{s.blocks.length === 1 ? '' : 's'}</span>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditingSection({ id: s.id, title: s.title, blocks: (s.blocks as Block[]).map((b) => ({ ...b })) })}>Edit</Button>
+            <button type="button" aria-label={`Remove ${s.title || 'section'}`} className="text-xs text-rose-500 hover:text-rose-700" onClick={() => removeSection(s.id)}>✕</button>
+          </div>
+        ))}
+        {!editingSection && (
+          <Button size="sm" variant="outline" disabled={homeSecs.length >= HOME_SECTION_MAX}
+            onClick={() => setEditingSection({ id: `s${Date.now().toString(36)}`, title: '', blocks: [{ t: 'h', text: '' }, { t: 'p', text: '' }] })}>
+            + New section{homeSecs.length >= HOME_SECTION_MAX ? ` (max ${HOME_SECTION_MAX})` : ''}
+          </Button>
+        )}
+        {editingSection && (
+          <div className="flex flex-col gap-2.5 rounded-lg border border-teal-200 bg-teal-50/40 p-3">
+            <div><Label className="text-xs">Section heading (shown centred above its content)</Label>
+              <Input value={editingSection.title} maxLength={120} placeholder="Why families choose us" onChange={(e) => setEditingSection({ ...editingSection, title: e.target.value })} className="mt-1 h-9 bg-white text-sm" /></div>
+            {editingSection.blocks.map((b, i) => (
+              <div key={i} className="rounded-md border border-slate-200 bg-white p-2">
+                <div className="flex items-center gap-1">
+                  <span className="flex-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{BLOCK_NAMES[b.t]}</span>
+                  <button type="button" aria-label="Move up" disabled={i === 0} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveSecBlock(i, -1)}>▲</button>
+                  <button type="button" aria-label="Move down" disabled={i === editingSection.blocks.length - 1} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveSecBlock(i, 1)}>▼</button>
+                  <button type="button" aria-label="Remove block" className="px-1 text-xs text-rose-400 hover:text-rose-600" onClick={() => setEditingSection({ ...editingSection, blocks: editingSection.blocks.filter((_, j) => j !== i) })}>✕</button>
+                </div>
+                {(b.t === 'h' || b.t === 'cta') && <Input value={b.t === 'h' ? b.text : b.label} maxLength={b.t === 'h' ? 200 : 80} placeholder={b.t === 'h' ? 'Heading' : 'Button label'} onChange={(e) => editSecBlock(i, b.t === 'h' ? { text: e.target.value } : { label: e.target.value })} className="mt-1 h-8 text-sm" />}
+                {(b.t === 'p' || b.t === 'imgtext') && <Textarea value={b.text} rows={2} placeholder="Write something…" onChange={(e) => editSecBlock(i, { text: e.target.value })} className="mt-1 text-sm" />}
+                {(b.t === 'img' || b.t === 'imgtext') && (
+                  <div className="mt-1 flex gap-1.5">
+                    <Input value={b.url ?? ''} placeholder="https://… image URL" onChange={(e) => editSecBlock(i, { url: e.target.value })} className="h-8 flex-1 text-xs" />
+                    {(galleryMedia.data ?? []).length > 0 && (
+                      <select aria-label="Use a gallery photo" className="h-8 rounded-md border border-slate-200 text-xs text-slate-500" value="" onChange={(e) => e.target.value && editSecBlock(i, { url: e.target.value })}>
+                        <option value="">Gallery…</option>{(galleryMedia.data ?? []).map((m, j) => <option key={m.id} value={m.url}>Photo {j + 1}</option>)}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(BLOCK_NAMES) as Block['t'][]).map((t) => (
+                <button key={t} type="button" disabled={editingSection.blocks.length >= 40} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40"
+                  onClick={() => { if (editingSection.blocks.length >= 40) return; setEditingSection({ ...editingSection, blocks: [...editingSection.blocks, t === 'h' ? { t, text: '' } : t === 'p' ? { t, text: '' } : t === 'img' ? { t, url: '' } : t === 'imgtext' ? { t, url: null, text: '' } : { t, label: 'Learn more' }] }); }}>+ {BLOCK_NAMES[t]}</button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={saveSection} disabled={!editingSection.title.trim() && !editingSection.blocks.some((b) => (b.t === 'h' || b.t === 'p' || b.t === 'imgtext' ? b.text.trim() : b.t === 'img' ? !!b.url : !!b.label.trim()))}>Save section</Button>
+              <Button size="sm" variant="outline" onClick={() => setEditingSection(null)}>Cancel</Button>
+            </div>
+          </div>
+        )}
       </Group>
 
       {/* ── Navigation ── */}

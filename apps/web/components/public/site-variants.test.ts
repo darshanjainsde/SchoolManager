@@ -21,6 +21,14 @@ import {
   buildCustomCss,
   sectionScopeSelector,
   normalizePageBlocks,
+  ORDERABLE_HOME_SECTIONS,
+  SECTION_ORDER_KEY,
+  HOME_SECTIONS_KEY,
+  HOME_SECTION_MAX,
+  normalizeSectionOrder,
+  normalizeHomeSections,
+  sectionOrderOf,
+  homeSectionsOf,
 } from './site-variants';
 
 /**
@@ -259,5 +267,83 @@ describe('page blocks normalize defensively', () => {
   it('non-arrays become empty pages, never throws', () => {
     expect(normalizePageBlocks(null)).toEqual([]);
     expect(normalizePageBlocks({})).toEqual([]);
+  });
+});
+
+/**
+ * Band order + admin-built homepage sections. Both ride inside the
+ * sectionVariants Json under reserved keys, so the iron rules here are:
+ * nothing saved → exactly today's order (repaint nobody), and the reserved
+ * keys never bleed into the per-band variant normalizer.
+ */
+describe('homepage band order', () => {
+  const DEFAULT = ORDERABLE_HOME_SECTIONS.map((s) => s.key);
+
+  it('nothing saved resolves to today’s order exactly', () => {
+    expect(normalizeSectionOrder(undefined)).toEqual(DEFAULT);
+    expect(normalizeSectionOrder(null)).toEqual(DEFAULT);
+    expect(normalizeSectionOrder([])).toEqual(DEFAULT);
+    expect(sectionOrderOf(null)).toEqual(DEFAULT);
+    expect(sectionOrderOf({ stats: { layout: 'RINGS' } })).toEqual(DEFAULT);
+  });
+
+  it('a saved order leads; unknown keys drop; missing bands keep their default slot', () => {
+    const out = normalizeSectionOrder(['about', 'NOT_REAL', 'stats', 'about']);
+    expect(out.slice(0, 2)).toEqual(['about', 'stats']);
+    expect(out).toHaveLength(DEFAULT.length);
+    expect(new Set(out)).toEqual(new Set(DEFAULT));
+  });
+
+  it('custom sections join as x:<id> and default to the end of the page', () => {
+    const out = normalizeSectionOrder(undefined, ['team']);
+    expect(out[out.length - 1]).toBe('x:team');
+    const placed = normalizeSectionOrder(['x:team', 'about'], ['team']);
+    expect(placed.slice(0, 2)).toEqual(['x:team', 'about']);
+  });
+
+  it('reads the reserved key out of the variants blob', () => {
+    const blob = { [SECTION_ORDER_KEY]: ['contact', 'stats'], stats: { layout: 'RINGS' } };
+    expect(sectionOrderOf(blob).slice(0, 2)).toEqual(['contact', 'stats']);
+  });
+
+  it('reserved keys never leak into the per-band variant normalizer', () => {
+    const blob = {
+      stats: { layout: 'RINGS' },
+      [SECTION_ORDER_KEY]: ['contact'],
+      [HOME_SECTIONS_KEY]: [{ id: 'team', title: 'Team', blocks: [] }],
+    };
+    expect(normalizeSectionVariants(blob)).toEqual({ stats: { layout: 'RINGS' } });
+  });
+});
+
+describe('admin-built homepage sections', () => {
+  it('normalizes real sections and rejects garbage', () => {
+    const out = normalizeHomeSections([
+      { id: 'Team!', title: '  Our team  ', blocks: [{ t: 'p', text: 'Hello' }] },
+      { id: 'team', title: 'Duplicate id after slugging', blocks: [] },
+      { id: '', title: 'No id', blocks: [] },
+      { id: 'empty', title: '', blocks: [] },
+      'garbage',
+      null,
+    ]);
+    expect(out).toEqual([{ id: 'team', title: 'Our team', blocks: [{ t: 'p', text: 'Hello' }] }]);
+  });
+
+  it('caps the section count and re-normalizes blocks through the page pipeline', () => {
+    const many = Array.from({ length: HOME_SECTION_MAX + 3 }, (_, i) => ({
+      id: `s${i}`, title: `S${i}`, blocks: [{ t: 'img', url: 'javascript:alert(1)' }],
+    }));
+    const out = normalizeHomeSections(many);
+    expect(out).toHaveLength(HOME_SECTION_MAX);
+    // the unsafe image url was dropped by normalizePageBlocks
+    expect(out.every((s) => s.blocks.length === 0)).toBe(true);
+  });
+
+  it('homeSectionsOf reads the reserved key and tolerates junk blobs', () => {
+    expect(homeSectionsOf(null)).toEqual([]);
+    expect(homeSectionsOf('x')).toEqual([]);
+    expect(homeSectionsOf({ [HOME_SECTIONS_KEY]: [{ id: 'a', title: 'A', blocks: [] }] })).toEqual([
+      { id: 'a', title: 'A', blocks: [] },
+    ]);
   });
 });
