@@ -250,10 +250,11 @@ export const PS_CSS = `
      corner; content keeps overflowing freely (no clip), so an overlapping
      badge or a hover-lift is never cut. A band that carries its own colour
      (events, hall of fame) simply becomes a coloured panel. */
-  /* Ground is a NEUTRAL darkening of the paper (not the brand ink, which cast a
-     greenish tint), and the shadow is soft, even and neutral so the rounded
-     corners don't show an uneven shade. */
-  .ps-shape-panels { background: color-mix(in srgb, #10131a 4.5%, var(--paper)); }
+  /* Ground is a WARM tonal darkening of the paper so it tones with the cream
+     panels instead of reading as a separate cool-grey colour (a cool tint next
+     to warm paper looked like a mismatch at the notch/gaps). Kept subtle — just
+     enough to let the panels and their shaped edges read. */
+  .ps-shape-panels { background: color-mix(in srgb, #4a4130 4%, var(--paper)); }
   .ps-shape-panels > section,
   .ps-shape-panels > div[data-sec]:not([data-sec="hero"]) {
     border-radius: 22px;
@@ -286,6 +287,12 @@ export const PS_CSS = `
   .ps-edge-wave > section, .ps-edge-wave > div[data-sec]:not([data-sec="hero"]) {
     clip-path: polygon(0 12px, 10% 5px, 20% 13px, 30% 20px, 40% 13px, 50% 5px, 60% 13px,
       70% 20px, 80% 13px, 90% 5px, 100% 12px, 100% 100%, 0 100%); }
+  /* Panels already frame every band, so when it's combined with the Deck scroll
+     feel drop Deck's heavy top-shadow — two shadow systems on one band muddied
+     the panel edges. */
+  .ps-shape-panels.ps-scroll-deck > section,
+  .ps-shape-panels.ps-scroll-deck > div[data-sec],
+  .ps-shape-panels.ps-scroll-deck > footer { box-shadow: none; }
 
   /* ── Ambient header layer (/connect) ──
      Two blurred brand-coloured drifts. No canvas and no library: two divs and
