@@ -964,6 +964,18 @@ export const PS_CSS = `
     animation: ps-fx-bob calc(3.4s / (var(--motion) + .06)) ease-in-out infinite alternate; }
   @keyframes ps-fx-bob { from { transform: translateY(0) rotate(-2deg); }
     to { transform: translateY(calc(-7px * var(--motion))) rotate(2deg); } }
+  /* Rakhi: a thread medallion — gold centre, pink-gold tassels radiating from
+     a ring — turning very slowly in a page corner (Raksha Bandhan). Colours
+     are the festival's own thread tones, not palette vars, so the medallion
+     reads as a rakhi even before the takeover retints the page. */
+  .ps-fx-rakhi { position: absolute; width: 110px; height: 110px; border-radius: 999px; opacity: .45;
+    background:
+      radial-gradient(circle, #d4a017 0 20%, transparent 21%),
+      repeating-conic-gradient(#f25287 0 8deg, #d4a017 8deg 16deg, transparent 16deg 28deg);
+    -webkit-mask: radial-gradient(circle, #000 0 26%, transparent 27% 36%, #000 37% 82%, transparent 83%);
+    mask: radial-gradient(circle, #000 0 26%, transparent 27% 36%, #000 37% 82%, transparent 83%);
+    animation: ps-fx-spin calc(16s / (var(--motion) + .06)) linear infinite; }
+  @keyframes ps-fx-spin { to { transform: rotate(360deg); } }
 
   /* FULL takeover on a night festival: panels and body text follow the dark
      paper via the same tokens the shape control owns. */
@@ -994,7 +1006,8 @@ export const PS_CSS = `
        come later in the sheet — the shipped single-class rule did not. */
     .ps-menuanim-slide .ps-menu-card, .ps-menuanim-scale .ps-menu-card { animation: none; }
     .ps-fx-bulb, .ps-fx-diya, .ps-fx-burst, .ps-fx-blob, .ps-fx-fall, .ps-fx-lantern,
-    .ps-fx-star, .ps-fx-kite, .ps-fx-gitem, .ps-fx-rise, .ps-fx-sun, .ps-fx-perch { animation: none; }
+    .ps-fx-star, .ps-fx-kite, .ps-fx-gitem, .ps-fx-rise, .ps-fx-sun, .ps-fx-perch,
+    .ps-fx-rakhi { animation: none; }
     .ps-fx-burst { opacity: 0; }
     .ps-fx-fall { top: 104%; }
     .ps-fx-rise { top: -8%; }

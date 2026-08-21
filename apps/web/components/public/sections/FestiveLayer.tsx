@@ -108,7 +108,7 @@ export const DECORATION_SETS = [
   'DIYAS', 'FIREWORKS', 'RANGOLI', 'SPLASH', 'CONFETTI', 'LANTERNS', 'CRESCENT',
   'BUNTING', 'KITES', 'SNOW', 'LIGHTS', 'MARIGOLD', 'GARBA', 'PETALS', 'TRICOLOR',
   'GOLDDUST', 'BALLOONS', 'SUN', 'PEACOCK', 'DOODLES', 'BOOKS', 'HARVEST',
-  'CRAYONS', 'GLOW', 'GIFTS',
+  'CRAYONS', 'GLOW', 'GIFTS', 'RAKHI', 'MITHAI',
 ] as const;
 
 function Decoration({ set }: { set: string }) {
@@ -247,6 +247,15 @@ function Decoration({ set }: { set: string }) {
       return <LightRow colors={['#e5c77b', '#f2d789', '#d9b45e']} />;
     case 'GIFTS':
       return <FallField glyphs={['🎁', '⭐', '❄']} colors={['#c0392b', '#e8b923', '#cfe3f0']} />;
+    case 'RAKHI':
+      return (
+        <>
+          <span className="ps-fx-rakhi" style={{ top: 96, left: -34 }} aria-hidden="true" />
+          <span className="ps-fx-rakhi" style={{ bottom: -34, right: -34, animationDelay: '3s', width: 150, height: 150 }} aria-hidden="true" />
+        </>
+      );
+    case 'MITHAI':
+      return <FallField glyphs={['🎁', '🍬', '✨']} colors={['#e63946', '#f25287', '#d4a017']} />;
     default:
       return null;
   }

@@ -400,6 +400,7 @@ export type FestivalKey =
   | 'JANMASHTAMI'
   | 'ONAM'
   | 'SANKRANTI'
+  | 'RAKSHA'
   | 'INDEPENDENCE'
   | 'REPUBLIC'
   | 'CHILDRENS'
@@ -546,6 +547,20 @@ export const FESTIVALS: FestivalDef[] = [
       { value: 'HARVEST', label: 'Harvest corners', hint: 'Wheat sheaves in the corners with a soft shimmer.' },
     ],
     fullExtras: ['KITES', 'SUN'],
+  },
+  {
+    value: 'RAKSHA',
+    label: 'Raksha Bandhan',
+    emoji: '🪢',
+    accent: '#e0447c',
+    full: { ps1: '#e63946', ps2: '#d4a017' },
+    greeting: 'Happy Raksha Bandhan — celebrating the bond between siblings',
+    variants: [
+      { value: 'RAKHI', label: 'Rakhi medallions', hint: 'Thread medallions turning slowly in the corners.' },
+      { value: 'MITHAI', label: 'Gifts & sweets', hint: 'Gifts and mithai drifting gently down.' },
+      { value: 'GLOW', label: 'Golden thread lights', hint: 'A warm gold light string along the top.' },
+    ],
+    fullExtras: ['RAKHI', 'MITHAI'],
   },
   {
     value: 'INDEPENDENCE',
