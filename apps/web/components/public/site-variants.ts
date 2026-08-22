@@ -39,11 +39,12 @@ export const SCROLL_FEELS: StyleOption<ScrollFeel>[] = [
   },
   { value: 'SNAP', label: 'Snap', hint: 'Each section clicks gently into place as you scroll.' },
   { value: 'DECK', label: 'Deck', hint: 'Sections stack over one another like a deck of cards.' },
-  {
-    value: 'HORIZONTAL',
-    label: 'Side-scroll',
-    hint: 'Sections glide in from the side as you scroll — a sideways journey on ordinary scrolling. Older browsers and reduced-motion visitors get the normal column.',
-  },
+  // HORIZONTAL (Side-scroll) is RETIRED, not offered. Two implementations — a
+  // JS-pinned track and a scroll-driven glide — both fell short of the real
+  // full-page sideways ride (the prevint.pt experience), which needs a
+  // dedicated scroll engine to do properly. Rather than ship a third
+  // approximation the option is removed; the enum value stays accepted so a
+  // profile that saved it keeps validating, and it renders as Classic.
 ];
 export function scrollFeelClass(v: string | null | undefined): string {
   switch (v) {
@@ -55,10 +56,7 @@ export function scrollFeelClass(v: string | null | undefined): string {
     // so the effect hook can find its own switch without re-reading the data.
     case 'GLIDE':
       return 'ps-scroll-glide';
-    // HORIZONTAL: scroll-driven sideways glide via CSS view() timelines
-    // (ps-sf-hslide) — native vertical scrolling, no pinned track, no JS.
-    case 'HORIZONTAL':
-      return 'ps-scroll-horizontal';
+    // HORIZONTAL: retired (see SCROLL_FEELS) — saved configs render Classic.
     // ZOOM / REVEAL / TILT: scroll-driven band effects via CSS view() timelines
     // — no JS, and browsers without scroll-timeline support just render the
     // bands statically (a safe no-op).

@@ -44,7 +44,9 @@ describe('defaults emit no class', () => {
     expect(scrollFeelClass('SNAP')).toBe('ps-scroll-snap');
     expect(scrollFeelClass('DECK')).toBe('ps-scroll-deck');
     expect(scrollFeelClass('GLIDE')).toBe('ps-scroll-glide');
-    expect(scrollFeelClass('HORIZONTAL')).toBe('ps-scroll-horizontal');
+    // Side-scroll is retired: the value stays accepted (old configs must not
+    // 400 on save) but renders as Classic — silent, like the default.
+    expect(scrollFeelClass('HORIZONTAL')).toBe('');
     expect(scrollFeelClass('ZOOM')).toBe('ps-scroll-zoom');
     expect(scrollFeelClass('REVEAL')).toBe('ps-scroll-reveal');
     expect(scrollFeelClass('TILT')).toBe('ps-scroll-tilt');

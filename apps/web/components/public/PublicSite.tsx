@@ -236,19 +236,8 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
     };
   }, [glideOn]);
 
-  // ── Scroll feel: HORIZONTAL ──
-  // No JS. The old implementation was a pinned track (reserve page height,
-  // sticky viewport, translate sideways) and it was fragile by construction:
-  // it depended on innerHeight never changing (mobile URL bars change it
-  // mid-scroll), on content never resizing after measurement, and it squeezed
-  // every band into one fixed screen with nested scrollbars — any mismatch
-  // scrolled the visitor DOWN past distorted, cropped panels, and the Panels/
-  // edge styling could not reach bands relocated into the track. Side-scroll
-  // is now pure scroll-driven CSS (ps-sf-hslide in ps-css.ts, the same
-  // animation-timeline: view() machinery as Zoom-through/Reveal/Tilt):
-  // scrolling stays native and vertical, each band glides in from the right
-  // and out to the left, and bands remain direct children of the root so
-  // every other axis still reaches them.
+  // (Scroll feel HORIZONTAL/"Side-scroll" is retired — see SCROLL_FEELS in
+  // site-variants.ts. Saved configs still validate and render as Classic.)
 
   // ── Home bands, keyed for admin ordering ────────────────────────────────
   // Every band keeps its exact markup and its exact visibility condition; the
