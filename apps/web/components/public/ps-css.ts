@@ -302,28 +302,23 @@ export const PS_CSS = `
   .ps-shape-panels.ps-scroll-deck > div[data-sec],
   .ps-shape-panels.ps-scroll-deck > footer { box-shadow: none; }
 
-  /* Panels tints the whole page ground, which then shows through anything that
-     sits on it with no fill of its own — including the hero and the transparent
-     strip behind a floating nav. That left a faint darker band at the very top,
-     behind the navbar. Give the top region paper so the page starts clean.
-
-     1) The hero floats on paper (not the tinted ground) — this alone covers a
-        floating nav that overlays the hero (fixed): behind it is the hero.
-     2) A NON-overlay pill (sticky, no hero behind it) shows paper AT REST via its
-        marker. On scroll it drops back to transparent (:not) so page content
-        still passes behind its sides as intended.
-     3) DECK forces every floating nav to position:sticky (see .ps-scroll-deck >
-        #ps-nav below), so an OVERLAY pill/ghost is no longer over the hero — it
-        takes flow space and its transparent shell reveals the ground strip. Under
-        deck, paper that strip too (at rest; the hero sits below it, so nothing is
-        covered). Scoped to deck because that's the only feel that relocates it. */
-  .ps-shape-panels > [data-sec="hero"] { background: var(--paper); }
-  /* The paper backdrop FADES into the tinted ground rather than stopping at
-     the header's bottom edge — a solid rectangle drew a visible seam where
-     paper met the ground strip above the first panel. */
-  .ps-shape-panels #ps-nav.ps-nav-pill-flow:not(.ps-nav-scrolled),
-  .ps-shape-panels.ps-scroll-deck #ps-nav.ps-nav-float-over:not(.ps-nav-scrolled) {
-    background: linear-gradient(to bottom, var(--paper) 58%, transparent); }
+  /* THE HERO IS PANEL #1. Earlier iterations papered the hero full-bleed and
+     gave the floating nav a paper backdrop, which split the page into three
+     background regimes (nav strip, paper hero, tinted ground with panels) —
+     every boundary between them read as a seam. Instead the hero now wears
+     the SAME framing as every band below it: a rounded panel floating on the
+     ground. The tinted ground then runs uninterrupted from the very top of
+     the page down — behind the nav's transparent shell, around the hero,
+     between the panels — one surface, no seams, so the nav needs no backdrop
+     at all. overflow:hidden clips full-bleed hero media to the radius. */
+  .ps-shape-panels > [data-sec="hero"] {
+    background: var(--paper);
+    border-radius: 22px;
+    max-width: min(76rem, calc(100% - clamp(20px, 5vw, 48px)));
+    margin: 14px auto 0;
+    box-shadow: 0 8px 26px -20px rgba(17, 20, 28, 0.25);
+    overflow: hidden;
+  }
 
   /* ── Ambient header layer (/connect) ──
      Two blurred brand-coloured drifts. No canvas and no library: two divs and
