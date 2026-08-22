@@ -34,6 +34,11 @@ const STATUS_COLOR: Record<Status, string> = {
 
 const AVATAR_COLORS = ['var(--sk-brand)', 'var(--sk-brand-2)', '#6b5ca8', '#a85c7b', '#4e7ca8', '#b0813b'];
 
+/** role arrives as the raw enum (LIBRARIAN, OFFICE, …) — humanize for display. */
+function roleLabel(role?: string): string | undefined {
+  return role ? role.charAt(0) + role.slice(1).toLowerCase() : undefined;
+}
+
 interface RosterPerson {
   id: string;
   name: string;
@@ -235,7 +240,7 @@ function AttendanceCardModal({
       >
         <div>
           <h3 id="staff-attn-card-h">{person.name}</h3>
-          {person.role && <p className="sk-muted" style={{ marginTop: 2 }}>{person.role}</p>}
+          {person.role && <p className="sk-muted" style={{ marginTop: 2 }}>{roleLabel(person.role)}</p>}
         </div>
         <button onClick={onClose} className="sk-btn sk-press" aria-label="Close" style={{ padding: 7 }}>
           <X className="h-4 w-4" />
@@ -579,7 +584,7 @@ export default function StaffAttendancePage() {
                       >
                         {p.name}
                       </button>
-                      <div className="meta">{p.kind === 'TEACHER' ? 'Teacher' : p.role ?? 'Staff'}</div>
+                      <div className="meta">{p.kind === 'TEACHER' ? 'Teacher' : roleLabel(p.role) ?? 'Staff'}</div>
                     </div>
                     <span className="sp" />
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
