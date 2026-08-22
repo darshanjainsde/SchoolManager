@@ -818,7 +818,9 @@ export const PS_CSS = `
   /* COVERS: tall photo tiles — the image fills the card and the copy sits on
      a dark wash at its foot. Cards without a photo keep the programme mark. */
   .ps-v-courses-covers .ps-flip, .ps-v-courses-covers .ps-flip-inner { min-height: 22rem; }
-  .ps-v-courses-covers .ps-face:not(.ps-face-back) { position: relative; overflow: hidden; }
+  /* The face KEEPS the base absolute/inset-0 sizing — overriding it to
+     relative collapses the card to its (all-absolute) children. */
+  .ps-v-courses-covers .ps-face:not(.ps-face-back) { overflow: hidden; }
   .ps-v-courses-covers .ps-face:not(.ps-face-back) > div:first-child {
     position: absolute; inset: 0; height: 100% !important; }
   .ps-v-courses-covers .ps-face:not(.ps-face-back) .p-5 { position: absolute; left: 0; right: 0; bottom: 0;
