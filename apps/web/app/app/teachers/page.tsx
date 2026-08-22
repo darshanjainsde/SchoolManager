@@ -248,7 +248,7 @@ function TeacherForm({
             />
           </Field>
         </div>
-        <Field label="Email (optional)" htmlFor="tf-email">
+        <Field label="Email (optional — needed to create their login)" htmlFor="tf-email">
           <input
             id="tf-email"
             type="email"

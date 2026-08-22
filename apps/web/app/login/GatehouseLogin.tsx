@@ -35,7 +35,7 @@ const DESTINATION: Record<string, string> = {
  * otherwise the Sckools Tassel-S (unbranded fallback). Deterministic — safe to
  * server-render.
  */
-function Crest({ theme, size = 44 }: { theme: LoginTheme; size?: number }) {
+export function Crest({ theme, size = 44 }: { theme: LoginTheme; size?: number }) {
   // A school logo that 404s (moved bucket, dead URL) must degrade to the
   // generated shield, never to a broken-image glyph on the identity panel.
   const [logoFailed, setLogoFailed] = useState(false);

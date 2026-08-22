@@ -268,7 +268,7 @@ function StaffForm({ title, initial = {}, onSave, isSaving, onCancel, roles }: S
           </select>
         </Field>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Email (optional)" htmlFor="sf-email">
+          <Field label="Email (optional — needed to create their login)" htmlFor="sf-email">
             <input
               id="sf-email"
               type="email"
