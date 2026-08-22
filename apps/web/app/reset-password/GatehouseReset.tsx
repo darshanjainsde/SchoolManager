@@ -41,7 +41,14 @@ function ResetForm({ theme }: { theme: LoginTheme }) {
       setTimeout(() => router.replace('/login'), 1600);
     } catch (err) {
       setStatus('idle');
-      fail((err as Error).message || 'This link is invalid or has expired — request a new one.');
+      // Token-shaped validator messages ("token must be longer than…") are
+      // for developers; the person holding a dead link needs the human line.
+      const raw = (err as Error).message || '';
+      fail(
+        !raw || /token/i.test(raw)
+          ? 'This link is invalid or has expired — request a new one below.'
+          : raw,
+      );
     }
   }
   function fail(message: string) {
