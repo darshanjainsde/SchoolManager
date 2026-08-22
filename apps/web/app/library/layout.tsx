@@ -90,9 +90,14 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="skosx sk-shell">
-      <header className="sk-topbar">
-        <div className="sk-topbar-inner">
+    // h-dvh + overflow-hidden makes the shell a fixed viewport (same mechanics
+    // as the admin console): the spine rail and the main area each scroll on
+    // their OWN, so the rail stays put while the librarian scrolls a long list.
+    <div className="skosx sk-shell flex h-dvh flex-col overflow-hidden">
+      <header className="sk-topbar shrink-0">
+        {/* The shared topbar centres at 68rem for the phone-first portals; the
+            library is a desk tool and uses the whole screen. */}
+        <div className="sk-topbar-inner" style={{ maxWidth: 'none' }}>
           <SckoolsLogo variant="symbol" size={30} />
           <div className="sk-who">
             <div className="n">The library</div>
@@ -107,11 +112,13 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-3 py-4 md:flex-row md:px-5">
-        {/* The shelf. Horizontal scroll strip on phones, spine rail on desktop. */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        {/* The shelf. Horizontal scroll strip on phones (always visible above
+            the page), spine rail pinned to the side on desktop with its own
+            scrollbar — scrolling the page never moves it. */}
         <nav
           aria-label="Library sections"
-          className="flex shrink-0 gap-2 overflow-x-auto pb-1 md:w-48 md:flex-col md:overflow-visible md:pb-0"
+          className="flex shrink-0 gap-2 overflow-x-auto px-3 pb-1 pt-3 md:w-48 md:flex-col md:overflow-y-auto md:overflow-x-visible md:py-4 md:pl-5 md:pr-0"
         >
           {NAV.map((item) => {
             const active = isActive(item.href);
@@ -120,7 +127,7 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
-                className={`flex items-center gap-2 whitespace-nowrap rounded-r-lg rounded-l-[5px] border border-[var(--sk-line)] bg-[var(--sk-card)] py-2.5 pl-2 pr-3 text-[13px] font-semibold shadow-sm transition-transform ${
+                className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-r-lg rounded-l-[5px] border border-[var(--sk-line)] bg-[var(--sk-card)] py-2.5 pl-2 pr-3 text-[13px] font-semibold shadow-sm transition-transform ${
                   active
                     ? 'translate-x-0 text-[var(--sk-ink)] shadow md:translate-x-1.5'
                     : 'text-[var(--sk-ink-2)] hover:translate-x-0.5'
@@ -137,7 +144,9 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4 pt-3 md:px-6 md:py-4">
+          {children}
+        </main>
       </div>
     </div>
   );
