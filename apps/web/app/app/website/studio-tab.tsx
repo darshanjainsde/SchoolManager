@@ -769,7 +769,15 @@ export default function StudioTab() {
           a saved look neither carries nor deletes them. ── */}
       <Group id="structure" title="Homepage structure" summary={homeSecs.length ? `Band order · ${homeSecs.length} custom section${homeSecs.length === 1 ? '' : 's'}` : 'Band order & your own sections'}>
         {activeId !== 'live' ? (
-          <p className="text-[11px] text-slate-400">The section order and your own sections belong to the live site (they’re content, not styling), so a saved look never changes them. Switch to <span className="font-semibold">Live site</span> to edit them.</p>
+          <div>
+            <p className="text-[11px] text-slate-400">The section order and your own sections belong to the live site (they’re content, not styling), so a saved look never changes them.</p>
+            {/* Without this button the feature reads as MISSING: an admin who
+                happens to have a draft theme selected sees only a note and no
+                way in. One click routes them to where the controls live. */}
+            <Button size="sm" variant="outline" className="mt-2" onClick={() => setEditingId('live')}>
+              Switch to Live site to edit ↩
+            </Button>
+          </div>
         ) : (<>
         <FieldLabel>Section order (top to bottom)</FieldLabel>
         <p className="mb-2 text-[11px] text-slate-400">The hero stays first and the footer last. A band with nothing to show is skipped automatically, so reordering never leaves a hole.</p>

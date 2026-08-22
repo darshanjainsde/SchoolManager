@@ -718,16 +718,23 @@ export const PS_CSS = `
   .ps-v-about-overlap .ps-about-img-wrap::before { content: ""; position: absolute;
     inset: -14px 14px 14px -14px; border: 2px solid var(--ps2);
     border-radius: var(--ps-radius); opacity: .55; }
-  .ps-v-about-center.ps-about-grid { grid-template-columns: 1fr !important;
-    text-align: center; max-width: 46rem; margin-inline: auto; }
-  .ps-v-about-center .ps-about-img-wrap { order: 2; max-width: 34rem; margin-inline: auto; width: 100%; }
+  /* Narrative uses the FULL band: the copy keeps a readable centred measure,
+     but the photo stretches wide beneath it — a narrow 46rem column floating
+     inside a 72rem framed panel read as broken, not elegant. */
+  .ps-v-about-center.ps-about-grid { grid-template-columns: 1fr !important; text-align: center; }
+  .ps-v-about-center .ps-about-copy { max-width: 52rem; margin-inline: auto; width: 100%; }
+  .ps-v-about-center .ps-about-img-wrap { order: 2; width: 100%; }
+  .ps-v-about-center .ps-about-img { height: clamp(14rem, 34vw, 24rem); }
   .ps-v-about-center .ps-about-copy blockquote { border-left: 0; padding-left: 0; }
 
   /* LETTER: the note reads as a sheet of school stationery — bordered paper,
      a brand letterhead rule on top, the principal's line closing it like a
      sign-off, and the campus photo tucked quietly below the sheet. */
-  .ps-v-about-letter.ps-about-grid { grid-template-columns: 1fr !important;
-    max-width: 46rem; margin-inline: auto; gap: 2.2rem; }
+  .ps-v-about-letter.ps-about-grid { grid-template-columns: 1fr !important; gap: 2.2rem; }
+  @media (min-width: 1024px) {
+    .ps-v-about-letter.ps-about-grid { grid-template-columns: 1.35fr 1fr !important; align-items: stretch; }
+    .ps-v-about-letter .ps-about-img { height: 100%; min-height: 24rem; }
+  }
   .ps-v-about-letter .ps-about-copy { position: relative; background: var(--paper);
     border: 1px solid color-mix(in srgb, var(--ps1) 16%, transparent);
     border-radius: 6px; padding: clamp(1.6rem, 4.5vw, 3rem);
@@ -740,15 +747,22 @@ export const PS_CSS = `
     margin-top: 1.5rem; font-size: .95rem;
     border-top: 1px dashed color-mix(in srgb, var(--ps1) 30%, transparent); }
   .ps-v-about-letter .ps-about-img-wrap { order: 2; }
-  .ps-v-about-letter .ps-about-img { height: 15rem; }
+  .ps-v-about-letter .ps-about-img { height: 16rem; }
   .ps-v-about-letter .ps-about-glow { display: none; }
 
   /* QUOTE: the principal's message IS the band — set display-size in the
      heading face under an oversized quote mark; the stock headline demotes to
      a small subhead and the photo becomes a wide strip with the signature card
      centred beneath it. Without a message it gracefully reads as Narrative. */
-  .ps-v-about-quote.ps-about-grid { grid-template-columns: 1fr !important;
-    max-width: 52rem; margin-inline: auto; text-align: center; }
+  .ps-v-about-quote.ps-about-grid { grid-template-columns: 1fr !important; text-align: center; }
+  @media (min-width: 1024px) {
+    .ps-v-about-quote.ps-about-grid { grid-template-columns: 1.25fr 1fr !important;
+      text-align: left; align-items: center; }
+    .ps-v-about-quote .ps-about-copy { align-items: flex-start; }
+    .ps-v-about-quote .ps-about-copy p { margin-inline: 0; }
+    .ps-v-about-quote .ps-about-img-wrap { order: 2; margin-bottom: 0; }
+    .ps-v-about-quote .ps-about-img { height: 26rem; }
+  }
   .ps-v-about-quote .ps-about-copy { display: flex; flex-direction: column; align-items: center; }
   .ps-v-about-quote .ps-about-copy blockquote { order: 1; border-left: 0; padding-left: 0;
     margin-top: 1.1rem; max-width: 46rem; font-style: normal;
@@ -768,9 +782,9 @@ export const PS_CSS = `
   /* EDITORIAL: magazine spread — full-width photo as the opening image, the
      story flowing in two columns behind a drop cap, and the principal's line
      as a centred pull-quote between hairline rules. */
-  .ps-v-about-editorial.ps-about-grid { grid-template-columns: 1fr !important;
-    max-width: 56rem; margin-inline: auto; gap: 2.6rem; }
-  .ps-v-about-editorial .ps-about-img { height: 20rem; border-radius: var(--ps-radius); }
+  .ps-v-about-editorial.ps-about-grid { grid-template-columns: 1fr !important; gap: 2.6rem; }
+  .ps-v-about-editorial .ps-about-img { height: clamp(14rem, 32vw, 24rem); border-radius: var(--ps-radius); }
+  @media (min-width: 1280px) { .ps-v-about-editorial .ps-about-copy p { columns: 3; } }
   .ps-v-about-editorial .ps-about-glow { display: none; }
   .ps-v-about-editorial .ps-about-copy p { margin-top: 1.5rem; column-gap: 2.6rem; }
   @media (min-width: 768px) { .ps-v-about-editorial .ps-about-copy p { columns: 2; } }
@@ -789,6 +803,30 @@ export const PS_CSS = `
   .ps-v-courses-carousel .ps-courses-grid > .reveal { flex: 0 0 min(78%, 320px); scroll-snap-align: start; }
   .ps-v-courses-rows .ps-courses-grid { grid-template-columns: minmax(0, 1fr) !important;
     max-width: 42rem; margin-inline: auto; }
+  /* SHOWCASE: each programme becomes a wide feature row — photo beside the
+     story, alternating sides. The flip interaction stays; only the front
+     face's geometry changes. */
+  .ps-v-courses-showcase .ps-courses-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 1.75rem; }
+  @media (min-width: 768px) {
+    .ps-v-courses-showcase .ps-face:not(.ps-face-back) { display: grid;
+      grid-template-columns: 44% 1fr; align-items: stretch; }
+    .ps-v-courses-showcase .ps-face:not(.ps-face-back) > div:first-child { height: 100%; min-height: 15rem; }
+    .ps-v-courses-showcase .ps-courses-grid > .reveal:nth-child(even) .ps-face:not(.ps-face-back) { direction: rtl; }
+    .ps-v-courses-showcase .ps-courses-grid > .reveal:nth-child(even) .ps-face:not(.ps-face-back) > * { direction: ltr; }
+    .ps-v-courses-showcase .ps-face:not(.ps-face-back) .p-5 { padding: 1.75rem 2rem; justify-content: center; }
+  }
+  /* COVERS: tall photo tiles — the image fills the card and the copy sits on
+     a dark wash at its foot. Cards without a photo keep the programme mark. */
+  .ps-v-courses-covers .ps-flip, .ps-v-courses-covers .ps-flip-inner { min-height: 22rem; }
+  .ps-v-courses-covers .ps-face:not(.ps-face-back) { position: relative; overflow: hidden; }
+  .ps-v-courses-covers .ps-face:not(.ps-face-back) > div:first-child {
+    position: absolute; inset: 0; height: 100% !important; }
+  .ps-v-courses-covers .ps-face:not(.ps-face-back) .p-5 { position: absolute; left: 0; right: 0; bottom: 0;
+    padding-top: 3.5rem;
+    background: linear-gradient(to top, rgba(10, 14, 20, 0.88) 30%, rgba(10, 14, 20, 0.45) 70%, transparent); }
+  .ps-v-courses-covers .ps-face:not(.ps-face-back) .p-5 h3 { color: #fff; }
+  .ps-v-courses-covers .ps-face:not(.ps-face-back) .p-5 p { color: rgba(255, 255, 255, 0.8); }
+  .ps-v-courses-covers .ps-face:not(.ps-face-back) .p-5 span { color: #fff !important; }
 
   /* ── Admissions TILES (JOURNEY and STEPPER reuse the shipped variants) ── */
   .ps-v-admissions-tiles .ps-jline { display: none; }

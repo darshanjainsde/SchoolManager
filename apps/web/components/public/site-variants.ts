@@ -145,6 +145,8 @@ export const SECTION_VARIANT_DEFS: Record<
       { value: 'GRID', label: 'Flip-card grid', hint: 'Cards that flip to their highlights — today’s look.' },
       { value: 'CAROUSEL', label: 'Carousel', hint: 'One swipeable row that snaps card to card.' },
       { value: 'ROWS', label: 'Single column', hint: 'One full-width card per row.' },
+      { value: 'SHOWCASE', label: 'Feature rows', hint: 'Wide alternating rows — the photo beside the story, zig then zag.' },
+      { value: 'COVERS', label: 'Cover tiles', hint: 'Tall full-photo tiles with the programme name over a dark wash.' },
     ],
   },
   admissions: {
