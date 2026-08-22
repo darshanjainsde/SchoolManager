@@ -42,7 +42,7 @@ export const SCROLL_FEELS: StyleOption<ScrollFeel>[] = [
   {
     value: 'HORIZONTAL',
     label: 'Side-scroll',
-    hint: 'The homepage bands become full-screen panels you move through sideways. Reverts to a normal column on phones and for reduced-motion visitors.',
+    hint: 'Sections glide in from the side as you scroll — a sideways journey on ordinary scrolling. Older browsers and reduced-motion visitors get the normal column.',
   },
 ];
 export function scrollFeelClass(v: string | null | undefined): string {
@@ -55,8 +55,8 @@ export function scrollFeelClass(v: string | null | undefined): string {
     // so the effect hook can find its own switch without re-reading the data.
     case 'GLIDE':
       return 'ps-scroll-glide';
-    // HORIZONTAL: the class flips the home track to a horizontal panel row (CSS,
-    // desktop + motion only); a small effect adds wheel-to-sideways on top.
+    // HORIZONTAL: scroll-driven sideways glide via CSS view() timelines
+    // (ps-sf-hslide) — native vertical scrolling, no pinned track, no JS.
     case 'HORIZONTAL':
       return 'ps-scroll-horizontal';
     // ZOOM / REVEAL / TILT: scroll-driven band effects via CSS view() timelines

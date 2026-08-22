@@ -585,33 +585,8 @@ export const PS_CSS = `
      the in-flow values the hero uses when the nav never overlays. */
   .ps-scroll-deck [data-sec="hero"] .pt-24 { padding-top: 1.5rem; }
   .ps-scroll-deck [data-sec="hero"] .pt-28 { padding-top: 3.5rem; }
-  /* Side-scroll: the home bands become full-viewport panels in a horizontal
-     track. Desktop + motion-allowed only — on phones and under reduced-motion
-     the track stays a normal column, so the page can never break there. Touch
-     keeps its native horizontal swipe; the wheel-to-sideways effect is layered
-     on top. Each band keeps its own vertical scroll for content over one screen. */
-  @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
-    /* Pinned horizontal: the sticky viewport holds still while the JS reserves
-       vertical scroll room on the wrapper and slides the track sideways as the
-       page scrolls down. Off this media (phones, reduced-motion) every element
-       is a plain block, so the bands fall back to a normal vertical column. */
-    .ps-scroll-horizontal .ps-hwrap { position: relative; }
-    .ps-scroll-horizontal .ps-hsticky {
-      position: sticky; top: 0;
-      height: 100vh; height: 100dvh;
-      overflow: hidden;
-      display: flex; align-items: stretch;
-    }
-    .ps-scroll-horizontal .ps-htrack {
-      display: flex; flex-wrap: nowrap; align-items: stretch;
-      height: 100%;
-      will-change: transform;
-    }
-    .ps-scroll-horizontal .ps-htrack > * {
-      flex: 0 0 100vw; max-width: 100vw; height: 100%;
-      overflow-y: auto; overflow-x: hidden;
-    }
-  }
+  /* Side-scroll lives with the other scroll-driven feels below (ps-sf-hslide):
+     the old JS-pinned track was fragile by construction and is gone. */
 
   /* ── Scroll-driven feels (Zoom-through / Reveal / Tilt) ──
      Continuous, tied to each band's position in the viewport via CSS view()
@@ -645,6 +620,30 @@ export const PS_CSS = `
       .ps-scroll-tilt:not(.ps-motion-off) [data-sec]:not([data-sec="hero"]) {
         animation: ps-sf-tilt linear both; animation-timeline: view();
         transform-style: preserve-3d; }
+      /* Side-scroll: each band GLIDES IN from the right as it enters the
+         viewport, rides level through the middle, and glides OUT to the left
+         as it leaves — sideways travel driven purely by native vertical
+         scrolling. Nothing is pinned, measured or clipped: no height maths to
+         desync, no nested scrollbars, and the bands stay direct children of
+         the root so Panels/edges/gestures all still reach them. Distance
+         scales with the animation-level knob; the alternating direction
+         (even bands from the left) makes it read as a journey, not a tic. */
+      @keyframes ps-sf-hslide {
+        0%   { transform: translateX(calc(64vw * var(--motion))) scale(calc(1 - 0.04 * var(--motion))); opacity: .35; }
+        26%  { transform: none; opacity: 1; }
+        74%  { transform: none; opacity: 1; }
+        100% { transform: translateX(calc(-64vw * var(--motion))) scale(calc(1 - 0.04 * var(--motion))); opacity: .35; }
+      }
+      @keyframes ps-sf-hslide-alt {
+        0%   { transform: translateX(calc(-64vw * var(--motion))) scale(calc(1 - 0.04 * var(--motion))); opacity: .35; }
+        26%  { transform: none; opacity: 1; }
+        74%  { transform: none; opacity: 1; }
+        100% { transform: translateX(calc(64vw * var(--motion))) scale(calc(1 - 0.04 * var(--motion))); opacity: .35; }
+      }
+      .ps-scroll-horizontal:not(.ps-motion-off) [data-sec]:not([data-sec="hero"]) {
+        animation: ps-sf-hslide linear both; animation-timeline: view(); }
+      .ps-scroll-horizontal:not(.ps-motion-off) [data-sec]:not([data-sec="hero"]):nth-child(even) {
+        animation-name: ps-sf-hslide-alt; }
     }
   }
 

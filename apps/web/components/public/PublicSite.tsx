@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Fragment, useEffect, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, type ReactNode } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
 import HeroSection, { heroImagesOf, heroIsPhotoLayout } from './sections/HeroSection';
@@ -43,41 +43,6 @@ interface Props {
 }
 
 
-/**
- * Wraps the home bands for side-scroll, and is a no-op fragment otherwise — so a
- * school on any other scroll feel keeps the exact DOM it renders today (which
- * matters: the Deck feel relies on the bands being direct children of the root).
- *
- * Side-scroll is a PINNED horizontal scroll: the outer wrapper reserves the
- * vertical scroll distance, the sticky viewport pins to the screen, and the
- * track slides sideways as the visitor scrolls DOWN — so ordinary vertical
- * scrolling drives the horizontal motion (no separate sideways gesture).
- */
-function HomeShell({
-  horizontal,
-  wrapRef,
-  trackRef,
-  children,
-}: {
-  horizontal: boolean;
-  wrapRef: React.RefObject<HTMLDivElement | null>;
-  trackRef: React.RefObject<HTMLDivElement | null>;
-  children: React.ReactNode;
-}) {
-  return horizontal ? (
-    <div className="ps-hwrap" ref={wrapRef}>
-      <div className="ps-hsticky">
-        <div className="ps-htrack" ref={trackRef}>
-          {children}
-        </div>
-      </div>
-    </div>
-  ) : (
-    <>{children}</>
-  );
-}
-
-
 function parseStatValue(val: string): { numeric: boolean; num: number; suffix: string } {
   const clean = val.trim();
   const match = clean.match(/^(\d+(?:\.\d+)?)\s*([%+]?)$/);
@@ -111,13 +76,6 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
   const glideOn =
     (data.profile?.scrollFeel ?? 'CLASSIC') === 'GLIDE' &&
     (data.profile?.animationLevel ?? 'FULL') !== 'NONE';
-  // Side-scroll: the home bands become full-viewport panels the visitor moves
-  // through sideways. Structural (a wrapper) so the CSS can fall back to normal
-  // vertical flow on small screens and reduced-motion; the wheel translation is
-  // desktop-only and gated inside its own effect.
-  const horizontalOn = view === 'home' && (data.profile?.scrollFeel ?? 'CLASSIC') === 'HORIZONTAL';
-  const hwrapRef = useRef<HTMLDivElement | null>(null);
-  const htrackRef = useRef<HTMLDivElement | null>(null);
   const statsLayout = sectionLayoutOf(variants, 'stats');
 
   const brandColor = data.profile?.brandColorPrimary ?? '#2f6b4f';
@@ -176,14 +134,6 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
     // at once, the rest as it scrolls in, and nothing depends on an async frame.
     const reveals = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
     const counts = Array.from(document.querySelectorAll<HTMLElement>('.count'));
-    // Side-scroll relocates the bands into a horizontal track where each panel
-    // has its own vertical scroller, so the window-scroll position gate below
-    // can't reach anything past the first screen of a panel. Reveal everything
-    // up front there rather than leave the lower half of tall panels blank.
-    if (horizontalOn) {
-      reveals.forEach((el) => el.classList.add('in'));
-      reveals.length = 0;
-    }
     const runCount = (el: HTMLElement) => {
       const to = Number(el.dataset.to);
       if (isNaN(to)) return;
@@ -286,62 +236,19 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
     };
   }, [glideOn]);
 
-  // ── Scroll feel: HORIZONTAL (pinned) ──
-  // The wrapper reserves vertical scroll distance equal to the track's overflow;
-  // while it's on screen the sticky viewport is pinned and the track is slid
-  // sideways in step with how far the visitor has scrolled DOWN. So normal
-  // vertical scrolling — wheel, trackpad, scrollbar, keyboard, touch — moves the
-  // page sideways; the visitor never changes gesture. Desktop + motion only; on
-  // phones and reduced-motion the CSS keeps a normal vertical column and this
-  // effect clears any inline height/transform it might have set.
-  useEffect(() => {
-    const wrap = hwrapRef.current;
-    const track = htrackRef.current;
-    if (!horizontalOn || !wrap || !track) return;
-    const wide = window.matchMedia('(min-width: 768px)');
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let raf = 0;
-    let overflow = 0;
-
-    const layout = () => {
-      if (!wide.matches || reduce.matches) {
-        wrap.style.height = '';
-        track.style.transform = '';
-        overflow = 0;
-        return;
-      }
-      overflow = Math.max(0, track.scrollWidth - window.innerWidth);
-      // Extra vertical room = the horizontal overflow, so one screen of vertical
-      // scroll ≈ one screen of sideways travel.
-      wrap.style.height = `${window.innerHeight + overflow}px`;
-      apply();
-    };
-    const apply = () => {
-      if (overflow <= 0) {
-        track.style.transform = '';
-        return;
-      }
-      const scrolled = Math.min(Math.max(0, -wrap.getBoundingClientRect().top), overflow);
-      track.style.transform = `translate3d(${-scrolled}px,0,0)`;
-    };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(() => { raf = 0; apply(); });
-    };
-
-    layout();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', layout);
-    // Panel widths settle after fonts/images load — re-measure then.
-    const fonts = (document as unknown as { fonts?: { ready?: Promise<unknown> } }).fonts;
-    fonts?.ready?.then(layout).catch(() => {});
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', layout);
-      if (raf) cancelAnimationFrame(raf);
-      wrap.style.height = '';
-      track.style.transform = '';
-    };
-  }, [horizontalOn]);
+  // ── Scroll feel: HORIZONTAL ──
+  // No JS. The old implementation was a pinned track (reserve page height,
+  // sticky viewport, translate sideways) and it was fragile by construction:
+  // it depended on innerHeight never changing (mobile URL bars change it
+  // mid-scroll), on content never resizing after measurement, and it squeezed
+  // every band into one fixed screen with nested scrollbars — any mismatch
+  // scrolled the visitor DOWN past distorted, cropped panels, and the Panels/
+  // edge styling could not reach bands relocated into the track. Side-scroll
+  // is now pure scroll-driven CSS (ps-sf-hslide in ps-css.ts, the same
+  // animation-timeline: view() machinery as Zoom-through/Reveal/Tilt):
+  // scrolling stays native and vertical, each band glides in from the right
+  // and out to the left, and bands remain direct children of the root so
+  // every other axis still reaches them.
 
   // ── Home bands, keyed for admin ordering ────────────────────────────────
   // Every band keeps its exact markup and its exact visibility condition; the
@@ -679,18 +586,20 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
           )}
         </>
       ) : (
-        <HomeShell horizontal={horizontalOn} wrapRef={hwrapRef} trackRef={htrackRef}>
+        <>
       {/* ── HERO (layout selected by the school admin) ── */}
       <div data-sec="hero">
         <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
       </div>
 
       {/* ── HOME BANDS (each defined once in homeBands; the admin's saved
-          order — plus their custom sections — decides the sequence) ── */}
+          order — plus their custom sections — decides the sequence). Always
+          direct children of the root: Deck, Panels/edges and the scroll-driven
+          feels (side-scroll included) all rely on that. ── */}
       {bandOrder.map((k) => (
         <Fragment key={k}>{homeBands[k]}</Fragment>
       ))}
-        </HomeShell>
+        </>
       )}
 
       {/* ── CUSTOM HTML BLOCK (operator escape hatch; sanitized on write) ── */}
