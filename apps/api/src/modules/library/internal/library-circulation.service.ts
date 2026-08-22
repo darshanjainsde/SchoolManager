@@ -147,6 +147,27 @@ export class LibraryCirculationService {
   async memberSearch(schoolId: string, q: string) {
     const query = q.trim();
     if (query.length < 2) return [];
+    // "Kavya Rao" matches neither firstName nor lastName alone, and typing the
+    // full name is how a librarian naturally searches — so a multi-word query
+    // also tries first-word-as-firstName + rest-as-lastName (and reversed).
+    const words = query.split(/\s+/);
+    const nameSplits =
+      words.length >= 2
+        ? [
+            {
+              AND: [
+                { firstName: { contains: words[0], mode: 'insensitive' as const } },
+                { lastName: { contains: words.slice(1).join(' '), mode: 'insensitive' as const } },
+              ],
+            },
+            {
+              AND: [
+                { firstName: { contains: words.slice(0, -1).join(' '), mode: 'insensitive' as const } },
+                { lastName: { contains: words[words.length - 1], mode: 'insensitive' as const } },
+              ],
+            },
+          ]
+        : [];
     return withTenant(schoolId, async (tx) => {
       const [students, teachers] = await Promise.all([
         tx.student.findMany({
@@ -156,6 +177,7 @@ export class LibraryCirculationService {
               { code: { equals: query, mode: 'insensitive' } },
               { firstName: { contains: query, mode: 'insensitive' } },
               { lastName: { contains: query, mode: 'insensitive' } },
+              ...nameSplits,
             ],
           },
           orderBy: [{ firstName: 'asc' }],
@@ -174,6 +196,7 @@ export class LibraryCirculationService {
             OR: [
               { firstName: { contains: query, mode: 'insensitive' } },
               { lastName: { contains: query, mode: 'insensitive' } },
+              ...nameSplits,
             ],
           },
           orderBy: [{ firstName: 'asc' }],

@@ -88,6 +88,39 @@ describe('LibraryCirculationService', () => {
     svc = new LibraryCirculationService(new LibrarySettingsService());
   });
 
+  describe('memberSearch', () => {
+    it('a full-name query also matches firstName + lastName split across the words', async () => {
+      txMock.student.findMany.mockResolvedValue([]);
+      txMock.teacher.findMany.mockResolvedValue([]);
+      txMock.libraryIssue.groupBy.mockResolvedValue([]);
+
+      await svc.memberSearch(SCHOOL, 'Kavya Rao');
+
+      const studentWhere = txMock.student.findMany.mock.calls[0][0].where;
+      expect(studentWhere.OR).toEqual(
+        expect.arrayContaining([
+          {
+            AND: [
+              { firstName: { contains: 'Kavya', mode: 'insensitive' } },
+              { lastName: { contains: 'Rao', mode: 'insensitive' } },
+            ],
+          },
+        ]),
+      );
+      const teacherWhere = txMock.teacher.findMany.mock.calls[0][0].where;
+      expect(teacherWhere.OR).toEqual(
+        expect.arrayContaining([
+          {
+            AND: [
+              { firstName: { contains: 'Kavya', mode: 'insensitive' } },
+              { lastName: { contains: 'Rao', mode: 'insensitive' } },
+            ],
+          },
+        ]),
+      );
+    });
+  });
+
   describe('issue', () => {
     it('rejects zero or two borrowers, and zero or two book pickers', async () => {
       await expect(svc.issue(SCHOOL, LIBRARIAN, { titleId: TITLE })).rejects.toBeInstanceOf(ApiError);
