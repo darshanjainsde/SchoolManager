@@ -298,7 +298,8 @@ export default function LibraryCounterPage() {
                 <div className="pr-6 text-sm font-bold text-[var(--sk-ink)]">{memberCard.data.borrower.name}</div>
                 <div className="text-xs text-[var(--sk-ink-3)]">
                   {memberCard.data.borrower.code ?? 'Teacher'}
-                  {memberCard.data.borrower.className ? ` · Class ${memberCard.data.borrower.className}` : ''}
+                  {/* className is already the full display name ("Class 6A", "UKGA") */}
+                  {memberCard.data.borrower.className ? ` · ${memberCard.data.borrower.className}` : ''}
                 </div>
                 <div className="mt-2">{holdingsList(memberCard.data, false)}</div>
               </Card>
