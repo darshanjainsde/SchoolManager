@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Sckools QA Atlas</title>
+<style>
+  :root{
+    --bg:#f7f6f2; --card:#ffffff; --ink:#1c1a2e; --ink2:#4b4763; --ink3:#8b87a0;
+    --line:#e6e3da; --brand:#4f46e5; --brand2:#3730a3; --good:#177245; --good-t:#e7f5ec;
+    --bad:#b3261e; --bad-t:#fbeae9; --amber:#8a6100; --amber-t:#fdf3d8; --blue-t:#eef2ff;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace; --r:12px;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .shell{display:flex;min-height:100dvh}
+  aside{width:230px;flex-shrink:0;background:#211e3b;color:#cac6e4;padding:18px 12px;position:sticky;top:0;height:100dvh;overflow-y:auto}
+  aside h1{font-size:15px;color:#fff;margin:4px 8px 2px}
+  aside .sub{font-size:11px;color:#8d88b3;margin:0 8px 14px}
+  aside button.tab{display:flex;width:100%;align-items:center;gap:8px;background:none;border:0;color:inherit;font:inherit;font-size:13.5px;font-weight:600;padding:9px 10px;border-radius:9px;cursor:pointer;text-align:left}
+  aside button.tab:hover{background:rgba(255,255,255,.07)}
+  aside button.tab.on{background:var(--brand);color:#fff}
+  aside .grp{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#7d78a5;margin:16px 10px 6px}
+  main{flex:1;min-width:0;padding:26px 30px 60px;max-width:1120px}
+  h2{font-size:22px;margin:0 0 4px} .lead{color:var(--ink2);margin:0 0 18px;font-size:13.5px}
+  .feat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px;overflow:hidden}
+  .feat>header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 16px;cursor:pointer}
+  .feat>header:hover{background:#fbfaf7}
+  .feat h3{font-size:15px;margin:0;flex:1;min-width:200px}
+  .routes{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+  .body{display:none;padding:2px 16px 14px;border-top:1px solid var(--line)}
+  .feat.open .body{display:block}
+  .cols{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+  @media(max-width:860px){.cols{grid-template-columns:1fr}.shell{flex-direction:column}aside{width:100%;height:auto;position:static;display:flex;flex-wrap:wrap;gap:2px}aside .grp{width:100%}aside h1,aside .sub{width:100%}main{padding:18px 14px}}
+  .body h4{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin:14px 0 6px}
+  ul{margin:0;padding-left:18px} li{margin:3px 0;color:var(--ink2);font-size:13.5px}
+  li b{color:var(--ink)}
+  .st{display:flex;gap:6px;align-items:center}
+  .st button{border:1px solid var(--line);background:var(--card);border-radius:99px;font-size:11px;font-weight:700;padding:3px 10px;cursor:pointer;color:var(--ink3)}
+  .st button.pass.on{background:var(--good-t);color:var(--good);border-color:var(--good)}
+  .st button.fail.on{background:var(--bad-t);color:var(--bad);border-color:var(--bad)}
+  .st button.blocked.on{background:var(--amber-t);color:var(--amber);border-color:var(--amber)}
+  .prog{font-size:12px;color:var(--ink3);margin:0 0 16px}
+  .prog b.p{color:var(--good)} .prog b.f{color:var(--bad)}
+  textarea.note{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;font:12.5px/1.45 inherit;margin-top:10px;color:var(--ink2)}
+  .pill{display:inline-block;border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700}
+  .pill.email{background:var(--blue-t);color:var(--brand2)} .pill.push{background:var(--good-t);color:var(--good)}
+  .pill.inapp{background:var(--amber-t);color:var(--amber)} .pill.idea{background:#f3e8ff;color:#6b21a8}
+  table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;font-size:13px}
+  .tblwrap{overflow-x:auto;border-radius:var(--r)}
+  th,td{padding:9px 12px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
+  th{background:#fbfaf7;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);border-top:0}
+  td ul{padding-left:14px}
+  .aud{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:12px}
+  .aud .meta{font-size:11.5px;color:var(--ink3);margin-bottom:6px}
+  .aud h3{margin:0 0 4px;font-size:14.5px}
+  form.issue{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:18px;display:grid;gap:10px}
+  form.issue input,form.issue select,form.issue textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:13.5px inherit;width:100%}
+  form.issue label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .btn{background:var(--brand);color:#fff;border:0;border-radius:9px;font-weight:700;font-size:13px;padding:9px 16px;cursor:pointer}
+  .btn.ghost{background:var(--card);color:var(--ink2);border:1px solid var(--line)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .sev{font-size:11px;font-weight:800;border-radius:6px;padding:1px 7px}
+  .sev.high{background:var(--bad-t);color:var(--bad)} .sev.med{background:var(--amber-t);color:var(--amber)} .sev.low{background:var(--blue-t);color:var(--brand2)}
+  .empty{color:var(--ink3);font-size:13px;padding:8px 2px}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .note-inline{background:var(--amber-t);border-radius:9px;padding:10px 14px;font-size:13px;color:var(--amber);margin-bottom:16px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <h1>Sckools QA Atlas</h1>
+    <p class="sub">Every feature · as designed · edge cases</p>
+    <div class="grp">Portals</div>
+    <button class="tab" data-t="admin">🏫 Admin</button>
+    <button class="tab" data-t="teacher">🧑‍🏫 Teacher</button>
+    <button class="tab" data-t="student">🎒 Student / Parent</button>
+    <button class="tab" data-t="library">📚 Library</button>
+    <button class="tab" data-t="staff">🧑‍💼 Staff</button>
+    <button class="tab" data-t="cross">🔐 Auth & Cross-portal</button>
+    <div class="grp">Deep dives</div>
+    <button class="tab" data-t="notifs">✉️ Notifications</button>
+    <button class="tab" data-t="audit">🧾 Audit log</button>
+  </aside>
+  <main id="main"></main>
+</div>
+<script>
+// ───────────────────────── QA content: portal → features ─────────────────────────
+// d = as designed. e = edge cases the QA must try.
+const PORTALS = {
+admin: { title:"Admin portal", lead:"School admin console at /app on the school's own host (e.g. raffles.sckools.com/app). Role: SCHOOL_ADMIN.", features:[
+ {n:"Dashboard", r:"/app", d:[
+   "Welcome view with live counts: students, teachers, classes.",
+   "Amber banner when leave requests await review, linking to Leave.",
+   "Setup checklist collapses to 'Your school is set up 🎉' once configured.",
+   "Quick link to the website editor."
+ ], e:[
+   "Counts update after adding/removing a student or teacher.",
+   "Banner count matches the Leave tab's actual pending list.",
+ ]},
+ {n:"Website Studio (design)", r:"/app/website", d:[
+   "Theme designer: palettes (2 brand colours, paper/ink), font pairs, motion level.",
+   "Section shapes: Default / Panels with edge styles (slant, notch, wave). Under Panels the hero renders as panel #1 — one continuous tinted ground, no background seams behind the nav or between bands.",
+   "Scroll feels: Classic, Glide, Snap, Deck, Zoom-through, Reveal, Tilt. Side-scroll (HORIZONTAL) is retired: old saved values still validate and render as Classic.",
+   "Per-section design variants for hero, about & principal, admissions, programmes/courses (incl. Feature rows and Cover tiles), gallery, educators, contact (incl. wizard), events, blog.",
+   "Homepage structure: reorder sections and add admin-built custom sections; stored inside sectionVariants JSON under __order/__custom.",
+   "Festive mode: 15 festivals (incl. Raksha Bandhan), each with multiple decoration themes.",
+   "Draft → live preview (scaled real desktop 1280px / phone 390px) → publish now or schedule.",
+ ], e:[
+   "Publishing a draft must NOT clobber __order/__custom saved from the structure tab (server merges reserved keys).",
+   "Scheduled publish overlays correctly at the scheduled time; cancelling a schedule reverts.",
+   "DEFAULT options emit no CSS class (site renders identical to no setting).",
+   "A site saved with HORIZONTAL scroll-feel still saves/validates and renders Classic.",
+   "Preview width must not depend on the editor panel size (no feedback loop).",
+   "Custom section links: unsafe URLs (javascript:, data:) are rejected.",
+   "Check background seams under every shape+theme combo, incl. dark-ink palettes.",
+   "Reveal/wipe animations must not clip card shadows or overhanging badges after finishing.",
+ ]},
+ {n:"Blog console", r:"/app/blog", d:[
+   "Compose & publish school posts; adopt posts from the global Sckools library; layout tab controls the public blog look.",
+   "Public school blog matches the site theme (light, themed tokens — never the platform dark skin).",
+   "School blog reads revalidate within 60s of publish.",
+ ], e:[
+   "Publish → check the public /blog within a minute (not 5).",
+   "Adopting a library post then editing it must not alter the library original.",
+   "Unpublishing removes it from the public list.",
+ ]},
+ {n:"Enquiries", r:"/app/enquiries", d:[
+   "Leads from the public enquiry form and course-card callback requests. Status flow New → Contacted → Closed with counts per bucket.",
+ ], e:[
+   "Public form is throttled (5/min per IP) — burst submits get 429.",
+   "HTML in a lead's name/message renders escaped, never as markup.",
+   "Phone/email optional fields; missing email still lists cleanly.",
+   "No email notification is sent to the admin today (see Notifications tab — planned).",
+ ]},
+ {n:"Classes & catalog", r:"/app/classes, /app/settings", d:[
+   "Academic years, grades (ordered), sections, subjects (name + short code), periods (label, start/end, CLASS or BREAK), working days.",
+ ], e:[
+   "Duplicate subject code → clean conflict error.",
+   "Deleting a grade/section that has students or slots → 409 with reason, not cascade.",
+   "Changing a period's times shifts what counts as the 'current' period everywhere (teacher My-day, library Hall) — verify immediately after edit.",
+   "Working-day changes reflect in attendance and timetable views.",
+ ]},
+ {n:"Teachers", r:"/app/teachers", d:[
+   "CRUD with primary subject, bio, phone, photo. Login invite (email on the row or typed at invite time; username optional), resend invite. 'Remove from school' releases: deactivates + disables the login so another school can onboard them.",
+   "One-school rule: an email holding an active teaching login elsewhere cannot get a second login.",
+ ], e:[
+   "Create login twice → 409 'already has a login'.",
+   "Invite shows emailSent — but a bad mailbox bounces silently; QA should verify a real inbox receives the /reset-password link.",
+   "Released teacher: login stops working, sessions revoked, row shows inactive; re-onboarding at ANOTHER school works.",
+   "Email label reads '(optional — needed to create their login)'.",
+ ]},
+ {n:"Staff", r:"/app/staff", d:[
+   "Non-teaching staff CRUD with role: OFFICE, SUPPORT, HELPER, DRIVER, SECURITY, LIBRARIAN. Logins as for teachers. LIBRARIAN staffRole gates the Library portal.",
+ ], e:[
+   "A LIBRARIAN login lands on /library after sign-in; other staff land on /staff.",
+   "Changing staffRole away from LIBRARIAN locks them out of /library on next load.",
+ ]},
+ {n:"Students", r:"/app/students", d:[
+   "CRUD: admission no, auto code (e.g. RAF-00301), class section, roll, DOB, gender, guardian name/phone, photo. Login invite — username defaults to the student code. Bulk import via scripts/import-students.mjs (dry-run default, resumable, re-invites on re-run).",
+ ], e:[
+   "Duplicate admission number → conflict.",
+   "Deactivated student vanishes from rosters, member search, attendance sheets.",
+   "Moving a student between sections keeps past attendance/results attached to history.",
+   "Import re-run after a crash finishes the missing logins instead of duplicating students.",
+ ]},
+ {n:"Timetable builder", r:"/app/timetable", d:[
+   "Per-class week grid. Assign subject + teacher to each day/period; teacher clashes across classes are flagged (409 TEACHER_CONFLICT). Re-assigning a slot supersedes with effective-dated history; a same-day correction updates in place. Unassign removes.",
+ ], e:[
+   "Assign the same teacher to two classes in one period → refused; the clash check must EXCLUDE the very slot being replaced.",
+   "A subject named 'Library…' is what the library Hall uses to find the current class — renaming it breaks that link.",
+   "History: yesterday's teacher change shows the old teacher for past dates, the new one from today.",
+   "Days are Monday-first (1–7).",
+ ]},
+ {n:"Availability", r:"/app/availability", d:["Which teachers are free in a given period, per academic year."], e:["A teacher just assigned a slot drops out of that period's free list."]},
+ {n:"Staff attendance", r:"/app/staff-attendance", d:[
+   "Mark everyone (teachers + non-teaching) present/absent/late/on-leave per day; group filter; 'mark all present'; click a person for the monthly record.",
+ ], e:[
+   "Saving twice for one day overwrites, never duplicates.",
+   "Role labels render humanized ('Librarian', not LIBRARIAN).",
+   "On-leave here vs an approved Leave request — check they don't contradict.",
+ ]},
+ {n:"Leave management", r:"/app/leave", d:[
+   "Teacher applications listed with type/dates/reason; approve or reject; coverage view shows the classes left uncovered and lets admin assign substitutes. Leave types, per-teacher allocations, defaults, year close.",
+ ], e:[
+   "Approve consumes allocation; exhausting an allocation blocks/flags further approvals of that type.",
+   "Rejected then re-applied same dates works.",
+   "Teacher cancels an approved leave → coverage entries clear.",
+   "Substitute assigned must not clash with their own slots.",
+ ]},
+ {n:"Requests (register changes)", r:"/app/requests", d:["Teachers request to correct a locked attendance register; admin approves/rejects; approval unlocks the day for that class."], e:["Approval actually lets the teacher edit exactly that class+date, nothing else."]},
+ {n:"Announcements", r:"/app/announcements", d:[
+   "Post school-wide or to specific classes (≤30). Edit, delete. Sends email + push + in-app inbox to targeted families (see Notifications).",
+ ], e:[
+   "Class-targeted post invisible to other classes' portals.",
+   "Long body (4000 chars) renders and emails cleanly.",
+ ]},
+ {n:"Events", r:"/app/events", d:[
+   "Create with venue, start/end, capacity (blank = unlimited), scope SCHOOL/NETWORK. Public site shows events; families RSVP; 'Who's coming' lists registrations.",
+ ], e:[
+   "Capacity reached → further RSVPs refused with a clear message.",
+   "RSVP dialog floats over the page and survives scrolling (portal into ps-root, light inputs even on OS dark mode).",
+   "Duplicate registration by the same person handled.",
+   "No confirmation email today (see Notifications — planned).",
+ ]},
+ {n:"Jobs (hiring)", r:"/app/jobs", d:[
+   "Post vacancies from role templates with pre-built screening questions (or blank). Submitted jobs go to the Sckools board after review — never on the school's own site. Applications list filtered by the screening answers; close a vacancy.",
+ ], e:[
+   "'With Sckools for review' status until moderated; rejected jobs show reason.",
+   "applyBy in the past → hidden from the public board.",
+   "Application answers map to the correct filters.",
+ ]},
+ {n:"Settings", r:"/app/settings", d:["School profile, class-note visibility (who sees teachers' class notes), working days."], e:["Class-note visibility change reflects immediately on teacher Notes."]},
+]},
+
+teacher: { title:"Teacher portal", lead:"At /teacher. Role: TEACHER. A teacher 'owns' the classes on their timetable — write access to class artifacts follows ownership.", features:[
+ {n:"Today (My day)", r:"/teacher", d:["The teacher's own day from the timetable: current period highlighted, next up, full-day timeline, substitutions included."], e:["During a BREAK period nothing is 'current'.","A substitution today appears in the day view.","Timetable change made today reflects on refresh."]},
+ {n:"Timetable", r:"/teacher/timetable", d:["The teacher's own week grid across all classes they teach."], e:["Effective-dated: last week's grid ≠ this week's after a reassignment."]},
+ {n:"Attendance", r:"/teacher/attendance", d:[
+   "Class picker limited to classes the teacher teaches. Register: tap to cycle Present → Absent → Late; save writes the day. Rates view ranks students lowest-first. 'Notify low attendance' emails guardians under a threshold within a date window. Absent marks trigger same-day ABSENCE_NOTICE emails to guardians. Days lock after a window; corrections go through a register-change request.",
+ ], e:[
+   "A class the teacher doesn't teach is absent from the picker; API refuses direct calls (ownership).",
+   "Locked day → editing blocked with a path to Requests.",
+   "Saving twice overwrites the same day (no duplicates).",
+   "Absence email goes only to that day's newly-absent students' guardians.",
+   "Threshold notify: teacher can prune the recipient list before send.",
+ ]},
+ {n:"Diary", r:"/teacher/diary", d:[
+   "Per class+date entries. ITEM (homework/notice, audience ALL or SELECTED students) and REMARK (always SELECTED — a private note about named students). Families sign entries; teacher sees sign counts. Edit body, delete.",
+ ], e:[
+   "Only a teacher who owns the class can write (admin gets CLASS_NOT_OWNED 403 — by design).",
+   "REMARK is only visible to the named student's family — verify from a second student login.",
+   "Diary entry fires a notification to the audience (email+push).",
+   "Editing after signatures keeps signature state.",
+ ]},
+ {n:"Assignments", r:"/teacher/assignments", d:[
+   "Create per class+subject: title, instructions, due date, up to 5 attachments (via upload endpoint). Students mark seen; teacher watches seen counts. Delete.",
+ ], e:[
+   "6th attachment refused; attachment must round-trip the upload response exactly.",
+   "Past-due assignments visibly distinct in the portal.",
+   "Deleting removes it from student portals.",
+ ]},
+ {n:"Tests & Results", r:"/teacher/tests, /teacher/results", d:[
+   "Create an exam (class, subject, title, syllabus, max marks, schedule) → families get TEST_SCHEDULED email. Enter a marks grid; publish → RESULTS_PUBLISHED email; students see marks only after publish.",
+ ], e:[
+   "Marks above maxMarks rejected.",
+   "Unpublished results invisible in the student portal.",
+   "Partial marks grid: missing students handled explicitly.",
+   "Re-saving marks after publish — verify intended behaviour (locked or re-publish).",
+ ]},
+ {n:"Announcements", r:"/teacher/announcements", d:["Post to one or several of their OWN classes (≤30); 'mine' list shows their history; edit/delete own posts."], e:["Cannot target a class they don't teach.","School-wide posting is admin-only."]},
+ {n:"Notes & to-dos", r:"/teacher/notes", d:["Per class+subject+date free-text notes ('covered up to…') and to-dos with a done toggle. Visibility to others follows the school setting."], e:["Ownership enforced; visibility setting hides/shows other teachers' notes."]},
+ {n:"Inbox (messages)", r:"/teacher/inbox", d:["Threads started by students/parents to this teacher; reply inline."], e:["A student can only reach teachers of their own class; replies land in the student's Messages with a notification."]},
+ {n:"Library shelf", r:"/teacher/library", d:["The teacher's own borrowed books, due dates and (if enabled) fines. Feature-gated on LIBRARY."], e:["Teacher fines appear only when the library's fineTeachers is on."]},
+ {n:"Requests", r:"/teacher/requests", d:["Raise a register-change request (class, date, reason) for a locked register; watch its status; badge shows pending count."], e:["Approval unlocks exactly the class+date pair; rejection shows the reason."]},
+ {n:"Leave", r:"/teacher/leave", d:["Apply (type SICK/CASUAL/EARNED/UNPAID/OTHER, dates, reason), see balance/allocations, list own applications, cancel pending or approved ones."], e:["Overlapping application blocked or flagged.","Cancel after approval frees the coverage plan."]},
+ {n:"Holidays", r:"/teacher/holidays", d:["School holiday calendar (public/festival/school types, ranges)."], e:["Multi-day ranges render as a span."]},
+ {n:"Notifications & profile", r:"/teacher/notifications, /teacher/profile", d:["In-app inbox of everything notify() sent them; profile with photo upload."], e:["Read/unread state; photo replaces old asset."]},
+]},
+
+student: { title:"Student / Parent portal", lead:"At /portal. Role: STUDENT (family login, username = student code).", features:[
+ {n:"Home", r:"/portal", d:["Today at a glance: timetable now/next, fresh diary, due assignments, announcements."], e:["Empty states for a brand-new school day."]},
+ {n:"Timetable", r:"/portal/timetable", d:["The child's class timetable for the week, subject + teacher per period."], e:["Reflects supersessions from the admin builder (effective dating)."]},
+ {n:"Attendance", r:"/portal/attendance", d:["Month calendar of the child's own marks (P/A/L), percentage summary; month navigation."], e:["IST month boundaries; today's register appears after the teacher saves.","Another child's data never reachable (tenancy + ownership)."]},
+ {n:"Diary", r:"/portal/diary", d:["Date-wise diary for the child's class; ITEMs for ALL plus anything SELECTED naming this child; sign an entry once."], e:["A REMARK about another student must never appear.","Sign is idempotent; signed state survives reload."]},
+ {n:"Assignments", r:"/portal/assignments", d:["Active and past assignments with instructions + attachments; 'seen' marks back to the teacher."], e:["Attachment links download; due-today vs overdue styling; seen state sticks."]},
+ {n:"Results & exams", r:"/portal/results", d:["Upcoming exams (schedule + syllabus) and published results with marks/max."], e:["Unpublished exams show as upcoming only — no marks leak.","TEST_SCHEDULED email arrives when teacher schedules."]},
+ {n:"Announcements", r:"/portal/announcements", d:["School-wide plus own-class announcements, newest first."], e:["Other classes' targeted posts hidden."]},
+ {n:"Messages", r:"/portal/messages", d:["Start a thread with any teacher who teaches the child's class; reply back and forth."], e:["Teacher list limited to the child's own teachers; notification on teacher reply."]},
+ {n:"Library shelf", r:"/portal/library", d:["Currently held books with due dates, plus any fines due (amount + reason). Read-only. Feature-gated on LIBRARY."], e:["Replacement price of a title is never exposed to students.","Fine paid at the counter clears here."]},
+ {n:"Events (public site)", r:"school site /events", d:["Browse events on the public site; RSVP with a light-themed dialog that overlays the viewport."], e:["Capacity-full events refuse politely; dialog readable on OS dark mode."]},
+ {n:"Notifications & profile", r:"/portal/notifications, /portal/profile", d:["In-app inbox mirroring emails/pushes; profile: child info, photo."], e:["Diary/announcement/results events each land one inbox row (no duplicates)."]},
+]},
+
+library: { title:"Library portal", lead:"At /library. Roles: SCHOOL_ADMIN or STAFF with staffRole LIBRARIAN. Feature-gated on LIBRARY. Full-width shell, spine rail pinned with independent scroll.", features:[
+ {n:"Dashboard", r:"/library", d:[
+   "Five live cards: Books (copies · titles · lost), Out now, Due soon (next 7 days), Fines collected (term), Fines due. Clicking a number opens its list inline (borrower, code, class, due pill per row).",
+ ], e:[
+   "Counts reconcile: out + on-shelf + lost = total copies.",
+   "Due-soon uses the school timezone, not the server's.",
+   "Lists scroll inside the main pane; the spine rail must stay pinned.",
+ ]},
+ {n:"Hall (class visits)", r:"/library/hall", d:[
+   "Shows the class in the library RIGHT NOW: timetable slots whose subject contains 'librar' matched to the current period by IST time. Capacity meter (in use / capacity). Roster auto-selected from the timetable; class teacher's register (if taken) is offered to confirm (SYNCED) or the librarian retakes (RETAKEN — tap to cycle P→A→L). One visit per class per day, reopenable.",
+ ], e:[
+   "Two classes in one slot show 'A + B' and fill the meter; a third is a warning at assignment time, not a refusal.",
+   "Outside any CLASS period: 'No class period right now' with manual class pick.",
+   "Saving marks for a student outside the class → 400.",
+   "Same class re-saved same day overwrites (SYNCED↔RETAKEN switch shown).",
+ ]},
+ {n:"Counter — Give out", r:"/library/counter", d:[
+   "Member search by student code, single name, or full name ('Kavya Rao'); card shows holdings (n of limit) with due dates. Pick a title (any free copy) or an exact copy/accession no. At the loan limit or already-holds-this-title → 409 warn; librarian can override deliberately.",
+ ], e:[
+   "Loan limit from settings enforced per member kind (student vs teacher).",
+   "Same-title second copy warns; override issues anyway.",
+   "Two clerks issuing to one borrower simultaneously can't exceed the limit (advisory lock).",
+   "Class shows once on the card (no 'Class Class 6A').",
+ ]},
+ {n:"Counter — Take back", r:"/library/counter", d:[
+   "Out-list beside the scan box, one-click Return per row. Result card stamps RETURNED with the assessment: on time — no fine, or ₹fine/day past due after grace days. Undo return; 'this copy is actually lost…' converts to a lost write-off.",
+ ], e:[
+   "Fine = (days late − grace) × finePerDay, min 0; verify against settings.",
+   "Undo restores the loan and reverses any fine.",
+   "Returning a copy that isn't out → clean refusal.",
+ ]},
+ {n:"New books", r:"/library/books", d:[
+   "Search-first: typing checks the shelf; add a copy to an existing title or create a new title (name, author, shelf). Every copy gets an accession number (B-00042) and a printable ticket.",
+ ], e:[
+   "Same title added twice → offered as 'add a copy', not a duplicate title.",
+   "Accession numbers strictly increment, never reused, incl. lost copies.",
+ ]},
+ {n:"Fines", r:"/library/fines", d:[
+   "Totals: collected this term / still due. Fines grouped BY CLASS with reader, book, reason (late or lost — replacement). Per-fine Collect and Waive (reopen exists via API); per-class Remind sends email + app push to the families with dues.",
+ ], e:[
+   "Collect moves totals instantly; waived fines leave the due total.",
+   "Remind toast reports exactly how many emails/pushes went.",
+   "Teacher fines exist only while fineTeachers is on.",
+   "Lost-book write-off creates the replacement fine at lostFeeRupees.",
+ ]},
+ {n:"Settings", r:"/library/settings", d:[
+   "Policy: loan days, student/teacher loan limits, fine per day, grace days, lost fee, fine teachers (off default), due-soon reminder emails (daily cron), hall capacity (classes at once).",
+ ], e:[
+   "Changing loanDays affects only NEW issues, never existing due dates.",
+   "Reading settings never creates rows (GET is pure); first save creates.",
+   "Due-soon cron is daily (Vercel Hobby allows daily only) — no sub-daily expectation.",
+ ]},
+]},
+
+staff: { title:"Staff portal", lead:"At /staff. Role: STAFF (non-teaching, non-librarian). Single-purpose by design.", features:[
+ {n:"My attendance", r:"/staff", d:["The staffer's own record: monthly summary (present/absent/late/on-leave, percentage) and day-by-day list, with their role shown."], e:["Marks appear after admin saves the day.","LIBRARIAN staff are routed to /library instead of here."]},
+]},
+
+cross: { title:"Auth & cross-portal", lead:"Everything shared: sign-in, invites, tenancy, the public site.", features:[
+ {n:"Gatehouse sign-in", r:"/login", d:[
+   "School-branded split screen (crest, name, tagline, living background). Identifier accepts email, username, or student code. Wrong password shakes with a precise error; success plays the gate-open overlay then routes by role: SCHOOL_ADMIN→/app, TEACHER→/teacher, STUDENT→/portal, STAFF→/staff (LIBRARIAN→/library).",
+ ], e:[
+   "On a non-school host the page explains and points to the school address.",
+   "Branding resolves server-side — no colour flash.",
+   "Refresh token rides an HttpOnly cookie; access token in memory only.",
+ ]},
+ {n:"Password set / reset", r:"/reset-password, /forgot-password", d:[
+   "Invite and reset emails link to /reset-password?token=… — the SAME gatehouse theme. Two fields (min 8, confirm), error shake, success overlay then auto-redirect to sign-in. No token → friendly pointer to request a link.",
+ ], e:[
+   "Expired/garbled token → human message ('request a new one'), not a validator string.",
+   "Token single-use; second use fails.",
+   "Reset revokes existing sessions.",
+ ]},
+ {n:"Tenancy & security", r:"API-wide", d:[
+   "Every school host maps to one tenant; API scopes by X-Skoolos-Host + JWT. Postgres RLS backs application scoping. Rate limiting via Redis (fail-open, fast-fail offline). Roles guard every management route.",
+ ], e:[
+   "A School-A login replayed against School-B's host must fail.",
+   "Student JWT on admin endpoints → 403 across the board.",
+   "Burst logins → 429 before user enumeration is useful.",
+ ]},
+ {n:"Public school site", r:"school host /", d:[
+   "The themed public site: hero, sections per design config, gallery, events + RSVP, blog, jobs (via Sckools board), enquiry form, festive overlays, admissions/contact. Single light theme (color-scheme: light) regardless of visitor OS.",
+ ], e:[
+   "All form controls light on OS-dark devices.",
+   "Festive overlay renders per active festival config and never blocks clicks.",
+   "SEO/meta per school; 404 host handling.",
+ ]},
+ {n:"Owner impersonation", r:"/app (via owner console)", d:["Platform owner can open a school admin session; a violet banner marks it; session self-expires."], e:["Banner always visible while impersonating; actions attribute sensibly."]},
+]},
+};
+
+// ───────────────────────── Notifications ─────────────────────────
+const NOTIF_CURRENT = [
+ {t:"Login invite", ch:["email"], trig:"Admin creates a login for a student / teacher / staff (or resends)", rec:"That person", note:"Links to the themed /reset-password. Resend available per row."},
+ {t:"Password reset", ch:["email"], trig:"'Forgot password' on the gatehouse", rec:"Account email", note:"Same themed set-password page; token expiry applies."},
+ {t:"Announcement", ch:["email","push","inapp"], trig:"Admin/teacher posts an announcement", rec:"Targeted classes' families or whole school", note:"One inbox row + best-effort email/push per family."},
+ {t:"Test scheduled", ch:["email"], trig:"Teacher creates/schedules an exam", rec:"Families of that class", note:"Email-only by design (kept out of push to avoid double-taps)."},
+ {t:"Results published", ch:["email"], trig:"Teacher publishes an exam's results", rec:"Families of that class", note:"Email-only; marks visible in portal after publish."},
+ {t:"Exam reminder", ch:["email","push"], trig:"Reminder window before a scheduled exam", rec:"Families of that class", note:"Window logic in ExamRemindersService."},
+ {t:"Absence notice", ch:["email"], trig:"Teacher saves a register with new absences", rec:"Guardians of that day's absent students", note:"One personalised payload per child — never a broadcast."},
+ {t:"Low attendance", ch:["email"], trig:"Teacher runs 'notify low attendance' with a threshold + window", rec:"Guardians under threshold (teacher can prune list)", note:"Deliberate, teacher-triggered."},
+ {t:"Diary entry", ch:["email","push","inapp"], trig:"Teacher writes a diary ITEM/REMARK", rec:"Audience (whole class or selected students)", note:"REMARK stays private to the named families."},
+ {t:"Library fine reminder", ch:["email","push"], trig:"Librarian clicks Remind on a class (or staff) in Fines", rec:"Families with dues in that class", note:"Toast reports 'n emails, n pushes'."},
+ {t:"Library due-soon", ch:["email"], trig:"Daily cron while dueSoonReminders is on", rec:"Borrowers with books due in the window", note:"Daily only (Vercel Hobby cron limit is a hard platform rule)."},
+ {t:"Marketing lead (callback)", ch:["email"], trig:"'Request a call' on sckools.com", rec:"Platform owner", note:"Lead fields HTML-escaped."},
+];
+const NOTIF_IDEAS = [
+ {t:"Enquiry alert to school admin", why:"Leads sit unseen in /app/enquiries until someone looks. Same-hour follow-up is where admissions are won.", how:"Email+push to admins on each new enquiry, with a daily digest fallback toggle."},
+ {t:"Event RSVP confirmation + reminder", why:"Families get no receipt after registering, and no nudge the day before.", how:"Confirmation email on RSVP; reminder push/email T-24h; admin summary when capacity fills."},
+ {t:"Assignment due reminder", why:"Assignments notify nobody today; the due date passes silently.", how:"Publish notification to the class + reminder to families of students not marked 'seen' by T-1 day."},
+ {t:"Leave decision notifications", why:"A teacher discovers approval only by re-opening the tab; admins discover new applications by the dashboard banner.", how:"Push+email to the teacher on approve/reject; push to admins on new application; notify the assigned substitute."},
+ {t:"Register-change decision", why:"Same silence as leave — the requesting teacher should hear the unlock.", how:"Push to the teacher on approve/reject with the unlocked date."},
+ {t:"Library overdue escalation", why:"Due-soon exists, overdue does not — the exact moment a nudge matters most.", how:"Overdue email at D+1 and weekly after; roll into the daily cron; per-school toggle beside dueSoonReminders."},
+ {t:"Fee-free 'invite not accepted' sweep", why:"Invites silently bounce or sit unopened; admin has no view of who never set a password.", how:"Weekly digest to admin of pending invites + one-click bulk re-invite."},
+ {t:"Staff attendance anomaly", why:"A staffer marked absent 3+ days straight deserves an admin flag.", how:"Threshold alert to admin; configurable.",},
+ {t:"Birthday note (delight)", why:"Cheap goodwill for families.", how:"Optional morning push to class teacher; school toggle."},
+ {t:"Channel preferences per family", why:"One family wants email only, another push only; today it's all-or-nothing.", how:"Per-user channel opt-outs honoured by notify()'s fan-out; unsubscribe link in every mail."},
+ {t:"Notification centre badge parity", why:"In-app inbox exists on both portals — ensure every email/push also lands one inbox row so nothing exists only in email.", how:"Audit each notify() call includes the in-app channel unless deliberately email-only."},
+];
+
+// ───────────────────────── render ─────────────────────────
+const $ = s => document.querySelector(s);
+const store = { get(k,f){ try{return JSON.parse(localStorage.getItem(k)) ?? f}catch{return f} }, set(k,v){ localStorage.setItem(k,JSON.stringify(v)) } };
+let tab = location.hash.slice(1) || 'admin';
+
+function featKey(p,i){ return `qa:${p}:${i}` }
+function renderPortal(id){
+  const P = PORTALS[id];
+  const states = P.features.map((_,i)=>store.get(featKey(id,i),{s:null,note:''}));
+  const pass = states.filter(x=>x.s==='pass').length, fail = states.filter(x=>x.s==='fail').length;
+  let h = `<h2>${P.title}</h2><p class="lead">${P.lead}</p>
+  <p class="prog">${P.features.length} features · <b class="p">${pass} pass</b> · <b class="f">${fail} fail</b> · ${states.filter(x=>x.s==='blocked').length} blocked · ${states.filter(x=>!x.s).length} untested</p>`;
+  P.features.forEach((f,i)=>{
+    const st = states[i];
+    h += `<div class="feat" id="f-${id}-${i}">
+      <header onclick="this.parentElement.classList.toggle('open')">
+        <h3>${f.n}</h3><span class="routes">${f.r}</span>
+        <span class="st" onclick="event.stopPropagation()">
+          ${['pass','fail','blocked'].map(s=>`<button class="${s} ${st.s===s?'on':''}" onclick="setSt('${id}',${i},'${s}')">${s}</button>`).join('')}
+        </span>
+      </header>
+      <div class="body">
+        <div class="cols">
+          <div><h4>As designed</h4><ul>${f.d.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+          <div><h4>Edge cases to test</h4><ul>${f.e.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+        </div>
+        <textarea class="note" rows="2" placeholder="QA notes for this feature…" onchange="setNote('${id}',${i},this.value)">${st.note||''}</textarea>
+      </div>
+    </div>`;
+  });
+  h += `<div class="toolbar"><button class="btn ghost" onclick="exportResults('${id}')">Copy ${P.title} results as Markdown</button></div>`;
+  return h;
+}
+window.setSt = (p,i,s)=>{ const k=featKey(p,i), v=store.get(k,{s:null,note:''}); v.s = v.s===s?null:s; store.set(k,v); render(); document.getElementById(`f-${p}-${i}`)?.scrollIntoView({block:'nearest'}); };
+window.setNote = (p,i,n)=>{ const k=featKey(p,i), v=store.get(k,{s:null,note:''}); v.note=n; store.set(k,v); };
+window.exportResults = (id)=>{
+  const P=PORTALS[id];
+  const md = `## QA results — ${P.title} (${new Date().toISOString().slice(0,10)})\n` + P.features.map((f,i)=>{
+    const st=store.get(featKey(id,i),{s:null,note:''});
+    return `- **${f.n}**: ${st.s||'untested'}${st.note?` — ${st.note}`:''}`;
+  }).join('\n');
+  navigator.clipboard.writeText(md); alert('Copied to clipboard.');
+};
+
+function renderNotifs(){
+  let h = `<h2>Notifications</h2><p class="lead">Where the product sends something today, and where it should next. Channels: <span class="pill email">email</span> <span class="pill push">push</span> <span class="pill inapp">in-app inbox</span></p>`;
+  h += `<h4 style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">Sending today</h4><div class="tblwrap"><table><tr><th>Notification</th><th>Channels</th><th>Trigger</th><th>Recipients</th><th>Notes / QA checks</th></tr>`;
+  NOTIF_CURRENT.forEach(n=>{ h+=`<tr><td><b>${n.t}</b></td><td>${n.ch.map(c=>`<span class="pill ${c}">${c}</span>`).join(' ')}</td><td>${n.trig}</td><td>${n.rec}</td><td>${n.note}</td></tr>`; });
+  h += `</table></div>
+  <div class="note-inline" style="margin-top:16px">⚠️ Environment gap: the staging (Preview) Vercel env is missing <b>SMTP_PASS</b> — every staging email silently fails while production sends. Fix before QA tests notification flows on staging.</div>
+  <h4 style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-top:22px">Where to take it next <span class="pill idea">proposed</span></h4><div class="tblwrap"><table><tr><th>Proposal</th><th>Why it matters</th><th>Shape</th></tr>`;
+  NOTIF_IDEAS.forEach(n=>{ h+=`<tr><td><b>${n.t}</b></td><td>${n.why}</td><td>${n.how}</td></tr>`; });
+  h += `</table></div>`;
+  return h;
+}
+
+function sevClass(s){ return s==='high'?'high':s==='low'?'low':'med' }
+async function renderAudit(){
+  let baked=[];
+  try{ baked = await (await fetch('audits.json',{cache:'no-store'})).json(); }catch{}
+  const local = store.get('qa:issues',[]);
+  let h = `<h2>Audit log</h2><p class="lead">Claude's audit findings ship with this site (audits.json — updated on each audit + redeploy). Your manual findings save in this browser and can be exported for a fix run.</p>`;
+  h += `<form class="issue" onsubmit="return addIssue(this)">
+    <div class="row2"><div><label>Portal / area</label><select name="area">${Object.values(PORTALS).map(p=>`<option>${p.title}</option>`).join('')}<option>Notifications</option><option>Public site</option><option>Other</option></select></div>
+    <div><label>Severity</label><select name="sev"><option value="high">High — broken / wrong data</option><option value="med" selected>Medium — works but wrong</option><option value="low">Low — polish</option></select></div></div>
+    <div><label>Title</label><input name="title" required placeholder="What is wrong, in one line"></div>
+    <div><label>Steps / expected vs actual</label><textarea name="body" rows="3" placeholder="1) … 2) … Expected: … Actual: …"></textarea></div>
+    <div style="display:flex;gap:8px"><button class="btn">Log issue</button><button type="button" class="btn ghost" onclick="exportIssues()">Copy my issues as Markdown</button></div>
+  </form>`;
+  if(local.length){ h += `<h4 style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)">My logged issues (${local.length})</h4>`;
+    local.slice().reverse().forEach((x,ri)=>{ const i = local.length-1-ri;
+      h += `<div class="aud"><div class="meta">${x.date} · ${x.area} · <span class="sev ${sevClass(x.sev)}">${x.sev.toUpperCase()}</span> <button class="btn ghost" style="float:right;padding:2px 10px;font-size:11px" onclick="delIssue(${i})">remove</button></div><h3>${x.title}</h3><div style="font-size:13px;color:var(--ink2);white-space:pre-wrap">${x.body||''}</div></div>`; });
+  } else { h += `<p class="empty">No manual issues logged in this browser yet.</p>`; }
+  h += `<h4 style="font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-top:24px">Claude audit entries (${baked.length})</h4>`;
+  if(!baked.length) h += `<p class="empty">None published yet.</p>`;
+  baked.slice().reverse().forEach(a=>{ h += `<div class="aud"><div class="meta">${a.date} · ${a.area} · <span class="sev ${sevClass(a.sev)}">${(a.sev||'med').toUpperCase()}</span> · ${a.status||'open'}</div><h3>${a.title}</h3><div style="font-size:13px;color:var(--ink2);white-space:pre-wrap">${a.body||''}</div></div>`; });
+  return h;
+}
+window.addIssue = (f)=>{ const d=new FormData(f); const local=store.get('qa:issues',[]);
+  local.push({date:new Date().toISOString().slice(0,16).replace('T',' '), area:d.get('area'), sev:d.get('sev'), title:d.get('title'), body:d.get('body')});
+  store.set('qa:issues',local); render(); return false; };
+window.delIssue = (i)=>{ const local=store.get('qa:issues',[]); local.splice(i,1); store.set('qa:issues',local); render(); };
+window.exportIssues = ()=>{ const local=store.get('qa:issues',[]);
+  navigator.clipboard.writeText(local.map(x=>`- [${x.sev.toUpperCase()}] **${x.area} — ${x.title}** (${x.date})\n  ${ (x.body||'').replace(/\n/g,'\n  ') }`).join('\n'));
+  alert('Copied — paste to Claude or an issue tracker.'); };
+
+async function render(){
+  document.querySelectorAll('aside .tab').forEach(b=>b.classList.toggle('on', b.dataset.t===tab));
+  const m = $('#main');
+  if(PORTALS[tab]) m.innerHTML = renderPortal(tab);
+  else if(tab==='notifs') m.innerHTML = renderNotifs();
+  else if(tab==='audit') m.innerHTML = await renderAudit();
+  location.hash = tab;
+}
+document.querySelectorAll('aside .tab').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render();window.scrollTo(0,0);});
+render();
+</script>
+</body>
+</html>

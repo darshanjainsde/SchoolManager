@@ -1,0 +1,58 @@
+[
+  {
+    "date": "2026-08-22",
+    "area": "Library portal",
+    "sev": "med",
+    "status": "fixed (4fa307d, live on main)",
+    "title": "Shell scrolled the sidebar away and capped width at max-w-6xl",
+    "body": "The spine rail scrolled off-screen on any long list and the page centred in a 6xl column. Rebuilt with the admin console's fixed-viewport mechanics: pinned rail with its own scroll, full-width main pane, mobile strip always visible. Verified at 390/768/1440px across all six pages — zero horizontal overflow."
+  },
+  {
+    "date": "2026-08-22",
+    "area": "Library portal",
+    "sev": "med",
+    "status": "fixed (384f72f, live on main)",
+    "title": "Counter member search found nobody for a full name",
+    "body": "\"Kavya Rao\" matched neither firstName nor lastName alone. memberSearch now also tries first-word(s)-as-firstName + rest-as-lastName and the reverse, for students and teachers. Spec added and proven by watching it fail without the fix."
+  },
+  {
+    "date": "2026-08-22",
+    "area": "Library portal",
+    "sev": "low",
+    "status": "fixed (8c4ce14, live on main)",
+    "title": "Member card rendered \"Class Class 6A\"",
+    "body": "className from the API is already the full display name; the card prepended another \"Class\". Grades without the word (UKG) masked the bug."
+  },
+  {
+    "date": "2026-08-22",
+    "area": "Admin portal",
+    "sev": "low",
+    "status": "fixed (2c4e973, live on main)",
+    "title": "Staff attendance showed raw role enums (LIBRARIAN, HELPER, OFFICE)",
+    "body": "Non-teaching rows rendered the enum verbatim beside teachers' title-cased label. All role renders now go through a label function."
+  },
+  {
+    "date": "2026-08-22",
+    "area": "Notifications",
+    "sev": "high",
+    "status": "open — needs the SMTP_PASS secret added to Vercel Preview env",
+    "title": "Staging sends no email at all (SMTP_PASS missing)",
+    "body": "Preview env has SMTP_HOST/USER/PORT/FROM but no SMTP_PASS, so every invite/notification on staging silently fails (emailSent:false) while production sends. Blocks QA of all notification flows on staging; login invites for staging test personas are stuck until fixed + resent."
+  },
+  {
+    "date": "2026-08-22",
+    "area": "Admin portal",
+    "sev": "med",
+    "status": "open — product decision needed",
+    "title": "A login's email can never be changed after creation",
+    "body": "Login invites bind to the email at creation; there is no change-login-email endpoint and release() keeps userId so re-inviting is blocked. Any typo'd or dead address permanently strands the account (all 330 seeded logins point at unreachable @raffles.edu addresses). Suggest an admin 'change login email + re-invite' action with session revocation."
+  },
+  {
+    "date": "2026-08-22",
+    "area": "Notifications",
+    "sev": "low",
+    "status": "open — accepted design, worth revisiting",
+    "title": "Invite emailSent:true only means the SMTP server accepted it",
+    "body": "Bounces are invisible; admin UI shows 'invited' forever with no 'never set a password' view. Pairs with the proposed weekly pending-invites digest."
+  }
+]
