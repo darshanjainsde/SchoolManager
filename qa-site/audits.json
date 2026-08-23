@@ -70,5 +70,13 @@
     "status": "shipped (6f6667b, live on main)",
     "title": "Owner console can put a school on its own domain",
     "body": "Add a domain, get the exact DNS record (A for an apex, CNAME otherwise), attach it at the host, then Verify \u2014 which reads live DNS and refuses to mark it LIVE until it resolves here. Promote to primary (LIVE only) makes it the address used in invite links and email footers. QA: verify with a real domain end to end; check that a school stays reachable on its slug host throughout."
+  },
+  {
+    "date": "2026-08-23",
+    "area": "Auth & Cross-portal",
+    "sev": "med",
+    "status": "open \u2014 found while verifying a second school",
+    "title": "Two school sessions in one browser collide (refresh cookie is scoped to .sckools.com)",
+    "body": "The refresh cookie is deliberately set on the parent domain .sckools.com, so signing into two schools in the same browser leaves both refresh tokens under one cookie name. On reload the refresh returns whichever validates first, and the other school's pages then 401 with 'Token does not match this tenant' \u2014 the admin console renders but every query fails. Reproduced on production: an owner impersonation into Beacon worked immediately, then broke on the next reload because the existing Raffles session's cookie won. Mostly affects owners impersonating several schools and anyone administering two schools; a real parent with one school is unaffected. Options: name the cookie per school, or scope it to the school host instead of the parent domain."
   }
 ]
