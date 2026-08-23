@@ -213,6 +213,10 @@ export class MailIdentityService {
       host,
       port,
       secure: port === 465,
+      // On 587 the session starts in the clear and upgrades. Without this a
+      // server that fails to offer STARTTLS would get the school's mailbox
+      // password in plaintext; requireTLS aborts instead.
+      ...(port === 465 ? {} : { requireTLS: true }),
       ...(user && pass ? { auth: { user, pass } } : {}),
       // A school's mailbox is a third party we do not control. Without these a
       // hung connection would keep a serverless invocation alive to its own
@@ -241,6 +245,7 @@ export class MailIdentityService {
       host: config.host,
       port: config.port,
       secure: config.port === 465,
+      ...(config.port === 465 ? {} : { requireTLS: true }),
       ...(config.user && config.pass ? { auth: { user: config.user, pass: config.pass } } : {}),
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
