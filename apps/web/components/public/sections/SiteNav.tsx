@@ -38,10 +38,22 @@ function useNavOverflow(count: number): {
       const items = Array.from(ghost.children) as HTMLElement[];
       const n = items.length;
       const avail = wrap.clientWidth;
-      // Not laid out yet (0-width, SSR/jsdom, or a hidden ancestor): show every
-      // link rather than guess — the next measure corrects it before paint.
+      // A zero width means one of two OPPOSITE things, and width alone cannot
+      // tell them apart:
+      //
+      //   * Not laid out yet (SSR, jsdom, a display:none ancestor) — show every
+      //     link, because the next measure corrects it before paint.
+      //   * Genuinely no room — on a phone the priority row sits between a
+      //     shrinking logo and fixed actions, and legitimately settles at zero.
+      //     Showing every link there put them ALL in a 0-width box with
+      //     overflow visible, so they spilled across the bar and off the screen.
+      //
+      // A real layout box (the element has client rects) inside a parent that
+      // itself has width means the zero is the honest answer: nothing fits, so
+      // every link belongs in the hamburger.
       if (avail <= 1) {
-        setFit(n);
+        const laidOut = wrap.getClientRects().length > 0 && (wrap.parentElement?.clientWidth ?? 0) > 1;
+        setFit(laidOut ? 0 : n);
         return;
       }
       const styles = getComputedStyle(ghost);
