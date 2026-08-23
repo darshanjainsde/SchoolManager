@@ -38,5 +38,12 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The Sckools packages only. @library/db's suite is live-only — it needs a
+      # real Postgres and deliberately HARD-FAILS rather than skipping when
+      # process.env.CI is set without one (packages/library-db/src/test-live.ts),
+      # because a silent skip in CI is a false green. This job has no database,
+      # so those tests belong to `library-ci`'s `e2e` job, which stands one up
+      # and already runs them. Lint/typecheck/build above still cover every
+      # package here — only the DB-backed tests are scoped out.
       - name: Unit tests
-        run: pnpm test
+        run: pnpm test --filter '!@library/*'
