@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
@@ -98,20 +98,29 @@ export function EmailSettingsCard() {
 
   // Seed the form from the server exactly once per load, so typing is never
   // clobbered by a refetch mid-edit.
-  // The preview box measures ITSELF and scales the 600px email to fit. Fed
-  // from the box (not the email), so this cannot become a feedback loop.
-  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  // The preview box measures ITSELF and scales the 600px email to fit.
+  //
+  // A CALLBACK ref, not useRef + useEffect([]): this card returns a loading
+  // shell first, so on the mount the effect would run the box does not exist
+  // yet, and with empty deps it would never look again — the preview would
+  // silently stay unscaled and clip. The callback fires exactly when the node
+  // appears. Only WIDTH is read, and the height it sets cannot feed back into
+  // that width (the box is a grid column), so there is no resize loop.
   const [previewScale, setPreviewScale] = useState(1);
-  useEffect(() => {
-    const el = previewBoxRef.current;
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const previewBoxRef = useCallback((el: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
+    const measure = () => {
       const w = el.clientWidth;
       if (w > 0) setPreviewScale(Math.min(1, w / 600));
-    });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    observerRef.current = ro;
   }, []);
+  useEffect(() => () => observerRef.current?.disconnect(), []);
 
   const [seeded, setSeeded] = useState(false);
   useEffect(() => {
