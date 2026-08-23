@@ -12,7 +12,7 @@ verifying against the code when precision matters.
 
 This skill was trained at commit **`6f6667b`** (main, 2026-08-23).
 
-1. `git fetch origin && git log --oneline 4fa307d..origin/main | head -30`
+1. `git fetch origin && git log --oneline 6f6667b..origin/main | head -30`
 2. If empty → knowledge is current; proceed.
 3. If commits exist → skim them (`git show --stat`) for areas they touch, read
    the changed files where they contradict this document, answer from the
