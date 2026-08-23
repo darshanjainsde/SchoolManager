@@ -119,13 +119,23 @@ function Logo({ data, small }: { data: PublicSiteData; small?: boolean }) {
     <Link
       href="/"
       aria-label={`${schoolName} — home`}
-      className="flex items-center gap-2.5 min-w-0 flex-none rounded-lg transition hover:opacity-90"
+      // `min-w-0` + shrinkable (NOT flex-none): the name below carries
+      // `truncate`, and truncation only ever happens when the box is allowed to
+      // become narrower than its text. A `flex-none` here silently disabled it,
+      // so a long school name pushed the whole bar past the right edge on a
+      // phone. The crest keeps `flex-none` so only the NAME gives way.
+      className="flex items-center gap-2.5 min-w-0 shrink rounded-lg transition hover:opacity-90"
     >
       {logoUrl ? (
-        <img src={logoUrl} alt={schoolName} decoding="async" className={small ? 'h-9 w-auto' : 'h-10 w-auto'} />
+        <img
+          src={logoUrl}
+          alt={schoolName}
+          decoding="async"
+          className={`${small ? 'h-9' : 'h-10'} w-auto flex-none`}
+        />
       ) : (
         <span
-          className={`${small ? 'h-9 w-9' : 'h-10 w-10'} rounded-2xl ps-logo-bg grid place-items-center font-bold text-white ps-head`}
+          className={`${small ? 'h-9 w-9' : 'h-10 w-10'} flex-none rounded-2xl ps-logo-bg grid place-items-center font-bold text-white ps-head`}
         >
           {schoolName.charAt(0)}
         </span>
@@ -505,7 +515,9 @@ export default function SiteNav({
             <nav aria-label="Primary" className="hidden lg:flex items-center gap-1 text-sm text-slate-600">
               <NavItems nodes={nodes} />
             </nav>
-            <div className="flex items-center gap-1.5">
+            {/* flex-none: the actions are the fixed cost of the bar. Whatever
+                width is left over belongs to the name, which truncates. */}
+            <div className="flex flex-none items-center gap-1.5">
               <NavActions data={data} enquireHref={enquireHref} ink={ink} />
               <HamburgerButton open={mobileOpen} onClick={() => setMobileOpen((o) => !o)} buttonRef={menuButtonRef} />
             </div>
@@ -554,7 +566,9 @@ export default function SiteNav({
           </nav>
           <div className="max-w-6xl mx-auto px-6 h-16 flex lg:hidden items-center justify-between">
             <Logo data={data} />
-            <div className="flex items-center gap-1.5">
+            {/* flex-none: the actions are the fixed cost of the bar. Whatever
+                width is left over belongs to the name, which truncates. */}
+            <div className="flex flex-none items-center gap-1.5">
               <NavActions data={data} enquireHref={enquireHref} ink={ink} />
               <HamburgerButton open={mobileOpen} onClick={() => setMobileOpen((o) => !o)} buttonRef={menuButtonRef} />
             </div>
