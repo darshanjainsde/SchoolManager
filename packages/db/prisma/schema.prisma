@@ -33,6 +33,23 @@ enum DomainStatus {
   ERROR
 }
 
+/// How a school's outbound mail is sent. DEFAULT = through the platform's own
+/// mailbox wearing the school's name (the always-works fallback); CUSTOM = the
+/// school's own SMTP credentials, but only once a live test send has passed.
+enum EmailSenderMode {
+  DEFAULT
+  CUSTOM
+}
+
+/// Lifecycle of a school's own sender. A school sits at UNVERIFIED until a
+/// real test send succeeds; FAILING is set when live sending later breaks, and
+/// mail silently falls back to the platform sender rather than stopping.
+enum EmailSenderStatus {
+  UNVERIFIED
+  VERIFIED
+  FAILING
+}
+
 enum UserRole {
   OWNER
   SCHOOL_ADMIN
@@ -195,6 +212,7 @@ model School {
   updatedAt           DateTime            @updatedAt
 
   domains                Domain[]
+  emailSettings          EmailSettings?
   featureOverrides       FeatureOverride[]
   users                  User[]
   auditLogs              AuditLog[]
@@ -266,6 +284,53 @@ model Domain {
   school    School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
+}
+
+/// A school's letterhead and (optionally) its own outbound sender.
+///
+/// Every field is nullable and the row itself is optional: a school with no
+/// row still gets fully branded mail, because the renderer falls back to the
+/// name, logo and colour it already set for its website. This table only holds
+/// DELIBERATE overrides — which is what makes the default path safe.
+model EmailSettings {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @unique @db.Uuid
+
+  // ── Letterhead (always applied, configured or not) ──
+  /// CLASSIC | BANNER | MINIMAL — see letterhead.ts.
+  template    String  @default("CLASSIC")
+  /// Overrides the From display name. Null = the school's own name.
+  senderName  String?
+  /// Where replies land. Null = no Reply-To header.
+  replyTo     String?
+  /// Overrides the letterhead accent. Null = SchoolProfile.brandColorPrimary.
+  accentColor String?
+  /// Overrides the crest. Null = SchoolProfile.logoAssetId.
+  logoAssetId String? @db.Uuid
+  /// Address / phone / office email, rendered as the footer's small print.
+  footerLines String[] @default([])
+
+  // ── Own sender (optional, verified before use) ──
+  senderMode   EmailSenderMode   @default(DEFAULT)
+  senderStatus EmailSenderStatus @default(UNVERIFIED)
+  /// The address mail is sent AS, e.g. office@theirschool.in — or a Gmail box.
+  fromAddress  String?
+  smtpHost     String?
+  smtpPort     Int?
+  smtpUser     String?
+  /// AES-256-GCM ciphertext, never returned by any API. Encrypted with
+  /// EMAIL_SECRET_KEY, which lives only in the environment — a database dump
+  /// alone does not yield a school's mailbox password.
+  smtpPassEnc  String?
+  verifiedAt   DateTime?
+  /// Why the last send failed, shown to the admin so a broken sender is
+  /// visible rather than silently dropping mail to the fallback forever.
+  lastError    String?
+  lastErrorAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 model FeatureOverride {

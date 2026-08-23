@@ -11,7 +11,7 @@ const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 interface UserWithSchool {
   id: string;
   email: string;
-  school: { name: string; slug: string; domains: { hostname: string }[] };
+  school: { id: string; name: string; slug: string; domains: { hostname: string }[] };
 }
 
 /** "sonia@gmail.com" → "s•••a@gmail.com" (short local parts keep first char only). */
@@ -46,6 +46,7 @@ export class PasswordResetService {
       include: {
         school: {
           select: {
+            id: true,
             name: true,
             slug: true,
             domains: { where: { isPrimary: true, status: 'LIVE' }, select: { hostname: true }, take: 1 },
@@ -79,6 +80,7 @@ export class PasswordResetService {
       include: {
         school: {
           select: {
+            id: true,
             name: true,
             slug: true,
             domains: { where: { isPrimary: true, status: 'LIVE' }, select: { hostname: true }, take: 1 },
@@ -102,7 +104,7 @@ export class PasswordResetService {
     const scheme = host.endsWith('.localhost') ? 'http' : 'https';
     const port = host.endsWith('.localhost') ? ':3000' : '';
     const resetUrl = `${scheme}://${host}${port}/reset-password?token=${token}`;
-    const sent = await this.mail.sendPasswordReset(user.email, user.school.name, resetUrl);
+    const sent = await this.mail.sendPasswordReset(user.email, user.school.name, resetUrl, user.school.id);
     if (!sent) this.logger.warn(`Reset email not delivered for user ${user.id}`);
   }
 

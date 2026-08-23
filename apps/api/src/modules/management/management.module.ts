@@ -14,6 +14,8 @@ import { StudentsService } from './students.service';
 import { StudentsController } from './students.controller';
 import { TimetableService } from './timetable.service';
 import { TimetableController } from './timetable.controller';
+import { EmailSettingsController } from './email-settings.controller';
+import { EmailSettingsService } from './email-settings.service';
 import { TeacherDayService } from './teacher-day.service';
 import { AnnouncementsService } from './announcements.service';
 import { AnnouncementsController } from './announcements.controller';
@@ -55,7 +57,7 @@ import { AttendanceBarService } from './attendance-bar.service';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService],
+  providers: [EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService],
   controllers: [
     CatalogController,
     TeachersController,
@@ -63,6 +65,7 @@ import { AttendanceBarService } from './attendance-bar.service';
     ClassesController,
     StudentsController,
     TimetableController,
+    EmailSettingsController,
     AnnouncementsController,
     AttendanceController,
     StaffAttendanceController,

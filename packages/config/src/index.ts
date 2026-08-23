@@ -56,6 +56,12 @@ const envSchema = z.object({
   // Optional: Mailhog (local dev) accepts unauthenticated mail.
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  // 32-byte key (base64 or 64-char hex) that encrypts schools' own SMTP
+  // passwords at rest. UNSET IS SAFE AND MEANS ONE THING: a school cannot
+  // save its own sender, so every school keeps sending through the platform
+  // mailbox. It is never a silent downgrade — the API refuses the save and
+  // says why, rather than storing a credential in the clear.
+  EMAIL_SECRET_KEY: z.string().optional(),
 
   // Single shared password that unlocks the owner console at /owner.
   // Unset → the gate endpoint answers 503 and only email login works.

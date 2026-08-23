@@ -32,6 +32,7 @@ export class LoginInviteService {
       include: {
         school: {
           select: {
+            id: true,
             name: true,
             slug: true,
             domains: { where: { isPrimary: true, status: 'LIVE' }, select: { hostname: true }, take: 1 },
@@ -54,7 +55,13 @@ export class LoginInviteService {
     const port = host.endsWith('.localhost') ? ':3000' : '';
     const setPasswordUrl = `${scheme}://${host}${port}/reset-password?token=${token}`;
 
-    const sent = await this.mail.sendWelcomeInvite(user.email, user.school.name, loginName, setPasswordUrl);
+    const sent = await this.mail.sendWelcomeInvite(
+      user.email,
+      user.school.name,
+      loginName,
+      setPasswordUrl,
+      user.school.id,
+    );
     if (!sent) this.logger.warn(`Welcome invite email not delivered for user ${user.id}`);
     return sent;
   }

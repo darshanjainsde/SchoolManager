@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant, type Prisma } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
-import { escapeHtml, MailService } from '../../../common/mail/mail.service';
+import { MailService } from '../../../common/mail/mail.service';
+import type { Letter } from '../../../common/mail/letterhead';
 import { runInBackground } from '../../../common/notifications/run-in-background';
 import { emitNotifications } from '../../../common/notifications/notification-inbox';
 import type { LibraryNoticeOutboxPayload } from '../../../common/notifications/notification.types';
@@ -236,7 +237,7 @@ export class LibraryFinesService {
       byReader.set(key, [...(byReader.get(key) ?? []), e]);
     }
 
-    const emailJobs: Array<{ to: string; subject: string; html: string; text: string }> = [];
+    const emailJobs: Array<{ to: string; subject: string; letter: Letter }> = [];
     let pushes = 0;
 
     await withTenant(schoolId, async (tx) => {
@@ -268,14 +269,18 @@ export class LibraryFinesService {
           pushes += 1;
           const user = await tx.user.findFirst({ where: { id: reader.userId }, select: { email: true } });
           if (user?.email) {
-            const itemsHtml = items
-              .map((e) => `<li>${escapeHtml(e.title)} — ₹${e.amountRupees} (${escapeHtml(e.detail)})</li>`)
-              .join('');
             emailJobs.push({
               to: user.email,
               subject: `${schoolName} library — ₹${total} fine to clear`,
-              html: `<p>${escapeHtml(reader.name)} has library fines to clear at the counter:</p><ul>${itemsHtml}</ul><p>Total: <b>₹${total}</b></p>`,
-              text: `${reader.name} has library fines to clear: ${lines.join('; ')}. Total ₹${total}.`,
+              letter: {
+                title: 'A library fine to clear',
+                intro: `${reader.name} has library fines to settle at the counter.`,
+                rows: [
+                  ...items.map((e) => ({ label: e.title, value: `₹${e.amountRupees} · ${e.detail}` })),
+                  { label: 'Total', value: `₹${total}` },
+                ],
+                note: 'Please settle it at the library counter.',
+              } satisfies Letter,
             });
           }
         }
@@ -284,7 +289,7 @@ export class LibraryFinesService {
 
     runInBackground(async () => {
       for (const job of emailJobs) {
-        await this.mail.send(job.to, job.subject, job.html, job.text);
+        await this.mail.sendLetter(job.to, schoolId, job.subject, job.letter);
       }
     }, (e) => this.logger.error(`library fine reminder emails failed: ${String(e)}`));
 

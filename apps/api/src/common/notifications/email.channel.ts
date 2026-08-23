@@ -17,26 +17,25 @@ export class EmailChannel implements NotificationChannel {
 
   constructor(private readonly mail: MailService) {}
 
-  // `schoolId` is part of the `NotificationChannel` contract (see
-  // notification.types.ts — `PushChannel` needs it to avoid a cross-tenant
-  // lookup) but SMTP delivery needs no DB lookup at all, so this channel
-  // ignores it.
-  async send(to: string, message: NotificationMessage, _schoolId: string): Promise<boolean> {
+  // `schoolId` now matters to this channel too: it is what resolves the
+  // school's letterhead and sender (see MailIdentityService), so every
+  // composer receives it rather than the mail going out unbranded.
+  async send(to: string, message: NotificationMessage, schoolId: string): Promise<boolean> {
     switch (message.kind) {
       case 'TEST_SCHEDULED':
-        return this.mail.sendTestScheduled(to, message.payload);
+        return this.mail.sendTestScheduled(to, message.payload, schoolId);
       case 'TEST_REMINDER':
-        return this.mail.sendTestReminder(to, message.payload);
+        return this.mail.sendTestReminder(to, message.payload, schoolId);
       case 'RESULTS_PUBLISHED':
-        return this.mail.sendResultsPublished(to, message.payload);
+        return this.mail.sendResultsPublished(to, message.payload, schoolId);
       case 'ABSENCE_NOTICE':
-        return this.mail.sendAbsenceNotice(to, message.payload);
+        return this.mail.sendAbsenceNotice(to, message.payload, schoolId);
       case 'ANNOUNCEMENT':
-        return this.mail.sendAnnouncement(to, message.payload);
+        return this.mail.sendAnnouncement(to, message.payload, schoolId);
       case 'DIARY_REMARK':
-        return this.mail.sendDiaryRemark(to, message.payload);
+        return this.mail.sendDiaryRemark(to, message.payload, schoolId);
       case 'LOW_ATTENDANCE':
-        return this.mail.sendLowAttendance(to, message.payload);
+        return this.mail.sendLowAttendance(to, message.payload, schoolId);
       default: {
         // Exhaustiveness guard — a new NotificationKind must be handled above.
         const _exhaustive: never = message;

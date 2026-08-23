@@ -916,3 +916,76 @@ export class NotifyLowAttendanceDto {
   @IsUUID(undefined, { each: true })
   studentIds?: string[];
 }
+
+// ── School email identity (Letterhead) ───────────────────────────────────────
+
+const EMAIL_TEMPLATE_VALUES = ['CLASSIC', 'BANNER', 'MINIMAL'] as const;
+
+export class UpdateEmailSettingsDto {
+  @IsOptional()
+  @IsIn(EMAIL_TEMPLATE_VALUES)
+  template?: (typeof EMAIL_TEMPLATE_VALUES)[number];
+
+  /** Empty string clears the override and falls back to the school's name. */
+  @IsOptional()
+  @IsString()
+  @Length(0, 80)
+  senderName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 160)
+  replyTo?: string;
+
+  /** `#rrggbb`; normalised server-side so it can never inject CSS. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^$|^#?[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/, { message: 'accentColor must be a hex colour' })
+  accentColor?: string;
+
+  @IsOptional()
+  @IsString()
+  logoAssetId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4)
+  @IsString({ each: true })
+  @Length(0, 160, { each: true })
+  footerLines?: string[];
+}
+
+export class UpdateEmailSenderDto {
+  @IsEmail()
+  fromAddress!: string;
+
+  @IsString()
+  @Length(1, 200)
+  smtpHost!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  smtpPort!: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 200)
+  smtpUser?: string;
+
+  /** Write-only: never returned by any endpoint, encrypted before storage. */
+  @IsOptional()
+  @IsString()
+  @Length(1, 400)
+  smtpPass?: string;
+}
+
+export class VerifyEmailSenderDto {
+  @IsEmail()
+  to!: string;
+}
+
+export class SendTestEmailDto {
+  @IsEmail()
+  to!: string;
+}

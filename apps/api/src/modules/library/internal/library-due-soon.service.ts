@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma, resolveFeatures, type Prisma } from '@skoolos/db';
-import { MailService, escapeHtml } from '../../../common/mail/mail.service';
+import { MailService } from '../../../common/mail/mail.service';
 import type { LibraryNoticeOutboxPayload } from '../../../common/notifications/notification.types';
 import { istTodayISO } from '../../management';
 import { addDaysISO, dateOnlyISO } from './library-policy';
@@ -103,11 +103,20 @@ export class LibraryDueSoonService {
         select: { email: true },
       });
       if (user?.email) {
-        const sent = await this.mail.send(
+        const sent = await this.mail.sendLetter(
           user.email,
+          issue.schoolId,
           `${school.name} library — “${issue.copy.title.title}” due ${dueOn}`,
-          `<p>${escapeHtml(readerName)}'s library book <b>${escapeHtml(issue.copy.title.title)}</b> (${issue.copy.accessionNo}) is due on <b>${dueOn}</b>.</p><p>Returning it on time keeps the shelf moving — and skips the fine.</p>`,
-          `${readerName}'s library book "${issue.copy.title.title}" (${issue.copy.accessionNo}) is due on ${dueOn}.`,
+          {
+            title: 'A library book is due back',
+            intro: `${readerName}'s library book is due on ${dueOn}.`,
+            rows: [
+              { label: 'Book', value: issue.copy.title.title },
+              { label: 'Copy', value: issue.copy.accessionNo },
+              { label: 'Due', value: dueOn },
+            ],
+            note: 'Returning it on time keeps the shelf moving — and skips the fine.',
+          },
         );
         if (sent) emails += 1;
       }

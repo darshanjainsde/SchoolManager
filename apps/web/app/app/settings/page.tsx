@@ -6,6 +6,7 @@ import { Plus, X, Pencil, Check, Coffee, Utensils } from 'lucide-react';
 import type { ClassNoteVisibilityValue } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { EmailSettingsCard } from './email-card';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1024,6 +1025,9 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+
+        {/* ── Email ─────────────────────────────────────────────────────── */}
+        <EmailSettingsCard />
 
         {/* ── Class notes visibility ────────────────────────────────────── */}
         <ClassNoteVisibilityCard

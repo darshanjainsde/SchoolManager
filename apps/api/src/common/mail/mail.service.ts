@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createTransport, type Transporter } from 'nodemailer';
 import { loadEnv } from '@skoolos/config';
 import { captureError } from '../observability/sentry-lite';
+import { MailIdentityService } from './mail-identity.service';
+import { escapeHtml, renderLetter, type Letter } from './letterhead';
 import type {
   AbsenceNoticePayload,
   AnnouncementPayload,
@@ -25,45 +26,51 @@ export type AnnouncementInfo = AnnouncementPayload;
 export type DiaryRemarkInfo = DiaryRemarkPayload;
 export type LowAttendanceInfo = LowAttendancePayload;
 
-/**
- * Escapes a value for interpolation into an HTML email body. School-authored
- * text (exam titles, school names, student names) reaches parents' inboxes,
- * so it must never be able to inject markup.
- */
-export function escapeHtml(value: string | number): string {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+/** Re-exported so existing importers (marketing, library) keep working. */
+export { escapeHtml };
 
 /**
- * Thin SMTP wrapper. Hostinger (authenticated, port 465/SSL) in prod,
- * Mailhog (unauthenticated, port 1025) in local dev — env-swap only.
+ * Composes and sends every email the product sends.
+ *
+ * Each method here decides only WHAT the message says — a `Letter` of title,
+ * intro, rows and one action. Who it is from and what it looks like is decided
+ * once, in `MailIdentityService` + `letterhead.ts`, so a school's crest and
+ * colour reach all twelve message kinds without any of them knowing that
+ * schools have branding at all.
+ *
+ * Every method takes `schoolId` so the letterhead can be resolved. `null` means
+ * "this mail belongs to no school" (owner/marketing) and gets the platform
+ * identity.
  */
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly env = loadEnv();
-  private readonly transporter: Transporter;
 
-  constructor() {
-    this.transporter = createTransport({
-      host: this.env.SMTP_HOST,
-      port: this.env.SMTP_PORT,
-      secure: this.env.SMTP_PORT === 465,
-      ...(this.env.SMTP_USER
-        ? { auth: { user: this.env.SMTP_USER, pass: this.env.SMTP_PASS } }
-        : {}),
-    });
-  }
+  constructor(private readonly identity: MailIdentityService) {}
 
-  /** Sends and reports success; failures are logged, never thrown to callers. */
-  async send(to: string, subject: string, html: string, text: string): Promise<boolean> {
+  /**
+   * Renders a letter on the school's letterhead and sends it.
+   * Failures are logged and reported, never thrown to callers — a mail outage
+   * must not roll back the attendance register that triggered it.
+   */
+  async sendLetter(
+    to: string,
+    schoolId: string | null,
+    subject: string,
+    letter: Letter,
+  ): Promise<boolean> {
+    const id = await this.identity.forSchool(schoolId);
+    const { html, text } = renderLetter(id.brand, letter);
     try {
-      await this.transporter.sendMail({ from: this.env.SMTP_FROM, to, subject, html, text });
+      await id.transporter.sendMail({
+        from: id.from,
+        ...(id.replyTo ? { replyTo: id.replyTo } : {}),
+        to,
+        subject,
+        html,
+        text,
+      });
       return true;
     } catch (e) {
       this.logger.error(`Mail to ${to} failed: ${(e as Error).message}`);
@@ -73,10 +80,41 @@ export class MailService {
       // subject must not, because composed subjects embed student names
       // ("Absence notice: <name>"), and a morning outage would otherwise
       // hand a third-party processor a list of named absent minors.
-      captureError(e, { kind: 'mail', domain: to.split('@')[1] ?? 'unknown' });
+      captureError(e, {
+        kind: 'mail',
+        domain: to.split('@')[1] ?? 'unknown',
+        sender: id.usingCustomSender ? 'school' : 'platform',
+      });
+      // A school's OWN sender that fails is a configuration problem only its
+      // admin can fix, so it is recorded against the school and surfaced in
+      // the Email settings tab rather than living in a log nobody reads.
+      if (id.usingCustomSender && id.schoolId) {
+        await this.recordSenderFailure(id.schoolId, (e as Error).message);
+      }
       return false;
     }
   }
+
+  /**
+   * Marks a school's own sender as FAILING and drops it back to the platform
+   * mailbox for subsequent sends. Deliberately best-effort: if this write
+   * fails there is nothing further to do, and it must never mask the mail
+   * error that caused it.
+   */
+  private async recordSenderFailure(schoolId: string, message: string): Promise<void> {
+    try {
+      const { getPlatformPrisma } = await import('@skoolos/db');
+      await getPlatformPrisma().emailSettings.update({
+        where: { schoolId },
+        data: { senderStatus: 'FAILING', lastError: message.slice(0, 500), lastErrorAt: new Date() },
+      });
+      this.identity.invalidate(schoolId);
+    } catch (e) {
+      this.logger.warn(`Could not record sender failure for ${schoolId}: ${(e as Error).message}`);
+    }
+  }
+
+  // ── Platform mail (no school) ───────────────────────────
 
   async sendLeadNotification(
     to: string,
@@ -84,49 +122,37 @@ export class MailService {
   ): Promise<boolean> {
     const who = lead.name ?? 'Someone';
     const subject = `New Sckools lead: ${who}${lead.school ? ` — ${lead.school}` : ''}`;
-    // Every value here is typed by an anonymous visitor on the public form —
-    // it MUST go through escapeHtml before landing in the owner's inbox as
-    // markup, like every other interpolation in this file.
-    const lines = [
-      `Name: ${escapeHtml(lead.name ?? '—')}`,
-      `Phone: ${escapeHtml(lead.phone)}`,
-      `School: ${escapeHtml(lead.school ?? '—')}`,
-      `Interested in: ${escapeHtml(lead.interest ?? '—')}`,
-      `Source: ${escapeHtml(lead.source)}`,
-    ];
-    const text = `New callback request from sckools.com\n\n${lines.join('\n')}\n\nOpen the owner console to follow up.`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#134e4a;margin:0 0 12px">📞 New callback request</h2>
-        <table style="border-collapse:collapse;width:100%;font-size:14px;color:#334155">
-          ${lines
-            .map((l) => {
-              const [k, v] = l.split(/: (.*)/s);
-              return `<tr><td style="padding:6px 10px 6px 0;color:#64748b;white-space:nowrap">${k}</td><td style="padding:6px 0;font-weight:bold">${v}</td></tr>`;
-            })
-            .join('')}
-        </table>
-        <p style="color:#64748b;font-size:13px;margin-top:20px">Open the owner console → Marketing leads to follow up.</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+    // Every value here is typed by an anonymous visitor on the public form.
+    // The letterhead renderer escapes on the way out, so no interpolation
+    // happens in this method at all.
+    return this.sendLetter(to, null, subject, {
+      title: 'New callback request',
+      intro: 'Someone asked to be called back from sckools.com.',
+      rows: [
+        { label: 'Name', value: lead.name ?? '—' },
+        { label: 'Phone', value: lead.phone },
+        { label: 'School', value: lead.school ?? '—' },
+        { label: 'Interested in', value: lead.interest ?? '—' },
+        { label: 'Source', value: lead.source },
+      ],
+      note: 'Open the owner console → Marketing leads to follow up.',
+    });
   }
 
-  async sendPasswordReset(to: string, schoolName: string, resetUrl: string): Promise<boolean> {
-    const subject = `Reset your ${schoolName} admin password`;
-    const text = `Someone requested a password reset for your ${schoolName} account.\n\nReset it here (valid 30 minutes): ${resetUrl}\n\nIf this wasn't you, ignore this email — your password is unchanged.`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#134e4a;margin:0 0 12px">Reset your password</h2>
-        <p style="color:#334155;line-height:1.6">Someone requested a password reset for your <b>${escapeHtml(schoolName)}</b> account.</p>
-        <p style="margin:24px 0">
-          <a href="${resetUrl}" style="background:#0d9488;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold;display:inline-block">
-            Set a new password
-          </a>
-        </p>
-        <p style="color:#64748b;font-size:13px;line-height:1.6">The link is valid for 30 minutes and can be used once.<br>
-        If this wasn't you, ignore this email — your password is unchanged.</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+  // ── Account mail ────────────────────────────────────────
+
+  async sendPasswordReset(
+    to: string,
+    schoolName: string,
+    resetUrl: string,
+    schoolId: string | null = null,
+  ): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `Reset your ${schoolName} password`, {
+      title: 'Reset your password',
+      intro: `Someone requested a password reset for your ${schoolName} account.`,
+      cta: { label: 'Set a new password', url: resetUrl },
+      note: "The link is valid for 30 minutes and can be used once. If this wasn't you, ignore this email — your password is unchanged.",
+    });
   }
 
   async sendWelcomeInvite(
@@ -134,95 +160,77 @@ export class MailService {
     schoolName: string,
     loginName: string,
     setPasswordUrl: string,
+    schoolId: string | null = null,
   ): Promise<boolean> {
-    const subject = `Welcome to ${schoolName} — set your password`;
-    const text = `You now have an account at ${schoolName}.\n\nYour sign-in name is: ${loginName}\n\nSet your password here (valid 30 minutes): ${setPasswordUrl}\n\nIf you weren't expecting this, you can safely ignore this email.`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#134e4a;margin:0 0 12px">Welcome to ${escapeHtml(schoolName)}</h2>
-        <p style="color:#334155;line-height:1.6">You now have an account at <b>${escapeHtml(schoolName)}</b>.</p>
-        <p style="color:#334155;line-height:1.6">Your sign-in name is: <b>${escapeHtml(loginName)}</b></p>
-        <p style="margin:24px 0">
-          <a href="${setPasswordUrl}" style="background:#0d9488;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold;display:inline-block">
-            Set your password
-          </a>
-        </p>
-        <p style="color:#64748b;font-size:13px;line-height:1.6">The link is valid for 30 minutes and can be used once.<br>
-        If you weren't expecting this, you can safely ignore this email.</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+    return this.sendLetter(to, schoolId, `Welcome to ${schoolName} — set your password`, {
+      title: `Welcome to ${schoolName}`,
+      intro: 'Your account is ready. Set a password to sign in.',
+      rows: [{ label: 'Sign-in name', value: loginName }],
+      cta: { label: 'Set your password', url: setPasswordUrl },
+      note: "The link is valid for 30 minutes and can be used once. If you weren't expecting this, you can safely ignore this email.",
+    });
   }
 
-  async sendTestScheduled(to: string, info: TestScheduledInfo): Promise<boolean> {
-    const subject = `New test scheduled: ${info.examTitle}`;
-    const text = `${info.schoolName} has scheduled a new test.\n\nSubject: ${info.subjectName}\nTest: ${info.examTitle}\nDate: ${info.scheduledAt}\n\nCheck the school portal for more details.`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#134e4a;margin:0 0 12px">📝 New test scheduled</h2>
-        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b> has scheduled a new test.</p>
-        <table style="border-collapse:collapse;width:100%;font-size:14px;color:#334155">
-          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Subject</td><td style="padding:6px 0;font-weight:bold">${escapeHtml(info.subjectName)}</td></tr>
-          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Test</td><td style="padding:6px 0;font-weight:bold">${escapeHtml(info.examTitle)}</td></tr>
-          <tr><td style="padding:6px 10px 6px 0;color:#64748b">Date</td><td style="padding:6px 0;font-weight:bold">${escapeHtml(info.scheduledAt)}</td></tr>
-        </table>
-        <p style="color:#64748b;font-size:13px;margin-top:20px">Check the school portal for more details.</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+  // ── School notifications ────────────────────────────────
+
+  async sendTestScheduled(to: string, info: TestScheduledInfo, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `New test scheduled: ${info.examTitle}`, {
+      title: 'New test scheduled',
+      intro: `${info.schoolName} has scheduled a new test.`,
+      rows: [
+        { label: 'Subject', value: info.subjectName },
+        { label: 'Test', value: info.examTitle },
+        { label: 'Date', value: info.scheduledAt },
+      ],
+      note: 'Check the school portal for more details.',
+    });
   }
 
-  async sendTestReminder(to: string, info: TestReminderInfo): Promise<boolean> {
-    const subject = `Reminder: ${info.examTitle} in ${info.daysUntil} day${info.daysUntil === 1 ? '' : 's'}`;
-    const text = `Reminder from ${info.schoolName}: "${info.examTitle}" (${info.subjectName}) is scheduled for ${info.scheduledAt} — that's ${info.daysUntil} day${info.daysUntil === 1 ? '' : 's'} away.`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#134e4a;margin:0 0 12px">⏰ Upcoming test reminder</h2>
-        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b>: <b>${escapeHtml(info.examTitle)}</b> (${escapeHtml(info.subjectName)}) is coming up on ${escapeHtml(info.scheduledAt)} — ${escapeHtml(info.daysUntil)} day${info.daysUntil === 1 ? '' : 's'} from now.</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+  async sendTestReminder(to: string, info: TestReminderInfo, schoolId: string | null = null): Promise<boolean> {
+    const days = `${info.daysUntil} day${info.daysUntil === 1 ? '' : 's'}`;
+    return this.sendLetter(to, schoolId, `Reminder: ${info.examTitle} in ${days}`, {
+      title: 'Upcoming test',
+      intro: `${info.schoolName}: ${info.examTitle} is ${days} away.`,
+      rows: [
+        { label: 'Subject', value: info.subjectName },
+        { label: 'Test', value: info.examTitle },
+        { label: 'Date', value: info.scheduledAt },
+      ],
+    });
   }
 
-  async sendResultsPublished(to: string, info: ResultsPublishedInfo): Promise<boolean> {
-    const subject = `Results published: ${info.examTitle}`;
-    const text = `${info.schoolName} has published results for "${info.examTitle}" (${info.subjectName}). Check the school portal to view them.`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#134e4a;margin:0 0 12px">✅ Results published</h2>
-        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b> has published results for <b>${escapeHtml(info.examTitle)}</b> (${escapeHtml(info.subjectName)}).</p>
-        <p style="color:#64748b;font-size:13px;margin-top:20px">Check the school portal to view them.</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+  async sendResultsPublished(to: string, info: ResultsPublishedInfo, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `Results published: ${info.examTitle}`, {
+      title: 'Results published',
+      intro: `${info.schoolName} has published results for ${info.examTitle} (${info.subjectName}).`,
+      note: 'Check the school portal to view them.',
+    });
   }
 
-  async sendAbsenceNotice(to: string, info: AbsenceNoticeInfo): Promise<boolean> {
-    const subject = `Absence notice: ${info.studentName}`;
-    const text = `${info.schoolName} marked ${info.studentName} absent on ${info.date}. If this is unexpected, please contact the school office.`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#134e4a;margin:0 0 12px">Absence notice</h2>
-        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.schoolName)}</b> marked <b>${escapeHtml(info.studentName)}</b> absent on ${escapeHtml(info.date)}.</p>
-        <p style="color:#64748b;font-size:13px;margin-top:20px">If this is unexpected, please contact the school office.</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+  async sendAbsenceNotice(to: string, info: AbsenceNoticeInfo, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `Absence notice: ${info.studentName}`, {
+      title: 'Absence notice',
+      tone: 'alert',
+      intro: `${info.schoolName} marked ${info.studentName} absent on ${info.date}.`,
+      note: 'If this is unexpected, please contact the school office.',
+    });
   }
 
   /**
    * The red-ink remark, sent to the family the moment a teacher writes it —
    * ALWAYS, even if the child then signs it in the app (the pitch's rule: a
    * remark reaches the parent, it does not sit in a child's phone). The
-   * remark is quoted in a bordered block so it reads as the teacher's own
-   * words rather than platform copy.
+   * remark is quoted so it reads as the teacher's own words rather than
+   * platform copy.
    */
-  async sendDiaryRemark(to: string, info: DiaryRemarkInfo): Promise<boolean> {
-    const subject = `Diary remark for ${info.studentName} — ${info.schoolName}`;
-    const text = `${info.teacherName} wrote a remark in ${info.studentName}'s diary on ${info.date} (${info.className}).\n\n"${info.remark}"\n\nOpen the school app to read and sign it.`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#b91c1c;margin:0 0 12px">Diary remark</h2>
-        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.teacherName)}</b> wrote a remark in <b>${escapeHtml(info.studentName)}</b>'s diary on ${escapeHtml(info.date)} (${escapeHtml(info.className)}).</p>
-        <blockquote style="margin:18px 0;padding:12px 16px;border-left:4px solid #b91c1c;background:#fef2f2;color:#7f1d1d;line-height:1.6;white-space:pre-wrap">${escapeHtml(info.remark)}</blockquote>
-        <p style="color:#64748b;font-size:13px;margin-top:20px">Open the school app to read it in full and sign it.</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+  async sendDiaryRemark(to: string, info: DiaryRemarkInfo, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `Diary remark for ${info.studentName} — ${info.schoolName}`, {
+      title: 'Diary remark',
+      tone: 'alert',
+      intro: `${info.teacherName} wrote a remark in ${info.studentName}'s diary on ${info.date} (${info.className}).`,
+      quote: info.remark,
+      note: 'Open the school app to read it in full and sign it.',
+    });
   }
 
   /**
@@ -230,28 +238,20 @@ export class MailService {
    * own number. Never names or counts other students (see
    * `AttendanceBarService.notifyLow`).
    */
-  async sendLowAttendance(to: string, info: LowAttendanceInfo): Promise<boolean> {
-    const subject = `${info.studentName}'s attendance is ${info.percent}%`;
-    const text = `${info.schoolName}: ${info.studentName} (${info.className}) has attended ${info.percent}% of classes over ${info.period}, below the school's ${info.threshold}% benchmark.\n\nIf something is making it hard to attend, please tell the class teacher — we would rather know.`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#b45309;margin:0 0 12px">Attendance update</h2>
-        <p style="color:#334155;line-height:1.6"><b>${escapeHtml(info.studentName)}</b> (${escapeHtml(info.className)}) has attended <b>${escapeHtml(info.percent)}%</b> of classes over ${escapeHtml(info.period)} — below ${escapeHtml(info.schoolName)}'s ${escapeHtml(info.threshold)}% benchmark.</p>
-        <p style="color:#64748b;font-size:13px;line-height:1.6;margin-top:20px">If something is making it hard to attend, please tell the class teacher — we would rather know.</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+  async sendLowAttendance(to: string, info: LowAttendanceInfo, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `${info.studentName}'s attendance is ${info.percent}%`, {
+      title: 'Attendance update',
+      intro: `${info.studentName} (${info.className}) has attended ${info.percent}% of classes over ${info.period} — below ${info.schoolName}'s ${info.threshold}% benchmark.`,
+      note: 'If something is making it hard to attend, please tell the class teacher — we would rather know.',
+    });
   }
 
-  async sendAnnouncement(to: string, info: AnnouncementInfo): Promise<boolean> {
-    const subject = info.title;
-    const target = info.className ? ` (${info.className})` : '';
-    const text = `${info.schoolName}${target} posted a new announcement.\n\n${info.title}\n\n${info.body}`;
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-        <h2 style="color:#134e4a;margin:0 0 12px">📣 ${escapeHtml(info.schoolName)}${target ? ` — ${escapeHtml(info.className as string)}` : ''}</h2>
-        <p style="color:#334155;font-weight:bold;margin:0 0 8px">${escapeHtml(info.title)}</p>
-        <p style="color:#334155;line-height:1.6;white-space:pre-wrap">${escapeHtml(info.body)}</p>
-      </div>`;
-    return this.send(to, subject, html, text);
+  async sendAnnouncement(to: string, info: AnnouncementInfo, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, info.title, {
+      title: info.title,
+      preheader: info.body.slice(0, 120),
+      intro: info.className ? `${info.schoolName} — ${info.className}` : info.schoolName,
+      body: info.body,
+    });
   }
 }

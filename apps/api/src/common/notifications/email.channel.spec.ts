@@ -1,3 +1,4 @@
+import { platformBrand, renderLetter } from '../mail/letterhead';
 import { MailService } from '../mail/mail.service';
 import { EmailChannel } from './email.channel';
 import type {
@@ -30,7 +31,16 @@ interface SentMail {
 function harness(): { channel: EmailChannel; sent: SentMail[] } {
   const sent: SentMail[] = [];
   const mail = Object.create(MailService.prototype) as MailService;
-  (mail as unknown as { send: MailService['send'] }).send = async (to, subject, html, text) => {
+  // The channel now hands MailService a `Letter` and the letterhead renders
+  // it. Rendering it here with the platform brand keeps every assertion below
+  // testing what it always tested — the STRING a parent actually receives.
+  (mail as unknown as { sendLetter: MailService['sendLetter'] }).sendLetter = async (
+    to,
+    _schoolId,
+    subject,
+    letter,
+  ) => {
+    const { html, text } = renderLetter(platformBrand(), letter);
     sent.push({ to, subject, html, text });
     return true;
   };
@@ -197,7 +207,7 @@ describe('EmailChannel', () => {
 
   it('reports a delivery failure as false rather than throwing', async () => {
     const mail = Object.create(MailService.prototype) as MailService;
-    (mail as unknown as { send: MailService['send'] }).send = async () => false;
+    (mail as unknown as { sendLetter: MailService['sendLetter'] }).sendLetter = async () => false;
     const channel = new EmailChannel(mail);
 
     await expect(

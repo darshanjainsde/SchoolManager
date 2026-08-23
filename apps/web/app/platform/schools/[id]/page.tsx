@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useApi } from '@/lib/use-api';
+import { DomainsCard } from './domains-card';
 import { OWNER_HOST } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
 import { AdminAccessCard } from '@/components/admin-access-card';
@@ -313,40 +314,8 @@ export default function SchoolDetailPage() {
       {/* Admin access ────────────────────────────────────────────────────── */}
       <AdminAccessCard schoolId={school.id} />
 
-      {/* Domains list ────────────────────────────────────────────────────── */}
-      {school.domains.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Domains</CardTitle>
-            <CardDescription>{school.domains.length} domain{school.domains.length !== 1 ? 's' : ''} attached</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y divide-slate-100">
-              {school.domains.map((d) => (
-                <li key={d.hostname} className="flex items-center justify-between py-2.5 text-sm">
-                  <span className="font-mono text-slate-800">{d.hostname}</span>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      tone={
-                        d.status === 'LIVE'
-                          ? 'success'
-                          : d.status === 'ERROR'
-                          ? 'danger'
-                          : d.status === 'VERIFYING'
-                          ? 'warning'
-                          : 'neutral'
-                      }
-                    >
-                      {d.status}
-                    </Badge>
-                    {d.isPrimary && <Badge tone="info">Primary</Badge>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
+      {/* Domains — add, verify against real DNS, promote ────────────────── */}
+      <DomainsCard schoolId={school.id} />
 
       {/* Danger zone ─────────────────────────────────────────────────────── */}
       <DangerZoneCard school={school} />

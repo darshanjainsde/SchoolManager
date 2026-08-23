@@ -6,6 +6,10 @@ import { HttpException } from '@nestjs/common';
  * free-form and may change without notice.
  */
 export type ErrorCode =
+  /** This deployment has no EMAIL_SECRET_KEY, so a school's own mail password
+   *  cannot be stored. Pair with 503 — it is an operator gap, not the admin's
+   *  mistake, and mail keeps flowing through the platform sender meanwhile. */
+  | 'EMAIL_SECRET_MISSING'
   | 'DUPLICATE_ADMISSION_NO'
   | 'CLASS_NOT_FOUND'
   | 'LOGIN_EXISTS'

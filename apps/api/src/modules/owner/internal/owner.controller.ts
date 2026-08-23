@@ -12,6 +12,8 @@ import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
 import { OwnerEventsService } from './owner-events.service';
 import { OwnerOverviewService } from './owner-overview.service';
 import { OwnerSchoolsService } from './owner-schools.service';
+import { OwnerDomainsService } from './owner-domains.service';
+import { AddDomainDto } from './owner.dto';
 
 @Controller('owner')
 @UseGuards(OwnerHostGuard, PlatformJwtGuard)
@@ -23,6 +25,7 @@ export class OwnerController {
     private readonly overviewSvc: OwnerOverviewService,
     private readonly marketing: MarketingService,
     private readonly jobs: JobsService,
+    private readonly domains: OwnerDomainsService,
   ) {}
 
   @Get('overview')
@@ -101,6 +104,44 @@ export class OwnerController {
   @Post('schools/:id/impersonate')
   impersonate(@Param('id', ParseUUIDPipe) id: string) {
     return this.impersonation.mint(id);
+  }
+
+  // ── Custom domains ──────────────────────────────────────
+  // Putting a school on its own address. The verify step reads real DNS, so a
+  // domain only goes LIVE once it actually points here.
+
+  @Get('schools/:id/domains')
+  listDomains(@Param('id', ParseUUIDPipe) id: string) {
+    return this.domains.list(id);
+  }
+
+  @Post('schools/:id/domains')
+  addDomain(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddDomainDto) {
+    return this.domains.add(id, dto.hostname);
+  }
+
+  @Post('schools/:id/domains/:domainId/verify')
+  verifyDomain(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('domainId', ParseUUIDPipe) domainId: string,
+  ) {
+    return this.domains.verify(id, domainId);
+  }
+
+  @Post('schools/:id/domains/:domainId/primary')
+  setPrimaryDomain(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('domainId', ParseUUIDPipe) domainId: string,
+  ) {
+    return this.domains.setPrimary(id, domainId);
+  }
+
+  @Delete('schools/:id/domains/:domainId')
+  removeDomain(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('domainId', ParseUUIDPipe) domainId: string,
+  ) {
+    return this.domains.remove(id, domainId);
   }
 
   @Get('events')

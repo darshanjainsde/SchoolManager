@@ -77,3 +77,8 @@ export class ModerateJobDto {
   /** Required on REJECT — a refusal with no reason cannot be acted on. */
   @IsOptional() @IsString() @Length(2, 500) reason?: string;
 }
+
+export class AddDomainDto {
+  /** Lower-cased and trimmed server-side; uniqueness is global. */
+  @IsString() @Length(3, 253) @Matches(/^[A-Za-z0-9.-]+$/) hostname!: string;
+}
