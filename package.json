@@ -16,7 +16,7 @@
     "preflight": "bash scripts/preflight.sh",
     "preflight:library": "bash scripts/preflight-library.sh",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "db:generate": "pnpm --filter @skoolos/db generate",
+    "db:generate": "pnpm --filter @skoolos/db generate && pnpm --filter @library/db generate",
     "db:migrate": "pnpm --filter @skoolos/db migrate:dev",
     "db:seed": "pnpm --filter @skoolos/db seed",
     "library:migrate": "pnpm --filter @library/db migrate:deploy",
