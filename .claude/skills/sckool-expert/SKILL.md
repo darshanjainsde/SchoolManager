@@ -10,7 +10,7 @@ verifying against the code when precision matters.
 
 ## Freshness protocol (run FIRST, every invocation)
 
-This skill was trained at commit **`4fa307d`** (main, 2026-08-22).
+This skill was trained at commit **`6f6667b`** (main, 2026-08-23).
 
 1. `git fetch origin && git log --oneline 4fa307d..origin/main | head -30`
 2. If empty → knowledge is current; proceed.
@@ -117,6 +117,46 @@ This skill was trained at commit **`4fa307d`** (main, 2026-08-22).
   no nav backdrops); reveal clips end at inset(-3rem) (never inset(0) — it
   amputates shadows/overhangs).
 
+## Email (Letterhead) — `apps/api/src/common/mail/`
+
+- `letterhead.ts` — pure renderer. Every message is a `Letter` (title, intro,
+  rows, body, quote, cta, note, tone); `renderLetter(brand, letter)` returns
+  html+text. Three templates: CLASSIC | BANNER | MINIMAL. Email-safe by
+  necessity (nested tables, inlined styles, 600px, bulletproof CTA).
+  `safeHex` normalises any stored colour so it cannot inject CSS.
+- `mail-identity.service.ts` — resolves BOTH brand and sender for a schoolId,
+  through the BYPASSRLS platform client (mail is dispatched post-commit,
+  outside any tenant transaction), cached 60s. THE FALLBACK RULE: a school's
+  own sender is used only when senderMode CUSTOM + senderStatus VERIFIED +
+  fromAddress/host/port present + the credential decrypts; anything else uses
+  the platform mailbox with the school's name as the From display name and
+  `showPlatformCredit: true` (the footer's "Sent for X by Sckools" line).
+- `secret-box.ts` — AES-256-GCM (`v1.iv.tag.ct`) keyed by `EMAIL_SECRET_KEY`
+  (32 bytes, hex or base64; set in Vercel prod+preview). Missing key = custom
+  senders cannot be SAVED (503 EMAIL_SECRET_MISSING), never a silent
+  plaintext downgrade. Undecryptable value → fall back, never fail the send.
+- `mail.service.ts` — `sendLetter(to, schoolId, subject, letter)` is the one
+  seam; all composers build letters. A failing custom sender is written back
+  as FAILING + lastError so the admin sees it.
+- DB: `EmailSettings` (1:1 School, additive migration 20260823090000, RLS
+  tenant_iso). Admin API `manage/email-settings` (GET/PUT, PUT sender, POST
+  sender/verify, sender/disable, test, GET preview) — SCHOOL_ADMIN only,
+  password write-only. UI: `apps/web/app/app/settings/email-card.tsx`.
+- Specs: `letterhead.spec.ts` (9), `mail-identity.service.spec.ts` (9, every
+  fallback branch), `mail-di.spec.ts` (bootstrap guard).
+
+## Custom domains
+
+`Domain` (hostname unique, type SUBDOMAIN|CUSTOM, status PENDING|LIVE|ERROR,
+isPrimary). Tenant resolution already accepts any hostname with status LIVE
+(`school-lookup.service.ts`, Redis-cached). Operator flow:
+`OwnerDomainsService` + `owner/schools/:id/domains` (list/add/verify/primary/
+delete) with UI `apps/web/app/platform/schools/[id]/domains-card.tsx`. Verify
+reads REAL DNS (CNAME to `INGRESS_CNAME_TARGET`, or A-record match for an
+apex) and only then flips LIVE, invalidating the lookup cache. Attaching the
+domain at the hosting provider stays a manual step, surfaced in the
+instructions.
+
 ## Notifications
 
 `apps/api/src/common/notifications/` — `NotificationService.notify(kind,
@@ -148,8 +188,13 @@ channel preferences.
   verbatim, never re-prefix. Every enum render goes through a label map,
   including fallbacks.
 - Known operational facts: staging Preview env lacks SMTP_PASS (staging email
-  dead until added); login emails are immutable after invite (no change-email
-  endpoint); `emailSent:true` = SMTP accepted, bounces invisible.
+  dead until added — prod sends fine); login emails are immutable after invite
+  (no change-email endpoint); `emailSent:true` = SMTP accepted, bounces
+  invisible. `EMAIL_SECRET_KEY` is set in Vercel production and preview.
+- Responsive rule learned here: a component whose width comes from its
+  CONTAINER (a page column) must measure the container — a viewport media
+  query never fires. Measure with a CALLBACK ref, since cards with a loading
+  branch mount their box after the first effect.
 
 ## QA atlas
 

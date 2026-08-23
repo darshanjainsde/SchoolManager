@@ -5,7 +5,7 @@
     "sev": "med",
     "status": "fixed (4fa307d, live on main)",
     "title": "Shell scrolled the sidebar away and capped width at max-w-6xl",
-    "body": "The spine rail scrolled off-screen on any long list and the page centred in a 6xl column. Rebuilt with the admin console's fixed-viewport mechanics: pinned rail with its own scroll, full-width main pane, mobile strip always visible. Verified at 390/768/1440px across all six pages — zero horizontal overflow."
+    "body": "The spine rail scrolled off-screen on any long list and the page centred in a 6xl column. Rebuilt with the admin console's fixed-viewport mechanics: pinned rail with its own scroll, full-width main pane, mobile strip always visible. Verified at 390/768/1440px across all six pages \u2014 zero horizontal overflow."
   },
   {
     "date": "2026-08-22",
@@ -35,7 +35,7 @@
     "date": "2026-08-22",
     "area": "Notifications",
     "sev": "high",
-    "status": "open — needs the SMTP_PASS secret added to Vercel Preview env",
+    "status": "open \u2014 needs the SMTP_PASS secret added to Vercel Preview env",
     "title": "Staging sends no email at all (SMTP_PASS missing)",
     "body": "Preview env has SMTP_HOST/USER/PORT/FROM but no SMTP_PASS, so every invite/notification on staging silently fails (emailSent:false) while production sends. Blocks QA of all notification flows on staging; login invites for staging test personas are stuck until fixed + resent."
   },
@@ -43,7 +43,7 @@
     "date": "2026-08-22",
     "area": "Admin portal",
     "sev": "med",
-    "status": "open — product decision needed",
+    "status": "open \u2014 product decision needed",
     "title": "A login's email can never be changed after creation",
     "body": "Login invites bind to the email at creation; there is no change-login-email endpoint and release() keeps userId so re-inviting is blocked. Any typo'd or dead address permanently strands the account (all 330 seeded logins point at unreachable @raffles.edu addresses). Suggest an admin 'change login email + re-invite' action with session revocation."
   },
@@ -51,8 +51,24 @@
     "date": "2026-08-22",
     "area": "Notifications",
     "sev": "low",
-    "status": "open — accepted design, worth revisiting",
+    "status": "open \u2014 accepted design, worth revisiting",
     "title": "Invite emailSent:true only means the SMTP server accepted it",
     "body": "Bounces are invisible; admin UI shows 'invited' forever with no 'never set a password' view. Pairs with the proposed weekly pending-invites digest."
+  },
+  {
+    "date": "2026-08-23",
+    "area": "Notifications",
+    "sev": "low",
+    "status": "shipped (6f6667b, live on main)",
+    "title": "Letterhead \u2014 every email now wears the school's branding",
+    "body": "All 12 message kinds render through one email-safe template carrying the school's crest, colour and footer, defaulting from the website profile so an unconfigured school is still branded. Admin Settings has an Email card (3 letterheads, sender name, reply-to, accent, footer, live preview, send-test). Schools may optionally send from their own mailbox (own domain or Gmail-style) with AES-256-GCM encrypted credentials; a sender is used only when VERIFIED by a real test send, and falls back to the platform mailbox on any failure. QA: check that every notification kind arrives branded, and that removing the custom sender returns mail to the Sckools sender without interruption."
+  },
+  {
+    "date": "2026-08-23",
+    "area": "Admin portal",
+    "sev": "low",
+    "status": "shipped (6f6667b, live on main)",
+    "title": "Owner console can put a school on its own domain",
+    "body": "Add a domain, get the exact DNS record (A for an apex, CNAME otherwise), attach it at the host, then Verify \u2014 which reads live DNS and refuses to mark it LIVE until it resolves here. Promote to primary (LIVE only) makes it the address used in invite links and email footers. QA: verify with a real domain end to end; check that a school stays reachable on its slug host throughout."
   }
 ]
