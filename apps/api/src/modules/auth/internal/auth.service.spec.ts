@@ -273,3 +273,55 @@ describe('AuthService.displayNameFor', () => {
     await expect(svc.displayNameFor(SCHOOL, 'user-1', 'TEACHER')).resolves.toBeNull();
   });
 });
+
+/**
+ * A refresh token from ANOTHER school must be refused before anything is
+ * rotated.
+ *
+ * Both schools' refresh cookies travel under the shared parent domain, so a
+ * browser signed into two schools offers both on every refresh. Accepting the
+ * wrong one mints an access token for school A on school B's host — the console
+ * then renders while every request 401s ("Token does not match this tenant"),
+ * which is exactly what happened on production. The rejection must also happen
+ * BEFORE any database work: rotating or revoking the other school's token would
+ * silently end a live session belonging to a different school.
+ */
+describe('AuthService.refresh — tenant binding', () => {
+  const jwt = new JwtService({});
+  const passwords = { verify: jest.fn() };
+  const svc = new AuthService(jwt, passwords as unknown as PasswordService);
+  const SCHOOL_A = '11111111-1111-1111-1111-111111111111';
+  const SCHOOL_B = '22222222-2222-2222-2222-222222222222';
+
+  beforeEach(() => jest.clearAllMocks());
+
+  function tokenFor(schoolId: string): string {
+    return jwt.sign(
+      { sub: 'user-1', jti: 'j1', fam: 'f1', schoolId },
+      { secret: process.env.JWT_SCHOOL_REFRESH_SECRET, audience: 'school-refresh' },
+    );
+  }
+
+  it('refuses a token minted for a different school', async () => {
+    await expect(svc.refresh(tokenFor(SCHOOL_A), SCHOOL_B)).rejects.toThrow(
+      'Refresh token belongs to another school',
+    );
+    // Nothing was looked up or rotated — the other school's session is intact.
+    expect(txMock.refreshToken.create).not.toHaveBeenCalled();
+  });
+
+  it('gets past the tenant gate when the token belongs to this school', async () => {
+    // It still fails further down (this harness stubs no stored token), but it
+    // must NOT fail with the tenant message — that is what proves the gate
+    // opened for the right school rather than rejecting everything.
+    await expect(svc.refresh(tokenFor(SCHOOL_A), SCHOOL_A)).rejects.not.toThrow(
+      'Refresh token belongs to another school',
+    );
+  });
+
+  it('stays backward compatible when no tenant is supplied', async () => {
+    await expect(svc.refresh(tokenFor(SCHOOL_A))).rejects.not.toThrow(
+      'Refresh token belongs to another school',
+    );
+  });
+});

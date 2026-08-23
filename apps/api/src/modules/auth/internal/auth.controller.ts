@@ -17,6 +17,8 @@ import {
   SCHOOL_REFRESH_COOKIE,
   clearRefreshCookie,
   resolveRefreshTokens,
+  resolveSchoolRefreshTokens,
+  schoolRefreshCookie,
   firstValidToken,
   setRefreshCookie,
 } from '../../../common/auth/refresh-cookie';
@@ -54,7 +56,9 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const ctx = this.tenantCtx.requireTenant();
     const tokens = await this.auth.login(ctx.schoolId, dto.identifier ?? dto.email ?? '', dto.password);
-    setRefreshCookie(res, SCHOOL_REFRESH_COOKIE, tokens.refreshToken, this.env);
+    // Per-school cookie name: signing into a second school must not overwrite
+    // (or be overwritten by) the first — they share the parent domain.
+    setRefreshCookie(res, schoolRefreshCookie(ctx.schoolSlug), tokens.refreshToken, this.env);
     // refreshToken stays in the body for now: clients released before the
     // cookie existed still read it from here. Drop it once they are gone.
     return tokens;
@@ -71,12 +75,18 @@ export class AuthController {
     // EVERY cookie sent under this name, not just the first. A browser holding
     // a stale copy under different attributes sends both, and picking the first
     // meant a permanently unrefreshable session that signing out could not fix.
-    const candidates = resolveRefreshTokens(req, SCHOOL_REFRESH_COOKIE, dto?.refreshToken);
+    // This school's own cookie first, then the legacy shared one, then the body.
+    // `auth.refresh` refuses any token belonging to a different school, so a
+    // second school's session in the same browser is skipped rather than
+    // mistakenly accepted (and is never rotated, so it stays alive).
+    const ctx = this.tenantCtx.requireTenant();
+    const candidates = resolveSchoolRefreshTokens(req, ctx.schoolSlug, dto?.refreshToken);
     if (candidates.length === 0) throw new ForbiddenException('No refresh token');
-    const tokens = await firstValidToken(candidates, (t) => this.auth.refresh(t));
-    // Rotation: the new token replaces the cookie. A session that arrived with
-    // a body token leaves with a cookie — that is the migration path.
-    setRefreshCookie(res, SCHOOL_REFRESH_COOKIE, tokens.refreshToken, this.env);
+    const tokens = await firstValidToken(candidates, (t) => this.auth.refresh(t, ctx.schoolId));
+    // Rotation: the new token replaces the cookie, under this school's OWN
+    // name. A session that arrived on the legacy shared cookie (or a body
+    // token) leaves with a per-school cookie — that is the migration path.
+    setRefreshCookie(res, schoolRefreshCookie(ctx.schoolSlug), tokens.refreshToken, this.env);
     return tokens;
   }
 
@@ -138,9 +148,15 @@ export class AuthController {
     if (user.schoolId !== ctx.schoolId) throw new ForbiddenException();
     // Revoke every token the browser offered, not just the first — otherwise a
     // stale duplicate outlives the sign-out it was meant to end.
-    for (const token of resolveRefreshTokens(req, SCHOOL_REFRESH_COOKIE, dto?.refreshToken)) {
+    for (const token of resolveSchoolRefreshTokens(req, ctx.schoolSlug, dto?.refreshToken)) {
+      // Tenant-scoped: a token belonging to another school simply is not found
+      // in this school's rows, so signing out here cannot revoke it.
       await this.auth.logout(ctx.schoolId, token).catch(() => undefined);
     }
+    // Only THIS school's cookie is cleared. The legacy shared name is cleared
+    // too — it can only hold a session this browser is signing out of or one
+    // already migrated to a per-school cookie.
+    clearRefreshCookie(res, schoolRefreshCookie(ctx.schoolSlug), this.env);
     clearRefreshCookie(res, SCHOOL_REFRESH_COOKIE, this.env);
     return { ok: true };
   }

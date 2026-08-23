@@ -23,6 +23,33 @@ import type { Request, Response } from 'express';
 export const SCHOOL_REFRESH_COOKIE = 'skoolos_rt';
 export const OWNER_REFRESH_COOKIE = 'skoolos_ort';
 
+/**
+ * One cookie NAME per school.
+ *
+ * The parent-domain scope above is not optional: the API lives on
+ * `api.<host>` while schools live on `<slug>.<host>`, so a host-scoped cookie
+ * would never reach the API at all. But that same scope means every school's
+ * session lands under ONE (name, domain, path) key, and a browser signed into
+ * two schools sends both indistinguishably. The consequences were real and
+ * silent: refresh returned whichever token validated first, so the second
+ * school's console rendered while every request 401'd
+ * ("Token does not match this tenant"), and signing out of one school deleted
+ * the other's cookie because `clearCookie` can only address the shared key.
+ *
+ * Putting the school in the NAME gives each session its own key while keeping
+ * the domain scope the API needs. `SCHOOL_REFRESH_COOKIE` is still read as a
+ * fallback so sessions created before this survive — they are re-issued under
+ * the per-school name on their next refresh.
+ *
+ * The slug is `^[a-z0-9-]+$` (enforced at school creation), which is already a
+ * valid cookie name; it is filtered here anyway rather than trusted, because a
+ * name containing `=` or `;` would let a slug forge a second cookie.
+ */
+export function schoolRefreshCookie(schoolSlug: string): string {
+  const safe = schoolSlug.toLowerCase().replace(/[^a-z0-9-]/g, '');
+  return safe ? `${SCHOOL_REFRESH_COOKIE}_${safe}` : SCHOOL_REFRESH_COOKIE;
+}
+
 interface CookieEnv {
   PLATFORM_HOST: string;
   JWT_REFRESH_TTL: number;
@@ -158,4 +185,27 @@ export async function firstValidToken<T>(
     }
   }
   throw lastError;
+}
+
+/**
+ * Every refresh token this browser might hold for ONE school: its own cookie
+ * first, then the legacy shared cookie (a session from before per-school
+ * names), then the body token.
+ *
+ * Order matters — the school's own cookie is the one that certainly belongs to
+ * it, so it is tried before the shared name that may carry another school's
+ * session. `AuthService.refresh` rejects a token whose schoolId does not match
+ * the tenant, so a stale shared cookie can only ever be skipped, never
+ * accepted.
+ */
+export function resolveSchoolRefreshTokens(
+  req: Request,
+  schoolSlug: string,
+  bodyToken?: string,
+): string[] {
+  const own = readCookies(req, schoolRefreshCookie(schoolSlug));
+  const legacy = readCookies(req, SCHOOL_REFRESH_COOKIE);
+  const all = [...own, ...legacy];
+  if (bodyToken) all.push(bodyToken);
+  return [...new Set(all.filter(Boolean))];
 }

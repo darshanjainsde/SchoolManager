@@ -63,7 +63,19 @@ export class AuthService {
     return this.issueTokens(user, randomUUID(), schoolId);
   }
 
-  async refresh(rawToken: string): Promise<IssuedTokens> {
+  /**
+   * `expectedSchoolId` is the tenant the request arrived on. A browser can hold
+   * a valid refresh token for a DIFFERENT school (both cookies travel under the
+   * parent domain), and accepting it here would mint an access token for school
+   * A on school B's host — which the JWT guard then rejects on every request,
+   * leaving a console that renders but cannot load anything.
+   *
+   * The check sits immediately after verification and before any database work,
+   * so a wrong-tenant token is skipped WITHOUT being rotated or revoked. That
+   * ordering is the whole point: rotating it would silently destroy the other
+   * school's live session.
+   */
+  async refresh(rawToken: string, expectedSchoolId?: string): Promise<IssuedTokens> {
     let payload: { sub: string; jti: string; fam: string; schoolId: string };
     try {
       payload = this.jwt.verify(rawToken, {
@@ -72,6 +84,10 @@ export class AuthService {
       });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (expectedSchoolId && payload.schoolId !== expectedSchoolId) {
+      throw new UnauthorizedException('Refresh token belongs to another school');
     }
 
     const tokenHash = sha256(rawToken);

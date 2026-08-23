@@ -8,6 +8,8 @@ import {
   resolveRefreshToken,
   resolveRefreshTokens,
   setRefreshCookie,
+  schoolRefreshCookie,
+  resolveSchoolRefreshTokens,
 } from './refresh-cookie';
 
 const prodEnv = { PLATFORM_HOST: 'sckools.com', JWT_REFRESH_TTL: 2_592_000, NODE_ENV: 'production' };
@@ -193,5 +195,52 @@ describe('firstValidToken', () => {
     });
     await expect(firstValidToken(['a', 'b', 'c'], attempt)).rejects.toThrow();
     expect(attempt).toHaveBeenCalledTimes(3);
+  });
+});
+
+/**
+ * Two schools signed in on one browser.
+ *
+ * The parent-domain scope is required (the API lives on a different subdomain
+ * from the schools), so every school's session used to land under ONE cookie
+ * key. The browser sent both, refresh took whichever validated first, and the
+ * second school's console rendered while every request 401'd with "Token does
+ * not match this tenant" — reproduced on production with an owner
+ * impersonation. Signing out of one school also deleted the other's cookie,
+ * because clearCookie can only address the shared key.
+ *
+ * Per-school NAMES fix both, while keeping the domain the API needs.
+ */
+describe('per-school refresh cookies', () => {
+  it('gives each school its own cookie name', () => {
+    expect(schoolRefreshCookie('raffles')).toBe('skoolos_rt_raffles');
+    expect(schoolRefreshCookie('beacon')).toBe('skoolos_rt_beacon');
+    expect(schoolRefreshCookie('raffles')).not.toBe(schoolRefreshCookie('beacon'));
+  });
+
+  it('never lets a slug forge a second cookie', () => {
+    // A name carrying '=' or ';' would inject into the Set-Cookie header.
+    const forged = schoolRefreshCookie('bad=x; skoolos_rt');
+    expect(forged).toBe('skoolos_rt_badxskoolosrt');
+    expect(forged).not.toMatch(/[=;\s]/);
+    expect(schoolRefreshCookie('!!!')).toBe('skoolos_rt');
+  });
+
+  it('reads only THIS school’s cookie ahead of the legacy shared one', () => {
+    const header = 'skoolos_rt=raffles-legacy; skoolos_rt_beacon=beacon-own; skoolos_rt_raffles=raffles-own';
+
+    // Beacon sees its own token first; the shared cookie is still offered last
+    // (it may hold a pre-migration session) but never ahead of its own.
+    expect(resolveSchoolRefreshTokens(req(header), 'beacon')).toEqual(['beacon-own', 'raffles-legacy']);
+    expect(resolveSchoolRefreshTokens(req(header), 'raffles')).toEqual(['raffles-own', 'raffles-legacy']);
+  });
+
+  it('still finds a pre-migration session stored under the shared name', () => {
+    expect(resolveSchoolRefreshTokens(req('skoolos_rt=old-session'), 'beacon')).toEqual(['old-session']);
+  });
+
+  it('offers the body token last, and never duplicates', () => {
+    expect(resolveSchoolRefreshTokens(req('skoolos_rt_beacon=a'), 'beacon', 'a')).toEqual(['a']);
+    expect(resolveSchoolRefreshTokens(req('skoolos_rt_beacon=a'), 'beacon', 'b')).toEqual(['a', 'b']);
   });
 });
