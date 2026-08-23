@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
@@ -98,6 +98,21 @@ export function EmailSettingsCard() {
 
   // Seed the form from the server exactly once per load, so typing is never
   // clobbered by a refetch mid-edit.
+  // The preview box measures ITSELF and scales the 600px email to fit. Fed
+  // from the box (not the email), so this cannot become a feedback loop.
+  const previewBoxRef = useRef<HTMLDivElement | null>(null);
+  const [previewScale, setPreviewScale] = useState(1);
+  useEffect(() => {
+    const el = previewBoxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      if (w > 0) setPreviewScale(Math.min(1, w / 600));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const [seeded, setSeeded] = useState(false);
   useEffect(() => {
     if (!q.data || seeded) return;
@@ -193,7 +208,7 @@ export function EmailSettingsCard() {
   const preview = d.previews.find((p) => p.template === template)?.html ?? '';
 
   return (
-    <div className="sk-card">
+    <div className="sk-card" style={{ gridColumn: '1 / -1' }}>
       <div className="sk-card-h">
         <h3>Email</h3>
         <p className="sk-muted" style={{ margin: 0, fontSize: 12.5 }}>
@@ -314,12 +329,23 @@ export function EmailSettingsCard() {
           {/* Live preview — the same renderer that sends the real mail. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
             <span className="sk-lab">Preview</span>
-            <div style={{ border: '1px solid var(--sk-line)', borderRadius: 10, overflow: 'hidden', background: '#f1f0ee' }}>
+            <div
+              ref={previewBoxRef}
+              style={{
+                border: '1px solid var(--sk-line)', borderRadius: 10, background: '#f1f0ee',
+                overflow: 'hidden', height: 470 * previewScale + 2,
+              }}
+            >
+              {/* Rendered at the real 600px an inbox gives it, then scaled —
+                  a preview reflowed to a narrow box would not be the email. */}
               <iframe
                 title="Email preview"
                 srcDoc={preview}
                 sandbox=""
-                style={{ width: '100%', height: 430, border: 0, display: 'block' }}
+                style={{
+                  width: 600, height: 470, border: 0, display: 'block',
+                  transform: `scale(${previewScale})`, transformOrigin: 'top left',
+                }}
               />
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
