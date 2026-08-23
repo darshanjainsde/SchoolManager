@@ -23,14 +23,17 @@ class FakeRedis {
   private key = '';
   private multiChain(cmd: string) {
     this.queue.push(cmd);
-    const self = this;
-    return {
-      pttl() {
-        self.queue.push('pttl');
-        return this;
+    // Arrow functions keep `this` lexical, so the chain can record calls
+    // against the fake WITHOUT aliasing `this` to a local (which lint
+    // rejects); `pttl` returns the chain object by name to stay chainable.
+    const chain = {
+      pttl: () => {
+        this.queue.push('pttl');
+        return chain;
       },
       exec: async () => this.execQueue(),
     };
+    return chain;
   }
 
   // The storage always calls multi().incr(k).pttl(k).exec() — capture the key
