@@ -102,5 +102,13 @@
     "status": "open \u2014 needs two GitHub secrets from the owner",
     "title": "Nightly database backup has never run",
     "body": "The db-backup workflow stops on its first line: DB_BACKUP_URL is not configured (BACKUP_PASSPHRASE is missing too). No independent encrypted dump of the production database has ever been produced. Needs DB_BACKUP_URL (Supabase SESSION pooler string, port 5432 \u2014 the transaction pooler on 6543 breaks pg_dump) and BACKUP_PASSPHRASE (long random string, stored in a password manager; the repo is public so every dump is gpg-encrypted and is unreadable without it). These cannot be recovered from Vercel: the database URLs are marked sensitive there and pull back empty. After adding them, run the workflow once and then the Restore drill in docs/RUNBOOK.md. This workflow is deliberately left failing loudly rather than skipping, because 'you have no backups' is a signal worth being nagged about."
+  },
+  {
+    "date": "2026-08-24",
+    "area": "Public site",
+    "sev": "high",
+    "status": "fixed (dc12203, live on main)",
+    "title": "Mobile nav ran off the right edge, clipping the Enquire button",
+    "body": "Reported from a real phone and reproduced on production (Enquire painted at x=468 on a 384px viewport). TWO causes. (1) The school name carries `truncate` so it can absorb a narrow screen, but its parent carried `flex-none`, which forbids the shrinking truncation depends on \u2014 so the name kept full width and pushed the nowrap bar past max-w-full. The name's box is now shrinkable while the crest and the action cluster are flex-none. (2) On the classic bar, the priority-row nav measures how many links fit and sends the rest to the hamburger; its guard treated a zero measurement as 'not laid out yet' and rendered EVERY link. On a phone that row legitimately settles at zero width, so all links rendered inside a 0-width box with overflow visible and spilled across the bar (links painting at x=506). The guard now distinguishes a real layout box in a sized parent (zero means nothing fits \u2014 all links to the hamburger) from a genuinely unmeasured element (SSR/jsdom \u2014 show all, unchanged). VERIFIED: element-level audit at 320/390/430px across every public page for two schools with different nav styles \u2014 zero visible overflow; a 93-character school name at 314px still fits with the name truncating. WHY RESPONSIVE TESTING MISSED IT: the failure depends on CONTENT LENGTH and on which nav style a school uses, not on width alone, and the earlier checks asked only 'does the page scroll sideways' \u2014 which a clipped-but-not-scrolling bar answers with no."
   }
 ]
