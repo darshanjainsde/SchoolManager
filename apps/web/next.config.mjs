@@ -29,6 +29,21 @@ const nextConfig = {
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
+  /**
+   * sckools.com/demo — the sales deck, served as a plain static file.
+   *
+   * It lives in `public/demo/index.html` — a self-contained page carrying its
+   * own <html>, styles and script — so it cannot be an App Router page: those
+   * render inside the root layout, which already owns the document. A rewrite
+   * keeps the URL clean while Vercel serves the file from its static layer, so
+   * there is no server work and nothing for the deck to depend on.
+   *
+   * It stays on the platform's own domain deliberately: a link handed to a
+   * school should sit on the same name as the brochure and the email address.
+   */
+  async rewrites() {
+    return [{ source: '/demo', destination: '/demo/index.html' }];
+  },
 };
 
 export default nextConfig;

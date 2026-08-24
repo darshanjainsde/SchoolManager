@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sckools — the school visit deck</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   Sckools · the deck you open in front of a principal.
+   ───────────────────────────────────────────────────────────────
+   RULES THIS DECK IS BUILT ON
+   1. One idea per slide. If it needs a paragraph, it needs a picture.
+   2. Say what the school GETS, never what the software does.
+   3. No jargon. "The office screen", not "the admin portal".
+   4. Every slide animates once, on arrival — motion explains the
+      idea (a message travelling, a card flipping), it never decorates.
+   Keys: → / space next · ← back · F fullscreen · P print handout.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --ink:#211D45; --ink2:#4B4768; --sub:#6E6A88;
+  --rule:#E7E3D6; --paper:#FBF9F4; --card:#fff;
+  --brand:#4F46E5; --deep:#3730A3; --tint:#EEF0FF;
+  --amber:#F59E0B; --amber-ink:#7A4E06; --amber-t:#FDF1D8;
+  --good:#178A5B; --good-t:#E3F4EC; --bad:#B3261E; --bad-t:#FBEAE9;
+  --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#26233F;font-family:var(--sans);color:var(--ink);overflow:hidden}
+
+/* ---------- stage: a 16:9 slide scaled to whatever screen is here ---------- */
+#stage{position:fixed;inset:0;display:grid;place-items:center}
+#slide{
+  width:1280px;height:720px;position:relative;background:var(--paper);
+  border-radius:14px;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.6);
+  transform-origin:center center;
+}
+.s{position:absolute;inset:0;padding:64px 72px;display:none;flex-direction:column}
+.s.on{display:flex}
+.s.dark{background:#1B1836;color:#EDEAF6}
+.s.dark .dek,.s.dark .lead{color:#B7B2D4}
+.s.dark .card{background:#252148;border-color:#3A3466;color:#EDEAF6}
+
+/* furniture */
+.eyebrow{font-size:13px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--brand);
+  display:flex;align-items:center;gap:12px;flex:none}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+.s.dark .eyebrow{color:#A5B4FC}.s.dark .eyebrow::after{background:#3A3466}
+h1{font-family:var(--serif);font-size:66px;line-height:1.04;letter-spacing:-.02em;font-weight:700}
+h2{font-family:var(--serif);font-size:46px;line-height:1.08;letter-spacing:-.02em;font-weight:700;margin-top:14px}
+h2 em{font-style:normal;color:var(--deep)}
+.s.dark h2 em{color:#FBBF24}
+.lead{font-size:21px;line-height:1.5;color:var(--ink2);margin-top:14px;max-width:22ch}
+.dek{font-size:18px;line-height:1.55;color:var(--ink2);margin-top:10px}
+.foot{position:absolute;left:72px;right:72px;bottom:26px;display:flex;align-items:center;gap:10px;
+  font-size:12.5px;font-weight:700;color:var(--sub)}
+.foot .sp{margin-left:auto;font-weight:600}
+.s.dark .foot{color:#7E78A8}
+.logo{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--brand),#7C6CFF);
+  color:#fff;display:grid;place-items:center;font-weight:900;font-size:13px;font-family:var(--serif)}
+
+.split{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;flex:1;min-height:0}
+.split.wide-left{grid-template-columns:1.15fr .85fr}
+.copy{min-width:0}
+.viz{min-width:0;display:flex;align-items:center;justify-content:center}
+
+/* points: three at most, big enough to read from the back of a room */
+.pts{list-style:none;margin-top:22px;display:flex;flex-direction:column;gap:14px}
+.pts li{position:relative;padding-left:26px;font-size:19px;line-height:1.45;color:var(--ink2)}
+.pts li b{color:var(--ink);font-weight:800}
+.s.dark .pts li b{color:#fff}
+.pts li::before{content:"";position:absolute;left:0;top:9px;width:9px;height:9px;border-radius:50%;background:var(--brand)}
+.pts li:nth-child(2)::before{background:var(--amber)}
+.pts li:nth-child(3)::before{background:var(--good)}
+
+.card{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:18px 20px;
+  box-shadow:0 10px 30px -18px rgba(33,29,69,.45)}
+.chip{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:5px 13px;
+  font-size:13px;font-weight:800;background:var(--tint);color:var(--deep)}
+.chip.amber{background:var(--amber-t);color:var(--amber-ink)}
+.chip.good{background:var(--good-t);color:var(--good)}
+.chip.bad{background:var(--bad-t);color:var(--bad)}
+.new{background:var(--good);color:#fff;border-radius:999px;padding:4px 11px;font-size:12px;font-weight:800;
+  letter-spacing:.04em;text-transform:uppercase}
+
+/* ---------- animation: everything with .a runs once when the slide lands ---------- */
+.a{opacity:0;transform:translateY(14px)}
+.s.on .a{animation:rise .62s cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes rise{to{opacity:1;transform:none}}
+.s.on .d1{animation-delay:.08s}.s.on .d2{animation-delay:.2s}.s.on .d3{animation-delay:.32s}
+.s.on .d4{animation-delay:.44s}.s.on .d5{animation-delay:.56s}.s.on .d6{animation-delay:.68s}
+.s.on .d7{animation-delay:.8s}.s.on .d8{animation-delay:.92s}
+.pop{opacity:0;transform:scale(.9)}
+.s.on .pop{animation:pop .5s cubic-bezier(.2,.8,.3,1.2) forwards}
+@keyframes pop{to{opacity:1;transform:none}}
+.strike{position:relative}
+.strike::after{content:"";position:absolute;left:-2%;top:52%;width:0;height:3px;background:var(--bad);border-radius:2px}
+.s.on .strike::after{animation:strike .5s ease forwards;animation-delay:.9s}
+@keyframes strike{to{width:104%}}
+@media (prefers-reduced-motion:reduce){
+  .a,.pop{opacity:1!important;transform:none!important;animation:none!important}
+  .strike::after{animation:none!important;width:104%!important}
+}
+
+/* ---------- little scene pieces ---------- */
+.phone{width:186px;height:376px;border-radius:26px;background:#fff;border:8px solid #1B1836;
+  box-shadow:0 24px 50px -20px rgba(33,29,69,.6);padding:12px 11px;display:flex;flex-direction:column;gap:8px}
+.phone .bar{height:5px;width:52px;background:#1B1836;border-radius:3px;margin:0 auto 4px;opacity:.25}
+.browser{width:100%;border-radius:12px;overflow:hidden;border:1px solid var(--rule);background:#fff;
+  box-shadow:0 18px 40px -20px rgba(33,29,69,.5)}
+.browser .chrome{background:#EFECE3;padding:8px 12px;display:flex;align-items:center;gap:7px}
+.browser .dot{width:9px;height:9px;border-radius:50%;background:#CFC9BA}
+.browser .url{flex:1;background:#fff;border-radius:6px;font-size:11.5px;padding:4px 9px;color:var(--sub);font-weight:700}
+.row{display:flex;align-items:center;gap:9px}
+.mini{font-size:13px;font-weight:700;color:var(--ink2)}
+.tiny{font-size:11.5px;color:var(--sub);font-weight:600}
+
+/* flow arrows */
+.flow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center}
+.arrow{width:34px;height:2px;background:linear-gradient(90deg,var(--rule),var(--brand));position:relative;flex:none}
+.arrow::after{content:"";position:absolute;right:-1px;top:-4px;border-left:8px solid var(--brand);
+  border-top:5px solid transparent;border-bottom:5px solid transparent}
+
+/* replaces-list */
+.repl{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 26px;margin-top:8px}
+.repl div{font-size:19px;color:var(--ink2);font-weight:600;padding-left:30px;position:relative}
+.repl div::before{content:"✕";position:absolute;left:0;top:0;color:var(--bad);font-weight:900}
+
+/* progress + nav */
+#bar{position:fixed;left:0;top:0;height:3px;background:linear-gradient(90deg,var(--brand),var(--amber));
+  z-index:40;transition:width .35s ease}
+/* The controls sit over the slide, so they fade out while you talk and come
+   back the moment the mouse moves — a presenter's hands should not be in the
+   picture, but they must never be hunted for either. */
+#nav{position:fixed;right:16px;bottom:14px;display:flex;gap:8px;z-index:40;
+  opacity:.12;transition:opacity .35s ease}
+#nav:hover,body.busy #nav{opacity:1}
+#nav button{border:0;border-radius:9px;background:rgba(20,17,45,.72);color:#fff;font-weight:800;
+  font-size:13px;padding:8px 13px;cursor:pointer;backdrop-filter:blur(6px)}
+#nav button:hover{background:rgba(255,255,255,.26)}
+#count{position:fixed;left:18px;bottom:18px;color:rgba(255,255,255,.6);font-size:12.5px;font-weight:700;z-index:40}
+
+/* ---------- print: one slide per page, no motion ---------- */
+@media print{
+  @page{size:A4 landscape;margin:8mm}
+  body{background:#fff;overflow:visible}
+  #stage{position:static;display:block}
+  #slide{width:auto;height:auto;box-shadow:none;transform:none!important;border-radius:0;background:none}
+  .s{display:flex!important;position:relative;inset:auto;page-break-after:always;height:175mm;
+     border:1px solid var(--rule);border-radius:8px;margin-bottom:6mm;padding:34px 40px}
+  .s.dark{background:#1B1836!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .a,.pop{opacity:1!important;transform:none!important;animation:none!important}
+  #nav,#bar,#count{display:none!important}
+  h1{font-size:40px}h2{font-size:30px}.lead{font-size:16px}.pts li{font-size:15px}
+}
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<div id="stage"><div id="slide">
+
+<!-- ══ 1 · cover ══════════════════════════════════════════════ -->
+<section class="s on">
+  <div class="split" style="align-items:center">
+    <div class="copy">
+      <div class="row a d1" style="gap:11px"><div class="logo">S</div>
+        <b style="font-size:19px;letter-spacing:-.01em">Sckools</b></div>
+      <h1 class="a d2" style="margin-top:26px">The whole school,<br>in one place.</h1>
+      <p class="lead a d3" style="max-width:26ch">Your website. Your office. Your teachers.
+        Your parents. One system — and your school still looks like your school.</p>
+      <div class="row a d4" style="margin-top:30px;gap:10px">
+        <span class="chip">Website</span><span class="chip amber">Office</span>
+        <span class="chip good">Teachers</span><span class="chip">Families</span>
+      </div>
+    </div>
+    <div class="viz">
+      <div class="browser pop d3" style="max-width:430px">
+        <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="url">yourschool.com</span><span class="chip good" style="font-size:10.5px;padding:3px 9px">LIVE</span></div>
+        <div style="padding:20px 20px 26px;background:linear-gradient(180deg,#fff,#FBF7EF)">
+          <div class="row" style="gap:9px"><div class="logo" style="background:#7A2233">R</div>
+            <b style="font-family:var(--serif);font-size:15px">Raffles Primary School</b></div>
+          <div style="font-family:var(--serif);font-size:27px;line-height:1.12;margin-top:16px;font-weight:700">
+            Where every child belongs</div>
+          <div class="tiny" style="margin-top:8px">Admissions open · 2026–27</div>
+          <div class="row" style="margin-top:16px;gap:8px">
+            <span class="chip" style="background:#7A2233;color:#fff">Book a visit</span>
+            <span class="chip" style="background:#fff;border:1px solid var(--rule);color:var(--ink2)">Explore</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div>
+    <span>Sckools</span><span class="sp">sckools.com · contact@sckools.com</span></div>
+</section>
+
+<!-- ══ 2 · the problem ════════════════════════════════════════ -->
+<section class="s">
+  <div class="eyebrow a d1">A normal Tuesday</div>
+  <div class="split" style="margin-top:8px">
+    <div class="copy">
+      <h2 class="a d2">Six places<br>hold your school.</h2>
+      <p class="dek a d3" style="max-width:24ch">None of them talk to each other. All of them are on paper,
+        or in one person's head.</p>
+    </div>
+    <div class="viz">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%;max-width:460px">
+        <div class="card pop d2" style="padding:15px 17px"><b>The paper register</b>
+          <div class="tiny" style="margin-top:4px">In a cupboard by Friday</div></div>
+        <div class="card pop d3" style="padding:15px 17px"><b>The 8&nbsp;a.m. phone round</b>
+          <div class="tiny" style="margin-top:4px">Who is absent today?</div></div>
+        <div class="card pop d4" style="padding:15px 17px"><b>The diary book</b>
+          <div class="tiny" style="margin-top:4px">If the bag comes home</div></div>
+        <div class="card pop d5" style="padding:15px 17px"><b>A passwords sheet</b>
+          <div class="tiny" style="margin-top:4px">Taped inside a drawer</div></div>
+        <div class="card pop d6" style="padding:15px 17px"><b>The staff-room board</b>
+          <div class="tiny" style="margin-top:4px">Who is covering 6-B?</div></div>
+        <div class="card pop d7" style="padding:15px 17px"><b>No website</b>
+          <div class="tiny" style="margin-top:4px">Parents ask on WhatsApp</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">The problem</span></div>
+</section>
+
+<!-- ══ 3 · four doors ═════════════════════════════════════════ -->
+<section class="s dark">
+  <div class="eyebrow a d1">One system, four doors</div>
+  <h2 class="a d2" style="text-align:center;margin-top:6px">Everyone opens <em>their own door.</em></h2>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;margin-top:6px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px;width:100%;max-width:960px">
+      <div class="card pop d3" style="text-align:center;padding:24px 16px">
+        <div style="font-size:34px">🌐</div><b style="display:block;margin-top:10px;font-size:19px">Your website</b>
+        <div class="tiny" style="margin-top:7px;color:#9C96C4">What families see<br>before they visit</div></div>
+      <div class="card pop d4" style="text-align:center;padding:24px 16px">
+        <div style="font-size:34px">🏫</div><b style="display:block;margin-top:10px;font-size:19px">The office</b>
+        <div class="tiny" style="margin-top:7px;color:#9C96C4">One screen that<br>runs the school</div></div>
+      <div class="card pop d5" style="text-align:center;padding:24px 16px">
+        <div style="font-size:34px">👩‍🏫</div><b style="display:block;margin-top:10px;font-size:19px">The teacher</b>
+        <div class="tiny" style="margin-top:7px;color:#9C96C4">In the room,<br>on her phone</div></div>
+      <div class="card pop d6" style="text-align:center;padding:24px 16px">
+        <div style="font-size:34px">👨‍👩‍👧</div><b style="display:block;margin-top:10px;font-size:19px">The family</b>
+        <div class="tiny" style="margin-top:7px;color:#9C96C4">At home,<br>that evening</div></div>
+    </div>
+  </div>
+  <p class="lead a d7" style="text-align:center;max-width:none;margin:0 auto">
+    One login each. Nothing to install. Nothing to buy again next year.</p>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">How it fits together</span></div>
+</section>
+
+<!-- ══ 4 · website ════════════════════════════════════════════ -->
+<section class="s">
+  <div class="eyebrow a d1">Door one · your website</div>
+  <div class="split wide-left" style="margin-top:4px">
+    <div class="viz">
+      <div class="browser pop d2" style="max-width:520px">
+        <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="url">www.yourschool.com</span></div>
+        <div style="padding:18px">
+          <div class="row" style="justify-content:space-between">
+            <div class="row" style="gap:8px"><div class="logo" style="background:#178A5B">B</div><b style="font-size:14px">Your School</b></div>
+            <span class="chip good" style="font-size:11px">Enquire</span></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:16px">
+            <div style="height:56px;border-radius:9px;background:#E8F0FB"></div>
+            <div style="height:56px;border-radius:9px;background:#F7E9D7"></div>
+            <div style="height:56px;border-radius:9px;background:#E3F4EC"></div>
+          </div>
+          <div class="tiny" style="margin-top:12px">Programmes · Admissions · Gallery · Events · Blog</div>
+        </div>
+      </div>
+    </div>
+    <div class="copy">
+      <h2 class="a d3">Live on day one.<br><em>On your own name.</em></h2>
+      <ul class="pts">
+        <li class="a d4"><b>www.yourschool.com</b> — your own address, not ours.</li>
+        <li class="a d5"><b>You change it yourself.</b> Fill a form. No developer, ever.</li>
+        <li class="a d6"><b>Pick a look, pick colours.</b> It stays your school.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">Your website</span></div>
+</section>
+
+<!-- ══ 5 · enquiries = admissions ═════════════════════════════ -->
+<section class="s">
+  <div class="eyebrow a d1">Why it pays for itself</div>
+  <h2 class="a d2" style="text-align:center">A parent taps <em>Enquire.</em> Your office sees it.</h2>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center">
+    <div class="flow">
+      <div class="card pop d3" style="width:210px;text-align:center">
+        <div style="font-size:28px">📱</div><b style="display:block;margin-top:8px">Parent, 9 p.m.</b>
+        <div class="tiny" style="margin-top:5px">Fills the form on<br>your website</div></div>
+      <div class="arrow a d4"></div>
+      <div class="card pop d5" style="width:210px;text-align:center;border-color:var(--brand)">
+        <div style="font-size:28px">🏫</div><b style="display:block;margin-top:8px">Your office</b>
+        <div class="tiny" style="margin-top:5px">New · Contacted · Closed</div></div>
+      <div class="arrow a d6"></div>
+      <div class="card pop d7" style="width:210px;text-align:center">
+        <div style="font-size:28px">🤝</div><b style="display:block;margin-top:8px">A campus visit</b>
+        <div class="tiny" style="margin-top:5px">Called back the<br>same morning</div></div>
+    </div>
+  </div>
+  <p class="lead a d8" style="text-align:center;max-width:none;margin:0 auto">
+    Every enquiry in one list. Nothing lost in a WhatsApp thread.</p>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">Admissions</span></div>
+</section>
+
+<!-- ══ 6 · the office ═════════════════════════════════════════ -->
+<section class="s dark">
+  <div class="eyebrow a d1">Door two · the office</div>
+  <div class="split" style="margin-top:4px">
+    <div class="copy">
+      <h2 class="a d2">One screen.<br><em>The whole school.</em></h2>
+      <ul class="pts">
+        <li class="a d3"><b>Everyone on the roll.</b> Children, teachers, staff, classes.</li>
+        <li class="a d4"><b>The timetable builds itself.</b> One teacher can't be in two rooms — it won't let you.</li>
+        <li class="a d5"><b>Logins without a paper list.</b> Each person gets their own.</li>
+      </ul>
+    </div>
+    <div class="viz">
+      <div style="width:100%;max-width:420px;display:grid;gap:12px">
+        <div class="card pop d3" style="padding:14px 16px"><div class="row" style="justify-content:space-between">
+          <b>Students</b><b style="font-size:22px">300</b></div></div>
+        <div class="card pop d4" style="padding:14px 16px"><div class="row" style="justify-content:space-between">
+          <b>Teachers</b><b style="font-size:22px">30</b></div></div>
+        <div class="card pop d5" style="padding:14px 16px"><div class="row" style="justify-content:space-between">
+          <b>Classes</b><b style="font-size:22px">15</b></div></div>
+        <div class="card pop d6" style="padding:14px 16px;border-color:#F59E0B">
+          <div class="row" style="gap:9px"><span style="font-size:17px">⚠️</span>
+          <div><b style="font-size:14.5px">2 leave requests waiting</b>
+            <div class="tiny" style="color:#9C96C4;margin-top:2px">Cover suggested for both</div></div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">The office</span></div>
+</section>
+
+<!-- ══ 7 · attendance → parent (the trust win) ════════════════ -->
+<section class="s">
+  <div class="eyebrow a d1">The one that wins parents</div>
+  <h2 class="a d2" style="text-align:center">Absent at 9. <em>Mother knows at 9.</em></h2>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:26px">
+    <div class="card pop d3" style="width:270px">
+      <div class="tiny">CLASS 6-A · TODAY</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px">
+        <span class="chip good" style="justify-content:center;padding:7px 0">P</span>
+        <span class="chip good" style="justify-content:center;padding:7px 0">P</span>
+        <span class="chip bad" style="justify-content:center;padding:7px 0">A</span>
+        <span class="chip good" style="justify-content:center;padding:7px 0">P</span>
+        <span class="chip good" style="justify-content:center;padding:7px 0">P</span>
+        <span class="chip good" style="justify-content:center;padding:7px 0">P</span>
+        <span class="chip good" style="justify-content:center;padding:7px 0">P</span>
+        <span class="chip amber" style="justify-content:center;padding:7px 0">L</span>
+      </div>
+      <div class="tiny" style="margin-top:11px">Tap a name to change it. 30 seconds.</div>
+    </div>
+    <div class="arrow a d5" style="width:56px"></div>
+    <div class="phone pop d6" style="height:300px">
+      <div class="bar"></div>
+      <div style="border-radius:11px;background:var(--bad-t);padding:11px;border:1px solid #F3C9C6">
+        <div class="tiny" style="color:var(--bad);font-weight:800">YOUR SCHOOL · 9:04 a.m.</div>
+        <div style="font-size:14px;font-weight:800;margin-top:5px;line-height:1.3">Aisha was marked absent today</div>
+        <div class="tiny" style="margin-top:6px">If this is unexpected, please call the office.</div>
+      </div>
+      <div style="border-radius:11px;background:#F4F2EC;padding:10px 11px">
+        <div class="tiny" style="font-weight:800">This month</div>
+        <div class="row" style="justify-content:space-between;margin-top:4px">
+          <b style="font-size:15px">18 of 20 days</b><span class="chip good" style="font-size:10.5px;padding:3px 9px">90%</span></div>
+      </div>
+      <div class="tiny" style="margin-top:auto;text-align:center">Mother's phone</div>
+    </div>
+  </div>
+  <p class="lead a d8" style="text-align:center;max-width:none;margin:0 auto">
+    No phone round. No child unaccounted for.</p>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">Attendance</span></div>
+</section>
+
+<!-- ══ 8 · teacher's day ══════════════════════════════════════ -->
+<section class="s">
+  <div class="eyebrow a d1">Door three · the teacher</div>
+  <div class="split wide-left" style="margin-top:4px">
+    <div class="viz">
+      <div class="phone pop d2">
+        <div class="bar"></div>
+        <div class="tiny" style="font-weight:800">TODAY · CLASS 6-A</div>
+        <div class="card" style="padding:11px 13px;box-shadow:none">
+          <b style="font-size:13.5px">Period 3 · English</b>
+          <div class="tiny" style="margin-top:3px">Now · Room 12</div></div>
+        <div class="card" style="padding:11px 13px;box-shadow:none;border-color:var(--good)">
+          <b style="font-size:13.5px;color:var(--good)">✓ Register saved</b>
+          <div class="tiny" style="margin-top:3px">28 present · 2 absent</div></div>
+        <div class="card" style="padding:11px 13px;box-shadow:none">
+          <b style="font-size:13.5px">Diary sent</b>
+          <div class="tiny" style="margin-top:3px">Read by 24 families</div></div>
+      </div>
+    </div>
+    <div class="copy">
+      <h2 class="a d3">Her whole day,<br><em>in her pocket.</em></h2>
+      <ul class="pts">
+        <li class="a d4"><b>Register in 30 seconds</b> — even where there is no signal.</li>
+        <li class="a d5"><b>The diary goes home the same hour</b>, not in a bag.</li>
+        <li class="a d6"><b>Marks stay hidden until she presses Publish.</b></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">Teachers</span></div>
+</section>
+
+<!-- ══ 9 · leave → cover ══════════════════════════════════════ -->
+<section class="s dark">
+  <div class="eyebrow a d1">The principal's headache</div>
+  <h2 class="a d2" style="text-align:center">Who is covering <em>6-B tomorrow?</em></h2>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center">
+    <div class="flow">
+      <div class="card pop d3" style="width:230px"><b>Teacher asks</b>
+        <div class="tiny" style="margin-top:6px;color:#9C96C4">From the sofa, Sunday night.<br>Sick leave · 1 day</div></div>
+      <div class="arrow a d4"></div>
+      <div class="card pop d5" style="width:230px;border-color:#F59E0B"><b>You see the gap</b>
+        <div class="tiny" style="margin-top:6px;color:#9C96C4">3 classes uncovered,<br>listed for you</div></div>
+      <div class="arrow a d6"></div>
+      <div class="card pop d7" style="width:230px;border-color:#178A5B"><b>Cover assigned</b>
+        <div class="tiny" style="margin-top:6px;color:#9C96C4">Free teachers only.<br>Everyone is told.</div></div>
+    </div>
+  </div>
+  <p class="lead a d8" style="text-align:center;max-width:none;margin:0 auto">
+    The staff-room whiteboard, done before you reach school.</p>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">Leave &amp; cover</span></div>
+</section>
+
+<!-- ══ 10 · family evening ════════════════════════════════════ -->
+<section class="s">
+  <div class="eyebrow a d1">Door four · the family</div>
+  <div class="split wide-left" style="margin-top:4px">
+    <div class="viz">
+      <div class="phone pop d2">
+        <div class="bar"></div>
+        <div class="card" style="padding:11px 13px;box-shadow:none">
+          <b style="font-size:13.5px">Homework · today</b>
+          <div class="tiny" style="margin-top:3px">Essay: My favourite season</div></div>
+        <div class="card" style="padding:11px 13px;box-shadow:none;border-color:var(--brand)">
+          <b style="font-size:13.5px">Maths · Unit Test 2</b>
+          <div class="row" style="justify-content:space-between;margin-top:5px">
+            <b style="font-size:19px">42<span class="tiny">/50</span></b>
+            <span class="tiny">Class average 36</span></div></div>
+        <div class="card" style="padding:11px 13px;box-shadow:none">
+          <b style="font-size:13.5px">A word from the teacher</b>
+          <div class="tiny" style="margin-top:3px">"Settled in beautifully."</div></div>
+      </div>
+    </div>
+    <div class="copy">
+      <h2 class="a d3">The evening<br><em>question, answered.</em></h2>
+      <ul class="pts">
+        <li class="a d4"><b>Marks with the class average beside them</b> — so a number means something.</li>
+        <li class="a d5"><b>Homework, diary, timetable, holidays.</b> One place.</li>
+        <li class="a d6"><b>Two children? One phone.</b> No second login.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">Families</span></div>
+</section>
+
+<!-- ══ 11 · library (NEW) ═════════════════════════════════════ -->
+<section class="s">
+  <div class="row a d1" style="gap:12px"><div class="eyebrow" style="flex:none;width:auto">The library</div>
+    <span class="new">New</span></div>
+  <div class="split" style="margin-top:4px">
+    <div class="copy">
+      <h2 class="a d2">Your library,<br><em>finally counted.</em></h2>
+      <ul class="pts">
+        <li class="a d3"><b>Give out and take back in one tap.</b> Every copy has its own number.</li>
+        <li class="a d4"><b>Fines worked out for you</b> — collect or waive, per class.</li>
+        <li class="a d5"><b>Library period on the timetable?</b> The class is already on screen.</li>
+      </ul>
+    </div>
+    <div class="viz">
+      <div style="width:100%;max-width:420px;display:grid;gap:12px">
+        <div class="card pop d3" style="padding:15px 17px"><div class="row" style="justify-content:space-between">
+          <div><b>Out with readers</b><div class="tiny" style="margin-top:3px">Due in the next 7 days: 24</div></div>
+          <b style="font-size:26px">68</b></div></div>
+        <div class="card pop d4" style="padding:15px 17px">
+          <div class="row" style="justify-content:space-between"><b style="font-size:14px">Class 6A · in the hall now</b>
+            <span class="chip good" style="font-size:11px">2 of 2</span></div>
+          <div class="tiny" style="margin-top:6px">Register taken from the class teacher</div></div>
+        <div class="card pop d5" style="padding:15px 17px"><div class="row" style="justify-content:space-between">
+          <div><b>Fines to collect</b><div class="tiny" style="margin-top:3px">Grouped by class</div></div>
+          <b style="font-size:22px;color:var(--bad)">₹600</b></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">The library</span></div>
+</section>
+
+<!-- ══ 12 · school-branded email (NEW) ════════════════════════ -->
+<section class="s dark">
+  <div class="row a d1" style="gap:12px"><div class="eyebrow" style="flex:none;width:auto">Every message home</div>
+    <span class="new">New</span></div>
+  <h2 class="a d2" style="text-align:center">It looks like <em>your school.</em> Because it is.</h2>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:34px">
+    <div class="card pop d3" style="width:290px;background:#fff;color:var(--ink);opacity:.55">
+      <div class="tiny" style="font-weight:800">BEFORE</div>
+      <div style="margin-top:9px;font-size:13px;color:var(--sub)">From: <b>Some Software Ltd</b></div>
+      <div style="margin-top:11px;height:8px;background:#EDEAE2;border-radius:4px"></div>
+      <div style="margin-top:7px;height:8px;background:#EDEAE2;border-radius:4px;width:70%"></div>
+      <div class="strike" style="margin-top:14px;font-size:13px;font-weight:700">Plain grey text</div>
+    </div>
+    <div class="arrow a d5" style="width:56px"></div>
+    <div class="card pop d6" style="width:330px;background:#fff;color:var(--ink);padding:0;overflow:hidden">
+      <div style="height:7px;background:#7A2233"></div>
+      <div style="padding:16px 18px">
+        <div class="row" style="gap:9px"><div class="logo" style="background:#7A2233">R</div>
+          <b style="font-family:var(--serif);font-size:14px">Raffles Primary School</b></div>
+        <div style="font-family:var(--serif);font-size:18px;font-weight:700;margin-top:12px;color:#7A2233">
+          Welcome to Raffles</div>
+        <div class="tiny" style="margin-top:7px">Your account is ready. Set a password to sign in.</div>
+        <div style="margin-top:12px"><span class="chip" style="background:#7A2233;color:#fff">Set your password</span></div>
+        <div class="tiny" style="margin-top:14px;border-top:1px solid var(--rule);padding-top:9px">
+          Raffles Primary School · office@raffles.in</div>
+      </div>
+    </div>
+  </div>
+  <p class="lead a d8" style="text-align:center;max-width:none;margin:0 auto">
+    Your crest, your colours — and it can send from <b>your own email address</b>.</p>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">Email</span></div>
+</section>
+
+
+<!-- ══ festive · dress the school for the season ══════════════ -->
+<section class="s">
+  <div class="row a d1" style="gap:12px"><div class="eyebrow" style="flex:none;width:auto">Diwali is next week</div>
+    <span class="new">Favourite</span></div>
+  <div class="split" style="margin-top:4px">
+    <div class="copy">
+      <h2 class="a d2">Dress your school<br><em>for the festival.</em></h2>
+      <ul class="pts">
+        <li class="a d3"><b>Pick the festival. That is the whole job.</b> The website puts on
+          lamps, colours and a greeting by itself.</li>
+        <li class="a d4"><b>Fifteen festivals ready</b> — Diwali, Holi, Eid, Christmas,
+          Pongal, Raksha Bandhan, Independence Day and more.</li>
+        <li class="a d5"><b>Take it off in one tap</b> when the week is over.</li>
+      </ul>
+    </div>
+    <div class="viz">
+      <div style="display:grid;gap:14px;width:100%;max-width:430px">
+        <div class="browser pop d3">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">yourschool.com</span></div>
+          <div style="padding:16px 18px;background:linear-gradient(180deg,#2A1533,#4A1F3D);position:relative;overflow:hidden">
+            <div style="position:absolute;top:8px;left:0;right:0;text-align:center;font-size:15px;letter-spacing:14px">🪔🪔🪔🪔</div>
+            <div style="margin-top:26px;font-family:var(--serif);font-size:20px;font-weight:700;color:#FFD79A">
+              Happy Diwali</div>
+            <div style="font-size:12px;color:#E6C9A8;margin-top:5px">from all of us at Raffles Primary</div>
+            <div class="row" style="margin-top:12px;gap:7px">
+              <span class="chip" style="background:#FFB020;color:#3A1E06;font-size:11px">Holiday: 6–10 Nov</span></div>
+          </div>
+        </div>
+        <div class="row a d6" style="gap:8px;flex-wrap:wrap;justify-content:center">
+          <span class="chip amber" style="font-size:12px">🪔 Diwali</span>
+          <span class="chip" style="font-size:12px">🎨 Holi</span>
+          <span class="chip good" style="font-size:12px">🌙 Eid</span>
+          <span class="chip" style="font-size:12px">🎄 Christmas</span>
+          <span class="chip amber" style="font-size:12px">🌾 Pongal</span>
+          <span class="chip good" style="font-size:12px">🇮🇳 15 Aug</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">Festive mode</span></div>
+</section>
+
+<!-- ══ 13 · what it replaces ══════════════════════════════════ -->
+<section class="s">
+  <div class="eyebrow a d1">On day one, you stop doing</div>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
+    <div class="repl" style="max-width:900px">
+      <div class="a d2">The paper register</div>
+      <div class="a d3">The 8 a.m. phone round</div>
+      <div class="a d4">The diary book</div>
+      <div class="a d5">Marks read out in class</div>
+      <div class="a d6">A spreadsheet of passwords</div>
+      <div class="a d7">The staff-room whiteboard</div>
+    </div>
+    <p class="lead a d8" style="margin-top:34px;max-width:none">
+      Nothing to install. Nothing to buy again next year. Your data stays yours.</p>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">What changes</span></div>
+</section>
+
+<!-- ══ 14 · close ═════════════════════════════════════════════ -->
+<section class="s dark">
+  <div class="split" style="align-items:center">
+    <div class="copy">
+      <div class="eyebrow a d1">Start</div>
+      <h1 class="a d2" style="font-size:56px;margin-top:16px">Your website<br>goes up first.</h1>
+      <p class="lead a d3" style="max-width:26ch">An afternoon's work. Then the office, the teachers,
+        the families — at your pace, one part at a time.</p>
+      <div class="a d5" style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap">
+        <span class="chip good" style="font-size:15px;padding:9px 17px">contact@sckools.com</span>
+        <span class="chip" style="font-size:15px;padding:9px 17px">8905123466</span>
+      </div>
+    </div>
+    <div class="viz">
+      <div style="width:100%;max-width:380px;display:grid;gap:13px">
+        <div class="card pop d3" style="padding:16px 18px"><div class="row" style="gap:12px">
+          <b style="font-size:22px;color:#A5B4FC">1</b><div><b>Your website</b>
+          <div class="tiny" style="color:#9C96C4;margin-top:3px">Live this week</div></div></div></div>
+        <div class="card pop d4" style="padding:16px 18px"><div class="row" style="gap:12px">
+          <b style="font-size:22px;color:#FBBF24">2</b><div><b>The office</b>
+          <div class="tiny" style="color:#9C96C4;margin-top:3px">Roll, timetable, attendance</div></div></div></div>
+        <div class="card pop d5" style="padding:16px 18px"><div class="row" style="gap:12px">
+          <b style="font-size:22px;color:#6EE7B7">3</b><div><b>Teachers &amp; families</b>
+          <div class="tiny" style="color:#9C96C4;margin-top:3px">One login each</div></div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="logo" style="width:18px;height:18px;font-size:11px">S</div><span>Sckools</span>
+    <span class="sp">One school · one system</span></div>
+</section>
+
+</div></div>
+
+<div id="count"></div>
+<div id="nav">
+  <button onclick="go(-1)">‹ Back</button>
+  <button onclick="go(1)">Next ›</button>
+  <button onclick="document.documentElement.requestFullscreen?.()">Full screen</button>
+  <button onclick="window.print()">Handout</button>
+</div>
+
+<script>
+const slides=[...document.querySelectorAll('.s')];
+let i=0;
+function show(n){
+  i=Math.max(0,Math.min(slides.length-1,n));
+  slides.forEach((s,k)=>s.classList.toggle('on',k===i));
+  // Re-trigger the entry animation by reflowing the newly shown slide.
+  void slides[i].offsetWidth;
+  document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';
+  document.getElementById('count').textContent=(i+1)+' / '+slides.length;
+  location.hash=i+1;
+}
+function go(d){show(i+d)}
+addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(1)}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(-1)}
+  else if(e.key==='Home'){show(0)} else if(e.key==='End'){show(slides.length-1)}
+  else if(e.key.toLowerCase()==='f'){document.documentElement.requestFullscreen?.()}
+  else if(e.key.toLowerCase()==='p'){window.print()}
+});
+// Click the right half to advance, left half to go back — how people actually present.
+document.getElementById('stage').addEventListener('click',e=>{
+  if(e.target.closest('#nav')) return;
+  go(e.clientX > innerWidth/2 ? 1 : -1);
+});
+let x0=null;
+addEventListener('touchstart',e=>x0=e.touches[0].clientX,{passive:true});
+addEventListener('touchend',e=>{if(x0===null)return;const dx=e.changedTouches[0].clientX-x0;
+  if(Math.abs(dx)>50) go(dx<0?1:-1); x0=null;},{passive:true});
+// Scale the fixed 1280×720 slide to whatever screen or projector is in the room.
+function fit(){
+  const s=document.getElementById('slide');
+  s.style.transform='scale('+Math.min(innerWidth/1280,innerHeight/720)*0.94+')';
+}
+addEventListener('resize',fit); fit();
+
+// Jumping straight to a slide by URL (#7) — useful mid-meeting, and how the
+// deck is linked to from an email.
+addEventListener('hashchange',()=>{
+  const n=parseInt(location.hash.slice(1));
+  if(!isNaN(n) && n-1!==i) show(n-1);
+});
+// Show the controls while the mouse is moving, then let them fade.
+let idle;
+addEventListener('mousemove',()=>{
+  document.body.classList.add('busy');
+  clearTimeout(idle);
+  idle=setTimeout(()=>document.body.classList.remove('busy'),2000);
+});
+show(parseInt(location.hash.slice(1))-1||0);
+</script>
+</body>
+</html>
