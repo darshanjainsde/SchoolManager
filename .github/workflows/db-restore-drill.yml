@@ -167,5 +167,28 @@ jobs:
             printf '%-12s %s\n' "$t" "$(psql_drill "SELECT count(*) FROM \"$t\";")"
           done
 
+      - name: Which database is this, and how current is its schema?
+        env:
+          PGPASSWORD: drill
+        run: |
+          set -euo pipefail
+          psql_drill() { psql -tA "postgresql://postgres@127.0.0.1:5432/drill" -c "$1"; }
+
+          # In an incident the first question is not "did it restore" but
+          # "restore of WHAT, from WHEN". The migration history answers both
+          # without needing anyone to remember which pooler URL was in the
+          # secret, and it is the check that would have caught a backup
+          # silently pointed at staging.
+          echo "── last 3 migrations present in this backup ──"
+          psql_drill "SELECT migration_name, to_char(finished_at,'YYYY-MM-DD HH24:MI') FROM _prisma_migrations ORDER BY finished_at DESC NULLS LAST LIMIT 3;"
+
+          echo "── schema markers ──"
+          has_col=$(psql_drill "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='Result' AND column_name='schoolId';")
+          if [ "${has_col}" -eq 1 ]; then
+            echo "Result.schoolId: PRESENT (this database has the 20260825090000 tenancy migration)"
+          else
+            echo "Result.schoolId: ABSENT (this database predates 20260825090000)"
+          fi
+
       - name: Verdict
         run: echo "✅ The newest backup decrypts, restores, and contains real data."
