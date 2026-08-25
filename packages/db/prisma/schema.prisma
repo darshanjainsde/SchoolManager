@@ -260,7 +260,7 @@ model School {
   messages               Message[]
   diaryEntries           DiaryEntry[]
   attendanceNotices      AttendanceNotice[]
-  jobPosts            JobPost[]
+  jobPosts               JobPost[]
   librarySettings        LibrarySettings?
   designDrafts           DesignDraft[]
   sitePages              SchoolPage[]
@@ -270,7 +270,8 @@ model School {
   libraryFines           LibraryFine[]
   libraryHallVisits      LibraryHallVisit[]
   libraryHallMarks       LibraryHallMark[]
-
+  results                Result[]
+  assignmentsSeen        AssignmentSeen[]
 }
 
 model Domain {
@@ -298,7 +299,7 @@ model EmailSettings {
 
   // ── Letterhead (always applied, configured or not) ──
   /// CLASSIC | BANNER | MINIMAL — see letterhead.ts.
-  template    String  @default("CLASSIC")
+  template    String   @default("CLASSIC")
   /// Overrides the From display name. Null = the school's own name.
   senderName  String?
   /// Where replies land. Null = no Reply-To header.
@@ -306,7 +307,7 @@ model EmailSettings {
   /// Overrides the letterhead accent. Null = SchoolProfile.brandColorPrimary.
   accentColor String?
   /// Overrides the crest. Null = SchoolProfile.logoAssetId.
-  logoAssetId String? @db.Uuid
+  logoAssetId String?  @db.Uuid
   /// Address / phone / office email, rendered as the footer's small print.
   footerLines String[] @default([])
 
@@ -673,6 +674,7 @@ model FeaturedStaff {
   teacher      Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
 
   @@index([schoolId])
+  @@index([schoolId, teacherId])
 }
 
 // Public "courses/classes offered" — CMS content for ALL tiers, fully
@@ -707,6 +709,7 @@ model CourseFee {
   course       Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
+  @@index([schoolId, courseId])
 }
 
 model AdmissionStep {
@@ -746,15 +749,15 @@ model HallOfFameEntry {
 
 // ── Management (Pro) ─────────────────────────────────────
 model AcademicYear {
-  id             String          @id @default(uuid()) @db.Uuid
-  schoolId       String          @db.Uuid
-  name           String
-  startDate      DateTime
-  endDate        DateTime
-  isCurrent      Boolean         @default(false)
-  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSections  ClassSection[]
-  timetableSlots TimetableSlot[]
+  id               String            @id @default(uuid()) @db.Uuid
+  schoolId         String            @db.Uuid
+  name             String
+  startDate        DateTime
+  endDate          DateTime
+  isCurrent        Boolean           @default(false)
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSections    ClassSection[]
+  timetableSlots   TimetableSlot[]
   leaveAllocations LeaveAllocation[]
 
   @@unique([schoolId, name])
@@ -927,6 +930,8 @@ model TimetableSlot {
   @@index([schoolId])
   @@index([schoolId, classSectionId, effectiveFrom])
   @@index([schoolId, teacherId, effectiveFrom])
+  @@index([schoolId, subjectId])
+  @@index([schoolId, academicYearId])
 }
 
 // ── Academics: attendance, exams, results ────────────────
@@ -998,26 +1003,27 @@ model StaffAttendance {
 }
 
 model LeaveApplication {
-  id           String      @id @default(uuid()) @db.Uuid
-  schoolId     String      @db.Uuid
-  teacherId    String      @db.Uuid
+  id           String        @id @default(uuid()) @db.Uuid
+  schoolId     String        @db.Uuid
+  teacherId    String        @db.Uuid
   type         LeaveType
   /// The school's own leave-type row this application counts against.
   /// Null on rows from before the policy feature (and on types the school
   /// never configured) — those resolve through `type` instead.
-  typeDefId    String?     @db.Uuid
-  startDate    DateTime    @db.Date
-  endDate      DateTime    @db.Date
+  typeDefId    String?       @db.Uuid
+  startDate    DateTime      @db.Date
+  endDate      DateTime      @db.Date
   reason       String?
-  status       LeaveStatus @default(PENDING)
-  reviewedById String?     @db.Uuid
+  status       LeaveStatus   @default(PENDING)
+  reviewedById String?       @db.Uuid
   reviewedAt   DateTime?
-  createdAt    DateTime    @default(now())
-  school       School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   typeDef      LeaveTypeDef? @relation(fields: [typeDefId], references: [id], onDelete: SetNull)
 
   @@index([schoolId, status])
   @@index([schoolId, teacherId])
+  @@index([schoolId, typeDefId])
 }
 
 /// A school's own leave vocabulary — quota and carry-forward policy live
@@ -1026,20 +1032,20 @@ model LeaveApplication {
 /// add custom types beyond them. No RLS — `schoolId` filters are load-bearing,
 /// same as LeaveApplication.
 model LeaveTypeDef {
-  id              String     @id @default(uuid()) @db.Uuid
-  schoolId        String     @db.Uuid
+  id              String             @id @default(uuid()) @db.Uuid
+  schoolId        String             @db.Uuid
   name            String
   /// The built-in enum value this row mirrors — null for a custom type.
   builtin         LeaveType?
-  isPaid          Boolean    @default(true)
+  isPaid          Boolean            @default(true)
   /// Days per year that "apply defaults to everyone" grants. 0 = the type
   /// exists but carries no standing quota (e.g. Unpaid).
-  defaultAnnual   Int        @default(0)
+  defaultAnnual   Int                @default(0)
   /// Max unused days that survive a year close into the next year. 0 = lapse.
-  carryForwardCap Int        @default(0)
-  isActive        Boolean    @default(true)
-  createdAt       DateTime   @default(now())
-  school          School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  carryForwardCap Int                @default(0)
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  school          School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   allocations     LeaveAllocation[]
   applications    LeaveApplication[]
 
@@ -1087,16 +1093,32 @@ model Exam {
   @@index([schoolId, classSectionId, scheduledAt])
 }
 
+/// `schoolId` is carried DIRECTLY rather than derived through `examId ->
+/// Exam.schoolId`, which is how this table's RLS policy used to establish
+/// tenancy. Two reasons, both learned the hard way:
+///
+///  1. Consistency. Every other tenant table compares `schoolId` to
+///     `app.current_tenant` directly; `Result` was one of two tables (with
+///     `AssignmentSeen`) whose policy ran an `EXISTS` subquery against its
+///     parent instead. One shape for 70 tables and a second shape for two is
+///     exactly how an exemption survives a review nobody re-reads.
+///  2. Indexability. Without a `schoolId` column the only index here was
+///     `@@unique([examId, studentId])`, so "show me this child's results" —
+///     the most common read a parent triggers — had no index it could use
+///     (`studentId` never leads). `@@index([schoolId, studentId])` fixes that.
 model Result {
   id          String    @id @default(uuid()) @db.Uuid
+  schoolId    String    @db.Uuid
   examId      String    @db.Uuid
   studentId   String    @db.Uuid
   marks       Float
   publishedAt DateTime?
+  school      School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
   student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([examId, studentId], name: "one_result_per_exam_student")
+  @@index([schoolId, studentId])
 }
 
 /// Transactional outbox for "families' phones get told" events (S6/S7 wiring,
@@ -1117,30 +1139,32 @@ model Result {
 /// `ExamScheduledOutboxPayload`/`ResultPublishedOutboxPayload`
 /// (apps/api/src/common/notifications/notification.types.ts).
 model NotificationOutbox {
-  id             String       @id @default(uuid()) @db.Uuid
-  schoolId       String       @db.Uuid
+  id             String        @id @default(uuid()) @db.Uuid
+  schoolId       String        @db.Uuid
   kind           String
   payload        Json
   /// Null only for single-reader kinds that have no section to broadcast to
   /// (LIBRARY_NOTICE to a teacher). The drain reads it only when
   /// targetUserId is null, so a null section never reaches a resolver.
-  classSectionId String?      @db.Uuid
+  classSectionId String?       @db.Uuid
   /// When set, the drain pushes to THIS single user only (a private message —
   /// MESSAGE_RECEIVED, or any LIBRARY_NOTICE), instead of resolving the whole
   /// classSectionId's section recipients. Null for the broadcast kinds
   /// (exam/result/assignment).
-  targetUserId   String?      @db.Uuid
-  createdAt      DateTime     @default(now())
+  targetUserId   String?       @db.Uuid
+  createdAt      DateTime      @default(now())
   sentAt         DateTime?
   /// Incremented on every failed send attempt; the drain excludes rows at
   /// or above its MAX_ATTEMPTS cap rather than retrying forever.
-  attempts       Int          @default(0)
+  attempts       Int           @default(0)
   lastError      String?
   school         School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
 
   /// The drain's own query shape: unsent rows, oldest first.
   @@index([schoolId, sentAt])
+  @@index([schoolId, classSectionId])
+  @@index([sentAt, createdAt])
 }
 
 /// A teacher-posted assignment for one class section (T21, Portal Parity R3
@@ -1183,6 +1207,7 @@ model Assignment {
   seen         AssignmentSeen[]
 
   @@index([schoolId, classSectionId, dueDate])
+  @@index([schoolId, subjectId])
 }
 
 /// A student's "seen/opened" mark for an `Assignment` — v1's ONLY tracking
@@ -1191,19 +1216,23 @@ model Assignment {
 /// student re-opening the same assignment twice never creates a second row
 /// — idempotent by construction, not by a pre-check.
 ///
-/// No `schoolId` column of its own — tenancy is derived via
-/// `assignmentId -> Assignment.schoolId`, the SAME pattern `Result`'s RLS
-/// policy already uses for `examId -> Exam.schoolId` (see the migration).
+/// Carries `schoolId` DIRECTLY, like every other tenant table. It used to
+/// derive tenancy through `assignmentId -> Assignment.schoolId` — the same
+/// second-class pattern `Result` used — and was converted alongside it for the
+/// reasons written on `Result`.
 model AssignmentSeen {
   id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @db.Uuid
   assignmentId String   @db.Uuid
   studentId    String   @db.Uuid
   seenAt       DateTime @default(now())
 
+  school     School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([assignmentId, studentId], name: "one_seen_per_assignment_student")
+  @@index([schoolId, studentId])
 }
 
 // Messaging (Phase 4 Task 5 / item T17). A student asks one of the teachers who
@@ -1231,6 +1260,7 @@ model MessageThread {
   @@unique([studentId, teacherId, subjectId], name: "one_thread_per_student_teacher_subject")
   @@index([schoolId, teacherId, lastMessageAt])
   @@index([schoolId, studentId, lastMessageAt])
+  @@index([schoolId, classSectionId])
 }
 
 model Message {
@@ -1395,6 +1425,7 @@ model EventRegistration {
   @@index([schoolId, eventId])
   @@index([eventId, status])
   @@index([fromSchoolId])
+  @@index([schoolId, ticketTypeId])
 }
 
 /// Money that changed hands. Written today by an admin recording cash at the
@@ -1689,6 +1720,7 @@ model DiaryEntry {
 
   /// The diary page: one class's entries for one day.
   @@index([schoolId, classSectionId, date])
+  @@index([schoolId, subjectId])
 }
 
 /// Who a SELECTED entry is addressed to. Absent entirely for `audience: ALL`
@@ -1827,18 +1859,18 @@ model JobPost {
 }
 
 model JobQuestion {
-  id         String          @id @default(uuid()) @db.Uuid
-  jobPostId  String          @db.Uuid
+  id        String          @id @default(uuid()) @db.Uuid
+  jobPostId String          @db.Uuid
   /// Carried for RLS, exactly as EventTicketType carries it.
-  schoolId   String          @db.Uuid
-  prompt     String
-  kind       JobQuestionKind @default(CHOICE)
+  schoolId  String          @db.Uuid
+  prompt    String
+  kind      JobQuestionKind @default(CHOICE)
   /// CHOICE only.
-  options    String[]
-  required   Boolean         @default(false)
-  order      Int             @default(0)
-  createdAt  DateTime        @default(now())
-  jobPost    JobPost         @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  options   String[]
+  required  Boolean         @default(false)
+  order     Int             @default(0)
+  createdAt DateTime        @default(now())
+  jobPost   JobPost         @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
 
   @@index([jobPostId])
   @@index([schoolId])
@@ -2008,6 +2040,7 @@ model LibraryFine {
   @@index([schoolId, status])
   @@index([schoolId, studentId])
   @@index([schoolId, teacherId])
+  @@index([schoolId, issueId])
 }
 
 /// A class's library-period attendance, saved by the librarian — either

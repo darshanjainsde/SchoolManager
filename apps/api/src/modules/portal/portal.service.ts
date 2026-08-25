@@ -540,7 +540,10 @@ export class PortalService {
 
       await tx.assignmentSeen.upsert({
         where: { one_seen_per_assignment_student: { assignmentId, studentId } },
-        create: { assignmentId, studentId },
+        // `schoolId` comes from the resolved tenant, not from caller input —
+        // `AssignmentSeen` carries it directly since
+        // 20260825090000_result_tenancy_and_fk_indexes.
+        create: { schoolId, assignmentId, studentId },
         update: {},
       });
       return { ok: true };

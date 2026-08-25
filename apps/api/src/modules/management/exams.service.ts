@@ -479,7 +479,11 @@ export class ExamsService {
       for (const mark of dto.marks) {
         await tx.result.upsert({
           where: { one_result_per_exam_student: { examId, studentId: mark.studentId } },
-          create: { examId, studentId: mark.studentId, marks: mark.marks },
+          // `schoolId` is the tenant's own id, never anything derived from
+          // caller input — `Result` carries it directly since
+          // 20260825090000_result_tenancy_and_fk_indexes, and its RLS policy
+          // now compares that column rather than walking to Exam.
+          create: { schoolId, examId, studentId: mark.studentId, marks: mark.marks },
           update: { marks: mark.marks },
         });
       }

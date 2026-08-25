@@ -483,7 +483,7 @@ describe('ExamsService', () => {
       expect(txMock.result.upsert).toHaveBeenCalledTimes(2);
       expect(txMock.result.upsert).toHaveBeenCalledWith({
         where: { one_result_per_exam_student: { examId: EXAM_ID, studentId: 's-1' } },
-        create: { examId: EXAM_ID, studentId: 's-1', marks: 80 },
+        create: { schoolId: SCHOOL, examId: EXAM_ID, studentId: 's-1', marks: 80 },
         update: { marks: 80 },
       });
     });

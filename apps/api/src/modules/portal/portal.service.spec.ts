@@ -642,7 +642,7 @@ describe('PortalService', () => {
       });
       expect(txMock.assignmentSeen.upsert).toHaveBeenCalledWith({
         where: { one_seen_per_assignment_student: { assignmentId: ASSIGNMENT, studentId: STUDENT } },
-        create: { assignmentId: ASSIGNMENT, studentId: STUDENT },
+        create: { schoolId: SCHOOL, assignmentId: ASSIGNMENT, studentId: STUDENT },
         update: {},
       });
     });
