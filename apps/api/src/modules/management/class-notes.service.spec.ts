@@ -1,5 +1,6 @@
 const txMock = {
   classSection: { findFirst: jest.fn() },
+  subject: { findFirst: jest.fn() },
   teacher: { findFirst: jest.fn() },
   substitution: { findFirst: jest.fn() },
   school: { findUnique: jest.fn() },
@@ -30,6 +31,9 @@ describe('ClassNotesService', () => {
     withTenantMock.mockImplementation((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
     txMock.teacher.findFirst.mockResolvedValue({ id: TID });
     txMock.classSection.findFirst.mockResolvedValue({ id: SECTION });
+    // The subject is one of this school's — assertTenantOwned reads it back
+    // through the tenant client before a note may reference it.
+    txMock.subject.findFirst.mockResolvedValue({ id: MATHS });
     txMock.substitution.findFirst.mockResolvedValue(null);
     txMock.school.findUnique.mockResolvedValue({ classNoteVisibility: 'ALL_TEACHERS' });
     txMock.timetableSlot.findFirst.mockResolvedValue(null);

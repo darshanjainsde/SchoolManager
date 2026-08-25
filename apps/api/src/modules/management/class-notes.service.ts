@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import type { ClassLog, ClassNoteRow, ClassTodoRow, NoteClass } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
+import { assertTenantOwned } from '../../common/tenancy/assert-tenant-owned';
 import { canReadClassNotes, requireClassAccess } from './internal/class-access';
 import { resolveAsOfDate } from './internal/timetable-date';
 import type { CreateClassNoteDto, CreateClassTodoDto } from './management.dto';
@@ -115,6 +116,11 @@ export class ClassNotesService {
     return withTenant(schoolId, async (tx) => {
       const teacherId = await this.requireTeacherFor(tx, userId, dto.classSectionId, dto.date);
       await this.requireReadAccess(tx, userId, role, schoolId, dto.classSectionId, dto.subjectId, dto.date);
+      // `classSectionId` is proven by `requireTeacherFor` above. `subjectId`
+      // was not: `canReadClassNotes` short-circuits to true for SCHOOL_ADMIN,
+      // and the FK to Subject is checked outside RLS, so a foreign subject id
+      // reached the row unchallenged. See `assertTenantOwned`.
+      await assertTenantOwned([{ field: 'subjectId', id: dto.subjectId, model: tx.subject }]);
       const row = await tx.classNote.create({
         data: {
           schoolId,
@@ -142,6 +148,11 @@ export class ClassNotesService {
     return withTenant(schoolId, async (tx) => {
       const teacherId = await this.requireTeacherFor(tx, userId, dto.classSectionId, dto.date);
       await this.requireReadAccess(tx, userId, role, schoolId, dto.classSectionId, dto.subjectId, dto.date);
+      // `classSectionId` is proven by `requireTeacherFor` above. `subjectId`
+      // was not: `canReadClassNotes` short-circuits to true for SCHOOL_ADMIN,
+      // and the FK to Subject is checked outside RLS, so a foreign subject id
+      // reached the row unchallenged. See `assertTenantOwned`.
+      await assertTenantOwned([{ field: 'subjectId', id: dto.subjectId, model: tx.subject }]);
       const row = await tx.classTodo.create({
         data: {
           schoolId,

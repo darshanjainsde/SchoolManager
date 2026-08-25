@@ -8,6 +8,7 @@ import type {
   StudentDiaryResult,
 } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
+import { assertTenantOwned } from '../../common/tenancy/assert-tenant-owned';
 import { formatDateIST } from '../../common/notifications/format';
 import { emitNotifications } from '../../common/notifications/notification-inbox';
 import { NotificationService } from '../../common/notifications/notification.service';
@@ -231,6 +232,13 @@ export class DiaryService {
           );
         }
       }
+
+      // `classSectionId` is already proven above (the caller must own it, and
+      // the roster read is scoped to it). `subjectId` was not proven anywhere:
+      // it went straight into the row, and the FK to Subject is checked
+      // OUTSIDE row-level security, so another school's subject id would have
+      // been accepted. See `assertTenantOwned`.
+      await assertTenantOwned([{ field: 'subjectId', id: dto.subjectId, model: tx.subject }]);
 
       const entry = await tx.diaryEntry.create({
         data: {
