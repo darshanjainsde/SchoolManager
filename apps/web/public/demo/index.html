@@ -141,6 +141,77 @@ h2 em{font-style:normal;color:var(--deep)}
 #nav button:hover{background:rgba(255,255,255,.26)}
 #count{position:fixed;left:18px;bottom:18px;color:rgba(255,255,255,.6);font-size:12.5px;font-weight:700;z-index:40}
 
+/* ---------- phones and short screens: stop being a stage ----------
+   WHY THIS EXISTS. The deck is a fixed 1280×720 slide scaled by `fit()` to
+   min(w/1280, h/720). On a portrait phone the WIDTH binds — 390/1280 = 0.30 —
+   while the height has 93% headroom nobody uses. The whole deck therefore
+   lands as a 367×206 card with 5px body type: not blank, a postage stamp,
+   which is exactly how "not visible on mobile" is reported. No amount of
+   scaling fixes it, because a 16:9 landscape slide cannot be legible on a
+   9:19.5 portrait screen; the content has to reflow instead.
+
+   So below this breakpoint the fixed stage is abandoned — the same move
+   @media print already makes for the same reason — and each slide becomes a
+   full-width panel that flows and scrolls, with type set for a hand rather
+   than for the back of a hall.
+
+   The condition is width OR height, not width alone: a phone held sideways is
+   844×390, which no width-only rule would catch, and where the stage would
+   still only manage 9px text. Keep this query and PHONE_Q in the script
+   identical — if they drift, the CSS reflows while the script keeps scaling. */
+@media (max-width:900px),(max-height:500px){
+  body{overflow:auto;background:var(--paper);-webkit-text-size-adjust:100%}
+  #stage{position:static;display:block}
+  #slide{width:100%;height:auto;min-height:100vh;min-height:100svh;
+         transform:none!important;border-radius:0;box-shadow:none;background:var(--paper)}
+  /* The bottom padding reserves the control band below — the slide's own
+     footer, the counter and the Back/Next buttons all live down there and
+     would otherwise sit on top of each other and on the last line of copy. */
+  .s{position:relative;inset:auto;min-height:100vh;min-height:100svh;padding:26px 20px 120px}
+  .s.dark{background:#1B1836}
+
+  /* The two-up split is the deck's main layout, and it is what squeezes the
+     measure on a phone. One column, aligned to the top so a tall picture does
+     not push the words off the first screen. */
+  .split,.split.wide-left{grid-template-columns:1fr;gap:26px;align-items:start}
+  .repl{grid-template-columns:1fr}
+  /* Three slides (4, 8, 10) put the picture before the words in source order,
+     which is what lands it in the LEFT column on the stage. Stacked, that same
+     order buries the headline under a full-width image — so the words come
+     first on every slide here. Only the mobile order changes; the desktop
+     composition is exactly as it was. */
+  .split .copy{order:0}
+  .split .viz{order:1}
+
+  h1{font-size:clamp(30px,8.5vw,42px)}
+  h2{font-size:clamp(23px,6.4vw,32px);margin-top:10px}
+  .lead{font-size:16.5px;max-width:none;margin-top:12px}
+  .dek{font-size:15px}
+  .pts li{font-size:16px}
+  .repl div{font-size:16px}
+  .eyebrow{font-size:11.5px}
+  /* Lifted clear of the fixed control band rather than sharing it. */
+  .foot{left:20px;right:20px;bottom:70px;font-size:11px}
+  .phone{width:150px;height:300px}
+
+  /* The controls fade in on mousemove and reveal on :hover — a touch screen
+     fires neither, so on a phone they sat permanently at 12% opacity: the
+     deck was navigable only by a swipe nothing advertised. Always visible
+     here, and big enough for a thumb. */
+  #nav{opacity:1;right:12px;bottom:12px;gap:10px}
+  #nav button{padding:11px 16px;font-size:14px}
+  /* Full screen and Handout are presenter tools: there is no projector to
+     fill on a phone and printing is a desk job. Dropping them keeps the thumb
+     band to the two buttons that actually move the deck, and stops a four
+     button row wrapping over the footer on a narrow screen. */
+  #nav button:nth-child(n+3){display:none}
+  /* Slides now fill the screen and alternate light and dark under these fixed
+     controls, so the counter carries its own ground rather than a colour that
+     is legible over only half of them. */
+  #count{left:14px;bottom:18px;color:#fff;background:rgba(20,17,45,.72);
+         padding:5px 10px;border-radius:999px;backdrop-filter:blur(6px)}
+}
+
 /* ---------- print: one slide per page, no motion ---------- */
 @media print{
   @page{size:A4 landscape;margin:8mm}
@@ -651,6 +722,11 @@ function show(n){
   void slides[i].offsetWidth;
   document.getElementById('bar').style.width=((i+1)/slides.length*100)+'%';
   document.getElementById('count').textContent=(i+1)+' / '+slides.length;
+  // On a phone a slide is taller than the screen and the page really scrolls,
+  // so arriving at slide 6 half way down it — where the last one was left —
+  // hides its own headline. On the stage the page never scrolls and this is a
+  // no-op, so it needs no guard.
+  scrollTo({top:0,behavior:'instant'});
   location.hash=i+1;
 }
 function go(d){show(i+d)}
@@ -664,6 +740,11 @@ addEventListener('keydown',e=>{
 // Click the right half to advance, left half to go back — how people actually present.
 document.getElementById('stage').addEventListener('click',e=>{
   if(e.target.closest('#nav')) return;
+  // Not on a phone. There a slide is a full-height panel the reader scrolls,
+  // so treating every tap as "next" would hijack the act of reading — and
+  // unlike a presenter with a pointer, they cannot aim at a half of the room.
+  // The swipe handler below and the now-visible Back/Next buttons carry it.
+  if(phone.matches) return;
   go(e.clientX > innerWidth/2 ? 1 : -1);
 });
 let x0=null;
@@ -671,11 +752,25 @@ addEventListener('touchstart',e=>x0=e.touches[0].clientX,{passive:true});
 addEventListener('touchend',e=>{if(x0===null)return;const dx=e.changedTouches[0].clientX-x0;
   if(Math.abs(dx)>50) go(dx<0?1:-1); x0=null;},{passive:true});
 // Scale the fixed 1280×720 slide to whatever screen or projector is in the room.
+//
+// Below PHONE_Q the deck is not a stage at all — the stylesheet reflows it (see
+// the matching @media). Scaling there would fight that, and an inline
+// transform beats a stylesheet, so this hands layout back to CSS by clearing
+// the property rather than by computing a smaller number.
+//
+// This string MUST stay identical to the media query in the <style> block.
+const PHONE_Q='(max-width:900px),(max-height:500px)';
+const phone=matchMedia(PHONE_Q);
 function fit(){
   const s=document.getElementById('slide');
+  if(phone.matches){s.style.transform='';return}
   s.style.transform='scale('+Math.min(innerWidth/1280,innerHeight/720)*0.94+')';
 }
-addEventListener('resize',fit); fit();
+addEventListener('resize',fit);
+// A phone turned sideways crosses the breakpoint without always firing resize.
+addEventListener('orientationchange',fit);
+phone.addEventListener('change',fit);
+fit();
 
 // Jumping straight to a slide by URL (#7) — useful mid-meeting, and how the
 // deck is linked to from an email.
