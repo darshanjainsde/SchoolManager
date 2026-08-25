@@ -51,6 +51,26 @@ jobs:
           set -euo pipefail
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y --no-install-recommends postgresql-client-17
+          # INSTALLING 17 IS NOT THE SAME AS USING IT. The runner image ships a
+          # PostgreSQL 16 client at /usr/bin/pg_dump, which keeps winning on
+          # PATH after the 17 packages land in /usr/lib/postgresql/17/bin. And
+          # pg_dump refuses to dump a server NEWER than itself, so the job died
+          # on "aborting because of server version mismatch" (server 17.6,
+          # pg_dump 16.15) against a database it had already connected to.
+          # Putting 17 first makes the installed client the one that runs.
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+
+      - name: Prove the client is newer than the server
+        run: |
+          set -euo pipefail
+          # Printed on every run so a future version skew is one line to read,
+          # not a failed dump to diagnose. `pg_dump --version` is also the
+          # cheapest possible check that PATH actually took effect.
+          pg_dump --version
+          case "$(pg_dump --version)" in
+            *' 17.'*) : ;;
+            *) echo "::error::pg_dump is not v17 — it cannot dump the v17 server." ; exit 1 ;;
+          esac
 
       - name: Dump and encrypt
         env:
