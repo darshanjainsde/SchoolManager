@@ -32,6 +32,16 @@ on:
   workflow_dispatch: {}
   schedule:
     - cron: '0 4 1 * *' # 09:30 IST on the 1st of each month
+  # Also on any change to the drill itself, on staging. Two reasons: GitHub
+  # will not let workflow_dispatch fire for a file that is not yet on the
+  # default branch, so without this the drill could not be proven until after
+  # it was merged — exactly backwards. And a drill nobody has watched pass is
+  # worth as much as a backup nobody has restored, so editing it should re-run
+  # it. Scoped to this one path, so ordinary staging pushes do not trigger it.
+  push:
+    branches: [staging]
+    paths:
+      - '.github/workflows/db-restore-drill.yml'
 
 permissions:
   actions: read # to list and download db-backup's artifacts
