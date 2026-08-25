@@ -192,7 +192,57 @@ h2 em{font-style:normal;color:var(--deep)}
   .eyebrow{font-size:11.5px}
   /* Lifted clear of the fixed control band rather than sharing it. */
   .foot{left:20px;right:20px;bottom:70px;font-size:11px}
-  .phone{width:150px;height:300px}
+
+  /* The scene pieces keep their designed sizes. Shrinking .phone to 150px
+     looked harmless and was not: the attendance chips inside it sit in a
+     four-column grid, and taking 36px off the frame left them 9px wide each.
+     A 390px screen minus the slide's 20px gutters has 350px, so the 186px
+     mockup fits as drawn — the frame was never the thing that needed to give.
+
+     Any picture that IS wider than the column still cannot overflow it. */
+  .viz>*{max-width:100%}
+
+  /* Multi-column card grids written inline on the slide. They are sized for a
+     1280px canvas, so at phone width `1fr` resolves below the cards' own
+     min-content and they burst out of their container instead of wrapping —
+     which is what put the fourth door half off the screen. Two columns, and
+     `minmax(0,1fr)` so a long word cannot push a track wider than its share.
+     Inline styles need !important to be overridden at all.
+     Scoped by the exact declaration so it cannot touch the chip grid inside
+     the phone mockup, which is correct at four columns in its own narrow box. */
+  [style*="repeat(4,1fr);gap:20px"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+
+  /* Chip and label rows are laid out with `.row`, which does not wrap. Four
+     chips fit 390px only just; anything longer would run off the edge rather
+     than on to a second line. */
+  .row{flex-wrap:wrap}
+
+  /* Slides give their picture block `flex:1` and centre inside it, so it takes
+     every pixel the words leave over. On a 16:9 stage that is the composition;
+     on an 844px-tall phone slide with short copy it opens a void between the
+     headline and the picture — the thing that reads as "the layout is broken"
+     even when nothing has actually overflowed. Sizing those blocks to their
+     content lets the slide flow from the top and puts the slack at the bottom,
+     where it is just breathing room. `!important` because `flex:1` is written
+     inline on the slides and would otherwise win. */
+  .s>[style*="flex:1"]{flex:0 0 auto!important}
+  .split{flex:0 0 auto}
+
+  /* Scene rows put a card, an arrow and a phone side by side. They are written
+     `nowrap`, so at 350px they do not wrap — they SHRINK, and a flex item
+     shrinking is silent: the phone mockup lost a third of its width and the
+     four-column chip grid inside it collapsed to 9px tracks. That is the
+     "everything is distorted" symptom, and no overflow check catches it
+     because nothing ever leaves the box.
+     So the rows wrap, and the scene pieces are excused from shrinking — they
+     are drawings at a fixed size, not text that can reflow. */
+  .s [style*="display:flex"]{flex-wrap:wrap}
+  .phone,.browser{flex:none}
+  /* The connector arrow only means anything while the two things it joins are
+     side by side. Once the row wraps it is a stray line pointing at whichever
+     piece happened to land beside it — on slide 7 it stranded itself to the
+     left of the phone. Stacking already reads as "then this", so drop it. */
+  .arrow{display:none}
 
   /* The controls fade in on mousemove and reveal on :hover — a touch screen
      fires neither, so on a phone they sat permanently at 12% opacity: the
