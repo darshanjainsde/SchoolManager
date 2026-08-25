@@ -1,0 +1,161 @@
+# Launch-gate #3, second half: a backup you have actually RESTORED.
+#
+# db-backup.yml proves we can produce an encrypted dump. That is not the same
+# claim as "we can get the school back". Between the two sits everything that
+# actually goes wrong in a recovery: a passphrase that was rotated and never
+# written down, a dump truncated by a runner that ran out of disk, a custom
+# format nobody can read with the client version they have to hand.
+#
+# So this takes the NEWEST artifact db-backup produced, decrypts it with the
+# same secret, restores it into a throwaway PostgreSQL 17 container, and then
+# asserts the data is really there. It never connects to production — the only
+# production credential it could use, DB_BACKUP_URL, is deliberately not in
+# this file's env at all.
+#
+# WHY ERRORS DURING pg_restore ARE TOLERATED BUT AN EMPTY DATABASE IS NOT.
+# The source is Supabase, so the dump carries references its own platform
+# provides — extensions, and grants to roles like `anon`/`authenticated` that
+# do not exist in a vanilla container. Those statements fail on restore and
+# SHOULD: they are Supabase's furniture, not our data. Refusing to proceed on
+# any error would make this drill permanently red for reasons that have nothing
+# to do with recoverability. Instead the restore is allowed to report errors,
+# and the verdict comes from the only question that matters afterwards — are
+# our tables there, and do they hold rows? That is checked below and IS fatal.
+#
+# Run it after any change to the backup workflow, after rotating
+# BACKUP_PASSPHRASE, and on the monthly schedule so a silent rot in any of the
+# above surfaces within thirty days rather than during an incident.
+
+name: Restore drill
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 4 1 * *' # 09:30 IST on the 1st of each month
+
+permissions:
+  actions: read # to list and download db-backup's artifacts
+  contents: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: drill
+          POSTGRES_DB: drill
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d drill"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          set -euo pipefail
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-client-17
+          # The runner ships a 16 client that otherwise wins on PATH — the same
+          # trap that kept db-backup.yml from ever producing a file. pg_restore
+          # cannot read a v17 custom-format archive with a v16 binary.
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+
+      - name: Prove the client matches the container
+        run: |
+          set -euo pipefail
+          pg_restore --version
+          case "$(pg_restore --version)" in
+            *' 17.'*) : ;;
+            *) echo "::error::pg_restore is not v17 — it cannot read the archive." ; exit 1 ;;
+          esac
+
+      - name: Fetch the newest backup artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id=$(gh run list --workflow=db-backup.yml --status=success \
+            --limit 1 --json databaseId --jq '.[0].databaseId' \
+            --repo "${{ github.repository }}")
+          if [ -z "${run_id}" ] || [ "${run_id}" = "null" ]; then
+            echo "::error::No successful db-backup run to restore from." ; exit 1
+          fi
+          echo "Restoring from db-backup run ${run_id}"
+          gh run download "${run_id}" --repo "${{ github.repository }}" -D ./artifact
+          find ./artifact -name '*.dump.gz.gpg' | head -1 > .backup-path
+          test -s .backup-path || { echo "::error::No .dump.gz.gpg in that run." ; exit 1; }
+          echo "Found: $(cat .backup-path)"
+
+      - name: Decrypt and unpack
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKUP_PASSPHRASE}" ]; then
+            echo "::error::BACKUP_PASSPHRASE is not configured — the drill cannot read the backup." ; exit 1
+          fi
+          src=$(cat .backup-path)
+          # A wrong passphrase fails HERE, which is the single most valuable
+          # thing this drill can tell you: every backup ever taken is scrap.
+          gpg --batch --yes --quiet --decrypt \
+            --passphrase "${BACKUP_PASSPHRASE}" \
+            --output restore.dump.gz "${src}"
+          gunzip -f restore.dump.gz
+          ls -lh restore.dump
+          # A custom-format archive begins with the magic "PGDMP". Checking it
+          # catches a truncated or corrupted download before pg_restore reports
+          # something more confusing, and proves the file is more than its size.
+          head -c 5 restore.dump | grep -q 'PGDMP' \
+            || { echo "::error::Decrypted file is not a PostgreSQL custom-format archive." ; exit 1; }
+
+      - name: Restore into the throwaway database
+        env:
+          PGPASSWORD: drill
+        run: |
+          set -uo pipefail
+          # NOT -e: see the header. Supabase's own extensions and role grants
+          # fail here by design and must not end the drill.
+          pg_restore --no-owner --no-privileges --schema=public \
+            --dbname "postgresql://postgres@127.0.0.1:5432/drill" \
+            restore.dump 2> restore.log || true
+          echo "── restore reported $(grep -c 'error:' restore.log || echo 0) error line(s) ──"
+          tail -20 restore.log || true
+
+      - name: Assert our data actually came back
+        env:
+          PGPASSWORD: drill
+        run: |
+          set -euo pipefail
+          psql_drill() { psql -tA "postgresql://postgres@127.0.0.1:5432/drill" -c "$1"; }
+
+          tables=$(psql_drill "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")
+          echo "public tables restored: ${tables}"
+          # The schema carries 70+ tenant tables; anything far below that means
+          # the restore fell over early rather than merely skipping furniture.
+          if [ "${tables}" -lt 50 ]; then
+            echo "::error::Only ${tables} tables restored — the archive did not come back intact." ; exit 1
+          fi
+
+          # A schema with no schools is a shape, not a backup. This is the
+          # assertion that separates "the file restored" from "we still have
+          # the customers".
+          schools=$(psql_drill 'SELECT count(*) FROM "School";')
+          echo "schools restored: ${schools}"
+          if [ "${schools}" -lt 1 ]; then
+            echo "::error::Restored database contains no schools." ; exit 1
+          fi
+
+          echo "--- row counts for the tables an incident would be judged on ---"
+          for t in School Student Teacher Attendance Result; do
+            printf '%-12s %s\n' "$t" "$(psql_drill "SELECT count(*) FROM \"$t\";")"
+          done
+
+      - name: Verdict
+        run: echo "✅ The newest backup decrypts, restores, and contains real data."
