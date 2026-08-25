@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ChevronsLeft, ChevronsRight, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, X } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ChevronsLeft, ChevronsRight, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -18,7 +18,14 @@ import '../sk-theme.css';
 
 // `requiredFeature` hides the item for schools whose tier lacks it. Items with
 // no requiredFeature are always shown.
-const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; requiredFeature?: string }[] = [
+const NAV_ITEMS: {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  requiredFeature?: string;
+  /** Marks the one tab that leaves /app — see the Library entry below. */
+  leavesConsole?: boolean;
+}[] = [
   { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/app/website', label: 'Website', icon: Globe },
   { href: '/app/blog', label: 'Blog', icon: Newspaper, requiredFeature: 'BLOG' },
@@ -37,7 +44,7 @@ const NAV_ITEMS: { href: string; label: string; icon: typeof LayoutDashboard; re
   // (see lib/role-routes.ts). An admin needs to reach it to set the library up
   // and to stand in when the librarian is away; a librarian never comes
   // through here, she lands on it directly.
-  { href: '/library', label: 'Library', icon: BookOpen, requiredFeature: 'LIBRARY' },
+  { href: '/library', label: 'Library', icon: BookOpen, requiredFeature: 'LIBRARY', leavesConsole: true },
   { href: '/app/jobs', label: 'Jobs', icon: Briefcase, requiredFeature: 'HIRING' },
   { href: '/app/events', label: 'Events', icon: CalendarHeart, requiredFeature: 'EVENTS' },
   { href: '/app/announcements', label: 'Announcements', icon: Megaphone },
@@ -68,11 +75,14 @@ function AdminNavLink({
   pathname,
   collapsed,
   onNavigate,
+  leavesConsole,
 }: {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
   pathname: string;
+  /** Renders the "opens another portal" cue — only the Library tab sets it. */
+  leavesConsole?: boolean;
   /** Icon-only rail: hide the label, centre the icon, name it via a tooltip. */
   collapsed?: boolean;
   onNavigate?: () => void;
@@ -82,7 +92,7 @@ function AdminNavLink({
     <Link
       href={href}
       onClick={onNavigate}
-      title={collapsed ? label : undefined}
+      title={leavesConsole ? `${label} — opens its own portal` : collapsed ? label : undefined}
       aria-label={collapsed ? label : undefined}
       className={cn(
         'flex items-center rounded-lg transition-colors',
@@ -92,6 +102,12 @@ function AdminNavLink({
     >
       <Icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
       {!collapsed && label}
+      {/* The Library is the only tab that swaps the whole shell rather than
+          changing the page inside it. Saying so BEFORE the click is what stops
+          it reading as "the console vanished". */}
+      {leavesConsole && !collapsed ? (
+        <ArrowUpRight aria-hidden="true" className="ml-auto h-3.5 w-3.5 opacity-60" />
+      ) : null}
     </Link>
   );
 }

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LogOut } from 'lucide-react';
+import { ArrowLeft, LogOut } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useApi } from '@/lib/use-api';
@@ -79,6 +79,12 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
 
   if (status !== 'authed' || audience !== 'school') return null;
 
+  // SCHOOL_ADMIN is the only role that reaches this portal from another one
+  // (see `homeForRole`: a librarian lands here directly and has nowhere else
+  // to be). Everything below keyed off this is about giving that visitor their
+  // bearings — it grants no access, which `LibrarianGuard` decides server-side.
+  const isVisitingAdmin = me.data?.role === 'SCHOOL_ADMIN';
+
   const isActive = (href: string) =>
     href === '/library' ? pathname === '/library' : pathname === href || pathname.startsWith(href + '/');
 
@@ -101,9 +107,28 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
           <SckoolsLogo variant="symbol" size={30} />
           <div className="sk-who">
             <div className="n">The library</div>
-            <div className="s">{me.data?.name ?? host?.split(':')[0] ?? 'Sckools'}</div>
+            {/* An admin arrives here from a sidebar tab that, uniquely, leaves
+                the /app segment — so say plainly whose desk they are standing
+                at. The librarian, who lives here, just sees her school. */}
+            <div className="s">
+              {isVisitingAdmin
+                ? 'Visiting as admin'
+                : (me.data?.name ?? host?.split(':')[0] ?? 'Sckools')}
+            </div>
           </div>
           <div style={{ flex: 1 }} />
+          {/* THE WAY BACK. The library is its own portal, so entering it from
+              the admin console swaps the entire shell — different rail,
+              different chrome, and (before this) no exit but "Sign out", which
+              ends the session instead of returning to the console. An admin
+              read that as being thrown out of their own product. The librarian
+              has no admin console to return to, so she never sees this. */}
+          {isVisitingAdmin ? (
+            <Link className="sk-signout" href="/app">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Back to admin</span>
+            </Link>
+          ) : null}
           <ThemeToggle />
           <button className="sk-signout" onClick={handleLogout}>
             <LogOut className="h-3.5 w-3.5" />
