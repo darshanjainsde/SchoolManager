@@ -16,6 +16,8 @@ export interface NotificationOutboxDrainResult {
   processed: number;
   sent: number;
   failed: number;
+  /** Delivered rows removed by the retention sweep — see `purgeDelivered()`. */
+  purged: number;
 }
 
 /**
@@ -35,6 +37,25 @@ const DRAIN_BATCH_CAP = 200;
  * long ago, "no Kafka", keep it small).
  */
 const MAX_ATTEMPTS = 5;
+
+/**
+ * Delivered rows are kept this long, then removed.
+ *
+ * This is a queue table, and nothing had ever deleted from it: every push ever
+ * sent was still sitting here, so the table and its indexes only ever grew,
+ * and the drain's own scan got slower for exactly as long as the product ran.
+ * Thirty days is chosen to outlast any plausible "did the parents actually get
+ * told?" question while keeping the working set small.
+ *
+ * WHAT THIS CAN AND CANNOT DELETE. The filter is `sentAt < cutoff`. In SQL a
+ * comparison against NULL is NULL, never true, so a row that has not been
+ * delivered — `sentAt IS NULL`, including one parked at MAX_ATTEMPTS with a
+ * `lastError` for an operator to inspect — can never match this predicate, no
+ * matter how old it is. Undelivered work is therefore never purged, which is
+ * the property that makes running this on every drain safe rather than merely
+ * convenient.
+ */
+const PURGE_DELIVERED_AFTER_DAYS = 30;
 
 /**
  * Maps a drained row's `kind` + denormalised `payload` onto the SAME
@@ -214,6 +235,32 @@ export class NotificationOutboxService {
       }
     }
 
-    return { processed: rows.length, sent, failed };
+    const purged = await this.purgeDelivered(db);
+
+    return { processed: rows.length, sent, failed, purged };
+  }
+
+  /**
+   * Retention sweep for rows this outbox has already delivered.
+   *
+   * Runs AFTER the drain and never throws: a failure to tidy up is not a
+   * reason to report the delivery run as failed, so it is logged and swallowed
+   * and the next run tries again. See `PURGE_DELIVERED_AFTER_DAYS` for why the
+   * `sentAt < cutoff` predicate cannot touch undelivered rows.
+   */
+  private async purgeDelivered(db: ReturnType<typeof getPlatformPrisma>): Promise<number> {
+    const cutoff = new Date(Date.now() - PURGE_DELIVERED_AFTER_DAYS * 24 * 60 * 60 * 1000);
+    try {
+      const { count } = await db.notificationOutbox.deleteMany({
+        where: { sentAt: { lt: cutoff } },
+      });
+      if (count > 0) {
+        this.logger.log(`Purged ${count} delivered outbox rows older than ${cutoff.toISOString()}.`);
+      }
+      return count;
+    } catch (e) {
+      this.logger.error(`Outbox retention sweep failed: ${(e as Error)?.message ?? 'unknown error'}`);
+      return 0;
+    }
   }
 }

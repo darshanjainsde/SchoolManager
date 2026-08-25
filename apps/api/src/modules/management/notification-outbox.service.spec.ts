@@ -1,5 +1,5 @@
 const dbMock = {
-  notificationOutbox: { findMany: jest.fn(), update: jest.fn() },
+  notificationOutbox: { findMany: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
   student: { findMany: jest.fn() },
   user: { findMany: jest.fn() },
 };
@@ -74,6 +74,7 @@ describe('NotificationOutboxService', () => {
     jest.clearAllMocks();
     dbMock.notificationOutbox.findMany.mockResolvedValue([]);
     dbMock.notificationOutbox.update.mockResolvedValue({});
+    dbMock.notificationOutbox.deleteMany.mockResolvedValue({ count: 0 });
     dbMock.student.findMany.mockResolvedValue([]);
     dbMock.user.findMany.mockResolvedValue([]);
     push.send.mockResolvedValue(true);
@@ -96,7 +97,7 @@ describe('NotificationOutboxService', () => {
 
     const result = await svc.drain();
 
-    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0, purged: 0 });
     expect(dbMock.student.findMany).toHaveBeenCalledWith({
       where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION, userId: { not: null } },
       select: { userId: true },
@@ -182,7 +183,7 @@ describe('NotificationOutboxService', () => {
 
     const result = await svc.drain();
 
-    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0, purged: 0 });
     expect(push.send).not.toHaveBeenCalled();
     expect(dbMock.notificationOutbox.update).toHaveBeenCalledWith({
       where: { id: 'row-1' },
@@ -204,7 +205,7 @@ describe('NotificationOutboxService', () => {
 
     const result = await svc.drain();
 
-    expect(result).toEqual({ processed: 2, sent: 1, failed: 1 });
+    expect(result).toEqual({ processed: 2, sent: 1, failed: 1, purged: 0 });
     expect(dbMock.notificationOutbox.update).toHaveBeenCalledWith({
       where: { id: 'row-1' },
       data: { attempts: { increment: 1 }, lastError: 'expo down' },
@@ -222,7 +223,7 @@ describe('NotificationOutboxService', () => {
 
     const result = await svc.drain();
 
-    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
+    expect(result).toEqual({ processed: 1, sent: 0, failed: 1, purged: 0 });
     expect(dbMock.notificationOutbox.update).toHaveBeenCalledWith({
       where: { id: 'row-1' },
       data: { attempts: { increment: 1 }, lastError: expect.stringContaining('SOMETHING_ELSE') },
@@ -236,6 +237,63 @@ describe('NotificationOutboxService', () => {
     push.send.mockRejectedValue(new Error('expo down'));
     dbMock.notificationOutbox.update.mockRejectedValue(new Error('db also down'));
 
-    await expect(svc.drain()).resolves.toEqual({ processed: 1, sent: 0, failed: 1 });
+    await expect(svc.drain()).resolves.toEqual({ processed: 1, sent: 0, failed: 1, purged: 0 });
+  });
+
+  describe('retention sweep', () => {
+    /**
+     * The safety property of the purge, asserted on the predicate itself
+     * rather than on a count: `sentAt: { lt: cutoff }` compiles to
+     * `"sentAt" < $1`, and SQL never returns true for a NULL comparison, so an
+     * undelivered row cannot match however old it is. If someone later
+     * "simplifies" this to an OR on `sentAt: null`, or drops the `sentAt`
+     * clause and filters on `createdAt` instead, this fails.
+     */
+    it('only ever deletes rows that were actually delivered', async () => {
+      await svc.drain();
+
+      expect(dbMock.notificationOutbox.deleteMany).toHaveBeenCalledTimes(1);
+      const where = dbMock.notificationOutbox.deleteMany.mock.calls[0][0].where;
+      expect(Object.keys(where)).toEqual(['sentAt']);
+      expect(where.sentAt.lt).toBeInstanceOf(Date);
+    });
+
+    it('uses a 30-day cutoff', async () => {
+      const before = Date.now();
+      await svc.drain();
+
+      const cutoff: Date = dbMock.notificationOutbox.deleteMany.mock.calls[0][0].where.sentAt.lt;
+      const days = (before - cutoff.getTime()) / (24 * 60 * 60 * 1000);
+      expect(days).toBeCloseTo(30, 3);
+    });
+
+    it('reports how many it removed', async () => {
+      dbMock.notificationOutbox.deleteMany.mockResolvedValue({ count: 7 });
+
+      await expect(svc.drain()).resolves.toEqual({
+        processed: 0,
+        sent: 0,
+        failed: 0,
+        purged: 7,
+      });
+    });
+
+    /**
+     * Tidying up is not the job — delivery is. A retention failure must not
+     * turn a successful drain into a failed cron run.
+     */
+    it('does not fail the drain when the sweep itself rejects', async () => {
+      dbMock.notificationOutbox.findMany.mockResolvedValue([examScheduledRow]);
+      dbMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
+      dbMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
+      dbMock.notificationOutbox.deleteMany.mockRejectedValue(new Error('lock timeout'));
+
+      await expect(svc.drain()).resolves.toEqual({
+        processed: 1,
+        sent: 1,
+        failed: 0,
+        purged: 0,
+      });
+    });
   });
 });
