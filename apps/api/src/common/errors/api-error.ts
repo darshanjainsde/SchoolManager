@@ -13,6 +13,9 @@ export type ErrorCode =
    *  requiring it is what makes suggesting an alternative the easier path. */
   | 'REASON_REQUIRED'
   | 'CLAIM_ALREADY_DECIDED'
+  /** A claim was merged into a record from a different batch year — almost
+   *  always a mis-click in a long list. Pair with 409. */
+  | 'CLAIM_BATCH_MISMATCH'
   /** Trust-for-students was granted to an alumnus nobody has verified — 409. */
   | 'MUST_BE_VERIFIED_FIRST'
   | 'BAD_GIFT_SCOPE'

@@ -135,11 +135,24 @@ export class AlumniService {
         skipDuplicates: true,
       });
 
-      // The register strength for a Sckools-graduated year is not a guess.
+      // The register strength for a Sckools-graduated year is not a guess — it
+      // is how many alumni rows that year actually has.
+      //
+      // It is DERIVED, never incremented. An increment double-counts the moment
+      // anyone types a strength in by hand before graduating the batch (81 typed
+      // from the bound register, then 81 graduated, reads as 162 and the Roll
+      // Call bar shows 50% coverage of a year that is completely accounted for).
+      // It must also never go DOWN: a pre-Sckools year legitimately carries a
+      // strength far larger than the handful of alumni found so far.
+      const actual = await tx.alumni.count({ where: { schoolId, batchYear: dto.batchYear } });
+      const existing = await tx.alumniBatch.findUnique({
+        where: { schoolId_batchYear: { schoolId, batchYear: dto.batchYear } },
+        select: { registerStrength: true },
+      });
       await tx.alumniBatch.upsert({
         where: { schoolId_batchYear: { schoolId, batchYear: dto.batchYear } },
-        update: { registerStrength: { increment: created.count } },
-        create: { schoolId, batchYear: dto.batchYear, registerStrength: rows.length },
+        update: { registerStrength: Math.max(existing?.registerStrength ?? 0, actual) },
+        create: { schoolId, batchYear: dto.batchYear, registerStrength: actual },
       });
 
       return {
@@ -265,12 +278,30 @@ export class AlumniService {
           where: { id: dto.mergeIntoAlumniId, schoolId },
         });
         if (!target) throw new NotFoundException('That alumni record is not in this school.');
+        // A merge writes the claimant's contact details onto an existing person.
+        // Get the person wrong and the school spends the next two years
+        // messaging a stranger in the belief it is reaching an old pupil, with
+        // nothing in the record to show it happened. A batch-year mismatch is
+        // far more often a mis-click in a long list than a deliberate
+        // correction, so it is refused rather than warned about.
+        if (target.batchYear !== claim.batchYear) {
+          throw new ApiError(
+            'CLAIM_BATCH_MISMATCH',
+            `That record is the Class of ${target.batchYear} and this claim says ${claim.batchYear}. Pick the right record, or verify the claim on its own and merge the two afterwards.`,
+            409,
+          );
+        }
+        const alreadyVerified = target.status === 'VERIFIED';
         await tx.alumni.update({
           where: { id: target.id },
           data: {
             status: 'VERIFIED',
-            verifiedByUserId: userId,
-            verifiedAt: new Date(),
+            // Do not overwrite an existing verification. Whoever first matched
+            // this person against the register is the answer to "who let them
+            // in", and a later merge must not quietly take the credit or the
+            // blame for it.
+            verifiedByUserId: alreadyVerified ? target.verifiedByUserId : userId,
+            verifiedAt: alreadyVerified ? target.verifiedAt : new Date(),
             // Fill blanks from the claim; never overwrite what the school holds.
             email: target.email ?? claim.email,
             phone: target.phone ?? claim.phone,

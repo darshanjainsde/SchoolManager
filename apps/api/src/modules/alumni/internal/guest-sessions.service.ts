@@ -329,14 +329,26 @@ export class GuestSessionsService {
         }),
       ]);
 
-      const siblingCounts = await Promise.all(
-        siblingSections.map(async (sec) => ({
-          label: sec.grade ? `${sec.grade.name} – ${sec.name}` : sec.name,
-          sessions: await tx.guestSession.count({
-            where: { schoolId, classSectionId: sec.id, status: { in: ['SCHEDULED', 'DELIVERED'] } },
-          }),
-        })),
-      );
+      // One grouped query, not one count per section. The first cut fired a
+      // COUNT for every sibling class — forty round trips inside an open
+      // transaction, to render a hint. A school with forty sections is the
+      // normal case here, not the pathological one.
+      const grouped = await tx.guestSession.groupBy({
+        by: ['classSectionId'],
+        where: {
+          schoolId,
+          classSectionId: { in: siblingSections.map((x) => x.id) },
+          status: { in: ['SCHEDULED', 'DELIVERED'] },
+        },
+        _count: { _all: true },
+      });
+      const bySection = new Map(grouped.map((g) => [g.classSectionId, g._count._all]));
+      const siblingCounts = siblingSections.map((sec) => ({
+        label: sec.grade ? `${sec.grade.name} – ${sec.name}` : sec.name,
+        // groupBy returns no row for a section with zero sessions, and zero is
+        // the answer this hint most wants to surface — "9-B has had none".
+        sessions: bySection.get(sec.id) ?? 0,
+      }));
 
       return {
         date,
