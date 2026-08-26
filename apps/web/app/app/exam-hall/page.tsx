@@ -15,6 +15,7 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
 import { PrintSheets, SheetPreview, SHEETS, type Sheet } from './print-sheets';
+import type { RoomShape } from './room-grid';
 import {
   RoomGrid,
   capacityOf,
@@ -103,6 +104,14 @@ export default function ExamHallPage() {
   const [rules, setRules] = useState<SeatingRules>(DEFAULT_RULES);
   const [title, setTitle] = useState('Half-Yearly');
   const [plan, setPlan] = useState<SeatingPlanResult | null>(null);
+  /**
+   * The floor the CURRENT plan was made for, which is not always the room in
+   * the editor. Reopening a saved plan used to load its old shape straight into
+   * `draft`, so the next "Save changes" would quietly revert the live room to
+   * whatever it looked like in October. The chart renders on the plan's floor;
+   * the editor keeps editing the real room.
+   */
+  const [planRoom, setPlanRoom] = useState<RoomShape | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   // All five by default: the office wants the bundle, not one sheet at a time.
   const [sheets, setSheets] = useState<Sheet[]>(SHEETS.map((s) => s.key));
@@ -168,6 +177,7 @@ export default function ExamHallPage() {
     });
     setDirty(false);
     setPlan(null);
+    setPlanRoom(null);
     setChosen(null);
   }
 
@@ -175,6 +185,7 @@ export default function ExamHallPage() {
     setDraft((d) => ({ ...d, ...patch }));
     setDirty(true);
     setPlan(null);
+    setPlanRoom(null);
   }
 
   // ── room writes ────────────────────────────────────────────────────────────
@@ -239,6 +250,12 @@ export default function ExamHallPage() {
       }),
     onSuccess: (p) => {
       setPlan(p);
+      setPlanRoom({
+        rows: draft.rows,
+        cols: draft.cols,
+        seatsPerDesk: draft.seatsPerDesk,
+        removedDesks: draft.removedDesks,
+      });
       setChosen(null);
     },
     onError: (e) => toast.error(errText(e)),
@@ -252,14 +269,23 @@ export default function ExamHallPage() {
   const openPlan = useMutation({
     mutationFn: (id: string) => api.get<SavedSeatingPlan>(`/manage/seating/${id}`),
     onSuccess: (p) => {
-      setDraft({
-        id: p.roomId,
-        name: p.roomName,
-        rows: p.room.rows,
-        cols: p.room.cols,
-        seatsPerDesk: p.room.seatsPerDesk,
-        removedDesks: p.room.removedDesks,
-      });
+      // The editor follows the room as it is TODAY; the chart follows the room
+      // as it was when the plan was saved. Collapsing the two would let a
+      // reprint quietly rewrite the room.
+      const live = rooms.find((r) => r.id === p.roomId);
+      setDraft(
+        live
+          ? {
+              id: live.id,
+              name: live.name,
+              rows: live.rows,
+              cols: live.cols,
+              seatsPerDesk: live.seatsPerDesk,
+              removedDesks: live.removedDesks,
+            }
+          : { id: p.roomId, name: p.roomName, ...p.room },
+      );
+      setPlanRoom(p.room);
       setDirty(false);
       setTicked(p.classSectionIds);
       setRules(p.rules);
@@ -372,6 +398,14 @@ export default function ExamHallPage() {
 
   const chosenSeat = chosen ? seatAt.get(chosen) : undefined;
   const saved = plansQuery.data ?? [];
+  /** Step 2 and step 3 draw on the plan's own floor, never the editor's. */
+  const chartRoom: RoomShape = planRoom ?? draft;
+  const roomMoved =
+    planRoom !== null &&
+    (planRoom.rows !== draft.rows ||
+      planRoom.cols !== draft.cols ||
+      planRoom.seatsPerDesk !== draft.seatsPerDesk ||
+      planRoom.removedDesks.length !== draft.removedDesks.length);
 
   // ── render ─────────────────────────────────────────────────────────────────
 
@@ -725,7 +759,7 @@ export default function ExamHallPage() {
               <div className="sk-eh-boardcap">Blackboard · teacher&rsquo;s table</div>
 
               <RoomGrid
-                room={draft}
+                room={chartRoom}
                 backRowFree={rules.backRowFree}
                 seats={plan?.seats}
                 classOrder={classOrder}
@@ -760,6 +794,12 @@ export default function ExamHallPage() {
                     <span className="hint">{plan.report.notes.join(' ')}</span>
                   </div>
 
+                  {roomMoved ? (
+                    <p className="sk-state" data-testid="room-moved" style={{ marginTop: 12 }}>
+                      {draft.name} has changed shape since this seating was saved. The chart below is
+                      the room as it was, so a reprint matches the stickers already on the desks.
+                    </p>
+                  ) : null}
                   <div className="sk-eh-why">
                     {chosenSeat ? (
                       <>
@@ -892,12 +932,7 @@ export default function ExamHallPage() {
                   </div>
                   <SheetPreview
                     plan={plan}
-                    room={{
-                      rows: draft.rows,
-                      cols: draft.cols,
-                      seatsPerDesk: draft.seatsPerDesk,
-                      removedDesks: draft.removedDesks,
-                    }}
+                    room={chartRoom}
                     school={host ?? ''}
                     sheets={sheets}
                   />
@@ -913,12 +948,7 @@ export default function ExamHallPage() {
       {plan ? (
         <PrintSheets
           plan={plan}
-          room={{
-            rows: draft.rows,
-            cols: draft.cols,
-            seatsPerDesk: draft.seatsPerDesk,
-            removedDesks: draft.removedDesks,
-          }}
+          room={chartRoom}
           school={host ?? ''}
           sheets={sheets}
         />
