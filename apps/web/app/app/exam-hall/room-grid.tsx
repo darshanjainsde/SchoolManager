@@ -235,6 +235,7 @@ export function RoomGrid({
           </div>
         ))}
       </div>
+      <p className="sk-eh-swipe">Swipe the room sideways to see every desk.</p>
     </div>
   );
 }

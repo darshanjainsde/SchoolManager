@@ -412,9 +412,17 @@
   border-radius: var(--sk-r-sm);
   background: #fff;
 }
-.sk-eh-paper-in { width: 210mm; transform: scale(var(--eh-zoom)); transform-origin: top left; }
+/* `zoom`, not `transform: scale()`. A transform does not affect layout, so the
+   wrapper kept the sheet's UNSCALED height — measured at 611px of box holding
+   256px of visible sheet, i.e. 355px of dead white space under every preview,
+   five times over. `zoom` scales the box too. */
+.sk-eh-paper-in { width: 210mm; zoom: var(--eh-zoom); }
 /* Only the first page of a multi-page sheet is previewed; the rest print. */
 .sk-eh-paper-in .eh-page ~ .eh-page { display: none; }
 .sk-eh-paper-in .eh-page { min-height: 0; }
 
-@media (max-width: 1100px) { .sk-eh-paper { --eh-zoom: 0.42; } }
+/* The zoom has to leave the sheet NARROWER than the pane at every width, or
+   `overflow: hidden` quietly eats the right edge — it was clipping 15px on a
+   390px phone. */
+@media (max-width: 1100px) { .sk-eh-paper { --eh-zoom: 0.44; } }
+@media (max-width: 700px) { .sk-eh-paper { --eh-zoom: 0.33; } }
