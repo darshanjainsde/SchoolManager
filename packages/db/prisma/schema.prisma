@@ -1382,6 +1382,15 @@ model SeatingPlan {
   seed            Int
   /// PlannedSeat[] — row, seat index, student, class, roll.
   seats           Json
+  /// The room's shape AT SAVE TIME — rows, cols, seatsPerDesk, removedDesks.
+  ///
+  /// Without this, reopening a plan draws its seats into whatever shape the
+  /// room has TODAY. Narrow Hall A from nine desks to six after saving and the
+  /// chart silently loses every seat past S06 while the door list still names
+  /// them. The seats are already frozen here; the floor they sit on has to be
+  /// frozen with them. Null on rows written before this column existed —
+  /// `SeatingService.get` falls back to the live room for those.
+  roomShape       Json?
   /// What the generator could and could not do, in the words the office read.
   report          Json
   createdById     String?  @db.Uuid

@@ -107,6 +107,65 @@ describe('drawing the room', () => {
   });
 });
 
+describe('keyboard navigation', () => {
+  // 54 desks in a normal hall and 1,200 in the biggest room the API accepts.
+  // If each is its own tab stop, reaching the button under the grid means
+  // pressing Tab twelve hundred times.
+  it('is a single tab stop, not one per desk', () => {
+    render(<RoomGrid room={room(6, 9)} backRowFree onToggleDesk={vi.fn()} />);
+    const tabbable = screen
+      .getAllByRole('button')
+      .filter((el) => el.getAttribute('tabindex') === '0');
+    expect(tabbable).toHaveLength(1);
+    expect(tabbable[0]).toBe(screen.getByTestId('cell-0:0'));
+  });
+
+  it('moves the cursor with the arrow keys', () => {
+    render(<RoomGrid room={room(4, 4)} backRowFree onToggleDesk={vi.fn()} />);
+    const grid = screen.getByRole('grid');
+    fireEvent.keyDown(grid, { key: 'ArrowRight' });
+    expect(screen.getByTestId('cell-0:1')).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(screen.getByTestId('cell-1:1')).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(grid, { key: 'ArrowLeft' });
+    fireEvent.keyDown(grid, { key: 'ArrowUp' });
+    expect(screen.getByTestId('cell-0:0')).toHaveAttribute('tabindex', '0');
+  });
+
+  it('stops at the edges instead of wrapping into the wrong row', () => {
+    render(<RoomGrid room={room(3, 3)} backRowFree onToggleDesk={vi.fn()} />);
+    const grid = screen.getByRole('grid');
+    fireEvent.keyDown(grid, { key: 'ArrowLeft' });
+    fireEvent.keyDown(grid, { key: 'ArrowUp' });
+    expect(screen.getByTestId('cell-0:0')).toHaveAttribute('tabindex', '0');
+    for (let i = 0; i < 6; i++) fireEvent.keyDown(grid, { key: 'ArrowRight' });
+    expect(screen.getByTestId('cell-0:2')).toHaveAttribute('tabindex', '0');
+  });
+
+  it('Home and End jump across the row', () => {
+    render(<RoomGrid room={room(2, 5)} backRowFree onToggleDesk={vi.fn()} />);
+    const grid = screen.getByRole('grid');
+    fireEvent.keyDown(grid, { key: 'End' });
+    expect(screen.getByTestId('cell-0:4')).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(grid, { key: 'Home' });
+    expect(screen.getByTestId('cell-0:0')).toHaveAttribute('tabindex', '0');
+  });
+
+  it('counts both halves of a bench as separate seats when moving', () => {
+    render(<RoomGrid room={room(2, 3, 2)} backRowFree onToggleDesk={vi.fn()} />);
+    const grid = screen.getByRole('grid');
+    for (let i = 0; i < 5; i++) fireEvent.keyDown(grid, { key: 'ArrowRight' });
+    expect(screen.getByTestId('cell-0:5')).toHaveAttribute('tabindex', '0');
+  });
+
+  it('names the grid so a screen reader says what the arrows do', () => {
+    const { rerender } = render(<RoomGrid room={room(2, 2)} backRowFree onToggleDesk={vi.fn()} />);
+    expect(screen.getByRole('grid').getAttribute('aria-label')).toMatch(/takes a desk out/);
+    rerender(<RoomGrid room={room(2, 2)} backRowFree seats={[]} classOrder={[]} />);
+    expect(screen.getByRole('grid').getAttribute('aria-label')).toMatch(/explains a seat/);
+  });
+});
+
 describe('the seated room', () => {
   const seats = [seat(0, 0, 'a', 1, 'Aarav Sharma'), seat(0, 1, 'b', 5, 'Diya Meena')];
 

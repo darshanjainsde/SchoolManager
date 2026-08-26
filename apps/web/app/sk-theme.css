@@ -2250,3 +2250,15 @@ html[data-theme='dark'] .sk-eh-steps > button[aria-selected="true"] > .n,
 html[data-theme='dark'] .sk-eh-tick[aria-pressed="true"] > .box::after { border-color: #211d45; color: #211d45; }
 html[data-theme='light'] .sk-eh-steps > button[aria-selected="true"] > .n,
 html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border-color: #fff; color: #fff; }
+
+/* ---- saved seatings ---- */
+.sk-eh-saved { display: flex; align-items: stretch; gap: 6px; }
+.sk-eh-saved .open {
+  flex: 1; min-width: 0; text-align: left; cursor: pointer; font: inherit; color: inherit;
+  border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm);
+  background: var(--sk-card); padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sk-eh-saved .open:hover { border-color: var(--sk-brand); }
+.sk-eh-saved .open .nm { font-family: var(--sk-serif); font-size: 14px; font-weight: 650; }
+.sk-eh-saved .open .meta { font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); }
