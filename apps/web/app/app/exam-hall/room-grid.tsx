@@ -119,6 +119,18 @@ export function describeNeighbours(seat: PlannedSeat, seats: PlannedSeat[]): str
   return bits.length ? `Around ${first}: ${bits.join(', ')}.` : 'No one is seated next to this desk.';
 }
 
+/**
+ * What a seat can actually fit.
+ *
+ * `classLabel` is "<Grade.name>-<section>", and Grade.name is usually the word
+ * "Class" plus a number — so the seat was rendering "Class 10-A" in a 60px box
+ * and crowding out the roll number. The full label still goes on every printed
+ * sheet and into the accessible name; only the seat is abbreviated.
+ */
+export function shortLabel(classLabel: string): string {
+  return classLabel.replace(/^\s*(class|grade|std\.?|standard)\s+/i, '');
+}
+
 /** Class colour. Four tones, cycled — the label is in the seat too. */
 export function toneFor(order: string[], classSectionId: string): string {
   const i = order.indexOf(classSectionId);
@@ -165,7 +177,11 @@ export function RoomGrid({
                   const dead = gone.has(deskKey(row, desk));
                   const spare = row >= usable;
                   const who = at.get(key);
-                  const state = dead ? 'gone' : who ? 'filled' : spare ? 'spare' : 'empty';
+                  // A seated child wins over a removed desk. Editing the room
+                  // clears the plan, so the two should never disagree — but if
+                  // they ever do, the plan is the fact and painting "no desk"
+                  // over somebody's name is the one unreadable outcome.
+                  const state = who ? 'filled' : dead ? 'gone' : spare ? 'spare' : 'empty';
                   const clickable = editing || Boolean(who);
 
                   function act() {
@@ -199,11 +215,11 @@ export function RoomGrid({
                     >
                       {who ? (
                         <>
-                          <b>{who.classLabel}</b>
+                          <b>{shortLabel(who.classLabel)}</b>
                           <i>{who.roll ?? '—'}</i>
                         </>
                       ) : dead ? (
-                        '×'
+                        ''
                       ) : spare ? (
                         'spare'
                       ) : editing ? (
