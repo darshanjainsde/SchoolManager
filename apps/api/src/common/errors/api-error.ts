@@ -13,6 +13,13 @@ export type ErrorCode =
    *  requiring it is what makes suggesting an alternative the easier path. */
   | 'REASON_REQUIRED'
   | 'CLAIM_ALREADY_DECIDED'
+  /** No alumni record with that id in this school — pair with 404. */
+  | 'ALUMNI_NOT_FOUND'
+  /** Declined or hidden records cannot be sent a claim link — pair with 409. */
+  | 'ALUMNI_NOT_INVITABLE'
+  /** One message for expired, already-used and never-existed alike. Telling a
+   *  caller WHICH of the three they hit is an oracle for probing links. 401. */
+  | 'ALUMNI_LINK_INVALID'
   /** A claim was merged into a record from a different batch year — almost
    *  always a mis-click in a long list. Pair with 409. */
   | 'CLAIM_BATCH_MISMATCH'

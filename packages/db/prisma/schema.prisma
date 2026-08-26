@@ -282,6 +282,7 @@ model School {
   giftReceipts           GiftReceipt[]
   giftDistributions      GiftDistribution[]
   guestSessions          GuestSession[]
+  alumniAccessTokens     AlumniAccessToken[]
 }
 
 model Domain {
@@ -2302,6 +2303,7 @@ model Alumni {
   school        School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   giftPledges   GiftPledge[]
   guestSessions GuestSession[]
+  accessTokens  AlumniAccessToken[]
 
   /// One alumni row per student. Re-running "graduate this batch" is therefore
   /// idempotent rather than duplicating a whole year group.
@@ -2555,4 +2557,48 @@ model GuestSession {
   /// SQL only and does not appear here. It is what actually prevents two alumni
   /// double-booking one period: the availability check and the insert are in one
   /// transaction, but READ COMMITTED means both would still read FREE.
+}
+
+/// The alumnus's credential. There is no password.
+///
+/// An alumnus touches this product perhaps three times a year, and nobody
+/// remembers a password they use three times a year — every low-frequency
+/// product that shipped one ended up running a password-reset service instead.
+/// So the LINK is the credential: signed, single-use, expiring, tied to one
+/// Alumni row, and pasted into a batch WhatsApp group by the office.
+///
+/// Only the sha256 hash is stored, exactly as PasswordResetToken does it; the
+/// raw token lives in the link and nowhere else. `usedAt` makes it single-use,
+/// and a used CLAIM token is what mints the long-lived device session.
+///
+/// This is deliberately weak on its own, and that is safe: possessing a link
+/// buys the directory and nothing else. Every action that carries real risk is
+/// gated on a flag a human grants — `Alumni.status = VERIFIED` to appear at
+/// all, `trustedForStudents` to go anywhere near a child, and the office's
+/// accept/receive/distribute states for anything involving money or goods.
+model AlumniAccessToken {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  alumniId String @db.Uuid
+
+  /// sha256 of the raw token. Never the token itself.
+  tokenHash String @unique
+  kind      AlumniTokenKind @default(CLAIM)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alumni Alumni @relation(fields: [alumniId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, alumniId])
+  @@index([expiresAt])
+}
+
+enum AlumniTokenKind {
+  /// Emailed or WhatsApped once, to prove "this is me" the first time.
+  CLAIM
+  /// The 90-day device session minted after a claim. Deliberately long: a
+  /// returning alumnus should never authenticate twice in a term.
+  SESSION
 }

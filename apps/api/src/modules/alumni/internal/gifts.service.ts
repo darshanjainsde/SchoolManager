@@ -205,6 +205,27 @@ export class GiftsService {
     });
   }
 
+  /** An alumnus's own pledges. Scoped by alumniId as well as school, so the
+   *  route cannot be turned into "list everybody's gifts" by omitting a filter. */
+  async listPledgesForAlumnus(schoolId: string, alumniId: string) {
+    return withTenant(schoolId, async (tx) => {
+      const rows = await tx.giftPledge.findMany({
+        where: { schoolId, alumniId },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 100,
+        include: {
+          giftItem: { select: { name: true, unit: true, sizesTracked: true } },
+          receipts: { select: { receivedQty: true } },
+          distributions: { select: { distributedQty: true, absentQty: true, distributedAt: true } },
+        },
+      });
+      return rows.map((p) => {
+        const received = p.receipts.reduce((n, r) => n + r.receivedQty, 0);
+        return { ...p, ...giftShortfall(p.quantity, received) };
+      });
+    });
+  }
+
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   async decide(schoolId: string, pledgeId: string, userId: string | null, dto: DecidePledgeDto) {

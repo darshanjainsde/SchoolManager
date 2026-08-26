@@ -17,6 +17,7 @@ import { Roles } from '../../../common/auth/roles.decorator';
 import { RequireFeature, RequireFeatureGuard } from '../../features';
 import { TenantContextService } from '../../tenancy';
 import { AlumniService } from './alumni.service';
+import { AlumniAuthService } from './alumni-auth.service';
 import { GiftsService } from './gifts.service';
 import { GuestSessionsService } from './guest-sessions.service';
 import {
@@ -51,6 +52,7 @@ export class AlumniController {
     private readonly alumni: AlumniService,
     private readonly gifts: GiftsService,
     private readonly sessions: GuestSessionsService,
+    private readonly alumniAuth: AlumniAuthService,
     private readonly tenant: TenantContextService,
   ) {}
 
@@ -92,6 +94,20 @@ export class AlumniController {
     @CurrentUser() u: SchoolJwtPayload,
   ) {
     return this.alumni.setTrusted(this.sid(), id, u.sub, dto);
+  }
+
+  /**
+   * Mint a claim link for one alumnus, and return the raw token ONCE.
+   *
+   * The office copies it into the batch WhatsApp group — which is the outreach
+   * design, costs nothing, and lands where these people actually are. No SMS:
+   * transactional SMS in India needs a gateway with a per-message cost AND DLT
+   * registration of the sender id and every template, which is a lead-time item
+   * rather than a switch.
+   */
+  @Post(':id/claim-link')
+  claimLink(@Param('id', ParseUUIDPipe) id: string) {
+    return this.alumniAuth.mintClaimToken(this.sid(), id);
   }
 
   // ─── Claims ────────────────────────────────────────────────────────────────

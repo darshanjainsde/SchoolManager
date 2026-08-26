@@ -279,6 +279,44 @@ export class GuestSessionsService {
     );
   }
 
+  /** An alumnus's own requests. */
+  async listForAlumnus(schoolId: string, alumniId: string) {
+    return withTenant(schoolId, (tx) =>
+      tx.guestSession.findMany({
+        where: { schoolId, alumniId },
+        orderBy: [{ createdAt: 'desc' }],
+        take: 100,
+      }),
+    );
+  }
+
+  /**
+   * The host answering the school's counter-offer.
+   *
+   * Separate from `decide` so the actor is decided by the ROUTE rather than by
+   * anything a caller can put in a body — and it verifies the session actually
+   * belongs to this alumnus, because an id in a URL is a caller-supplied value
+   * like any other.
+   */
+  async decideAsAlumnus(
+    schoolId: string,
+    sessionId: string,
+    alumniId: string,
+    dto: DecideSessionDto,
+  ) {
+    const owned = await withTenant(schoolId, (tx) =>
+      tx.guestSession.findFirst({
+        where: { id: sessionId, schoolId, alumniId },
+        select: { id: true },
+      }),
+    );
+    if (!owned) throw new NotFoundException('Session not found');
+    // An alumnus may accept a counter-offer, decline, or cancel. They may not
+    // COUNTER (only the school suggests a time) and may not mark DELIVER — both
+    // are refused by decideSession's actor check, not merely by this list.
+    return this.decide(schoolId, sessionId, null, 'HOST', dto);
+  }
+
   /**
    * The conflict panel: five phone calls collapsed into one screen. Everything
    * here already sits in the database — the timetable, the room, the exam

@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsObject,
   IsEmail,
   IsIn,
   IsInt,
@@ -156,4 +157,45 @@ export class DecideSessionDto {
   @IsOptional() @IsString() @Length(3, 400) reason?: string;
   @IsOptional() @IsUUID('4') roomId?: string;
   @IsOptional() @IsInt() @Min(0) @Max(2000) attendedCount?: number;
+}
+
+// ─── The alumnus's own door ──────────────────────────────────────────────────
+
+export class RedeemClaimDto {
+  /** The raw token from the link. In the BODY, never the query string: a token
+   *  in a URL lands in server logs and in the Referer header of every outbound
+   *  link on the page it opened. */
+  @IsString() @Length(16, 512) token!: string;
+}
+
+export class DirectoryQueryDto {
+  @IsOptional() @IsString() @Length(1, 80) q?: string;
+  @IsOptional() @IsInt() @Min(MIN_BATCH_YEAR) @Max(MAX_BATCH_YEAR) batchYear?: number;
+  @IsOptional() @IsString() @Length(1, 80) city?: string;
+  @IsOptional() @IsBoolean() mentor?: boolean;
+  @IsOptional() @IsInt() @Min(1) @Max(100) take?: number;
+  @IsOptional() @IsInt() @Min(0) skip?: number;
+}
+
+/**
+ * What an alumnus may change about themselves.
+ *
+ * Deliberately absent: `status`, `trustedForStudents`, `isBatchCaptain`,
+ * `batchYear`, `admissionNo`. Those are the school's to grant or correct, and a
+ * self-service field that could set them would make the whole verification
+ * ladder decorative. `forbidNonWhitelisted` means sending one is a 400, not a
+ * silent no-op.
+ */
+export class UpdateMeDto {
+  @IsOptional() @IsString() @Length(0, 30) phone?: string;
+  @IsOptional() @IsString() @Length(0, 80) city?: string;
+  @IsOptional() @IsString() @Length(0, 80) country?: string;
+  @IsOptional() @IsString() @Length(0, 120) profession?: string;
+  @IsOptional() @IsString() @Length(0, 120) employer?: string;
+  @IsOptional() @IsString() @Length(0, 120) collegeName?: string;
+  @IsOptional() @IsBoolean() isMentor?: boolean;
+  /** { field: PUBLIC | ALUMNI | BATCH | OFFICE | HIDDEN }. Unknown keys and
+   *  unknown levels are read as HIDDEN by `privacyOf`, so a malformed blob
+   *  closes a field rather than opening one. */
+  @IsOptional() @IsObject() privacy?: Record<string, string>;
 }
