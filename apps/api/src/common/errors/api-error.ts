@@ -73,6 +73,10 @@ export type ErrorCode =
   | 'LIBRARY_NOT_OPEN'
   /** The fine is not DUE (already collected or waived) — pair with 409. */
   | 'LIBRARY_FINE_SETTLED'
+  /** A room with that name already exists at this school — pair with 409. */
+  | 'ROOM_NAME_TAKEN'
+  /** The room still has saved seating plans; deleting it would take them too — pair with 409. */
+  | 'ROOM_IN_USE'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

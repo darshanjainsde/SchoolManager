@@ -220,6 +220,108 @@ describe('RLS on the new management tables', () => {
       ).rejects.toThrow(/row-level security|42501/);
     });
   });
+
+  // ── Exam Hall (Room / SeatingPlan) ─────────────────────────────────────────
+  // Both carry `schoolId` directly, so both get the same `tenant_iso` policy as
+  // the other 70+ tenant tables. `SeatingPlan` matters twice over: it holds
+  // every seated child's NAME and roll number inside its `seats` JSONB, so a
+  // leak here is a leak of a roster, not of a room's dimensions.
+  describe('Room / SeatingPlan', () => {
+    let acmeRoom: string;
+    let beaconRoom: string;
+
+    beforeAll(async () => {
+      const p = getPlatformPrisma();
+      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const a = await p.room.create({
+        data: { schoolId: acmeId, name: `Acme Hall ${suffix}`, rows: 6, cols: 9, seatsPerDesk: 1 },
+      });
+      const b = await p.room.create({
+        data: { schoolId: beaconId, name: `Beacon Hall ${suffix}`, rows: 4, cols: 5, seatsPerDesk: 2 },
+      });
+      acmeRoom = a.id;
+      beaconRoom = b.id;
+
+      for (const [schoolId, roomId, title] of [
+        [acmeId, acmeRoom, 'Acme half-yearly'],
+        [beaconId, beaconRoom, 'Beacon half-yearly'],
+      ] as const) {
+        await p.seatingPlan.create({
+          data: {
+            schoolId,
+            roomId,
+            title,
+            classSectionIds: [],
+            rules: { noClassmates: true, alternateCols: true, spreadRolls: true, backRowFree: true },
+            seed: 11,
+            seats: [],
+            report: { capacity: 45, seated: 0, unseated: 0, clashes: 0, bent: 0, notes: [] },
+          },
+        });
+      }
+    });
+
+    it('a tenant sees only its own rooms', async () => {
+      const mine = await withTenant(acmeId, (tx) => tx.room.findMany());
+      expect(mine.length).toBe(1);
+      expect(mine[0].id).toBe(acmeRoom);
+    });
+
+    it('a tenant cannot forge a room owned by another school', async () => {
+      await expect(
+        withTenant(acmeId, (tx) =>
+          tx.room.create({ data: { schoolId: beaconId, name: 'stolen', rows: 1, cols: 1 } }),
+        ),
+      ).rejects.toThrow(/row-level security|42501/);
+    });
+
+    it('a tenant cannot read another school\'s room by id', async () => {
+      const row = await withTenant(acmeId, (tx) => tx.room.findFirst({ where: { id: beaconRoom } }));
+      expect(row).toBeNull();
+    });
+
+    it('a tenant sees only its own seating plans', async () => {
+      const mine = await withTenant(acmeId, (tx) => tx.seatingPlan.findMany());
+      const theirs = await withTenant(beaconId, (tx) => tx.seatingPlan.findMany());
+      expect(mine.length).toBe(1);
+      expect(mine[0].title).toBe('Acme half-yearly');
+      expect(theirs.length).toBe(1);
+      expect(theirs[0].title).toBe('Beacon half-yearly');
+    });
+
+    // Postgres checks referential integrity with RLS BYPASSED, so an FK alone
+    // never proves the referenced row was visible to the caller. The service
+    // re-reads the room inside the tenant scope before writing for exactly this
+    // reason; this asserts the property the service depends on.
+    it('a tenant cannot hang a seating plan off another school\'s room', async () => {
+      await expect(
+        withTenant(acmeId, (tx) =>
+          tx.seatingPlan.create({
+            data: {
+              schoolId: beaconId,
+              roomId: beaconRoom,
+              title: 'stolen',
+              classSectionIds: [],
+              rules: {},
+              seed: 1,
+              seats: [],
+              report: {},
+            },
+          }),
+        ),
+      ).rejects.toThrow(/row-level security|42501/);
+    });
+
+    it('a tenant cannot delete another school\'s room', async () => {
+      const { count } = await withTenant(acmeId, (tx) =>
+        tx.room.deleteMany({ where: { id: beaconRoom } }),
+      );
+      expect(count).toBe(0);
+      const still = await withTenant(beaconId, (tx) => tx.room.findFirst({ where: { id: beaconRoom } }));
+      expect(still).not.toBeNull();
+    });
+  });
+
 });
 
 /**

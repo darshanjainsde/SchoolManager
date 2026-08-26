@@ -272,6 +272,8 @@ model School {
   libraryHallMarks       LibraryHallMark[]
   results                Result[]
   assignmentsSeen        AssignmentSeen[]
+  rooms                  Room[]
+  seatingPlans           SeatingPlan[]
 }
 
 model Domain {
@@ -1322,6 +1324,73 @@ model Notification {
   @@index([schoolId, userId, readAt])
   /// recent list, newest-first (the paginated notification screen)
   @@index([schoolId, userId, createdAt])
+}
+
+// ── Exam Hall ────────────────────────────────────────────
+/// A physical room, described only as far as seating needs it: how many rows
+/// of desks, how many desks in a row, and how many students share one desk.
+///
+/// Deliberately NOT exam-only. The office records its rooms once and the same
+/// rows can feed anything later that needs a venue (timetable, events, PTM
+/// desks), which is why this is `Room` and not `ExamRoom`.
+///
+/// `removedDesks` holds the grid positions with no desk — a pillar, a broken
+/// desk, or a gap the school keeps as a walking lane. A string array of
+/// "row:col" (both 0-based) rather than a child table: it is read and written
+/// only as a whole, never queried across rooms, and one room's worth of
+/// exceptions is a handful of strings.
+model Room {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @db.Uuid
+  name         String
+  /// Rows of desks, front (nearest the board) to back.
+  rows         Int      @default(6)
+  /// Desks across one row, left to right as you face the board.
+  cols         Int      @default(6)
+  /// 1 or 2. Two only where the desk is a bench.
+  seatsPerDesk Int      @default(1)
+  /// "row:col" positions, 0-based, that hold no desk.
+  removedDesks String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  seatingPlans SeatingPlan[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+/// One generated seating chart for one room. `seats` is the whole plan as
+/// JSON, not a row per student.
+///
+/// A plan is written once by the generator and afterwards read whole — the
+/// office prints it, it never queries inside it. A `Seat` table would be the
+/// largest in this schema (a row per student per paper) to serve reads that
+/// always want every row anyway. When "where does this child sit?" becomes a
+/// real question from the parent portal, that is the moment to promote it.
+model SeatingPlan {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @db.Uuid
+  roomId          String   @db.Uuid
+  /// What the office calls this sitting — "Half-Yearly, Day 3, Morning".
+  title           String
+  /// Sections this plan seats, in the order the office ticked them.
+  classSectionIds String[] @default([])
+  /// Which rules were on, so a reprint months later is still explainable.
+  rules           Json
+  /// The generator is seeded, so the same inputs rebuild the same hall.
+  seed            Int
+  /// PlannedSeat[] — row, seat index, student, class, roll.
+  seats           Json
+  /// What the generator could and could not do, in the words the office read.
+  report          Json
+  createdById     String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  room            Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+  @@index([schoolId, roomId])
 }
 
 // ── Community ────────────────────────────────────────────
