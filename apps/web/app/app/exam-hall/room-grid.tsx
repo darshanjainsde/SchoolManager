@@ -1,4 +1,5 @@
 'use client';
+import { useRef, useState } from 'react';
 import type { PlannedSeat, SeatingRules } from '@skoolos/types';
 
 /**
@@ -163,10 +164,49 @@ export function RoomGrid({
   const usable = usableRows(room, backRowFree);
   const at = new Map((seats ?? []).map((s) => [`${s.row}:${s.seat}`, s]));
   const editing = Boolean(onToggleDesk);
+  const seatsWide = room.cols * room.seatsPerDesk;
+
+  // ROVING TABINDEX. Every desk used to be its own tab stop, so a keyboard user
+  // had to press Tab past all of them — 54 in a normal hall and 1,200 in the
+  // largest room the API will accept — before reaching the next control. The
+  // grid is one stop now, and the arrow keys move inside it, which is the
+  // standard pattern for a two-dimensional widget.
+  const [cursor, setCursor] = useState({ row: 0, seat: 0 });
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  function moveTo(row: number, seat: number) {
+    const r = Math.max(0, Math.min(room.rows - 1, row));
+    const c = Math.max(0, Math.min(seatsWide - 1, seat));
+    setCursor({ row: r, seat: c });
+    gridRef.current?.querySelector<HTMLElement>(`[data-testid="cell-${r}:${c}"]`)?.focus();
+  }
+
+  function onGridKey(e: React.KeyboardEvent) {
+    const step: Record<string, [number, number]> = {
+      ArrowUp: [-1, 0],
+      ArrowDown: [1, 0],
+      ArrowLeft: [0, -1],
+      ArrowRight: [0, 1],
+    };
+    const d = step[e.key];
+    if (d) {
+      e.preventDefault();
+      moveTo(cursor.row + d[0], cursor.seat + d[1]);
+      return;
+    }
+    if (e.key === 'Home') { e.preventDefault(); moveTo(cursor.row, 0); }
+    else if (e.key === 'End') { e.preventDefault(); moveTo(cursor.row, seatsWide - 1); }
+  }
 
   return (
     <div className="sk-eh-floor" data-testid="room-floor">
-      <div className="sk-eh-rows">
+      <div
+        className="sk-eh-rows"
+        ref={gridRef}
+        role="grid"
+        aria-label={editing ? 'Room layout — arrow keys move, Enter takes a desk out' : 'Seating chart — arrow keys move, Enter explains a seat'}
+        onKeyDown={onGridKey}
+      >
         {Array.from({ length: room.rows }, (_, row) => (
           <div className="sk-eh-rowline" key={row}>
             {Array.from({ length: room.cols }, (_, desk) => (
@@ -199,7 +239,10 @@ export function RoomGrid({
                       data-clash={who && clashes?.has(key) ? 'true' : undefined}
                       data-chosen={chosen === key ? 'true' : undefined}
                       role={clickable ? 'button' : undefined}
-                      tabIndex={clickable ? 0 : undefined}
+                      tabIndex={
+                        clickable && cursor.row === row && cursor.seat === seat ? 0 : -1
+                      }
+                      onFocus={() => setCursor({ row, seat })}
                       aria-label={
                         who
                           ? `${who.studentName}, ${who.classLabel}${who.roll !== null ? `, roll ${who.roll}` : ''}, ${seatCode(row, seat)}`

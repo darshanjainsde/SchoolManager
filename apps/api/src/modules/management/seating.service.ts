@@ -90,7 +90,8 @@ export class SeatingService {
    * Generates a chart without saving it. The office presses the button, looks
    * at the hall, and only then decides — so nothing is written until Save.
    */
-  async preview(schoolId: string, dto: PreviewSeatingDto): Promise<SeatingPlanResult> {
+  /** Shared by preview and save so the room is read once, not twice. */
+  private async build(schoolId: string, dto: PreviewSeatingDto) {
     const room = await this.loadRoom(schoolId, dto.roomId);
     const classes = await this.loadClasses(schoolId, dto.classSectionIds);
     const rules = SeatingService.rules(dto.rules);
@@ -107,7 +108,7 @@ export class SeatingService {
       dto.seed ?? 11,
     );
 
-    return {
+    const result: SeatingPlanResult = {
       roomId: room.id,
       roomName: room.name,
       title: dto.title?.trim() || 'Exam seating',
@@ -117,6 +118,11 @@ export class SeatingService {
       seats: out.seats,
       report: out.report,
     };
+    return { result, room };
+  }
+
+  async preview(schoolId: string, dto: PreviewSeatingDto): Promise<SeatingPlanResult> {
+    return (await this.build(schoolId, dto)).result;
   }
 
   /**
@@ -126,8 +132,13 @@ export class SeatingService {
    * that seats a child from another school.
    */
   async save(schoolId: string, dto: SaveSeatingDto, userId?: string): Promise<SavedSeatingPlan> {
-    const result = await this.preview(schoolId, dto);
-    const room = await this.loadRoom(schoolId, dto.roomId);
+    const { result, room } = await this.build(schoolId, dto);
+    const roomShape = {
+      rows: room.rows,
+      cols: room.cols,
+      seatsPerDesk: room.seatsPerDesk,
+      removedDesks: room.removedDesks,
+    };
 
     const row = await withTenant(schoolId, (tx) =>
       tx.seatingPlan.create({
@@ -140,22 +151,14 @@ export class SeatingService {
           seed: result.seed,
           seats: result.seats as unknown as object,
           report: result.report as unknown as object,
+          // Frozen with the seats: the floor those coordinates mean something on.
+          roomShape,
           createdById: userId ?? null,
         },
       }),
     );
 
-    return {
-      ...result,
-      id: row.id,
-      createdAt: row.createdAt.toISOString(),
-      room: {
-        rows: room.rows,
-        cols: room.cols,
-        seatsPerDesk: room.seatsPerDesk,
-        removedDesks: room.removedDesks,
-      },
-    };
+    return { ...result, id: row.id, createdAt: row.createdAt.toISOString(), room: roomShape };
   }
 
   /** Newest first — the office almost always wants the one it just made. */
@@ -183,7 +186,9 @@ export class SeatingService {
   /**
    * A saved plan is returned exactly as it was written, including the room
    * shape at the time. A room edited afterwards must not silently redraw a
-   * chart the school has already printed and pasted onto desks.
+   * chart the school has already printed and pasted onto desks — which is what
+   * a live join to `Room` did until `roomShape` existed. Plans older than that
+   * column still fall back to the join; there is nothing truer to give them.
    */
   async get(schoolId: string, id: string): Promise<SavedSeatingPlan> {
     const row = await withTenant(schoolId, (tx) =>
@@ -205,7 +210,7 @@ export class SeatingService {
       seats: row.seats as unknown as SavedSeatingPlan['seats'],
       report: row.report as unknown as SavedSeatingPlan['report'],
       createdAt: row.createdAt.toISOString(),
-      room: {
+      room: (row.roomShape as unknown as SavedSeatingPlan['room']) ?? {
         rows: row.room.rows,
         cols: row.room.cols,
         seatsPerDesk: row.room.seatsPerDesk,

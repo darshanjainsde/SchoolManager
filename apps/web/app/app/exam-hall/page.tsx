@@ -3,7 +3,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Copy, Plus, Printer, Trash2 } from 'lucide-react';
-import type { PlannedSeat, RoomRow, SeatingPlanResult, SeatingRules } from '@skoolos/types';
+import type {
+  PlannedSeat,
+  RoomRow,
+  SavedSeatingPlan,
+  SeatingPlanResult,
+  SeatingPlanSummary,
+  SeatingRules,
+} from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
@@ -121,6 +128,16 @@ export default function ExamHallPage() {
     enabled: !!host,
   });
 
+  // Saving wrote a plan nothing could open again, while the toast said "you can
+  // reprint it any time". Either the promise goes or the list does.
+  const plansQuery = useQuery({
+    queryKey: ['exam-hall', 'plans'],
+    queryFn: () => api.get<SeatingPlanSummary[]>('/manage/seating'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
+  });
+
   const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
   const classes = useMemo(
     () => (classesQuery.data ?? []).filter((c) => c._count.students > 0),
@@ -227,6 +244,39 @@ export default function ExamHallPage() {
     onError: (e) => toast.error(errText(e)),
   });
 
+  /**
+   * Reopening a saved plan restores the room AS IT WAS SAVED, not as the room
+   * is now — a chart already printed and pasted onto desks must not silently
+   * redraw itself.
+   */
+  const openPlan = useMutation({
+    mutationFn: (id: string) => api.get<SavedSeatingPlan>(`/manage/seating/${id}`),
+    onSuccess: (p) => {
+      setDraft({
+        id: p.roomId,
+        name: p.roomName,
+        rows: p.room.rows,
+        cols: p.room.cols,
+        seatsPerDesk: p.room.seatsPerDesk,
+        removedDesks: p.room.removedDesks,
+      });
+      setDirty(false);
+      setTicked(p.classSectionIds);
+      setRules(p.rules);
+      setTitle(p.title);
+      setPlan(p);
+      setChosen(null);
+      setStep(1);
+    },
+    onError: (e) => toast.error(errText(e)),
+  });
+
+  const deletePlan = useMutation({
+    mutationFn: (id: string) => api.del<{ ok: boolean }>(`/manage/seating/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['exam-hall', 'plans'] }),
+    onError: (e) => toast.error(errText(e)),
+  });
+
   const savePlan = useMutation({
     mutationFn: () =>
       api.post<{ id: string }>('/manage/seating', {
@@ -236,7 +286,10 @@ export default function ExamHallPage() {
         rules,
         seed: plan?.seed,
       }),
-    onSuccess: () => toast.success('Seating saved. You can reprint it any time.'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['exam-hall', 'plans'] });
+      toast.success('Seating saved. It is in “Saved seatings” whenever you need to reprint.');
+    },
     onError: (e) => toast.error(errText(e)),
   });
 
@@ -318,6 +371,7 @@ export default function ExamHallPage() {
   const tone = (id: string) => toneFor(classOrder, id);
 
   const chosenSeat = chosen ? seatAt.get(chosen) : undefined;
+  const saved = plansQuery.data ?? [];
 
   // ── render ─────────────────────────────────────────────────────────────────
 
@@ -334,6 +388,7 @@ export default function ExamHallPage() {
         <p className="sk-state">Loading…</p>
       ) : null}
       {roomsQuery.error ? <p className="sk-state err">{errText(roomsQuery.error)}</p> : null}
+      {classesQuery.error ? <p className="sk-state err">{errText(classesQuery.error)}</p> : null}
 
       <div className="sk-card" style={{ overflow: 'hidden' }}>
         <div className="sk-eh-steps" role="tablist">
@@ -505,8 +560,16 @@ export default function ExamHallPage() {
                     <button
                       type="button"
                       className="sk-btn sk-press"
+                      aria-label={`Delete ${draft.name || 'this room'}`}
+                      title={`Delete ${draft.name || 'this room'}`}
                       disabled={deleteRoom.isPending}
-                      onClick={() => deleteRoom.mutate(draft.id!)}
+                      onClick={() => {
+                        // A room is ten minutes of somebody's afternoon and there
+                        // is no undo, so the icon alone must not be enough.
+                        if (window.confirm(`Delete ${draft.name || 'this room'}? This cannot be undone.`)) {
+                          deleteRoom.mutate(draft.id!);
+                        }
+                      }}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -762,6 +825,45 @@ export default function ExamHallPage() {
             </div>
 
             <div className="sk-eh-main">
+              {saved.length ? (
+                <div className="sk-eh-group" style={{ marginBottom: 18 }}>
+                  <span className="sk-lab">Saved seatings</span>
+                  {saved.map((p) => (
+                    <div className="sk-eh-saved" key={p.id}>
+                      <button
+                        type="button"
+                        className="open"
+                        disabled={openPlan.isPending}
+                        onClick={() => openPlan.mutate(p.id)}
+                      >
+                        <span className="nm">{p.title}</span>
+                        <span className="meta">
+                          {p.roomName} · {p.seated} students ·{' '}
+                          {new Date(p.createdAt).toLocaleDateString()}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="sk-btn sk-press"
+                        aria-label={`Delete the saved seating “${p.title}”`}
+                        title={`Delete “${p.title}”`}
+                        disabled={deletePlan.isPending}
+                        onClick={() => {
+                          if (window.confirm(`Delete the saved seating “${p.title}”? This cannot be undone.`)) {
+                            deletePlan.mutate(p.id);
+                          }
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                  <p className="sk-muted">
+                    Opening one restores the room exactly as it was when you saved it.
+                  </p>
+                </div>
+              ) : null}
+
               {plan ? (
                 <>
                   <p className="sk-muted" style={{ marginBottom: 14 }}>
