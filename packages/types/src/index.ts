@@ -819,3 +819,96 @@ export interface NotifyLowAttendanceResult {
   /** Days a family must wait before the same nudge can be sent again. */
   cooldownDays: number;
 }
+
+// ── Exam Hall ───────────────────────────────────────────────────────────────
+// The seating screen's wire shapes. The engine that produces a plan lives in
+// the API (`seating-engine.ts`); these are only what crosses the network.
+
+/** The four rules the office can switch on. Anything more waits for a school to ask. */
+export interface SeatingRules {
+  /** Classmates never sit adjacent — left, right, front or back. */
+  noClassmates: boolean;
+  /** Columns alternate between the room's two grades, so a neighbour writes a different paper. */
+  alternateCols: boolean;
+  /** Consecutive roll numbers in one class are never adjacent. */
+  spreadRolls: boolean;
+  /** The last row stays empty so the teacher can stand behind everyone. */
+  backRowFree: boolean;
+}
+
+export const DEFAULT_SEATING_RULES: SeatingRules = {
+  noClassmates: true,
+  alternateCols: true,
+  spreadRolls: true,
+  backRowFree: true,
+};
+
+/** `GET /manage/rooms` — a room as the office described it. */
+export interface RoomRow {
+  id: string;
+  name: string;
+  rows: number;
+  cols: number;
+  /** 1 or 2. Two only where the desk is a bench. */
+  seatsPerDesk: number;
+  /** "row:col", 0-based, for grid positions that hold no desk. */
+  removedDesks: string[];
+  /** Seats a student can actually be put in, with the back row kept spare. */
+  capacity: number;
+  /** Seating plans made for this room — a room in use is not safe to delete. */
+  planCount: number;
+}
+
+/** One placed student. `seat` is the position across the whole row, 0-based. */
+export interface PlannedSeat {
+  row: number;
+  seat: number;
+  desk: number;
+  /** "R3·S07" — what the desk sticker, the door list and the chart all say. */
+  code: string;
+  studentId: string;
+  studentName: string;
+  classSectionId: string;
+  classLabel: string;
+  roll: number | null;
+}
+
+/** What the generator could and could not do, in the words the office reads. */
+export interface SeatingReport {
+  capacity: number;
+  seated: number;
+  unseated: number;
+  clashes: number;
+  bent: number;
+  notes: string[];
+}
+
+/** `POST /manage/seating/preview` and the body of a saved plan. */
+export interface SeatingPlanResult {
+  roomId: string;
+  roomName: string;
+  title: string;
+  classSectionIds: string[];
+  rules: SeatingRules;
+  seed: number;
+  seats: PlannedSeat[];
+  report: SeatingReport;
+}
+
+/** `GET /manage/seating` — the saved plans list, without the seats. */
+export interface SeatingPlanSummary {
+  id: string;
+  roomId: string;
+  roomName: string;
+  title: string;
+  classSectionIds: string[];
+  seated: number;
+  createdAt: string;
+}
+
+/** `GET /manage/seating/:id` — a saved plan, whole. */
+export interface SavedSeatingPlan extends SeatingPlanResult {
+  id: string;
+  createdAt: string;
+  room: { rows: number; cols: number; seatsPerDesk: number; removedDesks: string[] };
+}
