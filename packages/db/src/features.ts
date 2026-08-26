@@ -9,8 +9,11 @@ const isFeatureKey = (k: string): k is FeatureKey => (ALL_KEYS as string[]).incl
 
 const BASIC: FeatureKey[] = ['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL'];
 const STANDARD: FeatureKey[] = [...BASIC, 'ABOUT_CONTACT', 'EVENTS', 'BLOG'];
-const PRO: FeatureKey[] = [...STANDARD, 'MANAGEMENT', 'HIRING', 'LIBRARY', 'ALUMNI'];
+const PRO: FeatureKey[] = [...STANDARD, 'MANAGEMENT', 'HIRING', 'LIBRARY'];
 
+// ALUMNI is in NO tier, deliberately and for the same reason LIBRARY is not:
+// a brand-new module must not appear in every existing PRO school's sidebar the
+// moment it deploys. The override path is the only way it is ever enabled.
 export const TIER_FEATURES: Record<Tier, FeatureKey[]> = {
   BASIC, STANDARD, PRO,
 };

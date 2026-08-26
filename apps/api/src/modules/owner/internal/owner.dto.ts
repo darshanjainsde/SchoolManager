@@ -49,7 +49,7 @@ export class SetStatusDto {
  * unreachable no matter what the UI offers.
  */
 export class SetFeatureDto {
-  @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG', 'HIRING', 'LIBRARY'])
+  @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG', 'HIRING', 'LIBRARY', 'ALUMNI'])
   featureKey!: string;
   @IsBoolean() enabled!: boolean;
 }
