@@ -2548,4 +2548,11 @@ model GuestSession {
   @@index([schoolId, requestedDate])
   @@index([alumniId])
   @@index([schoolId, classSectionId])
+  /// NOTE: a PARTIAL unique index also guards this table —
+  /// GuestSession_live_slot_key on (schoolId, classSectionId, requestedDate,
+  /// requestedPeriodId) WHERE status IN ('REQUESTED','COUNTERED','SCHEDULED').
+  /// Prisma cannot express a partial unique index, so it lives in the migration
+  /// SQL only and does not appear here. It is what actually prevents two alumni
+  /// double-booking one period: the availability check and the insert are in one
+  /// transaction, but READ COMMITTED means both would still read FREE.
 }

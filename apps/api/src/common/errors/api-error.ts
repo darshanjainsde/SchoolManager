@@ -6,6 +6,39 @@ import { HttpException } from '@nestjs/common';
  * free-form and may change without notice.
  */
 export type ErrorCode =
+  // ─── Homecoming (alumni wing) ──────────────────────────────────────────────
+  /** Graduation was asked for with no class sections — pair with 400. */
+  | 'NOTHING_TO_GRADUATE'
+  /** A decline (claim, gift, session) with no reason. The office owes one, and
+   *  requiring it is what makes suggesting an alternative the easier path. */
+  | 'REASON_REQUIRED'
+  | 'CLAIM_ALREADY_DECIDED'
+  /** Trust-for-students was granted to an alumnus nobody has verified — 409. */
+  | 'MUST_BE_VERIFIED_FIRST'
+  | 'BAD_GIFT_SCOPE'
+  | 'DONOR_REQUIRED'
+  | 'GIFT_REQUIRED'
+  | 'GIFT_ITEM_INACTIVE'
+  /** The chosen group has no active students, so there is no headcount — 409. */
+  | 'EMPTY_GROUP'
+  | 'COUNTER_NOTE_REQUIRED'
+  | 'GIFT_TRANSITION_ILLEGAL'
+  /** Fewer goods arrived than the group has children. The gift covers everyone
+   *  or it waits — the pledge stays open so somebody can close it. Pair with 409. */
+  | 'GIFT_SHORT'
+  /** Given + absent must equal the headcount; children who were away are still owed. */
+  | 'GIFT_COUNT_MISMATCH'
+  | 'BAD_DATE_RANGE'
+  /** A session was requested by an alumnus the school has not cleared to work
+   *  with students. Verified is not the same as trusted — pair with 403. */
+  | 'NOT_TRUSTED_FOR_STUDENTS'
+  | 'SLOT_NOT_AVAILABLE'
+  | 'COUNTER_SLOT_REQUIRED'
+  /** Nothing reaches SCHEDULED without a named member of staff in the room. */
+  | 'SESSION_NEEDS_ACCOMPANYING_TEACHER'
+  | 'SESSION_COUNTER_LIMIT_REACHED'
+  | 'SESSION_WRONG_ACTOR'
+  | 'SESSION_ILLEGAL_TRANSITION'
   /** This deployment has no EMAIL_SECRET_KEY, so a school's own mail password
    *  cannot be stored. Pair with 503 — it is an operator gap, not the admin's
    *  mistake, and mail keeps flowing through the platform sender meanwhile. */

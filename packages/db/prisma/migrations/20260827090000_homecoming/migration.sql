@@ -356,3 +356,20 @@ BEGIN
     );
   END LOOP;
 END $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Two alumni asking for the same period at the same moment.
+--
+-- The availability check and the INSERT share one transaction, which gives
+-- atomicity — but NOT mutual exclusion. Under READ COMMITTED two transactions
+-- that both BEGIN before either COMMITs read the same snapshot, so both see the
+-- period as FREE and both write. This is the `txn-scope-is-not-mutual-exclusion`
+-- pattern, logged three times on this project already.
+--
+-- A partial unique index is the fix that needs no lock ordering and cannot be
+-- forgotten by a future caller: the second writer gets a constraint violation
+-- instead of a double booking. It is partial because a cancelled or declined
+-- request must NOT keep the period reserved forever.
+CREATE UNIQUE INDEX "GuestSession_live_slot_key"
+  ON "GuestSession" ("schoolId", "classSectionId", "requestedDate", "requestedPeriodId")
+  WHERE "status" IN ('REQUESTED', 'COUNTERED', 'SCHEDULED');
