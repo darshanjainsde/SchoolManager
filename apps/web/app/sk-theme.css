@@ -2082,8 +2082,46 @@ button.sk-availcell:hover { filter: brightness(0.97); }
 .sk-eh-main { padding: 20px; min-width: 0; }
 .sk-eh-group { display: flex; flex-direction: column; gap: 9px; }
 @media (max-width: 900px) {
-  .sk-eh-pane { grid-template-columns: 1fr; }
+  /* minmax(0,1fr), not 1fr: a `1fr` track takes its minimum from the item's
+     min-content, and the floor's 420px minimum would then widen the whole card
+     instead of scrolling inside it. */
+  .sk-eh-pane { grid-template-columns: minmax(0, 1fr); }
   .sk-eh-side { border-right: 0; border-bottom: 1px solid var(--sk-line); }
+}
+
+/* On a phone all three steps must be reachable without discovering a sideways
+   swipe. The console's own tab strip hides behind one — that is why the layout
+   swaps it for a drawer — and three short labels genuinely fit. */
+@media (max-width: 640px) {
+  .sk-eh-steps { overflow-x: visible; }
+  .sk-eh-steps > button {
+    min-width: 0; flex: 1 1 0; gap: 6px;
+    padding: 11px 7px; font-size: 12px; letter-spacing: -0.015em;
+  }
+  .sk-eh-steps > button > .n { width: 18px; height: 18px; font-size: 10px; }
+  .sk-eh-main, .sk-eh-side { padding: 15px; }
+}
+
+/* A room chart is wider than a phone, so the floor scrolls — but a scroll
+   nothing announces is a scroll nobody finds. These are the classic
+   background-attachment shadows: the covers are `local` so they ride the
+   scroll, the shadows are `scroll` so they only show while there is more room
+   in that direction. */
+.sk-eh-floor {
+  background:
+    linear-gradient(to right, var(--sk-card) 40%, transparent) left center / 26px 100% no-repeat local,
+    linear-gradient(to left, var(--sk-card) 40%, transparent) right center / 26px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--sk-ink) 16%, transparent), transparent)
+      left center / 13px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--sk-ink) 16%, transparent), transparent)
+      right center / 13px 100% no-repeat scroll;
+}
+.sk-eh-swipe { display: none; }
+@media (max-width: 700px) {
+  .sk-eh-swipe {
+    display: block; margin-top: 9px;
+    font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3);
+  }
 }
 
 /* ---- blackboard: which end of the room the teacher stands at ---- */
