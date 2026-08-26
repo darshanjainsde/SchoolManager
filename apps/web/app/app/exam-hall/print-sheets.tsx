@@ -286,24 +286,85 @@ function Slips({ plan, school }: { plan: Plan; school: string }) {
 
 // ── the container the print stylesheet shows ─────────────────────────────────
 
+function OneSheet({
+  sheet,
+  plan,
+  room,
+  school,
+}: {
+  sheet: Sheet;
+  plan: Plan;
+  room: RoomShape;
+  school: string;
+}) {
+  if (sheet === 'chart') return <Chart plan={plan} room={room} />;
+  if (sheet === 'door') return <DoorList plan={plan} />;
+  if (sheet === 'attendance') return <Attendance plan={plan} />;
+  if (sheet === 'stickers') return <Stickers plan={plan} room={room} school={school} />;
+  return <Slips plan={plan} school={school} />;
+}
+
+/**
+ * Every ticked sheet, in one print job.
+ *
+ * The office does not want a seating chart; it wants the bundle — chart, door
+ * list, attendance sheet, stickers, slips — sorted and stapled. Printing them
+ * one at a time is five trips to the dialog, so `sheets` is a list and the
+ * order here is the order they come off the printer.
+ */
 export function PrintSheets({
   plan,
   room,
   school,
-  sheet,
+  sheets,
 }: {
   plan: Plan;
   room: RoomShape;
   school: string;
-  sheet: Sheet;
+  sheets: Sheet[];
 }) {
+  const ordered = SHEETS.filter((s) => sheets.includes(s.key));
   return (
-    <div id="eh-print" aria-hidden="true">
-      {sheet === 'chart' && <Chart plan={plan} room={room} />}
-      {sheet === 'door' && <DoorList plan={plan} />}
-      {sheet === 'attendance' && <Attendance plan={plan} />}
-      {sheet === 'stickers' && <Stickers plan={plan} room={room} school={school} />}
-      {sheet === 'slips' && <Slips plan={plan} school={school} />}
+    <div id="eh-print" className="eh-sheets" aria-hidden="true">
+      {ordered.map((s) => (
+        <OneSheet key={s.key} sheet={s.key} plan={plan} room={room} school={school} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The same sheets, on screen, shrunk to fit beside the picker.
+ *
+ * Without this the office ticks five boxes and prints on faith. It renders the
+ * identical component tree as the print container, so what is previewed cannot
+ * drift from what comes out.
+ */
+export function SheetPreview({
+  plan,
+  room,
+  school,
+  sheets,
+}: {
+  plan: Plan;
+  room: RoomShape;
+  school: string;
+  sheets: Sheet[];
+}) {
+  const ordered = SHEETS.filter((s) => sheets.includes(s.key));
+  if (!ordered.length) return null;
+  return (
+    <div className="sk-eh-preview">
+      {ordered.map((s) => (
+        <figure key={s.key}>
+          <figcaption>{s.label}</figcaption>
+          <div className="sk-eh-paper">
+            <div className="sk-eh-paper-in eh-sheets">
+              <OneSheet sheet={s.key} plan={plan} room={room} school={school} />
+            </div>
+          </div>
+        </figure>
+      ))}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import type { PlannedSeat, RoomRow, SeatingPlanResult, SeatingRules } from '@sko
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
-import { PrintSheets, SHEETS, type Sheet } from './print-sheets';
+import { PrintSheets, SheetPreview, SHEETS, type Sheet } from './print-sheets';
 import {
   RoomGrid,
   capacityOf,
@@ -97,16 +97,28 @@ export default function ExamHallPage() {
   const [title, setTitle] = useState('Half-Yearly');
   const [plan, setPlan] = useState<SeatingPlanResult | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<Sheet>('chart');
+  // All five by default: the office wants the bundle, not one sheet at a time.
+  const [sheets, setSheets] = useState<Sheet[]>(SHEETS.map((s) => s.key));
 
+  // `enabled: !!host` is not optional here. useHost() resolves only AFTER
+  // mount, so a query that fires on the first render sends no Host header, the
+  // API cannot resolve the tenant, and the 401 -> failed refresh path calls
+  // clear() — which signs the admin out the instant they open this tab. Every
+  // other /app page guards the same way.
   const roomsQuery = useQuery({
     queryKey: ['exam-hall', 'rooms'],
     queryFn: () => api.get<RoomRow[]>('/manage/rooms'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const classesQuery = useQuery({
     queryKey: ['exam-hall', 'classes'],
     queryFn: () => api.get<SchoolClass[]>('/manage/classes'),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
   });
 
   const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
@@ -318,7 +330,9 @@ export default function ExamHallPage() {
         </div>
       </header>
 
-      {classesQuery.isLoading || roomsQuery.isLoading ? <p className="sk-state">Loading…</p> : null}
+      {!host || classesQuery.isLoading || roomsQuery.isLoading ? (
+        <p className="sk-state">Loading…</p>
+      ) : null}
       {roomsQuery.error ? <p className="sk-state err">{errText(roomsQuery.error)}</p> : null}
 
       <div className="sk-card" style={{ overflow: 'hidden' }}>
@@ -452,7 +466,7 @@ export default function ExamHallPage() {
                 </p>
                 {draft.removedDesks.length > 0 ? (
                   <button type="button" className="sk-btn sk-press" onClick={() => edit({ removedDesks: [] })}>
-                    Put all {draft.removedDesks.length} back
+                    Put {draft.removedDesks.length} desk{draft.removedDesks.length === 1 ? '' : 's'} back
                   </button>
                 ) : null}
               </div>
@@ -541,7 +555,7 @@ export default function ExamHallPage() {
           <div className="sk-eh-pane">
             <div className="sk-eh-side">
               <div className="sk-eh-group">
-                <span className="sk-lab">What is this sitting</span>
+                <span className="sk-lab">Which exam is this</span>
                 <input
                   className="sk-input"
                   value={title}
@@ -674,7 +688,7 @@ export default function ExamHallPage() {
                   </div>
 
                   <div
-                    className="sk-kpi"
+                    className="sk-kpi sk-eh-result"
                     data-tone={plan.report.clashes === 0 ? 'good' : 'bad'}
                     style={{ marginTop: 14 }}
                   >
@@ -723,21 +737,28 @@ export default function ExamHallPage() {
           <div className="sk-eh-pane">
             <div className="sk-eh-side">
               <span className="sk-lab">Goes to the printer</span>
-              {SHEETS.map((s) => (
-                <button
-                  key={s.key}
-                  type="button"
-                  className="sk-eh-tick"
-                  aria-pressed={sheet === s.key}
-                  onClick={() => setSheet(s.key)}
-                >
-                  <span className="box" aria-hidden="true" />
-                  <span>
-                    <span className="lbl">{s.label}</span>
-                    <span className="sub">{s.blurb}</span>
-                  </span>
-                </button>
-              ))}
+              {SHEETS.map((s) => {
+                const on = sheets.includes(s.key);
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    className="sk-eh-tick"
+                    aria-pressed={on}
+                    onClick={() =>
+                      setSheets((cur) =>
+                        on ? cur.filter((k) => k !== s.key) : [...cur, s.key],
+                      )
+                    }
+                  >
+                    <span className="box" aria-hidden="true" />
+                    <span>
+                      <span className="lbl">{s.label}</span>
+                      <span className="sub">{s.blurb}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="sk-eh-main">
@@ -752,17 +773,32 @@ export default function ExamHallPage() {
                     type="button"
                     className="sk-btn sk-press"
                     data-variant="primary"
+                    disabled={!sheets.length}
                     onClick={printSheet}
                   >
-                    <Printer size={14} /> Print {SHEETS.find((s) => s.key === sheet)?.label.toLowerCase()}
+                    <Printer size={14} />{' '}
+                    {sheets.length === 1
+                      ? `Print ${SHEETS.find((s) => s.key === sheets[0])?.label.toLowerCase()}`
+                      : `Print ${sheets.length} sheets`}
                   </button>
-                  <div className="sk-eh-why" style={{ marginTop: 18 }}>
+                  <div className="sk-eh-why" style={{ marginTop: 16 }}>
                     <b>{plan.roomName}</b> — {plan.title}. {plan.report.seated} students,{' '}
                     {plan.report.clashes === 0 ? 'no rule broken' : `${plan.report.clashes} rules broken`}.
                     {plan.report.unseated > 0
                       ? ` ${plan.report.unseated} still need another room.`
                       : ''}
                   </div>
+                  <SheetPreview
+                    plan={plan}
+                    room={{
+                      rows: draft.rows,
+                      cols: draft.cols,
+                      seatsPerDesk: draft.seatsPerDesk,
+                      removedDesks: draft.removedDesks,
+                    }}
+                    school={host ?? ''}
+                    sheets={sheets}
+                  />
                 </>
               ) : (
                 <p className="sk-state">Make the seating first — step 2.</p>
@@ -782,7 +818,7 @@ export default function ExamHallPage() {
             removedDesks: draft.removedDesks,
           }}
           school={host ?? ''}
-          sheet={sheet}
+          sheets={sheets}
         />
       ) : null}
     </div>

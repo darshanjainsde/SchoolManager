@@ -54,6 +54,7 @@
   /* Amber is a fill, never legible as text on its own tint — amber-ink is the
      readable partner for anything written on --sk-amber-tint. */
   --sk-amber-ink: #7a4e06;
+  --sk-cls-1: #4f46e5; --sk-cls-2: #0f766e; --sk-cls-3: #be185d; --sk-cls-4: #a16207;
   --sk-good: #178a5b;
   --sk-good-tint: #e3f4ec;
   --sk-bad: #c4453f;
@@ -108,6 +109,7 @@
     --sk-amber: #f5b23c;
     --sk-amber-tint: #3d2e14;
     --sk-amber-ink: #f5ce8a;
+    --sk-cls-1: #818cf8; --sk-cls-2: #2dd4bf; --sk-cls-3: #f472b6; --sk-cls-4: #fbbf24;
     --sk-good: #4cc08e;
     --sk-good-tint: #173327;
     --sk-bad: #e0656f;
@@ -491,6 +493,7 @@ html[data-theme='light'] .skosx {
   --sk-card: #ffffff; --sk-bg-2: #f3f0e7; --sk-line: #e7e3d6; --sk-line-2: #d9d4c4;
   --sk-brand: #4f46e5; --sk-brand-2: #3730a3; --sk-brand-tint: #eef0ff;
   --sk-amber: #f59e0b; --sk-amber-tint: #fde9c8; --sk-amber-ink: #7a4e06;
+  --sk-cls-1: #4f46e5; --sk-cls-2: #0f766e; --sk-cls-3: #be185d; --sk-cls-4: #a16207;
   --sk-good: #178a5b; --sk-good-tint: #e3f4ec;
   --sk-bad: #c4453f; --sk-bad-tint: #fbe9e8; --sk-margin-red: #e86a6a; --sk-late: #7a4e06;
   --sk-shadow: 0 1px 2px rgba(33, 29, 69, 0.05), 0 14px 34px -22px rgba(33, 29, 69, 0.35);
@@ -502,6 +505,7 @@ html[data-theme='dark'] .skosx {
   --sk-card: #1b1830; --sk-bg-2: #100e1e; --sk-line: #2b2847; --sk-line-2: #37335a;
   --sk-brand: #8b87ff; --sk-brand-2: #a5a1ff; --sk-brand-tint: #232052;
   --sk-amber: #f5b23c; --sk-amber-tint: #3d2e14; --sk-amber-ink: #f5ce8a;
+  --sk-cls-1: #818cf8; --sk-cls-2: #2dd4bf; --sk-cls-3: #f472b6; --sk-cls-4: #fbbf24;
   --sk-good: #4cc08e; --sk-good-tint: #173327;
   --sk-bad: #e0656f; --sk-bad-tint: #3a1b1e; --sk-margin-red: #e0656f; --sk-late: #f5ce8a;
   --sk-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -24px rgba(0, 0, 0, 0.8);
@@ -2107,19 +2111,36 @@ button.sk-availcell:hover { filter: brightness(0.97); }
 .sk-eh-desk > .sk-eh-cell:last-child:not(:first-child) { border-top-left-radius: 2px; border-bottom-left-radius: 2px; }
 .sk-eh-cell:hover { transform: translateY(-1px); }
 .sk-eh-cell:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; }
-.sk-eh-cell > b { font-weight: 650; font-size: 10px; }
-.sk-eh-cell > i { font-style: normal; font-size: 9.5px; opacity: 0.8; }
+.sk-eh-cell > b { font-weight: 700; font-size: 10.5px; letter-spacing: -0.01em; }
+/* The roll number is what an invigilator reads off the chart while walking the
+   aisle, so it is not a footnote. */
+.sk-eh-cell > i { font-style: normal; font-size: 11px; font-weight: 500; opacity: 1; color: var(--sk-ink-2); }
 
-/* No desk here — a pillar, a broken desk, a walking lane the school keeps. */
-.sk-eh-cell[data-state="gone"] { background: transparent; border-style: dashed; border-color: var(--sk-line); color: var(--sk-line-2); }
+/* NO DESK HERE — a pillar, a broken desk, a walking lane the school keeps.
+   Taking a desk out is the main thing this screen does, so it has to be
+   unmistakable: the audit showed a faint dashed box with a 13px "x" that was
+   indistinguishable from an empty desk at a glance, in both themes. Now it is
+   struck through and sunk into the floor. */
+.sk-eh-cell[data-state="gone"] {
+  background: repeating-linear-gradient(135deg, var(--sk-line) 0 2px, transparent 2px 7px);
+  border-style: dashed; border-color: var(--sk-line-2); color: var(--sk-ink-3);
+}
+.sk-eh-cell[data-state="gone"]::after { content: 'no desk'; font-size: 8.5px; letter-spacing: 0.04em; }
 /* A desk that exists but is deliberately unused — the spare back row. */
 .sk-eh-cell[data-state="spare"] { background: transparent; border-style: dashed; color: var(--sk-ink-3); font-size: 9px; }
-.sk-eh-cell[data-state="empty"] { background: transparent; border-style: dashed; }
+/* A real desk with nobody in it yet still looks like FURNITURE. Painting it
+   transparent-and-dashed made a full room read as an empty one. */
+.sk-eh-cell[data-state="empty"] { background: var(--sk-bg-2); }
 
-.sk-eh-cell[data-tone="c1"] { background: color-mix(in srgb, var(--sk-brand) 13%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-brand) 36%, transparent); color: var(--sk-brand); }
-.sk-eh-cell[data-tone="c2"] { background: color-mix(in srgb, var(--sk-good) 13%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-good) 36%, transparent); color: var(--sk-good); }
-.sk-eh-cell[data-tone="c3"] { background: color-mix(in srgb, var(--sk-bad) 13%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-bad) 36%, transparent); color: var(--sk-bad); }
-.sk-eh-cell[data-tone="c4"] { background: color-mix(in srgb, var(--sk-amber) 16%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-amber) 40%, transparent); color: var(--sk-amber-ink); }
+/* Class tones use --sk-cls-*, NOT the semantic state colours. Two reasons,
+   both found in the audit: a class painted --sk-bad reads as an error in a
+   product where red means absent, and the clash ring is itself --sk-bad, so a
+   red class beside a red warning was unreadable. --sk-amber-ink was the other
+   casualty: correct as dark ink on a light tint, invisible on a dark one. */
+.sk-eh-cell[data-tone="c1"] { background: color-mix(in srgb, var(--sk-cls-1) 14%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-cls-1) 38%, transparent); color: var(--sk-cls-1); }
+.sk-eh-cell[data-tone="c2"] { background: color-mix(in srgb, var(--sk-cls-2) 14%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-cls-2) 38%, transparent); color: var(--sk-cls-2); }
+.sk-eh-cell[data-tone="c3"] { background: color-mix(in srgb, var(--sk-cls-3) 14%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-cls-3) 38%, transparent); color: var(--sk-cls-3); }
+.sk-eh-cell[data-tone="c4"] { background: color-mix(in srgb, var(--sk-cls-4) 14%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-cls-4) 38%, transparent); color: var(--sk-cls-4); }
 
 .sk-eh-cell[data-clash="true"] { box-shadow: 0 0 0 2px var(--sk-bad); }
 .sk-eh-cell[data-chosen="true"] { box-shadow: 0 0 0 2px var(--sk-ink); }
@@ -2128,13 +2149,17 @@ button.sk-availcell:hover { filter: brightness(0.97); }
 .sk-eh-key { display: flex; flex-wrap: wrap; gap: 6px 15px; margin-top: 14px; font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); }
 .sk-eh-key > span { display: inline-flex; align-items: center; gap: 6px; }
 .sk-eh-key i { width: 10px; height: 10px; border-radius: 3px; }
-.sk-eh-key i[data-tone="c1"] { background: var(--sk-brand); }
-.sk-eh-key i[data-tone="c2"] { background: var(--sk-good); }
-.sk-eh-key i[data-tone="c3"] { background: var(--sk-bad); }
-.sk-eh-key i[data-tone="c4"] { background: var(--sk-amber); }
+.sk-eh-key i[data-tone="c1"] { background: var(--sk-cls-1); }
+.sk-eh-key i[data-tone="c2"] { background: var(--sk-cls-2); }
+.sk-eh-key i[data-tone="c3"] { background: var(--sk-cls-3); }
+.sk-eh-key i[data-tone="c4"] { background: var(--sk-cls-4); }
 
 /* ---- "why is this child here" ---- */
 .sk-eh-why { margin-top: 14px; border-top: 1px solid var(--sk-line); padding-top: 12px; font-size: 13.5px; line-height: 1.5; color: var(--sk-ink-2); min-height: 46px; }
+/* The run result is a sentence with a number in it, not a dashboard tile — the
+   92px KPI min-height left a dead band under a one-line note. */
+.sk-eh-result { min-height: 0; }
+.sk-eh-result .hint { margin-top: 4px; }
 .sk-eh-why b { color: var(--sk-ink); font-weight: 650; }
 
 /* ---- a tickable row (a class, a rule) ---- */
@@ -2160,10 +2185,10 @@ button.sk-availcell:hover { filter: brightness(0.97); }
 .sk-eh-tick .sub { display: block; font-size: 12px; color: var(--sk-ink-3); line-height: 1.4; margin-top: 2px; }
 .sk-eh-tick .cnt { margin-left: auto; font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); padding-top: 2px; }
 .sk-eh-tick .swatch { flex: none; width: 9px; height: 9px; border-radius: 3px; margin-top: 6px; }
-.sk-eh-tick .swatch[data-tone="c1"] { background: var(--sk-brand); }
-.sk-eh-tick .swatch[data-tone="c2"] { background: var(--sk-good); }
-.sk-eh-tick .swatch[data-tone="c3"] { background: var(--sk-bad); }
-.sk-eh-tick .swatch[data-tone="c4"] { background: var(--sk-amber); }
+.sk-eh-tick .swatch[data-tone="c1"] { background: var(--sk-cls-1); }
+.sk-eh-tick .swatch[data-tone="c2"] { background: var(--sk-cls-2); }
+.sk-eh-tick .swatch[data-tone="c3"] { background: var(--sk-cls-3); }
+.sk-eh-tick .swatch[data-tone="c4"] { background: var(--sk-cls-4); }
 
 /* ---- room list ---- */
 .sk-eh-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
