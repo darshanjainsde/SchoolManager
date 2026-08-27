@@ -1,0 +1,77 @@
+name: alumni-demo-data
+
+# Loads demo data for the Homecoming (alumni) wing into ONE school on staging,
+# so the module can be tested against something that looks like a real school
+# rather than an empty page.
+#
+# WHY A WORKFLOW: the same reason db-migrate is one — the credentials live in a
+# GitHub Environment and never pass through a chat window or a laptop. It also
+# means the run is logged, repeatable, and reviewable after the fact.
+#
+# STAGING ONLY, and not by policy alone: there is no production option to pick.
+# This writes people who do not exist, a login with a known password, and
+# pledges nobody made. None of that belongs near a real school's data, so the
+# safest design is one where the dangerous choice cannot be expressed.
+#
+# Re-running is safe. Every write is an upsert keyed on something stable, and
+# the script touches nothing outside the alumni tables plus one FeatureOverride.
+
+on:
+  workflow_dispatch:
+    inputs:
+      school:
+        description: Which school slug to load the demo data into
+        required: true
+        type: string
+        default: beacon
+      dry_run:
+        description: >-
+          Change NOTHING. Resolve the school, print which database it actually
+          reached, and list what would be written. Run this first.
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: alumni-demo-data-staging
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Load the alumni demo data
+        env:
+          # The script's clients read DATABASE_URL_APP / DATABASE_URL_PLATFORM
+          # FIRST and fall back to DATABASE_URL. Setting only DATABASE_URL is
+          # correct here because neither specific variable exists in this
+          # environment — but it is spelled out because a half-set environment
+          # silently sends the writes somewhere else, which is exactly the
+          # failure this comment exists to prevent.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school }}
+          DEMO_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: pnpm --filter @skoolos/db exec tsx prisma/seed-alumni-demo.ts
+
+      - name: What to do next
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          echo "Feature flags are cached in Redis for 300s — give it five"
+          echo "minutes, or hard-refresh, before the alumni tab appears."
