@@ -11,6 +11,8 @@
  * absences in it, marks that vary, a library with books out and overdue, and a
  * term's worth of notices. Every screen then has something true to render.
  *
+ * Re-runnable: every write is keyed on something stable.
+ *
  * NOT for production. It writes people who do not exist and logins with known
  * passwords, which is why the workflow that runs it has no production option.
  *
