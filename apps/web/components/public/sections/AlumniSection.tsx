@@ -268,6 +268,8 @@ function Batches({ schoolName }: { schoolName: string }) {
         ))}
       </div>
 
+      <ClaimForm defaultYear={open} schoolName={schoolName} />
+
       {open !== null && (
         <div className="ps-panel p-8 mt-8">
           <h3 className="ps-head font-bold text-2xl">Class of {open}</h3>
@@ -603,5 +605,132 @@ function Profile({
         </button>
       </div>
     </div>
+  );
+}
+
+/* ─── "I was a student here" ─────────────────────────────────────────────── */
+
+/**
+ * The public front door to the school's verification queue.
+ *
+ * Five fields, because every one of them is something a person genuinely
+ * remembers about a school they left twenty years ago, and anything more is a
+ * form they abandon. The batch year pre-fills from whichever year they were
+ * looking at, which is the whole reason this sits under the year list rather
+ * than on a page of its own.
+ *
+ * It promises nothing it cannot keep: there is no status page and no automatic
+ * email, so the closing line says a person will be in touch, not "check back".
+ */
+function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; schoolName: string }) {
+  const [openForm, setOpenForm] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [f, setF] = useState({ firstName: '', lastName: '', batchYear: '', email: '', phone: '', proof: '' });
+
+  // Follows the year they opened, until they type their own.
+  const [touchedYear, setTouchedYear] = useState(false);
+  useEffect(() => {
+    if (!touchedYear && defaultYear !== null) setF((x) => ({ ...x, batchYear: String(defaultYear) }));
+  }, [defaultYear, touchedYear]);
+
+  if (sent) {
+    return (
+      <div className="ps-panel p-8 mt-8" role="status">
+        <h3 className="ps-head font-bold text-lg">Thank you — that is with the office.</h3>
+        <p className="text-sm text-slate-500 mt-2 max-w-xl">
+          Somebody at {schoolName} will check the register and get in touch on the email or number
+          you left. Nobody else can see what you sent, and you do not appear anywhere on this site
+          until a person has matched you to the roll.
+        </p>
+      </div>
+    );
+  }
+
+  if (!openForm) {
+    return (
+      <div className="mt-8">
+        <button type="button" className="ps-btn ps-cta-btn" onClick={() => setOpenForm(true)}>
+          Not on the list? Tell us you were here →
+        </button>
+      </div>
+    );
+  }
+
+  const ready = f.firstName.trim() && f.lastName.trim() && f.batchYear && f.proof.trim().length >= 3
+    && (f.email.trim() || f.phone.trim());
+
+  return (
+    <form
+      className="ps-panel p-8 mt-8 max-w-2xl"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        setErr(null);
+        call('POST', '/alumni/claims', {
+          body: {
+            firstName: f.firstName.trim(),
+            lastName: f.lastName.trim(),
+            batchYear: Number(f.batchYear),
+            email: f.email.trim() || undefined,
+            phone: f.phone.trim() || undefined,
+            proof: f.proof.trim(),
+          },
+        })
+          .then(() => setSent(true))
+          .catch((e2: Error) => setErr(e2.message))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <h3 className="ps-head font-bold text-lg">Were you a student here?</h3>
+      <p className="text-sm text-slate-500 mt-1">
+        Five things, and the office checks them against the register by hand. Nothing you send
+        appears on this site until a person has matched you to the roll.
+      </p>
+
+      <div className="grid gap-4 sm:grid-cols-2 mt-6">
+        <label className="block text-sm">
+          <span className="text-slate-500">First name</span>
+          <input className="ps-wiz-input w-full mt-1" required value={f.firstName}
+            onChange={(e) => setF({ ...f, firstName: e.target.value })} />
+        </label>
+        <label className="block text-sm">
+          <span className="text-slate-500">Last name</span>
+          <input className="ps-wiz-input w-full mt-1" required value={f.lastName}
+            onChange={(e) => setF({ ...f, lastName: e.target.value })} />
+        </label>
+        <label className="block text-sm">
+          <span className="text-slate-500">The year you left</span>
+          <input className="ps-wiz-input w-full mt-1" type="number" required
+            min={1900} max={2100} placeholder="1998" value={f.batchYear}
+            onChange={(e) => { setTouchedYear(true); setF({ ...f, batchYear: e.target.value }); }} />
+        </label>
+        <label className="block text-sm">
+          <span className="text-slate-500">Email or phone — either is enough</span>
+          <input className="ps-wiz-input w-full mt-1" placeholder="you@example.com" value={f.email}
+            onChange={(e) => setF({ ...f, email: e.target.value })} />
+          <input className="ps-wiz-input w-full mt-2" placeholder="Phone" value={f.phone}
+            onChange={(e) => setF({ ...f, phone: e.target.value })} />
+        </label>
+      </div>
+
+      <label className="block text-sm mt-4">
+        <span className="text-slate-500">Something the school can check</span>
+        <textarea className="ps-wiz-input w-full mt-1" rows={3} required
+          placeholder="Your class teacher's name, your admission number, or two classmates the office would find in the same register."
+          value={f.proof} onChange={(e) => setF({ ...f, proof: e.target.value })} />
+      </label>
+
+      {err && <p className="text-sm mt-4" style={{ color: '#b3261e' }}>{err}</p>}
+
+      <div className="flex flex-wrap gap-3 mt-6">
+        <button type="submit" className="ps-btn ps-cta-btn" disabled={!ready || busy}
+          style={!ready || busy ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+          {busy ? 'Sending…' : 'Send this to the office'}
+        </button>
+        <button type="button" className="ps-btn" onClick={() => setOpenForm(false)}>Cancel</button>
+      </div>
+    </form>
   );
 }

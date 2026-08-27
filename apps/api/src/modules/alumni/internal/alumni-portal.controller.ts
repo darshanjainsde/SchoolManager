@@ -17,6 +17,7 @@ import { RequireFeature, RequireFeatureGuard } from '../../features';
 import { TenantContextService } from '../../tenancy';
 import { AlumniAuthService } from './alumni-auth.service';
 import { AlumniPortalService } from './alumni-portal.service';
+import { AlumniService } from './alumni.service';
 import { GiftsService } from './gifts.service';
 import { GuestSessionsService } from './guest-sessions.service';
 import {
@@ -25,6 +26,7 @@ import {
   type AlumniRequest,
 } from './alumni-session.guard';
 import {
+  CreateClaimDto,
   CreatePledgeDto,
   DecideSessionDto,
   DirectoryQueryDto,
@@ -55,6 +57,7 @@ export class PublicAlumniController {
   constructor(
     private readonly portal: AlumniPortalService,
     private readonly auth: AlumniAuthService,
+    private readonly alumni: AlumniService,
     private readonly tenant: TenantContextService,
   ) {}
 
@@ -80,6 +83,21 @@ export class PublicAlumniController {
     const y = Math.trunc(year);
     if (y < 1900 || y > 2100) return { batchYear: y, found: 0, registerStrength: 0, coverage: null, stillMissing: 0, alumni: [] };
     return this.portal.publicBatch(this.sid(), y);
+  }
+
+  /**
+   * "I was a student here."
+   *
+   * The public front door to the verification queue, and the only write an
+   * unauthenticated stranger can make in this module. It creates an inert
+   * AlumniClaim and nothing else: no status, no visibility, no login. A human
+   * in the office matches it against the bound register, and only then does
+   * anybody exist to another human being.
+   */
+  @Public()
+  @Post('claims')
+  submitClaim(@Body() dto: CreateClaimDto) {
+    return this.alumni.submitClaim(this.sid(), dto);
   }
 
   /**

@@ -145,6 +145,112 @@ describe('Alumni portal authorization', () => {
     });
   });
 
+  describe('self-registration — the public front door to the queue', () => {
+    const claim = (over: Record<string, unknown> = {}) => ({
+      firstName: 'Rahul', lastName: 'Gupta', batchYear: 1998,
+      email: 'rahul@example.test', proof: 'Class teacher was Mrs Sharma', ...over,
+    });
+
+    it('accepts a claim from a complete stranger', async () => {
+      const res = await request(srv()).post('/alumni/claims').set(hostOnly()).send(claim()).expect(201);
+      expect(res.body.received).toBe(true);
+    });
+
+    it('creates an INERT row — pending, and visible to nobody', async () => {
+      await request(srv()).post('/alumni/claims').set(hostOnly()).send(claim({ firstName: 'Inert' })).expect(201);
+      const row = await getPlatformPrisma().alumniClaim.findFirst({
+        where: { schoolId, firstName: 'Inert' },
+      });
+      expect(row!.status).toBe('PENDING');
+
+      // Not in the directory, not on the batch page. A claim is not a person
+      // until a human matches it against the register.
+      const pub = await request(srv()).get('/alumni/batches/1998').set(hostOnly()).expect(200);
+      expect(JSON.stringify(pub.body)).not.toMatch(/Inert/);
+      const dir = await request(srv()).get('/alumni/me/directory').set(withSession(plainSession)).expect(200);
+      expect(JSON.stringify(dir.body)).not.toMatch(/Inert/);
+    });
+
+    it('cannot set its own status, however hard it tries', async () => {
+      // forbidNonWhitelisted: a field the DTO does not declare is a 400, not a
+      // silent no-op. Without that the verification ladder is decorative.
+      await request(srv()).post('/alumni/claims').set(hostOnly())
+        .send(claim({ status: 'VERIFIED' })).expect(400);
+      await request(srv()).post('/alumni/claims').set(hostOnly())
+        .send(claim({ matchedAlumniId: '00000000-0000-4000-8000-000000000001' })).expect(400);
+    });
+
+    it('refuses a claim with no way to reply to it', async () => {
+      const res = await request(srv()).post('/alumni/claims').set(hostOnly())
+        .send(claim({ email: undefined, phone: undefined }));
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('CONTACT_REQUIRED');
+    });
+
+    it('swallows a duplicate instead of stacking the queue', async () => {
+      const dup = claim({ firstName: 'Twice', lastName: 'Over', batchYear: 1992 });
+      await request(srv()).post('/alumni/claims').set(hostOnly()).send(dup).expect(201);
+      // Same person submitting again because nothing visibly happened is the
+      // NORMAL case — there is no status page. Two rows is a queue the
+      // coordinator de-duplicates by hand.
+      await request(srv()).post('/alumni/claims').set(hostOnly()).send(dup).expect(201);
+      const n = await getPlatformPrisma().alumniClaim.count({
+        where: { schoolId, firstName: 'Twice', batchYear: 1992 },
+      });
+      expect(n).toBe(1);
+    });
+
+    it('matches a duplicate case-insensitively', async () => {
+      const base = claim({ firstName: 'Case', lastName: 'Fold', batchYear: 1991 });
+      await request(srv()).post('/alumni/claims').set(hostOnly()).send(base).expect(201);
+      await request(srv()).post('/alumni/claims').set(hostOnly())
+        .send({ ...base, firstName: 'CASE', lastName: 'fold' }).expect(201);
+      const n = await getPlatformPrisma().alumniClaim.count({
+        where: { schoolId, batchYear: 1991 },
+      });
+      expect(n).toBe(1);
+    });
+
+    it('enforces field bounds rather than storing whatever arrives', async () => {
+      await request(srv()).post('/alumni/claims').set(hostOnly())
+        .send(claim({ batchYear: 20260 })).expect(400);
+      await request(srv()).post('/alumni/claims').set(hostOnly())
+        .send(claim({ proof: 'x' })).expect(400);
+      await request(srv()).post('/alumni/claims').set(hostOnly())
+        .send(claim({ firstName: 'z'.repeat(200) })).expect(400);
+      await request(srv()).post('/alumni/claims').set(hostOnly())
+        .send(claim({ email: 'not-an-email' })).expect(400);
+    });
+
+    it('is refused entirely for a school without the ALUMNI feature', async () => {
+      const plainSchool = await seedMinimalSchool();
+      await request(srv()).post('/alumni/claims')
+        .set({ 'X-Skoolos-Host': plainSchool.host }).send(claim()).expect(403);
+    });
+
+    it('the office can see it and verify it, and only then does the person exist', async () => {
+      await request(srv()).post('/alumni/claims').set(hostOnly())
+        .send(claim({ firstName: 'Becomes', lastName: 'Real', batchYear: 1987 })).expect(201);
+
+      const queue = await request(srv()).get('/manage/alumni/claims?status=PENDING')
+        .set({ ...hostOnly(), Authorization: `Bearer ${adminToken}` }).expect(200);
+      const mine = queue.body.find((c: { firstName: string }) => c.firstName === 'Becomes');
+      expect(mine).toBeDefined();
+
+      await request(srv()).post(`/manage/alumni/claims/${mine.id}/decide`)
+        .set({ ...hostOnly(), Authorization: `Bearer ${adminToken}` })
+        .send({ action: 'VERIFY' }).expect(201);
+
+      const alum = await getPlatformPrisma().alumni.findFirst({
+        where: { schoolId, firstName: 'Becomes' },
+      });
+      expect(alum!.status).toBe('VERIFIED');
+      // And still NOT cleared to work with students — that is a second,
+      // separate decision the school makes by hand.
+      expect(alum!.trustedForStudents).toBe(false);
+    });
+  });
+
   describe('the member tier', () => {
     it.each(MEMBER_ROUTES)('$method $path refuses an anonymous caller', async (r) => {
       await call(r, hostOnly()).expect(401);
