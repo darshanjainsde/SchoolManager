@@ -8,6 +8,7 @@ import { HealthModule } from './health/health.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
 import { CommonAuthModule } from './common/auth/auth.module';
 import { AuditModule } from './common/audit/audit.module';
+import { RedisModule } from './common/redis/redis.module';
 import { StorageModule } from './common/storage/storage.module';
 import { MailModule } from './common/mail/mail.module';
 import { NotificationModule } from './common/notifications/notification.module';
@@ -63,6 +64,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
       }),
     }),
 
+    RedisModule,
     CommonAuthModule,
     AuditModule,
     StorageModule,

@@ -66,10 +66,32 @@ export async function withTenant<T>(
   if (!UUID_RE.test(tenantId)) {
     throw new Error('withTenant: tenantId must be a UUID');
   }
-  return client.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`SET LOCAL app.current_tenant = '${tenantId}'`);
-    return fn(tx);
-  });
+  return client.$transaction(
+    async (tx) => {
+      // `set_config(..., TRUE)` is the LOCAL form: it lasts exactly as long as
+      // this transaction, which is what makes RLS safe behind a transaction-mode
+      // pooler. The id is bound as a parameter rather than spliced into the
+      // statement — the UUID check above is defence in depth, not the only guard.
+      await tx.$executeRaw`SELECT set_config('app.current_tenant', ${tenantId}, TRUE)`;
+      return fn(tx);
+    },
+    {
+      // Both were previously left at Prisma's defaults, and both have bitten us.
+      //
+      // `timeout` (default 5s) is how long the transaction may run. A batched
+      // attendance read on a large tenant exceeded it and surfaced as an opaque
+      // 500 — "Transaction already closed". 10s is a safety net, not a budget:
+      // a hot read path that approaches it is a bug to fix, not a limit to raise.
+      //
+      // `maxWait` (default 2s) is how long a request queues for a pooled
+      // connection. When the pool saturates this is what fails, and it should
+      // fail rather than queue indefinitely — a request that has waited 3s for a
+      // connection is already a bad response. Kept deliberately tight so pool
+      // exhaustion stays loud instead of turning into creeping latency.
+      timeout: 10_000,
+      maxWait: 3_000,
+    },
+  );
 }
 
 /** Useful in tests and the seed: tear down + close. */
