@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * The alumni wing, on the school's OWN public site.
@@ -683,10 +683,6 @@ function Give({
     call<GiftItem[]>('GET', '/alumni/me/gift-items', { session }).then(setItems).catch(() => undefined);
   }, [session]);
 
-  const all = useMemo(
-    () => (groups ? [groups.school, ...groups.grades, ...groups.sections] : []),
-    [groups],
-  );
   const item = items.find((i) => i.id === itemId);
   const qty = group?.headcount ?? 0;
   const custom = itemId === '' && ownItem.trim().length >= 3;
@@ -703,19 +699,44 @@ function Give({
         <p className="text-sm text-slate-500 mt-1">
           Live from the register. Counts only — never a child&rsquo;s name, photograph or fee status.
         </p>
-        {/* A real school has ten grades and twenty sections. Forty chips on one
-            track is not a control, so the groups are split by kind and only the
-            one being used is expanded. */}
+        {/* A real school has twenty-five year groups and thirty-five classes.
+            Rendered flat that is sixty-one cards to scroll past before reaching
+            step two — so the whole-school option, which most donors want, stays
+            open and the two long lists fold away behind their own counts. */}
+        <div className="ps-choices mt-5">
+          {groups?.school && (
+            <button
+              type="button"
+              className="ps-choice"
+              aria-pressed={group?.label === groups.school.label}
+              onClick={() => setGroup(group?.label === groups.school.label ? null : groups.school)}
+            >
+              <span className="ps-choice-mark" aria-hidden="true" />
+              <span>
+                <span className="ps-choice-name">Every child in the school</span>
+                <span className="ps-choice-meta tabular-nums">
+                  {groups.school.headcount} children
+                </span>
+              </span>
+            </button>
+          )}
+        </div>
+
         {([
-          ['The whole school', groups ? [groups.school] : []],
-          ['By year group', groups?.grades ?? []],
+          ['One year group', groups?.grades ?? []],
           ['One class', groups?.sections ?? []],
         ] as const).map(([heading, list]) => list.length > 0 && (
-          <div key={heading} className="mt-5">
-            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-              {heading}
-            </div>
-            <div className="ps-choices">
+          <details
+            key={heading}
+            className="mt-4"
+            /* Open if the current choice lives in here, so a selection is never
+               hidden behind a fold the donor has to remember to reopen. */
+            open={list.some((g) => g.label === group?.label)}
+          >
+            <summary style={{ cursor: 'pointer', fontSize: '.875rem', fontWeight: 600, color: 'var(--ink)' }}>
+              {heading} <span className="text-slate-500">({list.length})</span>
+            </summary>
+            <div className="ps-choices mt-3">
               {list.map((g) => (
                 <button
                   key={g.label}
@@ -734,7 +755,7 @@ function Give({
                 </button>
               ))}
             </div>
-          </div>
+          </details>
         ))}
 
         <h3 className="ps-head font-bold text-lg mt-8">2 · What</h3>
