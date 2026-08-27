@@ -287,6 +287,8 @@ model School {
   alumniClaims           AlumniClaim[]
   giftItems              GiftItem[]
   giftPledges            GiftPledge[]
+  giftAttachments   GiftAttachment[]
+  giftEvents        GiftEvent[]
   giftReceipts           GiftReceipt[]
   giftDistributions      GiftDistribution[]
   guestSessions          GuestSession[]
@@ -2227,9 +2229,32 @@ enum GiftStatus {
   /// School suggested a different gift; waiting on the donor.
   COUNTERED
   CANCELLED
+  /// SUPPLY only. Somebody — the donor or the office — has asked for the goods
+  /// to be collected. The address lives on the pledge.
+  PICKUP_REQUESTED
+  /// SUPPLY only. In transit, with a courier and a tracking reference if one
+  /// exists. A hand-carried consignment goes straight to RECEIVED instead.
+  PICKED_UP
+  /// It is HERE. Both tracks converge on this: for FUND the money has landed,
+  /// for SUPPLY the school has confirmed the goods arrived. GiftReceipt rows
+  /// record how much, and a short delivery stays here until it is topped up.
   RECEIVED
+  /// FUND only. The school has bought the thing the money was given for.
+  PURCHASED
   DISTRIBUTED
   REPORTED
+}
+
+/// What a photograph or document attached to a pledge IS. The kind decides
+/// where it may be shown, so it is a column rather than a caption convention.
+enum GiftAttachmentKind {
+  /// The school's purchase invoice, for a gift that was funded.
+  BILL
+  /// The consignment as it arrived — a count the donor can see was honoured.
+  CONSIGNMENT
+  /// The handover itself. May contain children, which is why it is donor-and-
+  /// office only unless somebody deliberately publishes it.
+  DISTRIBUTION
 }
 
 enum GiftDedication {
@@ -2452,6 +2477,35 @@ model GiftPledge {
   amountMinor Int?
   currency    String @default("INR")
 
+  /// What the donor typed as a per-unit price, for a gift they are FUNDING.
+  /// Null for SUPPLY, always — an in-kind gift carries no rupee valuation, and
+  /// that is the rule that keeps donated goods out of the fee ledger. A donor
+  /// entering 0 is telling us they are sending the goods themselves.
+  unitPriceMinor Int?
+
+  // ── Collection, for a gift the donor is sending ────────────────────────────
+  /// Where the goods are. Either side may fill this in: the donor when they
+  /// pledge, the office when they ring to arrange it.
+  pickupAddress     String?
+  pickupContact     String?
+  pickupPhone       String?
+  pickupNote        String?
+  pickupRequestedAt DateTime?
+  /// Courier and consignment reference. Both optional and independent of each
+  /// other: plenty of gifts arrive in somebody's car boot.
+  courier     String?
+  trackingRef String?
+  pickedUpAt  DateTime?
+  /// FUND only — when the school bought the thing.
+  purchasedAt DateTime?
+
+  /// The school's note back to the donor. Not decoration: for most donors this
+  /// is the only thing they ever receive in return, and a gift that disappears
+  /// into a school without a word is a gift nobody repeats.
+  thankYouNote     String?
+  thankYouAt       DateTime?
+  thankYouByUserId String?   @db.Uuid
+
   dedicationKind GiftDedication @default(NONE)
   dedicationText String?
   visibility     GiftVisibility @default(ALUMNI)
@@ -2472,6 +2526,8 @@ model GiftPledge {
   giftItem      GiftItem?          @relation(fields: [giftItemId], references: [id], onDelete: SetNull)
   receipts      GiftReceipt[]
   distributions GiftDistribution[]
+  attachments   GiftAttachment[]
+  events        GiftEvent[]
 
   @@index([schoolId, status])
   @@index([schoolId, createdAt])
@@ -2500,6 +2556,66 @@ model GiftReceipt {
 
 /// The handing out. `absentQty` exists because the school already knows the 38
 /// children, so "two absent, collected Monday" is a fact and not an estimate.
+///
+/// A photograph or document hung on a pledge.
+///
+/// Stored the way MediaAsset is (a storage key plus a URL) rather than pointing
+/// at one: a distribution photograph is not site content, must never appear in
+/// the school's media library where it could be dropped onto a public page by
+/// accident, and is deleted with the pledge.
+model GiftAttachment {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  pledgeId String @db.Uuid
+
+  kind       GiftAttachmentKind
+  storageKey String
+  url        String
+  caption    String?
+  byUserId   String?  @db.Uuid
+  createdAt  DateTime @default(now())
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledge GiftPledge @relation(fields: [pledgeId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, pledgeId])
+  @@index([pledgeId, kind])
+}
+
+///
+/// One line of a pledge's history.
+///
+/// The pledge carries its CURRENT status; this carries how it got there, and it
+/// is what the donor actually reads. A status field alone answers "where is it"
+/// and never "what happened" — and for somebody who handed over money months
+/// ago, the second question is the whole point.
+///
+/// Append-only. Nothing edits or deletes a row here; a correction is another
+/// row, because a history that can be rewritten is not a history.
+model GiftEvent {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  pledgeId String @db.Uuid
+
+  status GiftStatus
+  note   String?
+
+  /// Who moved it. At most ONE of these is set — the office through a staff
+  /// login, or the donor from their own portal. Neither set means the system
+  /// did it. Not a relation on either side: deleting a staff account must not
+  /// erase the record of what they did.
+  byUserId   String? @db.Uuid
+  byAlumniId String? @db.Uuid
+
+  at DateTime @default(now())
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledge GiftPledge @relation(fields: [pledgeId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, pledgeId])
+  @@index([pledgeId, at])
+}
+
 model GiftDistribution {
   id             String   @id @default(uuid()) @db.Uuid
   schoolId       String   @db.Uuid

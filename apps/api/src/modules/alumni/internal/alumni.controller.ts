@@ -1,14 +1,21 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Post,
   Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+
+/** Off a phone, in a school office, on a patchy connection. */
+const MAX_GIFT_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
@@ -21,20 +28,25 @@ import { AlumniAuthService } from './alumni-auth.service';
 import { GiftsService } from './gifts.service';
 import { GuestSessionsService } from './guest-sessions.service';
 import {
-  CreatePledgeDto,
+  AttachGiftDto,
   CreateAlumniAccountDto,
+  CreatePledgeDto,
   DecideClaimDto,
   DecidePledgeDto,
   DecideSessionDto,
   DistributeGiftDto,
   GraduateBatchDto,
   ListAlumniQueryDto,
+  MarkPickedUpDto,
+  PurchaseGiftDto,
   ReceiveGiftDto,
+  RequestPickupDto,
   RequestSessionDto,
   SaveBatchStrengthDto,
   SaveGiftItemDto,
   SetTrustedDto,
   SlotsQueryDto,
+  ThankYouDto,
 } from './alumni.dto';
 
 /**
@@ -221,6 +233,71 @@ export class AlumniController {
     @CurrentUser() u: SchoolJwtPayload,
   ) {
     return this.gifts.distribute(this.sid(), id, u.sub, dto);
+  }
+
+  /** Either the office or the donor may arrange collection; this is the
+   *  office's door, and it passes no alumniId because its guard is the tenant
+   *  role, not ownership of the pledge. */
+  @Post('pledges/:id/request-pickup')
+  requestPickup(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RequestPickupDto,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.gifts.requestPickup(this.sid(), id, { userId: u.sub }, dto);
+  }
+
+  @Post('pledges/:id/picked-up')
+  markPickedUp(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MarkPickedUpDto,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.gifts.markPickedUp(this.sid(), id, { userId: u.sub }, dto);
+  }
+
+  @Post('pledges/:id/purchase')
+  purchase(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PurchaseGiftDto,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.gifts.purchase(this.sid(), id, u.sub, dto);
+  }
+
+  /** The school's word back. Not a status, so it has its own route and can be
+   *  written or corrected at any point once the gift is real. */
+  @Post('pledges/:id/thank-you')
+  thankYou(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ThankYouDto,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.gifts.thankYou(this.sid(), id, u.sub, dto);
+  }
+
+  /**
+   * Bills and photographs. Capped at 8 MB because these come off a phone in a
+   * school office on a patchy connection, and a 40 MB upload that fails twice
+   * is a feature nobody uses.
+   */
+  @Post('pledges/:id/attachments')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_GIFT_ATTACHMENT_BYTES } }))
+  attach(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string },
+    @Body() dto: AttachGiftDto,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.gifts.attach(this.sid(), id, u.sub, file, dto);
+  }
+
+  @Delete('pledges/:id/attachments/:attachmentId')
+  removeAttachment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('attachmentId', ParseUUIDPipe) attachmentId: string,
+  ) {
+    return this.gifts.removeAttachment(this.sid(), id, attachmentId);
   }
 
   @Post('pledges/:id/report')

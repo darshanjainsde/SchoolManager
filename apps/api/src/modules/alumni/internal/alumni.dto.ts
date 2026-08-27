@@ -109,6 +109,27 @@ export class CreatePledgeDto {
   @IsOptional() @IsString() @Length(3, 400) customRequest?: string;
 
   @IsIn(GIFT_MODES) mode!: (typeof GIFT_MODES)[number];
+
+  /**
+   * What the donor is willing to give PER CHILD, in paise.
+   *
+   * Overrides the school's indicative cost, because the list price is the
+   * school's estimate of what a thing costs and this is what the donor is
+   * actually offering — different facts. Ignored entirely for SUPPLY, where a
+   * rupee valuation is never stored; a donor entering 0 there is telling us
+   * they are sending the goods themselves, which is the sentence on the form.
+   */
+  @IsOptional() @AsInt() @IsInt() @Min(0) @Max(100_000_00) unitPriceMinor?: number;
+
+  // ── Where to collect it, for a gift the donor is sending ──────────────────
+  // Optional at pledge time: plenty of people offer first and work out the
+  // logistics on the phone afterwards, and a required address is a form they
+  // abandon. The office can fill these in later from its own screen.
+  @IsOptional() @IsString() @Length(5, 400) pickupAddress?: string;
+  @IsOptional() @IsString() @Length(2, 120) pickupContact?: string;
+  @IsOptional() @IsString() @Length(4, 30) pickupPhone?: string;
+  @IsOptional() @IsString() @Length(0, 400) pickupNote?: string;
+
   @IsOptional() @IsIn(DEDICATIONS) dedicationKind?: (typeof DEDICATIONS)[number];
   @IsOptional() @IsString() @Length(0, 240) dedicationText?: string;
   @IsOptional() @IsIn(VISIBILITIES) visibility?: (typeof VISIBILITIES)[number];
@@ -124,6 +145,36 @@ export class DecidePledgeDto {
   @IsOptional() @IsString() @Length(3, 400) reason?: string;
   /** COUNTER only: what the school would rather have. */
   @IsOptional() @IsString() @Length(3, 400) counterNote?: string;
+}
+
+/** Raised by either side; re-callable, because arrangements change. */
+export class RequestPickupDto {
+  @IsString() @Length(5, 400) pickupAddress!: string;
+  @IsOptional() @IsString() @Length(2, 120) pickupContact?: string;
+  @IsOptional() @IsString() @Length(4, 30) pickupPhone?: string;
+  @IsOptional() @IsString() @Length(0, 400) pickupNote?: string;
+}
+
+/** Courier and reference are independent and both optional — plenty of gifts
+ *  travel in somebody's car boot. The service refuses a reference with no
+ *  carrier, because that is a number nobody can look up. */
+export class MarkPickedUpDto {
+  @IsOptional() @IsString() @Length(2, 80) courier?: string;
+  @IsOptional() @IsString() @Length(2, 80) trackingRef?: string;
+}
+
+export class PurchaseGiftDto {
+  @IsOptional() @IsString() @Length(0, 400) note?: string;
+}
+
+export class ThankYouDto {
+  /** Long enough to be a sentence. A one-word thank you is worse than none. */
+  @IsString() @Length(10, 2000) note!: string;
+}
+
+export class AttachGiftDto {
+  @IsIn(['BILL', 'CONSIGNMENT', 'DISTRIBUTION']) kind!: 'BILL' | 'CONSIGNMENT' | 'DISTRIBUTION';
+  @IsOptional() @IsString() @Length(0, 200) caption?: string;
 }
 
 export class ReceiveGiftDto {
