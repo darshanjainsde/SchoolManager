@@ -496,7 +496,7 @@ function Giving({ session, onGo }: { session: string | null; onGo: (t: TabId) =>
             {sum.childrenReached} {sum.childrenReached === 1 ? 'child' : 'children'}
           </p>
           <p className="text-sm text-slate-600 mt-2">
-            have received something because of you, across{' '}
+            {sum.childrenReached === 1 ? 'has' : 'have'} received something because of you, across{' '}
             {sum.gifts} {sum.gifts === 1 ? 'gift' : 'gifts'}.
             {sum.inFlight > 0 && <> {sum.inFlight} still on the way.</>}
           </p>
@@ -558,10 +558,13 @@ function Giving({ session, onGo }: { session: string | null; onGo: (t: TabId) =>
                 </div>
               )}
 
-              {r.short > 0 && (
+              {/* Only once the school is actually holding some of it. Before
+                  that, "0 of 38 have arrived" reads as a problem rather than as
+                  "it has not been sent yet", which is what it means. */}
+              {r.status === 'RECEIVED' && r.short > 0 && (
                 <p className="text-sm mt-3" style={{ color: '#8a5a00' }}>
-                  {r.received} of {r.quantity} have arrived. It stays open until every child in the
-                  group has one.
+                  {r.received} of {r.quantity} {r.received === 1 ? 'has' : 'have'} arrived. It stays
+                  open until every child in the group has one.
                 </p>
               )}
               {r.declineReason && (
