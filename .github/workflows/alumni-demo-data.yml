@@ -68,6 +68,22 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile=false
 
+      # The seed writes rows carrying enum values and columns that only exist
+      # after a migration. Both this workflow and db-migrate trigger on the same
+      # push to staging, and they START AT THE SAME MOMENT — so "the migration
+      # will have run by now" is a race, not a guarantee. It happened to WIN the
+      # first time, which is the worst way for a race to behave, because it
+      # looks like a design.
+      #
+      # `migrate deploy` is a no-op against a database that is already current,
+      # so this costs nothing and makes the seed responsible for its own
+      # preconditions rather than for its luck.
+      - name: Make sure the schema is there first
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: pnpm --filter @skoolos/db exec prisma migrate deploy
+
       # Always, even on the real run: it prints which database was actually
       # reached and resolves the school, so a wrong target or a missing school
       # fails HERE, before anything is written.
