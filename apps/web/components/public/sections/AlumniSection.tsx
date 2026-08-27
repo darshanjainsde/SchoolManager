@@ -38,7 +38,7 @@ interface Me {
 }
 interface GiftGroup { scopeKind: string; gradeId?: string; classSectionId?: string; label: string; headcount: number }
 interface GiftGroups { school: GiftGroup; grades: GiftGroup[]; sections: GiftGroup[] }
-interface GiftItem { id: string; name: string; indicativeCostMinor: number; currency: string }
+interface GiftItem { id: string; name: string; unit: string; indicativeCostMinor: number; currency: string }
 
 type Tab = 'batches' | 'directory' | 'give' | 'giving' | 'profile';
 type TabId = Tab;
@@ -703,40 +703,67 @@ function Give({
         <p className="text-sm text-slate-500 mt-1">
           Live from the register. Counts only — never a child&rsquo;s name, photograph or fee status.
         </p>
-        <div className="ps-seg mt-5">
-          {all.map((g) => (
-            <button
-              key={g.label}
-              type="button"
-              className="ps-seg-btn"
-              aria-pressed={group?.label === g.label}
-              onClick={() => setGroup(group?.label === g.label ? null : g)}
-            >
-              {g.label}<span className="ml-2 opacity-70 tabular-nums">{g.headcount}</span>
-            </button>
-          ))}
-        </div>
+        {/* A real school has ten grades and twenty sections. Forty chips on one
+            track is not a control, so the groups are split by kind and only the
+            one being used is expanded. */}
+        {([
+          ['The whole school', groups ? [groups.school] : []],
+          ['By year group', groups?.grades ?? []],
+          ['One class', groups?.sections ?? []],
+        ] as const).map(([heading, list]) => list.length > 0 && (
+          <div key={heading} className="mt-5">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+              {heading}
+            </div>
+            <div className="ps-choices">
+              {list.map((g) => (
+                <button
+                  key={g.label}
+                  type="button"
+                  className="ps-choice"
+                  aria-pressed={group?.label === g.label}
+                  onClick={() => setGroup(group?.label === g.label ? null : g)}
+                >
+                  <span className="ps-choice-mark" aria-hidden="true" />
+                  <span>
+                    <span className="ps-choice-name">{g.label}</span>
+                    <span className="ps-choice-meta tabular-nums">
+                      {g.headcount} {g.headcount === 1 ? 'child' : 'children'}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
 
         <h3 className="ps-head font-bold text-lg mt-8">2 · What</h3>
         <p className="text-sm text-slate-500 mt-1">
           Written by the school. Anything off this list becomes a proposal the office can redirect.
         </p>
-        <div className="ps-seg mt-5">
-          {items.map((i) => (
-            <button
-              key={i.id}
-              type="button"
-              className="ps-seg-btn"
-              aria-pressed={itemId === i.id}
-              onClick={() => setItemId(itemId === i.id ? '' : i.id)}
-            >
-              {i.name}<span className="ml-2 opacity-70">{rupees(i.indicativeCostMinor)}</span>
-            </button>
-          ))}
-          {items.length === 0 && (
-            <p className="text-sm text-slate-500">The school has not published a wish list yet.</p>
-          )}
-        </div>
+        {items.length === 0 ? (
+          <p className="text-sm text-slate-500 mt-5">The school has not published a wish list yet.</p>
+        ) : (
+          <div className="ps-choices mt-5">
+            {items.map((i) => (
+              <button
+                key={i.id}
+                type="button"
+                className="ps-choice"
+                aria-pressed={itemId === i.id}
+                onClick={() => { setItemId(itemId === i.id ? '' : i.id); if (itemId !== i.id) setOwnItem(''); }}
+              >
+                <span className="ps-choice-mark" aria-hidden="true" />
+                <span>
+                  <span className="ps-choice-name">{i.name}</span>
+                  <span className="ps-choice-meta">
+                    about {rupees(i.indicativeCostMinor)} {i.unit}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* The list is a suggestion, not a menu. Plenty of people want to give
             the thing they happen to have, and a form that only accepts four

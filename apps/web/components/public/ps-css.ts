@@ -267,6 +267,47 @@ export const PS_CSS = `
   .ps-cta-ink { background: var(--ink); color: #fff; }
   .ps-cta-ink:hover { background: color-mix(in srgb, var(--ink) 86%, #fff); }
 
+  /* ── CHOICE CARDS ────────────────────────────────────────────────────────
+     For picking a THING, as opposed to switching a view.
+
+     The gift list was first built as a segmented control, and it was the wrong
+     component: a track is for a handful of short, mutually exclusive labels in
+     one row. Four product names with prices wrapped it onto two lines and the
+     result read as a blob — a pill inside a pill, prices in a tint so light
+     they looked disabled.
+
+     A thing you are choosing to give wants its own surface, room for a price,
+     and a mark that says "this one". */
+  .ps-choices { display: grid; gap: .6rem;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .ps-choice { display: flex; align-items: flex-start; gap: .6rem; width: 100%;
+    text-align: left; padding: .8rem .9rem;
+    background: #fff; border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+    border-radius: var(--ps-radius-sm); cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
+  .ps-choice:hover { border-color: color-mix(in srgb, var(--ps1) 45%, transparent); }
+  .ps-choice[aria-pressed="true"] { border-color: var(--ps1);
+    background: color-mix(in srgb, var(--ps1) 6%, #fff);
+    box-shadow: 0 0 0 1px var(--ps1) inset; }
+  /* The mark. A ring that fills, rather than an icon per item — the items are
+     school-authored free text ("Library book fund", "Sports kit"), so any
+     icon set would be guesswork that breaks on the fifth entry. */
+  .ps-choice-mark { flex: none; width: 18px; height: 18px; margin-top: 1px;
+    border-radius: 999px; border: 2px solid color-mix(in srgb, var(--ink) 25%, transparent);
+    display: grid; place-items: center; transition: border-color .15s ease, background .15s ease; }
+  .ps-choice[aria-pressed="true"] .ps-choice-mark { border-color: var(--ps1); background: var(--ps1); }
+  .ps-choice-mark::after { content: ""; width: 7px; height: 7px; border-radius: 999px;
+    background: var(--ps1-on, #fff); transform: scale(0); transition: transform .15s ease; }
+  .ps-choice[aria-pressed="true"] .ps-choice-mark::after { transform: scale(1); }
+  /* display:block, or the name and the price render as one run-on string —
+     both are spans, and an inline span does not stack. */
+  .ps-choice-name { display: block; font-weight: 620; font-size: .9rem; line-height: 1.3; color: var(--ink); }
+  .ps-choice-meta { display: block; font-size: .8rem; margin-top: .15rem;
+    color: color-mix(in srgb, var(--ink) 62%, transparent); }
+  .ps-shape-editorial .ps-choice, .ps-shape-crisp .ps-choice { box-shadow: none; }
+  .ps-shape-editorial .ps-choice[aria-pressed="true"],
+  .ps-shape-crisp .ps-choice[aria-pressed="true"] { box-shadow: none; border-width: 2px; }
+
   /* ── SEGMENTED CONTROL ───────────────────────────────────────────────────
      Tabs as a single object on one track, rather than loose lozenges.
 

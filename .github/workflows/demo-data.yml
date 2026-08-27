@@ -1,8 +1,13 @@
-name: alumni-demo-data
+name: demo-data
 
-# Loads demo data for the Homecoming (alumni) wing into ONE school on staging,
-# so the module can be tested against something that looks like a real school
-# rather than an empty page.
+# Loads demo data into ONE school on staging, so the product can be tested
+# against something that looks like a real school rather than an empty page.
+#
+# Two scripts, in order. The whole-school one builds the frame — grades, roll,
+# timetable, attendance, marks, library, notices — and the alumni one layers its
+# wing on top and needs the roll to exist first, because a gift's quantity IS
+# the live headcount. Beacon had ONE active student, which made every gifting
+# screen read as broken while being perfectly correct.
 #
 # WHY A WORKFLOW: the same reason db-migrate is one — the credentials live in a
 # GitHub Environment and never pass through a chat window or a laptop. It also
@@ -23,7 +28,15 @@ on:
         description: Which school slug to load the demo data into
         required: true
         type: string
-        default: beacon
+        default: raffles
+      whole_school:
+        description: >-
+          Also build the school itself — grades, roll, timetable, attendance,
+          marks, library, notices. Creates the school and its hostname if they
+          do not exist. Leave off to refresh only the alumni wing.
+        required: false
+        type: boolean
+        default: true
       dry_run:
         description: >-
           Change NOTHING. Resolve the school, print which database it actually
@@ -42,10 +55,11 @@ on:
     branches: [staging]
     paths:
       - 'packages/db/prisma/seed-alumni-demo.ts'
+      - 'packages/db/prisma/seed-school-demo.ts'
       - '.github/workflows/alumni-demo-data.yml'
 
 concurrency:
-  group: alumni-demo-data-staging
+  group: demo-data-staging
   cancel-in-progress: false
 
 jobs:
@@ -94,6 +108,18 @@ jobs:
           DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school || 'beacon' }}
           DEMO_DRY_RUN: 'true'
         run: pnpm --filter @skoolos/db exec tsx prisma/seed-alumni-demo.ts
+
+      # The frame first: the alumni wing prices its gifts against the live
+      # headcount, so seeding it into an empty school produces pledges for one
+      # child and screens that look broken.
+      - name: Build the school
+        if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.whole_school != 'false' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school || 'raffles' }}
+          DEMO_DRY_RUN: 'false'
+        run: pnpm --filter @skoolos/db exec tsx prisma/seed-school-demo.ts
 
       - name: Load the alumni demo data
         if: ${{ github.event.inputs.dry_run != 'true' }}
