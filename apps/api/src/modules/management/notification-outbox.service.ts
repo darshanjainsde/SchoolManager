@@ -39,6 +39,17 @@ const DRAIN_BATCH_CAP = 200;
 const MAX_ATTEMPTS = 5;
 
 /**
+ * How long a claim is honoured before another drain may take the row.
+ *
+ * A drain that crashes between claiming and finishing leaves `claimedAt` set
+ * forever, so without a ceiling the row would never be retried. Five minutes is
+ * comfortably longer than a full DRAIN_BATCH_CAP run (sequential push sends,
+ * bounded by the function's maxDuration of 60s) and short enough that a genuine
+ * crash costs one cron cycle, not a day.
+ */
+const CLAIM_TTL_MS = 5 * 60_000;
+
+/**
  * Delivered rows are kept this long, then removed.
  *
  * This is a queue table, and nothing had ever deleted from it: every push ever
@@ -165,6 +176,16 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
  * silently losing the notification forever, which a naive "mark sent before
  * sending" ordering would risk instead).
  */
+/** Exactly the columns the claim statement returns. */
+interface OutboxRow {
+  id: string;
+  schoolId: string;
+  kind: string;
+  payload: unknown;
+  classSectionId: string | null;
+  targetUserId: string | null;
+}
+
 @Injectable()
 export class NotificationOutboxService {
   private readonly logger = new Logger(NotificationOutboxService.name);
@@ -174,11 +195,27 @@ export class NotificationOutboxService {
   async drain(): Promise<NotificationOutboxDrainResult> {
     const db = getPlatformPrisma();
 
-    const rows = await db.notificationOutbox.findMany({
-      where: { sentAt: null, attempts: { lt: MAX_ATTEMPTS } },
-      orderBy: [{ createdAt: 'asc' }],
-      take: DRAIN_BATCH_CAP,
-    });
+    // Claim the batch in ONE statement. `FOR UPDATE SKIP LOCKED` makes a second
+    // concurrent drain step over rows this one already holds rather than block
+    // on them, and stamping `claimedAt` in the same statement means the claim
+    // survives after the row lock is released at commit.
+    //
+    // Written as raw SQL because Prisma has no way to express SKIP LOCKED. The
+    // only interpolated values are bound parameters.
+    const staleBefore = new Date(Date.now() - CLAIM_TTL_MS);
+    const rows = await db.$queryRaw<OutboxRow[]>`
+      UPDATE "NotificationOutbox" SET "claimedAt" = now()
+      WHERE id IN (
+        SELECT id FROM "NotificationOutbox"
+        WHERE "sentAt" IS NULL
+          AND attempts < ${MAX_ATTEMPTS}
+          AND ("claimedAt" IS NULL OR "claimedAt" < ${staleBefore})
+        ORDER BY "createdAt" ASC
+        LIMIT ${DRAIN_BATCH_CAP}
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id, "schoolId", kind, payload, "classSectionId", "targetUserId"
+    `;
 
     if (rows.length === DRAIN_BATCH_CAP) {
       this.logger.warn(
@@ -222,7 +259,12 @@ export class NotificationOutboxService {
         try {
           await db.notificationOutbox.update({
             where: { id: row.id },
-            data: { attempts: { increment: 1 }, lastError: errorMessage.slice(0, 500) },
+            // claimedAt back to null: this row is released for the next run.
+            data: {
+              attempts: { increment: 1 },
+              lastError: errorMessage.slice(0, 500),
+              claimedAt: null,
+            },
           });
         } catch (updateError) {
           // Even the failure-bookkeeping write failed — log and move on; the

@@ -1179,6 +1179,11 @@ model NotificationOutbox {
   sentAt         DateTime?
   /// Incremented on every failed send attempt; the drain excludes rows at
   /// or above its MAX_ATTEMPTS cap rather than retrying forever.
+  /// Stamped when a drain takes ownership of the row, so two concurrent drains
+  /// cannot both send it. Cleared on failure so the row is retried; a claim
+  /// older than CLAIM_TTL is treated as abandoned (the drain crashed mid-send)
+  /// and may be reclaimed.
+  claimedAt      DateTime?
   attempts       Int           @default(0)
   lastError      String?
   school         School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -1188,6 +1193,7 @@ model NotificationOutbox {
   @@index([schoolId, sentAt])
   @@index([schoolId, classSectionId])
   @@index([sentAt, createdAt])
+  @@index([sentAt, claimedAt, createdAt])
 }
 
 /// A teacher-posted assignment for one class section (T21, Portal Parity R3
