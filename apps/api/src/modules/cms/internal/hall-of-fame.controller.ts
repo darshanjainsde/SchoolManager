@@ -1,11 +1,19 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Put, UseGuards } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { Roles } from '../../../common/auth/roles.decorator';
 import { TenantContextService } from '../../tenancy';
 import { HallOfFameService } from './hall-of-fame.service';
 import { SetHallOfFameDto } from './cms.dto';
 
 @Controller('site/hall-of-fame')
-@UseGuards(SchoolJwtGuard)
+// SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
+// all. Without RolesGuard beside it every route here was reachable with a
+// STUDENT or PARENT token — and the enquiries ones hand back other families'
+// names and phone numbers. Every caller lives under /app, which is already
+// SCHOOL_ADMIN-only, so this locks out nobody who was legitimately using it.
+@UseGuards(SchoolJwtGuard, RolesGuard)
+@Roles('SCHOOL_ADMIN')
 export class HallOfFameController {
   constructor(
     private readonly hof: HallOfFameService,
