@@ -32,6 +32,18 @@ on:
         type: boolean
         default: false
 
+  # workflow_dispatch alone is not enough: GitHub only registers that trigger
+  # for workflows present on the DEFAULT branch, and this one deliberately
+  # never goes to main. So staging also runs it on push, the same way
+  # db-migrate auto-applies migrations there — and for the same reason, that
+  # the environment which exists to be tested should not need a person to
+  # remember to refresh it.
+  push:
+    branches: [staging]
+    paths:
+      - 'packages/db/prisma/seed-alumni-demo.ts'
+      - '.github/workflows/alumni-demo-data.yml'
+
 concurrency:
   group: alumni-demo-data-staging
   cancel-in-progress: false
@@ -56,7 +68,19 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile=false
 
+      # Always, even on the real run: it prints which database was actually
+      # reached and resolves the school, so a wrong target or a missing school
+      # fails HERE, before anything is written.
+      - name: Dry run first — where does this actually land?
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school || 'beacon' }}
+          DEMO_DRY_RUN: 'true'
+        run: pnpm --filter @skoolos/db exec tsx prisma/seed-alumni-demo.ts
+
       - name: Load the alumni demo data
+        if: ${{ github.event.inputs.dry_run != 'true' }}
         env:
           # The script's clients read DATABASE_URL_APP / DATABASE_URL_PLATFORM
           # FIRST and fall back to DATABASE_URL. Setting only DATABASE_URL is
@@ -66,8 +90,8 @@ jobs:
           # failure this comment exists to prevent.
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
-          DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school }}
-          DEMO_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school || 'beacon' }}
+          DEMO_DRY_RUN: 'false'
         run: pnpm --filter @skoolos/db exec tsx prisma/seed-alumni-demo.ts
 
       - name: What to do next
