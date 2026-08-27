@@ -286,3 +286,46 @@ describe('privacy defaults fail closed', () => {
     expect(d.name).toBe('ALUMNI');
   });
 });
+
+/**
+ * The drift guard for the four unions `homecoming-rules.ts` declares locally.
+ *
+ * That file cannot import the generated client — doing so broke the Vercel
+ * build three times, because a cold checkout bundles before the client is
+ * generated where apps/api resolves it. A spec is never bundled, so it can
+ * import freely and hold the two in sync. Without this, adding a GiftStatus to
+ * schema.prisma would leave the state machine silently unable to name it.
+ */
+describe('the local unions match the Prisma enums exactly', () => {
+  // Required inside the describe: importing at module scope would put a
+  // '@prisma/client' import in the same file as the rules under test, which is
+  // the thing being avoided — and a require here runs only when jest does.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const prisma = require('@prisma/client') as Record<string, Record<string, string>>;
+
+  const LOCAL = {
+    GiftMode: ['FUND', 'SUPPLY'],
+    GiftScope: ['SCHOOL', 'GRADE', 'SECTION'],
+    GiftStatus: [
+      'PROPOSED', 'ACCEPTED', 'DECLINED', 'COUNTERED',
+      'CANCELLED', 'RECEIVED', 'DISTRIBUTED', 'REPORTED',
+    ],
+    GuestSessionStatus: [
+      'REQUESTED', 'COUNTERED', 'SCHEDULED', 'DECLINED', 'CANCELLED', 'DELIVERED',
+    ],
+  };
+
+  it.each(Object.keys(LOCAL))('%s has the same members in both places', (name) => {
+    const fromPrisma = Object.keys(prisma[name] ?? {}).sort();
+    expect(fromPrisma.length).toBeGreaterThan(0);
+    expect(fromPrisma).toEqual([...LOCAL[name as keyof typeof LOCAL]].sort());
+  });
+
+  it('the gift state machine names every GiftStatus Prisma knows', () => {
+    // A status missing from GIFT_TRANSITIONS would fall through to "refused"
+    // forever, which looks like a rule rather than an omission.
+    for (const status of Object.keys(prisma.GiftStatus)) {
+      expect(nextGiftStatus(status as never, 'CANCEL')).not.toBeUndefined();
+    }
+  });
+});

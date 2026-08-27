@@ -14,7 +14,34 @@
  *      strictly separate) what the office is additionally allowed to see.
  */
 
-import type { GiftMode, GiftScope, GiftStatus, GuestSessionStatus } from '@prisma/client';
+/**
+ * These four unions are declared here rather than imported from
+ * '@prisma/client', and that is deliberate on two counts.
+ *
+ * The honest one: this file's whole point is that it has no database in it, and
+ * a type import from the generated client is a database dependency wearing a
+ * type's clothes. Every other file in apps/api goes through '@skoolos/db' or
+ * '@skoolos/types'; this one had become the single exception.
+ *
+ * The expensive one: it broke the Vercel build three times. `tsc` and the local
+ * `ncc` bundle both passed, because a generated client was already sitting in
+ * node_modules from an earlier `prisma generate`. On a clean CI checkout the
+ * bundle runs before the generated client is where apps/api resolves it, and
+ * every one of these members is missing. A local green bundle is not evidence
+ * that a cold one builds — LIBRARY-TRAPS #9, "a gate covers less than you
+ * assume", in its most literal form.
+ *
+ * `homecoming-rules.spec.ts` asserts these stay identical to the Prisma enums,
+ * so drift is caught by a test rather than by a caller. A spec is never
+ * bundled, so it may import the client freely.
+ */
+export type GiftMode = 'FUND' | 'SUPPLY';
+export type GiftScope = 'SCHOOL' | 'GRADE' | 'SECTION';
+export type GiftStatus =
+  | 'PROPOSED' | 'ACCEPTED' | 'DECLINED' | 'COUNTERED'
+  | 'CANCELLED' | 'RECEIVED' | 'DISTRIBUTED' | 'REPORTED';
+export type GuestSessionStatus =
+  | 'REQUESTED' | 'COUNTERED' | 'SCHEDULED' | 'DECLINED' | 'CANCELLED' | 'DELIVERED';
 
 // ─── Gifts ───────────────────────────────────────────────────────────────────
 
