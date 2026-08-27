@@ -274,6 +274,15 @@ model School {
   assignmentsSeen        AssignmentSeen[]
   rooms                  Room[]
   seatingPlans           SeatingPlan[]
+  alumni                 Alumni[]
+  alumniBatches          AlumniBatch[]
+  alumniClaims           AlumniClaim[]
+  giftItems              GiftItem[]
+  giftPledges            GiftPledge[]
+  giftReceipts           GiftReceipt[]
+  giftDistributions      GiftDistribution[]
+  guestSessions          GuestSession[]
+  alumniAccessTokens     AlumniAccessToken[]
 }
 
 model Domain {
@@ -2151,4 +2160,445 @@ model LibraryHallMark {
 
   @@unique([visitId, studentId])
   @@index([schoolId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Homecoming — the alumni wing.
+//
+// The one fact the whole module turns on: a school does not have an alumni
+// database, it has a graduating class every March. `Alumni` is therefore
+// written FROM `Student` at year end (studentId set, zero typing) and only
+// secondarily from a self-registration that a human verifies against the old
+// register (studentId null).
+//
+// Alumni are adults and students are children, so nothing here ever exposes a
+// child to a donor or a guest speaker: `GiftPledge` addresses a GROUP and
+// stores the headcount, never a student; `GuestSession` addresses a class and
+// requires a named accompanying teacher before it can be scheduled.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum AlumniStatus {
+  /// Created by "graduate this batch". Real, but has never signed in.
+  SCHOOL_ADDED
+  /// A claim link has been sent.
+  INVITED
+  /// Self-registered from the public site. Visible to the office and NOBODY else.
+  PENDING
+  /// A human matched them against the register, or a claim link proved it.
+  VERIFIED
+  DECLINED
+  /// The alumnus's own choice, and instant.
+  HIDDEN
+}
+
+enum ClaimStatus {
+  PENDING
+  VERIFIED
+  DECLINED
+}
+
+enum GiftScope {
+  SCHOOL
+  GRADE
+  SECTION
+}
+
+enum GiftMode {
+  /// The donor pays; the school buys. Money runs on the school's merchant rail.
+  FUND
+  /// The donor sends the goods. No money moves here and NO rupee valuation is
+  /// ever stored — an in-kind gift is a register of things, counted in things.
+  SUPPLY
+}
+
+enum GiftStatus {
+  PROPOSED
+  ACCEPTED
+  DECLINED
+  /// School suggested a different gift; waiting on the donor.
+  COUNTERED
+  CANCELLED
+  RECEIVED
+  DISTRIBUTED
+  REPORTED
+}
+
+enum GiftDedication {
+  NONE
+  IN_MEMORY_OF
+  IN_HONOUR_OF
+}
+
+enum GiftVisibility {
+  /// Name and gift on the school website. The AMOUNT is never public.
+  PUBLIC
+  ALUMNI
+  /// The office sees the name for its books; nobody else does.
+  ANONYMOUS
+}
+
+enum GuestSessionMode {
+  IN_PERSON
+  ONLINE
+}
+
+enum GuestSessionStatus {
+  REQUESTED
+  /// The school suggested another time. Both slots are held until the host answers.
+  COUNTERED
+  /// Terminal-happy: written into the timetable.
+  SCHEDULED
+  DECLINED
+  CANCELLED
+  DELIVERED
+}
+
+/// A former student. One row per person per school.
+model Alumni {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+
+  /// Set when the row came from "graduate this batch"; null for a recovered
+  /// pre-Sckools alumnus. NOT a foreign key with cascade delete — deleting a
+  /// student record must never silently erase the alumni record built from it.
+  studentId String? @db.Uuid
+  /// Set once they claim a login. Null is the normal state.
+  userId    String? @db.Uuid
+
+  admissionNo String?
+  firstName   String
+  lastName    String
+  /// The leaving year. An Int, because every screen in this module groups by it.
+  batchYear   Int
+  lastClass   String?
+
+  email       String?
+  phone       String?
+  city        String?
+  country     String?
+  profession  String?
+  employer    String?
+  collegeName String?
+  photoAssetId String? @db.Uuid
+
+  status AlumniStatus @default(SCHOOL_ADDED)
+  /// A SECOND decision, separate from `status`. Being a real alumnus gets you
+  /// the directory; it does not get you a room full of fourteen-year-olds.
+  /// Revoking it cancels their future sessions — see AlumniService.setTrusted.
+  trustedForStudents Boolean @default(false)
+  isBatchCaptain     Boolean @default(false)
+  isMentor           Boolean @default(false)
+  isDeceased         Boolean @default(false)
+
+  /// { field: PUBLIC | ALUMNI | BATCH | OFFICE | HIDDEN }. Absent key = HIDDEN,
+  /// so a field added later is closed until somebody opens it.
+  privacy Json?
+
+  verifiedByUserId String?   @db.Uuid
+  verifiedAt       DateTime?
+  declineReason    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  school        School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  giftPledges   GiftPledge[]
+  guestSessions GuestSession[]
+  accessTokens  AlumniAccessToken[]
+
+  /// One alumni row per student. Re-running "graduate this batch" is therefore
+  /// idempotent rather than duplicating a whole year group.
+  @@unique([schoolId, studentId])
+  @@index([schoolId, batchYear])
+  @@index([schoolId, status])
+  @@index([schoolId, trustedForStudents])
+}
+
+/// The denominator Roll Call needs. The SIS knows how many alumni it created;
+/// only the bound register knows how many were in the room in 1998.
+model AlumniBatch {
+  id               String   @id @default(uuid()) @db.Uuid
+  schoolId         String   @db.Uuid
+  batchYear        Int
+  /// From the old register, typed in once. 0 means "not counted yet".
+  registerStrength Int      @default(0)
+  note             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, batchYear])
+  @@index([schoolId])
+}
+
+/// A public self-registration awaiting a human. The JobApplication shape: an
+/// application row plus a review queue, deliberately NOT an Alumni row — an
+/// unverified stranger must not exist in the same table the directory reads.
+model AlumniClaim {
+  id                String  @id @default(uuid()) @db.Uuid
+  schoolId          String  @db.Uuid
+  firstName         String
+  lastName          String
+  batchYear         Int
+  claimedAdmissionNo String?
+  email             String?
+  phone             String?
+  /// Free text: a class teacher's name, two classmates, a link to a marksheet.
+  /// A LINK, never a file — there is no public upload endpoint in this product.
+  proof             String
+
+  status ClaimStatus @default(PENDING)
+  /// Set when the office merges the claim into a row that already exists.
+  matchedAlumniId   String? @db.Uuid
+  /// A vouch does NOT verify anyone. It moves them to the top of the queue with
+  /// a name attached to the recommendation.
+  vouchedByAlumniId String? @db.Uuid
+
+  reviewedByUserId String?   @db.Uuid
+  reviewedAt       DateTime?
+  declineReason    String?
+  createdAt        DateTime  @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@index([schoolId, batchYear])
+}
+
+/// The school's own wish list. Written by the school, never by us and never by
+/// a donor — the worst outcome this module can produce is three hundred
+/// unwanted T-shirts nobody can refuse politely.
+model GiftItem {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  name     String
+  /// "per child", "per classroom".
+  unit     String @default("per child")
+  /// Minor units — paise. NEVER a float: rounding error in money is the bug you
+  /// find in reconciliation months later and never fully clean up.
+  indicativeCostMinor Int    @default(0)
+  currency            String @default("INR")
+  /// Shoes and sweaters need a size tally; notebooks do not.
+  sizesTracked Boolean @default(false)
+  isActive     Boolean @default(true)
+  order        Int     @default(0)
+  createdAt    DateTime @default(now())
+
+  school  School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledges GiftPledge[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId, isActive])
+}
+
+/// One gift, from proposal to report. A gift is not a payment — it is a small
+/// supply chain, and every state carries a date.
+model GiftPledge {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+
+  /// Signed in: the alumnus. Signed out: a parent or a local donor, by name.
+  /// Exactly one of alumniId or donorName is expected; the service enforces it.
+  alumniId   String? @db.Uuid
+  donorName  String?
+  donorEmail String?
+
+  scopeKind      GiftScope
+  gradeId        String? @db.Uuid
+  classSectionId String? @db.Uuid
+
+  /// FROZEN at pledge time, exactly like EventRegistration.amountMinor. A pledge
+  /// for 38 sweaters must not silently become 41 because three children joined
+  /// in July — the donor agreed to a number and that number is the agreement.
+  headcountAtPledge Int
+
+  giftItemId    String? @db.Uuid
+  /// Off-catalogue. Arrives as a PROPOSED pledge the office can counter.
+  customRequest String?
+  /// Always equals headcountAtPledge on creation: a class of 38 with 20 sweaters
+  /// is a worse place than one with none. It is a column and not a computation
+  /// because the office may top a short pledge up.
+  quantity      Int
+
+  mode GiftMode
+  /// FUND only. Null for SUPPLY — an in-kind gift never carries a valuation,
+  /// which keeps donated goods out of the fee ledger and out of the audit.
+  amountMinor Int?
+  currency    String @default("INR")
+
+  dedicationKind GiftDedication @default(NONE)
+  dedicationText String?
+  visibility     GiftVisibility @default(ALUMNI)
+
+  status        GiftStatus @default(PROPOSED)
+  declineReason String?
+  counterNote   String?
+  /// SUPPLY only: when the donor said the goods would arrive.
+  dueAt         DateTime?
+
+  acceptedByUserId String?   @db.Uuid
+  acceptedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  school        School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alumni        Alumni?            @relation(fields: [alumniId], references: [id], onDelete: SetNull)
+  giftItem      GiftItem?          @relation(fields: [giftItemId], references: [id], onDelete: SetNull)
+  receipts      GiftReceipt[]
+  distributions GiftDistribution[]
+
+  @@index([schoolId, status])
+  @@index([schoolId, createdAt])
+  @@index([alumniId])
+  @@index([giftItemId])
+  @@index([schoolId, classSectionId])
+}
+
+/// What actually arrived. Pledged and received are two different numbers and
+/// both get written down — 38 promised, 36 delivered is a real and common event.
+model GiftReceipt {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  pledgeId       String   @db.Uuid
+  receivedQty    Int
+  receivedAt     DateTime @default(now())
+  receivedByUserId String? @db.Uuid
+  note           String?
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledge GiftPledge @relation(fields: [pledgeId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, pledgeId])
+  @@index([pledgeId])
+}
+
+/// The handing out. `absentQty` exists because the school already knows the 38
+/// children, so "two absent, collected Monday" is a fact and not an estimate.
+model GiftDistribution {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  pledgeId       String   @db.Uuid
+  classSectionId String?  @db.Uuid
+  distributedQty Int
+  absentQty      Int      @default(0)
+  distributedAt  DateTime @default(now())
+  byUserId       String?  @db.Uuid
+  note           String?
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledge GiftPledge @relation(fields: [pledgeId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, pledgeId])
+  @@index([pledgeId])
+}
+
+/// A lecture or skill session an alumnus gives to a class. The only feature in
+/// Homecoming that puts an adult in a room with children, which is why
+/// `accompanyingTeacherId` is checked before SCHEDULED and why only an alumnus
+/// with `trustedForStudents` can create one.
+model GuestSession {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  alumniId String @db.Uuid
+
+  title   String
+  summary String?
+  mode    GuestSessionMode @default(IN_PERSON)
+
+  classSectionId String @db.Uuid
+  /// Frozen at request time, same reason as GiftPledge.headcountAtPledge.
+  headcountAtBooking Int
+
+  /// What the HOST asked for.
+  requestedDate     DateTime
+  requestedPeriodId String   @db.Uuid
+  /// What the SCHOOL suggested back. Both slots are held until the host answers.
+  counterDate       DateTime?
+  counterPeriodId   String?   @db.Uuid
+  counterNote       String?
+  /// One counter each, then it is a phone call. Software that lets two people
+  /// haggle indefinitely just moves the argument somewhere worse.
+  counterRound      Int       @default(0)
+  /// Set only on SCHEDULED, and it is whichever of the two above was accepted.
+  scheduledDate     DateTime?
+  scheduledPeriodId String?   @db.Uuid
+
+  /// REQUIRED before SCHEDULED. The safeguarding rule as a constraint rather
+  /// than a paragraph in a policy nobody reads.
+  accompanyingTeacherId String? @db.Uuid
+  /// Recorded AT DECISION TIME, never inferred later — six months on, "which
+  /// period did 9-A lose" is a syllabus question somebody will actually ask.
+  displacedSubjectId    String? @db.Uuid
+  displacedTeacherId    String? @db.Uuid
+  roomId                String? @db.Uuid
+  meetingUrl            String?
+
+  status        GuestSessionStatus @default(REQUESTED)
+  declineReason String?
+  decidedByUserId String?   @db.Uuid
+  decidedAt       DateTime?
+  deliveredAt     DateTime?
+  attendedCount   Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alumni Alumni @relation(fields: [alumniId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@index([schoolId, requestedDate])
+  @@index([alumniId])
+  @@index([schoolId, classSectionId])
+  /// NOTE: a PARTIAL unique index also guards this table —
+  /// GuestSession_live_slot_key on (schoolId, classSectionId, requestedDate,
+  /// requestedPeriodId) WHERE status IN ('REQUESTED','COUNTERED','SCHEDULED').
+  /// Prisma cannot express a partial unique index, so it lives in the migration
+  /// SQL only and does not appear here. It is what actually prevents two alumni
+  /// double-booking one period: the availability check and the insert are in one
+  /// transaction, but READ COMMITTED means both would still read FREE.
+}
+
+/// The alumnus's credential. There is no password.
+///
+/// An alumnus touches this product perhaps three times a year, and nobody
+/// remembers a password they use three times a year — every low-frequency
+/// product that shipped one ended up running a password-reset service instead.
+/// So the LINK is the credential: signed, single-use, expiring, tied to one
+/// Alumni row, and pasted into a batch WhatsApp group by the office.
+///
+/// Only the sha256 hash is stored, exactly as PasswordResetToken does it; the
+/// raw token lives in the link and nowhere else. `usedAt` makes it single-use,
+/// and a used CLAIM token is what mints the long-lived device session.
+///
+/// This is deliberately weak on its own, and that is safe: possessing a link
+/// buys the directory and nothing else. Every action that carries real risk is
+/// gated on a flag a human grants — `Alumni.status = VERIFIED` to appear at
+/// all, `trustedForStudents` to go anywhere near a child, and the office's
+/// accept/receive/distribute states for anything involving money or goods.
+model AlumniAccessToken {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  alumniId String @db.Uuid
+
+  /// sha256 of the raw token. Never the token itself.
+  tokenHash String @unique
+  kind      AlumniTokenKind @default(CLAIM)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alumni Alumni @relation(fields: [alumniId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, alumniId])
+  @@index([expiresAt])
+}
+
+enum AlumniTokenKind {
+  /// Emailed or WhatsApped once, to prove "this is me" the first time.
+  CLAIM
+  /// The 90-day device session minted after a claim. Deliberately long: a
+  /// returning alumnus should never authenticate twice in a term.
+  SESSION
 }

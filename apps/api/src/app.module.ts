@@ -24,6 +24,7 @@ import { PublicModule } from './modules/public';
 import { PortalModule } from './modules/portal';
 import { LibraryModule } from './modules/library';
 import { DirectoryModule } from './modules/directory/directory.module';
+import { AlumniModule } from './modules/alumni';
 import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
 import { BlogModule } from './modules/blog';
@@ -83,6 +84,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     PortalModule,
     LibraryModule,
     DirectoryModule,
+    AlumniModule,
     MarketingModule,
     BlogModule,
   ],

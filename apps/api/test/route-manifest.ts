@@ -18,6 +18,56 @@
  * this becomes a list of good intentions.
  */
 export const AUTHZ_REVIEWED: string[] = [
+  // ── Homecoming / the alumnus's own door ─────────────────────────────────
+  // homecoming-portal-authz.e2e-spec.ts proves the lines BETWEEN the three
+  // tiers, not merely that each works: public batch pages readable with no
+  // token, member routes refusing anonymous / forged / SCHOOL_ADMIN-JWT
+  // callers, and trusted routes refusing a VERIFIED but untrusted alumnus.
+  "POST /manage/alumni/:id/claim-link",
+  "GET /alumni/batches",
+  "GET /alumni/batches/:year",
+  "POST /alumni/claim",
+  "GET /alumni/me",
+  "PUT /alumni/me",
+  "POST /alumni/me/sign-out",
+  "GET /alumni/me/directory",
+  "GET /alumni/me/gift-groups",
+  "GET /alumni/me/gift-items",
+  "POST /alumni/me/pledges",
+  "GET /alumni/me/pledges",
+  "GET /alumni/me/sessions/slots",
+  "GET /alumni/me/sessions",
+  "POST /alumni/me/sessions",
+  "POST /alumni/me/sessions/:id/decide",
+  // ── Homecoming / Alumni Office ──────────────────────────────────────────
+  // Every one of these is exercised in homecoming-authz.e2e-spec.ts against
+  // an anonymous caller (401) and STUDENT / TEACHER / STAFF tokens (403), and
+  // is confirmed NOT to 401/403 for a SCHOOL_ADMIN. The feature gate and
+  // cross-tenant isolation are asserted over the whole set as well.
+  "GET /manage/alumni/summary",
+  "GET /manage/alumni",
+  "POST /manage/alumni/graduate",
+  "GET /manage/alumni/roll-call",
+  "PUT /manage/alumni/roll-call",
+  "PUT /manage/alumni/:id/trusted",
+  "GET /manage/alumni/claims",
+  "POST /manage/alumni/claims/:id/decide",
+  "GET /manage/alumni/gift-items",
+  "POST /manage/alumni/gift-items",
+  "PUT /manage/alumni/gift-items/:id",
+  "GET /manage/alumni/gift-groups",
+  "GET /manage/alumni/pledges",
+  "POST /manage/alumni/pledges",
+  "POST /manage/alumni/pledges/:id/decide",
+  "POST /manage/alumni/pledges/:id/receive",
+  "POST /manage/alumni/pledges/:id/distribute",
+  "POST /manage/alumni/pledges/:id/report",
+  "GET /manage/alumni/slots",
+  "GET /manage/alumni/sessions",
+  "POST /manage/alumni/sessions",
+  "GET /manage/alumni/sessions/:id/conflicts",
+  "POST /manage/alumni/sessions/:id/decide",
+  "POST /manage/alumni/sessions/:id/decide-as-host",
   "DELETE /library/issues/:id",
   "GET /internal/cron/library-due-soon",
   "GET /library/dashboard",

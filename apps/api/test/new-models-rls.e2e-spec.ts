@@ -137,9 +137,16 @@ describe('RLS on the new management tables', () => {
     // derived via assignmentId -> Assignment.schoolId (the SAME pattern
     // Result uses for examId -> Exam.schoolId). This proves that derived
     // policy actually isolates tenants, not just the direct-column ones above.
+    //
+    // UPDATED: AssignmentSeen stopped being derived-tenancy in
+    // 20260825090000_result_tenancy_and_fk_indexes, which gave it a direct
+    // schoolId and switched its policy to the same direct comparison the other
+    // 70+ tables use. This suite still built rows the old way and had been
+    // failing on staging ever since — a tenant-isolation guard that cannot run
+    // is a false green, which is why it is repaired here rather than skipped.
     it('a tenant sees only its own AssignmentSeen rows (derived tenancy via assignmentId -> Assignment.schoolId)', async () => {
       await withTenant(acmeId, (tx) =>
-        tx.assignmentSeen.create({ data: { assignmentId: acmeAssignment, studentId: acmeStudent } }),
+        tx.assignmentSeen.create({ data: { schoolId: acmeId, assignmentId: acmeAssignment, studentId: acmeStudent } }),
       );
       const mine = await withTenant(acmeId, (tx) => tx.assignmentSeen.findMany());
       const theirs = await withTenant(beaconId, (tx) => tx.assignmentSeen.findMany());
@@ -158,7 +165,7 @@ describe('RLS on the new management tables', () => {
       await expect(
         withTenant(acmeId, (tx) =>
           tx.assignmentSeen.create({
-            data: { assignmentId: beaconAssignment, studentId: acmeStudent },
+            data: { schoolId: beaconId, assignmentId: beaconAssignment, studentId: acmeStudent },
           }),
         ),
       ).rejects.toThrow(/row-level security|42501/);
