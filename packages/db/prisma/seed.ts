@@ -10,20 +10,30 @@ async function main() {
   const OWNER_PW = 'OwnerPassw0rd!';
 
   // Platform owner (no school).
+  //
+  // NOT an upsert. The compound unique is (schoolId, email) and this row's
+  // schoolId is NULL — which no SQL unique index can match, because NULL is
+  // not equal to itself. Prisma therefore throws "Argument `schoolId` must not
+  // be null" on every run, and the previous version caught that and did the
+  // lookup by hand in the catch block. It worked, but it printed a database
+  // error on every single seed, which is how a seed teaches people to ignore
+  // its output.
   const MFA_SECRET = 'AIRFGVZFLVAH6J2C';
-  await db.user.upsert({
-    where: { schoolId_email: { schoolId: null as unknown as string, email: 'owner@skoolos.local' } },
-    update: { mfaSecret: MFA_SECRET },
-    create: { email: 'owner@skoolos.local', passwordHash: await hash(OWNER_PW), role: 'OWNER', mfaSecret: MFA_SECRET },
-  }).catch(async () => {
-    // schoolId null can't use the compound unique in some Prisma versions; fall back to findFirst.
-    const existing = await db.user.findFirst({ where: { email: 'owner@skoolos.local', schoolId: null } });
-    if (!existing) {
-      await db.user.create({ data: { email: 'owner@skoolos.local', passwordHash: await hash(OWNER_PW), role: 'OWNER', mfaSecret: MFA_SECRET } });
-    } else {
-      await db.user.update({ where: { id: existing.id }, data: { mfaSecret: MFA_SECRET } });
-    }
+  const ownerHash = await hash(OWNER_PW);
+  const existingOwner = await db.user.findFirst({
+    where: { email: 'owner@skoolos.local', schoolId: null },
+    select: { id: true },
   });
+  if (existingOwner) {
+    await db.user.update({
+      where: { id: existingOwner.id },
+      data: { passwordHash: ownerHash, mfaSecret: MFA_SECRET },
+    });
+  } else {
+    await db.user.create({
+      data: { email: 'owner@skoolos.local', passwordHash: ownerHash, role: 'OWNER', mfaSecret: MFA_SECRET },
+    });
+  }
   console.log('Owner TOTP secret: AIRFGVZFLVAH6J2C  current code:', authenticator.generate(MFA_SECRET));
 
   for (const [slug, name, tier] of [
