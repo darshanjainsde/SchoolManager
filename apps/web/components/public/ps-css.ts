@@ -28,7 +28,7 @@ export const PS_CSS = `
   .ps-accentbg { background: var(--ps2); }
   .ps-brandgrad { background: linear-gradient(120deg, var(--ps1), color-mix(in srgb, var(--ps1) 55%, var(--ps2))); }
   .ps-logo-bg { background: linear-gradient(135deg, var(--ps1), var(--ps2)); }
-  .ps-cta-btn { background: var(--ps1); color: #fff; }
+  .ps-cta-btn { background: var(--ps1); color: var(--ps1-on, #fff); }
   .ps-icon-bg { background: linear-gradient(135deg, var(--ps2), var(--ps1)); }
   .ps-progress-bar { background: linear-gradient(90deg, var(--ps1), var(--ps2)); height: 100%; }
 
@@ -257,7 +257,7 @@ export const PS_CSS = `
   .ps-shape-editorial .ps-cta:hover, .ps-shape-crisp .ps-cta:hover { box-shadow: none; }
 
   /* The school's own colour. The page's primary action. */
-  .ps-cta-1 { background: var(--ps1); color: #fff; }
+  .ps-cta-1 { background: var(--ps1); color: var(--ps1-on, #fff); }
   .ps-cta-1:hover { background: color-mix(in srgb, var(--ps1) 88%, #000); }
 
   /* The CONTRAST fill, for an action that must not compete with the primary
@@ -288,7 +288,7 @@ export const PS_CSS = `
     transition: background .16s ease, color .16s ease; cursor: pointer; }
   .ps-seg-btn:hover:not([aria-pressed="true"]):not(:disabled) {
     background: color-mix(in srgb, var(--ps1) 12%, #fff); color: var(--ink); }
-  .ps-seg-btn[aria-pressed="true"] { background: var(--ps1); color: #fff;
+  .ps-seg-btn[aria-pressed="true"] { background: var(--ps1); color: var(--ps1-on, #fff);
     box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--ps1) 70%, transparent); }
   .ps-shape-editorial .ps-seg-btn[aria-pressed="true"],
   .ps-shape-crisp .ps-seg-btn[aria-pressed="true"] { box-shadow: none; }
@@ -300,10 +300,11 @@ export const PS_CSS = `
   /* Denser variant, for a per-field selector inside a form rather than a
      page-level tab row. */
   .ps-seg-sm { padding: .35rem .75rem; font-size: .75rem; }
-  /* A track that holds a long, open-ended list (every batch year a school has)
-     rather than a fixed handful — it wraps and stays left-aligned instead of
-     stretching one row. */
-  .ps-seg-wrap { display: flex; }
+  /* NOTE: there is deliberately no ".ps-seg-wrap". An earlier version added
+     one that set display:flex, which made the track block-level — the batch
+     row then stretched the full width of the page with four chips huddled at
+     its left end. .ps-seg is inline-flex AND already wraps, so a track hugs
+     its contents at any length. */
 
   .ps-panel-glass { background: rgba(255,255,255,.10);
     border: 1px solid rgba(255,255,255,.15); box-shadow: none; }

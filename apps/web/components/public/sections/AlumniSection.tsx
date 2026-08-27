@@ -252,7 +252,7 @@ function Batches({ schoolName }: { schoolName: string }) {
 
   return (
     <div>
-      <div className="ps-seg ps-seg-wrap flex-wrap">
+      <div className="ps-seg">
         {index.map((b) => (
           <button
             key={b.batchYear}
@@ -403,7 +403,7 @@ function Give({
         <p className="text-sm text-slate-500 mt-1">
           Live from the register. Counts only — never a child&rsquo;s name, photograph or fee status.
         </p>
-        <div className="ps-seg ps-seg-wrap flex-wrap mt-5">
+        <div className="ps-seg mt-5">
           {all.map((g) => (
             <button
               key={g.label}
@@ -421,7 +421,7 @@ function Give({
         <p className="text-sm text-slate-500 mt-1">
           Written by the school. Anything off this list becomes a proposal the office can redirect.
         </p>
-        <div className="ps-seg ps-seg-wrap flex-wrap mt-5">
+        <div className="ps-seg mt-5">
           {items.map((i) => (
             <button
               key={i.id}
@@ -575,7 +575,7 @@ function Profile({
           {PRIVACY_FIELDS.map((f) => (
             <div key={f.key}>
               <div className="text-sm font-medium">{f.label}</div>
-              <div className="ps-seg ps-seg-wrap flex-wrap mt-1.5">
+              <div className="ps-seg mt-1.5">
                 {PRIVACY_LEVELS.map((lv) => {
                   const on = (privacy[f.key] ?? 'HIDDEN') === lv;
                   return (
@@ -805,7 +805,7 @@ function SignInPanel({ onSignedIn }: { onSignedIn: (session: string, firstName: 
 
   return (
     <div className="ps-panel p-7 mb-8 max-w-xl">
-      <div className="ps-seg ps-seg-wrap flex-wrap">
+      <div className="ps-seg">
         {([['password', 'I have a password'], ['link', 'Send me my link']] as const).map(([m, label]) => (
           <button key={m} type="button"
             className="ps-seg-btn"

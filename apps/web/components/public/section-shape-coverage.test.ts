@@ -136,3 +136,30 @@ describe('a call to action is a class, not six utilities', () => {
     expect(src).not.toContain("borderColor: 'var(--ps1)'");
   });
 });
+
+describe('a brand fill never assumes its label is white', () => {
+  const CSS = source('ps-css.ts');
+
+  it('takes the CTA label from the resolved token', () => {
+    // Beacon's brand is a mint; white on it measures 1.6:1. Hardcoding #fff
+    // made every primary button on that school's site unreadable.
+    expect(CSS).toMatch(/\.ps-cta-1\s*\{[^}]*color:\s*var\(--ps1-on/);
+    expect(CSS).toMatch(/\.ps-cta-btn\s*\{[^}]*color:\s*var\(--ps1-on/);
+  });
+
+  it('takes the selected segment label from it too', () => {
+    expect(CSS).toMatch(/\.ps-seg-btn\[aria-pressed="true"\]\s*\{[^}]*color:\s*var\(--ps1-on/);
+  });
+
+  it('keeps a track hugging its contents, at any length', () => {
+    // .ps-seg-wrap set display:flex, which made the track block-level: the
+    // batch row stretched the full page with four chips at its left end.
+    expect(CSS).not.toMatch(/\.ps-seg-wrap\s*\{/);
+    expect(CSS).toMatch(/\.ps-seg\s*\{[^}]*display:\s*inline-flex/);
+    expect(CSS).toMatch(/\.ps-seg\s*\{[^}]*flex-wrap:\s*wrap/);
+  });
+
+  it('leaves no stretched track behind in the alumni section', () => {
+    expect(source('sections/AlumniSection.tsx')).not.toContain('ps-seg-wrap');
+  });
+});

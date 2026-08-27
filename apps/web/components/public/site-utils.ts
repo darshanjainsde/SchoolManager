@@ -37,6 +37,45 @@ export function mix(hex: string, target: string, amt: number): string {
   const [r, g, bl] = a.map((v, i) => Math.round(v + (b[i] - v) * amt));
   return `#${((1 << 24) + (r << 16) + (g << 8) + bl).toString(16).slice(1)}`;
 }
+/**
+ * Relative luminance (WCAG 2.1), 0 = black, 1 = white.
+ */
+export function luminance(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  const [r, g, b] = rgb.map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG contrast ratio between two hex colours, 1..21. */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * The label colour to put ON a brand fill.
+ *
+ * A school picks its own brand colour, and plenty of them are light — Beacon's
+ * is a mint (#3ee6b0). White text on that measures 1.6:1, which is not a near
+ * miss: it is unreadable, and it was every primary button on their site.
+ * Hardcoding `#fff` assumes a dark brand, and about half of them are not.
+ *
+ * So the label is CHOSEN: whichever of white or a deep ink has more contrast
+ * against the fill. Returns the winner, never a compromise between them.
+ */
+export function labelOn(fill: string): string {
+  // Near-black, not merely "dark". A softer ink (#10241c) looked right and
+  // still failed the mid-tones — a periwinkle brand reached only 4.12:1 with
+  // the better of the two options, because neither end was far enough away.
+  // The worst case across realistic brands is 4.70:1 at this value.
+  const DARK = '#0a1410';
+  return contrastRatio(fill, '#ffffff') >= contrastRatio(fill, DARK) ? '#ffffff' : DARK;
+}
+
 /** `rgba()` string from hex + alpha, for overlay gradients. */
 export function rgba(hex: string, alpha: number): string {
   const rgb = hexToRgb(hex) ?? [0, 0, 0];
