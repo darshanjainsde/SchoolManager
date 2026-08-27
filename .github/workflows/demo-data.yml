@@ -56,7 +56,11 @@ on:
     paths:
       - 'packages/db/prisma/seed-alumni-demo.ts'
       - 'packages/db/prisma/seed-school-demo.ts'
-      - '.github/workflows/alumni-demo-data.yml'
+      # This file's OWN name. It was left pointing at the pre-rename filename,
+      # so every later change to this workflow stopped triggering it — silently,
+      # because a push that matches no path is indistinguishable from a push
+      # that ran and did nothing.
+      - '.github/workflows/demo-data.yml'
 
 concurrency:
   group: demo-data-staging
