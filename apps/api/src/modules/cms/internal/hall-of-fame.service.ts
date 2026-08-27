@@ -21,7 +21,7 @@ export class HallOfFameService {
     if (!course || course.schoolId !== schoolId) throw new NotFoundException('Course not found');
 
     await withTenant(schoolId, async (tx) => {
-      await tx.hallOfFameEntry.deleteMany({ where: { courseId } });
+      await tx.hallOfFameEntry.deleteMany({ where: { schoolId, courseId } });
       if (entries.length)
         await tx.hallOfFameEntry.createMany({
           data: entries.map((e) => ({ ...e, courseId, schoolId })),

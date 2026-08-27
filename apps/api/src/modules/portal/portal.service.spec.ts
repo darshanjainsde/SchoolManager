@@ -199,7 +199,7 @@ describe('PortalService', () => {
       });
       // …and the student row itself was found by the JWT sub, not a client id.
       expect(txMock.student.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { userId: USER } }),
+        expect.objectContaining({ where: { schoolId: SCHOOL, userId: USER } }),
       );
     });
 
@@ -436,7 +436,7 @@ describe('PortalService', () => {
       // The individual-marks read is keyed on the caller's own Student.id and
       // filtered to published rows.
       expect(txMock.result.findMany).toHaveBeenCalledWith({
-        where: { studentId: STUDENT, publishedAt: { not: null } },
+        where: { schoolId: SCHOOL, studentId: STUDENT, publishedAt: { not: null } },
         select: { examId: true, marks: true },
       });
       expect(txMock.result.findMany).toHaveBeenCalledTimes(1);
@@ -444,7 +444,7 @@ describe('PortalService', () => {
       // could pull a classmate's mark into this process.
       expect(txMock.result.groupBy).toHaveBeenCalledWith({
         by: ['examId'],
-        where: { examId: { in: ['exam-a'] }, publishedAt: { not: null } },
+        where: { schoolId: SCHOOL, examId: { in: ['exam-a'] }, publishedAt: { not: null } },
         _avg: { marks: true },
       });
       // …and nothing in the response is keyed to another student.

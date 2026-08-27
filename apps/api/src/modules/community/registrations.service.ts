@@ -50,7 +50,7 @@ export class RegistrationsService {
           where: { eventId, schoolId },
           orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
         }),
-        tx.eventTicketType.findMany({ where: { eventId }, orderBy: { createdAt: 'asc' } }),
+        tx.eventTicketType.findMany({ where: { schoolId, eventId }, orderBy: { createdAt: 'asc' } }),
       ]);
 
       // Student names are resolved separately: a registration may reference a
@@ -168,8 +168,8 @@ export class RegistrationsService {
       }
 
       const ticket = dto.ticketTypeId
-        ? await tx.eventTicketType.findFirst({ where: { id: dto.ticketTypeId, eventId } })
-        : await tx.eventTicketType.findFirst({ where: { eventId }, orderBy: { createdAt: 'asc' } });
+        ? await tx.eventTicketType.findFirst({ where: { schoolId, id: dto.ticketTypeId, eventId } })
+        : await tx.eventTicketType.findFirst({ where: { schoolId, eventId }, orderBy: { createdAt: 'asc' } });
       if (!ticket) throw new BadRequestException('That event has no ticket type to register against');
 
       const now = new Date();
@@ -189,7 +189,7 @@ export class RegistrationsService {
       // waitlist is information the school can act on.
       const waitlisted = overCapacity;
       const waitlistPos = waitlisted
-        ? (await tx.eventRegistration.count({ where: { eventId, status: 'WAITLISTED' } })) + 1
+        ? (await tx.eventRegistration.count({ where: { schoolId, eventId, status: 'WAITLISTED' } })) + 1
         : null;
 
       const amountMinor = ticket.priceMinor * quantity;
