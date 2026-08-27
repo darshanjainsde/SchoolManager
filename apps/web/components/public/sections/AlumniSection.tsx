@@ -172,24 +172,19 @@ export default function AlumniSection({ schoolName }: { schoolName: string }) {
         </p>
       )}
 
-      <div className="flex flex-wrap gap-2 mb-8">
+      {/* One object on one track. `aria-pressed` drives the selected style in
+          CSS, so the button's state and its appearance cannot drift apart. */}
+      <div className="ps-seg mb-8" role="group" aria-label="Alumni sections">
         {TABS.map((t) => {
           const locked = t.needsSession && !signedIn;
           return (
             <button
               key={t.id}
               type="button"
-              className="ps-chip px-4 py-2 rounded-full text-sm font-semibold border border-black/5 transition"
+              className="ps-seg-btn"
               disabled={locked}
               aria-pressed={tab === t.id}
-              title={locked ? 'Open the link the school sent you' : undefined}
-              style={
-                tab === t.id
-                  ? { background: 'var(--ps1)', color: '#fff', borderColor: 'var(--ps1)' }
-                  : locked
-                    ? { opacity: 0.45, cursor: 'not-allowed' }
-                    : undefined
-              }
+              title={locked ? 'Sign in to open this' : undefined}
               onClick={() => setTab(t.id)}
             >
               {t.label}
@@ -257,14 +252,13 @@ function Batches({ schoolName }: { schoolName: string }) {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
+      <div className="ps-seg ps-seg-wrap flex-wrap">
         {index.map((b) => (
           <button
             key={b.batchYear}
             type="button"
-            className="ps-chip px-4 py-2 rounded-full text-sm font-semibold border border-black/5 transition"
+            className="ps-seg-btn"
             aria-pressed={open === b.batchYear}
-            style={open === b.batchYear ? { background: 'var(--ps1)', color: '#fff', borderColor: 'var(--ps1)' } : undefined}
             onClick={() => setOpen(open === b.batchYear ? null : b.batchYear)}
           >
             {b.batchYear}
@@ -354,7 +348,7 @@ function Directory({ session }: { session: string | null }) {
         {rows.map((a) => (
           <div key={a.id} className="ps-card p-4">
             <div className="font-semibold">
-              {a.name} <span className="text-slate-400 text-sm tabular-nums">{a.batchYear}</span>
+              {a.name} <span className="text-slate-500 text-sm tabular-nums">{a.batchYear}</span>
             </div>
             <div className="text-sm text-slate-500 mt-0.5">
               {[a.city, a.profession, a.employer].filter(Boolean).join(' · ') || '—'}
@@ -409,14 +403,13 @@ function Give({
         <p className="text-sm text-slate-500 mt-1">
           Live from the register. Counts only — never a child&rsquo;s name, photograph or fee status.
         </p>
-        <div className="flex flex-wrap gap-2 mt-5">
+        <div className="ps-seg ps-seg-wrap flex-wrap mt-5">
           {all.map((g) => (
             <button
               key={g.label}
               type="button"
-              className="ps-chip px-4 py-2 rounded-full text-sm font-semibold border border-black/5 transition"
+              className="ps-seg-btn"
               aria-pressed={group?.label === g.label}
-              style={group?.label === g.label ? { background: 'var(--ps1)', color: '#fff', borderColor: 'var(--ps1)' } : undefined}
               onClick={() => setGroup(group?.label === g.label ? null : g)}
             >
               {g.label}<span className="ml-2 opacity-70 tabular-nums">{g.headcount}</span>
@@ -428,14 +421,13 @@ function Give({
         <p className="text-sm text-slate-500 mt-1">
           Written by the school. Anything off this list becomes a proposal the office can redirect.
         </p>
-        <div className="flex flex-wrap gap-2 mt-5">
+        <div className="ps-seg ps-seg-wrap flex-wrap mt-5">
           {items.map((i) => (
             <button
               key={i.id}
               type="button"
-              className="ps-chip px-4 py-2 rounded-full text-sm font-semibold border border-black/5 transition"
+              className="ps-seg-btn"
               aria-pressed={itemId === i.id}
-              style={itemId === i.id ? { background: 'var(--ps1)', color: '#fff', borderColor: 'var(--ps1)' } : undefined}
               onClick={() => setItemId(itemId === i.id ? '' : i.id)}
             >
               {i.name}<span className="ml-2 opacity-70">{rupees(i.indicativeCostMinor)}</span>
@@ -447,14 +439,13 @@ function Give({
         </div>
 
         <h3 className="ps-head font-bold text-lg mt-8">3 · How it arrives</h3>
-        <div className="flex gap-2 mt-4">
+        <div className="ps-seg mt-4">
           {(['SUPPLY', 'FUND'] as const).map((m) => (
             <button
               key={m}
               type="button"
-              className="ps-chip px-4 py-2 rounded-full text-sm font-semibold border border-black/5 transition"
+              className="ps-seg-btn"
               aria-pressed={mode === m}
-              style={mode === m ? { background: 'var(--ps1)', color: '#fff', borderColor: 'var(--ps1)' } : undefined}
               onClick={() => setMode(m)}
             >
               {m === 'SUPPLY' ? 'I will send the goods' : 'I will pay, school buys'}
@@ -498,7 +489,7 @@ function Give({
             )}
             <button
               type="button"
-              className="ps-btn ps-cta-btn mt-6"
+              className="ps-cta ps-cta-1 mt-6"
               disabled={busy}
               onClick={() => {
                 setBusy(true);
@@ -521,7 +512,7 @@ function Give({
             >
               {busy ? 'Sending…' : `Pledge ${qty} ${item?.name.toLowerCase()}`}
             </button>
-            <p className="text-xs text-slate-400 mt-3">
+            <p className="text-xs text-slate-500 mt-3">
               The office decides next. Nothing is charged or shipped until they accept.
             </p>
           </>
@@ -584,16 +575,15 @@ function Profile({
           {PRIVACY_FIELDS.map((f) => (
             <div key={f.key}>
               <div className="text-sm font-medium">{f.label}</div>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
+              <div className="ps-seg ps-seg-wrap flex-wrap mt-1.5">
                 {PRIVACY_LEVELS.map((lv) => {
                   const on = (privacy[f.key] ?? 'HIDDEN') === lv;
                   return (
                     <button
                       key={lv}
                       type="button"
-                      className="ps-chip px-3 py-1 rounded-full text-xs font-semibold border border-black/5 transition"
+                      className="ps-seg-btn ps-seg-sm"
                       aria-pressed={on}
-                      style={on ? { background: 'var(--ps1)', color: '#fff', borderColor: 'var(--ps1)' } : undefined}
                       onClick={() => setPrivacy((p) => ({ ...p, [f.key]: lv }))}
                     >
                       {lv === 'ALUMNI' ? 'Alumni' : lv === 'BATCH' ? 'My batch' : lv === 'PUBLIC' ? 'Public' : 'Hidden'}
@@ -606,7 +596,7 @@ function Profile({
         </div>
         <button
           type="button"
-          className="ps-btn ps-cta-btn mt-7"
+          className="ps-cta ps-cta-1 mt-7"
           disabled={busy}
           onClick={() => {
             setBusy(true);
@@ -669,7 +659,7 @@ function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; sc
   if (!openForm) {
     return (
       <div className="mt-8">
-        <button type="button" className="ps-btn ps-cta-btn" onClick={() => setOpenForm(true)}>
+        <button type="button" className="ps-cta ps-cta-1" onClick={() => setOpenForm(true)}>
           Tell us you were here →
         </button>
       </div>
@@ -730,7 +720,7 @@ function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; sc
           <span className="text-slate-500">Your date of birth</span>
           <input className="ps-wiz-input w-full mt-1" type="date" value={f.dob}
             onChange={(e) => setF({ ...f, dob: e.target.value })} />
-          <span className="text-xs text-slate-400 mt-1 block">
+          <span className="text-xs text-slate-500 mt-1 block">
             The school can check this against its own records — it is the quickest way to find you.
           </span>
         </label>
@@ -758,7 +748,7 @@ function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; sc
       {err && <p className="text-sm mt-4" style={{ color: '#b3261e' }}>{err}</p>}
 
       <div className="flex flex-wrap gap-3 mt-6">
-        <button type="submit" className="ps-btn ps-cta-btn" disabled={!ready || busy}
+        <button type="submit" className="ps-cta ps-cta-1" disabled={!ready || busy}
           style={!ready || busy ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
           {busy ? 'Sending…' : 'Send this to the office'}
         </button>
@@ -797,11 +787,16 @@ function SignInPanel({ onSignedIn }: { onSignedIn: (session: string, firstName: 
 
   if (!open) {
     return (
-      <div className="mb-8">
-        <button type="button" className="ps-btn ps-cta-btn" onClick={() => setOpen(true)}>
-          Sign in →
+      <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-3">
+        {/* Same weight as the site's "Enquire now", in the CONTRAST fill: the
+            primary colour is already spoken for by the selected tab a few
+            pixels above, and two indigo objects that close together read as
+            one smear rather than two choices. */}
+        <button type="button" className="ps-cta ps-cta-ink" onClick={() => setOpen(true)}>
+          Sign in
+          <span aria-hidden="true">&rarr;</span>
         </button>
-        <span className="text-sm text-slate-500 ml-3">
+        <span className="text-sm text-slate-600">
           Already registered? Sign in, or ask the school for your link.
         </span>
       </div>
@@ -810,12 +805,11 @@ function SignInPanel({ onSignedIn }: { onSignedIn: (session: string, firstName: 
 
   return (
     <div className="ps-panel p-7 mb-8 max-w-xl">
-      <div className="flex flex-wrap gap-2">
+      <div className="ps-seg ps-seg-wrap flex-wrap">
         {([['password', 'I have a password'], ['link', 'Send me my link']] as const).map(([m, label]) => (
           <button key={m} type="button"
-            className="ps-chip px-4 py-2 rounded-full text-sm font-semibold border border-black/5 transition"
+            className="ps-seg-btn"
             aria-pressed={mode === m}
-            style={mode === m ? { background: 'var(--ps1)', color: '#fff', borderColor: 'var(--ps1)' } : undefined}
             onClick={() => { setMode(m); setMsg(null); }}>
             {label}
           </button>
@@ -846,10 +840,10 @@ function SignInPanel({ onSignedIn }: { onSignedIn: (session: string, firstName: 
             <input className="ps-wiz-input w-full mt-1" type="password" required autoComplete="current-password"
               value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
-          <p className="text-xs text-slate-400 mt-2">
+          <p className="text-xs text-slate-500 mt-2">
             The school gives you this when it approves you. Not got one? Use <em>Send me my link</em>.
           </p>
-          <button type="submit" className="ps-btn ps-cta-btn mt-4" disabled={busy}
+          <button type="submit" className="ps-cta ps-cta-1 mt-4" disabled={busy}
             style={busy ? { opacity: 0.5 } : undefined}>
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
@@ -874,10 +868,10 @@ function SignInPanel({ onSignedIn }: { onSignedIn: (session: string, firstName: 
             <input className="ps-wiz-input w-full mt-1" required value={contact}
               onChange={(e) => setContact(e.target.value)} />
           </label>
-          <p className="text-xs text-slate-400 mt-2">
+          <p className="text-xs text-slate-500 mt-2">
             No password needed. The office sends you a link that signs you in for ninety days.
           </p>
-          <button type="submit" className="ps-btn ps-cta-btn mt-4" disabled={busy}
+          <button type="submit" className="ps-cta ps-cta-1 mt-4" disabled={busy}
             style={busy ? { opacity: 0.5 } : undefined}>
             {busy ? 'Sending…' : 'Ask for my link'}
           </button>
@@ -889,7 +883,7 @@ function SignInPanel({ onSignedIn }: { onSignedIn: (session: string, firstName: 
           {msg.text}
         </p>
       )}
-      <button type="button" className="text-sm text-slate-400 underline underline-offset-2 mt-4"
+      <button type="button" className="text-sm text-slate-500 underline underline-offset-2 mt-4"
         onClick={() => setOpen(false)}>
         Close
       </button>

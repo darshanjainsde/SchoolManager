@@ -11,6 +11,11 @@ skipping it already cost real time or shipped a real defect.
    — anything marked ⚠️ (2+) is a pattern that has already bitten twice.
 3. **Check the branch.** Local checkouts drift behind `main`, and `main` is what
    production runs. `git log --oneline HEAD..origin/main | head`.
+4. **Touching any user-facing UI? Read
+   `.claude/skills/sckools-ui-taste/SKILL.md` FIRST** — before the first class
+   is written, not at review. Every rule in it was paid for by a screenshot
+   sent back. It applies even when the request says nothing about design,
+   because the first feedback on a feature is always visual.
 
 ## While working
 

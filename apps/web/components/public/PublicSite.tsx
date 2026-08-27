@@ -570,7 +570,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
               <p className="mt-2 text-slate-600">Our admissions team is happy to help with any question.</p>
               <a
                 href="/contact"
-                className="btn-glow ps-cta-btn inline-block mt-6 font-semibold px-6 py-3.5 rounded-xl ps-soft hover:scale-[1.03] transition"
+                className="btn-glow ps-cta ps-cta-1 mt-6"
               >
                 Enquire now →
               </a>
