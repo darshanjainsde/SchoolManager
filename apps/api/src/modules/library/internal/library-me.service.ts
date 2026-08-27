@@ -27,12 +27,12 @@ export class LibraryMeService {
       let kind: BorrowerKind;
       let borrowerId: string;
       if (role === 'STUDENT') {
-        const s = await tx.student.findFirst({ where: { userId }, select: { id: true } });
+        const s = await tx.student.findFirst({ where: { schoolId, userId }, select: { id: true } });
         if (!s) throw new ApiError('NOT_A_STUDENT', 'No student record for this login.', 404);
         kind = 'STUDENT';
         borrowerId = s.id;
       } else if (role === 'TEACHER') {
-        const t = await tx.teacher.findFirst({ where: { userId }, select: { id: true } });
+        const t = await tx.teacher.findFirst({ where: { schoolId, userId }, select: { id: true } });
         if (!t) throw new ApiError('NOT_A_TEACHER', 'No teacher record for this login.', 404);
         kind = 'TEACHER';
         borrowerId = t.id;
@@ -47,18 +47,18 @@ export class LibraryMeService {
 
       const [open, history, fixedDue] = await Promise.all([
         tx.libraryIssue.findMany({
-          where: { ...where, returnedOn: null },
+          where: { schoolId, ...where, returnedOn: null },
           orderBy: { dueOn: 'asc' },
           include: { copy: { select: { accessionNo: true, title: { select: { title: true, author: true } } } } },
         }),
         tx.libraryIssue.findMany({
-          where: { ...where, returnedOn: { not: null } },
+          where: { schoolId, ...where, returnedOn: { not: null } },
           orderBy: { returnedOn: 'desc' },
           take: 50,
           include: { copy: { select: { accessionNo: true, title: { select: { title: true, author: true } } } } },
         }),
         tx.libraryFine.findMany({
-          where: { ...where, status: 'DUE' },
+          where: { schoolId, ...where, status: 'DUE' },
           orderBy: { createdAt: 'asc' },
           include: { issue: { select: { copy: { select: { title: { select: { title: true } } } } } } },
         }),
