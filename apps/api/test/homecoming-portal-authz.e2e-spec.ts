@@ -386,4 +386,98 @@ describe('Alumni portal authorization', () => {
       expect(res.body.token.length).toBeGreaterThan(30);
     });
   });
+
+  /**
+   * The third door: the school's ORDINARY login.
+   *
+   * An alumnus with an account signs in at /login like anybody else and gets a
+   * school JWT, not an AlumniAccessToken. The guard accepts it — otherwise the
+   * login would succeed and then every alumni route would refuse the session it
+   * had just created.
+   *
+   * The risk in accepting a second token type is that it becomes a way AROUND
+   * the school guard rather than a second way in, so the refusals matter more
+   * than the acceptance and get more tests than it does.
+   */
+  describe('the school-login door', () => {
+    let alumnusUserId: string;
+    let alumnusJwt: string;
+
+    beforeAll(async () => {
+      const db = getPlatformPrisma();
+      const user = await db.user.create({
+        data: { schoolId, email: 'jwt.door@example.com', passwordHash: 'x', role: 'ALUMNUS' },
+      });
+      alumnusUserId = user.id;
+      await db.alumni.update({ where: { id: plainId }, data: { userId: user.id } });
+      alumnusJwt = signSchoolToken({ sub: user.id, schoolId, role: 'ALUMNUS' });
+    });
+
+    it('lets an ALUMNUS school token reach the member routes', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/alumni/me').set('Host', host).set('Authorization', `Bearer ${alumnusJwt}`);
+      expect(res.status).toBe(200);
+    });
+
+    it('does NOT let it reach the trusted routes without the clearance', async () => {
+      // plainId is verified but not cleared, and the door must not change that.
+      const res = await request(app.getHttpServer())
+        .get('/alumni/me/sessions').set('Host', host).set('Authorization', `Bearer ${alumnusJwt}`);
+      expect(res.status).toBe(403);
+    });
+
+    it('refuses a school token whose role is not ALUMNUS', async () => {
+      // The admin is a real, valid, current school user. Being signed in at the
+      // school is not the same as being an alumnus of it.
+      const res = await request(app.getHttpServer())
+        .get('/alumni/me').set('Host', host).set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(401);
+    });
+
+    it('refuses a NON-alumnus role even for a user who IS on the alumni roll', async () => {
+      // The sharp case, and the only one that actually exercises the role
+      // check: same user, same school, same alumni record — but a token minted
+      // for a different purpose. Deleting the role check leaves every other
+      // test in this block green, so without this one the check is untested.
+      const wrongRole = signSchoolToken({ sub: alumnusUserId, schoolId, role: 'STUDENT' });
+      const res = await request(app.getHttpServer())
+        .get('/alumni/me').set('Host', host).set('Authorization', `Bearer ${wrongRole}`);
+      expect(res.status).toBe(401);
+    });
+
+    it('refuses an ALUMNUS token whose user has no alumni record', async () => {
+      const db = getPlatformPrisma();
+      const stray = await db.user.create({
+        data: { schoolId, email: 'stray@example.com', passwordHash: 'x', role: 'ALUMNUS' },
+      });
+      const jwt = signSchoolToken({ sub: stray.id, schoolId, role: 'ALUMNUS' });
+      const res = await request(app.getHttpServer())
+        .get('/alumni/me').set('Host', host).set('Authorization', `Bearer ${jwt}`);
+      expect(res.status).toBe(401);
+    });
+
+    it('refuses an ALUMNUS token minted for a DIFFERENT school', async () => {
+      const other = await seedMinimalSchool();
+      const jwt = signSchoolToken({ sub: alumnusUserId, schoolId: other.schoolId, role: 'ALUMNUS' });
+      const res = await request(app.getHttpServer())
+        .get('/alumni/me').set('Host', host).set('Authorization', `Bearer ${jwt}`);
+      expect(res.status).toBe(401);
+    });
+
+    it('refuses a forged token', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/alumni/me').set('Host', host)
+        .set('Authorization', 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4Iiwicm9sZSI6IkFMVU1OVVMifQ.nope');
+      expect(res.status).toBe(401);
+    });
+
+    it('stops working the moment the office un-verifies them', async () => {
+      const db = getPlatformPrisma();
+      await db.alumni.update({ where: { id: plainId }, data: { status: 'HIDDEN' } });
+      const res = await request(app.getHttpServer())
+        .get('/alumni/me').set('Host', host).set('Authorization', `Bearer ${alumnusJwt}`);
+      expect(res.status).toBe(401);
+      await db.alumni.update({ where: { id: plainId }, data: { status: 'VERIFIED' } });
+    });
+  });
 });

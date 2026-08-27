@@ -287,4 +287,68 @@ describe('Homecoming services, against a real database', () => {
       ).rejects.toThrow(/verified/i);
     });
   });
+
+  /**
+   * "I am already registered — send me my link."
+   *
+   * The security property is not that it works. It is that the response is
+   * IDENTICAL whether or not the contact belongs to anybody, so this cannot be
+   * used to ask a school whether a given address is one of its alumni.
+   */
+  describe('requestLink', () => {
+    let registered: string;
+
+    beforeAll(async () => {
+      const p = getPlatformPrisma();
+      const al = await p.alumni.create({
+        data: {
+          schoolId, firstName: 'Farida', lastName: 'Sheikh', batchYear: 1998,
+          status: 'VERIFIED', email: 'farida.sheikh@example.com', phone: '+919812345678',
+        },
+      });
+      registered = al.id;
+    });
+
+    it('answers a stranger exactly as it answers a real alumnus', async () => {
+      const hit = await alumni.requestLink(schoolId, { contact: 'farida.sheikh@example.com' });
+      const miss = await alumni.requestLink(schoolId, { contact: 'nobody-at-all@example.com' });
+      expect(hit).toEqual(miss);
+      expect(hit).toEqual({ received: true });
+    });
+
+    it('files a request for the real alumnus and none for the stranger', async () => {
+      const rows = await alumni.listLinkRequests(schoolId);
+      expect(rows.map((r) => r.alumni.id)).toContain(registered);
+      expect(rows).toHaveLength(1);
+    });
+
+    it('does not queue a second request when somebody taps it again', async () => {
+      await alumni.requestLink(schoolId, { contact: 'farida.sheikh@example.com' });
+      await alumni.requestLink(schoolId, { contact: '+919812345678' });
+      const rows = await alumni.listLinkRequests(schoolId);
+      expect(rows).toHaveLength(1);
+    });
+
+    it('ignores somebody the office has not verified', async () => {
+      const p = getPlatformPrisma();
+      await p.alumni.create({
+        data: {
+          schoolId, firstName: 'Pending', lastName: 'Person', batchYear: 1998,
+          status: 'PENDING', email: 'pending.person@example.com',
+        },
+      });
+      const r = await alumni.requestLink(schoolId, { contact: 'pending.person@example.com' });
+      expect(r).toEqual({ received: true });
+      const rows = await alumni.listLinkRequests(schoolId);
+      expect(rows).toHaveLength(1); // still just Farida
+    });
+
+    it('closing a request takes it off the queue and lets a new one be filed', async () => {
+      const [open] = await alumni.listLinkRequests(schoolId);
+      await alumni.closeLinkRequest(schoolId, open.id, ACTOR, true);
+      expect(await alumni.listLinkRequests(schoolId)).toHaveLength(0);
+      await alumni.requestLink(schoolId, { contact: 'farida.sheikh@example.com' });
+      expect(await alumni.listLinkRequests(schoolId)).toHaveLength(1);
+    });
+  });
 });

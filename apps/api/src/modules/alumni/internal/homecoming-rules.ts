@@ -346,6 +346,8 @@ export interface GraduationSource {
   firstName: string;
   lastName: string;
   email: string | null;
+  dob: Date | null;
+  guardianName: string | null;
   /** The GUARDIAN's number, and it must be labelled as such wherever it is shown. */
   guardianPhone: string | null;
   className: string | null;
@@ -360,6 +362,10 @@ export interface GraduationRow {
   batchYear: number;
   lastClass: string | null;
   email: string | null;
+  /** Carried so a later self-registration can be matched by machine rather than
+   *  by a clerk walking to a shelf. Office-only, forever. */
+  dob: Date | null;
+  guardianName: string | null;
   photoAssetId: string | null;
   /**
    * Deliberately NOT copied into Alumni.phone. The number on file belongs to a
@@ -379,6 +385,8 @@ export function toGraduationRows(students: GraduationSource[], batchYear: number
     batchYear,
     lastClass: s.className,
     email: s.email,
+    dob: s.dob,
+    guardianName: s.guardianName,
     photoAssetId: s.photoAssetId,
     guardianPhoneForInvite: s.guardianPhone,
   }));
@@ -405,4 +413,85 @@ export function privacyOf(privacy: unknown, field: PrivacyField): PrivacyLevel {
 /** What a brand-new alumnus starts with: everything closed but the bare identity. */
 export function defaultPrivacy(): Record<PrivacyField, PrivacyLevel> {
   return { name: 'ALUMNI', photo: 'HIDDEN', city: 'HIDDEN', work: 'HIDDEN', college: 'HIDDEN', phone: 'HIDDEN' };
+}
+
+// ─── Matching a claim to the roll ────────────────────────────────────────────
+
+export interface ClaimFacts {
+  firstName: string;
+  lastName: string;
+  batchYear: number;
+  dob: Date | null;
+}
+
+export interface RollCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  batchYear: number;
+  dob: Date | null;
+  admissionNo: string | null;
+  guardianName: string | null;
+  status: string;
+}
+
+export interface MatchScore {
+  candidateId: string;
+  /** What actually lined up, in words, because the office is deciding — not the
+   *  computer. A score with no reasons is a number somebody either trusts
+   *  blindly or ignores entirely. */
+  reasons: string[];
+  /** STRONG = name and year and date of birth. A clerk can act on it.
+   *  WEAK    = name and year only, which every sibling and namesake also has. */
+  strength: 'STRONG' | 'WEAK';
+}
+
+const sameDay = (a: Date | null, b: Date | null): boolean =>
+  !!a && !!b && a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10);
+
+const sameName = (a: string, b: string): boolean =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * Suggest which rows on the roll a claim might be.
+ *
+ * This NEVER decides anything. It hands the office a shortlist and says why,
+ * and a human presses the button — which is the whole design of the
+ * verification ladder and the reason claims live in their own table.
+ *
+ * Date of birth is what makes a suggestion worth reading: name-and-year alone
+ * matches every sibling, cousin and namesake in a batch, and a school of three
+ * hundred has several. So a match without a date of birth is reported WEAK
+ * rather than left to look like the same thing.
+ */
+export function matchClaimToRoll(claim: ClaimFacts, roll: RollCandidate[]): MatchScore[] {
+  const out: MatchScore[] = [];
+  for (const c of roll) {
+    if (c.batchYear !== claim.batchYear) continue;
+    const nameHit = sameName(c.firstName, claim.firstName) && sameName(c.lastName, claim.lastName);
+    const dobHit = sameDay(c.dob, claim.dob);
+    // A date of birth alone is enough to shortlist: somebody who married and
+    // changed their surname is exactly the person the paper register loses.
+    if (!nameHit && !dobHit) continue;
+
+    const reasons: string[] = [];
+    if (nameHit) reasons.push('name matches the roll');
+    else reasons.push('name differs — married name, or a spelling');
+    reasons.push(`left in ${c.batchYear}`);
+    // Three different situations, and a clerk acts differently on each. Saying
+    // "does NOT match" when the claimant simply left the field blank is the
+    // wording that gets a real alumnus declined.
+    if (dobHit) reasons.push('date of birth matches the student record');
+    else if (!claim.dob) reasons.push('claimant gave no date of birth');
+    else if (c.dob) reasons.push('date of birth does NOT match');
+    else reasons.push('no date of birth on file to check');
+
+    out.push({
+      candidateId: c.id,
+      reasons,
+      strength: nameHit && dobHit ? 'STRONG' : 'WEAK',
+    });
+  }
+  // Strong suggestions first; a clerk reads the top of a list.
+  return out.sort((a, b) => (a.strength === b.strength ? 0 : a.strength === 'STRONG' ? -1 : 1)).slice(0, 5);
 }

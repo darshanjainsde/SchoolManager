@@ -30,7 +30,10 @@ import {
   CreatePledgeDto,
   DecideSessionDto,
   DirectoryQueryDto,
+  AlumniLoginDto,
+  ChangeAlumniPasswordDto,
   RedeemClaimDto,
+  RequestLinkDto,
   RequestSessionDto,
   SlotsQueryDto,
   UpdateMeDto,
@@ -101,6 +104,33 @@ export class PublicAlumniController {
   }
 
   /**
+   * "I am already registered — send me my link."
+   *
+   * Public, because the whole point is that the caller has no session. The
+   * answer is identical whether or not the contact matches anybody, so this
+   * cannot be used to ask whether an address belongs to an alumnus here.
+   */
+  @Public()
+  @Post('link-request')
+  requestLink(@Body() dto: RequestLinkDto) {
+    return this.alumni.requestLink(this.sid(), dto);
+  }
+
+  /**
+   * The ordinary login, for alumni the school has given an account.
+   *
+   * Public because the caller has no session yet — that is the point. It mints
+   * the SAME AlumniAccessToken a claim link would, so there is one session
+   * concept and the guard downstream is unchanged.
+   */
+  @Public()
+  @Post('login')
+  async login(@Body() dto: AlumniLoginDto) {
+    const r = await this.auth.loginWithPassword(this.sid(), dto.email, dto.password);
+    return { session: r.session, expiresAt: r.expiresAt, alumni: r.alumni };
+  }
+
+  /**
    * Redeem a claim link for a device session.
    *
    * Public because the whole point is that the holder has no session yet. The
@@ -144,6 +174,16 @@ export class AlumniPortalController {
   @Put()
   updateMe(@Req() req: AlumniRequest, @Body() dto: UpdateMeDto) {
     return this.portal.updateMe(this.sid(), this.who(req).alumniId, dto);
+  }
+
+  /** An alumnus sets their own password, replacing the temporary one the office
+   *  handed over. Requires the current one, so a borrowed 90-day session on a
+   *  shared phone cannot lock the owner out of their own account. */
+  @Put('password')
+  changePassword(@Req() req: AlumniRequest, @Body() dto: ChangeAlumniPasswordDto) {
+    return this.auth.changePassword(
+      this.sid(), this.who(req).alumniId, dto.currentPassword, dto.newPassword,
+    );
   }
 
   @Post('sign-out')

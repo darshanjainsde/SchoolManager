@@ -60,6 +60,14 @@ enum UserRole {
   /// apps/api/src/modules/management/staff.service.ts and
   /// apps/web/app/login/page.tsx.
   STAFF
+  /// A former student with an account.
+  ///
+  /// A genuine role rather than the LIBRARIAN mistake repeated: a librarian IS
+  /// the school's staff, so the JOB decides the door and the login stays one
+  /// kind. An alumnus is not staff, not a teacher and not a student, holds no
+  /// Staff row, and reaches a data set with no overlap with any of theirs.
+  /// That is a different door, not a different job.
+  ALUMNUS
   /// LEGACY — the first library line modelled the librarian as a login ROLE.
   /// The Library Wing replaced that with one staff login kind: the JOB
   /// (Staff.role = LIBRARIAN) decides the door via /auth/me's staffRole, and
@@ -283,6 +291,7 @@ model School {
   giftDistributions      GiftDistribution[]
   guestSessions          GuestSession[]
   alumniAccessTokens     AlumniAccessToken[]
+  alumniLinkRequests     AlumniLinkRequest[]
 }
 
 model Domain {
@@ -2268,6 +2277,15 @@ model Alumni {
   admissionNo String?
   firstName   String
   lastName    String
+  /// Carried from the Student record at graduation, and the reason a claim can
+  /// be checked by MACHINE rather than by a clerk walking to a shelf. An
+  /// alumnus reliably remembers their own birthday; they often do not remember
+  /// whether they were in 10-A or 10-B. Office-only, always — it appears in no
+  /// projection any audience can reach.
+  dob           DateTime?
+  /// Same purpose, same visibility. A parent's name is the second thing an
+  /// Indian alumnus can always supply and the school always holds.
+  guardianName  String?
   /// The leaving year. An Int, because every screen in this module groups by it.
   batchYear   Int
   lastClass   String?
@@ -2304,6 +2322,7 @@ model Alumni {
   giftPledges   GiftPledge[]
   guestSessions GuestSession[]
   accessTokens  AlumniAccessToken[]
+  linkRequests  AlumniLinkRequest[]
 
   /// One alumni row per student. Re-running "graduate this batch" is therefore
   /// idempotent rather than duplicating a whole year group.
@@ -2340,6 +2359,13 @@ model AlumniClaim {
   firstName         String
   lastName          String
   batchYear         Int
+  /// What the applicant typed. Compared against Alumni.dob to suggest a match —
+  /// never trusted on its own, and never shown to anybody but the office.
+  claimedDob        DateTime?
+  /// "10-B", "5th standard". Optional on purpose: twenty years on, the year is
+  /// remembered and the section usually is not, and a required field somebody
+  /// cannot answer is a form they abandon.
+  claimedClass      String?
   claimedAdmissionNo String?
   email             String?
   phone             String?
@@ -2601,4 +2627,40 @@ enum AlumniTokenKind {
   /// The 90-day device session minted after a claim. Deliberately long: a
   /// returning alumnus should never authenticate twice in a term.
   SESSION
+}
+
+enum LinkRequestStatus {
+  PENDING
+  SENT
+  DISMISSED
+}
+
+/// "I am already registered — send me my link."
+///
+/// A row exists ONLY when the contact matched a verified alumnus. A non-match
+/// writes nothing at all, while the response to the caller is identical either
+/// way: telling somebody whether an address belongs to an alumnus of this
+/// school is an enumeration oracle, and it is also the only thing this endpoint
+/// could leak.
+///
+/// It is a queue rather than an email because email does not work yet
+/// (SMTP_PASS is missing on Preview) and SMS needs DLT registration. The office
+/// presses one button and gets a link to paste into the batch WhatsApp group,
+/// which is where these people actually are. The day mail works, the same
+/// request sends itself and never reaches a human.
+model AlumniLinkRequest {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  alumniId String @db.Uuid
+
+  status       LinkRequestStatus @default(PENDING)
+  createdAt    DateTime          @default(now())
+  sentAt       DateTime?
+  sentByUserId String?           @db.Uuid
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alumni Alumni @relation(fields: [alumniId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@index([alumniId])
 }

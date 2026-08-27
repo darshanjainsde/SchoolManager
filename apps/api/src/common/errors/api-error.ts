@@ -26,6 +26,12 @@ export type ErrorCode =
   /** One message for expired, already-used and never-existed alike. Telling a
    *  caller WHICH of the three they hit is an oracle for probing links. 401. */
   | 'ALUMNI_LINK_INVALID'
+  /** Wrong email/password, no such account, or the office has since un-verified
+   *  them. One message for all three — separate ones are an oracle for who has
+   *  an account at a given school. Pair with 401. */
+  | 'ALUMNI_LOGIN_INVALID'
+  /** Tried to change a password on an alumnus who has no account. Pair with 409. */
+  | 'NO_ALUMNI_ACCOUNT'
   /** A claim was merged into a record from a different batch year — almost
    *  always a mis-click in a long list. Pair with 409. */
   | 'CLAIM_BATCH_MISMATCH'

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../../auth';
 import { FeaturesModule } from '../../features';
 import { TenancyModule } from '../../tenancy';
 import { AlumniService } from './alumni.service';
@@ -15,7 +16,9 @@ import {
 } from './alumni-portal.controller';
 
 @Module({
-  imports: [FeaturesModule, TenancyModule],
+  // AuthModule provides PasswordService — the alumni account door hashes and
+  // verifies with exactly the same argon2id settings every other login uses.
+  imports: [AuthModule, FeaturesModule, TenancyModule],
   providers: [
     AlumniService,
     GiftsService,
