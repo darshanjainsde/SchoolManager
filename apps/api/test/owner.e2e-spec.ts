@@ -10,6 +10,7 @@
  */
 import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
 import Redis from 'ioredis';
+import { describeLiveApi } from './requires-live-api';
 
 const BASE = 'http://localhost:3001';
 async function ownerToken(): Promise<string> {
@@ -26,7 +27,7 @@ async function ownerToken(): Promise<string> {
   return (await res.json()).accessToken as string;
 }
 
-describe('POST /owner/schools', () => {
+describeLiveApi('POST /owner/schools', () => {
   const slug = `test-${Date.now()}`;
   afterAll(async () => {
     const db = getPlatformPrisma();
