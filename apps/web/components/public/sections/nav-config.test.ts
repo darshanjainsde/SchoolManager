@@ -165,7 +165,7 @@ describe('the overview behaviour actually goes somewhere', () => {
     const nodes = navModel({
       flags: {
         hasAbout: true, hasAcademics: true, hasAdmissions: true, hasHof: true,
-        hasGallery: true, hasEvents: true, hasBlog: true, hasContact: true, hasEnquiry: true,
+        hasGallery: true, hasEvents: true, hasAlumni: true, hasBlog: true, hasContact: true, hasEnquiry: true,
       },
       base: '',
       courses: [],
@@ -194,7 +194,7 @@ describe('the overview behaviour actually goes somewhere', () => {
     const nodes = navModel({
       flags: {
         hasAbout: true, hasAcademics: true, hasAdmissions: true, hasHof: true,
-        hasGallery: true, hasEvents: true, hasBlog: true, hasContact: true, hasEnquiry: true,
+        hasGallery: true, hasEvents: true, hasAlumni: true, hasBlog: true, hasContact: true, hasEnquiry: true,
       },
       base: '',
       courses: [],
