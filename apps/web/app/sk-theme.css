@@ -481,7 +481,14 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
 .sk-btn[data-variant="primary"] { background: var(--sk-brand); color: #fff; border-color: transparent; }
 @media (prefers-color-scheme: dark) { .sk-btn[data-variant="primary"] { color: #211d45; } }
 .sk-btn[data-variant="primary"]:hover { filter: brightness(1.06); }
-.sk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* NOT opacity. Fading the brand fill toward the card makes a washed indigo
+   that the white label sinks into — and a disabled button is usually disabled
+   BECAUSE its label is saying something ("Saving…", "Sending…"). A flat
+   neutral with muted ink stays readable and still reads as unavailable. */
+.sk-btn:disabled { cursor: not-allowed; background: var(--sk-bg-2); color: var(--sk-ink-3);
+  border-color: var(--sk-line); filter: none; }
+.sk-btn[data-variant="primary"]:disabled { background: var(--sk-bg-2); color: var(--sk-ink-3);
+  border-color: var(--sk-line); }
 
 /* ============================================================================
    Explicit theme choice — the toggle stamps data-theme on <html> and must beat
