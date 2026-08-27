@@ -122,8 +122,13 @@ commented out behind a probe marker.
 ## Never
 
 - `git add -A` — explicit paths only.
-- Commit `.env`, `packages/library-db/generated/`, `apps/library-api/api/`, or
-  `apps/api/api/`.
+- Commit `.env`, `packages/library-db/generated/`, or `apps/library-api/api/`.
+- Commit anything under `apps/api/api/` EXCEPT its `.js` entrypoints. Those six
+  files are tracked deliberately: `apps/api/vercel.json` declares
+  `functions."api/index.js"`, and Vercel validates that pattern against the
+  repo's checked-in files BEFORE the build runs — so untracking `index.js`
+  fails every deploy at config validation, with an error that names nothing
+  useful. The `.d.ts` and `.map` files beside them are gitignored.
 - Import Sckools code from the library, or widen a wildcard that lets Sckools
   reach the library. Isolation is enforced in both directions by
   `.dependency-cruiser.library.cjs` and `apps/api/tsconfig.json`.
