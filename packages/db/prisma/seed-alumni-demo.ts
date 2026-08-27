@@ -353,6 +353,16 @@ async function main() {
   // no students loaded yet, so the demo still has a number to show.
   const headcount = await step((db) => db.student.count({ where: { schoolId, isActive: true } }));
   const scopeCount = headcount > 0 ? headcount : 240;
+  if (headcount < 20) {
+    // Not fatal, but say it plainly. A gift's quantity IS the live headcount,
+    // so an empty school produces pledges for one child and gifting screens
+    // that look broken while being perfectly correct — which cost real time to
+    // diagnose the first time it happened.
+    console.log(
+      `  ! only ${headcount} active students here — gift screens will look thin.`
+      + ' Run seed-school-demo.ts against this school first.',
+    );
+  }
   console.log(`  · live headcount: ${headcount || '(none — using 240 for the demo)'}`);
   // Five pledges, placed at DIFFERENT points on the two journeys — because the
   // whole feature is the journey, and a demo where everything sits at PROPOSED
@@ -473,6 +483,19 @@ async function main() {
     });
   }
   console.log(`  ✓ ${PLEDGES.length} pledges, spread across both journeys`);
+
+  // Pledges left behind by API testing: PROPOSED, no history, no dedication.
+  // On screen they are indistinguishable from real demo data and they make the
+  // office queue look like a mess.
+  //
+  // Safe to identify precisely, rather than by counting: the seed's OWN
+  // proposed pledge carries a dedication ("In memory of Mrs. Dandekar"), and a
+  // pledge somebody has actually decided on has events. So "proposed, no
+  // events, no dedication" is exactly the litter and nothing else.
+  const cleared = await step((db) => db.giftPledge.deleteMany({
+    where: { schoolId, status: 'PROPOSED', dedicationText: null, events: { none: {} } },
+  }));
+  if (cleared.count > 0) console.log(`  ✓ cleared ${cleared.count} stray test pledges`);
 
   console.log('\n──────────────────────────────────────────────');
   console.log('  Alumnus login');
