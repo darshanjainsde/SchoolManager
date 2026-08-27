@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useHost } from '@/components/use-host';
@@ -118,6 +118,10 @@ export default function AlumniSitePage() {
   const host = useHost();
   const qc = useQueryClient();
   const [session, setSession] = useState<string | null>(null);
+  /** Held between "found it in the hash" and "the host is known". */
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
+  /** A single-use token must be spent once, even under StrictMode double-invoke. */
+  const claimedRef = useRef(false);
   const [tab, setTab] = useState<'batches' | 'directory' | 'give' | 'sessions' | 'me'>('batches');
   const [openYear, setOpenYear] = useState<number | null>(null);
 
@@ -137,18 +141,45 @@ export default function AlumniSitePage() {
     onError: (e) => toast.error(errText(e, 'That link is not valid any more. Ask the school for a new one.')),
   });
 
+  /**
+   * Step one, on mount: lift the token OUT of the URL and hold it.
+   *
+   * The hash is stripped immediately — a token left in the address bar ends up
+   * in the Referer header of every outbound link and in whatever gets pasted
+   * into a group chat when somebody shares "the page".
+   */
   useEffect(() => {
     setSession(readSession());
     const m = /[#&]claim=([^&]+)/.exec(window.location.hash);
     if (m?.[1]) {
-      const token = decodeURIComponent(m[1]);
+      setPendingToken(decodeURIComponent(m[1]));
       window.history.replaceState(null, '', window.location.pathname);
-      redeem.mutate(token);
     }
-    // Deliberately once, on mount: re-running this on every render would try to
-    // redeem a single-use token again and burn it.
+    // Once, on mount. Re-running would re-read a hash that is already gone.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Step two: redeem, but ONLY once the host is known.
+   *
+   * `useHost()` reads window.location.host in its own mount effect, so on the
+   * very first render it is undefined. Redeeming there sends no Host header,
+   * the API cannot resolve the tenant, and the answer is "No tenant context" —
+   * which burns nothing, but means the claim link simply never works. This is
+   * the same fault the Exam Hall tab shipped with; the repo's host guard did
+   * not catch it here because that guard reads `useQuery` bodies under
+   * `app/app`, and this is a mutation in an effect under `app/alumni`.
+   *
+   * The ref makes it fire exactly once. The token is single-use: a second
+   * attempt would spend it and land the alumnus on an error.
+   */
+  useEffect(() => {
+    if (!host || !pendingToken || claimedRef.current) return;
+    claimedRef.current = true;
+    redeem.mutate(pendingToken);
+    setPendingToken(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [host, pendingToken]);
 
   const me = useQuery({
     queryKey: ['alumni-site', 'me', session],
