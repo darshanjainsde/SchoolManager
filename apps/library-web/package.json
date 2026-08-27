@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p ${LIBRARY_WEB_PORT:-3100}",
-    "build": "next build",
+    "build": "NODE_ENV=production next build",
     "start": "next start -p ${LIBRARY_WEB_PORT:-3100}",
     "lint": "next lint --dir app --dir components --dir lib",
     "typecheck": "tsc --noEmit",

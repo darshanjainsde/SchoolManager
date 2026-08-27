@@ -101,8 +101,21 @@ commented out behind a probe marker.
 - **Run the package script, never the bare tool.** `pnpm --filter X test:e2e`,
   not `jest --config …`. The bare invocation misses env the script provides and
   reports "skipped" rather than failing — a false green.
-- **`set -a && source .env && set +a`** first. `pnpm --filter` does not load the
-  root `.env`.
+- **`set -a && source .env && set +a`** before the **e2e suites and DB scripts
+  only** — they need real credentials, and `pnpm --filter` does not load the
+  root `.env`. NEVER before a build or the unit tests. A sourced `.env` leaks
+  into whatever runs next, and the resulting failures name your code rather
+  than your shell: three times in one build, twice reported to Darshan as
+  pre-existing product breakage. Builds now pin their own `NODE_ENV` and the
+  unit fixture overrides rather than defers, so both are immune — but the habit
+  is what to fix.
+- **Never say "pre-existing" without reproducing it cleanly.** "It fails on an
+  earlier commit too" proves your change is innocent; it does NOT prove the
+  code is at fault, because a polluted shell, a stale server on the wrong
+  database, or a missing fixture fails identically on every commit. Two cheap
+  checks first: run it the way CI does with nothing sourced, and read the
+  failure for a *precondition* before reading it as a defect. A suite whose
+  first line says "requires a separately booted API" is telling you which.
 - **Never background a long command through a buffering pipe.** `cmd | grep` in
   the background leaves the output file empty until the pipe closes, destroying
   exactly the progress you piped it through. Redirect raw to a file, grep the file.
