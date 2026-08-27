@@ -8,6 +8,9 @@ import {
   SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
+import { loadEnv } from '@skoolos/config';
+import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
 import type { Request } from 'express';
 import { TenantContextService } from '../../tenancy';
 import { AlumniAuthService, type AlumniIdentity } from './alumni-auth.service';
@@ -38,11 +41,39 @@ export interface AlumniRequest extends Request {
 
 @Injectable()
 export class AlumniSessionGuard implements CanActivate {
+  private readonly env = loadEnv();
+
   constructor(
     @Inject(AlumniAuthService) private readonly auth: AlumniAuthService,
     @Inject(TenantContextService) private readonly tenant: TenantContextService,
     @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(JwtService) private readonly jwt: JwtService,
   ) {}
+
+  /**
+   * The third door: an ordinary school JWT whose role is ALUMNUS.
+   *
+   * Verified with the SAME secret and audience as `SchoolJwtGuard`, and the
+   * schoolId in the token must match the host — a token minted for school A is
+   * not a session at school B. Anything less than all three checks would make
+   * this a way around the school guard rather than a second entrance to it.
+   */
+  private fromSchoolJwt(token: string, schoolId: string): Promise<AlumniIdentity | null> | null {
+    let payload: SchoolJwtPayload;
+    try {
+      payload = this.jwt.verify<SchoolJwtPayload>(token, {
+        secret: this.env.JWT_SCHOOL_ACCESS_SECRET,
+        audience: 'school',
+      });
+    } catch {
+      return null;
+    }
+    if (payload.aud !== 'school') return null;
+    if (payload.schoolId !== schoolId) return null;
+    if (payload.role !== 'ALUMNUS') return null;
+    if (!payload.sub) return null;
+    return this.auth.resolveSchoolUser(schoolId, payload.sub);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const ctx = this.tenant.requireTenant();
@@ -52,9 +83,14 @@ export class AlumniSessionGuard implements CanActivate {
     const token = readToken(req);
     if (!token) throw new UnauthorizedException('Sign in with your link');
 
-    const alumnus = await this.auth.resolveSession(ctx.schoolId, token);
-    // resolveSession re-reads status and isDeceased on EVERY request, so the
-    // office un-verifying somebody takes effect on their next call rather than
+    // An AlumniAccessToken first — it is what the link and the alumni-page
+    // login both mint, and it is the common case. Only if that fails is the
+    // token tried as a school JWT, so the ordinary path costs no extra work.
+    const alumnus =
+      (await this.auth.resolveSession(ctx.schoolId, token)) ??
+      (await this.fromSchoolJwt(token, ctx.schoolId));
+    // Both paths re-read status and isDeceased on EVERY request, so the office
+    // un-verifying somebody takes effect on their next call rather than
     // whenever their ninety-day session happens to lapse.
     if (!alumnus) throw new UnauthorizedException('That link is not valid any more');
 

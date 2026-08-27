@@ -6,6 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
 import type {
+  AlumniListResult,
   AlumniSummary,
   ClaimRow,
   GiftGroups,
@@ -22,18 +23,19 @@ import type {
 /**
  * The Alumni Office — the school's side of Homecoming.
  *
- * Five tabs, and every one of them is a queue or a board the coordinator works
+ * Six tabs, and every one of them is a queue or a board the coordinator works
  * through. The alumnus-facing half (the passwordless door, public batch pages,
  * the Give and Sessions tabs an alumnus sees) is a separate slice; this screen
  * deliberately contains everything a school does WITHOUT needing that to exist,
  * so it can be tested and audited on its own.
  */
 
-type Tab = 'office' | 'verify' | 'rollcall' | 'gifts' | 'sessions';
+type Tab = 'office' | 'verify' | 'people' | 'rollcall' | 'gifts' | 'sessions';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'office', label: 'Alumni Office' },
   { id: 'verify', label: 'Verification' },
+  { id: 'people', label: 'People' },
   { id: 'rollcall', label: 'Roll Call' },
   { id: 'gifts', label: 'Gifts' },
   { id: 'sessions', label: 'Session requests' },
@@ -122,6 +124,7 @@ export default function AlumniOfficePage() {
 
       {tab === 'office' && <OfficeTab summary={summary.data} onGo={setTab} onChanged={invalidateAll} />}
       {tab === 'verify' && <VerifyTab onChanged={invalidateAll} />}
+      {tab === 'people' && <PeopleTab onChanged={invalidateAll} />}
       {tab === 'rollcall' && <RollCallTab />}
       {tab === 'gifts' && <GiftsTab onChanged={invalidateAll} />}
       {tab === 'sessions' && <SessionsTab onChanged={invalidateAll} />}
@@ -333,20 +336,75 @@ function QueueCard({ title, body, onGo }: { title: string; body: string; onGo: (
 
 // ─── Verification ────────────────────────────────────────────────────────────
 
+interface Suggestion {
+  alumniId: string; name: string; admissionNo: string | null;
+  guardianName: string | null; status: string;
+  strength: 'STRONG' | 'WEAK'; reasons: string[];
+}
+
+interface LinkRequestRow {
+  id: string;
+  alumni: { id: string; firstName: string; lastName: string; batchYear: number; email: string | null; phone: string | null };
+}
+
+/** Shown once, then gone. Nothing stores it and there is no way to read it back,
+ *  so the office copies it out now or provisions again. */
+function Handover({ title, lines }: { title: string; lines: string[] }) {
+  return (
+    <div style={{ borderLeft: '3px solid var(--sk-good)', background: 'var(--sk-good-tint)', padding: '12px 15px', borderRadius: 9 }}>
+      <div style={{ fontWeight: 650, fontSize: 14 }}>{title}</div>
+      {lines.map((l) => (
+        <div key={l} className="sk-num" style={{ fontSize: 13, marginTop: 4, wordBreak: 'break-all' }}>{l}</div>
+      ))}
+      <p className="sk-muted" style={{ marginTop: 8 }}>
+        Copy this now — it is shown once and cannot be read back. Paste it into the batch WhatsApp group.
+      </p>
+    </div>
+  );
+}
+
 function VerifyTab({ onChanged }: { onChanged: () => void }) {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
   const [reasons, setReasons] = useState<Record<string, string>>({});
 
+  const [handover, setHandover] = useState<{ title: string; lines: string[] } | null>(null);
+
   const claims = useQuery({
     queryKey: ['alumni', 'claims'],
-    queryFn: () => api.get<ClaimRow[]>('/manage/alumni/claims?status=PENDING'),
+    queryFn: () => api.get<(ClaimRow & { suggestions: Suggestion[] })[]>('/manage/alumni/claims?status=PENDING'),
     enabled: !!host,
   });
 
+  const linkReqs = useQuery({
+    queryKey: ['alumni', 'link-requests'],
+    queryFn: () => api.get<LinkRequestRow[]>('/manage/alumni/link-requests'),
+    enabled: !!host,
+  });
+
+  /** Mints a fresh claim link. The office pastes it into WhatsApp — there is no
+   *  email yet, and this is where these people actually are. */
+  const sendLink = useMutation({
+    mutationFn: (v: { alumniId: string; requestId?: string; name: string }) =>
+      api.post<{ token: string }>(`/manage/alumni/${v.alumniId}/claim-link`, {}).then(async (r) => {
+        if (v.requestId) await api.post(`/manage/alumni/link-requests/${v.requestId}/sent`, {});
+        return { ...r, name: v.name };
+      }),
+    onSuccess: (r) => {
+      onChanged();
+      setHandover({
+        title: `Link for ${r.name} — expires in 30 minutes`,
+        lines: [`${window.location.origin}/alumni#claim=${r.token}`],
+      });
+    },
+    onError: (e) => toast.error(errText(e, 'Could not make a link.')),
+  });
+
   const decide = useMutation({
-    mutationFn: (v: { id: string; action: 'VERIFY' | 'DECLINE'; reason?: string }) =>
-      api.post(`/manage/alumni/claims/${v.id}/decide`, { action: v.action, reason: v.reason }),
+    mutationFn: (v: { id: string; action: 'VERIFY' | 'DECLINE'; reason?: string; mergeIntoAlumniId?: string }) =>
+      api.post(`/manage/alumni/claims/${v.id}/decide`, {
+        action: v.action, reason: v.reason, mergeIntoAlumniId: v.mergeIntoAlumniId,
+      }),
     onSuccess: (_r, v) => {
       onChanged();
       toast.success(v.action === 'VERIFY' ? 'Verified.' : 'Declined, with the reason sent.');
@@ -355,22 +413,48 @@ function VerifyTab({ onChanged }: { onChanged: () => void }) {
   });
 
   if (claims.isLoading) return <p className="sk-state">Loading the queue…</p>;
-  if (!claims.data?.length) {
-    return (
-      <section className="sk-card">
-        <div className="sk-card-b">
-          <p className="sk-state">
-            The queue is clear. Nobody is waiting, and nobody unverified is visible to another
-            human being.
-          </p>
-        </div>
-      </section>
-    );
-  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {claims.data.map((c) => (
+      {handover && <Handover title={handover.title} lines={handover.lines} />}
+
+      {/* People who already exist and just cannot get back in. Kept ABOVE the
+          claims: it is one button and it unblocks somebody who is already
+          approved, where a claim needs a judgement. */}
+      {!!linkReqs.data?.length && (
+        <section className="sk-card">
+          <div className="sk-card-h">
+            <h3>Wants their link back</h3>
+            <p>Already verified. They asked from the alumni page; one button makes a fresh link.</p>
+          </div>
+          <div className="sk-card-b">
+            {linkReqs.data.map((r) => (
+              <div className="sk-row" key={r.id}>
+                <div className="sp">
+                  <div className="nm">{fullName(r.alumni)} <span className="sk-pill" style={{ background: 'var(--sk-bg-2)', color: 'var(--sk-ink-3)' }}>{r.alumni.batchYear}</span></div>
+                  <div className="meta">{[r.alumni.email, r.alumni.phone].filter(Boolean).join(' · ') || 'no contact on file'}</div>
+                </div>
+                <button type="button" className="sk-btn"
+                  style={{ background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
+                  onClick={() => sendLink.mutate({ alumniId: r.alumni.id, requestId: r.id, name: r.alumni.firstName })}>
+                  Make a link
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!claims.data?.length && (
+        <section className="sk-card">
+          <div className="sk-card-b">
+            <p className="sk-state">
+              No claims waiting. Nobody unverified is visible to another human being.
+            </p>
+          </div>
+        </section>
+      )}
+      {claims.data?.map((c) => (
         <section className="sk-card" key={c.id}>
           <div className="sk-card-h">
             <h3>{fullName(c)}</h3>
@@ -385,6 +469,10 @@ function VerifyTab({ onChanged }: { onChanged: () => void }) {
           </div>
           <div className="sk-card-b">
             <p className="sk-muted">
+              <strong>Date of birth given:</strong>{' '}
+              {c.claimedDob ? c.claimedDob.slice(0, 10) : '— not given —'}
+              {c.claimedClass ? <> · <strong>Class:</strong> {c.claimedClass}</> : null}
+              <br />
               <strong>Admission number claimed:</strong> {c.claimedAdmissionNo || '— not remembered —'}
               <br />
               <strong>Proof offered:</strong> {c.proof}
@@ -395,6 +483,40 @@ function VerifyTab({ onChanged }: { onChanged: () => void }) {
                 </>
               )}
             </p>
+            {c.suggestions?.length ? (
+              <div style={{ background: 'var(--sk-bg-2)', borderRadius: 11, padding: '12px 14px' }}>
+                <div className="sk-lab" style={{ marginBottom: 6 }}>Who this might be on the roll</div>
+                {c.suggestions.map((sg) => (
+                  <div className="sk-row" key={sg.alumniId} style={{ borderTop: '1px solid var(--sk-line)' }}>
+                    <div className="sp">
+                      <div className="nm">
+                        {sg.name}{' '}
+                        <span className="sk-pill" style={sg.strength === 'STRONG'
+                          ? { background: 'var(--sk-good-tint)', color: 'var(--sk-good)' }
+                          : { background: 'var(--sk-amber-tint)', color: 'var(--sk-amber-ink)' }}>
+                          {sg.strength === 'STRONG' ? 'strong match' : 'weak — check by hand'}
+                        </span>
+                      </div>
+                      <div className="meta">
+                        {sg.reasons.join(' · ')}
+                        {sg.admissionNo ? ` · adm ${sg.admissionNo}` : ''}
+                        {sg.guardianName ? ` · parent ${sg.guardianName}` : ''}
+                      </div>
+                    </div>
+                    <button type="button" className="sk-btn"
+                      disabled={decide.isPending}
+                      onClick={() => decide.mutate({ id: c.id, action: 'VERIFY', mergeIntoAlumniId: sg.alumniId })}>
+                      This is them
+                    </button>
+                  </div>
+                ))}
+                <p className="sk-muted" style={{ marginTop: 8 }}>
+                  A suggestion decides nothing. A strong match is name, year AND date of birth —
+                  name and year alone fit every sibling and namesake in a batch.
+                </p>
+              </div>
+            ) : null}
+
             <label className="sk-lab" htmlFor={`reason-${c.id}`}>
               Reason (required to decline)
             </label>
@@ -437,6 +559,156 @@ function VerifyTab({ onChanged }: { onChanged: () => void }) {
 }
 
 // ─── Roll Call ───────────────────────────────────────────────────────────────
+
+/**
+ * The roll — every alumnus the school holds, and the three things the office
+ * does to one of them.
+ *
+ * This tab existed as an API and nothing else, which meant `trustedForStudents`
+ * could never be granted: the flag gates every guest-session route, so the
+ * whole sessions half of Homecoming was unreachable from the interface. A
+ * capability with no control is a capability the school does not have.
+ */
+function PeopleTab({ onChanged }: { onChanged: () => void }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const [q, setQ] = useState('');
+  const [handover, setHandover] = useState<{ title: string; lines: string[] } | null>(null);
+  const [emailFor, setEmailFor] = useState<Record<string, string>>({});
+
+  const people = useQuery({
+    queryKey: ['alumni', 'people', q],
+    queryFn: () => api.get<AlumniListResult>(`/manage/alumni?take=50${q ? `&q=${encodeURIComponent(q)}` : ''}`),
+    enabled: !!host,
+  });
+
+  const refresh = () => {
+    onChanged();
+    void people.refetch();
+  };
+
+  const trust = useMutation({
+    mutationFn: (v: { id: string; trusted: boolean }) =>
+      api.put(`/manage/alumni/${v.id}/trusted`, { trusted: v.trusted }),
+    onSuccess: refresh,
+    onError: (e) => toast.error(errText(e, 'Could not change that.')),
+  });
+
+  const sendLink = useMutation({
+    mutationFn: (v: { id: string; name: string }) =>
+      api.post<{ token: string }>(`/manage/alumni/${v.id}/claim-link`, {}).then((r) => ({ ...r, name: v.name })),
+    onSuccess: (r) => setHandover({
+      title: `Link for ${r.name} — expires in 30 minutes`,
+      lines: [`${window.location.origin}/alumni#claim=${r.token}`],
+    }),
+    onError: (e) => toast.error(errText(e, 'Could not make a link.')),
+  });
+
+  const makeAccount = useMutation({
+    mutationFn: (v: { id: string; email: string; name: string }) =>
+      api.post<{ email: string; tempPassword: string }>(`/manage/alumni/${v.id}/account`, { email: v.email })
+        .then((r) => ({ ...r, name: v.name })),
+    onSuccess: (r) => {
+      refresh();
+      setHandover({
+        title: `Account for ${r.name}`,
+        lines: [`Email: ${r.email}`, `Temporary password: ${r.tempPassword}`],
+      });
+    },
+    onError: (e) => toast.error(errText(e, 'Could not create that account.')),
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {handover && <Handover title={handover.title} lines={handover.lines} />}
+
+      <section className="sk-card">
+        <div className="sk-card-h">
+          <h3>The roll</h3>
+          <p>Everyone the school holds. Search by name, batch year, city or trade.</p>
+        </div>
+        <div className="sk-card-b">
+          <input
+            className="sk-input"
+            placeholder="Search the roll…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label="Search alumni"
+          />
+
+          {people.isLoading && <p className="sk-state">Loading…</p>}
+          {people.data && !people.data.rows.length && (
+            <p className="sk-state">Nobody matches that.</p>
+          )}
+
+          {people.data?.rows.map((a) => (
+            <div key={a.id} style={{ borderTop: '1px solid var(--sk-line)', padding: '12px 0' }}>
+              <div className="sk-row">
+                <div className="sp">
+                  <div className="nm">
+                    {fullName(a)} <span className="sk-pill" style={{ background: 'var(--sk-bg-2)', color: 'var(--sk-ink-3)' }}>{a.batchYear}</span>
+                    {a.status !== 'VERIFIED' && (
+                      <span className="sk-pill" style={{ marginLeft: 6, background: 'var(--sk-amber-tint)', color: 'var(--sk-amber-ink)' }}>{a.status.toLowerCase()}</span>
+                    )}
+                    {a.trustedForStudents && (
+                      <span className="sk-pill" style={{ marginLeft: 6, background: 'var(--sk-good-tint)', color: 'var(--sk-good)' }}>cleared for students</span>
+                    )}
+                  </div>
+                  <div className="meta">
+                    {[a.profession, a.city, a.email, a.phone].filter(Boolean).join(' · ') || 'nothing on file'}
+                  </div>
+                </div>
+              </div>
+
+              {a.status === 'VERIFIED' && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+                  <button type="button" className="sk-btn"
+                    disabled={sendLink.isPending}
+                    onClick={() => sendLink.mutate({ id: a.id, name: a.firstName })}>
+                    Make a sign-in link
+                  </button>
+
+                  <input
+                    className="sk-input"
+                    style={{ width: 230 }}
+                    placeholder={a.email || 'email for their login'}
+                    value={emailFor[a.id] ?? ''}
+                    onChange={(e) => setEmailFor((m) => ({ ...m, [a.id]: e.target.value }))}
+                    aria-label={`Login email for ${fullName(a)}`}
+                  />
+                  <button type="button" className="sk-btn"
+                    disabled={makeAccount.isPending || !(emailFor[a.id] || a.email)}
+                    onClick={() => makeAccount.mutate({
+                      id: a.id, email: emailFor[a.id] || a.email || '', name: a.firstName,
+                    })}>
+                    Create a login
+                  </button>
+
+                  {/* The only control that puts an adult in a room with children.
+                      Kept last, worded as what it does, and reversible in one click. */}
+                  <button type="button"
+                    className="sk-btn"
+                    style={a.trustedForStudents
+                      ? undefined
+                      : { background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
+                    disabled={trust.isPending}
+                    onClick={() => trust.mutate({ id: a.id, trusted: !a.trustedForStudents })}>
+                    {a.trustedForStudents ? 'Withdraw clearance' : 'Clear to teach a class'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <p className="sk-muted">
+        Clearing somebody lets them book a period with a class. Withdrawing it cancels
+        any session they have scheduled — the class gets its teacher back automatically.
+      </p>
+    </div>
+  );
+}
 
 function RollCallTab() {
   const host = useHost();

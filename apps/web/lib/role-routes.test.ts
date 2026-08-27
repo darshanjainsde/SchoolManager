@@ -48,4 +48,17 @@ describe('homeForRole', () => {
     // layout did. This assertion is what stops it drifting back.
     expect(homeForRole('LIBRARIAN').startsWith('/app')).toBe(false);
   });
+
+  it('sends an alumnus to the alumni page, not round the login loop', () => {
+    // Before ALUMNUS was added here it fell to `default` and returned /login —
+    // from which a successful login would route back to /login, forever.
+    expect(homeForRole('ALUMNUS')).toBe('/alumni');
+  });
+
+  it('keeps the alumni page OUTSIDE /app', () => {
+    // /alumni is the school's public site in the school's own theme. Under
+    // /app it would inherit the admin sidebar and the admin layout's
+    // `role !== 'SCHOOL_ADMIN'` redirect, which would bounce every alumnus.
+    expect(homeForRole('ALUMNUS').startsWith('/app')).toBe(false);
+  });
 });

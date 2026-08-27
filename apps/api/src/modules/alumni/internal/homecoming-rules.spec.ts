@@ -1,4 +1,5 @@
 import {
+  matchClaimToRoll,
   amountForMode,
   assertScopeShape,
   buildSlots,
@@ -244,7 +245,8 @@ describe('slot availability', () => {
 describe('graduating a batch', () => {
   const students = [
     { id: 'st-1', admissionNo: '2013/0417', firstName: 'Aarav', lastName: 'Sharma', email: 'a@x.com',
-      guardianPhone: '+919800000001', className: 'XII – A', photoAssetId: 'ph-1' },
+      guardianPhone: '+919800000001', className: 'XII – A', photoAssetId: 'ph-1',
+      dob: new Date('2008-03-04'), guardianName: 'R. Sharma' },
   ];
 
   it('carries the record across without anybody typing it', () => {
@@ -327,5 +329,80 @@ describe('the local unions match the Prisma enums exactly', () => {
     for (const status of Object.keys(prisma.GiftStatus)) {
       expect(nextGiftStatus(status as never, 'CANCEL')).not.toBeUndefined();
     }
+  });
+});
+
+describe('matchClaimToRoll', () => {
+  const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+  const cand = (over: Partial<Parameters<typeof matchClaimToRoll>[1][0]> = {}) => ({
+    id: 'c1', firstName: 'Anita', lastName: 'Rao', batchYear: 2014,
+    dob: d('2014-03-02'), admissionNo: 'A/101', guardianName: 'S Rao', status: 'VERIFIED',
+    ...over,
+  });
+  const claim = (over: Partial<Parameters<typeof matchClaimToRoll>[0]> = {}) => ({
+    firstName: 'Anita', lastName: 'Rao', batchYear: 2014, dob: d('2014-03-02'), ...over,
+  });
+
+  it('calls name + year + date of birth STRONG', () => {
+    const [m] = matchClaimToRoll(claim(), [cand()]);
+    expect(m.strength).toBe('STRONG');
+    expect(m.candidateId).toBe('c1');
+  });
+
+  it('calls name + year alone WEAK — every sibling and namesake has that much', () => {
+    const [m] = matchClaimToRoll(claim({ dob: null }), [cand()]);
+    expect(m.strength).toBe('WEAK');
+    expect(m.reasons).toContain('claimant gave no date of birth');
+    expect(m.reasons).not.toContain('date of birth does NOT match');
+  });
+
+  it('shortlists on date of birth alone — a married name is what loses people', () => {
+    const [m] = matchClaimToRoll(claim({ lastName: 'Menon' }), [cand()]);
+    expect(m).toBeDefined();
+    expect(m.strength).toBe('WEAK');
+    expect(m.reasons).toContain('name differs — married name, or a spelling');
+  });
+
+  it('never crosses batch years, however well the name fits', () => {
+    expect(matchClaimToRoll(claim(), [cand({ batchYear: 2013 })])).toEqual([]);
+  });
+
+  it('drops a candidate that shares neither name nor date of birth', () => {
+    expect(matchClaimToRoll(claim(), [cand({ firstName: 'Vikram', lastName: 'Shah', dob: d('2014-09-09') })])).toEqual([]);
+  });
+
+  it('still shortlists a name match whose date of birth CONTRADICTS, and says so', () => {
+    // Deliberate: the office decides. Hiding a near-miss is how a clerk merges
+    // the wrong sibling, because the row simply never appeared.
+    const [m] = matchClaimToRoll(claim(), [cand({ dob: d('2014-08-19') })]);
+    expect(m.strength).toBe('WEAK');
+    expect(m.reasons).toContain('date of birth does NOT match');
+  });
+
+  it('says plainly when the school holds no date of birth to check against', () => {
+    const [m] = matchClaimToRoll(claim(), [cand({ dob: null })]);
+    expect(m.reasons).toContain('no date of birth on file to check');
+  });
+
+  it('is case- and whitespace-insensitive on names', () => {
+    const [m] = matchClaimToRoll(claim({ firstName: '  aNiTa ', lastName: 'RAO' }), [cand()]);
+    expect(m.strength).toBe('STRONG');
+  });
+
+  it('puts strong suggestions above weak ones', () => {
+    const rows = matchClaimToRoll(claim(), [
+      cand({ id: 'weak', dob: null }),
+      cand({ id: 'strong' }),
+    ]);
+    expect(rows[0].candidateId).toBe('strong');
+  });
+
+  it('caps the shortlist at five — a clerk reads a list, not a report', () => {
+    const many = Array.from({ length: 12 }, (_, i) => cand({ id: `c${i}` }));
+    expect(matchClaimToRoll(claim(), many)).toHaveLength(5);
+  });
+
+  it('returns nothing for an empty roll rather than throwing', () => {
+    expect(matchClaimToRoll(claim(), [])).toEqual([]);
   });
 });

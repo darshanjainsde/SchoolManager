@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
-import { defaultPrivacy, toGraduationRows } from './homecoming-rules';
+import { defaultPrivacy, matchClaimToRoll, toGraduationRows, type MatchScore } from './homecoming-rules';
 import type {
   CreateClaimDto,
+  RequestLinkDto,
   DecideClaimDto,
   GraduateBatchDto,
   ListAlumniQueryDto,
@@ -104,6 +105,9 @@ export class AlumniService {
         select: {
           id: true, admissionNo: true, firstName: true, lastName: true, email: true,
           guardianPhone: true, photoAssetId: true, classSectionId: true,
+          // The two facts that let a later self-registration be checked by
+          // machine instead of by a clerk walking to a shelf.
+          dob: true, guardianName: true,
         },
       });
 
@@ -114,6 +118,8 @@ export class AlumniService {
           firstName: s.firstName,
           lastName: s.lastName,
           email: s.email,
+          dob: s.dob,
+          guardianName: s.guardianName,
           guardianPhone: s.guardianPhone,
           className: s.classSectionId ? (label.get(s.classSectionId) ?? null) : null,
           photoAssetId: s.photoAssetId,
@@ -131,6 +137,8 @@ export class AlumniService {
           batchYear: r.batchYear,
           lastClass: r.lastClass,
           email: r.email,
+          dob: r.dob,
+          guardianName: r.guardianName,
           photoAssetId: r.photoAssetId,
           // r.guardianPhoneForInvite is deliberately NOT written to `phone`.
           // See toGraduationRows — it belongs to a parent, and a school that
@@ -235,17 +243,135 @@ export class AlumniService {
 
   // ─── Claims ────────────────────────────────────────────────────────────────
 
+  /**
+   * The queue, with a shortlist of who each claim might be.
+   *
+   * The shortlist decides nothing — a human presses the button. But without it
+   * the coordinator's job is to walk to a shelf and read a bound register,
+   * which is why the queue in every alumni product ends up untouched. Date of
+   * birth is what makes a suggestion worth reading: name-and-year alone matches
+   * every sibling and namesake in a batch.
+   */
   async listClaims(schoolId: string, status?: string) {
-    return withTenant(schoolId, (tx) =>
-      tx.alumniClaim.findMany({
+    return withTenant(schoolId, async (tx) => {
+      const claims = await tx.alumniClaim.findMany({
         where: { schoolId, ...(status ? { status: status as never } : {}) },
         // Vouched claims first: the office cannot personally recognise four
         // thousand faces from thirty years of registers, and a name attached to
         // a recommendation is the only thing that makes the queue tractable.
         orderBy: [{ vouchedByAlumniId: { sort: 'desc', nulls: 'last' } }, { createdAt: 'asc' }],
         take: 200,
+      });
+      if (claims.length === 0) return [];
+
+      // One query for every year in the queue, not one per claim.
+      const years = [...new Set(claims.map((c) => c.batchYear))];
+      const roll = await tx.alumni.findMany({
+        where: { schoolId, batchYear: { in: years } },
+        select: {
+          id: true, firstName: true, lastName: true, batchYear: true,
+          dob: true, admissionNo: true, guardianName: true, status: true,
+        },
+      });
+
+      return claims.map((c) => {
+        const suggestions: MatchScore[] = matchClaimToRoll(
+          { firstName: c.firstName, lastName: c.lastName, batchYear: c.batchYear, dob: c.claimedDob },
+          roll,
+        );
+        return {
+          ...c,
+          suggestions: suggestions.map((m) => {
+            const cand = roll.find((r) => r.id === m.candidateId)!;
+            return {
+              alumniId: cand.id,
+              name: `${cand.firstName} ${cand.lastName}`.trim(),
+              admissionNo: cand.admissionNo,
+              guardianName: cand.guardianName,
+              status: cand.status,
+              strength: m.strength,
+              reasons: m.reasons,
+            };
+          }),
+        };
+      });
+    });
+  }
+
+  // ─── "Send me my link" ─────────────────────────────────────────────────────
+
+  /**
+   * A verified alumnus who has lost their link asks for another.
+   *
+   * A row is written ONLY when the contact matches somebody real and verified.
+   * The response is identical either way — telling a caller whether an address
+   * belongs to an alumnus of this school is an enumeration oracle, and it is
+   * the only thing this endpoint could leak.
+   *
+   * It is a queue rather than an email because email does not work yet. The day
+   * it does, this same request sends itself and never reaches a human.
+   */
+  async requestLink(schoolId: string, dto: RequestLinkDto) {
+    const contact = dto.contact.trim();
+    await withTenant(schoolId, async (tx) => {
+      const alum = await tx.alumni.findFirst({
+        where: {
+          schoolId,
+          status: 'VERIFIED',
+          isDeceased: false,
+          OR: [
+            { email: { equals: contact, mode: 'insensitive' } },
+            { phone: contact },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!alum) return;
+      // One live request per alumnus. Somebody tapping it three times because
+      // nothing visibly happened is the normal case, and three rows is a queue
+      // the coordinator reads three times to learn one thing. The partial
+      // unique index is the real guarantee; this avoids the error path.
+      const open = await tx.alumniLinkRequest.findFirst({
+        where: { schoolId, alumniId: alum.id, status: 'PENDING' },
+        select: { id: true },
+      });
+      if (open) return;
+      await tx.alumniLinkRequest.create({
+        data: { schoolId, alumniId: alum.id, status: 'PENDING' },
+      });
+    }).catch(() => undefined);
+    // Always the same answer.
+    return { received: true };
+  }
+
+  listLinkRequests(schoolId: string) {
+    return withTenant(schoolId, (tx) =>
+      tx.alumniLinkRequest.findMany({
+        where: { schoolId, status: 'PENDING' },
+        orderBy: { createdAt: 'asc' },
+        take: 100,
+        include: {
+          alumni: {
+            select: { id: true, firstName: true, lastName: true, batchYear: true, email: true, phone: true },
+          },
+        },
       }),
     );
+  }
+
+  async closeLinkRequest(schoolId: string, id: string, userId: string | null, sent: boolean) {
+    return withTenant(schoolId, async (tx) => {
+      const row = await tx.alumniLinkRequest.findFirst({ where: { id, schoolId } });
+      if (!row) throw new NotFoundException('Request not found');
+      return tx.alumniLinkRequest.update({
+        where: { id },
+        data: {
+          status: sent ? 'SENT' : 'DISMISSED',
+          sentAt: sent ? new Date() : null,
+          sentByUserId: sent ? userId : null,
+        },
+      });
+    });
   }
 
   /**
@@ -306,6 +432,8 @@ export class AlumniService {
           firstName: first,
           lastName: last,
           batchYear: dto.batchYear,
+          claimedDob: dto.dob ? new Date(dto.dob) : null,
+          claimedClass: dto.claimedClass?.trim() || null,
           email: dto.email?.trim() || null,
           phone: dto.phone?.trim() || null,
           proof: dto.proof.trim(),

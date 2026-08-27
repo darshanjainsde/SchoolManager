@@ -71,6 +71,8 @@ export interface ClaimRow {
   lastName: string;
   batchYear: number;
   claimedAdmissionNo: string | null;
+  claimedDob: string | null;
+  claimedClass: string | null;
   email: string | null;
   phone: string | null;
   proof: string;

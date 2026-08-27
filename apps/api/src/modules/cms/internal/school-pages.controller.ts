@@ -1,11 +1,18 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { Roles } from '../../../common/auth/roles.decorator';
 import { TenantContextService } from '../../tenancy';
 import { SchoolPagesService } from './school-pages.service';
 import { UpsertSchoolPageDto } from './cms.dto';
 
 @Controller('site/pages')
-@UseGuards(SchoolJwtGuard)
+@UseGuards(SchoolJwtGuard, RolesGuard)
+// SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
+// all. Without RolesGuard beside it, "publish this draft to the live site" was
+// reachable with a STUDENT token. Class-level, not per-handler: this is the
+// shape that let StaffController ship with two of six handlers guarded.
+@Roles('SCHOOL_ADMIN')
 export class SchoolPagesController {
   constructor(
     private readonly pages: SchoolPagesService,

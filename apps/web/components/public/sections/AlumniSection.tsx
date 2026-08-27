@@ -198,6 +198,13 @@ export default function AlumniSection({ schoolName }: { schoolName: string }) {
         })}
       </div>
 
+      {!signedIn && <SignInPanel onSignedIn={(sess, name) => {
+        try { window.localStorage.setItem(SESSION_KEY, sess); } catch { /* ignore */ }
+        setSession(sess);
+        setTab('profile');
+        setNote({ kind: 'ok', text: `Welcome back, ${name}.` });
+      }} />}
+
       {!signedIn && tab === 'batches' && (
         <p className="text-sm text-slate-500 mb-6 max-w-2xl">
           <strong className="text-slate-700">This page is public on purpose.</strong> Anyone can read it without
@@ -317,13 +324,17 @@ function Directory({ session }: { session: string | null }) {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<DirRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const p = new URLSearchParams();
     if (q) p.set('q', q);
     call<{ rows: DirRow[]; total: number }>('GET', `/alumni/me/directory?${p}`, { session })
-      .then((r) => { setRows(r.rows); setTotal(r.total); })
-      .catch(() => { setRows([]); setTotal(0); });
+      .then((r) => { setRows(r.rows); setTotal(r.total); setFailed(false); })
+      // Swallowing this into an empty list said "nobody matches that" when the
+      // truth was "the request failed" — the two need different reactions from
+      // the person reading the screen.
+      .catch(() => { setRows([]); setTotal(0); setFailed(true); });
   }, [q, session]);
 
   return (
@@ -356,7 +367,11 @@ function Directory({ session }: { session: string | null }) {
           </div>
         ))}
       </div>
-      {rows.length === 0 && <p className="text-sm text-slate-500 mt-6">Nobody matches that.</p>}
+      {rows.length === 0 && (
+        <p className="text-sm text-slate-500 mt-6">
+          {failed ? 'The directory could not be loaded. Try again in a moment.' : 'Nobody matches that.'}
+        </p>
+      )}
     </div>
   );
 }
@@ -627,7 +642,10 @@ function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; sc
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [f, setF] = useState({ firstName: '', lastName: '', batchYear: '', email: '', phone: '', proof: '' });
+  const [f, setF] = useState({
+    firstName: '', lastName: '', batchYear: '', dob: '', claimedClass: '',
+    email: '', phone: '', proof: '',
+  });
 
   // Follows the year they opened, until they type their own.
   const [touchedYear, setTouchedYear] = useState(false);
@@ -652,7 +670,7 @@ function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; sc
     return (
       <div className="mt-8">
         <button type="button" className="ps-btn ps-cta-btn" onClick={() => setOpenForm(true)}>
-          Not on the list? Tell us you were here →
+          Tell us you were here →
         </button>
       </div>
     );
@@ -673,6 +691,8 @@ function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; sc
             firstName: f.firstName.trim(),
             lastName: f.lastName.trim(),
             batchYear: Number(f.batchYear),
+            dob: f.dob || undefined,
+            claimedClass: f.claimedClass.trim() || undefined,
             email: f.email.trim() || undefined,
             phone: f.phone.trim() || undefined,
             proof: f.proof.trim(),
@@ -707,6 +727,19 @@ function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; sc
             onChange={(e) => { setTouchedYear(true); setF({ ...f, batchYear: e.target.value }); }} />
         </label>
         <label className="block text-sm">
+          <span className="text-slate-500">Your date of birth</span>
+          <input className="ps-wiz-input w-full mt-1" type="date" value={f.dob}
+            onChange={(e) => setF({ ...f, dob: e.target.value })} />
+          <span className="text-xs text-slate-400 mt-1 block">
+            The school can check this against its own records — it is the quickest way to find you.
+          </span>
+        </label>
+        <label className="block text-sm">
+          <span className="text-slate-500">Your class, if you remember it</span>
+          <input className="ps-wiz-input w-full mt-1" placeholder="10 – B, or leave blank"
+            value={f.claimedClass} onChange={(e) => setF({ ...f, claimedClass: e.target.value })} />
+        </label>
+        <label className="block text-sm">
           <span className="text-slate-500">Email or phone — either is enough</span>
           <input className="ps-wiz-input w-full mt-1" placeholder="you@example.com" value={f.email}
             onChange={(e) => setF({ ...f, email: e.target.value })} />
@@ -716,9 +749,9 @@ function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; sc
       </div>
 
       <label className="block text-sm mt-4">
-        <span className="text-slate-500">Something the school can check</span>
+        <span className="text-slate-500">Anything else the school can check</span>
         <textarea className="ps-wiz-input w-full mt-1" rows={3} required
-          placeholder="Your class teacher's name, your admission number, or two classmates the office would find in the same register."
+          placeholder="Your father's or mother's name, your admission number, a class teacher, or two classmates — anything the office can look up."
           value={f.proof} onChange={(e) => setF({ ...f, proof: e.target.value })} />
       </label>
 
@@ -732,5 +765,134 @@ function ClaimForm({ defaultYear, schoolName }: { defaultYear: number | null; sc
         <button type="button" className="ps-btn" onClick={() => setOpenForm(false)}>Cancel</button>
       </div>
     </form>
+  );
+}
+
+/* ─── The door ───────────────────────────────────────────────────────────── */
+
+/**
+ * One control, three ways in, and they are three because an alumnus arrives in
+ * one of exactly three states:
+ *
+ *   1. HAS AN ACCOUNT     — email and password. The ordinary login, for people
+ *                           who asked the school for one and for the batch
+ *                           captain who opens this weekly.
+ *   2. HAD A LINK, LOST IT— "send me my link". Goes to the office queue rather
+ *                           than an inbox, because email does not work yet;
+ *                           the office pastes a fresh link into WhatsApp.
+ *   3. NOT REGISTERED     — the claim form, which is a request for an account
+ *                           that a human approves against the register.
+ *
+ * A fourth state — HAS a link, in their hand — needs no door at all: opening it
+ * signs them in.
+ */
+function SignInPanel({ onSignedIn }: { onSignedIn: (session: string, firstName: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<'password' | 'link'>('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [contact, setContact] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  if (!open) {
+    return (
+      <div className="mb-8">
+        <button type="button" className="ps-btn ps-cta-btn" onClick={() => setOpen(true)}>
+          Sign in →
+        </button>
+        <span className="text-sm text-slate-500 ml-3">
+          Already registered? Sign in, or ask the school for your link.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ps-panel p-7 mb-8 max-w-xl">
+      <div className="flex flex-wrap gap-2">
+        {([['password', 'I have a password'], ['link', 'Send me my link']] as const).map(([m, label]) => (
+          <button key={m} type="button"
+            className="ps-chip px-4 py-2 rounded-full text-sm font-semibold border border-black/5 transition"
+            aria-pressed={mode === m}
+            style={mode === m ? { background: 'var(--ps1)', color: '#fff', borderColor: 'var(--ps1)' } : undefined}
+            onClick={() => { setMode(m); setMsg(null); }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'password' ? (
+        <form
+          className="mt-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setBusy(true); setMsg(null);
+            call<{ session: string; alumni: { firstName: string } }>('POST', '/alumni/login', {
+              body: { email: email.trim(), password },
+            })
+              .then((r) => onSignedIn(r.session, r.alumni.firstName))
+              .catch((e2: Error) => setMsg({ kind: 'err', text: e2.message }))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <label className="block text-sm">
+            <span className="text-slate-500">Email</span>
+            <input className="ps-wiz-input w-full mt-1" type="email" required autoComplete="username"
+              value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <label className="block text-sm mt-3">
+            <span className="text-slate-500">Password</span>
+            <input className="ps-wiz-input w-full mt-1" type="password" required autoComplete="current-password"
+              value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <p className="text-xs text-slate-400 mt-2">
+            The school gives you this when it approves you. Not got one? Use <em>Send me my link</em>.
+          </p>
+          <button type="submit" className="ps-btn ps-cta-btn mt-4" disabled={busy}
+            style={busy ? { opacity: 0.5 } : undefined}>
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      ) : (
+        <form
+          className="mt-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setBusy(true); setMsg(null);
+            call('POST', '/alumni/link-request', { body: { contact: contact.trim() } })
+              .then(() => setMsg({
+                kind: 'ok',
+                text: 'If that reaches somebody on our roll, the school will send a fresh link to it.',
+              }))
+              .catch((e2: Error) => setMsg({ kind: 'err', text: e2.message }))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <label className="block text-sm">
+            <span className="text-slate-500">The email or phone the school has for you</span>
+            <input className="ps-wiz-input w-full mt-1" required value={contact}
+              onChange={(e) => setContact(e.target.value)} />
+          </label>
+          <p className="text-xs text-slate-400 mt-2">
+            No password needed. The office sends you a link that signs you in for ninety days.
+          </p>
+          <button type="submit" className="ps-btn ps-cta-btn mt-4" disabled={busy}
+            style={busy ? { opacity: 0.5 } : undefined}>
+            {busy ? 'Sending…' : 'Ask for my link'}
+          </button>
+        </form>
+      )}
+
+      {msg && (
+        <p className="text-sm mt-4" style={{ color: msg.kind === 'ok' ? 'var(--ps1)' : '#b3261e' }}>
+          {msg.text}
+        </p>
+      )}
+      <button type="button" className="text-sm text-slate-400 underline underline-offset-2 mt-4"
+        onClick={() => setOpen(false)}>
+        Close
+      </button>
+    </div>
   );
 }

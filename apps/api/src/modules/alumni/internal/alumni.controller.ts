@@ -22,6 +22,7 @@ import { GiftsService } from './gifts.service';
 import { GuestSessionsService } from './guest-sessions.service';
 import {
   CreatePledgeDto,
+  CreateAlumniAccountDto,
   DecideClaimDto,
   DecidePledgeDto,
   DecideSessionDto,
@@ -124,6 +125,39 @@ export class AlumniController {
     @CurrentUser() u: SchoolJwtPayload,
   ) {
     return this.alumni.decideClaim(this.sid(), id, u.sub, dto);
+  }
+
+  /**
+   * Give a verified alumnus an ordinary account.
+   *
+   * Returns a readable temporary password ONCE. Nothing stores it and there is
+   * no way to read it back — the office hands it over the way it hands over
+   * everything else here, in a WhatsApp message. The student flow emails an
+   * invite instead; that is not available to us until SMTP_PASS exists on
+   * Preview, and an invite nobody receives is worse than no invite.
+   */
+  @Post(':id/account')
+  createAccount(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateAlumniAccountDto) {
+    return this.alumniAuth.createAccount(this.sid(), id, dto.email);
+  }
+
+  // ─── "Send me my link" queue ───────────────────────────────────────────────
+
+  @Get('link-requests')
+  linkRequests() {
+    return this.alumni.listLinkRequests(this.sid());
+  }
+
+  /** Marks it sent. The office still does the sending — it pastes the link into
+   *  the batch WhatsApp group, which is where these people actually are. */
+  @Post('link-requests/:id/sent')
+  markLinkSent(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
+    return this.alumni.closeLinkRequest(this.sid(), id, u.sub, true);
+  }
+
+  @Post('link-requests/:id/dismiss')
+  dismissLinkRequest(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
+    return this.alumni.closeLinkRequest(this.sid(), id, u.sub, false);
   }
 
   // ─── Gifts ─────────────────────────────────────────────────────────────────

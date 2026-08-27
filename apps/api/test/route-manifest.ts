@@ -27,9 +27,12 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /alumni/batches",
   "GET /alumni/batches/:year",
   "POST /alumni/claim",
+  "POST /alumni/login",
+  "POST /alumni/link-request",
   "POST /alumni/claims",
   "GET /alumni/me",
   "PUT /alumni/me",
+  "PUT /alumni/me/password",
   "POST /alumni/me/sign-out",
   "GET /alumni/me/directory",
   "GET /alumni/me/gift-groups",
@@ -53,6 +56,10 @@ export const AUTHZ_REVIEWED: string[] = [
   "PUT /manage/alumni/:id/trusted",
   "GET /manage/alumni/claims",
   "POST /manage/alumni/claims/:id/decide",
+  "POST /manage/alumni/:id/account",
+  "GET /manage/alumni/link-requests",
+  "POST /manage/alumni/link-requests/:id/sent",
+  "POST /manage/alumni/link-requests/:id/dismiss",
   "GET /manage/alumni/gift-items",
   "POST /manage/alumni/gift-items",
   "PUT /manage/alumni/gift-items/:id",
@@ -122,6 +129,49 @@ export const AUTHZ_REVIEWED: string[] = [
   "PUT /manage/classes/:id",
   "PUT /manage/staff-attendance",
   "PUT /manage/staff/:id",
+  // Reviewed 27 Aug 2026, while adding the Homecoming routes — these 33 had
+  // shipped into neither bucket, so this guard was red and nobody had looked.
+  //
+  // owner/*/domains  — OwnerController: OwnerHostGuard + PlatformJwtGuard. Owner
+  //                    host required and a platform token; correct.
+  // manage/rooms, manage/seating, manage/email-settings
+  //                  — SchoolJwtGuard + RequireFeatureGuard + RolesGuard,
+  //                    @Roles('SCHOOL_ADMIN') at class level; correct.
+  // site/pages, site/design-drafts
+  //                  — WERE SchoolJwtGuard alone, which reads no role: a STUDENT
+  //                    token could publish to the live website. Fixed here, and
+  //                    site-authoring-authz.e2e-spec.ts holds it shut.
+  "GET /owner/schools/:id/domains",
+  "POST /owner/schools/:id/domains",
+  "POST /owner/schools/:id/domains/:domainId/verify",
+  "POST /owner/schools/:id/domains/:domainId/primary",
+  "DELETE /owner/schools/:id/domains/:domainId",
+  "GET /site/design-drafts",
+  "POST /site/design-drafts",
+  "PUT /site/design-drafts/:id",
+  "DELETE /site/design-drafts/:id",
+  "POST /site/design-drafts/:id/publish",
+  "GET /site/pages",
+  "POST /site/pages",
+  "PUT /site/pages/:id",
+  "DELETE /site/pages/:id",
+  "GET /manage/rooms",
+  "POST /manage/rooms",
+  "PUT /manage/rooms/:id",
+  "POST /manage/rooms/:id/duplicate",
+  "DELETE /manage/rooms/:id",
+  "GET /manage/seating",
+  "POST /manage/seating/preview",
+  "POST /manage/seating",
+  "GET /manage/seating/:id",
+  "DELETE /manage/seating/:id",
+  "GET /manage/email-settings",
+  "GET /manage/email-settings/preview",
+  "PUT /manage/email-settings",
+  "PUT /manage/email-settings/sender",
+  "POST /manage/email-settings/sender/verify",
+  "POST /manage/email-settings/sender/disable",
+  "POST /manage/email-settings/test",
 ];
 
 /**

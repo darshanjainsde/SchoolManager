@@ -1,6 +1,7 @@
 import { getPlatformPrisma, disconnectAll, withTenant } from '@skoolos/db';
 import { createHash } from 'node:crypto';
 import { AlumniAuthService } from '../src/modules/alumni/internal/alumni-auth.service';
+import { PasswordService } from '../src/modules/auth';
 import { AlumniPortalService } from '../src/modules/alumni/internal/alumni-portal.service';
 
 /**
@@ -15,7 +16,7 @@ import { AlumniPortalService } from '../src/modules/alumni/internal/alumni-porta
  *   twice concurrently.
  */
 describe('The alumnus door', () => {
-  const auth = new AlumniAuthService();
+  const auth = new AlumniAuthService(new PasswordService());
   const portal = new AlumniPortalService();
   let schoolId: string;
   let otherSchoolId: string;
@@ -365,6 +366,99 @@ describe('The alumnus door', () => {
         expect(keys).not.toContain('privacy');
         expect(keys).not.toContain('studentId');
       }
+    });
+  });
+
+  /**
+   * The second door: an ordinary email + password account, for the alumnus who
+   * lost the link and would rather have a login. It mints the SAME session
+   * object a link does, so everything downstream is unchanged.
+   */
+  describe('accounts', () => {
+    let accountAlumniId: string;
+    const email = 'meera.pillai@example.com';
+
+    beforeAll(async () => {
+      const p = getPlatformPrisma();
+      const al = await p.alumni.create({
+        data: { schoolId, firstName: 'Meera', lastName: 'Pillai', batchYear: 2009, status: 'VERIFIED' },
+      });
+      accountAlumniId = al.id;
+    });
+
+    it('refuses an account for somebody the office has not verified', async () => {
+      const p = getPlatformPrisma();
+      const pending = await p.alumni.create({
+        data: { schoolId, firstName: 'Not', lastName: 'Yet', batchYear: 2009, status: 'PENDING' },
+      });
+      // `code` lives in the HttpException response body, not on the error
+      // object — clients branch on it, so that is what gets asserted.
+      const err = await auth.createAccount(schoolId, pending.id, 'notyet@example.com')
+        .then(() => null, (e) => e);
+      expect(err).not.toBeNull();
+      expect((err.getResponse() as { code: string }).code).toBe('MUST_BE_VERIFIED_FIRST');
+    });
+
+    it('refuses an alumnus from another school', async () => {
+      await expect(auth.createAccount(schoolId, otherAlumniId, 'x@example.com')).rejects.toThrow();
+    });
+
+    it('returns a temporary password that is never readable again', async () => {
+      const r = await auth.createAccount(schoolId, accountAlumniId, email);
+      expect(r.tempPassword).toMatch(/^[A-Z0-9]{5}-[A-Z0-9]{5}$/); // grouped, to be read aloud
+      // No O/0 or I/l/1 — this gets read down a phone line.
+      expect(r.tempPassword).not.toMatch(/[O0Il1]/);
+      const stored = await withTenant(schoolId, (tx) =>
+        tx.user.findFirst({ where: { email, schoolId } }));
+      expect(stored!.passwordHash).not.toContain(r.tempPassword);
+      expect(stored!.role).toBe('ALUMNUS');
+    });
+
+    it('will not issue a second account for the same alumnus', async () => {
+      await expect(auth.createAccount(schoolId, accountAlumniId, 'again@example.com'))
+        .rejects.toThrow(/already has a login/i);
+    });
+
+    it('signs in with the temporary password and mints an ordinary session', async () => {
+      const p = getPlatformPrisma();
+      const al = await p.alumni.create({
+        data: { schoolId, firstName: 'Rohit', lastName: 'Nair', batchYear: 2011, status: 'VERIFIED' },
+      });
+      const { tempPassword } = await auth.createAccount(schoolId, al.id, 'rohit.nair@example.com');
+      const s = await auth.loginWithPassword(schoolId, 'rohit.nair@example.com', tempPassword);
+      expect(s.alumni.alumniId).toBe(al.id);
+      const who = await auth.resolveSession(schoolId, s.session);
+      expect(who.alumniId).toBe(al.id);
+    });
+
+    it('rejects a wrong password without saying which half was wrong', async () => {
+      await expect(auth.loginWithPassword(schoolId, email, 'WrongPass99')).rejects.toThrow();
+      await expect(auth.loginWithPassword(schoolId, 'nobody@example.com', 'WrongPass99')).rejects.toThrow();
+    });
+
+    it('will not sign in across schools with a valid password', async () => {
+      const p = getPlatformPrisma();
+      const al = await p.alumni.create({
+        data: { schoolId, firstName: 'Cross', lastName: 'School', batchYear: 2012, status: 'VERIFIED' },
+      });
+      const { tempPassword } = await auth.createAccount(schoolId, al.id, 'cross@example.com');
+      await expect(auth.loginWithPassword(otherSchoolId, 'cross@example.com', tempPassword))
+        .rejects.toThrow();
+    });
+
+    it('changes a password only when the current one is given', async () => {
+      const p = getPlatformPrisma();
+      const al = await p.alumni.create({
+        data: { schoolId, firstName: 'Change', lastName: 'Me', batchYear: 2013, status: 'VERIFIED' },
+      });
+      const { tempPassword } = await auth.createAccount(schoolId, al.id, 'change@example.com');
+      await expect(auth.changePassword(schoolId, al.id, 'not-it', 'BrandNewPass77'))
+        .rejects.toThrow();
+      await auth.changePassword(schoolId, al.id, tempPassword, 'BrandNewPass77');
+      await expect(auth.loginWithPassword(schoolId, 'change@example.com', tempPassword))
+        .rejects.toThrow();
+      const ok = await auth.loginWithPassword(schoolId, 'change@example.com', 'BrandNewPass77');
+      expect(ok.alumni.alumniId).toBe(al.id);
     });
   });
 });

@@ -12,6 +12,21 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+
+/**
+ * A query string carries only text: `?take=50` arrives as "50", and the global
+ * ValidationPipe runs WITHOUT `enableImplicitConversion` — deliberately, since
+ * implicit conversion would also coerce body fields and quietly turn a typo'd
+ * "abc" into NaN. So every numeric or boolean QUERY field needs its own @Type.
+ *
+ * Without these the alumni roll 400s on its own first page load, and the
+ * directory 400s the moment an alumnus filters by batch year. Both were live.
+ */
+const AsInt = () => Type(() => Number);
+const AsBool = () =>
+  Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value));
+
 
 /** The earliest batch a school could plausibly claim, and the latest. Bounds
  *  exist so a typo cannot create a Roll Call row for the year 20260. */
@@ -28,11 +43,11 @@ const SESSION_MODES = ['IN_PERSON', 'ONLINE'] as const;
 
 export class ListAlumniQueryDto {
   @IsOptional() @IsString() @Length(1, 80) q?: string;
-  @IsOptional() @IsInt() @Min(MIN_BATCH_YEAR) @Max(MAX_BATCH_YEAR) batchYear?: number;
+  @IsOptional() @AsInt() @IsInt() @Min(MIN_BATCH_YEAR) @Max(MAX_BATCH_YEAR) batchYear?: number;
   @IsOptional() @IsIn(['SCHOOL_ADDED', 'INVITED', 'PENDING', 'VERIFIED', 'DECLINED', 'HIDDEN'])
   status?: string;
-  @IsOptional() @IsInt() @Min(1) @Max(200) take?: number;
-  @IsOptional() @IsInt() @Min(0) skip?: number;
+  @IsOptional() @AsInt() @IsInt() @Min(1) @Max(200) take?: number;
+  @IsOptional() @AsInt() @IsInt() @Min(0) skip?: number;
 }
 
 export class GraduateBatchDto {
@@ -170,11 +185,11 @@ export class RedeemClaimDto {
 
 export class DirectoryQueryDto {
   @IsOptional() @IsString() @Length(1, 80) q?: string;
-  @IsOptional() @IsInt() @Min(MIN_BATCH_YEAR) @Max(MAX_BATCH_YEAR) batchYear?: number;
+  @IsOptional() @AsInt() @IsInt() @Min(MIN_BATCH_YEAR) @Max(MAX_BATCH_YEAR) batchYear?: number;
   @IsOptional() @IsString() @Length(1, 80) city?: string;
-  @IsOptional() @IsBoolean() mentor?: boolean;
-  @IsOptional() @IsInt() @Min(1) @Max(100) take?: number;
-  @IsOptional() @IsInt() @Min(0) skip?: number;
+  @IsOptional() @AsBool() @IsBoolean() mentor?: boolean;
+  @IsOptional() @AsInt() @IsInt() @Min(1) @Max(100) take?: number;
+  @IsOptional() @AsInt() @IsInt() @Min(0) skip?: number;
 }
 
 /**
@@ -216,9 +231,50 @@ export class CreateClaimDto {
   @IsString() @Length(1, 60) firstName!: string;
   @IsString() @Length(1, 60) lastName!: string;
   @IsInt() @Min(MIN_BATCH_YEAR) @Max(MAX_BATCH_YEAR) batchYear!: number;
+  /**
+   * The one fact that lets the office check a claim by MACHINE. An alumnus
+   * reliably remembers their own birthday twenty years on; the school holds it
+   * on the student record. Optional only because a pre-Sckools school may have
+   * nothing to compare it against — the form still asks for it.
+   */
+  @IsOptional() @IsISO8601() dob?: string;
+  /** "10-B", "5th standard". Optional on purpose: the year is remembered and
+   *  the section usually is not, and a required field somebody cannot answer is
+   *  a form they abandon. */
+  @IsOptional() @IsString() @Length(1, 40) claimedClass?: string;
   @IsOptional() @IsEmail() email?: string;
   @IsOptional() @IsString() @Length(4, 30) phone?: string;
-  /** "Mrs Sharma taught 5-A", an admission number, two classmates. Free text,
-   *  because the useful proof differs by decade and no dropdown covers it. */
+  /** A parent's name, an admission number, a classmate. Free text, because the
+   *  useful proof differs by decade and no dropdown covers it. */
   @IsString() @Length(3, 400) proof!: string;
+}
+
+/**
+ * "I am already registered — send me my link."
+ *
+ * One field. The response is identical whether or not it matches anybody, so
+ * this cannot be used to ask whether an address belongs to an alumnus of a
+ * given school.
+ */
+export class RequestLinkDto {
+  @IsString() @Length(4, 160) contact!: string;
+}
+
+/** The ordinary login, on the alumni page. */
+export class AlumniLoginDto {
+  @IsEmail() email!: string;
+  @IsString() @Length(6, 200) password!: string;
+}
+
+/** The office gives a verified alumnus an account. Returns a temporary password
+ *  ONCE, for the office to hand over — email does not work here yet. */
+export class CreateAlumniAccountDto {
+  @IsEmail() email!: string;
+}
+
+export class ChangeAlumniPasswordDto {
+  @IsString() @Length(6, 200) currentPassword!: string;
+  /** Eight is the floor a person will actually accept for an account they open
+   *  three times a year. The link door remains for everybody else. */
+  @IsString() @Length(8, 200) newPassword!: string;
 }
