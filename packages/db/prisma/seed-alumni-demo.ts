@@ -175,11 +175,28 @@ async function main() {
     return;
   }
 
-  // Hash before opening the transaction — argon2 is deliberately slow, and a
+  // Hash before any transaction — argon2 is deliberately slow, and a
   // transaction held open across it is a transaction held open for no reason.
   const passwordHash = await hash(ALUMNUS_PW);
 
-  await withTenant(schoolId, async (db) => {
+  /**
+   * Each section gets its OWN short transaction.
+   *
+   * The first version wrapped the whole seed in one `withTenant`, which
+   * passed locally against a database on localhost and died against staging
+   * with P2028: Prisma's interactive transactions have a five-second ceiling,
+   * and this is dozens of round-trips to ap-south-1 from a GitHub runner.
+   *
+   * The fix is not a longer timeout — `withTenant` is the whole application's
+   * and holding a pooled connection open for a minute is exactly what should
+   * not be encouraged. It is smaller transactions, which is the right shape
+   * for a seed anyway. Losing all-or-nothing costs nothing here: every write
+   * is an upsert, so a partial run is simply re-run.
+   */
+  const step = <T>(fn: (db: Parameters<Parameters<typeof withTenant>[1]>[0]) => Promise<T>) =>
+    withTenant(schoolId, fn);
+
+  await step(async (db) => {
   // ── The feature itself ───────────────────────────────────────────────────
   // ALUMNI belongs to no tier by design, so without this row every route 403s
   // and every screen is a 404. Cached in Redis for 300s after this lands.
@@ -189,11 +206,15 @@ async function main() {
   } else {
     await db.featureOverride.create({ data: { schoolId, featureKey: 'ALUMNI', enabled: true } });
   }
+  });
   console.log('  ✓ ALUMNI feature enabled');
 
   // ── The roll ─────────────────────────────────────────────────────────────
+  // One person per transaction: twelve short writes beat one long one, and a
+  // seed's wall-clock is worth nothing next to it actually finishing.
   const byName = new Map<string, string>();
   for (const p of PEOPLE) {
+    await step(async (db) => {
     const key = `${p.firstName} ${p.lastName}`;
     const found = await db.alumni.findFirst({
       where: { schoolId, firstName: p.firstName, lastName: p.lastName, batchYear: p.batchYear },
@@ -219,6 +240,7 @@ async function main() {
       ? await db.alumni.update({ where: { id: found.id }, data, select: { id: true } })
       : await db.alumni.create({ data, select: { id: true } });
     byName.set(key, row.id);
+    });
   }
   console.log(`  ✓ ${PEOPLE.length} alumni on the roll`);
 
@@ -226,21 +248,23 @@ async function main() {
   // Deliberately larger than what is on the roll: the coverage bar is the
   // module's honest statement of how much of a batch is still missing.
   for (const [batchYear, registerStrength] of [[1998, 96], [2004, 104], [2011, 112], [2018, 118]] as const) {
-    await db.alumniBatch.upsert({
+    await step((db) => db.alumniBatch.upsert({
       where: { schoolId_batchYear: { schoolId, batchYear } },
       update: { registerStrength },
       create: { schoolId, batchYear, registerStrength },
-    });
+    }));
   }
   console.log('  ✓ register strength for 4 batches');
 
   // ── The login ────────────────────────────────────────────────────────────
   const loginAlumniId = byName.get(`${LOGIN_FOR.firstName} ${LOGIN_FOR.lastName}`)!;
-  const existingUser = await db.user.findFirst({ where: { schoolId, email: LOGIN_FOR.email } });
-  const user = existingUser
-    ? await db.user.update({ where: { id: existingUser.id }, data: { passwordHash, role: 'ALUMNUS' } })
-    : await db.user.create({ data: { schoolId, email: LOGIN_FOR.email, passwordHash, role: 'ALUMNUS' } });
-  await db.alumni.update({ where: { id: loginAlumniId }, data: { userId: user.id, email: LOGIN_FOR.email } });
+  await step(async (db) => {
+    const existingUser = await db.user.findFirst({ where: { schoolId, email: LOGIN_FOR.email } });
+    const user = existingUser
+      ? await db.user.update({ where: { id: existingUser.id }, data: { passwordHash, role: 'ALUMNUS' } })
+      : await db.user.create({ data: { schoolId, email: LOGIN_FOR.email, passwordHash, role: 'ALUMNUS' } });
+    await db.alumni.update({ where: { id: loginAlumniId }, data: { userId: user.id, email: LOGIN_FOR.email } });
+  });
   console.log(`  ✓ login for ${LOGIN_FOR.firstName}: ${LOGIN_FOR.email}`);
 
   // ── The verification queue ───────────────────────────────────────────────
@@ -271,18 +295,22 @@ async function main() {
     },
   ];
   for (const c of CLAIMS) {
-    const already = await db.alumniClaim.findFirst({
-      where: { schoolId, firstName: c.firstName, lastName: c.lastName, batchYear: c.batchYear },
-      select: { id: true },
+    await step(async (db) => {
+      const already = await db.alumniClaim.findFirst({
+        where: { schoolId, firstName: c.firstName, lastName: c.lastName, batchYear: c.batchYear },
+        select: { id: true },
+      });
+      if (!already) await db.alumniClaim.create({ data: { schoolId, ...c, status: 'PENDING' } });
     });
-    if (!already) await db.alumniClaim.create({ data: { schoolId, ...c, status: 'PENDING' } });
   }
   console.log(`  ✓ ${CLAIMS.length} claims waiting, with three different match strengths`);
 
   // ── "Send me my link" queue ──────────────────────────────────────────────
   const linkFor = byName.get('Farida Sheikh')!;
-  const openReq = await db.alumniLinkRequest.findFirst({ where: { schoolId, alumniId: linkFor, status: 'PENDING' } });
-  if (!openReq) await db.alumniLinkRequest.create({ data: { schoolId, alumniId: linkFor, status: 'PENDING' } });
+  await step(async (db) => {
+    const openReq = await db.alumniLinkRequest.findFirst({ where: { schoolId, alumniId: linkFor, status: 'PENDING' } });
+    if (!openReq) await db.alumniLinkRequest.create({ data: { schoolId, alumniId: linkFor, status: 'PENDING' } });
+  });
   console.log('  ✓ 1 link request waiting');
 
   // ── What the school actually wants ───────────────────────────────────────
@@ -294,12 +322,12 @@ async function main() {
   ];
   const itemIds = new Map<string, string>();
   for (const it of ITEMS) {
-    const row = await db.giftItem.upsert({
+    const row = await step((db) => db.giftItem.upsert({
       where: { schoolId_name: { schoolId, name: it.name } },
       update: { ...it, schoolId, isActive: true },
       create: { ...it, schoolId, isActive: true },
       select: { id: true },
-    });
+    }));
     itemIds.set(it.name, row.id);
   }
   console.log(`  ✓ ${ITEMS.length} gift items published`);
@@ -308,7 +336,7 @@ async function main() {
   // The real live headcount, which is what a pledge's quantity IS — a gift
   // covers everyone in the group or it waits. Falls back only on a school with
   // no students loaded yet, so the demo still has a number to show.
-  const headcount = await db.student.count({ where: { schoolId, isActive: true } });
+  const headcount = await step((db) => db.student.count({ where: { schoolId, isActive: true } }));
   const scopeCount = headcount > 0 ? headcount : 240;
   console.log(`  · live headcount: ${headcount || '(none — using 240 for the demo)'}`);
   const PLEDGES = [
@@ -328,14 +356,15 @@ async function main() {
     },
   ];
   for (const p of PLEDGES) {
-    const already = await db.giftPledge.findFirst({
-      where: { schoolId, alumniId: p.alumniId, giftItemId: p.giftItemId },
-      select: { id: true },
+    await step(async (db) => {
+      const already = await db.giftPledge.findFirst({
+        where: { schoolId, alumniId: p.alumniId, giftItemId: p.giftItemId },
+        select: { id: true },
+      });
+      if (!already) await db.giftPledge.create({ data: { schoolId, ...p } });
     });
-    if (!already) await db.giftPledge.create({ data: { schoolId, ...p } });
   }
   console.log(`  ✓ ${PLEDGES.length} pledges (one waiting on the office, one accepted)`);
-  });
 
   console.log('\n──────────────────────────────────────────────');
   console.log('  Alumnus login');
