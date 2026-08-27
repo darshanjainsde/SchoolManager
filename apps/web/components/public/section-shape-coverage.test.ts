@@ -163,3 +163,35 @@ describe('a brand fill never assumes its label is white', () => {
     expect(source('sections/AlumniSection.tsx')).not.toContain('ps-seg-wrap');
   });
 });
+
+describe('choosing a THING is not the same control as switching a view', () => {
+  const CSS = source('ps-css.ts');
+
+  it('gives a choice its own surface, a price line and a mark', () => {
+    // The gift list was first built as a segmented control. A track is for a
+    // handful of short mutually-exclusive labels in ONE row; four product names
+    // with prices wrapped it onto two lines and read as a blob.
+    expect(CSS).toMatch(/\.ps-choice\s*\{[^}]*background:\s*#fff/);
+    expect(CSS).toMatch(/\.ps-choice\[aria-pressed="true"\]\s*\{[^}]*border-color:\s*var\(--ps1\)/);
+    expect(CSS).toMatch(/\.ps-choice-mark\s*\{/);
+  });
+
+  it('stacks the name above its price rather than running them together', () => {
+    // Both are spans; without display:block they render as one run-on string
+    // ("Winter sweaterabout ₹450 per child"), which is what shipped first.
+    expect(CSS).toMatch(/\.ps-choice-name\s*\{[^}]*display:\s*block/);
+    expect(CSS).toMatch(/\.ps-choice-meta\s*\{[^}]*display:\s*block/);
+  });
+
+  it('takes the card corner from the shape token', () => {
+    expect(CSS).toMatch(/\.ps-choice\s*\{[^}]*border-radius:\s*var\(--ps-radius-sm\)/);
+  });
+
+  it('leaves no product list on a segmented track in the alumni section', () => {
+    const src = source('sections/AlumniSection.tsx');
+    // The tab row is still a track, and should be — this checks the two
+    // PICKERS moved off it.
+    expect(src).toContain('ps-choices');
+    expect(src).not.toMatch(/items\.map\([^)]*\)\s*=>\s*\([\s\S]{0,200}ps-seg-btn/);
+  });
+});
