@@ -28,6 +28,7 @@
 
 import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
 import Redis from 'ioredis';
+import { describeLiveApi } from './requires-live-api';
 
 const BASE = 'http://localhost:3001';
 
@@ -46,7 +47,7 @@ async function schoolToken(slug: string): Promise<string> {
   return body.accessToken;
 }
 
-describe('Public API e2e', () => {
+describeLiveApi('Public API e2e', () => {
   const ts = Date.now();
   // Slug must match ^[a-z0-9-]{2,32}$. e.g. "e2et1751234567890" = 17 chars ✓
   const throwawaySlug = `e2et${ts}`;
