@@ -1,5 +1,6 @@
 import { getPlatformPrisma, disconnectAll, withTenant } from '@skoolos/db';
 import { createHash } from 'node:crypto';
+import { Client } from 'pg';
 import { AlumniAuthService } from '../src/modules/alumni/internal/alumni-auth.service';
 import { PasswordService } from '../src/modules/auth';
 import { AlumniPortalService } from '../src/modules/alumni/internal/alumni-portal.service';
@@ -152,13 +153,62 @@ describe('The alumnus door', () => {
      * does not expose. Claiming a sabotage-proof here would be the false green
      * this project already has a ledger entry for.
      */
-    it('cannot be redeemed twice concurrently (documents, does not prove — see comment)', async () => {
+    it('cannot be redeemed twice concurrently — PROVED, with two real connections', async () => {
+      // Prisma's client will not produce this race: interactive transactions
+      // are serialised through its pool, so Promise.all over redeemClaim runs
+      // them one after another and passes whether or not the guard exists.
+      // That is a false green, and this project has a ledger entry for it.
+      //
+      // So the race is forced with two genuine sessions and a barrier between
+      // them, which is what actually happens when two taps arrive at two
+      // instances at once:
+      //
+      //   A: BEGIN; UPDATE ... WHERE usedAt IS NULL   -- takes the row lock
+      //   B: BEGIN; UPDATE ... WHERE usedAt IS NULL   -- BLOCKS on A's lock
+      //   A: COMMIT                                   -- B now re-evaluates
+      //   B: ...against the committed row, and matches nothing
+      //
+      // Under READ COMMITTED that re-evaluation is the entire guarantee. A
+      // read-then-write would let both through, because both would have read
+      // null before either committed.
       const { token } = await auth.mintClaimToken(schoolId, alumniId);
-      const results = await Promise.allSettled(
-        Array.from({ length: 8 }, () => auth.redeemClaim(schoolId, token)),
-      );
-      const ok = results.filter((r) => r.status === 'fulfilled');
-      expect(ok).toHaveLength(1);
+      const hash = createHash('sha256').update(token).digest('hex');
+
+      const url = process.env.DATABASE_URL!;
+      const a = new Client({ connectionString: url });
+      const b = new Client({ connectionString: url });
+      await a.connect();
+      await b.connect();
+      try {
+        const claim = (c: Client) =>
+          c.query(
+            `UPDATE "AlumniAccessToken" SET "usedAt" = now()
+              WHERE "tokenHash" = $1 AND "usedAt" IS NULL`,
+            [hash],
+          );
+
+        await a.query('BEGIN');
+        await b.query('BEGIN');
+        // Both sessions have to be told the tenant, or FORCE row-level security
+        // hides the row from each of them and the test passes for the wrong
+        // reason — two zeroes instead of a one and a zero.
+        await a.query(`SET LOCAL app.current_tenant = '${schoolId}'`);
+        await b.query(`SET LOCAL app.current_tenant = '${schoolId}'`);
+
+        const first = await claim(a);
+        // B's UPDATE blocks on A's row lock, so it must NOT be awaited before A
+        // commits — awaiting here would deadlock the test rather than race it.
+        const secondPending = claim(b);
+        await a.query('COMMIT');
+        const second = await secondPending;
+        await b.query('COMMIT');
+
+        expect(first.rowCount).toBe(1);
+        expect(second.rowCount).toBe(0);
+      } finally {
+        await a.end().catch(() => undefined);
+        await b.end().catch(() => undefined);
+      }
     });
 
     it('the single-use guarantee is a CONDITIONAL update, and the condition bites', async () => {
