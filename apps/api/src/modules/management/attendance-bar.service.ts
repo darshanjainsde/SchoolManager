@@ -90,7 +90,7 @@ export class AttendanceBarService {
       }
 
       const section = await tx.classSection.findFirst({
-        where: { id: classSectionId },
+        where: { schoolId, id: classSectionId },
         select: { name: true, grade: { select: { name: true } } },
       });
       if (!section) {
@@ -98,7 +98,7 @@ export class AttendanceBarService {
       }
 
       const students = await tx.student.findMany({
-        where: { classSectionId },
+        where: { schoolId, classSectionId },
         orderBy: [{ rollNo: 'asc' }, { admissionNo: 'asc' }],
         select: { id: true, firstName: true, lastName: true, rollNo: true },
       });
@@ -115,13 +115,13 @@ export class AttendanceBarService {
 
       const window = { gte: new Date(from), lte: new Date(to) };
       const marks = await tx.attendance.findMany({
-        where: { classSectionId, date: window },
+        where: { schoolId, classSectionId, date: window },
         select: { studentId: true, status: true, date: true },
       });
 
       // The most recent notice per student, for the cooldown display.
       const notices = await tx.attendanceNotice.findMany({
-        where: { classSectionId },
+        where: { schoolId, classSectionId },
         orderBy: { sentAt: 'desc' },
         select: { studentId: true, sentAt: true },
       });
@@ -215,7 +215,7 @@ export class AttendanceBarService {
     const studentIds = targets.map((t) => t.studentId);
 
     const { schoolName } = await withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { userId }, select: { id: true } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId }, select: { id: true } });
       const school = await tx.school.findFirst({ where: { id: schoolId }, select: { name: true } });
 
       await tx.attendanceNotice.createMany({
@@ -231,7 +231,7 @@ export class AttendanceBarService {
 
       // The in-app bell, in the same transaction as the receipt.
       const withLogins = await tx.student.findMany({
-        where: { id: { in: studentIds }, userId: { not: null } },
+        where: { schoolId, id: { in: studentIds }, userId: { not: null } },
         select: { id: true, userId: true },
       });
       const percentById = new Map(targets.map((t) => [t.studentId, t.percent]));

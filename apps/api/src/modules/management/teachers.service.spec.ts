@@ -258,7 +258,7 @@ describe('TeachersService.me', () => {
     const result = await svc.me(SCHOOL, USER_ID);
 
     expect(txMock.teacher.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: USER_ID } }),
+      expect.objectContaining({ where: { schoolId: SCHOOL, userId: USER_ID } }),
     );
     expect(result).toEqual({
       id: TEACHER_ID,
@@ -290,7 +290,7 @@ describe('TeachersService.me', () => {
     const result = await svc.me(SCHOOL, USER_ID);
 
     expect(txMock.mediaAsset.findFirst).toHaveBeenCalledWith({
-      where: { id: 'asset-1' },
+      where: { schoolId: SCHOOL, id: 'asset-1' },
       select: { url: true },
     });
     expect(result.photoUrl).toBe('https://cdn.example.com/avatar.jpg');

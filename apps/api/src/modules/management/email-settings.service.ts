@@ -104,7 +104,7 @@ export class EmailSettingsService {
       // The crest must be one of THIS school's own assets; an id from another
       // tenant would leak an image path across schools.
       const owned = await withTenant(schoolId, (tx) =>
-        tx.mediaAsset.findFirst({ where: { id: dto.logoAssetId }, select: { id: true } }),
+        tx.mediaAsset.findFirst({ where: { schoolId, id: dto.logoAssetId }, select: { id: true } }),
       );
       if (!owned) throw new ApiError('VALIDATION', 'That logo does not belong to this school.', 400, 'logoAssetId');
     }

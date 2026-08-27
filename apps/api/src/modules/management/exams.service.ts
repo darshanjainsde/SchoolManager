@@ -228,7 +228,7 @@ export class ExamsService {
     await this.assertClassOwned(schoolId, callerUserId, role, dto.classSectionId, 'schedule an exam for');
 
     const exam = await withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
@@ -349,7 +349,7 @@ export class ExamsService {
   ): Promise<ExamList> {
     await this.assertClassOwned(schoolId, callerUserId, role, classSectionId, 'view exams for');
     return withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
@@ -406,7 +406,7 @@ export class ExamsService {
       }
 
       const rows = await tx.result.findMany({
-        where: { examId },
+        where: { schoolId, examId },
         select: { studentId: true, marks: true, publishedAt: true },
         orderBy: [{ studentId: 'asc' }],
       });
@@ -454,7 +454,7 @@ export class ExamsService {
       }
 
       const roster = await tx.student.findMany({
-        where: { classSectionId: exam.classSectionId },
+        where: { schoolId, classSectionId: exam.classSectionId },
         select: { id: true },
       });
       const rosterIds = new Set(roster.map((s) => s.id));
@@ -517,7 +517,7 @@ export class ExamsService {
       }
 
       const { count } = await tx.result.updateMany({
-        where: { examId },
+        where: { schoolId, examId },
         data: { publishedAt: new Date() },
       });
 

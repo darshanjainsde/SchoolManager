@@ -94,7 +94,7 @@ describe('AttendanceService', () => {
         scheduledOnly: true,
       });
 
-      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { userId: TEACHER_USER } });
+      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, userId: TEACHER_USER } });
       // Both arms are scoped to the DAY: a register belongs to a period on a
       // timetable, so a class only exists on a date the teacher holds it.
       // `dayOfWeek: 1` is Monday, in TimetableSlot's 1-7 Monday-first encoding.

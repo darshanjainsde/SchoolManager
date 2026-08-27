@@ -189,7 +189,7 @@ export class AssignmentsService {
     await this.assertClassOwned(schoolId, callerUserId, role, dto.classSectionId, 'post an assignment for');
 
     const assignment = await withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
@@ -273,7 +273,7 @@ export class AssignmentsService {
     await this.assertClassOwned(schoolId, callerUserId, role, classSectionId, 'view assignments for');
 
     return withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }

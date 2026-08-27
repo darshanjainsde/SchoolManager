@@ -863,6 +863,7 @@ model Teacher {
   libraryIssues    LibraryIssue[]
 
   @@index([schoolId])
+  @@index([userId])
 }
 
 model TeacherSubject {

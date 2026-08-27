@@ -40,7 +40,7 @@ export class TeachersService {
   async me(schoolId: string, userId: string): Promise<TeacherProfile> {
     return withTenant(schoolId, async (tx) => {
       const teacher = await tx.teacher.findFirst({
-        where: { userId },
+        where: { schoolId, userId },
         include: {
           teacherSubjects: { include: { subject: { select: { name: true } } } },
           classSections: { select: { name: true, grade: { select: { name: true, order: true } } } },
@@ -55,7 +55,7 @@ export class TeachersService {
       let photoUrl: string | null = null;
       if (teacher.photoAssetId) {
         const asset = await tx.mediaAsset.findFirst({
-          where: { id: teacher.photoAssetId },
+          where: { schoolId, id: teacher.photoAssetId },
           select: { url: true },
         });
         photoUrl = asset?.url ?? null;
@@ -160,7 +160,7 @@ export class TeachersService {
     const username = dto.username?.trim() || null;
 
     const { userId, email, loginName } = await withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { id: teacherId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, id: teacherId } });
       if (!teacher) throw new NotFoundException('Teacher not found');
       if (teacher.userId) throw new ConflictException('Teacher already has a login');
 
@@ -218,7 +218,7 @@ export class TeachersService {
   /** Re-sends the welcome invite for a teacher who already has a login. */
   async resendInvite(schoolId: string, teacherId: string): Promise<LoginInviteResult> {
     const { userId, email, username, loginName } = await withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { id: teacherId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, id: teacherId } });
       if (!teacher) throw new NotFoundException('Teacher not found');
       if (!teacher.userId) throw new NotFoundException('Teacher has no login to resend an invite for');
 

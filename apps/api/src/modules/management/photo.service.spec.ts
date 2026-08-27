@@ -55,7 +55,10 @@ describe('PhotoService', () => {
       where: { id: 'stu-1' }, data: { photoAssetId: 'asset-1' },
     });
     // The person row is resolved from the JWT sub — never a client id.
-    expect(txMock.student.findFirst).toHaveBeenCalledWith({ where: { userId: USER }, select: { id: true } });
+    expect(txMock.student.findFirst).toHaveBeenCalledWith({
+      where: { schoolId: SCHOOL, userId: USER },
+      select: { id: true },
+    });
   });
 
   it('a TEACHER updates the teacher row; a STAFF the staff row', async () => {

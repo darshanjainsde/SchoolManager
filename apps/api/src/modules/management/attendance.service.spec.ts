@@ -93,7 +93,7 @@ describe('AttendanceService', () => {
 
       expect(txMock.attendance.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { classSectionId: CLASS_SECTION, date: new Date('2026-07-21') },
+          where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION, date: new Date('2026-07-21') },
         }),
       );
     });
@@ -353,7 +353,7 @@ describe('AttendanceService', () => {
 
       await svc.save(SCHOOL, 'user-teacher-42', dto);
 
-      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { userId: 'user-teacher-42' } });
+      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, userId: 'user-teacher-42' } });
       expect(txMock.attendance.createMany.mock.calls[0][0].data[0].markedById).toBe('teacher-42');
     });
 
@@ -545,7 +545,7 @@ describe('AttendanceService', () => {
       });
 
       expect(txMock.attendance.findMany).toHaveBeenCalledWith({
-        where: { classSectionId: CLASS_SECTION, date: new Date('2026-07-21') },
+        where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION, date: new Date('2026-07-21') },
         select: { studentId: true, status: true, markedById: true },
       });
       // Read before the writes, so the "was already absent" answer is not

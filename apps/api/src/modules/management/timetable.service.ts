@@ -267,7 +267,7 @@ export class TimetableService {
   async listForTeacher(schoolId: string, userId: string, date?: string): Promise<TimetableSlot[]> {
     const asOf = resolveAsOfDate(date, new Date());
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { userId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId } });
       if (!teacher) return [];
       return tx.timetableSlot.findMany({
         where: {
