@@ -3,12 +3,18 @@ import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
 import { defaultPrivacy, toGraduationRows } from './homecoming-rules';
 import type {
+  CreateClaimDto,
   DecideClaimDto,
   GraduateBatchDto,
   ListAlumniQueryDto,
   SaveBatchStrengthDto,
   SetTrustedDto,
 } from './alumni.dto';
+
+/** How many unverified claims one school may have waiting. Not a rate limit on
+ *  a caller — a ceiling on the damage, so a script cannot bury a real claim
+ *  under ten thousand fake ones. Clearing the queue restores capacity. */
+const MAX_PENDING_CLAIMS = 500;
 
 export interface RollCallRow {
   batchYear: number;
@@ -240,6 +246,74 @@ export class AlumniService {
         take: 200,
       }),
     );
+  }
+
+  /**
+   * A public self-registration. The only write an unauthenticated stranger can
+   * make in this module, so it is the only one that needs anti-abuse.
+   *
+   * Three cheap defences, in order of how often they matter:
+   *
+   *  1. A duplicate is swallowed, not stacked. The same person submitting twice
+   *     because nothing visibly happened is the NORMAL case — there is no
+   *     status page and the office replies by WhatsApp days later. Two rows for
+   *     one person is a queue the coordinator has to de-duplicate by hand.
+   *  2. A per-school ceiling on the pending queue. Not a rate limit on the
+   *     caller (they change IP) — a cap on the DAMAGE, so a script cannot bury
+   *     a real claim under ten thousand fake ones. The office clearing the
+   *     queue restores capacity.
+   *  3. Nothing it writes is visible to any human but the office, ever, and the
+   *     row cannot carry a status. That is structural, not a check.
+   */
+  async submitClaim(schoolId: string, dto: CreateClaimDto) {
+    if (!dto.email?.trim() && !dto.phone?.trim()) {
+      throw new ApiError(
+        'CONTACT_REQUIRED',
+        'Leave an email or a phone number, or the school cannot tell you the outcome.',
+        400,
+      );
+    }
+    return withTenant(schoolId, async (tx) => {
+      const pending = await tx.alumniClaim.count({ where: { schoolId, status: 'PENDING' } });
+      if (pending >= MAX_PENDING_CLAIMS) {
+        throw new ApiError(
+          'CLAIM_QUEUE_FULL',
+          'The school has a lot of claims waiting just now. Please try again in a day or two.',
+          429,
+        );
+      }
+
+      const first = dto.firstName.trim();
+      const last = dto.lastName.trim();
+      const existing = await tx.alumniClaim.findFirst({
+        where: {
+          schoolId,
+          status: 'PENDING',
+          batchYear: dto.batchYear,
+          firstName: { equals: first, mode: 'insensitive' },
+          lastName: { equals: last, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      // Answer the same way either way. "You already applied" tells somebody
+      // probing which names are in the queue, and it reads to an honest person
+      // as a failure when it is not one.
+      if (existing) return { received: true };
+
+      await tx.alumniClaim.create({
+        data: {
+          schoolId,
+          firstName: first,
+          lastName: last,
+          batchYear: dto.batchYear,
+          email: dto.email?.trim() || null,
+          phone: dto.phone?.trim() || null,
+          proof: dto.proof.trim(),
+          status: 'PENDING',
+        },
+      });
+      return { received: true };
+    });
   }
 
   /**

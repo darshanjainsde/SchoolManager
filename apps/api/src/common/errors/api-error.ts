@@ -13,6 +13,12 @@ export type ErrorCode =
    *  requiring it is what makes suggesting an alternative the easier path. */
   | 'REASON_REQUIRED'
   | 'CLAIM_ALREADY_DECIDED'
+  /** A self-registration with neither an email nor a phone — the school would
+   *  have no way to tell the person the outcome. Pair with 400. */
+  | 'CONTACT_REQUIRED'
+  /** The school's pending-claim queue is at its ceiling. A cap on the damage a
+   *  script can do, not on an honest caller. Pair with 429. */
+  | 'CLAIM_QUEUE_FULL'
   /** No alumni record with that id in this school — pair with 404. */
   | 'ALUMNI_NOT_FOUND'
   /** Declined or hidden records cannot be sent a claim link — pair with 409. */

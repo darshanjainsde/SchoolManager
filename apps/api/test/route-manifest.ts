@@ -27,6 +27,7 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /alumni/batches",
   "GET /alumni/batches/:year",
   "POST /alumni/claim",
+  "POST /alumni/claims",
   "GET /alumni/me",
   "PUT /alumni/me",
   "POST /alumni/me/sign-out",

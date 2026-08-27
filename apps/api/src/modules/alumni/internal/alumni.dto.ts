@@ -199,3 +199,26 @@ export class UpdateMeDto {
    *  closes a field rather than opening one. */
   @IsOptional() @IsObject() privacy?: Record<string, string>;
 }
+
+/**
+ * "I was a student here" — the public front door to the verification queue.
+ *
+ * Five fields and no more. Every one of them is something a person genuinely
+ * remembers about a school they left twenty years ago; anything else is a form
+ * they abandon. There is deliberately no file upload — this product has no
+ * public upload endpoint, and the pitch's answer was always a line of text a
+ * clerk can check against the bound register.
+ *
+ * Nothing here can set a status. A claim is inert until a human in the office
+ * matches it against the register, which is the entire point of the table.
+ */
+export class CreateClaimDto {
+  @IsString() @Length(1, 60) firstName!: string;
+  @IsString() @Length(1, 60) lastName!: string;
+  @IsInt() @Min(MIN_BATCH_YEAR) @Max(MAX_BATCH_YEAR) batchYear!: number;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() @Length(4, 30) phone?: string;
+  /** "Mrs Sharma taught 5-A", an admission number, two classmates. Free text,
+   *  because the useful proof differs by decade and no dropdown covers it. */
+  @IsString() @Length(3, 400) proof!: string;
+}
