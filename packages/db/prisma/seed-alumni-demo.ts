@@ -24,8 +24,48 @@
  * differ from each other, a batch page with a gap in it, a pledge mid-flight,
  * and one alumnus who can genuinely sign in.
  */
-import { loadEnv } from '@skoolos/config';
-loadEnv();
+/**
+ * Connection resolution, done deliberately and in one place.
+ *
+ * Two traps live here, and this script hit BOTH before it ever reached a real
+ * database:
+ *
+ * 1. `loadEnv()` from @skoolos/config validates the WHOLE application schema —
+ *    JWT secrets, hosts, ingress records — and throws if any of it is missing.
+ *    A seed needs a database URL and nothing else, so calling it makes the
+ *    script unrunnable in CI, where only the database credentials exist.
+ *
+ * 2. @skoolos/db does not read one variable. `getTenantPrisma()` takes
+ *    `DATABASE_URL_APP ?? DATABASE_URL` and `getPlatformPrisma()` takes
+ *    `DATABASE_URL_PLATFORM ?? DATABASE_URL`. So on any machine with a root
+ *    .env, the MORE SPECIFIC variables win and a `DATABASE_URL=...` passed on
+ *    the command line is silently ignored — the run lands on the developer's
+ *    own database while reporting success against the one they named.
+ *
+ * So: ONE variable decides, and it is pinned onto all three before any client
+ * is constructed. A .env can supply it when nothing else does; it can never
+ * redirect it.
+ */
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+function dotenvValue(key: string): string | undefined {
+  const path = resolve(__dirname, '../../../.env');
+  if (!existsSync(path)) return undefined;
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    const m = new RegExp(`^\\s*${key}\\s*=\\s*(.*)$`).exec(line);
+    if (m) return m[1].trim().replace(/^["']|["']$/g, '');
+  }
+  return undefined;
+}
+
+const DB_URL = process.env.DATABASE_URL ?? dotenvValue('DATABASE_URL');
+if (!DB_URL) throw new Error('DATABASE_URL must be set (in the environment, or in a root .env).');
+// Pin all three, so which client is used cannot change where the writes land.
+process.env.DATABASE_URL = DB_URL;
+process.env.DATABASE_URL_APP = DB_URL;
+process.env.DATABASE_URL_PLATFORM = DB_URL;
+
 import { getPlatformPrisma, withTenant, disconnectAll } from '@skoolos/db';
 import { hash } from 'argon2';
 
