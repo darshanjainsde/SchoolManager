@@ -80,22 +80,37 @@ const DRY_RUN = process.env.DEMO_DRY_RUN === 'true';
 
 const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
-/** Open enough to be worth looking at, without inventing a contact detail the
- *  person never published — which is the module's whole rule. */
+/**
+ * Three privacy postures, because one is not a demonstration.
+ *
+ * The default (`defaultPrivacy()`) hides a name from PUBLIC, which is right —
+ * but a roll where EVERY row is private renders a batch page of twelve
+ * identical "A former student" entries, and that reads as a broken page rather
+ * than as a working privacy rule. It also hides the thing the public page
+ * exists for: somebody who left in 1998 finding themselves from a search
+ * engine.
+ *
+ * So the demo carries the real spread a school would actually have.
+ */
+/** Opened up: findable from outside, which is how recovery works at all. */
+const PUBLIC = { name: 'PUBLIC', photo: 'PUBLIC', city: 'PUBLIC', work: 'PUBLIC', college: 'PUBLIC', phone: 'BATCH' };
+/** The common posture: visible to fellow alumni, invisible to the internet. */
 const OPEN = { name: 'ALUMNI', photo: 'ALUMNI', city: 'ALUMNI', work: 'ALUMNI', college: 'ALUMNI', phone: 'BATCH' };
-const SHY = { name: 'ALUMNI', photo: 'HIDDEN', city: 'ALUMNI', work: 'ALUMNI', college: 'HIDDEN', phone: 'HIDDEN' };
+/** Listed, and almost nothing else. Every module needs one of these to prove
+ *  that opting out is real. */
+const SHY = { name: 'ALUMNI', photo: 'HIDDEN', city: 'HIDDEN', work: 'HIDDEN', college: 'HIDDEN', phone: 'HIDDEN' };
 
 type Person = {
   firstName: string; lastName: string; batchYear: number; dob: string;
   guardianName: string; lastClass: string; admissionNo: string;
   city?: string; country?: string; profession?: string; employer?: string;
   collegeName?: string; email?: string; phone?: string;
-  trusted?: boolean; captain?: boolean; mentor?: boolean; shy?: boolean;
+  trusted?: boolean; captain?: boolean; mentor?: boolean; shy?: boolean; open?: boolean;
 };
 
 const PEOPLE: Person[] = [
   // ── 1998: the batch that predates the software entirely ──────────────────
-  { firstName: 'Farida', lastName: 'Sheikh', batchYear: 1998, dob: '1980-04-12', guardianName: 'Iqbal Sheikh',
+  { open: true, firstName: 'Farida', lastName: 'Sheikh', batchYear: 1998, dob: '1980-04-12', guardianName: 'Iqbal Sheikh',
     lastClass: '12-A', admissionNo: 'B/1994/031', city: 'Pune', country: 'India',
     profession: 'Paediatrician', employer: 'Sahyadri Hospital', collegeName: 'B.J. Medical College',
     email: 'farida.sheikh@example.com', phone: '+91 98123 45678', captain: true, trusted: true },
@@ -107,7 +122,7 @@ const PEOPLE: Person[] = [
     profession: 'School principal', employer: 'Vidya Niketan', shy: true },
 
   // ── 2004 ─────────────────────────────────────────────────────────────────
-  { firstName: 'Vikram', lastName: 'Chauhan', batchYear: 2004, dob: '1986-06-30', guardianName: 'R. S. Chauhan',
+  { open: true, firstName: 'Vikram', lastName: 'Chauhan', batchYear: 2004, dob: '1986-06-30', guardianName: 'R. S. Chauhan',
     lastClass: '12-C', admissionNo: 'B/2000/018', city: 'Mumbai', country: 'India',
     profession: 'Chartered accountant', employer: 'Deloitte', collegeName: 'Sydenham',
     email: 'vikram.chauhan@example.com', mentor: true, trusted: true },
@@ -119,7 +134,7 @@ const PEOPLE: Person[] = [
     profession: 'Product designer', employer: 'Shopify' },
 
   // ── 2011 ─────────────────────────────────────────────────────────────────
-  { firstName: 'Aisha', lastName: 'Qureshi', batchYear: 2011, dob: '1993-03-21', guardianName: 'N. Qureshi',
+  { open: true, firstName: 'Aisha', lastName: 'Qureshi', batchYear: 2011, dob: '1993-03-21', guardianName: 'N. Qureshi',
     lastClass: '12-A', admissionNo: 'B/2007/011', city: 'Hyderabad', country: 'India',
     profession: 'Civil services', employer: 'Govt. of Telangana', collegeName: 'NALSAR', trusted: true },
   { firstName: 'Karan', lastName: 'Mehta', batchYear: 2011, dob: '1993-07-05', guardianName: 'D. Mehta',
@@ -137,7 +152,7 @@ const PEOPLE: Person[] = [
   { firstName: 'Aditya', lastName: 'Kulkarni', batchYear: 2018, dob: '2000-01-23', guardianName: 'V. Kulkarni',
     lastClass: '12-B', admissionNo: 'B/2014/021', city: 'Berlin', country: 'Germany',
     profession: 'Research assistant', employer: 'TU Berlin', collegeName: 'IIT Bombay' },
-  { firstName: 'Neha', lastName: 'Bhosale', batchYear: 2018, dob: '2000-10-09', guardianName: 'A. Bhosale',
+  { open: true, firstName: 'Neha', lastName: 'Bhosale', batchYear: 2018, dob: '2000-10-09', guardianName: 'A. Bhosale',
     lastClass: '12-A', admissionNo: 'B/2014/014', city: 'Pune', country: 'India',
     profession: 'Journalist', employer: 'Indian Express', captain: true },
 ];
@@ -233,7 +248,7 @@ async function main() {
       trustedForStudents: !!p.trusted,
       isBatchCaptain: !!p.captain,
       isMentor: !!p.mentor,
-      privacy: p.shy ? SHY : OPEN,
+      privacy: p.shy ? SHY : p.open ? PUBLIC : OPEN,
       verifiedAt: new Date(),
     };
     const row = found
