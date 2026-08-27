@@ -1,14 +1,20 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import type { BlogPost } from '@skoolos/db';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { Roles } from '../../../common/auth/roles.decorator';
 import { RequireFeature, RequireFeatureGuard } from '../../features';
 import { TenantContextService } from '../../tenancy';
 import { BlogCmsService } from './blog-cms.service';
 import { AddSelectionDto, BlogSettingsDto, CreatePostDto, PatchSelectionDto, UpdatePostDto } from './blog.dto';
 
+/** SchoolJwtGuard reads no role, so without RolesGuard every route here was
+ *  reachable with a STUDENT or PARENT token. Every caller is under /app, which
+ *  is already SCHOOL_ADMIN-only, so nothing legitimate loses access. */
 @Controller('cms/blog')
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard)
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
 @RequireFeature('BLOG')
+@Roles('SCHOOL_ADMIN')
 export class BlogCmsController {
   constructor(
     private readonly cms: BlogCmsService,

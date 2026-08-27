@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { Roles } from '../../../common/auth/roles.decorator';
 import { TenantContextService } from '../../tenancy';
 import { MediaService } from './media.service';
 import { ListMediaDto } from './cms.dto';
@@ -20,7 +22,13 @@ import { ListMediaDto } from './cms.dto';
 const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT', 'EVENT'];
 
 @Controller('site/media')
-@UseGuards(SchoolJwtGuard)
+// SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
+// all. Without RolesGuard beside it every route here was reachable with a
+// STUDENT or PARENT token — and the enquiries ones hand back other families'
+// names and phone numbers. Every caller lives under /app, which is already
+// SCHOOL_ADMIN-only, so this locks out nobody who was legitimately using it.
+@UseGuards(SchoolJwtGuard, RolesGuard)
+@Roles('SCHOOL_ADMIN')
 export class MediaController {
   constructor(
     private readonly media: MediaService,

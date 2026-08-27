@@ -1,12 +1,18 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
+import { RolesGuard } from '../../common/auth/roles.guard';
+import { Roles } from '../../common/auth/roles.decorator';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { EventsService } from './events.service';
 import { RegistrationsService } from './registrations.service';
 import { CreateEventDto, RegisterDto, SetRegistrationStatusDto, UpdateEventDto } from './community.dto';
 
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard)
+/** SchoolJwtGuard reads no role, so without RolesGuard every route here was
+ *  reachable with a STUDENT or PARENT token. Every caller is under /app, which
+ *  is already SCHOOL_ADMIN-only, so nothing legitimate loses access. */
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
 @RequireFeature('EVENTS')
+@Roles('SCHOOL_ADMIN')
 @Controller('manage/events')
 export class EventsController {
   constructor(

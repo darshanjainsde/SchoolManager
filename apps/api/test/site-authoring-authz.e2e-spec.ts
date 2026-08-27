@@ -51,7 +51,34 @@ describe('site authoring authorization', () => {
 
   // Every route on both controllers, by hand — a loop over a list read off the
   // controller would pass just as happily if the controller lost a route.
+  const ID = '00000000-0000-4000-8000-000000000001';
   const ROUTES: [string, 'get' | 'post' | 'put' | 'delete', string][] = [
+    // The rest of /site, added after the first pass fixed only the two that
+    // happened to be making the route-coverage guard red. They carried the
+    // identical defect, and the enquiries pair is the sharpest: those hand back
+    // other families' names, phone numbers and email addresses.
+    ['read admission enquiries', 'get', '/site/enquiries'],
+    ['read the site content', 'get', '/site/content'],
+    ['rewrite the homepage', 'put', '/site/homepage'],
+    ['list site media', 'get', '/site/media'],
+    ['delete site media', 'delete', `/site/media/${ID}`],
+    ['list courses', 'get', '/site/courses'],
+    ['create a course', 'post', '/site/courses'],
+    ['delete a course', 'delete', `/site/courses/${ID}`],
+    ['list featured staff', 'get', '/site/staff'],
+    ['create featured staff', 'post', '/site/staff'],
+    ['delete featured staff', 'delete', `/site/staff/${ID}`],
+    ['read admissions settings', 'get', '/site/admissions'],
+    ['rewrite the admissions steps', 'put', '/site/admissions/steps'],
+    ['read the hall of fame', 'get', '/site/hall-of-fame'],
+    // The other three consoles that carried a school token and no role.
+    ['list blog posts', 'get', '/cms/blog/posts'],
+    ['create a blog post', 'post', '/cms/blog/posts'],
+    ['list job posts', 'get', '/manage/jobs'],
+    ['create a job post', 'post', '/manage/jobs'],
+    ['read applications', 'get', `/manage/jobs/${ID}/applications`],
+    ['list events', 'get', '/manage/events'],
+    ['create an event', 'post', '/manage/events'],
     ['list pages', 'get', '/site/pages'],
     ['create a page', 'post', '/site/pages'],
     ['edit a page', 'put', '/site/pages/00000000-0000-4000-8000-000000000001'],
@@ -89,6 +116,19 @@ describe('site authoring authorization', () => {
 
   it('a SCHOOL_ADMIN can still list design drafts', async () => {
     const res = await send('get', '/site/design-drafts', adminToken);
+    expect(res.status).not.toBe(403);
+  });
+
+  /**
+   * The other half of the fix: the PUBLIC jobs board is public on purpose.
+   *
+   * `jobs.controller.ts` holds two controllers, and the careless version of
+   * this change guards both — which would take the school's vacancies off the
+   * internet, where the entire point is that a stranger can read them.
+   */
+  it('leaves the public jobs board reachable with no token at all', async () => {
+    const res = await request(app.getHttpServer()).get('/public/jobs').set('Host', host);
+    expect(res.status).not.toBe(401);
     expect(res.status).not.toBe(403);
   });
 });

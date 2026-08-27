@@ -1,14 +1,20 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
+import { RolesGuard } from '../../../common/auth/roles.guard';
+import { Roles } from '../../../common/auth/roles.decorator';
 import { Public } from '../../../common/auth/public.decorator';
 import { RequireFeature, RequireFeatureGuard } from '../../features';
 import { JobsService } from './jobs.service';
 import { ApplyDto, CreateJobDto, SetApplicationStatusDto, UpdateJobDto } from './hiring.dto';
 
 /** The school's own vacancies and its applications desk. */
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard)
+/** SchoolJwtGuard reads no role, so without RolesGuard every route here was
+ *  reachable with a STUDENT or PARENT token. Every caller is under /app, which
+ *  is already SCHOOL_ADMIN-only, so nothing legitimate loses access. */
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
 @RequireFeature('HIRING')
+@Roles('SCHOOL_ADMIN')
 @Controller('manage/jobs')
 export class ManageJobsController {
   constructor(private readonly jobs: JobsService) {}
