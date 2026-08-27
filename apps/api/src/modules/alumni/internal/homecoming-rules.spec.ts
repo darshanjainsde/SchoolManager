@@ -1,5 +1,10 @@
 import {
+  giftJourney,
+  giftJourneyIndex,
+  giftStatusLabel,
   matchClaimToRoll,
+  needsCollection,
+  priceForPledge,
   amountForMode,
   assertScopeShape,
   buildSlots,
@@ -15,40 +20,58 @@ import {
   type SlotInputs,
 } from './homecoming-rules';
 
-describe('gift state machine', () => {
+describe('gift state machine — the money track', () => {
   it('walks the happy path proposal → report', () => {
-    expect(nextGiftStatus('PROPOSED', 'ACCEPT')).toBe('ACCEPTED');
-    expect(nextGiftStatus('ACCEPTED', 'RECEIVE')).toBe('RECEIVED');
-    expect(nextGiftStatus('RECEIVED', 'DISTRIBUTE')).toBe('DISTRIBUTED');
-    expect(nextGiftStatus('DISTRIBUTED', 'REPORT')).toBe('REPORTED');
+    expect(nextGiftStatus('PROPOSED', 'ACCEPT', 'FUND')).toBe('ACCEPTED');
+    expect(nextGiftStatus('ACCEPTED', 'RECEIVE', 'FUND')).toBe('RECEIVED');
+    expect(nextGiftStatus('RECEIVED', 'PURCHASE', 'FUND')).toBe('PURCHASED');
+    expect(nextGiftStatus('PURCHASED', 'DISTRIBUTE', 'FUND')).toBe('DISTRIBUTED');
+    expect(nextGiftStatus('DISTRIBUTED', 'REPORT', 'FUND')).toBe('REPORTED');
   });
 
   it('lets a school counter, and the donor then accept or walk', () => {
-    expect(nextGiftStatus('PROPOSED', 'COUNTER')).toBe('COUNTERED');
-    expect(nextGiftStatus('COUNTERED', 'ACCEPT')).toBe('ACCEPTED');
-    expect(nextGiftStatus('COUNTERED', 'DECLINE')).toBe('DECLINED');
+    expect(nextGiftStatus('PROPOSED', 'COUNTER', 'FUND')).toBe('COUNTERED');
+    expect(nextGiftStatus('COUNTERED', 'ACCEPT', 'FUND')).toBe('ACCEPTED');
+    expect(nextGiftStatus('COUNTERED', 'DECLINE', 'FUND')).toBe('DECLINED');
   });
 
   it('cannot counter a countered pledge — that is the haggle, and it is capped', () => {
-    expect(nextGiftStatus('COUNTERED', 'COUNTER')).toBeNull();
+    expect(nextGiftStatus('COUNTERED', 'COUNTER', 'FUND')).toBeNull();
   });
 
   it('accepts a second consignment against an already-received pledge', () => {
     // A short delivery is topped up, and each consignment is its own dated row.
-    expect(nextGiftStatus('RECEIVED', 'RECEIVE')).toBe('RECEIVED');
+    expect(nextGiftStatus('RECEIVED', 'RECEIVE', 'FUND')).toBe('RECEIVED');
+  });
+
+  it('will not hand out money that has not been spent yet', () => {
+    // The money arriving is not the sweaters arriving. Skipping PURCHASED would
+    // let a school report a distribution of something it had not bought.
+    expect(nextGiftStatus('RECEIVED', 'DISTRIBUTE', 'FUND')).toBeNull();
+  });
+
+  it('refuses to cancel money the school has already spent', () => {
+    // Refunding is a conversation, not a state transition, and pretending
+    // otherwise leaves the books saying something untrue.
+    expect(nextGiftStatus('PURCHASED', 'CANCEL', 'FUND')).toBeNull();
+  });
+
+  it('has no collection steps at all', () => {
+    expect(nextGiftStatus('ACCEPTED', 'REQUEST_PICKUP', 'FUND')).toBeNull();
+    expect(nextGiftStatus('PICKUP_REQUESTED', 'MARK_PICKED_UP', 'FUND')).toBeNull();
   });
 
   it('refuses every action from a terminal state', () => {
     for (const action of ['ACCEPT', 'DECLINE', 'RECEIVE', 'DISTRIBUTE', 'REPORT', 'CANCEL'] as const) {
-      expect(nextGiftStatus('REPORTED', action)).toBeNull();
-      expect(nextGiftStatus('DECLINED', action)).toBeNull();
-      expect(nextGiftStatus('CANCELLED', action)).toBeNull();
+      expect(nextGiftStatus('REPORTED', action, 'FUND')).toBeNull();
+      expect(nextGiftStatus('DECLINED', action, 'FUND')).toBeNull();
+      expect(nextGiftStatus('CANCELLED', action, 'FUND')).toBeNull();
     }
   });
 
   it('will not skip receiving — a pledge cannot go straight to distributed', () => {
-    expect(nextGiftStatus('ACCEPTED', 'DISTRIBUTE')).toBeNull();
-    expect(nextGiftStatus('PROPOSED', 'DISTRIBUTE')).toBeNull();
+    expect(nextGiftStatus('ACCEPTED', 'DISTRIBUTE', 'FUND')).toBeNull();
+    expect(nextGiftStatus('PROPOSED', 'DISTRIBUTE', 'FUND')).toBeNull();
   });
 });
 
@@ -309,9 +332,11 @@ describe('the local unions match the Prisma enums exactly', () => {
     GiftMode: ['FUND', 'SUPPLY'],
     GiftScope: ['SCHOOL', 'GRADE', 'SECTION'],
     GiftStatus: [
-      'PROPOSED', 'ACCEPTED', 'DECLINED', 'COUNTERED',
-      'CANCELLED', 'RECEIVED', 'DISTRIBUTED', 'REPORTED',
+      'PROPOSED', 'ACCEPTED', 'DECLINED', 'COUNTERED', 'CANCELLED',
+      'PICKUP_REQUESTED', 'PICKED_UP',
+      'RECEIVED', 'PURCHASED', 'DISTRIBUTED', 'REPORTED',
     ],
+    GiftAttachmentKind: ['BILL', 'CONSIGNMENT', 'DISTRIBUTION'],
     GuestSessionStatus: [
       'REQUESTED', 'COUNTERED', 'SCHEDULED', 'DECLINED', 'CANCELLED', 'DELIVERED',
     ],
@@ -323,11 +348,25 @@ describe('the local unions match the Prisma enums exactly', () => {
     expect(fromPrisma).toEqual([...LOCAL[name as keyof typeof LOCAL]].sort());
   });
 
-  it('the gift state machine names every GiftStatus Prisma knows', () => {
-    // A status missing from GIFT_TRANSITIONS would fall through to "refused"
-    // forever, which looks like a rule rather than an omission.
+  it('the gift state machine names every GiftStatus Prisma knows, in BOTH tracks', () => {
+    // A status missing from a transition table falls through to "refused"
+    // forever, which looks like a rule rather than an omission. Now that there
+    // are two tables, a value can be present in one and forgotten in the other
+    // — which is worse, because it only breaks for half the donors.
     for (const status of Object.keys(prisma.GiftStatus)) {
-      expect(nextGiftStatus(status as never, 'CANCEL')).not.toBeUndefined();
+      expect(nextGiftStatus(status as never, 'CANCEL', 'FUND')).not.toBeUndefined();
+      expect(nextGiftStatus(status as never, 'CANCEL', 'SUPPLY')).not.toBeUndefined();
+    }
+  });
+
+  it('gives every GiftStatus words a donor can read, in both modes', () => {
+    for (const status of Object.keys(prisma.GiftStatus)) {
+      for (const mode of ['FUND', 'SUPPLY'] as const) {
+        const label = giftStatusLabel(status as never, mode);
+        expect(label).toBeTruthy();
+        // The raw enum name leaking to a donor is the failure this catches.
+        expect(label).not.toBe(status);
+      }
     }
   });
 });
@@ -404,5 +443,132 @@ describe('matchClaimToRoll', () => {
 
   it('returns nothing for an empty roll rather than throwing', () => {
     expect(matchClaimToRoll(claim(), [])).toEqual([]);
+  });
+});
+
+
+describe('gift state machine — the goods track', () => {
+  it('walks collection → transit → arrival → handover', () => {
+    expect(nextGiftStatus('ACCEPTED', 'REQUEST_PICKUP', 'SUPPLY')).toBe('PICKUP_REQUESTED');
+    expect(nextGiftStatus('PICKUP_REQUESTED', 'MARK_PICKED_UP', 'SUPPLY')).toBe('PICKED_UP');
+    expect(nextGiftStatus('PICKED_UP', 'RECEIVE', 'SUPPLY')).toBe('RECEIVED');
+    expect(nextGiftStatus('RECEIVED', 'DISTRIBUTE', 'SUPPLY')).toBe('DISTRIBUTED');
+  });
+
+  it('lets a donor who drives it over skip collection entirely', () => {
+    // Not an oversight. Plenty of gifts arrive in the donor's own car, and
+    // forcing a pickup that never happened makes the history a fiction.
+    expect(nextGiftStatus('ACCEPTED', 'RECEIVE', 'SUPPLY')).toBe('RECEIVED');
+  });
+
+  it('lets a waiting consignment be collected in person after all', () => {
+    expect(nextGiftStatus('PICKUP_REQUESTED', 'RECEIVE', 'SUPPLY')).toBe('RECEIVED');
+  });
+
+  it('never lets goods be "purchased" — the donor already bought them', () => {
+    for (const from of ['ACCEPTED', 'PICKED_UP', 'RECEIVED'] as const) {
+      expect(nextGiftStatus(from, 'PURCHASE', 'SUPPLY')).toBeNull();
+    }
+  });
+
+  it('will not hand out goods that have not arrived', () => {
+    expect(nextGiftStatus('PICKED_UP', 'DISTRIBUTE', 'SUPPLY')).toBeNull();
+    expect(nextGiftStatus('PICKUP_REQUESTED', 'DISTRIBUTE', 'SUPPLY')).toBeNull();
+  });
+
+  it('can be called off at any point before it is handed out', () => {
+    for (const from of ['ACCEPTED', 'PICKUP_REQUESTED', 'PICKED_UP', 'RECEIVED'] as const) {
+      expect(nextGiftStatus(from, 'CANCEL', 'SUPPLY')).toBe('CANCELLED');
+    }
+    expect(nextGiftStatus('DISTRIBUTED', 'CANCEL', 'SUPPLY')).toBeNull();
+  });
+});
+
+describe('what the donor typed', () => {
+  it('takes a per-child price for a funded gift and multiplies it out', () => {
+    const r = priceForPledge('FUND', 45000, 38);
+    expect(r.ok).toBe(true);
+    expect(r.unitPriceMinor).toBe(45000);
+    expect(r.amountMinor).toBe(45000 * 38);
+  });
+
+  it('stores NO valuation for goods, whatever was typed', () => {
+    // The rule that keeps donated goods out of the fee ledger.
+    const r = priceForPledge('SUPPLY', 45000, 38);
+    expect(r.ok).toBe(true);
+    expect(r.unitPriceMinor).toBeNull();
+    expect(r.amountMinor).toBeNull();
+  });
+
+  it('treats zero as "I am sending it myself", not as a mistake', () => {
+    expect(priceForPledge('SUPPLY', 0, 38).ok).toBe(true);
+  });
+
+  it('refuses a funded gift with no price, and says what to do instead', () => {
+    const r = priceForPledge('FUND', 0, 38);
+    expect(r.ok).toBe(false);
+    expect(r.problem).toMatch(/send the goods/i);
+  });
+
+  it('refuses a negative price', () => {
+    expect(priceForPledge('FUND', -1, 38).ok).toBe(false);
+  });
+
+  it('refuses to price a gift for an empty group', () => {
+    expect(priceForPledge('FUND', 45000, 0).ok).toBe(false);
+  });
+});
+
+describe('the journey a donor is shown', () => {
+  it('gives money and goods different journeys', () => {
+    expect(giftJourney('FUND')).toContain('PURCHASED');
+    expect(giftJourney('FUND')).not.toContain('PICKED_UP');
+    expect(giftJourney('SUPPLY')).toContain('PICKED_UP');
+    expect(giftJourney('SUPPLY')).not.toContain('PURCHASED');
+  });
+
+  it('advances the index along the journey', () => {
+    expect(giftJourneyIndex('PROPOSED', 'FUND')).toBe(0);
+    expect(giftJourneyIndex('DISTRIBUTED', 'FUND')).toBe(giftJourney('FUND').length - 1);
+    expect(giftJourneyIndex('PICKED_UP', 'SUPPLY')).toBeGreaterThan(
+      giftJourneyIndex('PICKUP_REQUESTED', 'SUPPLY'),
+    );
+  });
+
+  it('marks a pledge that ended early as off the journey rather than at step 0', () => {
+    // -1 and 0 render very differently: "nothing has happened yet" is a lie
+    // about a gift the school declined.
+    expect(giftJourneyIndex('DECLINED', 'FUND')).toBe(-1);
+    expect(giftJourneyIndex('CANCELLED', 'SUPPLY')).toBe(-1);
+  });
+
+  it('puts a countered pledge back at the donor’s end, not partway along', () => {
+    expect(giftJourneyIndex('COUNTERED', 'FUND')).toBe(0);
+  });
+
+  it('treats REPORTED as complete rather than as an unknown step', () => {
+    expect(giftJourneyIndex('REPORTED', 'SUPPLY')).toBe(giftJourney('SUPPLY').length - 1);
+  });
+
+  it('says something different to a funder and a sender at the same status', () => {
+    expect(giftStatusLabel('RECEIVED', 'FUND')).not.toBe(giftStatusLabel('RECEIVED', 'SUPPLY'));
+  });
+});
+
+describe('whether to ask about collection at all', () => {
+  it('never asks a funder for a pickup address', () => {
+    // Asking a donor in Toronto where to collect their money is how a form
+    // loses somebody.
+    expect(needsCollection('FUND', 'ACCEPTED')).toBe(false);
+  });
+
+  it('asks while a consignment still needs collecting', () => {
+    expect(needsCollection('SUPPLY', 'ACCEPTED')).toBe(true);
+    expect(needsCollection('SUPPLY', 'PICKUP_REQUESTED')).toBe(true);
+  });
+
+  it('stops asking once it is on its way', () => {
+    expect(needsCollection('SUPPLY', 'PICKED_UP')).toBe(false);
+    expect(needsCollection('SUPPLY', 'RECEIVED')).toBe(false);
   });
 });

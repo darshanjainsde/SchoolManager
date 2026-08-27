@@ -47,6 +47,19 @@ export type ErrorCode =
   | 'GIFT_TRANSITION_ILLEGAL'
   /** Fewer goods arrived than the group has children. The gift covers everyone
    *  or it waits — the pledge stays open so somebody can close it. Pair with 409. */
+  /** A funded gift with no price: the school can neither bank it, buy against
+   *  it, nor chase it. Pair with 400. */
+  | 'GIFT_PRICE_REQUIRED'
+  /** Asked to arrange collection for a gift of money. Pair with 409. */
+  | 'GIFT_NOT_COLLECTABLE'
+  /** A tracking reference with nobody carrying it — an unlookuppable number.
+   *  Pair with 400. */
+  | 'COURIER_REQUIRED'
+  /** Tried to thank somebody for a gift the school has not accepted. 409. */
+  | 'GIFT_NOT_ACCEPTED'
+  /** An attachment upload with no file, or the wrong sort of file. 400. */
+  | 'FILE_REQUIRED'
+  | 'BAD_FILE_TYPE'
   | 'GIFT_SHORT'
   /** Given + absent must equal the headcount; children who were away are still owed. */
   | 'GIFT_COUNT_MISMATCH'

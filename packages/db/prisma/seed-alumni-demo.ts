@@ -354,6 +354,11 @@ async function main() {
   const headcount = await step((db) => db.student.count({ where: { schoolId, isActive: true } }));
   const scopeCount = headcount > 0 ? headcount : 240;
   console.log(`  · live headcount: ${headcount || '(none — using 240 for the demo)'}`);
+  // Five pledges, placed at DIFFERENT points on the two journeys — because the
+  // whole feature is the journey, and a demo where everything sits at PROPOSED
+  // shows none of it. Vikram gets three of them so the signed-in donor has a
+  // history worth opening.
+  const vikram = byName.get('Vikram Chauhan')!;
   const PLEDGES = [
     {
       alumniId: byName.get('Farida Sheikh')!, giftItemId: itemIds.get('Winter sweater')!,
@@ -365,21 +370,109 @@ async function main() {
     {
       alumniId: byName.get('Karan Mehta')!, giftItemId: itemIds.get('Notebook set (6)')!,
       scopeKind: 'SCHOOL' as const, headcountAtPledge: scopeCount, quantity: scopeCount,
-      mode: 'FUND' as const, amountMinor: 18000 * scopeCount,
+      mode: 'FUND' as const, amountMinor: 18000 * scopeCount, unitPriceMinor: 18000,
       dedicationKind: 'NONE' as const, dedicationText: null,
       visibility: 'ALUMNI' as const, status: 'ACCEPTED' as const,
+    },
+    // Goods, mid-flight: collected and on a courier, so the donor's screen has
+    // a tracking number to show and the office has an arrival to confirm.
+    {
+      alumniId: vikram, giftItemId: itemIds.get('School shoes')!,
+      scopeKind: 'SCHOOL' as const, headcountAtPledge: scopeCount, quantity: scopeCount,
+      mode: 'SUPPLY' as const, amountMinor: null,
+      dedicationKind: 'NONE' as const, dedicationText: null,
+      visibility: 'ALUMNI' as const, status: 'PICKED_UP' as const,
+      pickupAddress: '14 Residency Road, Pune 411001',
+      pickupContact: 'Building watchman',
+      pickupPhone: '+91 98120 00011',
+      pickupNote: 'Four cartons, second floor, no lift.',
+      pickupRequestedAt: new Date(),
+      courier: 'Delhivery',
+      trackingRef: 'DL-4471902',
+      pickedUpAt: new Date(),
+    },
+    // Money, spent but not yet handed out.
+    {
+      alumniId: vikram, giftItemId: itemIds.get('Library book fund')!,
+      scopeKind: 'SCHOOL' as const, headcountAtPledge: scopeCount, quantity: scopeCount,
+      mode: 'FUND' as const, amountMinor: 500000 * scopeCount, unitPriceMinor: 500000,
+      dedicationKind: 'IN_HONOUR_OF' as const, dedicationText: 'In honour of the class of 2004',
+      visibility: 'ALUMNI' as const, status: 'PURCHASED' as const,
+      purchasedAt: new Date(),
+    },
+    // Finished, with the school's own words back — the state the whole feature
+    // exists to reach.
+    {
+      alumniId: vikram, giftItemId: null,
+      customRequest: 'Sports kit for the under-14 team',
+      scopeKind: 'SCHOOL' as const, headcountAtPledge: scopeCount, quantity: scopeCount,
+      mode: 'SUPPLY' as const, amountMinor: null,
+      dedicationKind: 'NONE' as const, dedicationText: null,
+      visibility: 'ALUMNI' as const, status: 'DISTRIBUTED' as const,
+      thankYouNote:
+        'They wore the new kit for the inter-house final on Saturday and won it. '
+        + 'Thank you — the old set had been patched twice and the children knew it.',
+      thankYouAt: new Date(),
     },
   ];
   for (const p of PLEDGES) {
     await step(async (db) => {
       const already = await db.giftPledge.findFirst({
-        where: { schoolId, alumniId: p.alumniId, giftItemId: p.giftItemId },
+        where: {
+          schoolId,
+          alumniId: p.alumniId,
+          ...(p.giftItemId ? { giftItemId: p.giftItemId } : { customRequest: p.customRequest }),
+        },
         select: { id: true },
       });
-      if (!already) await db.giftPledge.create({ data: { schoolId, ...p } });
+      if (already) return;
+      const created = await db.giftPledge.create({ data: { schoolId, ...p } });
+
+      // A pledge past PROPOSED with an empty history is exactly the screen this
+      // feature was built to replace, so the demo carries the journey too.
+      const walked: Record<string, string[]> = {
+        ACCEPTED: ['ACCEPTED'],
+        PICKED_UP: ['ACCEPTED', 'PICKUP_REQUESTED', 'PICKED_UP'],
+        PURCHASED: ['ACCEPTED', 'RECEIVED', 'PURCHASED'],
+        DISTRIBUTED: ['ACCEPTED', 'RECEIVED', 'DISTRIBUTED'],
+      };
+      const steps = walked[p.status] ?? [];
+      const notes: Record<string, string> = {
+        ACCEPTED: 'The office accepted this.',
+        PICKUP_REQUESTED: 'Collection arranged from 14 Residency Road, Pune.',
+        PICKED_UP: 'Collected by Delhivery — DL-4471902.',
+        RECEIVED: p.mode === 'FUND' ? 'The funds landed.' : 'Arrived at the school.',
+        PURCHASED: 'Bought by the school.',
+        DISTRIBUTED: `Given to ${scopeCount} children.`,
+      };
+      for (const [i, status] of steps.entries()) {
+        await db.giftEvent.create({
+          data: {
+            schoolId,
+            pledgeId: created.id,
+            status: status as never,
+            note: notes[status] ?? null,
+            // Spread backwards through the last fortnight so the timeline reads
+            // as a sequence rather than as one instant.
+            at: new Date(Date.now() - (steps.length - i) * 3 * 24 * 3600 * 1000),
+          },
+        });
+      }
+      // The two that are in hand also need a receipt, or the shortfall rule
+      // reports them as still owed and the office cannot hand them out.
+      if (p.status === 'PURCHASED' || p.status === 'DISTRIBUTED') {
+        await db.giftReceipt.create({
+          data: { schoolId, pledgeId: created.id, receivedQty: p.quantity },
+        });
+      }
+      if (p.status === 'DISTRIBUTED') {
+        await db.giftDistribution.create({
+          data: { schoolId, pledgeId: created.id, distributedQty: p.quantity, absentQty: 0 },
+        });
+      }
     });
   }
-  console.log(`  ✓ ${PLEDGES.length} pledges (one waiting on the office, one accepted)`);
+  console.log(`  ✓ ${PLEDGES.length} pledges, spread across both journeys`);
 
   console.log('\n──────────────────────────────────────────────');
   console.log('  Alumnus login');

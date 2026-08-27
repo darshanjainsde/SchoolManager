@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth';
 import { FeaturesModule } from '../../features';
 import { TenancyModule } from '../../tenancy';
+import { StorageModule } from '../../../common/storage/storage.module';
 import { AlumniService } from './alumni.service';
 import { GiftsService } from './gifts.service';
 import { GuestSessionsService } from './guest-sessions.service';
@@ -18,7 +19,7 @@ import {
 @Module({
   // AuthModule provides PasswordService — the alumni account door hashes and
   // verifies with exactly the same argon2id settings every other login uses.
-  imports: [AuthModule, FeaturesModule, TenancyModule],
+  imports: [AuthModule, FeaturesModule, TenancyModule, StorageModule],
   providers: [
     AlumniService,
     GiftsService,

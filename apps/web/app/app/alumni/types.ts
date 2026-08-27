@@ -113,9 +113,26 @@ export type GiftStatus =
   | 'DECLINED'
   | 'COUNTERED'
   | 'CANCELLED'
+  /** Goods only — waiting to be collected from the donor. */
+  | 'PICKUP_REQUESTED'
+  /** Goods only — in transit. */
+  | 'PICKED_UP'
+  /** Both tracks: it is HERE. Money landed, or goods confirmed by the school. */
   | 'RECEIVED'
+  /** Money only — the school has bought the thing. */
+  | 'PURCHASED'
   | 'DISTRIBUTED'
   | 'REPORTED';
+
+export type GiftAttachmentKind = 'BILL' | 'CONSIGNMENT' | 'DISTRIBUTION';
+
+export interface GiftAttachmentRow {
+  id: string;
+  kind: GiftAttachmentKind;
+  url: string;
+  caption: string | null;
+  createdAt: string;
+}
 
 export interface PledgeRow {
   id: string;
@@ -137,6 +154,19 @@ export interface PledgeRow {
   counterNote: string | null;
   dueAt: string | null;
   createdAt: string;
+  /** What the donor typed per child. Null for goods, always. */
+  unitPriceMinor: number | null;
+  pickupAddress: string | null;
+  pickupContact: string | null;
+  pickupPhone: string | null;
+  pickupNote: string | null;
+  courier: string | null;
+  trackingRef: string | null;
+  pickedUpAt: string | null;
+  purchasedAt: string | null;
+  thankYouNote: string | null;
+  thankYouAt: string | null;
+  attachments?: GiftAttachmentRow[];
   /** Computed server-side by giftShortfall — the screen never re-derives it. */
   received: number;
   short: number;

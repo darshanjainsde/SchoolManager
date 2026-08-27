@@ -1,17 +1,39 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import type { TenantTx } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
-import { amountForMode, assertScopeShape, giftShortfall, nextGiftStatus } from './homecoming-rules';
+import { StorageService } from '../../../common/storage/storage.service';
+import {
+  assertScopeShape,
+  giftJourney,
+  giftJourneyIndex,
+  giftShortfall,
+  giftStatusLabel,
+  nextGiftStatus,
+  priceForPledge,
+  type GiftStatus,
+} from './homecoming-rules';
 import type {
+  AttachGiftDto,
   CreatePledgeDto,
   DecidePledgeDto,
   DistributeGiftDto,
+  MarkPickedUpDto,
+  PurchaseGiftDto,
   ReceiveGiftDto,
+  RequestPickupDto,
   SaveGiftItemDto,
+  ThankYouDto,
 } from './alumni.dto';
 
 @Injectable()
 export class GiftsService {
+  // Explicit, not decorative: tsx does not reliably emit design:paramtypes, so
+  // a bare-typed constructor parameter can resolve to undefined (LIBRARY-TRAPS
+  // #6) — and an undefined storage client fails at upload time, in production,
+  // rather than at boot.
+  constructor(@Inject(StorageService) private readonly storage: StorageService) {}
+
   // ─── Catalogue ─────────────────────────────────────────────────────────────
 
   /** Written by the school, never by us and never by a donor. The worst outcome
@@ -147,11 +169,20 @@ export class GiftsService {
         }
         unitCost = item.indicativeCostMinor;
       }
+      // What the DONOR typed beats the school's indicative cost. The list price
+      // is the school's estimate of what a thing costs; the donor is telling us
+      // what they are actually willing to give, and those are different facts.
+      if (dto.unitPriceMinor !== undefined && dto.unitPriceMinor !== null) {
+        unitCost = dto.unitPriceMinor;
+      }
 
       const headcount = await this.resolveHeadcount(tx, schoolId, dto);
       if (headcount === 0) {
         throw new ApiError('EMPTY_GROUP', 'There are no children in that group right now.', 409);
       }
+
+      const price = priceForPledge(dto.mode, unitCost, headcount);
+      if (!price.ok) throw new ApiError('GIFT_PRICE_REQUIRED', price.problem!, 400);
 
       return tx.giftPledge.create({
         data: {
@@ -174,7 +205,14 @@ export class GiftsService {
           mode: dto.mode,
           // null for SUPPLY — an in-kind gift carries no valuation, which is
           // what keeps donated goods out of the fee ledger.
-          amountMinor: amountForMode(dto.mode, unitCost, headcount),
+          amountMinor: price.amountMinor,
+          unitPriceMinor: price.unitPriceMinor,
+          // Asked for on the form only when there is something to collect, so a
+          // donor funding a purchase is never asked where to send a courier.
+          pickupAddress: dto.mode === 'SUPPLY' ? dto.pickupAddress?.trim() || null : null,
+          pickupContact: dto.mode === 'SUPPLY' ? dto.pickupContact?.trim() || null : null,
+          pickupPhone: dto.mode === 'SUPPLY' ? dto.pickupPhone?.trim() || null : null,
+          pickupNote: dto.mode === 'SUPPLY' ? dto.pickupNote?.trim() || null : null,
           dedicationKind: dto.dedicationKind ?? 'NONE',
           dedicationText: dto.dedicationText?.trim() || null,
           visibility: dto.visibility ?? 'ALUMNI',
@@ -196,6 +234,12 @@ export class GiftsService {
           alumni: { select: { firstName: true, lastName: true, batchYear: true } },
           receipts: { select: { receivedQty: true } },
           distributions: { select: { distributedQty: true, absentQty: true, distributedAt: true } },
+          // The office needs to see what it has already sent the donor, so it
+          // does not add the same photograph three times.
+          attachments: {
+            orderBy: { createdAt: 'asc' },
+            select: { id: true, kind: true, url: true, caption: true, createdAt: true },
+          },
         },
       });
       return rows.map((p) => {
@@ -207,6 +251,14 @@ export class GiftsService {
 
   /** An alumnus's own pledges. Scoped by alumniId as well as school, so the
    *  route cannot be turned into "list everybody's gifts" by omitting a filter. */
+  /**
+   * Everything one alumnus has ever given, with the story of each.
+   *
+   * This is the screen that decides whether somebody gives twice. A donation
+   * that vanishes into an institution and is never mentioned again reads as
+   * having been unwelcome, so the history carries the journey, the school's
+   * own words, and the photographs — not just a row and a status.
+   */
   async listPledgesForAlumnus(schoolId: string, alumniId: string) {
     return withTenant(schoolId, async (tx) => {
       const rows = await tx.giftPledge.findMany({
@@ -215,18 +267,92 @@ export class GiftsService {
         take: 100,
         include: {
           giftItem: { select: { name: true, unit: true, sizesTracked: true } },
-          receipts: { select: { receivedQty: true } },
+          receipts: { select: { receivedQty: true, receivedAt: true } },
           distributions: { select: { distributedQty: true, absentQty: true, distributedAt: true } },
+          events: { orderBy: { at: 'asc' }, select: { status: true, note: true, at: true } },
+          attachments: {
+            orderBy: { createdAt: 'asc' },
+            select: { id: true, kind: true, url: true, caption: true, createdAt: true },
+          },
         },
       });
       return rows.map((p) => {
         const received = p.receipts.reduce((n, r) => n + r.receivedQty, 0);
-        return { ...p, ...giftShortfall(p.quantity, received) };
+        return {
+          ...p,
+          ...giftShortfall(p.quantity, received),
+          // The donor's screen never re-derives these. Two implementations of
+          // one state machine is two state machines.
+          journey: giftJourney(p.mode),
+          journeyIndex: giftJourneyIndex(p.status, p.mode),
+          statusLabel: giftStatusLabel(p.status, p.mode),
+          // The office's private working notes are NOT part of this — only the
+          // events, which are written to be read by the person who gave.
+          events: p.events.map((e) => ({
+            ...e,
+            label: giftStatusLabel(e.status, p.mode),
+          })),
+        };
       });
     });
   }
 
+  /**
+   * The one-line summary above that list.
+   *
+   * Counts children reached rather than rupees given: the number that means
+   * something to a donor is how many people got something, and for an in-kind
+   * gift there is deliberately no rupee figure to add up at all.
+   */
+  async givingSummary(schoolId: string, alumniId: string) {
+    return withTenant(schoolId, async (tx) => {
+      const rows = await tx.giftPledge.findMany({
+        where: { schoolId, alumniId, status: { notIn: ['DECLINED', 'CANCELLED'] } },
+        select: { quantity: true, status: true, mode: true, amountMinor: true, currency: true },
+      });
+      const delivered = rows.filter((r) => r.status === 'DISTRIBUTED' || r.status === 'REPORTED');
+      return {
+        gifts: rows.length,
+        inFlight: rows.length - delivered.length,
+        childrenReached: delivered.reduce((n, r) => n + r.quantity, 0),
+        // Funded gifts only, and only where the school has actually banked it.
+        fundedMinor: rows
+          .filter((r) => r.mode === 'FUND')
+          .reduce((n, r) => n + (r.amountMinor ?? 0), 0),
+        currency: rows[0]?.currency ?? 'INR',
+      };
+    });
+  }
+
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
+
+  /**
+   * Append one line to a pledge's history.
+   *
+   * Called on EVERY move, including the ones the office makes without thinking
+   * of them as events. The donor's screen is built entirely from these rows, so
+   * a transition that forgets to log is a transition that, to the person who
+   * gave the money, silently did not happen.
+   */
+  private async logEvent(
+    tx: TenantTx,
+    schoolId: string,
+    pledgeId: string,
+    status: GiftStatus,
+    actor: { userId?: string | null; alumniId?: string | null },
+    note?: string | null,
+  ) {
+    await tx.giftEvent.create({
+      data: {
+        schoolId,
+        pledgeId,
+        status,
+        note: note?.trim() || null,
+        byUserId: actor.userId ?? null,
+        byAlumniId: actor.alumniId ?? null,
+      },
+    });
+  }
 
   async decide(schoolId: string, pledgeId: string, userId: string | null, dto: DecidePledgeDto) {
     if (dto.action === 'DECLINE' && !dto.reason?.trim()) {
@@ -241,7 +367,7 @@ export class GiftsService {
     return withTenant(schoolId, async (tx) => {
       const pledge = await tx.giftPledge.findFirst({ where: { id: pledgeId, schoolId } });
       if (!pledge) throw new NotFoundException('Pledge not found');
-      const next = nextGiftStatus(pledge.status, dto.action);
+      const next = nextGiftStatus(pledge.status, dto.action, pledge.mode);
       if (!next) {
         throw new ApiError(
           'GIFT_TRANSITION_ILLEGAL',
@@ -249,6 +375,8 @@ export class GiftsService {
           409,
         );
       }
+      await this.logEvent(tx, schoolId, pledgeId, next, { userId },
+        dto.action === 'DECLINE' ? dto.reason : dto.action === 'COUNTER' ? dto.counterNote : null);
       return tx.giftPledge.update({
         where: { id: pledgeId },
         data: {
@@ -271,7 +399,7 @@ export class GiftsService {
         include: { receipts: { select: { receivedQty: true } } },
       });
       if (!pledge) throw new NotFoundException('Pledge not found');
-      const next = nextGiftStatus(pledge.status, 'RECEIVE');
+      const next = nextGiftStatus(pledge.status, 'RECEIVE', pledge.mode);
       if (!next) {
         throw new ApiError(
           'GIFT_TRANSITION_ILLEGAL',
@@ -290,7 +418,12 @@ export class GiftsService {
       });
       await tx.giftPledge.update({ where: { id: pledgeId }, data: { status: next } });
       const received = pledge.receipts.reduce((n, r) => n + r.receivedQty, 0) + dto.receivedQty;
-      return giftShortfall(pledge.quantity, received);
+      const view = giftShortfall(pledge.quantity, received);
+      await this.logEvent(tx, schoolId, pledgeId, next, { userId },
+        view.short > 0
+          ? `${dto.receivedQty} received — ${view.short} still to come.`
+          : dto.note ?? `${dto.receivedQty} received.`);
+      return view;
     });
   }
 
@@ -305,7 +438,7 @@ export class GiftsService {
         include: { receipts: { select: { receivedQty: true } } },
       });
       if (!pledge) throw new NotFoundException('Pledge not found');
-      const next = nextGiftStatus(pledge.status, 'DISTRIBUTE');
+      const next = nextGiftStatus(pledge.status, 'DISTRIBUTE', pledge.mode);
       if (!next) {
         throw new ApiError(
           'GIFT_TRANSITION_ILLEGAL',
@@ -343,7 +476,226 @@ export class GiftsService {
           note: dto.note?.trim() || null,
         },
       });
+      await this.logEvent(tx, schoolId, pledgeId, next, { userId },
+        (dto.absentQty ?? 0) > 0
+          ? `Given to ${dto.distributedQty}. ${dto.absentQty} were away and are still owed theirs.`
+          : dto.note ?? `Given to ${dto.distributedQty} children.`);
       return tx.giftPledge.update({ where: { id: pledgeId }, data: { status: next } });
+    });
+  }
+
+  /**
+   * "Come and get it." Raised by EITHER side — the donor when they pledge or
+   * later from their own screen, the office when they ring to arrange it.
+   *
+   * Re-callable on purpose: an address gets corrected, a date moves, somebody
+   * else answers the phone. Each call updates the details and logs a line, so
+   * the donor can see the arrangement changed rather than wondering.
+   */
+  async requestPickup(
+    schoolId: string,
+    pledgeId: string,
+    actor: { userId?: string | null; alumniId?: string | null },
+    dto: RequestPickupDto,
+  ) {
+    return withTenant(schoolId, async (tx) => {
+      const pledge = await tx.giftPledge.findFirst({ where: { id: pledgeId, schoolId } });
+      if (!pledge) throw new NotFoundException('Pledge not found');
+      // A donor may only touch their own, and only their own. The office route
+      // passes no alumniId and is authorised by its own guard.
+      if (actor.alumniId && pledge.alumniId !== actor.alumniId) {
+        throw new NotFoundException('Pledge not found');
+      }
+      if (pledge.mode !== 'SUPPLY') {
+        throw new ApiError(
+          'GIFT_NOT_COLLECTABLE',
+          'Nothing is being collected — this gift is money, and the school buys locally.',
+          409,
+        );
+      }
+      const already = pledge.status === 'PICKUP_REQUESTED';
+      const next = already ? 'PICKUP_REQUESTED' : nextGiftStatus(pledge.status, 'REQUEST_PICKUP', pledge.mode);
+      if (!next) {
+        throw new ApiError(
+          'GIFT_TRANSITION_ILLEGAL',
+          `Collection cannot be arranged for a ${pledge.status.toLowerCase()} pledge.`,
+          409,
+        );
+      }
+      const updated = await tx.giftPledge.update({
+        where: { id: pledgeId },
+        data: {
+          status: next,
+          pickupAddress: dto.pickupAddress.trim(),
+          pickupContact: dto.pickupContact?.trim() || null,
+          pickupPhone: dto.pickupPhone?.trim() || null,
+          pickupNote: dto.pickupNote?.trim() || null,
+          pickupRequestedAt: pledge.pickupRequestedAt ?? new Date(),
+        },
+      });
+      await this.logEvent(tx, schoolId, pledgeId, next, actor,
+        already ? 'Collection details updated.' : `Collection arranged from ${dto.pickupAddress.trim()}.`);
+      return updated;
+    });
+  }
+
+  /**
+   * It has left. Courier and reference are both optional and independent:
+   * plenty of gifts travel in somebody's car boot, and a reference with no
+   * carrier is a number nobody can look up.
+   */
+  async markPickedUp(
+    schoolId: string,
+    pledgeId: string,
+    actor: { userId?: string | null; alumniId?: string | null },
+    dto: MarkPickedUpDto,
+  ) {
+    if (dto.trackingRef?.trim() && !dto.courier?.trim()) {
+      throw new ApiError(
+        'COURIER_REQUIRED',
+        'Say who is carrying it — a tracking number with no carrier cannot be looked up.',
+        400,
+      );
+    }
+    return withTenant(schoolId, async (tx) => {
+      const pledge = await tx.giftPledge.findFirst({ where: { id: pledgeId, schoolId } });
+      if (!pledge) throw new NotFoundException('Pledge not found');
+      if (actor.alumniId && pledge.alumniId !== actor.alumniId) {
+        throw new NotFoundException('Pledge not found');
+      }
+      const next = nextGiftStatus(pledge.status, 'MARK_PICKED_UP', pledge.mode);
+      if (!next) {
+        throw new ApiError(
+          'GIFT_TRANSITION_ILLEGAL',
+          `A ${pledge.status.toLowerCase()} pledge is not waiting to be collected.`,
+          409,
+        );
+      }
+      const updated = await tx.giftPledge.update({
+        where: { id: pledgeId },
+        data: {
+          status: next,
+          courier: dto.courier?.trim() || null,
+          trackingRef: dto.trackingRef?.trim() || null,
+          pickedUpAt: new Date(),
+        },
+      });
+      await this.logEvent(tx, schoolId, pledgeId, next, actor,
+        dto.courier?.trim()
+          ? `Collected by ${dto.courier.trim()}${dto.trackingRef?.trim() ? ` — ${dto.trackingRef.trim()}` : ''}.`
+          : 'Collected.');
+      return updated;
+    });
+  }
+
+  /** FUND only: the money has been spent on the thing it was given for. */
+  async purchase(schoolId: string, pledgeId: string, userId: string | null, dto: PurchaseGiftDto) {
+    return withTenant(schoolId, async (tx) => {
+      const pledge = await tx.giftPledge.findFirst({ where: { id: pledgeId, schoolId } });
+      if (!pledge) throw new NotFoundException('Pledge not found');
+      const next = nextGiftStatus(pledge.status, 'PURCHASE', pledge.mode);
+      if (!next) {
+        throw new ApiError(
+          'GIFT_TRANSITION_ILLEGAL',
+          pledge.mode === 'SUPPLY'
+            ? 'The donor is sending the goods — there is nothing for the school to buy.'
+            : `Nothing can be bought against a ${pledge.status.toLowerCase()} pledge.`,
+          409,
+        );
+      }
+      const updated = await tx.giftPledge.update({
+        where: { id: pledgeId },
+        data: { status: next, purchasedAt: new Date() },
+      });
+      await this.logEvent(tx, schoolId, pledgeId, next, { userId }, dto.note ?? 'Bought by the school.');
+      return updated;
+    });
+  }
+
+  /**
+   * The school's word back to the donor.
+   *
+   * Deliberately NOT a status. It can be written at any point once the gift is
+   * real, edited afterwards, and it does not move the pledge — because a thank
+   * you is not a stage of a workflow, and making it one would mean somebody
+   * had to reach the end of the process before being allowed to say it.
+   */
+  async thankYou(schoolId: string, pledgeId: string, userId: string | null, dto: ThankYouDto) {
+    return withTenant(schoolId, async (tx) => {
+      const pledge = await tx.giftPledge.findFirst({ where: { id: pledgeId, schoolId } });
+      if (!pledge) throw new NotFoundException('Pledge not found');
+      if (pledge.status === 'PROPOSED' || pledge.status === 'DECLINED') {
+        throw new ApiError(
+          'GIFT_NOT_ACCEPTED',
+          'Accept the gift before thanking somebody for it.',
+          409,
+        );
+      }
+      const updated = await tx.giftPledge.update({
+        where: { id: pledgeId },
+        data: { thankYouNote: dto.note.trim(), thankYouAt: new Date(), thankYouByUserId: userId },
+      });
+      await this.logEvent(tx, schoolId, pledgeId, pledge.status, { userId }, 'The school sent a note.');
+      return updated;
+    });
+  }
+
+  /**
+   * Hang a photograph or a document on a pledge.
+   *
+   * These are NOT site media: a distribution photograph must never land in the
+   * school's media library, where it could be dropped onto a public page by
+   * accident. It is stored under the pledge, deleted with it, and seen by the
+   * office and the donor and nobody else.
+   */
+  async attach(
+    schoolId: string,
+    pledgeId: string,
+    userId: string | null,
+    file: { originalname: string; buffer: Buffer; mimetype: string },
+    dto: AttachGiftDto,
+  ) {
+    if (!file) throw new ApiError('FILE_REQUIRED', 'Choose a file first.', 400);
+    if (!/^image\/(png|jpe?g|webp|gif)$|^application\/pdf$/.test(file.mimetype)) {
+      throw new ApiError('BAD_FILE_TYPE', 'Photographs or a PDF bill, nothing else.', 400);
+    }
+    return withTenant(schoolId, async (tx) => {
+      const pledge = await tx.giftPledge.findFirst({ where: { id: pledgeId, schoolId } });
+      if (!pledge) throw new NotFoundException('Pledge not found');
+      const stored = await this.storage.upload(
+        `schools/${schoolId}/gifts/${pledgeId}`,
+        file.originalname,
+        file.buffer,
+        file.mimetype,
+      );
+      const row = await tx.giftAttachment.create({
+        data: {
+          schoolId,
+          pledgeId,
+          kind: dto.kind,
+          storageKey: stored.key,
+          url: stored.url,
+          caption: dto.caption?.trim() || null,
+          byUserId: userId,
+        },
+      });
+      await this.logEvent(tx, schoolId, pledgeId, pledge.status, { userId },
+        dto.kind === 'DISTRIBUTION' ? 'Photographs from the handover added.'
+          : dto.kind === 'BILL' ? 'The bill was added.'
+          : 'A photograph of the consignment was added.');
+      return row;
+    });
+  }
+
+  async removeAttachment(schoolId: string, pledgeId: string, attachmentId: string) {
+    return withTenant(schoolId, async (tx) => {
+      const row = await tx.giftAttachment.findFirst({ where: { id: attachmentId, pledgeId, schoolId } });
+      if (!row) throw new NotFoundException('Attachment not found');
+      await tx.giftAttachment.delete({ where: { id: attachmentId } });
+      // Storage last: a row that survives its file is a broken image, but a
+      // file that survives its row is only a byte nobody reads.
+      await this.storage.delete(row.storageKey).catch(() => undefined);
+      return { ok: true };
     });
   }
 
@@ -351,7 +703,7 @@ export class GiftsService {
     return withTenant(schoolId, async (tx) => {
       const pledge = await tx.giftPledge.findFirst({ where: { id: pledgeId, schoolId } });
       if (!pledge) throw new NotFoundException('Pledge not found');
-      const next = nextGiftStatus(pledge.status, 'REPORT');
+      const next = nextGiftStatus(pledge.status, 'REPORT', pledge.mode);
       if (!next) {
         throw new ApiError(
           'GIFT_TRANSITION_ILLEGAL',
@@ -359,6 +711,7 @@ export class GiftsService {
           409,
         );
       }
+      await this.logEvent(tx, schoolId, pledgeId, next, { userId: null });
       return tx.giftPledge.update({ where: { id: pledgeId }, data: { status: next } });
     });
   }

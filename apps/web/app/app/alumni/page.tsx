@@ -828,6 +828,24 @@ function GiftsTab({ onChanged }: { onChanged: () => void }) {
   const [recv, setRecv] = useState<Record<string, string>>({});
   const [absent, setAbsent] = useState<Record<string, string>>({});
   const [note, setNote] = useState<Record<string, string>>({});
+  const [pick, setPick] = useState<Record<string, { address: string; contact: string; phone: string }>>({});
+  const [ship, setShip] = useState<Record<string, { courier: string; ref: string }>>({});
+  const [thanks, setThanks] = useState<Record<string, string>>({});
+  const upd = <T,>(set: React.Dispatch<React.SetStateAction<Record<string, T>>>, id: string, patch: Partial<T>, empty: T) =>
+    set((m) => ({ ...m, [id]: { ...(m[id] ?? empty), ...patch } as T }));
+
+  /** Bills and photographs. Multipart, so it does not go through api.post. */
+  const attach = useMutation({
+    mutationFn: async (v: { id: string; kind: string; file: File; caption?: string }) => {
+      const fd = new FormData();
+      fd.append('file', v.file);
+      fd.append('kind', v.kind);
+      if (v.caption) fd.append('caption', v.caption);
+      return api.postForm(`/manage/alumni/pledges/${v.id}/attachments`, fd);
+    },
+    onSuccess: () => refresh(),
+    onError: (e) => toast.error(errText(e, 'That file did not upload.')),
+  });
 
   const pledges = useQuery({
     queryKey: ['alumni', 'pledges'],
@@ -927,18 +945,111 @@ function GiftsTab({ onChanged }: { onChanged: () => void }) {
               {p.status === 'ACCEPTED' && (
                 <>
                   <p className="sk-muted">
-                    Accepted{p.dueAt ? ` — due ${p.dueAt.slice(0, 10)}` : ''}. Pledged and received
-                    are two different numbers and both get written down.
+                    Accepted{p.dueAt ? ` — due ${p.dueAt.slice(0, 10)}` : ''}.{' '}
+                    {p.mode === 'FUND'
+                      ? 'Record the money once it lands, then what you bought with it.'
+                      : 'Arrange collection, or record it straight away if the donor brought it in themselves.'}
                   </p>
+
+                  {/* Only for goods. A donor funding a purchase is never asked
+                      where to send a courier. */}
+                  {p.mode === 'SUPPLY' && (
+                    <div style={{ background: 'var(--sk-bg-2)', borderRadius: 11, padding: '12px 14px' }}>
+                      <div className="sk-lab" style={{ marginBottom: 6 }}>Arrange collection</div>
+                      <input className="sk-input" placeholder={p.pickupAddress || 'Pickup address'}
+                        value={pick[p.id]?.address ?? p.pickupAddress ?? ''}
+                        onChange={(e) => upd(setPick, p.id, { address: e.target.value }, { address: '', contact: '', phone: '' })} />
+                      <div style={{ display: 'flex', gap: 9, marginTop: 8, flexWrap: 'wrap' }}>
+                        <input className="sk-input" style={{ flex: 1, minWidth: 150 }} placeholder={p.pickupContact || 'Who hands it over'}
+                          value={pick[p.id]?.contact ?? p.pickupContact ?? ''}
+                          onChange={(e) => upd(setPick, p.id, { contact: e.target.value }, { address: '', contact: '', phone: '' })} />
+                        <input className="sk-input" style={{ flex: 1, minWidth: 150 }} placeholder={p.pickupPhone || 'Phone'}
+                          value={pick[p.id]?.phone ?? p.pickupPhone ?? ''}
+                          onChange={(e) => upd(setPick, p.id, { phone: e.target.value }, { address: '', contact: '', phone: '' })} />
+                      </div>
+                      <button type="button" className="sk-btn" style={{ marginTop: 9 }}
+                        disabled={!((pick[p.id]?.address ?? p.pickupAddress ?? '').trim().length >= 5)}
+                        onClick={() => act.mutate({
+                          id: p.id, path: 'request-pickup',
+                          body: {
+                            pickupAddress: (pick[p.id]?.address ?? p.pickupAddress ?? '').trim(),
+                            pickupContact: (pick[p.id]?.contact ?? p.pickupContact ?? '').trim() || undefined,
+                            pickupPhone: (pick[p.id]?.phone ?? p.pickupPhone ?? '').trim() || undefined,
+                          },
+                        })}>
+                        Book the collection
+                      </button>
+                    </div>
+                  )}
+
                   <label className="sk-lab" htmlFor={`recv-${p.id}`}>
-                    How many actually arrived (pledged {p.quantity})
+                    {p.mode === 'FUND'
+                      ? `How many children the money covers (pledged ${p.quantity})`
+                      : `How many actually arrived (pledged ${p.quantity})`}
                   </label>
                   <input id={`recv-${p.id}`} className="sk-input" type="number" min={1} style={{ maxWidth: 140 }}
                     value={recv[p.id] ?? String(p.quantity)}
                     onChange={(e) => setRecv((r) => ({ ...r, [p.id]: e.target.value }))} />
                   <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start', background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
                     onClick={() => act.mutate({ id: p.id, path: 'receive', body: { receivedQty: Number(recv[p.id] ?? p.quantity) } })}>
-                    Record what arrived
+                    {p.mode === 'FUND' ? 'Money has landed' : 'It arrived — record it'}
+                  </button>
+                </>
+              )}
+
+              {p.status === 'PICKUP_REQUESTED' && (
+                <>
+                  <p className="sk-muted">
+                    Waiting to be collected from <strong>{p.pickupAddress}</strong>
+                    {p.pickupContact ? ` — ${p.pickupContact}` : ''}
+                    {p.pickupPhone ? `, ${p.pickupPhone}` : ''}.
+                    {p.pickupNote ? ` ${p.pickupNote}` : ''}
+                  </p>
+                  <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                    <input className="sk-input" style={{ flex: 1, minWidth: 150 }} placeholder="Who is carrying it"
+                      value={ship[p.id]?.courier ?? ''}
+                      onChange={(e) => upd(setShip, p.id, { courier: e.target.value }, { courier: '', ref: '' })} />
+                    <input className="sk-input" style={{ flex: 1, minWidth: 150 }} placeholder="Tracking / AWB number"
+                      value={ship[p.id]?.ref ?? ''}
+                      onChange={(e) => upd(setShip, p.id, { ref: e.target.value }, { courier: '', ref: '' })} />
+                  </div>
+                  <p className="sk-muted">
+                    A tracking number with no carrier cannot be looked up, so both go together — or
+                    leave them empty if somebody is simply driving it over.
+                  </p>
+                  <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                    <button type="button" className="sk-btn"
+                      onClick={() => act.mutate({
+                        id: p.id, path: 'picked-up',
+                        body: {
+                          courier: ship[p.id]?.courier?.trim() || undefined,
+                          trackingRef: ship[p.id]?.ref?.trim() || undefined,
+                        },
+                      })}>
+                      It has been collected
+                    </button>
+                    <button type="button" className="sk-btn"
+                      onClick={() => act.mutate({ id: p.id, path: 'receive', body: { receivedQty: p.quantity } })}>
+                      It is already here
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {p.status === 'PICKED_UP' && (
+                <>
+                  <p className="sk-muted">
+                    On its way{p.courier ? ` with ${p.courier}` : ''}
+                    {p.trackingRef ? ` · ${p.trackingRef}` : ''}. Only the school confirms arrival —
+                    a courier marking itself delivered is not the goods being in the building.
+                  </p>
+                  <label className="sk-lab" htmlFor={`arr-${p.id}`}>How many arrived (sent {p.quantity})</label>
+                  <input id={`arr-${p.id}`} className="sk-input" type="number" min={1} style={{ maxWidth: 140 }}
+                    value={recv[p.id] ?? String(p.quantity)}
+                    onChange={(e) => setRecv((r) => ({ ...r, [p.id]: e.target.value }))} />
+                  <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start', background: 'var(--sk-good)', borderColor: 'var(--sk-good)', color: '#fff' }}
+                    onClick={() => act.mutate({ id: p.id, path: 'receive', body: { receivedQty: Number(recv[p.id] ?? p.quantity) } })}>
+                    Confirm it arrived
                   </button>
                 </>
               )}
@@ -963,7 +1074,24 @@ function GiftsTab({ onChanged }: { onChanged: () => void }) {
                 </>
               )}
 
-              {p.status === 'RECEIVED' && p.canDistribute && (
+              {p.mode === 'FUND' && p.status === 'RECEIVED' && p.canDistribute && (
+                <>
+                  <p className="sk-muted">
+                    The money is in. Record what you bought with it before handing anything out —
+                    skipping that would have the school reporting a distribution of something it
+                    had not purchased.
+                  </p>
+                  <input className="sk-input" placeholder="What you bought, and where from — optional"
+                    value={note[`buy${p.id}`] ?? ''}
+                    onChange={(e) => setNote((n) => ({ ...n, [`buy${p.id}`]: e.target.value }))} />
+                  <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start', background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
+                    onClick={() => act.mutate({ id: p.id, path: 'purchase', body: { note: note[`buy${p.id}`]?.trim() || undefined } })}>
+                    Bought it
+                  </button>
+                </>
+              )}
+
+              {((p.mode === 'SUPPLY' && p.status === 'RECEIVED') || p.status === 'PURCHASED') && p.canDistribute && (
                 <>
                   <p className="sk-muted">
                     All {p.received} received{p.surplus ? ` (${p.surplus} spare)` : ''}. Given plus
@@ -1013,6 +1141,86 @@ function GiftsTab({ onChanged }: { onChanged: () => void }) {
                     Send the report to the donor
                   </button>
                 </>
+              )}
+
+              {/* What the donor actually gets back. Available from the moment
+                  the gift is real rather than only at the end — a thank you is
+                  not a stage of a workflow, and making it one would mean
+                  reaching the last step before being allowed to say it. */}
+              {p.status !== 'PROPOSED' && p.status !== 'DECLINED' && p.status !== 'CANCELLED' && (
+                <details style={{ borderTop: '1px solid var(--sk-line)', paddingTop: 12 }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 650, fontSize: 13 }}>
+                    What the donor sees
+                    {(p.attachments?.length || p.thankYouNote) ? ' — added' : ' — nothing yet'}
+                  </summary>
+
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <label className="sk-lab" htmlFor={`ty-${p.id}`}>A note back to them</label>
+                      <textarea id={`ty-${p.id}`} className="sk-input" rows={3}
+                        placeholder="The children wore them the same morning. Thank you — it made a real difference to a cold week."
+                        value={thanks[p.id] ?? p.thankYouNote ?? ''}
+                        onChange={(e) => setThanks((t) => ({ ...t, [p.id]: e.target.value }))} />
+                      <button type="button" className="sk-btn" style={{ marginTop: 8 }}
+                        disabled={(thanks[p.id] ?? p.thankYouNote ?? '').trim().length < 10}
+                        onClick={() => act.mutate({ id: p.id, path: 'thank-you', body: { note: (thanks[p.id] ?? p.thankYouNote ?? '').trim() } })}>
+                        {p.thankYouNote ? 'Update the note' : 'Send the note'}
+                      </button>
+                    </div>
+
+                    <div>
+                      <div className="sk-lab">Bills and photographs</div>
+                      <p className="sk-muted">
+                        The donor sees these and nobody else — they are stored under the gift, not
+                        in the school&rsquo;s media library, so a photograph of children can never
+                        be dropped onto a public page by accident. Have whatever consent your
+                        school normally requires before adding one.
+                      </p>
+                      <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginTop: 8 }}>
+                        {([
+                          ['BILL', 'Add the bill'],
+                          ['CONSIGNMENT', 'Photo of what arrived'],
+                          ['DISTRIBUTION', 'Photo of the handover'],
+                        ] as const).map(([kind, label]) => (
+                          <label key={kind} className="sk-btn" style={{ cursor: 'pointer' }}>
+                            {label}
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,application/pdf"
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) attach.mutate({ id: p.id, kind, file: f });
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        ))}
+                      </div>
+
+                      {!!p.attachments?.length && (
+                        <div style={{ display: 'grid', gap: 10, marginTop: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+                          {p.attachments.map((a) => (
+                            <div key={a.id}>
+                              {a.url.toLowerCase().endsWith('.pdf') ? (
+                                <a className="sk-btn" href={a.url} target="_blank" rel="noreferrer">Open the bill</a>
+                              ) : (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img src={a.url} alt={a.caption ?? a.kind.toLowerCase()} loading="lazy"
+                                  style={{ width: '100%', borderRadius: 9, display: 'block' }} />
+                              )}
+                              <button type="button"
+                                className="sk-btn" style={{ marginTop: 6, color: 'var(--sk-bad)' }}
+                                onClick={() => api.del(`/manage/alumni/pledges/${p.id}/attachments/${a.id}`).then(refresh)}>
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </details>
               )}
 
               {(p.status === 'REPORTED' || p.status === 'DECLINED' || p.status === 'CANCELLED' || p.status === 'COUNTERED') && (

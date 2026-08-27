@@ -38,8 +38,10 @@
 export type GiftMode = 'FUND' | 'SUPPLY';
 export type GiftScope = 'SCHOOL' | 'GRADE' | 'SECTION';
 export type GiftStatus =
-  | 'PROPOSED' | 'ACCEPTED' | 'DECLINED' | 'COUNTERED'
-  | 'CANCELLED' | 'RECEIVED' | 'DISTRIBUTED' | 'REPORTED';
+  | 'PROPOSED' | 'ACCEPTED' | 'DECLINED' | 'COUNTERED' | 'CANCELLED'
+  | 'PICKUP_REQUESTED' | 'PICKED_UP'
+  | 'RECEIVED' | 'PURCHASED' | 'DISTRIBUTED' | 'REPORTED';
+export type GiftAttachmentKind = 'BILL' | 'CONSIGNMENT' | 'DISTRIBUTION';
 export type GuestSessionStatus =
   | 'REQUESTED' | 'COUNTERED' | 'SCHEDULED' | 'DECLINED' | 'CANCELLED' | 'DELIVERED';
 
@@ -50,7 +52,10 @@ export type GiftAction =
   | 'DECLINE'
   | 'COUNTER'
   | 'CANCEL'
+  | 'REQUEST_PICKUP'
+  | 'MARK_PICKED_UP'
   | 'RECEIVE'
+  | 'PURCHASE'
   | 'DISTRIBUTE'
   | 'REPORT';
 
@@ -62,21 +67,122 @@ export type GiftAction =
  * different gift, so the donor is deciding again from the top. It is not a
  * fourth kind of acceptance.
  */
-const GIFT_TRANSITIONS: Record<GiftStatus, Partial<Record<GiftAction, GiftStatus>>> = {
+/**
+ * Legal transitions, exhaustively, and DIFFERENT PER MODE. Anything not listed
+ * is refused — a state machine that falls through to "allow" is not one.
+ *
+ * The two tracks exist because the journeys genuinely differ. Money arrives in
+ * an account and is then spent; goods have to be collected, carried, and
+ * confirmed. Modelling both with one row of statuses produced a screen that
+ * asked a donor who had posted sweaters whether the school had "purchased"
+ * them.
+ *
+ *   FUND    ACCEPTED → RECEIVED(money in) → PURCHASED → DISTRIBUTED
+ *   SUPPLY  ACCEPTED → PICKUP_REQUESTED → PICKED_UP → RECEIVED(arrived)
+ *                                                   → DISTRIBUTED
+ *
+ * Both converge on RECEIVED, which means the same thing on either side: it is
+ * HERE. That is also what a GiftReceipt row records, so the shortfall rule
+ * keeps working untouched across both.
+ *
+ * COUNTERED goes back to the donor rather than forward — the school suggested
+ * something different, so they are deciding again from the top.
+ */
+type Table = Record<GiftStatus, Partial<Record<GiftAction, GiftStatus>>>;
+
+/** True of both tracks: nothing is settled until the office has accepted. */
+const HEAD: Pick<Table, 'PROPOSED' | 'COUNTERED' | 'DECLINED' | 'CANCELLED'> = {
   PROPOSED: { ACCEPT: 'ACCEPTED', DECLINE: 'DECLINED', COUNTER: 'COUNTERED', CANCEL: 'CANCELLED' },
   COUNTERED: { ACCEPT: 'ACCEPTED', DECLINE: 'DECLINED', CANCEL: 'CANCELLED' },
-  ACCEPTED: { RECEIVE: 'RECEIVED', CANCEL: 'CANCELLED' },
-  // RECEIVE again is legal and deliberate: a short delivery is topped up by a
-  // second consignment, and each one is its own dated GiftReceipt row.
-  RECEIVED: { RECEIVE: 'RECEIVED', DISTRIBUTE: 'DISTRIBUTED', CANCEL: 'CANCELLED' },
-  DISTRIBUTED: { REPORT: 'REPORTED' },
-  REPORTED: {},
   DECLINED: {},
   CANCELLED: {},
 };
 
-export function nextGiftStatus(current: GiftStatus, action: GiftAction): GiftStatus | null {
-  return GIFT_TRANSITIONS[current]?.[action] ?? null;
+/** Shared tail: once it is here, it is counted, handed out and reported on. */
+const TAIL = {
+  // RECEIVE again is legal and deliberate: a short delivery is topped up by a
+  // second consignment, and each one is its own dated GiftReceipt row.
+  DISTRIBUTED: { REPORT: 'REPORTED' as GiftStatus },
+  REPORTED: {},
+} as const;
+
+const FUND_TRANSITIONS: Table = {
+  ...HEAD,
+  ACCEPTED: { RECEIVE: 'RECEIVED', CANCEL: 'CANCELLED' },
+  RECEIVED: { RECEIVE: 'RECEIVED', PURCHASE: 'PURCHASED', CANCEL: 'CANCELLED' },
+  // A school that has already SPENT the money cannot cancel — refunding is a
+  // conversation, not a state transition, and pretending otherwise would leave
+  // the books saying something that is not true.
+  PURCHASED: { DISTRIBUTE: 'DISTRIBUTED' },
+  PICKUP_REQUESTED: {},
+  PICKED_UP: {},
+  ...TAIL,
+};
+
+const SUPPLY_TRANSITIONS: Table = {
+  ...HEAD,
+  // RECEIVE straight from ACCEPTED is not an oversight: plenty of gifts arrive
+  // in the donor's own car, and forcing a pickup that never happened would make
+  // the history a fiction.
+  ACCEPTED: { REQUEST_PICKUP: 'PICKUP_REQUESTED', RECEIVE: 'RECEIVED', CANCEL: 'CANCELLED' },
+  PICKUP_REQUESTED: { MARK_PICKED_UP: 'PICKED_UP', RECEIVE: 'RECEIVED', CANCEL: 'CANCELLED' },
+  // Only the school moves it out of PICKED_UP. A courier marking itself
+  // delivered is not the school having the goods.
+  PICKED_UP: { RECEIVE: 'RECEIVED', CANCEL: 'CANCELLED' },
+  RECEIVED: { RECEIVE: 'RECEIVED', DISTRIBUTE: 'DISTRIBUTED', CANCEL: 'CANCELLED' },
+  PURCHASED: {},
+  ...TAIL,
+};
+
+export function nextGiftStatus(
+  current: GiftStatus,
+  action: GiftAction,
+  mode: GiftMode,
+): GiftStatus | null {
+  const table = mode === 'FUND' ? FUND_TRANSITIONS : SUPPLY_TRANSITIONS;
+  return table[current]?.[action] ?? null;
+}
+
+/**
+ * The journey a donor is shown, in order, for their mode.
+ *
+ * Returned as a list rather than derived in the UI so that both the portal and
+ * the office read the same sequence — a progress bar that disagrees with the
+ * state machine is worse than no progress bar.
+ */
+export function giftJourney(mode: GiftMode): GiftStatus[] {
+  return mode === 'FUND'
+    ? ['PROPOSED', 'ACCEPTED', 'RECEIVED', 'PURCHASED', 'DISTRIBUTED']
+    : ['PROPOSED', 'ACCEPTED', 'PICKUP_REQUESTED', 'PICKED_UP', 'RECEIVED', 'DISTRIBUTED'];
+}
+
+/** Where a pledge has got to along its journey, for a progress indicator.
+ *  -1 for a pledge that ended early (declined or cancelled). */
+export function giftJourneyIndex(status: GiftStatus, mode: GiftMode): number {
+  if (status === 'DECLINED' || status === 'CANCELLED') return -1;
+  if (status === 'REPORTED') return giftJourney(mode).length - 1;
+  // COUNTERED sits back at the donor's end of the journey, not partway along.
+  if (status === 'COUNTERED') return 0;
+  return giftJourney(mode).indexOf(status);
+}
+
+/** What each step says to the person who gave. Plain words, and never the
+ *  internal name of the state. */
+export function giftStatusLabel(status: GiftStatus, mode: GiftMode): string {
+  switch (status) {
+    case 'PROPOSED': return 'Offered — waiting for the school';
+    case 'ACCEPTED': return mode === 'FUND' ? 'Accepted — awaiting your payment' : 'Accepted — arranging collection';
+    case 'COUNTERED': return 'The school suggested something different';
+    case 'DECLINED': return 'Not taken up';
+    case 'CANCELLED': return 'Cancelled';
+    case 'PICKUP_REQUESTED': return 'Collection arranged';
+    case 'PICKED_UP': return 'On its way';
+    case 'RECEIVED': return mode === 'FUND' ? 'Funds received' : 'Arrived at the school';
+    case 'PURCHASED': return 'Bought by the school';
+    case 'DISTRIBUTED': return 'Given to the children';
+    case 'REPORTED': return 'Reported back';
+    default: return status;
+  }
 }
 
 export interface ShortfallView {
@@ -119,6 +225,66 @@ export function giftShortfall(quantity: number, received: number): ShortfallView
  */
 export function amountForMode(mode: GiftMode, unitCostMinor: number, quantity: number): number | null {
   return mode === 'FUND' ? unitCostMinor * quantity : null;
+}
+
+export interface PriceCheck {
+  ok: boolean;
+  /** What to store. Null for SUPPLY, always. */
+  unitPriceMinor: number | null;
+  amountMinor: number | null;
+  /** Addressed to the donor, in their words, when ok is false. */
+  problem?: string;
+}
+
+/**
+ * What a donor typed, checked against what they said they were doing.
+ *
+ * The price field is where the two modes actually meet: a donor who enters a
+ * figure is funding a purchase, and one who enters nothing (or zero) is sending
+ * the goods. Rather than let those disagree silently, the pair is validated
+ * together and the zero is given a MEANING instead of being treated as a
+ * mistake — "0 means you are sending it yourself" is the sentence on the form.
+ *
+ * A funded gift with no price is the case worth catching: it produces a pledge
+ * the school cannot bank, cannot buy against, and cannot chase.
+ */
+export function priceForPledge(
+  mode: GiftMode,
+  unitPriceMinor: number | null | undefined,
+  quantity: number,
+): PriceCheck {
+  const typed = unitPriceMinor ?? 0;
+  if (typed < 0) {
+    return { ok: false, unitPriceMinor: null, amountMinor: null, problem: 'A price cannot be negative.' };
+  }
+  if (mode === 'SUPPLY') {
+    // Not an error, and deliberately not stored either — see amountForMode.
+    return { ok: true, unitPriceMinor: null, amountMinor: null };
+  }
+  if (typed === 0) {
+    return {
+      ok: false,
+      unitPriceMinor: null,
+      amountMinor: null,
+      problem: 'Enter what you would like to contribute per child, or choose "I will send the goods" instead.',
+    };
+  }
+  if (quantity <= 0) {
+    return { ok: false, unitPriceMinor: null, amountMinor: null, problem: 'There is nobody in that group yet.' };
+  }
+  return { ok: true, unitPriceMinor: typed, amountMinor: typed * quantity };
+}
+
+/**
+ * Whether a gift still needs collecting, and therefore whether the pickup
+ * questions are worth asking at all.
+ *
+ * Funded gifts never do — the school buys locally — and asking a donor in
+ * Toronto for a pickup address for money is how a form loses somebody.
+ */
+export function needsCollection(mode: GiftMode, status: GiftStatus): boolean {
+  if (mode !== 'SUPPLY') return false;
+  return status === 'ACCEPTED' || status === 'PICKUP_REQUESTED';
 }
 
 /** A pledge addresses a GROUP. It never names, reaches, or filters a child. */

@@ -227,6 +227,10 @@ describe('Homecoming services, against a real database', () => {
       expect(p2.amountMinor).toBe(45000 * 3);
       await gifts.decide(schoolId, p2.id, ACTOR, { action: 'ACCEPT' });
       await gifts.receive(schoolId, p2.id, ACTOR, { receivedQty: 3 });
+      // Money has to be SPENT before there is anything to hand out. Skipping
+      // this step would let a school report distributing something it had not
+      // bought, which is why the funded track has it at all.
+      await gifts.purchase(schoolId, p2.id, ACTOR, {});
       // 1 given + 1 absent = 2, but the group has 3. The third child is
       // unaccounted for, which is the divided classroom by another name.
       await expect(
@@ -349,6 +353,192 @@ describe('Homecoming services, against a real database', () => {
       expect(await alumni.listLinkRequests(schoolId)).toHaveLength(0);
       await alumni.requestLink(schoolId, { contact: 'farida.sheikh@example.com' });
       expect(await alumni.listLinkRequests(schoolId)).toHaveLength(1);
+    });
+  });
+
+  /**
+   * The journey a donor actually watches.
+   *
+   * Every assertion here is about what the person who gave the money can see,
+   * because that is the half of gifting that decides whether they give again.
+   */
+  describe('the gift journey', () => {
+    const givingItem = async (name: string) =>
+      withTenant(schoolId, (tx) =>
+        tx.giftItem.create({ data: { schoolId, name, indicativeCostMinor: 30000 } }));
+
+    it('walks a funded gift and records every step in the history', async () => {
+      const item = await givingItem('Funded shoes');
+      const p = await gifts.createPledge(schoolId, {
+        donorName: 'Funder', scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'FUND', unitPriceMinor: 50000,
+      });
+      // What the donor typed beats the school's indicative cost.
+      expect(p.unitPriceMinor).toBe(50000);
+      expect(p.amountMinor).toBe(50000 * 3);
+
+      await gifts.decide(schoolId, p.id, ACTOR, { action: 'ACCEPT' });
+      await gifts.receive(schoolId, p.id, ACTOR, { receivedQty: 3 });
+      await gifts.purchase(schoolId, p.id, ACTOR, {});
+      await gifts.distribute(schoolId, p.id, ACTOR, { distributedQty: 3, absentQty: 0 });
+
+      const events = await withTenant(schoolId, (tx) =>
+        tx.giftEvent.findMany({ where: { pledgeId: p.id }, orderBy: { at: 'asc' } }));
+      expect(events.map((e) => e.status)).toEqual([
+        'ACCEPTED', 'RECEIVED', 'PURCHASED', 'DISTRIBUTED',
+      ]);
+    });
+
+    it('walks a sent gift through collection, transit and arrival', async () => {
+      const item = await givingItem('Sent blankets');
+      const p = await gifts.createPledge(schoolId, {
+        donorName: 'Sender', scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'SUPPLY',
+        pickupAddress: '14 Residency Road, Pune', pickupContact: 'Watchman', pickupPhone: '+919812345678',
+      });
+      // No valuation is stored for goods, whatever the school's list says.
+      expect(p.amountMinor).toBeNull();
+      expect(p.unitPriceMinor).toBeNull();
+      expect(p.pickupAddress).toContain('Residency Road');
+
+      await gifts.decide(schoolId, p.id, ACTOR, { action: 'ACCEPT' });
+      await gifts.requestPickup(schoolId, p.id, { userId: ACTOR }, {
+        pickupAddress: '14 Residency Road, Pune', pickupContact: 'Watchman',
+      });
+      const moving = await gifts.markPickedUp(schoolId, p.id, { userId: ACTOR }, {
+        courier: 'Delhivery', trackingRef: 'DL-99001',
+      });
+      expect(moving.status).toBe('PICKED_UP');
+      expect(moving.trackingRef).toBe('DL-99001');
+      expect(moving.pickedUpAt).not.toBeNull();
+
+      await gifts.receive(schoolId, p.id, ACTOR, { receivedQty: 3 });
+      await gifts.distribute(schoolId, p.id, ACTOR, { distributedQty: 3, absentQty: 0 });
+
+      const events = await withTenant(schoolId, (tx) =>
+        tx.giftEvent.findMany({ where: { pledgeId: p.id }, orderBy: { at: 'asc' } }));
+      expect(events.map((e) => e.status)).toEqual([
+        'ACCEPTED', 'PICKUP_REQUESTED', 'PICKED_UP', 'RECEIVED', 'DISTRIBUTED',
+      ]);
+    });
+
+    it('refuses to arrange collection for a gift of money', async () => {
+      const item = await givingItem('Money only');
+      const p = await gifts.createPledge(schoolId, {
+        donorName: 'F2', scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'FUND', unitPriceMinor: 10000,
+      });
+      await gifts.decide(schoolId, p.id, ACTOR, { action: 'ACCEPT' });
+      await expect(
+        gifts.requestPickup(schoolId, p.id, { userId: ACTOR }, { pickupAddress: 'Anywhere at all' }),
+      ).rejects.toThrow(/money/i);
+    });
+
+    it('refuses a tracking reference with nobody carrying it', async () => {
+      const item = await givingItem('Untracked');
+      const p = await gifts.createPledge(schoolId, {
+        donorName: 'S2', scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'SUPPLY',
+      });
+      await gifts.decide(schoolId, p.id, ACTOR, { action: 'ACCEPT' });
+      await gifts.requestPickup(schoolId, p.id, { userId: ACTOR }, { pickupAddress: '1 Some Street' });
+      await expect(
+        gifts.markPickedUp(schoolId, p.id, { userId: ACTOR }, { trackingRef: 'ORPHAN-1' }),
+      ).rejects.toThrow(/carrying/i);
+    });
+
+    it('lets a donor who drives it over skip collection entirely', async () => {
+      const item = await givingItem('Hand delivered');
+      const p = await gifts.createPledge(schoolId, {
+        donorName: 'S3', scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'SUPPLY',
+      });
+      await gifts.decide(schoolId, p.id, ACTOR, { action: 'ACCEPT' });
+      const r = await gifts.receive(schoolId, p.id, ACTOR, { receivedQty: 3 });
+      expect(r.canDistribute).toBe(true);
+    });
+
+    it('will not let a donor touch somebody else’s pledge', async () => {
+      const p = getPlatformPrisma();
+      const other = await p.alumni.create({
+        data: { schoolId, firstName: 'Some', lastName: 'Other', batchYear: 2001, status: 'VERIFIED' },
+      });
+      const item = await givingItem('Not yours');
+      const pledge = await gifts.createPledge(schoolId, {
+        donorName: 'S4', scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'SUPPLY',
+      });
+      await gifts.decide(schoolId, pledge.id, ACTOR, { action: 'ACCEPT' });
+      // Reported as not-found rather than forbidden: whether a pledge exists is
+      // itself information about somebody else's giving.
+      await expect(
+        gifts.requestPickup(schoolId, pledge.id, { alumniId: other.id }, { pickupAddress: '9 Elsewhere Road' }),
+      ).rejects.toThrow(/not found/i);
+    });
+
+    it('refuses to thank somebody for a gift nobody has accepted', async () => {
+      const item = await givingItem('Unaccepted');
+      const p = await gifts.createPledge(schoolId, {
+        donorName: 'S5', scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'SUPPLY',
+      });
+      await expect(
+        gifts.thankYou(schoolId, p.id, ACTOR, { note: 'Thank you so much for this.' }),
+      ).rejects.toThrow(/accept/i);
+    });
+
+    it('lets the school write a note without moving the pledge', async () => {
+      const item = await givingItem('Thanked');
+      const p = await gifts.createPledge(schoolId, {
+        donorName: 'S6', scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'SUPPLY',
+      });
+      await gifts.decide(schoolId, p.id, ACTOR, { action: 'ACCEPT' });
+      const after = await gifts.thankYou(schoolId, p.id, ACTOR, {
+        note: 'The children were delighted — thank you for thinking of them.',
+      });
+      // A thank you is not a stage of a workflow.
+      expect(after.status).toBe('ACCEPTED');
+      expect(after.thankYouAt).not.toBeNull();
+    });
+
+    it('gives the donor a summary that counts children, not rupees', async () => {
+      const p = getPlatformPrisma();
+      const donor = await p.alumni.create({
+        data: { schoolId, firstName: 'Counted', lastName: 'Donor', batchYear: 2002, status: 'VERIFIED' },
+      });
+      const item = await givingItem('Summed');
+      const pledge = await gifts.createPledge(schoolId, {
+        alumniId: donor.id, scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'SUPPLY',
+      });
+      let summary = await gifts.givingSummary(schoolId, donor.id);
+      expect(summary.gifts).toBe(1);
+      expect(summary.childrenReached).toBe(0); // nothing has reached anybody yet
+      expect(summary.inFlight).toBe(1);
+
+      await gifts.decide(schoolId, pledge.id, ACTOR, { action: 'ACCEPT' });
+      await gifts.receive(schoolId, pledge.id, ACTOR, { receivedQty: 3 });
+      await gifts.distribute(schoolId, pledge.id, ACTOR, { distributedQty: 3, absentQty: 0 });
+
+      summary = await gifts.givingSummary(schoolId, donor.id);
+      expect(summary.childrenReached).toBe(3);
+      expect(summary.inFlight).toBe(0);
+    });
+
+    it('leaves a cancelled gift out of the summary entirely', async () => {
+      const p = getPlatformPrisma();
+      const donor = await p.alumni.create({
+        data: { schoolId, firstName: 'Changed', lastName: 'Mind', batchYear: 2003, status: 'VERIFIED' },
+      });
+      const item = await givingItem('Withdrawn');
+      const pledge = await gifts.createPledge(schoolId, {
+        alumniId: donor.id, scopeKind: 'SECTION', classSectionId: sectionId,
+        giftItemId: item.id, mode: 'SUPPLY',
+      });
+      await gifts.decide(schoolId, pledge.id, ACTOR, { action: 'CANCEL' });
+      const summary = await gifts.givingSummary(schoolId, donor.id);
+      expect(summary.gifts).toBe(0);
     });
   });
 });

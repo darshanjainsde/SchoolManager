@@ -40,7 +40,25 @@ interface GiftGroup { scopeKind: string; gradeId?: string; classSectionId?: stri
 interface GiftGroups { school: GiftGroup; grades: GiftGroup[]; sections: GiftGroup[] }
 interface GiftItem { id: string; name: string; indicativeCostMinor: number; currency: string }
 
-type Tab = 'batches' | 'directory' | 'give' | 'profile';
+type Tab = 'batches' | 'directory' | 'give' | 'giving' | 'profile';
+type TabId = Tab;
+
+/** Mirrors giftJourney()/giftStatusLabel() on the server. The server sends the
+ *  journey and the labels with every pledge, so this is only the fallback for
+ *  a row that predates them — never a second implementation of the rules. */
+const GIFT_STEP_WORDS: Record<string, string> = {
+  PROPOSED: 'Offered',
+  ACCEPTED: 'Accepted',
+  PICKUP_REQUESTED: 'Collection arranged',
+  PICKED_UP: 'On its way',
+  RECEIVED: 'Arrived',
+  PURCHASED: 'Bought',
+  DISTRIBUTED: 'Given out',
+  REPORTED: 'Reported back',
+  COUNTERED: 'School suggested another',
+  DECLINED: 'Not taken up',
+  CANCELLED: 'Cancelled',
+};
 
 const PRIVACY_LEVELS = ['PUBLIC', 'ALUMNI', 'BATCH', 'HIDDEN'] as const;
 const PRIVACY_FIELDS: { key: string; label: string }[] = [
@@ -136,6 +154,7 @@ export default function AlumniSection({ schoolName }: { schoolName: string }) {
     { id: 'batches', label: 'Every year', needsSession: false },
     { id: 'directory', label: 'Directory', needsSession: true },
     { id: 'give', label: 'Give', needsSession: true },
+    { id: 'giving', label: 'My giving', needsSession: true },
     { id: 'profile', label: 'My profile', needsSession: true },
   ];
 
@@ -153,13 +172,38 @@ export default function AlumniSection({ schoolName }: { schoolName: string }) {
         </div>
       )}
 
+      {/* A sentence of grey text was not enough — it read as a caption, and
+          people were not sure they had actually signed in. This is an object:
+          their initials, their name, their year, and the way out. */}
       {signedIn && (
-        <p className="text-sm text-slate-500 mb-5">
-          Signed in as <strong className="text-slate-700">{me!.firstName} {me!.lastName}</strong>,
-          Class of {me!.batchYear}. No password — this device stays known for ninety days.{' '}
+        <div
+          className="ps-panel mb-6"
+          style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', flexWrap: 'wrap' }}
+        >
+          <div
+            aria-hidden="true"
+            className="ps-head"
+            style={{
+              width: 44, height: 44, borderRadius: 999, flex: 'none',
+              display: 'grid', placeItems: 'center',
+              background: 'var(--ps1)', color: 'var(--ps1-on, #fff)',
+              fontWeight: 700, fontSize: 16,
+            }}
+          >
+            {me!.firstName.charAt(0)}{me!.lastName.charAt(0)}
+          </div>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div className="font-semibold" style={{ color: 'var(--ink)' }}>
+              {me!.firstName} {me!.lastName}
+            </div>
+            <div className="text-sm text-slate-500">
+              Signed in &middot; Class of {me!.batchYear}
+              {me!.trustedForStudents && <> &middot; cleared to teach a class</>}
+            </div>
+          </div>
           <button
             type="button"
-            className="underline underline-offset-2"
+            className="text-sm underline underline-offset-2 text-slate-500"
             onClick={() => {
               call('POST', '/alumni/me/sign-out', { session }).catch(() => undefined);
               try { window.localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
@@ -169,7 +213,7 @@ export default function AlumniSection({ schoolName }: { schoolName: string }) {
           >
             Sign out
           </button>
-        </p>
+        </div>
       )}
 
       {/* One object on one track. `aria-pressed` drives the selected style in
@@ -210,7 +254,8 @@ export default function AlumniSection({ schoolName }: { schoolName: string }) {
 
       {tab === 'batches' && <Batches schoolName={schoolName} />}
       {tab === 'directory' && signedIn && <Directory session={session} />}
-      {tab === 'give' && signedIn && <Give session={session} onNote={setNote} />}
+      {tab === 'give' && signedIn && <Give session={session} onNote={setNote} onGo={setTab} />}
+      {tab === 'giving' && signedIn && <Giving session={session} onGo={setTab} />}
       {tab === 'profile' && signedIn && <Profile me={me!} session={session} onNote={setNote} />}
     </section>
   );
@@ -370,19 +415,265 @@ function Directory({ session }: { session: string | null }) {
   );
 }
 
+/* ─── My giving ──────────────────────────────────────────────────────────── */
+
+interface GivingEvent { status: string; note: string | null; at: string; label: string }
+interface GivingAttachment { id: string; kind: 'BILL' | 'CONSIGNMENT' | 'DISTRIBUTION'; url: string; caption: string | null }
+interface GivingRow {
+  id: string;
+  giftItem: { name: string; unit: string } | null;
+  customRequest: string | null;
+  scopeKind: string;
+  quantity: number;
+  mode: 'FUND' | 'SUPPLY';
+  amountMinor: number | null;
+  currency: string;
+  status: string;
+  statusLabel: string;
+  journey: string[];
+  journeyIndex: number;
+  events: GivingEvent[];
+  attachments: GivingAttachment[];
+  thankYouNote: string | null;
+  courier: string | null;
+  trackingRef: string | null;
+  declineReason: string | null;
+  counterNote: string | null;
+  received: number;
+  short: number;
+  createdAt: string;
+}
+interface GivingSummary {
+  gifts: number; inFlight: number; childrenReached: number; fundedMinor: number; currency: string;
+}
+
+const onDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/**
+ * Everything one alumnus has given, and what happened to it.
+ *
+ * The screen that decides whether somebody gives twice. A donation that
+ * disappears into an institution and is never mentioned again reads as having
+ * been unwelcome — so this leads with what they achieved, and every row carries
+ * the whole journey rather than a status word.
+ */
+function Giving({ session, onGo }: { session: string | null; onGo: (t: TabId) => void }) {
+  const [rows, setRows] = useState<GivingRow[] | null>(null);
+  const [sum, setSum] = useState<GivingSummary | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+
+  useEffect(() => {
+    call<GivingRow[]>('GET', '/alumni/me/pledges', { session }).then(setRows).catch(() => setRows([]));
+    call<GivingSummary>('GET', '/alumni/me/giving', { session }).then(setSum).catch(() => undefined);
+  }, [session]);
+
+  if (!rows) return <p className="text-sm text-slate-500">Loading&hellip;</p>;
+
+  if (rows.length === 0) {
+    return (
+      <div className="ps-panel p-7 max-w-xl">
+        <h3 className="ps-head font-bold text-lg">Nothing yet</h3>
+        <p className="text-sm text-slate-600 mt-2">
+          When you give something, this is where you follow it — from the office accepting it, all
+          the way to photographs of the children who got it.
+        </p>
+        <button type="button" className="ps-cta ps-cta-1 mt-5" onClick={() => onGo('give')}>
+          Give something
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Children reached, not rupees given: the number that means something to
+          a donor is how many people got something — and an in-kind gift has
+          deliberately no rupee figure to add up at all. */}
+      {sum && sum.childrenReached > 0 && (
+        <div className="ps-panel p-7 mb-6">
+          <p className="ps-head font-bold" style={{ fontSize: 34, lineHeight: 1.1, color: 'var(--ps1)' }}>
+            {sum.childrenReached} {sum.childrenReached === 1 ? 'child' : 'children'}
+          </p>
+          <p className="text-sm text-slate-600 mt-2">
+            have received something because of you, across{' '}
+            {sum.gifts} {sum.gifts === 1 ? 'gift' : 'gifts'}.
+            {sum.inFlight > 0 && <> {sum.inFlight} still on the way.</>}
+          </p>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {rows.map((r) => {
+          const what = r.giftItem?.name ?? r.customRequest ?? 'A gift';
+          const ended = r.journeyIndex < 0;
+          const isOpen = open === r.id;
+          return (
+            <div key={r.id} className="ps-panel p-6">
+              <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <div className="ps-head font-bold text-lg">
+                    {r.quantity} &times; {what.toLowerCase()}
+                  </div>
+                  <div className="text-sm text-slate-500 mt-0.5">
+                    Offered {onDate(r.createdAt)}
+                    {r.mode === 'FUND' && r.amountMinor ? ` · ${rupees(r.amountMinor)}` : ' · you sent the goods'}
+                  </div>
+                </div>
+                <span
+                  className="ps-chip px-3 py-1.5 rounded-full text-xs font-semibold"
+                  style={ended
+                    ? { background: '#f2e6e6', color: '#8a2b2b' }
+                    : r.journeyIndex >= r.journey.length - 1
+                      ? { background: 'var(--ps1)', color: 'var(--ps1-on, #fff)' }
+                      : undefined}
+                >
+                  {r.statusLabel}
+                </span>
+              </div>
+
+              {/* The journey, as a row of steps rather than a word. Somebody who
+                  gave months ago is asking "where has it got to", and a single
+                  status word answers that badly. */}
+              {!ended && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-4">
+                  {r.journey.map((step, i) => (
+                    <div key={step} className="flex items-center gap-1.5">
+                      <span
+                        className="text-xs font-semibold"
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          background: i <= r.journeyIndex ? 'var(--ps1)' : 'color-mix(in srgb, var(--ink) 8%, #fff)',
+                          color: i <= r.journeyIndex ? 'var(--ps1-on, #fff)' : 'color-mix(in srgb, var(--ink) 55%, transparent)',
+                        }}
+                      >
+                        {GIFT_STEP_WORDS[step] ?? step}
+                      </span>
+                      {i < r.journey.length - 1 && (
+                        <span aria-hidden="true" style={{ color: 'color-mix(in srgb, var(--ink) 30%, transparent)' }}>&rarr;</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {r.short > 0 && (
+                <p className="text-sm mt-3" style={{ color: '#8a5a00' }}>
+                  {r.received} of {r.quantity} have arrived. It stays open until every child in the
+                  group has one.
+                </p>
+              )}
+              {r.declineReason && (
+                <p className="text-sm text-slate-600 mt-3">
+                  <strong>The school said:</strong> {r.declineReason}
+                </p>
+              )}
+              {r.counterNote && (
+                <p className="text-sm text-slate-600 mt-3">
+                  <strong>The school suggested instead:</strong> {r.counterNote}
+                </p>
+              )}
+              {(r.courier || r.trackingRef) && (
+                <p className="text-sm text-slate-600 mt-3">
+                  <strong>On its way with</strong> {r.courier ?? 'a carrier'}
+                  {r.trackingRef && <> &middot; <span className="tabular-nums">{r.trackingRef}</span></>}
+                </p>
+              )}
+
+              {/* The school's own words. For most donors this is the only thing
+                  they ever get back, so it is given real weight rather than
+                  being tucked into the timeline. */}
+              {r.thankYouNote && (
+                <blockquote
+                  className="mt-4 text-sm"
+                  style={{
+                    borderLeft: '3px solid var(--ps1)',
+                    padding: '10px 14px',
+                    background: 'color-mix(in srgb, var(--ps1) 7%, #fff)',
+                    borderRadius: 8,
+                  }}
+                >
+                  {r.thankYouNote}
+                </blockquote>
+              )}
+
+              {r.attachments.length > 0 && (
+                <div className="mt-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+                  {r.attachments.map((a) => (
+                    <figure key={a.id} style={{ margin: 0 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={a.url} alt={a.caption ?? 'From the school'} loading="lazy"
+                        style={{ width: '100%', borderRadius: 10, display: 'block' }} />
+                      {a.caption && (
+                        <figcaption className="text-xs text-slate-500 mt-1">{a.caption}</figcaption>
+                      )}
+                    </figure>
+                  ))}
+                </div>
+              )}
+
+              {r.events.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="text-sm underline underline-offset-2 text-slate-500 mt-4"
+                    onClick={() => setOpen(isOpen ? null : r.id)}
+                  >
+                    {isOpen ? 'Hide the history' : `Full history (${r.events.length})`}
+                  </button>
+                  {isOpen && (
+                    <ol style={{ listStyle: 'none', margin: '14px 0 0', padding: 0 }}>
+                      {r.events.map((e, i) => (
+                        <li key={`${e.at}-${i}`} className="text-sm" style={{ display: 'flex', gap: 12, padding: '7px 0' }}>
+                          <span className="text-slate-500 tabular-nums" style={{ minWidth: 92 }}>{onDate(e.at)}</span>
+                          <span>
+                            <strong className="text-slate-700">{e.label}</strong>
+                            {e.note && <span className="text-slate-600"> — {e.note}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Give ───────────────────────────────────────────────────────────────── */
 
 function Give({
   session,
   onNote,
-}: { session: string | null; onNote: (n: { kind: 'ok' | 'err'; text: string }) => void }) {
+  onGo,
+}: {
+  session: string | null;
+  onNote: (n: { kind: 'ok' | 'err'; text: string }) => void;
+  /** So the confirmation can hand the donor straight to where they follow it. */
+  onGo: (tab: TabId) => void;
+}) {
   const [groups, setGroups] = useState<GiftGroups | null>(null);
   const [items, setItems] = useState<GiftItem[]>([]);
   const [group, setGroup] = useState<GiftGroup | null>(null);
   const [itemId, setItemId] = useState('');
+  /** Off-catalogue. The school's list is a suggestion, not a menu — plenty of
+   *  people want to give the thing they happen to have. */
+  const [ownItem, setOwnItem] = useState('');
+  /** Rupees per child, as typed. Kept as a string so the field can be empty
+   *  rather than showing a 0 nobody entered. */
+  const [price, setPrice] = useState('');
   const [mode, setMode] = useState<'SUPPLY' | 'FUND'>('SUPPLY');
   const [ded, setDed] = useState('');
+  const [pickup, setPickup] = useState({ address: '', contact: '', phone: '', note: '' });
   const [busy, setBusy] = useState(false);
+  /** The pledge that was just made, so the screen can say so properly instead
+   *  of flashing a line of text and forgetting. */
+  const [done, setDone] = useState<{ what: string; qty: number; group: string } | null>(null);
 
   useEffect(() => {
     call<GiftGroups>('GET', '/alumni/me/gift-groups', { session }).then(setGroups).catch(() => undefined);
@@ -395,6 +686,12 @@ function Give({
   );
   const item = items.find((i) => i.id === itemId);
   const qty = group?.headcount ?? 0;
+  const custom = itemId === '' && ownItem.trim().length >= 3;
+  const whatLabel = item?.name ?? ownItem.trim();
+  /** Paise. The donor types rupees; nothing downstream ever sees a float. */
+  const unitPaise = Math.round(Number(price || '0') * 100);
+  const chosen = !!group && (!!itemId || custom);
+  const fundable = mode === 'FUND' ? unitPaise > 0 : true;
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -438,6 +735,55 @@ function Give({
           )}
         </div>
 
+        {/* The list is a suggestion, not a menu. Plenty of people want to give
+            the thing they happen to have, and a form that only accepts four
+            options turns those people away. */}
+        <label className="block text-sm mt-4">
+          <span className="text-slate-500">
+            {items.length === 0 ? 'What would you like to give?' : 'Or something else entirely'}
+          </span>
+          <input
+            className="ps-wiz-input w-full mt-1"
+            placeholder="Sports kit for the under-14 team"
+            value={ownItem}
+            onChange={(e) => { setOwnItem(e.target.value); if (e.target.value.trim()) setItemId(''); }}
+          />
+        </label>
+        {custom && (
+          <p className="text-xs text-slate-500 mt-1">
+            Off the school&rsquo;s list, so this arrives as a proposal — the office can accept it or
+            suggest something they need more.
+          </p>
+        )}
+
+        <label className="block text-sm mt-5">
+          <span className="text-slate-500">What you would like to give per child</span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-slate-500 text-base">&#8377;</span>
+            <input
+              className="ps-wiz-input w-40"
+              inputMode="decimal"
+              placeholder="0"
+              value={price}
+              onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ''))}
+              aria-label="Amount per child in rupees"
+            />
+            {item && (
+              <button
+                type="button"
+                className="text-xs underline underline-offset-2 text-slate-500"
+                onClick={() => setPrice(String(item.indicativeCostMinor / 100))}
+              >
+                use the school&rsquo;s estimate ({rupees(item.indicativeCostMinor)})
+              </button>
+            )}
+          </div>
+        </label>
+        <p className="text-xs text-slate-500 mt-1">
+          Leave it at <strong className="text-slate-700">0</strong> if you are sending the goods
+          yourself — we will arrange collection from your address and get them to the school.
+        </p>
+
         <h3 className="ps-head font-bold text-lg mt-8">3 · How it arrives</h3>
         <div className="ps-seg mt-4">
           {(['SUPPLY', 'FUND'] as const).map((m) => (
@@ -454,9 +800,47 @@ function Give({
         </div>
         <p className="text-sm text-slate-500 mt-4">
           {mode === 'SUPPLY'
-            ? 'No money changes hands here. You commit to a quantity and a date; the office records what actually arrives. Note: gifts in kind are generally not eligible for 80G relief — if you need a certificate, choose “I will pay”.'
+            ? 'No money changes hands here. You commit to a quantity; the office records what actually arrives, and you can follow it the whole way. Note: gifts in kind are generally not eligible for 80G relief — if you need a certificate, choose “I will pay”.'
             : 'On the school’s own payment rail. The school is the merchant, never us, and the receipt comes from them.'}
         </p>
+
+        {/* Only asked when there is something to collect. A donor in Toronto
+            funding a purchase is never asked where to send a courier. */}
+        {mode === 'SUPPLY' && (
+          <>
+            <h3 className="ps-head font-bold text-lg mt-8">4 · Where to collect it</h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Optional — you can settle this with the office later. Filling it in now just means
+              nobody has to ring you.
+            </p>
+            <label className="block text-sm mt-4">
+              <span className="text-slate-500">Pickup address</span>
+              <input className="ps-wiz-input w-full mt-1" placeholder="14 Residency Road, Pune 411001"
+                value={pickup.address}
+                onChange={(e) => setPickup((v) => ({ ...v, address: e.target.value }))} />
+            </label>
+            <div className="grid sm:grid-cols-2 gap-4 mt-4">
+              <label className="block text-sm">
+                <span className="text-slate-500">Who will hand it over</span>
+                <input className="ps-wiz-input w-full mt-1" placeholder="My mother, or the watchman"
+                  value={pickup.contact}
+                  onChange={(e) => setPickup((v) => ({ ...v, contact: e.target.value }))} />
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-500">Phone for the pickup</span>
+                <input className="ps-wiz-input w-full mt-1" placeholder="+91 98123 45678"
+                  value={pickup.phone}
+                  onChange={(e) => setPickup((v) => ({ ...v, phone: e.target.value }))} />
+              </label>
+            </div>
+            <label className="block text-sm mt-4">
+              <span className="text-slate-500">Anything the driver should know</span>
+              <input className="ps-wiz-input w-full mt-1" placeholder="Six cartons, second floor, no lift"
+                value={pickup.note}
+                onChange={(e) => setPickup((v) => ({ ...v, note: e.target.value }))} />
+            </label>
+          </>
+        )}
         <label className="block text-sm mt-5">
           <span className="text-slate-500">Dedication — optional</span>
           <input
@@ -469,52 +853,108 @@ function Give({
       </div>
 
       <div className="ps-panel p-7 self-start">
-        <h3 className="ps-head font-bold text-lg">Your pledge</h3>
-        {!group || !itemId ? (
-          <p className="text-sm text-slate-500 mt-2">Pick a group and something from the list.</p>
+        {done ? (
+          /* A pledge that vanishes the instant it is made reads as having gone
+             nowhere. This stays until the donor dismisses it, says exactly what
+             was promised, and points them at where to follow it. */
+          <>
+            <div style={{ fontSize: 30, lineHeight: 1 }} aria-hidden="true">&#10003;</div>
+            <h3 className="ps-head font-bold text-lg mt-3">That is with the office</h3>
+            <p className="ps-head font-bold text-2xl mt-3" style={{ color: 'var(--ps1)' }}>
+              {done.qty} &times; {done.what.toLowerCase()}
+            </p>
+            <p className="text-sm text-slate-600 mt-2">
+              for <strong>{done.group}</strong>. Nothing is charged or collected until the school
+              accepts it — you will see that happen, and every step afterwards, under{' '}
+              <strong>My giving</strong>.
+            </p>
+            <div className="flex flex-wrap gap-3 mt-6">
+              <button type="button" className="ps-cta ps-cta-ink" onClick={() => onGo('giving')}>
+                Follow it
+              </button>
+              <button
+                type="button"
+                className="text-sm underline underline-offset-2 text-slate-500"
+                onClick={() => { setDone(null); setItemId(''); setOwnItem(''); setPrice(''); setDed(''); }}
+              >
+                Give something else
+              </button>
+            </div>
+          </>
         ) : (
           <>
-            <p className="ps-head font-bold text-3xl mt-3" style={{ color: 'var(--ps1)' }}>
-              {qty} × {item?.name.toLowerCase()}
-            </p>
-            <p className="text-sm text-slate-500 mt-2">
-              for <strong className="text-slate-700">{group.label}</strong> — {qty} children. The quantity{' '}
-              <strong className="text-slate-700">is</strong> the headcount and is not something you can edit: a class
-              of {qty} with fewer than {qty} is a worse place than one with none.
-            </p>
-            {mode === 'FUND' && item && (
-              <p className="text-sm text-slate-500 mt-2 tabular-nums">
-                {qty} × {rupees(item.indicativeCostMinor)} = <strong className="text-slate-700">{rupees(item.indicativeCostMinor * qty)}</strong>
+            <h3 className="ps-head font-bold text-lg">Your pledge</h3>
+            {!chosen ? (
+              <p className="text-sm text-slate-500 mt-2">
+                Pick a group, then choose something from the list or type your own.
               </p>
+            ) : (
+              <>
+                <p className="ps-head font-bold text-3xl mt-3" style={{ color: 'var(--ps1)' }}>
+                  {qty} &times; {whatLabel.toLowerCase()}
+                </p>
+                <p className="text-sm text-slate-500 mt-2">
+                  for <strong className="text-slate-700">{group!.label}</strong> — {qty} children. The
+                  quantity <strong className="text-slate-700">is</strong> the headcount and is not
+                  something you can edit: a class of {qty} with fewer than {qty} is a worse place than
+                  one with none.
+                </p>
+
+                {mode === 'FUND' ? (
+                  unitPaise > 0 ? (
+                    <p className="text-sm text-slate-500 mt-3 tabular-nums">
+                      {qty} &times; {rupees(unitPaise)} ={' '}
+                      <strong className="text-slate-700">{rupees(unitPaise * qty)}</strong>
+                    </p>
+                  ) : (
+                    <p className="text-sm mt-3" style={{ color: '#b3261e' }}>
+                      Enter what you would like to give per child, or switch to{' '}
+                      <em>I will send the goods</em>.
+                    </p>
+                  )
+                ) : (
+                  <p className="text-sm text-slate-500 mt-3">
+                    You are sending the goods, so no amount is recorded against this — an in-kind
+                    gift is counted in things, never in rupees.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  className="ps-cta ps-cta-1 mt-6"
+                  disabled={busy || !fundable}
+                  onClick={() => {
+                    setBusy(true);
+                    call('POST', '/alumni/me/pledges', {
+                      session,
+                      body: {
+                        scopeKind: group!.scopeKind,
+                        gradeId: group!.gradeId,
+                        classSectionId: group!.classSectionId,
+                        giftItemId: itemId || undefined,
+                        customRequest: custom ? ownItem.trim() : undefined,
+                        mode,
+                        unitPriceMinor: mode === 'FUND' ? unitPaise : undefined,
+                        pickupAddress: mode === 'SUPPLY' && pickup.address.trim() ? pickup.address.trim() : undefined,
+                        pickupContact: mode === 'SUPPLY' && pickup.contact.trim() ? pickup.contact.trim() : undefined,
+                        pickupPhone: mode === 'SUPPLY' && pickup.phone.trim() ? pickup.phone.trim() : undefined,
+                        pickupNote: mode === 'SUPPLY' && pickup.note.trim() ? pickup.note.trim() : undefined,
+                        dedicationKind: ded.trim() ? 'IN_MEMORY_OF' : 'NONE',
+                        dedicationText: ded.trim() || undefined,
+                      },
+                    })
+                      .then(() => setDone({ what: whatLabel, qty, group: group!.label }))
+                      .catch((e: Error) => onNote({ kind: 'err', text: e.message }))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {busy ? 'Sending…' : mode === 'FUND' ? 'Pledge this' : 'Offer to send this'}
+                </button>
+                <p className="text-xs text-slate-500 mt-3">
+                  Nothing is charged or collected until the school accepts.
+                </p>
+              </>
             )}
-            <button
-              type="button"
-              className="ps-cta ps-cta-1 mt-6"
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                call('POST', '/alumni/me/pledges', {
-                  session,
-                  body: {
-                    scopeKind: group.scopeKind,
-                    gradeId: group.gradeId,
-                    classSectionId: group.classSectionId,
-                    giftItemId: itemId,
-                    mode,
-                    dedicationKind: ded.trim() ? 'IN_MEMORY_OF' : 'NONE',
-                    dedicationText: ded.trim() || undefined,
-                  },
-                })
-                  .then(() => onNote({ kind: 'ok', text: 'Sent to the office. Nothing is charged or shipped until they accept.' }))
-                  .catch((e: Error) => onNote({ kind: 'err', text: e.message }))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              {busy ? 'Sending…' : `Pledge ${qty} ${item?.name.toLowerCase()}`}
-            </button>
-            <p className="text-xs text-slate-500 mt-3">
-              The office decides next. Nothing is charged or shipped until they accept.
-            </p>
           </>
         )}
       </div>

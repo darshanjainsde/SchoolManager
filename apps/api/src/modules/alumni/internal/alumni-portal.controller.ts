@@ -26,14 +26,16 @@ import {
   type AlumniRequest,
 } from './alumni-session.guard';
 import {
+  AlumniLoginDto,
+  ChangeAlumniPasswordDto,
   CreateClaimDto,
   CreatePledgeDto,
   DecideSessionDto,
   DirectoryQueryDto,
-  AlumniLoginDto,
-  ChangeAlumniPasswordDto,
+  MarkPickedUpDto,
   RedeemClaimDto,
   RequestLinkDto,
+  RequestPickupDto,
   RequestSessionDto,
   SlotsQueryDto,
   UpdateMeDto,
@@ -230,9 +232,46 @@ export class AlumniPortalController {
     });
   }
 
+  /**
+   * Everything they have given, with the story of each.
+   *
+   * The screen that decides whether somebody gives twice: a donation that
+   * vanishes into an institution and is never mentioned again reads as having
+   * been unwelcome.
+   */
   @Get('pledges')
   myPledges(@Req() req: AlumniRequest) {
     return this.gifts.listPledgesForAlumnus(this.sid(), this.who(req).alumniId);
+  }
+
+  @Get('giving')
+  myGiving(@Req() req: AlumniRequest) {
+    return this.gifts.givingSummary(this.sid(), this.who(req).alumniId);
+  }
+
+  /**
+   * The donor's side of collection. `alumniId` comes from the SESSION and the
+   * service checks the pledge is theirs — a donor may arrange a pickup for
+   * their own gift and for nobody else's.
+   */
+  @Post('pledges/:id/request-pickup')
+  requestPickup(
+    @Req() req: AlumniRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RequestPickupDto,
+  ) {
+    return this.gifts.requestPickup(this.sid(), id, { alumniId: this.who(req).alumniId }, dto);
+  }
+
+  /** "It has gone." The donor usually knows before the school does — they are
+   *  the one who handed it to the courier. */
+  @Post('pledges/:id/picked-up')
+  markPickedUp(
+    @Req() req: AlumniRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: MarkPickedUpDto,
+  ) {
+    return this.gifts.markPickedUp(this.sid(), id, { alumniId: this.who(req).alumniId }, dto);
   }
 }
 
