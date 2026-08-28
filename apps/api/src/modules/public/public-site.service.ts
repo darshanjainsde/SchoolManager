@@ -103,7 +103,9 @@ export class PublicSiteService {
       const has = (k: FeatureKey) => feat.has(k);
       const showFees = admissionsSettings?.showFeesPublicly ?? true;
 
-      const events = has('EVENTS') ? await this.publicEvents.forHost(tx, schoolId) : [];
+      const events = has('EVENTS')
+        ? await this.publicEvents.forHost(tx, schoolId, new Date(), profile?.city)
+        : [];
 
       return {
         school: { name: school.name, slug: school.slug, tier: school.tier, features: [...feat], timezone: school.timezone },

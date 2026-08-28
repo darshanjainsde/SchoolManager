@@ -108,6 +108,24 @@ enum MenuKind {
   CUSTOM
 }
 
+/// Who an event is published to.
+///
+/// Replaces the old binary SCHOOL/NETWORK split, where NETWORK meant "every
+/// school on the platform, forever" — which made every school's public site
+/// carry every other school's events (measured at 3.16 MB / 10,050 events at
+/// 200 schools, against a hard 4.5 MB response cap).
+enum EventAudienceKind {
+  /// Only this school's own public site.
+  SCHOOL_ONLY
+  /// Every school whose profile city matches `audienceCity`.
+  CITY
+  /// Exactly the schools listed in EventAudienceSchool.
+  SELECTED
+  /// Legacy: the old NETWORK behaviour. Not offered in the UI; existing rows
+  /// keep working and drain naturally as their events pass.
+  EVERYWHERE
+}
+
 enum EventScope {
   SCHOOL
   NETWORK
@@ -1442,6 +1460,13 @@ model Event {
   coverUrl         String?
   originSchoolName String?
   scope            EventScope          @default(SCHOOL)
+  /// Targeting. `scope` is retained so existing readers keep working; new code
+  /// reads audienceKind.
+  audienceKind     EventAudienceKind   @default(SCHOOL_ONLY)
+  /// Set only when audienceKind = CITY. Denormalised from the host school's
+  /// profile at publish time so the match is a flat string compare rather than
+  /// a join — a per-row join here is what made Result's RLS policy 1,425 ms.
+  audienceCity     String?
   status           EventStatus         @default(DRAFT)
   createdByUserId  String?             @db.Uuid
   approvedByUserId String?             @db.Uuid
@@ -1450,9 +1475,22 @@ model Event {
   school           School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   ticketTypes      EventTicketType[]
   registrations    EventRegistration[]
+  audienceSchools  EventAudienceSchool[]
 
   @@index([schoolId])
   @@index([scope, status])
+  /// The public-site query's own shape: approved events for a given audience.
+  @@index([status, audienceKind, audienceCity])
+}
+
+/// One explicitly-invited school, when audienceKind = SELECTED.
+model EventAudienceSchool {
+  eventId  String @db.Uuid
+  schoolId String @db.Uuid
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, schoolId])
+  @@index([schoolId])
 }
 
 /// A thing you can register for. An event has one or many; a free event has a

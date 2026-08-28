@@ -1,4 +1,7 @@
-import { IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
+
+/** How many schools one event may be hand-addressed to. */
+export const MAX_SELECTED_SCHOOLS = 50;
 
 export class CreateEventDto {
   @IsString() @Length(1, 160) title!: string;
@@ -8,6 +11,18 @@ export class CreateEventDto {
   @IsOptional() @IsDateString() endAt?: string;
   @IsOptional() @IsString() @Length(0, 200) venue?: string;
   @IsIn(['SCHOOL', 'NETWORK']) scope!: 'SCHOOL' | 'NETWORK';
+  /**
+   * Who sees this event.
+   *
+   * EVERYWHERE is deliberately absent: it is the legacy "every school on the
+   * platform" behaviour that made one public-site response 3.16 MB, and it
+   * cannot be chosen for a NEW event. Existing rows keep it until they pass.
+   */
+  @IsOptional() @IsIn(['SCHOOL_ONLY', 'CITY', 'SELECTED'])
+  audienceKind?: 'SCHOOL_ONLY' | 'CITY' | 'SELECTED';
+  /** Required when audienceKind = SELECTED. Ignored otherwise. */
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_SELECTED_SCHOOLS) @IsUUID('4', { each: true })
+  audienceSchoolIds?: string[];
   /** Seats available. Omitted means unlimited — no number is invented. */
   @IsOptional() @IsInt() @Min(0) capacity?: number;
 }

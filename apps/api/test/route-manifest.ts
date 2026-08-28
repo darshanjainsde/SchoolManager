@@ -223,6 +223,7 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /cms/blog/selections",
   "GET /cms/blog/settings",
   "GET /manage/events",
+  "GET /manage/events/audience-candidates",
   "GET /manage/events/:id/registrations",
   "GET /manage/jobs",
   "GET /manage/jobs/:id/applications",
