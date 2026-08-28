@@ -55,6 +55,8 @@ const ALLOWED: Record<string, string> = {
   'modules/owner/internal/owner-domains.service.ts': 'operator console',
   'modules/owner/internal/owner-events.service.ts': 'operator console',
   'modules/owner/internal/impersonation.service.ts': 'operator console',
+  'modules/owner/internal/ops.service.ts':
+    'platform-wide health: outbox depth and DLQ across every tenant. Counts only — it reads no tenant row content',
 
   // ── Public, non-tenant surfaces on sckools.com ────────────────────────────
   'modules/directory/directory.service.ts': 'public directory of LIVE schools; cross-tenant by design',

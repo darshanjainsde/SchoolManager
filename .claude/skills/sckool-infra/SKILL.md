@@ -11,7 +11,7 @@ made. Every number here was measured, and says how.
 
 ## Freshness protocol (run FIRST, every invocation)
 
-Trained at commit **`a24a216`** (`perf/phase3-outbox-latency`, 2026-08-28),
+Trained at commit **`69f3b6a`** (`perf/phase4-ops-dashboard`, 2026-08-28),
 which branches off `origin/staging` at `a724f4e`.
 
 1. `git fetch origin && git log --oneline a24a216..origin/staging | head -30`
@@ -156,6 +156,19 @@ a Redis outage would have queued cache commands through connect-timeout cycles
 instead of falling through to Postgres. `withTenant` binds the tenant id via
 `set_config` instead of splicing it into `$executeRawUnsafe`, and sets explicit
 `timeout: 10s` / `maxWait: 3s`.
+
+**#37 — ops dashboard.** `/platform/ops` answers "which rung are we on" from the
+ladder in ARCHITECTURE.md §5. Fixed-bucket histograms because they are the only
+form that MERGES across instances — nothing is scrapeable on serverless, so
+everything must be summable. Latency and connection-hold time are collected
+separately: hold × throughput is the concurrent connection count, which is what
+actually breaks. In-memory accumulation flushed every 15s via HINCRBY, never
+per-request (Upstash bills per command). Route labels templated and capped at
+200/instance.
+
+**Known limitation:** `instances` is hard-coded to 1 — a function cannot count
+its warm siblings. The login-headroom rung is therefore pessimistic, which is
+the safe direction, but reads "act" early once Vercel scales out.
 
 **#36 — outbox latency.** The outbox always had durability right (rows written
 in the same transaction as the business change, with attempts/lastError). Its

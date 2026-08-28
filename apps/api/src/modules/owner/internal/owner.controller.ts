@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Header, Param, ParseUUIDPipe, Patch, Pos
 import type { Response } from 'express';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
+import { OpsService } from './ops.service';
 import type { PlatformJwtPayload } from '../../../common/auth/jwt-payload';
 import { MarketingService, SetLeadStatusDto, UpdateMarketingConfigDto } from '../../marketing';
 import { JobsService } from '../../hiring';
@@ -26,6 +27,7 @@ export class OwnerController {
     private readonly marketing: MarketingService,
     private readonly jobs: JobsService,
     private readonly domains: OwnerDomainsService,
+    private readonly opsService: OpsService,
   ) {}
 
   @Get('overview')
@@ -59,6 +61,12 @@ export class OwnerController {
     const { filename, body } = await this.overviewSvc.enquiriesCsv(id);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(body);
+  }
+
+  /** Runtime health: which rung of the scaling ladder we are on. */
+  @Get('ops')
+  ops() {
+    return this.opsService.snapshot();
   }
 
   @Get('stats')
