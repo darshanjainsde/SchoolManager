@@ -9,6 +9,7 @@ import { OwnerAuthController } from './owner-auth.controller';
 import { ImpersonationService } from './impersonation.service';
 import { OwnerEventsService } from './owner-events.service';
 import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
+import { OpsService } from './ops.service';
 import { OwnerOverviewService } from './owner-overview.service';
 import { OwnerSchoolsService } from './owner-schools.service';
 import { OwnerDomainsService } from './owner-domains.service';
@@ -17,6 +18,6 @@ import { OwnerController } from './owner.controller';
 @Module({
   imports: [JwtModule.register({}), AuthModule, FeaturesModule, MarketingModule, HiringModule],
   controllers: [OwnerAuthController, OwnerController],
-  providers: [OwnerAuthService, OwnerHostGuard, OwnerSchoolsService, OwnerDomainsService, OwnerEventsService, ImpersonationService, OwnerOverviewService],
+  providers: [OpsService, OwnerAuthService, OwnerHostGuard, OwnerSchoolsService, OwnerDomainsService, OwnerEventsService, ImpersonationService, OwnerOverviewService],
 })
 export class OwnerModule {}

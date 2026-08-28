@@ -326,6 +326,7 @@ export const AUTHZ_UNREVIEWED: string[] = [
   "GET /owner/jobs",
   "GET /owner/leads",
   "GET /owner/marketing-config",
+  "GET /owner/ops",
   "GET /owner/overview",
   "GET /owner/schools",
   "GET /owner/schools/:id",
