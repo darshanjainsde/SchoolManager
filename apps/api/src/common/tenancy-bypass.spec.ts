@@ -58,6 +58,8 @@ const ALLOWED: Record<string, string> = {
 
   // ── Public, non-tenant surfaces on sckools.com ────────────────────────────
   'modules/directory/directory.service.ts': 'public directory of LIVE schools; cross-tenant by design',
+  'modules/community/events.service.ts':
+    'the event audience picker — you cannot invite a school you cannot see. Returns LIVE schools and only the public identity (name, city) the directory already publishes',
   'modules/marketing/marketing.service.ts': 'marketing leads belong to the platform, not a school',
   'modules/blog/internal/blog-public.service.ts': 'shared editorial library',
   'modules/blog/internal/blog-cms.service.ts': 'shared editorial library',

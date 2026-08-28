@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -21,6 +21,12 @@ export class EventsController {
   ) {}
 
   @Get() list() { return this.events.list(); }
+
+  /** Schools this event can be addressed to — powers the audience picker's search. */
+  @Get('audience-candidates')
+  audienceCandidates(@Query('q') q?: string) {
+    return this.events.audienceCandidates(q);
+  }
   @Post() create(@Body() dto: CreateEventDto) { return this.events.create(dto); }
   @Patch(':id') update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateEventDto) {
     return this.events.update(id, dto);
