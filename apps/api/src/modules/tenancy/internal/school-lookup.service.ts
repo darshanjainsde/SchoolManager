@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import Redis from 'ioredis';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import { loadEnv } from '@skoolos/config';
+import { REDIS_CLIENT, ensureConnected, sharedRedis, type SharedRedis } from '../../../common/redis/redis.client';
 
 type LookupResult =
   | { kind: 'tenant'; schoolId: string; schoolSlug: string }
@@ -19,15 +19,9 @@ const CACHE_PREFIX = 'host:';
 @Injectable()
 export class SchoolLookupService {
   private readonly logger = new Logger(SchoolLookupService.name);
-  private readonly redis: Redis;
   private readonly env = loadEnv();
 
-  constructor() {
-    this.redis = new Redis(this.env.REDIS_URL, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 2,
-    });
-  }
+  constructor(@Optional() @Inject(REDIS_CLIENT) private readonly redis: SharedRedis = sharedRedis()) {}
 
   async resolveByHostname(rawHost: string): Promise<LookupResult> {
     const hostname = rawHost.split(':')[0].toLowerCase();
@@ -45,8 +39,8 @@ export class SchoolLookupService {
   /** Invalidate cache for a hostname — called when a domain changes status. */
   async invalidate(hostname: string): Promise<void> {
     try {
-      await this.connectIfNeeded();
-      await this.redis.del(CACHE_PREFIX + hostname.toLowerCase());
+      await ensureConnected(this.redis);
+      await this.redis?.del(CACHE_PREFIX + hostname.toLowerCase());
     } catch (e) {
       this.logger.warn(`Redis invalidate failed for ${hostname}: ${(e as Error).message}`);
     }
@@ -83,8 +77,8 @@ export class SchoolLookupService {
 
   private async cacheGet(hostname: string): Promise<LookupResult | null> {
     try {
-      await this.connectIfNeeded();
-      const raw = await this.redis.get(CACHE_PREFIX + hostname);
+      if (!(await ensureConnected(this.redis))) return null;
+      const raw = await this.redis!.get(CACHE_PREFIX + hostname);
       return raw ? (JSON.parse(raw) as LookupResult) : null;
     } catch (e) {
       this.logger.warn(`Redis cacheGet failed for ${hostname}: ${(e as Error).message}`);
@@ -94,8 +88,8 @@ export class SchoolLookupService {
 
   private async cacheSet(hostname: string, value: LookupResult): Promise<void> {
     try {
-      await this.connectIfNeeded();
-      await this.redis.set(
+      if (!(await ensureConnected(this.redis))) return;
+      await this.redis!.set(
         CACHE_PREFIX + hostname,
         JSON.stringify(value),
         'EX',
@@ -106,8 +100,4 @@ export class SchoolLookupService {
     }
   }
 
-  private async connectIfNeeded(): Promise<void> {
-    if (this.redis.status === 'ready' || this.redis.status === 'connecting') return;
-    await this.redis.connect().catch(() => undefined);
-  }
 }

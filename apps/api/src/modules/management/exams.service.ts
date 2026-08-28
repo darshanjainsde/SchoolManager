@@ -20,6 +20,7 @@ import type {
 import { resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
 import { AttendanceService } from './attendance.service';
+import { NotificationOutboxService } from './notification-outbox.service';
 import type { CreateExamDto, SaveExamResultsDto } from './management.dto';
 
 /**
@@ -73,6 +74,7 @@ export class ExamsService {
   constructor(
     private readonly notifications: NotificationService,
     private readonly attendance: AttendanceService,
+    private readonly outbox: NotificationOutboxService,
   ) {}
 
   /**
@@ -569,6 +571,11 @@ export class ExamsService {
 
       return { published: count, exam };
     });
+
+    // The cron is the safety net, not the delivery path — on Hobby it cannot run
+    // more than once a day. Kick a drain now so a published result reaches parents
+    // in seconds. Claim-safe: the drain uses FOR UPDATE SKIP LOCKED.
+    this.outbox.drainSoon();
 
     // Nothing was actually published (no Results saved for this exam yet) —
     // telling parents results are out would be a lie.
