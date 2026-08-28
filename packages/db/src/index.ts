@@ -58,6 +58,24 @@ export function getPlatformPrisma(): PrismaClient {
  */
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
+
+/**
+ * Optional observer for tenant-transaction duration.
+ *
+ * This is CONNECTION-HOLD TIME: how long a request pinned a pooled connection,
+ * which is the variable that multiplies into pool exhaustion (Little's Law:
+ * concurrent connections = throughput x hold). The API registers a recorder;
+ * packages/db stays unaware of it, so nothing here depends on Nest or Redis.
+ *
+ * Never allowed to throw — an observer bug must not fail a tenant query.
+ */
+type TxObserver = (holdMs: number) => void;
+let txObserver: TxObserver | null = null;
+
+export function setTenantTxObserver(fn: TxObserver | null): void {
+  txObserver = fn;
+}
+
 export async function withTenant<T>(
   tenantId: string,
   fn: (tx: TenantTx) => Promise<T>,
@@ -66,6 +84,16 @@ export async function withTenant<T>(
   if (!UUID_RE.test(tenantId)) {
     throw new Error('withTenant: tenantId must be a UUID');
   }
+  const startedAt = Date.now();
+  const observe = (): void => {
+    if (!txObserver) return;
+    try {
+      txObserver(Date.now() - startedAt);
+    } catch {
+      /* an observer must never fail the query it is measuring */
+    }
+  };
+
   return client.$transaction(
     async (tx) => {
       // `set_config(..., TRUE)` is the LOCAL form: it lasts exactly as long as
@@ -91,6 +119,9 @@ export async function withTenant<T>(
       timeout: 10_000,
       maxWait: 3_000,
     },
+  ).then(
+    (v) => { observe(); return v; },
+    (e) => { observe(); throw e; },
   );
 }
 
