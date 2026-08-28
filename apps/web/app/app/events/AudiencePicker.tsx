@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
+
 import { Label } from '@/components/ui/label';
 
 export type AudienceKind = 'SCHOOL_ONLY' | 'CITY' | 'SELECTED';
@@ -34,7 +36,11 @@ const MAX_SELECTED = 50;
  * not discover it afterwards.
  */
 export function AudiencePicker({ kind, onKindChange, selectedIds, onSelectedChange }: Props) {
-  const api = useApi();
+  // The tenant host must travel with the request: without it the API resolves
+  // the caller from the deployment host, not the school, and the picker would
+  // list the wrong platform's schools. app/tenant-host.test.ts guards this.
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
   const [query, setQuery] = useState('');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [ownCity, setOwnCity] = useState<string | null>(null);

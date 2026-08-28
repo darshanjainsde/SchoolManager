@@ -477,6 +477,18 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
   /* A label never wraps inside its button — squeezed rows wrap AROUND it. */
   white-space: nowrap; flex: none;
 }
+
+/* Square, icon-only. Edit and Delete sat as full labelled buttons beside a
+   primary action, and on a grid card that row could not hold three: the last
+   one wrapped to its own line and the tile grew to fit it. Naming the action
+   twice — once in the row and again in a tooltip — is not what the space was
+   for. The icons keep an accessible name via aria-label; the hit area stays a
+   comfortable 34px square, so this is not a tap-target trade. */
+.sk-btn[data-icon] {
+  padding: 0; width: 34px; height: 34px; gap: 0; flex: none;
+}
+.sk-btn[data-icon][data-tone='bad'] { color: var(--sk-bad); }
+.sk-btn[data-icon][data-tone='bad']:hover:not(:disabled) { border-color: var(--sk-bad); }
 .sk-btn:hover { border-color: var(--sk-brand); }
 .sk-btn[data-variant="primary"] { background: var(--sk-brand); color: #fff; border-color: transparent; }
 @media (prefers-color-scheme: dark) { .sk-btn[data-variant="primary"] { color: #211d45; } }
@@ -533,6 +545,26 @@ html[data-theme='dark'] .skosx {
 .skosx .bg-white { background-color: var(--sk-card); }
 .skosx .bg-slate-50, .skosx .bg-slate-100 { background-color: var(--sk-paper); }
 .skosx .border-slate-200, .skosx .border-slate-100 { border-color: var(--sk-line); }
+/* border-slate-300 is the shadcn <Input> default. Left unmapped it stayed a
+   light grey hairline on a dark card — the field read as a pale outline round
+   a dark hole, which is the "the inputs look dark" report. */
+.skosx .border-slate-300 { border-color: var(--sk-line-2); }
+/* A placeholder must sit between the field's ink and its ground in BOTH
+   themes; slate-400 only does that in one. */
+.skosx .placeholder\:text-slate-400::placeholder { color: var(--sk-ink-3); }
+.skosx .ring-slate-400 { --tw-ring-color: var(--sk-brand); }
+
+/* A field with no background class inherits the page, so on a dark surface it
+   became a dark box with no edge and no fill — indistinguishable from the card
+   behind it. Any bare input/textarea/select inside the console gets the same
+   ground and ink as .sk-input, so a page that predates the theme is still
+   typable in the dark. Explicit classes on the element still win. */
+.skosx input:not([type='checkbox']):not([type='radio']):not([class*='bg-']),
+.skosx textarea:not([class*='bg-']),
+.skosx select:not([class*='bg-']) {
+  background-color: var(--sk-card);
+  color: var(--sk-ink);
+}
 .skosx .text-teal-700, .skosx .text-teal-600 { color: var(--sk-brand-2); }
 .skosx .bg-teal-50 { background-color: var(--sk-brand-tint); }
 .skosx .text-rose-600, .skosx .text-rose-500 { color: var(--sk-bad); }

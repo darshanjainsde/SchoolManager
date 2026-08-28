@@ -659,22 +659,26 @@ export default function StaffPage() {
                   )}
                   <button
                     className="sk-btn sk-press"
+                    data-icon
+                    aria-label={`Edit ${fullName(member)}`}
+                    title="Edit"
                     onClick={() => {
                       setShowAdd(false);
                       setEditId(member.id);
                     }}
                   >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit
+                    <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     className="sk-btn sk-press"
+                    data-icon
+                    data-tone="bad"
+                    aria-label={`Delete ${fullName(member)}`}
+                    title="Delete"
                     disabled={deleteMutation.isPending}
                     onClick={() => confirmDeleteStaff(member)}
-                    style={{ color: 'var(--sk-bad)' }}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
