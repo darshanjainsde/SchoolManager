@@ -24,7 +24,7 @@
     },
     {
       "path": "/internal/cron/notification-outbox",
-      "schedule": "* * * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/internal/cron/library-due-soon",

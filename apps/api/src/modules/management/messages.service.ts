@@ -15,6 +15,7 @@ import type { MessageReceivedOutboxPayload } from '../../common/notifications/no
 import { emitNotifications } from '../../common/notifications/notification-inbox';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from './timetable.service';
+import { NotificationOutboxService } from './notification-outbox.service';
 
 const FALLBACK_SCHOOL_NAME = 'Your school';
 const FALLBACK_SUBJECT_NAME = 'General';
@@ -51,6 +52,7 @@ export class MessagesService {
   constructor(
     private readonly tenant: TenantContextService,
     private readonly timetable: TimetableService,
+    private readonly outbox: NotificationOutboxService,
   ) {}
 
   // ── shared helpers ──────────────────────────────────────────────────────────
@@ -233,7 +235,7 @@ export class MessagesService {
       );
     }
 
-    return withTenant(schoolId, async (tx) => {
+    const sent = await withTenant(schoolId, async (tx) => {
       const s = await this.myStudent(tx, userId);
       if (!s.classSectionId) {
         throw new ApiError('NO_CLASS_SECTION', 'You are not in a class section yet.', 409);
@@ -269,6 +271,12 @@ export class MessagesService {
       const fresh = await MessagesService.loadThreadForList(tx, thread.id, 'TEACHER');
       return MessagesService.detail(tx, fresh!);
     });
+
+    // Kick the outbox now rather than waiting for the daily cron — on Hobby the
+    // cron cannot run more often, and a parent message that lands tomorrow is
+    // not a message. Claim-safe (FOR UPDATE SKIP LOCKED) so it cannot race the cron.
+    this.outbox.drainSoon();
+    return sent;
   }
 
   // ── teacher side (/manage/messages) ─────────────────────────────────────────

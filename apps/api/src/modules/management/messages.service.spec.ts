@@ -1,3 +1,4 @@
+import type { NotificationOutboxService } from './notification-outbox.service';
 const txMock = {
   student: { findFirst: jest.fn() },
   teacher: { findFirst: jest.fn() },
@@ -68,9 +69,11 @@ function threadRow(over: Record<string, unknown> = {}) {
 describe('MessagesService', () => {
   const tenant = { requireTenant: jest.fn() };
   const timetable = { listForClass: jest.fn() };
+  const outbox = { drainSoon: jest.fn() };
   const svc = new MessagesService(
     tenant as unknown as TenantContextService,
     timetable as unknown as TimetableService,
+    outbox as unknown as NotificationOutboxService,
   );
 
   beforeEach(() => {

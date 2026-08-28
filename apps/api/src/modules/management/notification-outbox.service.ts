@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { runInBackground } from '../../common/notifications/run-in-background';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
 import { PushChannel } from '../../common/notifications/push.channel';
@@ -191,6 +192,29 @@ export class NotificationOutboxService {
   private readonly logger = new Logger(NotificationOutboxService.name);
 
   constructor(private readonly push: PushChannel) {}
+
+  /**
+   * Drain shortly, without blocking the caller.
+   *
+   * The cron is the safety net, not the delivery path. On a Vercel Hobby plan
+   * it CANNOT be the delivery path: Hobby rejects any cron more frequent than
+   * daily at deploy time, and fires it anywhere within the scheduled hour. A
+   * notification enqueued at 09:00 would wait until the small hours.
+   *
+   * `runInBackground` wraps Vercel's `waitUntil`, so the work survives the
+   * response being sent instead of being frozen with the instance. Failures are
+   * swallowed: the row is still in the outbox and the cron will retry it, so a
+   * failed opportunistic drain costs latency, never delivery.
+   *
+   * Safe to call concurrently with the cron — the drain claims its batch with
+   * FOR UPDATE SKIP LOCKED, so two runs never take the same row.
+   */
+  drainSoon(): void {
+    runInBackground(
+      () => this.drain(),
+      (e) => this.logger.warn(`opportunistic outbox drain failed: ${(e as Error)?.message}`),
+    );
+  }
 
   async drain(): Promise<NotificationOutboxDrainResult> {
     const db = getPlatformPrisma();
