@@ -50,19 +50,19 @@ export class AttendanceService {
     const day = new Date(date);
 
     return withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
       const students = await tx.student.findMany({
-        where: { classSectionId },
+        where: { schoolId, classSectionId },
         orderBy: [{ admissionNo: 'asc' }],
         select: { id: true },
       });
 
       const marks = await tx.attendance.findMany({
-        where: { classSectionId, date: day },
+        where: { schoolId, classSectionId, date: day },
         select: { studentId: true, status: true },
       });
       const byStudent = new Map(marks.map((m) => [m.studentId, m.status]));
@@ -122,7 +122,7 @@ export class AttendanceService {
         return sections.map((c) => AttendanceService.toMyClassSection(c));
       }
 
-      const teacher = await tx.teacher.findFirst({ where: { userId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId } });
       if (!teacher) return [];
 
       // TWO DIFFERENT QUESTIONS, one method.
@@ -152,7 +152,7 @@ export class AttendanceService {
         : {};
 
       const owned = await tx.classSection.findMany({
-        where: {
+        where: { schoolId,
           OR: [
             // A class teacher takes their form class's register — but only on
             // days that class actually meets. Without the `some`, their class
@@ -170,7 +170,7 @@ export class AttendanceService {
       const ownedIds = new Set(owned.map((c) => c.id));
 
       const subs = await tx.substitution.findMany({
-        where: { date: new Date(date), substituteTeacherId: teacher.id },
+        where: { schoolId, date: new Date(date), substituteTeacherId: teacher.id },
         select: { classSectionId: true },
       });
       const coveredIds = [...new Set(subs.map((s) => s.classSectionId))].filter(
@@ -238,7 +238,7 @@ export class AttendanceService {
 
     return withTenant(schoolId, async (tx) => {
       const rows = await tx.attendance.findMany({
-        where: { classSectionId: { in: classSectionIds }, date: day },
+        where: { schoolId, classSectionId: { in: classSectionIds }, date: day },
         select: { classSectionId: true, status: true, markedById: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       });
@@ -313,12 +313,12 @@ export class AttendanceService {
     const day = new Date(dto.date);
 
     const result = await withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
-      const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
 
       // A SCHOOL_ADMIN may mark any section; a TEACHER may not. This is the
       // server-side twin of the client only showing their own classes —
@@ -352,7 +352,7 @@ export class AttendanceService {
           // or seeded APPROVED row with a null expiry can never become a
           // silent, permanent unlock either.
           const unlock = await tx.registerChangeRequest.findFirst({
-            where: {
+            where: { schoolId,
               classSectionId: dto.classSectionId,
               date: day,
               status: 'APPROVED',
@@ -372,12 +372,12 @@ export class AttendanceService {
       }
 
       // Every mark must target a student who is actually enrolled in this
-      // class section. `Student` has active RLS, so a foreign-school
-      // studentId will not appear in this query at all — closing the
-      // cross-tenant write hole (Attendance itself has no RLS and its
-      // unique key [studentId, date] is not school-scoped).
+      // class section. Student is RLS-scoped and now also filtered by
+      // schoolId, so a foreign-school studentId cannot appear here — closing
+      // the cross-tenant write hole, since Attendance's unique key
+      // [studentId, date] is not itself school-scoped.
       const roster = await tx.student.findMany({
-        where: { classSectionId: dto.classSectionId },
+        where: { schoolId, classSectionId: dto.classSectionId },
         select: { id: true },
       });
       const rosterIds = new Set(roster.map((s) => s.id));
@@ -400,7 +400,7 @@ export class AttendanceService {
       // snapshot also feeds the retake audit entry below — `markedById` is
       // selected for that purpose (unused by the newly-absent diff).
       const before = await tx.attendance.findMany({
-        where: { classSectionId: dto.classSectionId, date: day },
+        where: { schoolId, classSectionId: dto.classSectionId, date: day },
         select: { studentId: true, status: true, markedById: true },
       });
       const previousStatus = new Map(before.map((m) => [m.studentId, m.status]));
@@ -432,7 +432,7 @@ export class AttendanceService {
       const studentIds = dto.marks.map((m) => m.studentId);
       try {
         await tx.attendance.deleteMany({
-          where: { date: day, studentId: { in: studentIds } },
+          where: { schoolId, date: day, studentId: { in: studentIds } },
         });
         await tx.attendance.createMany({
           data: dto.marks.map((mark) => ({

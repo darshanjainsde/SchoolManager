@@ -188,7 +188,7 @@ export class StudentsService {
     const username = dto.username?.trim() || null;
 
     const { userId, code } = await withTenant(schoolId, async (tx) => {
-      const student = await tx.student.findFirst({ where: { id: studentId } });
+      const student = await tx.student.findFirst({ where: { schoolId, id: studentId } });
       if (!student) throw new NotFoundException('Student not found');
       if (student.userId) throw new ConflictException('Student already has a login');
 
@@ -258,7 +258,7 @@ export class StudentsService {
    */
   async resendInvite(schoolId: string, studentId: string): Promise<LoginInviteResult> {
     const { userId, email, username, code } = await withTenant(schoolId, async (tx) => {
-      const student = await tx.student.findFirst({ where: { id: studentId } });
+      const student = await tx.student.findFirst({ where: { schoolId, id: studentId } });
       if (!student) throw new NotFoundException('Student not found');
       if (!student.userId) throw new NotFoundException('Student has no login to resend an invite for');
 

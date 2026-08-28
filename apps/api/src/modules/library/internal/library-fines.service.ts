@@ -64,12 +64,12 @@ export class LibraryFinesService {
       const rules = this.settings.rules(settings);
       const [fixed, openLate, collected] = await Promise.all([
         tx.libraryFine.findMany({
-          where: { status: 'DUE' },
+          where: { schoolId, status: 'DUE' },
           orderBy: { createdAt: 'asc' },
           include: FINE_INCLUDE,
         }),
         tx.libraryIssue.findMany({
-          where: { returnedOn: null, dueOn: { lt: new Date(`${todayISO}T00:00:00.000Z`) } },
+          where: { schoolId, returnedOn: null, dueOn: { lt: new Date(`${todayISO}T00:00:00.000Z`) } },
           include: {
             copy: { select: { accessionNo: true, title: { select: { title: true } } } },
             student: {
@@ -82,7 +82,7 @@ export class LibraryFinesService {
             teacher: { select: { id: true, firstName: true, lastName: true, userId: true } },
           },
         }),
-        tx.libraryFine.aggregate({ where: { status: 'PAID' }, _sum: { amountRupees: true } }),
+        tx.libraryFine.aggregate({ where: { schoolId, status: 'PAID' }, _sum: { amountRupees: true } }),
       ]);
 
       const borrowerIds = {

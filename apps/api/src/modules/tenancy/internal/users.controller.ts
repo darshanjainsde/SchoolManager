@@ -58,7 +58,7 @@ export class UsersController {
     const ctx = this.tenantCtx.requireTenant();
     return withTenant(ctx.schoolId, (tx) =>
       tx.user.findMany({
-        where: { role: UserRole.STUDENT },
+        where: { schoolId: ctx.schoolId, role: UserRole.STUDENT },
         select: { id: true, email: true, isActive: true, createdAt: true },
         orderBy: { email: 'asc' },
       }),
@@ -72,7 +72,7 @@ export class UsersController {
     const ctx = this.tenantCtx.requireTenant();
     const row = await withTenant(ctx.schoolId, (tx) =>
       tx.user.findFirst({
-        where: { id, role: UserRole.STUDENT },
+        where: { schoolId: ctx.schoolId, id, role: UserRole.STUDENT },
         select: { id: true, email: true, isActive: true, createdAt: true },
       }),
     );
@@ -95,7 +95,7 @@ export class UsersController {
     const ctx = this.tenantCtx.requireTenant();
     const row = await withTenant(ctx.schoolId, (tx) =>
       tx.user.findFirst({
-        where: { id, role: UserRole.TEACHER },
+        where: { schoolId: ctx.schoolId, id, role: UserRole.TEACHER },
         select: { id: true, email: true, isActive: true, createdAt: true },
       }),
     );

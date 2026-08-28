@@ -72,7 +72,7 @@ describe('AssignmentsService', () => {
 
       const result = await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
 
-      expect(txMock.classSection.findFirst).toHaveBeenCalledWith({ where: { id: CLASS_SECTION } });
+      expect(txMock.classSection.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: CLASS_SECTION } });
       expect(txMock.assignment.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           schoolId: SCHOOL,

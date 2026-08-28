@@ -83,7 +83,7 @@ describe('ExamsService', () => {
 
       const result = await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
 
-      expect(txMock.classSection.findFirst).toHaveBeenCalledWith({ where: { id: CLASS_SECTION } });
+      expect(txMock.classSection.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: CLASS_SECTION } });
       expect(txMock.exam.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           schoolId: SCHOOL,
@@ -387,7 +387,7 @@ describe('ExamsService', () => {
       ]);
       expect(txMock.result.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { examId: EXAM_ID },
+          where: { schoolId: SCHOOL, examId: EXAM_ID },
           select: { studentId: true, marks: true, publishedAt: true },
         }),
       );
@@ -521,7 +521,7 @@ describe('ExamsService', () => {
 
       expect(result).toEqual({ published: 3 });
       expect(txMock.result.updateMany).toHaveBeenCalledWith({
-        where: { examId: EXAM_ID },
+        where: { schoolId: SCHOOL, examId: EXAM_ID },
         data: { publishedAt: expect.any(Date) },
       });
     });

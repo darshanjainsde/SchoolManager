@@ -253,7 +253,7 @@ export class AnnouncementsService {
       }
 
       if (dto.classSectionId) {
-        const cs = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
+        const cs = await tx.classSection.findFirst({ where: { schoolId, id: dto.classSectionId } });
         if (!cs) throw new BadRequestException('classSectionId not found');
       }
       try {

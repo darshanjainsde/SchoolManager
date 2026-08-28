@@ -56,13 +56,13 @@ export class PhotoService {
       // Resolve the caller's own person row — the only row this endpoint may touch.
       let personId: string | null = null;
       if (role === 'STUDENT') {
-        const s = await tx.student.findFirst({ where: { userId }, select: { id: true } });
+        const s = await tx.student.findFirst({ where: { schoolId, userId }, select: { id: true } });
         personId = s?.id ?? null;
       } else if (role === 'TEACHER') {
-        const t = await tx.teacher.findFirst({ where: { userId }, select: { id: true } });
+        const t = await tx.teacher.findFirst({ where: { schoolId, userId }, select: { id: true } });
         personId = t?.id ?? null;
       } else if (role === 'STAFF') {
-        const st = await tx.staff.findFirst({ where: { userId }, select: { id: true } });
+        const st = await tx.staff.findFirst({ where: { schoolId, userId }, select: { id: true } });
         personId = st?.id ?? null;
       }
       if (!personId) {

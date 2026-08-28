@@ -74,7 +74,7 @@ export class StaffService {
     const username = dto.username?.trim() || null;
 
     const { userId, email, loginName } = await withTenant(schoolId, async (tx) => {
-      const staff = await tx.staff.findFirst({ where: { id: staffId } });
+      const staff = await tx.staff.findFirst({ where: { schoolId, id: staffId } });
       if (!staff) throw new NotFoundException('Staff member not found');
       if (staff.userId) throw new ConflictException('Staff member already has a login');
 
@@ -112,7 +112,7 @@ export class StaffService {
   /** Re-sends the welcome invite for a staff member who already has a login. */
   async resendInvite(schoolId: string, staffId: string): Promise<LoginInviteResult> {
     const { userId, email, username, loginName } = await withTenant(schoolId, async (tx) => {
-      const staff = await tx.staff.findFirst({ where: { id: staffId } });
+      const staff = await tx.staff.findFirst({ where: { schoolId, id: staffId } });
       if (!staff) throw new NotFoundException('Staff member not found');
       if (!staff.userId) throw new NotFoundException('Staff member has no login to resend an invite for');
 

@@ -112,7 +112,7 @@ export class DiaryService {
       }
 
       const section = await tx.classSection.findFirst({
-        where: { id: classSectionId },
+        where: { schoolId, id: classSectionId },
         select: { name: true, grade: { select: { name: true } }, _count: { select: { students: true } } },
       });
       if (!section) {
@@ -120,7 +120,7 @@ export class DiaryService {
       }
 
       const entries = await tx.diaryEntry.findMany({
-        where: { classSectionId, date: day },
+        where: { schoolId, classSectionId, date: day },
         orderBy: { createdAt: 'asc' },
         include: {
           subject: { select: { name: true } },
@@ -201,7 +201,7 @@ export class DiaryService {
           : await requireClassAccess(tx, userId, dto.classSectionId, dto.date, 'write in the diary of');
 
       const section = await tx.classSection.findFirst({
-        where: { id: dto.classSectionId },
+        where: { schoolId, id: dto.classSectionId },
         select: { name: true, grade: { select: { name: true } }, _count: { select: { students: true } } },
       });
       if (!section) {
@@ -220,7 +220,7 @@ export class DiaryService {
       let named: { id: string; firstName: string; lastName: string }[] = [];
       if (studentIds.length > 0) {
         named = await tx.student.findMany({
-          where: { id: { in: studentIds }, classSectionId: dto.classSectionId },
+          where: { schoolId, id: { in: studentIds }, classSectionId: dto.classSectionId },
           select: { id: true, firstName: true, lastName: true },
         });
         if (named.length !== studentIds.length) {
@@ -389,7 +389,7 @@ export class DiaryService {
     if (!body) throw new ApiError('VALIDATION', 'A diary entry cannot be empty.', 400, 'body');
 
     return withTenant(schoolId, async (tx) => {
-      const existing = await this.requireOwnEntry(tx, userId, role, id, 'edited');
+      const existing = await this.requireOwnEntry(tx, schoolId, userId, role, id, 'edited');
       const date = existing.date.toISOString().slice(0, 10);
       const entry = await tx.diaryEntry.update({
         where: { id },
@@ -433,7 +433,7 @@ export class DiaryService {
   /** Strikes today's line out entirely. Author-only, today-only. */
   async remove(schoolId: string, userId: string, role: string, id: string): Promise<void> {
     await withTenant(schoolId, async (tx) => {
-      await this.requireOwnEntry(tx, userId, role, id, 'deleted');
+      await this.requireOwnEntry(tx, schoolId, userId, role, id, 'deleted');
       await tx.diaryEntry.delete({ where: { id } });
     });
   }
@@ -443,12 +443,19 @@ export class DiaryService {
    * ink, and the caller wrote it. A SCHOOL_ADMIN is not given a bypass here —
    * see `assertToday`; if a remark truly must go, the author strikes it out.
    */
-  private async requireOwnEntry(tx: Tx, userId: string, role: string, id: string, action: string) {
-    const existing = await tx.diaryEntry.findFirst({ where: { id } });
+  private async requireOwnEntry(
+    tx: Tx,
+    schoolId: string,
+    userId: string,
+    role: string,
+    id: string,
+    action: string,
+  ) {
+    const existing = await tx.diaryEntry.findFirst({ where: { schoolId, id } });
     if (!existing) throw new ApiError('NOT_FOUND', 'That diary entry no longer exists.', 404, 'id');
     this.assertToday(existing.date, action);
 
-    const teacher = await tx.teacher.findFirst({ where: { userId }, select: { id: true } });
+    const teacher = await tx.teacher.findFirst({ where: { schoolId, userId }, select: { id: true } });
     if (!teacher || teacher.id !== existing.authorTeacherId) {
       throw new ApiError(
         'CLASS_NOT_OWNED',
@@ -480,7 +487,7 @@ export class DiaryService {
 
     return withTenant(schoolId, async (tx) => {
       const student = await tx.student.findFirst({
-        where: { userId },
+        where: { schoolId, userId },
         select: { id: true, classSectionId: true },
       });
       if (!student?.classSectionId) return { entries: [], unsignedCount: 0 };
@@ -489,7 +496,7 @@ export class DiaryService {
       since.setDate(since.getDate() - STUDENT_WINDOW_DAYS);
 
       const entries = await tx.diaryEntry.findMany({
-        where: {
+        where: { schoolId,
           classSectionId: student.classSectionId,
           ...(date ? { date: new Date(date) } : { date: { gte: since } }),
           // A SELECTED entry is only this child's business if they are named
@@ -553,7 +560,7 @@ export class DiaryService {
 
     return withTenant(schoolId, async (tx) => {
       const student = await tx.student.findFirst({
-        where: { userId },
+        where: { schoolId, userId },
         select: { id: true, classSectionId: true },
       });
       if (!student?.classSectionId) {
@@ -563,7 +570,7 @@ export class DiaryService {
       // Resolve the entry through THIS child's own visibility, never by id
       // alone — otherwise one student could sign another class's remark.
       const entry = await tx.diaryEntry.findFirst({
-        where: {
+        where: { schoolId,
           id,
           classSectionId: student.classSectionId,
           OR: [{ audience: 'ALL' }, { recipients: { some: { studentId: student.id } } }],
@@ -575,7 +582,7 @@ export class DiaryService {
       }
 
       const existing = await tx.diaryAck.findFirst({
-        where: { entryId: id, studentId: student.id },
+        where: { schoolId, entryId: id, studentId: student.id },
         select: { id: true, signedAt: true, signedName: true },
       });
       const signedAt = existing?.signedAt ?? new Date();
@@ -596,7 +603,7 @@ export class DiaryService {
       const since = new Date();
       since.setDate(since.getDate() - STUDENT_WINDOW_DAYS);
       const unsigned = await tx.diaryEntry.findMany({
-        where: {
+        where: { schoolId,
           classSectionId: student.classSectionId,
           date: { gte: since },
           kind: 'REMARK',

@@ -84,7 +84,7 @@ export class JobsService {
         },
       });
       if (dto.questions) {
-        await tx.jobQuestion.deleteMany({ where: { jobPostId: id } });
+        await tx.jobQuestion.deleteMany({ where: { schoolId, jobPostId: id } });
         await this.writeQuestions(tx, id, schoolId, dto.questions);
       }
       return post;

@@ -41,7 +41,7 @@ export class TeacherDayService {
         select: { id: true, label: true, startTime: true, endTime: true, kind: true },
       });
 
-      const teacher = await tx.teacher.findFirst({ where: { userId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId } });
       if (!teacher) {
         return periods.map((p): TeacherDayEntry => ({
           periodId: p.id,
@@ -55,7 +55,7 @@ export class TeacherDayService {
       }
 
       const subs = await tx.substitution.findMany({
-        where: { date: new Date(date), substituteTeacherId: teacher.id },
+        where: { schoolId, date: new Date(date), substituteTeacherId: teacher.id },
         select: { periodId: true, classSectionId: true, originalTeacherId: true },
       });
       const subByPeriod = new Map(subs.map((s) => [s.periodId, s]));
@@ -72,7 +72,7 @@ export class TeacherDayService {
       // query out of sync with listForClass and listForTeacher.
       const asOf = resolveAsOfDate(date, new Date());
       const slots = await tx.timetableSlot.findMany({
-        where: {
+        where: { schoolId,
           dayOfWeek,
           effectiveFrom: { lte: asOf },
           AND: [

@@ -86,7 +86,7 @@ export class MessagesService {
     return withTenant(schoolId, async (tx) => {
       const me = await this.myStudent(tx, userId);
       const count = await tx.message.count({
-        where: { senderRole: 'TEACHER', readAt: null, thread: { studentId: me.id } },
+        where: { schoolId, senderRole: 'TEACHER', readAt: null, thread: { studentId: me.id } },
       });
       return { count };
     });
@@ -98,7 +98,7 @@ export class MessagesService {
     return withTenant(schoolId, async (tx) => {
       const me = await this.myTeacher(tx, userId);
       const count = await tx.message.count({
-        where: { senderRole: 'STUDENT', readAt: null, thread: { teacherId: me.id } },
+        where: { schoolId, senderRole: 'STUDENT', readAt: null, thread: { teacherId: me.id } },
       });
       return { count };
     });
@@ -187,7 +187,7 @@ export class MessagesService {
     return withTenant(schoolId, async (tx) => {
       const s = await this.myStudent(tx, userId);
       const rows = await tx.messageThread.findMany({
-        where: { studentId: s.id },
+        where: { schoolId, studentId: s.id },
         orderBy: { lastMessageAt: 'desc' },
         include: MessagesService.listInclude('TEACHER'),
       });
@@ -206,7 +206,7 @@ export class MessagesService {
         throw new ApiError('NOT_FOUND', 'thread not found', 404, 'threadId');
       }
       await tx.message.updateMany({
-        where: { threadId, senderRole: 'TEACHER', readAt: null },
+        where: { schoolId, threadId, senderRole: 'TEACHER', readAt: null },
         data: { readAt: new Date() },
       });
       return MessagesService.detail(tx, thread);
@@ -278,7 +278,7 @@ export class MessagesService {
     return withTenant(schoolId, async (tx) => {
       const t = await this.myTeacher(tx, userId);
       const rows = await tx.messageThread.findMany({
-        where: { teacherId: t.id },
+        where: { schoolId, teacherId: t.id },
         orderBy: { lastMessageAt: 'desc' },
         include: MessagesService.listInclude('STUDENT'),
       });
@@ -295,7 +295,7 @@ export class MessagesService {
         throw new ApiError('NOT_FOUND', 'thread not found', 404, 'threadId');
       }
       await tx.message.updateMany({
-        where: { threadId, senderRole: 'STUDENT', readAt: null },
+        where: { schoolId, threadId, senderRole: 'STUDENT', readAt: null },
         data: { readAt: new Date() },
       });
       return MessagesService.detail(tx, thread);
@@ -312,7 +312,7 @@ export class MessagesService {
       const t = await this.myTeacher(tx, userId);
       // Ownership from the STORED thread, never caller input: a teacher may
       // only post to a thread whose teacherId is their own (403 otherwise).
-      const thread = await tx.messageThread.findFirst({ where: { id: threadId } });
+      const thread = await tx.messageThread.findFirst({ where: { schoolId, id: threadId } });
       if (!thread || thread.teacherId !== t.id) {
         throw new ApiError('NOT_YOUR_THREAD', 'Thread not found', 404, 'threadId');
       }

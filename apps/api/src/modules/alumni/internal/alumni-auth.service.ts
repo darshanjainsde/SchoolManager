@@ -126,7 +126,7 @@ export class AlumniAuthService {
       if (!row || row.usedAt || row.expiresAt.getTime() < Date.now()) throw refuse();
 
       const claimed = await tx.alumniAccessToken.updateMany({
-        where: { id: row.id, usedAt: null },
+        where: { schoolId, id: row.id, usedAt: null },
         data: { usedAt: new Date() },
       });
       if (claimed.count !== 1) throw refuse();

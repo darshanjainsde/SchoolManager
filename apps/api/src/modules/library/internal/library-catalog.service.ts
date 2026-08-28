@@ -44,7 +44,7 @@ export class LibraryCatalogService {
     if (query.length < 2) return Promise.resolve([]);
     return withTenant(schoolId, async (tx) => {
       const titles = await tx.libraryBookTitle.findMany({
-        where: {
+        where: { schoolId,
           OR: [
             { title: { contains: query, mode: 'insensitive' } },
             { author: { contains: query, mode: 'insensitive' } },

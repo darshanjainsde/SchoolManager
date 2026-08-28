@@ -231,7 +231,10 @@ describe('MessagesService', () => {
       const [row] = await svc.studentThreads(STUDENT_USER);
       expect(row).toMatchObject({ teacherName: 'Asha Rao', studentName: 'Ravi Kumar', subjectName: 'Mathematics', lastMessagePreview: 'hi sir', unreadCount: 2 });
       expect(txMock.messageThread.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { studentId: STUDENT }, orderBy: { lastMessageAt: 'desc' } }),
+        expect.objectContaining({
+          where: { schoolId: SCHOOL, studentId: STUDENT },
+          orderBy: { lastMessageAt: 'desc' },
+        }),
       );
     });
   });

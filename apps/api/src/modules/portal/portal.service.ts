@@ -192,7 +192,7 @@ export class PortalService {
   private async myStudent(schoolId: string, userId: string) {
     return withTenant(schoolId, (tx) =>
       tx.student.findFirst({
-        where: { userId },
+        where: { schoolId, userId },
         include: { classSection: { select: { id: true, name: true } } },
       }),
     );
@@ -399,7 +399,7 @@ export class PortalService {
 
     return withTenant(schoolId, async (tx) => {
       const mine = await tx.result.findMany({
-        where: { studentId: s.id, publishedAt: { not: null } },
+        where: { schoolId, studentId: s.id, publishedAt: { not: null } },
         select: { examId: true, marks: true },
       });
       if (mine.length === 0) return [];
@@ -415,7 +415,7 @@ export class PortalService {
 
       const averages = await tx.result.groupBy({
         by: ['examId'],
-        where: { examId: { in: examIds }, publishedAt: { not: null } },
+        where: { schoolId, examId: { in: examIds }, publishedAt: { not: null } },
         _avg: { marks: true },
       });
       const averageByExam = new Map(

@@ -54,7 +54,7 @@ export class LibraryHallService {
       // Every library period scheduled today (for the "hall in use N of M" meter),
       // and the one happening right now.
       const librarySlots = await tx.timetableSlot.findMany({
-        where: {
+        where: { schoolId,
           dayOfWeek,
           subject: { name: { contains: 'librar', mode: 'insensitive' } },
           effectiveFrom: { lte: asOf },
@@ -92,12 +92,12 @@ export class LibraryHallService {
 
         const [students, marks, visit] = await Promise.all([
           tx.student.findMany({
-            where: { classSectionId: sectionId, isActive: true },
+            where: { schoolId, classSectionId: sectionId, isActive: true },
             orderBy: [{ rollNo: 'asc' }, { firstName: 'asc' }],
             select: { id: true, firstName: true, lastName: true, rollNo: true },
           }),
           tx.attendance.findMany({
-            where: { classSectionId: sectionId, date },
+            where: { schoolId, classSectionId: sectionId, date },
             select: { studentId: true, status: true, markedById: true, createdAt: true },
           }),
           tx.libraryHallVisit.findUnique({
@@ -183,7 +183,7 @@ export class LibraryHallService {
       const rosterIds = new Set(
         (
           await tx.student.findMany({
-            where: { classSectionId: dto.classSectionId, isActive: true },
+            where: { schoolId, classSectionId: dto.classSectionId, isActive: true },
             select: { id: true },
           })
         ).map((s) => s.id),
@@ -205,7 +205,7 @@ export class LibraryHallService {
         },
         update: { source: dto.source, savedById: librarianUserId, periodId: dto.periodId ?? null },
       });
-      await tx.libraryHallMark.deleteMany({ where: { visitId: visit.id } });
+      await tx.libraryHallMark.deleteMany({ where: { schoolId, visitId: visit.id } });
       await tx.libraryHallMark.createMany({
         data: dto.marks.map((m) => ({
           schoolId,

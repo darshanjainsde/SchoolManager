@@ -50,7 +50,7 @@ export class LeaveService {
     }
 
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
       if (!teacher) {
         throw new ApiError('NOT_A_TEACHER', 'Only teachers can apply for leave', 403);
       }
@@ -80,7 +80,7 @@ export class LeaveService {
   /** The caller's own leave applications, most recent first. */
   async mine(schoolId: string, callerUserId: string): Promise<LeaveApplication[]> {
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
       if (!teacher) return [];
 
       const rows = await tx.leaveApplication.findMany({
@@ -95,7 +95,7 @@ export class LeaveService {
    *  of the teacher "Requests" badge (see `RequestsController`). */
   async pendingCount(schoolId: string, callerUserId: string): Promise<number> {
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
       if (!teacher) return 0;
       return tx.leaveApplication.count({
         where: { schoolId, teacherId: teacher.id, status: 'PENDING' },
@@ -197,7 +197,7 @@ export class LeaveService {
 
         for (const slot of slots) {
           const existing = await tx.substitution.findFirst({
-            where: { classSectionId: slot.classSectionId, periodId: slot.periodId, date },
+            where: { schoolId, classSectionId: slot.classSectionId, periodId: slot.periodId, date },
           });
           if (existing) continue;
 
@@ -282,7 +282,7 @@ export class LeaveService {
       if (!app) throw new NotFoundException('Leave application not found');
 
       if (callerRole !== 'SCHOOL_ADMIN') {
-        const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
+        const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
         if (!teacher || teacher.id !== app.teacherId) {
           throw new ApiError('LEAVE_CANCEL_FORBIDDEN', 'You can only cancel your own leave', 403);
         }

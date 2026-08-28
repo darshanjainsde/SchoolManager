@@ -213,11 +213,11 @@ export class ClassNotesService {
    */
   async noteClasses(schoolId: string, userId: string): Promise<NoteClass[]> {
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { userId }, select: { id: true } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId }, select: { id: true } });
       if (!teacher) return [];
       const asOf = resolveAsOfDate(undefined, new Date());
       const slots = await tx.timetableSlot.findMany({
-        where: {
+        where: { schoolId,
           teacherId: teacher.id,
           effectiveFrom: { lte: asOf },
           OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
@@ -264,12 +264,12 @@ export class ClassNotesService {
       const [noteCounts, todoCounts] = await Promise.all([
         tx.classNote.groupBy({
           by: ['classSectionId', 'subjectId'],
-          where: { classSectionId: { in: sectionIds }, subjectId: { in: subjectIds } },
+          where: { schoolId, classSectionId: { in: sectionIds }, subjectId: { in: subjectIds } },
           _count: { _all: true },
         }),
         tx.classTodo.groupBy({
           by: ['classSectionId', 'subjectId'],
-          where: { classSectionId: { in: sectionIds }, subjectId: { in: subjectIds }, done: false },
+          where: { schoolId, classSectionId: { in: sectionIds }, subjectId: { in: subjectIds }, done: false },
           _count: { _all: true },
         }),
       ]);
