@@ -74,6 +74,17 @@ export interface FeeCategory {
   order: number;
 }
 
+export type LateFeeMode = 'NONE' | 'FLAT' | 'PER_DAY';
+
+export interface FeeSettings {
+  lateFeeMode: LateFeeMode;
+  /** Paise. The whole fee for FLAT, the daily rate for PER_DAY. */
+  lateFeeAmountMinor: number;
+  lateFeeGraceDays: number;
+  /** 0 means uncapped. */
+  lateFeeCapMinor: number;
+}
+
 export interface FeeTerm {
   id: string;
   name: string;
@@ -141,7 +152,13 @@ export interface PaymentRow {
   receiptNumber: string | null;
   proofUrl: string | null;
   student: { id: string; name: string; admissionNo: string; className: string | null };
-  invoice: { id: string; number: string; totalMinor: number; dueDate: string; termName: string } | null;
+  invoice: {
+    id: string; number: string; totalMinor: number; dueDate: string; termName: string;
+    /** Late fee accrued as of the day the parent says they paid. */
+    lateFeeMinor: number;
+    /** Bill total plus that late fee — what the parent was actually quoted. */
+    expectedMinor: number;
+  } | null;
   /** Pre-computed by the API so the clerk never does arithmetic. */
   amountMatchesBill: boolean | null;
 }
@@ -182,9 +199,16 @@ export interface StudentFees {
   balanceMinor: number;
   billedMinor: number;
   paidMinor: number;
+  /** One line of plain English, or null when the school charges no late fee. */
+  lateFeeRule: string | null;
   invoices: {
     id: string; number: string; termName: string; dueDate: string;
-    totalMinor: number; paidMinor: number; dueMinor: number;
+    totalMinor: number; paidMinor: number;
+    /** Owed on the bill itself, before any late fee. */
+    principalDueMinor: number;
+    lateFeeMinor: number;
+    /** What the parent has to send today — principal plus late fee. */
+    dueMinor: number;
     isPaid: boolean; isOverdue: boolean;
     lines: PreviewLine[];
   }[];

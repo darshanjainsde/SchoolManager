@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { withTenant, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { StorageService } from '../../common/storage/storage.service';
+import { computeLateFee, describeLateFeeRule, ruleFromSettings } from './late-fee';
 
 /**
  * Read paths for the office screens and the parent portal.
@@ -15,9 +16,22 @@ import { StorageService } from '../../common/storage/storage.service';
 export class FeeQueryService {
   constructor(private readonly storage: StorageService) {}
 
+  /**
+   * The school's late-fee rule, defaulted rather than created. A read path
+   * must not write — `studentFees` is hit by every parent opening the app, and
+   * a row-creating read turns that into a write storm on first load.
+   */
+  private async lateFeeRule(tx: TenantTx, schoolId: string) {
+    const row = await tx.feeSettings.findUnique({ where: { schoolId } });
+    return ruleFromSettings(
+      row ?? { lateFeeMode: 'NONE', lateFeeAmountMinor: 0, lateFeeGraceDays: 0, lateFeeCapMinor: 0 },
+    );
+  }
+
   /** The verify desk. Payments awaiting a decision, newest claim first. */
   async paymentsToVerify(schoolId: string, status: 'SUBMITTED' | 'VERIFIED' | 'REJECTED' | 'REVERSED' = 'SUBMITTED') {
     return withTenant(schoolId, async (tx) => {
+      const rule = await this.lateFeeRule(tx, schoolId);
       const payments = await tx.feePayment.findMany({
         where: { schoolId, status },
         include: {
@@ -27,7 +41,14 @@ export class FeeQueryService {
               classSection: { select: { name: true, grade: { select: { name: true } } } },
             },
           },
-          invoice: { select: { id: true, number: true, totalMinor: true, dueDate: true, term: { select: { name: true } } } },
+          invoice: {
+            select: {
+              id: true, number: true, totalMinor: true, dueDate: true,
+              term: { select: { name: true } },
+              lines: { select: { isCollectible: true } },
+              allocations: { select: { amountMinor: true } },
+            },
+          },
           receipt: { select: { number: true } },
         },
         orderBy: { submittedAt: 'desc' },
@@ -37,7 +58,25 @@ export class FeeQueryService {
       // Presigning is per row and unavoidable (each key is different), but it
       // is the ONLY per-row work — everything else came back in one query.
       return Promise.all(
-        payments.map(async (p) => ({
+        payments.map(async (p) => {
+          // What the parent was actually quoted: the bill, less anything already
+          // paid against it, plus the late fee as of the day they say they paid.
+          // Comparing against the bill total alone would mark EVERY late payment
+          // as an overpayment, and the clerk would learn to ignore the flag.
+          const alreadyPaid = p.invoice?.allocations.reduce((a, x) => a + x.amountMinor, 0) ?? 0;
+          const principal = p.invoice ? p.invoice.totalMinor - alreadyPaid : 0;
+          const lateFeeMinor = p.invoice
+            ? computeLateFee({
+                rule,
+                dueDate: p.invoice.dueDate,
+                asOf: p.paidOn,
+                outstandingMinor: principal,
+                isCollectible: p.invoice.lines.some((l) => l.isCollectible),
+              })
+            : 0;
+          const expectedMinor = principal + lateFeeMinor;
+
+          return {
           id: p.id,
           status: p.status,
           method: p.method,
@@ -65,14 +104,17 @@ export class FeeQueryService {
                 totalMinor: p.invoice.totalMinor,
                 dueDate: p.invoice.dueDate,
                 termName: p.invoice.term.name,
+                lateFeeMinor,
+                expectedMinor,
               }
             : null,
           /**
            * Pre-computed so the clerk is never doing arithmetic. This is what
            * turns "open the screenshot and squint" into a glance.
            */
-          amountMatchesBill: p.invoice ? p.invoice.totalMinor === p.amountMinor : null,
-        })),
+          amountMatchesBill: p.invoice ? expectedMinor === p.amountMinor : null,
+          };
+        }),
       );
     });
   }
@@ -149,7 +191,8 @@ export class FeeQueryService {
       });
       if (!student) throw new ApiError('NOT_FOUND', 'Student not found', 404);
 
-      const [invoices, payments, ledger] = await Promise.all([
+      const [rule, invoices, payments, ledger] = await Promise.all([
+        this.lateFeeRule(tx, schoolId),
         tx.feeInvoice.findMany({
           where: { schoolId, studentId, cancelledAt: null },
           include: {
@@ -173,6 +216,7 @@ export class FeeQueryService {
 
       const billed = ledger.filter((l) => l.kind === 'DEBIT').reduce((a, l) => a + l.amountMinor, 0);
       const paid = ledger.filter((l) => l.kind === 'CREDIT').reduce((a, l) => a + l.amountMinor, 0);
+      const now = new Date();
 
       return {
         student: {
@@ -187,8 +231,20 @@ export class FeeQueryService {
         balanceMinor: billed - paid,
         billedMinor: billed,
         paidMinor: paid,
+        lateFeeRule: describeLateFeeRule(rule),
         invoices: invoices.map((inv) => {
           const allocated = inv.allocations.reduce((a, x) => a + x.amountMinor, 0);
+          const outstanding = inv.totalMinor - allocated;
+          // Charged only on the collectible part: an RTE line is reimbursed by
+          // the state, so its lateness is not the parent's.
+          const collectible = inv.lines.some((l) => l.isCollectible);
+          const lateFeeMinor = computeLateFee({
+            rule,
+            dueDate: inv.dueDate,
+            asOf: now,
+            outstandingMinor: outstanding,
+            isCollectible: collectible,
+          });
           return {
             id: inv.id,
             number: inv.number,
@@ -196,9 +252,13 @@ export class FeeQueryService {
             dueDate: inv.dueDate,
             totalMinor: inv.totalMinor,
             paidMinor: allocated,
-            dueMinor: inv.totalMinor - allocated,
+            /** What is owed on the bill itself, before any late fee. */
+            principalDueMinor: outstanding,
+            lateFeeMinor,
+            /** What the parent actually has to send today. */
+            dueMinor: outstanding + lateFeeMinor,
             isPaid: allocated >= inv.totalMinor,
-            isOverdue: allocated < inv.totalMinor && inv.dueDate < new Date(),
+            isOverdue: outstanding > 0 && inv.dueDate < now,
             lines: inv.lines.map((l) => ({
               categoryName: l.categoryName,
               categoryDescription: l.categoryDescription,
@@ -242,6 +302,8 @@ export class FeeQueryService {
     opts: { termId?: string; gradeId?: string; minDueMinor?: number; overdueOnly?: boolean; take?: number; cursor?: string },
   ) {
     return withTenant(schoolId, async (tx) => {
+      const rule = await this.lateFeeRule(tx, schoolId);
+      const now = new Date();
       const invoices = await tx.feeInvoice.findMany({
         where: {
           schoolId,
@@ -251,6 +313,7 @@ export class FeeQueryService {
         },
         include: {
           allocations: { select: { amountMinor: true } },
+          lines: { select: { isCollectible: true } },
           term: { select: { name: true } },
           student: {
             select: {
@@ -265,18 +328,28 @@ export class FeeQueryService {
       const rows = invoices
         .map((inv) => {
           const paid = inv.allocations.reduce((a, x) => a + x.amountMinor, 0);
-          const due = inv.totalMinor - paid;
+          const principal = inv.totalMinor - paid;
+          const lateFeeMinor = computeLateFee({
+            rule,
+            dueDate: inv.dueDate,
+            asOf: now,
+            outstandingMinor: principal,
+            isCollectible: inv.lines.some((l) => l.isCollectible),
+          });
           const days = Math.max(
             0,
-            Math.floor((Date.now() - inv.dueDate.getTime()) / 86_400_000),
+            Math.floor((now.getTime() - inv.dueDate.getTime()) / 86_400_000),
           );
           return {
             invoiceId: inv.id,
             number: inv.number,
             termName: inv.term.name,
             dueDate: inv.dueDate,
-            dueMinor: due,
-            daysOverdue: due > 0 ? days : 0,
+            principalDueMinor: principal,
+            lateFeeMinor,
+            // What chasing this family is actually about, late fee included.
+            dueMinor: principal + lateFeeMinor,
+            daysOverdue: principal > 0 ? days : 0,
             student: {
               id: inv.student.id,
               name: `${inv.student.firstName} ${inv.student.lastName}`.trim(),
@@ -289,7 +362,7 @@ export class FeeQueryService {
             },
           };
         })
-        .filter((r) => r.dueMinor > 0)
+        .filter((r) => r.principalDueMinor > 0)
         .filter((r) => (opts.gradeId ? r.student.gradeId === opts.gradeId : true))
         .filter((r) => (opts.minDueMinor ? r.dueMinor >= opts.minDueMinor : true));
 

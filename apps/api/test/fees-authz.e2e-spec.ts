@@ -27,6 +27,8 @@ const OFFICE_ROUTES: [method: 'get' | 'post' | 'put' | 'delete', path: string][]
   ['delete', '/manage/fees/categories/00000000-0000-0000-0000-000000000001'],
   ['get', '/manage/fees/terms'],
   ['put', '/manage/fees/terms'],
+  ['get', '/manage/fees/settings'],
+  ['put', '/manage/fees/settings'],
   ['get', '/manage/fees/grid'],
   ['put', '/manage/fees/grid'],
   ['get', '/manage/fees/concessions'],

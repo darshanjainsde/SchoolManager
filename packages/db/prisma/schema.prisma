@@ -328,6 +328,7 @@ model School {
   bankDetail             SchoolBankDetail?
   feeAudits              FeeAudit[]
   feeCounters            FeeCounter[]
+  feeSettings            FeeSettings?
 }
 
 model Domain {
@@ -3399,4 +3400,43 @@ model FeeCounter {
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@id([schoolId, series])
+}
+
+/// How a school charges for a late payment. NONE is a first-class choice, not
+/// an absence — a school that does not charge says so, rather than leaving an
+/// amount at zero and hoping the code reads it the same way.
+enum LateFeeMode {
+  NONE
+  /// Charged once, however late.
+  FLAT
+  /// Charged for each day past the due date (and past any grace days).
+  PER_DAY
+}
+
+/// One row per school, created on first read with these defaults — the same
+/// shape `LibrarySettings` uses, and for the same reason: the school should
+/// never meet an empty settings screen.
+///
+/// The late fee is deliberately NOT stored per bill. It is computed from this
+/// rule, the bill's due date and the day being asked about (see
+/// `late-fee.ts`), so the parent's screen, the office's desk and the ledger
+/// cannot disagree, and so no nightly job can charge the wrong amount by
+/// running late — or not running.
+model FeeSettings {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @unique @db.Uuid
+
+  lateFeeMode LateFeeMode @default(NONE)
+  /// FLAT: the whole fee. PER_DAY: the daily rate. Paise.
+  lateFeeAmountMinor Int @default(0)
+  /// Days after the due date before anything is charged.
+  lateFeeGraceDays Int @default(0)
+  /// Ceiling in paise. 0 means uncapped — mostly matters for PER_DAY, where an
+  /// uncapped daily charge on a forgotten bill becomes indefensible by March.
+  lateFeeCapMinor Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }

@@ -4,6 +4,7 @@ import { Prisma, withTenant, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002 } from '../../common/errors/prisma-errors';
 import { StorageService } from '../../common/storage/storage.service';
+import { computeLateFee, ruleFromSettings } from './late-fee';
 import { PaymentProviderRegistry } from './providers/payment-provider.registry';
 import type { RejectPaymentDto, SubmitPaymentDto } from './fees.dto';
 
@@ -134,6 +135,14 @@ export class FeePaymentService {
         data: { status: 'VERIFIED', verifiedBy: actorId, verifiedAt: new Date() },
       });
 
+      // Charge any late fee BEFORE the payment credit, so the balance nets out
+      // the way the parent was shown it. Accrual is computed as of the day the
+      // parent says they paid — not today — so a bill that sat three weeks on
+      // the verify desk does not cost them three more weeks of late fee.
+      if (payment.invoice) {
+        await this.chargeLateFee(tx, schoolId, payment.studentId, payment.invoice, payment.paidOn);
+      }
+
       await tx.feeLedgerEntry.create({
         data: {
           schoolId,
@@ -252,6 +261,69 @@ export class FeePaymentService {
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
+
+  /**
+   * Post the late fee this bill has accrued, if any is still unposted.
+   *
+   * Idempotent by construction: it reads what has already been charged against
+   * this invoice and posts only the difference. Verifying a second payment on
+   * the same bill therefore adds nothing, and a part payment followed weeks
+   * later by the balance charges the extra days once, not twice.
+   *
+   * A DEBIT rather than a new invoice line, because an issued invoice is
+   * immutable — the parent has seen it. The ledger is where anything that
+   * happens *after* issue belongs.
+   */
+  private async chargeLateFee(
+    tx: TenantTx,
+    schoolId: string,
+    studentId: string,
+    invoice: { id: string; dueDate: Date; totalMinor: number; lines: { isCollectible: boolean }[] },
+    asOf: Date,
+  ): Promise<number> {
+    const settings = await tx.feeSettings.findUnique({ where: { schoolId } });
+    const rule = ruleFromSettings(
+      settings ?? { lateFeeMode: 'NONE', lateFeeAmountMinor: 0, lateFeeGraceDays: 0, lateFeeCapMinor: 0 },
+    );
+    if (rule.mode === 'NONE') return 0;
+
+    const [allocated, alreadyCharged] = await Promise.all([
+      tx.feeAllocation.aggregate({
+        where: { schoolId, invoiceId: invoice.id },
+        _sum: { amountMinor: true },
+      }),
+      tx.feeLedgerEntry.aggregate({
+        where: { schoolId, refType: 'LATE_FEE', refId: invoice.id },
+        _sum: { amountMinor: true },
+      }),
+    ]);
+
+    const outstanding = invoice.totalMinor - (allocated._sum.amountMinor ?? 0);
+    const accrued = computeLateFee({
+      rule,
+      dueDate: invoice.dueDate,
+      asOf,
+      outstandingMinor: outstanding,
+      isCollectible: invoice.lines.some((l) => l.isCollectible),
+    });
+
+    const delta = accrued - (alreadyCharged._sum.amountMinor ?? 0);
+    if (delta <= 0) return 0;
+
+    await tx.feeLedgerEntry.create({
+      data: {
+        schoolId,
+        studentId,
+        kind: 'DEBIT',
+        amountMinor: delta,
+        refType: 'LATE_FEE',
+        refId: invoice.id,
+        narration: `Late fee — paid after ${invoice.dueDate.toISOString().slice(0, 10)}`,
+        occurredAt: asOf,
+      },
+    });
+    return delta;
+  }
 
   /**
    * Spread a payment across the bill's lines.
