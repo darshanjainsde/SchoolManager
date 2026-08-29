@@ -339,17 +339,17 @@ function PayByTransfer({
           ))}
         </div>
 
-        <div>
+        <div className="flex flex-col gap-1.5">
           <label className="sk-lab" htmlFor="pay-amount">Amount you paid</label>
           <input id="pay-amount" className="sk-input" inputMode="decimal" value={amount}
                  onChange={(e) => setAmount(e.target.value)} />
         </div>
-        <div>
+        <div className="flex flex-col gap-1.5">
           <label className="sk-lab" htmlFor="pay-date">Date you paid</label>
           <input id="pay-date" type="date" className="sk-input" value={paidOn}
                  onChange={(e) => setPaidOn(e.target.value)} />
         </div>
-        <div>
+        <div className="flex flex-col gap-1.5">
           <label className="sk-lab" htmlFor="pay-ref">
             {method === 'CASH' ? 'Receipt number (if you have one)' : 'UPI reference / UTR'}
           </label>

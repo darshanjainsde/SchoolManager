@@ -99,14 +99,14 @@ export default function PaymentSetupPage() {
                 ['branch', 'Branch (optional)', 'Sikar Road, Jaipur'],
                 ['upiId', 'UPI ID (optional)', 'yourschool@bank'],
               ] as const).map(([k, label, ph]) => (
-                <div key={k}>
+                <div key={k} className="flex flex-col gap-1.5">
                   <label className="sk-lab" htmlFor={`bank-${k}`}>{label}</label>
                   <input id={`bank-${k}`} className="sk-input" placeholder={ph}
                          value={bank[k]} onChange={(e) => setBank({ ...bank, [k]: e.target.value })} />
                 </div>
               ))}
 
-              <div>
+              <div className="flex flex-col gap-1.5">
                 <label className="sk-lab" htmlFor="bank-instructions">Note to parents (optional)</label>
                 <input id="bank-instructions" className="sk-input"
                        placeholder="Write your child's admission number in the payment remark."
