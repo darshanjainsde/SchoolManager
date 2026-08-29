@@ -1280,6 +1280,8 @@ model AssignmentSeen {
 
   @@unique([assignmentId, studentId], name: "one_seen_per_assignment_student")
   @@index([schoolId, studentId])
+  /// Serves the read-receipt count per assignment, scoped to one school.
+  @@index([schoolId, assignmentId])
 }
 
 // Messaging (Phase 4 Task 5 / item T17). A student asks one of the teachers who
@@ -1323,6 +1325,10 @@ model Message {
   thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
+  /// Serves the unread-per-thread aggregate behind every inbox. Without it
+  /// that count seq-scanned every message on the platform (2,432ms -> 1.77ms
+  /// on the 200-school bench, 2026-08-29).
+  @@index([schoolId, senderRole, readAt])
 }
 
 /// In-app notification inbox — the per-user, per-event rows behind the bell in

@@ -12,6 +12,7 @@ import { requireClassAccess } from './internal/class-access';
 import { istTodayISO, resolveAsOfDate } from './internal/timetable-date';
 import type { SaveAttendanceDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { studentCountsBySection } from '../../common/lists/relation-counts';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -83,17 +84,17 @@ export class AttendanceService {
     id: true,
     name: true,
     grade: { select: { name: true } },
-    _count: { select: { students: true } },
   } as const;
 
   private static toMyClassSection(
-    c: { id: string; name: string; grade: { name: string }; _count: { students: number } },
+    c: { id: string; name: string; grade: { name: string } },
+    roll: Map<string, number>,
     covering = false,
   ): MyClassSection {
     return {
       classSectionId: c.id,
       name: `${c.grade.name}-${c.name}`,
-      studentCount: c._count.students,
+      studentCount: roll.get(c.id) ?? 0,
       covering,
     };
   }
@@ -119,11 +120,14 @@ export class AttendanceService {
 
     return withTenant(schoolId, async (tx) => {
       if (role === 'SCHOOL_ADMIN') {
-        const sections = await tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
-          select: AttendanceService.CLASS_SELECT,
-          orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
-        });
-        return sections.map((c) => AttendanceService.toMyClassSection(c));
+        const [sections, roll] = await Promise.all([
+          tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
+            select: AttendanceService.CLASS_SELECT,
+            orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
+          }),
+          studentCountsBySection(tx, schoolId),
+        ]);
+        return sections.map((c) => AttendanceService.toMyClassSection(c, roll));
       }
 
       const teacher = await tx.teacher.findFirst({ where: { schoolId, userId } });
@@ -189,9 +193,10 @@ export class AttendanceService {
           })
         : [];
 
+      const roll = await studentCountsBySection(tx, schoolId);
       return [
-        ...owned.map((c) => AttendanceService.toMyClassSection(c, false)),
-        ...covered.map((c) => AttendanceService.toMyClassSection(c, true)),
+        ...owned.map((c) => AttendanceService.toMyClassSection(c, roll, false)),
+        ...covered.map((c) => AttendanceService.toMyClassSection(c, roll, true)),
       ];
     });
   }

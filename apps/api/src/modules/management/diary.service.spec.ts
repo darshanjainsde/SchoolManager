@@ -3,7 +3,7 @@ const txMock = {
   teacher: { findFirst: jest.fn(), findMany: jest.fn() },
   substitution: { findFirst: jest.fn() },
   school: { findFirst: jest.fn() },
-  student: { findMany: jest.fn(), findFirst: jest.fn() },
+  student: { findMany: jest.fn(), findFirst: jest.fn(), groupBy: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   diaryEntry: {
     findMany: jest.fn(),
     findFirst: jest.fn(),
@@ -85,8 +85,10 @@ describe('DiaryService', () => {
       id: SECTION,
       name: 'C',
       grade: { name: '8' },
-      _count: { students: 28 },
     });
+    // The live roster, counted scoped to this school rather than aggregated
+    // across every school's students — see common/lists/relation-counts.ts.
+    txMock.student.count.mockResolvedValue(28);
     txMock.substitution.findFirst.mockResolvedValue(null);
     txMock.school.findFirst.mockResolvedValue({ name: 'Raffles Public School' });
     txMock.student.findMany.mockResolvedValue([]);

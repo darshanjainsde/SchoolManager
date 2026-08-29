@@ -6,6 +6,7 @@ import { isP2002, isP2025 } from '../../common/errors/prisma-errors';
 import { roomCapacity } from './seating-engine';
 import type { SaveRoomDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { seatingPlanCountsByRoom } from '../../common/lists/relation-counts';
 
 /** A room bigger than this is not a room — it is a typo, and it would render as one. */
 const MAX_ROWS = 20;
@@ -83,13 +84,17 @@ export class RoomsService {
   }
 
   async list(schoolId: string): Promise<RoomRow[]> {
-    const rows = await withTenant(schoolId, (tx) =>
-      tx.room.findMany({ take: LIST_CEILING.STRUCTURE,
-        where: { schoolId },
-        orderBy: { name: 'asc' },
-        include: { _count: { select: { seatingPlans: true } } },
-      }),
-    );
+    const rows = await withTenant(schoolId, async (tx) => {
+      // Plan counts come from a scoped groupBy — see relation-counts.ts.
+      const [rooms, plans] = await Promise.all([
+        tx.room.findMany({ take: LIST_CEILING.STRUCTURE,
+          where: { schoolId },
+          orderBy: { name: 'asc' },
+        }),
+        seatingPlanCountsByRoom(tx, schoolId),
+      ]);
+      return rooms.map((r) => ({ ...r, _count: { seatingPlans: plans.get(r.id) ?? 0 } }));
+    });
     return rows.map(RoomsService.toRow);
   }
 
@@ -109,13 +114,11 @@ export class RoomsService {
   async update(schoolId: string, id: string, dto: SaveRoomDto): Promise<RoomRow> {
     const data = RoomsService.clean(dto);
     try {
-      const row = await withTenant(schoolId, (tx) =>
-        tx.room.update({
-          where: { id },
-          data,
-          include: { _count: { select: { seatingPlans: true } } },
-        }),
-      );
+      const row = await withTenant(schoolId, async (tx) => {
+        const updated = await tx.room.update({ where: { id }, data });
+        const seatingPlans = await tx.seatingPlan.count({ where: { schoolId, roomId: id } });
+        return { ...updated, _count: { seatingPlans } };
+      });
       return RoomsService.toRow(row);
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('Room not found');

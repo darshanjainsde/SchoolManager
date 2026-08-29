@@ -114,7 +114,7 @@ export class DiaryService {
 
       const section = await tx.classSection.findFirst({
         where: { schoolId, id: classSectionId },
-        select: { name: true, grade: { select: { name: true } }, _count: { select: { students: true } } },
+        select: { name: true, grade: { select: { name: true } } },
       });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
@@ -134,7 +134,7 @@ export class DiaryService {
 
       const names = await this.teacherNames(tx, entries.map((e) => e.authorTeacherId));
       const editable = date === istTodayISO();
-      const rosterCount = section._count.students;
+      const rosterCount = await tx.student.count({ where: { schoolId, classSectionId } });
 
       return {
         date,
@@ -203,11 +203,14 @@ export class DiaryService {
 
       const section = await tx.classSection.findFirst({
         where: { schoolId, id: dto.classSectionId },
-        select: { name: true, grade: { select: { name: true } }, _count: { select: { students: true } } },
+        select: { name: true, grade: { select: { name: true } } },
       });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
+      const rosterCount = await tx.student.count({
+        where: { schoolId, classSectionId: dto.classSectionId },
+      });
       // An admin with no Teacher row still has to be attributable; there is no
       // Teacher.id to store, so refuse rather than write an unattributed line.
       if (!teacherId) {
@@ -297,7 +300,7 @@ export class DiaryService {
         })),
         seenCount: 0,
         signedCount: 0,
-        recipientCount: audience === 'SELECTED' ? named.length : section._count.students,
+        recipientCount: audience === 'SELECTED' ? named.length : rosterCount,
         createdAt: entry.createdAt.toISOString(),
         editable: true,
       };
@@ -401,7 +404,6 @@ export class DiaryService {
             select: { student: { select: { id: true, firstName: true, lastName: true } } },
           },
           acks: { select: { seenAt: true, signedAt: true } },
-          classSection: { select: { _count: { select: { students: true } } } },
         },
       });
       const names = await this.teacherNames(tx, [entry.authorTeacherId]);
@@ -424,7 +426,9 @@ export class DiaryService {
         recipientCount:
           entry.audience === 'SELECTED'
             ? entry.recipients.length
-            : entry.classSection._count.students,
+            : await tx.student.count({
+                where: { schoolId, classSectionId: entry.classSectionId },
+              }),
         createdAt: entry.createdAt.toISOString(),
         editable: true,
       };

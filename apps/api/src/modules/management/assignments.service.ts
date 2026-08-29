@@ -15,6 +15,7 @@ import { StorageService } from '../../common/storage/storage.service';
 import { AttendanceService } from './attendance.service';
 import type { CreateAssignmentDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { seenCountsByAssignment } from '../../common/lists/relation-counts';
 
 export type { Assignment, AssignmentList, AssignmentUploadResponse };
 
@@ -282,18 +283,21 @@ export class AssignmentsService {
       const rows = await tx.assignment.findMany({
         take: LIST_CEILING.ACTIVITY,
         where: { schoolId, classSectionId },
-        include: { _count: { select: { seen: true } } },
         orderBy: [{ dueDate: 'asc' }],
       });
+      // Read receipts are counted for THESE assignments only — see
+      // relation-counts.ts for why `include: { _count }` cannot be.
+      const seen = await seenCountsByAssignment(tx, schoolId, rows.map((r) => r.id));
 
       const today = todayISTKey();
       const upcoming: Assignment[] = [];
       const past: Assignment[] = [];
       for (const row of rows) {
+        const withSeen = { ...row, _count: { seen: seen.get(row.id) ?? 0 } };
         if (dueDateKey(row.dueDate) >= today) {
-          upcoming.push(AssignmentsService.toAssignment(row));
+          upcoming.push(AssignmentsService.toAssignment(withSeen));
         } else {
-          past.push(AssignmentsService.toAssignment(row));
+          past.push(AssignmentsService.toAssignment(withSeen));
         }
       }
 
