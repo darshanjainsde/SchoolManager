@@ -2826,3 +2826,29 @@ model AlumniLinkRequest {
   @@index([schoolId, status])
   @@index([alumniId])
 }
+
+/// One hour of traffic for one route, promoted out of Redis.
+///
+/// Redis holds only the live minutes — it is a buffer, not a store, and its
+/// keys expire. History lives here so the ops dashboard can answer "was last
+/// Monday worse", which is the question that catches a limit before it is hit.
+///
+/// Hourly rather than per-minute on purpose: 25 routes x 24 hours is ~600 rows
+/// a day, where minutes would be 36,000. Trend does not need the resolution,
+/// and the live view already has it.
+model MetricRollup {
+  /// Truncated to the hour, UTC.
+  hour          DateTime
+  route         String
+  count         Int      @default(0)
+  errors        Int      @default(0)
+  txTimeouts    Int      @default(0)
+  poolTimeouts  Int      @default(0)
+  /// Fixed-bucket histograms. Summable across instances and across minutes,
+  /// which is the property that lets an hour be built from sixty of them.
+  latency       Int[]
+  dbHold        Int[]
+
+  @@id([hour, route])
+  @@index([hour])
+}

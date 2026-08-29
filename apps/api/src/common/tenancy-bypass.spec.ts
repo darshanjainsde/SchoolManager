@@ -55,6 +55,8 @@ const ALLOWED: Record<string, string> = {
   'modules/owner/internal/owner-domains.service.ts': 'operator console',
   'modules/owner/internal/owner-events.service.ts': 'operator console',
   'modules/owner/internal/impersonation.service.ts': 'operator console',
+  'common/metrics/metrics.service.ts':
+    'writes MetricRollup — platform-wide request counts and latency histograms. The table has no schoolId and holds no tenant row content, only route names and numbers',
   'modules/owner/internal/ops.service.ts':
     'platform-wide health: outbox depth and DLQ across every tenant. Counts only — it reads no tenant row content',
 
