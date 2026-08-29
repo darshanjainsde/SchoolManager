@@ -94,7 +94,7 @@ type Host = string | undefined;
 
 function CategoriesStep({ api, qc, host }: { api: Api; qc: Qc; host: Host }) {
   const list = useQuery({
-    queryKey: ['fee-categories', host],
+    queryKey: ['fee-categories', host], enabled: !!host,
     queryFn: () => api.get<FeeCategory[]>('/manage/fees/categories'),
   });
 
@@ -249,7 +249,7 @@ const TERM_PRESETS: { label: string; names: string[] }[] = [
 
 function TermsStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; yearId: string }) {
   const list = useQuery({
-    queryKey: ['fee-terms', host, yearId],
+    queryKey: ['fee-terms', host, yearId], enabled: !!host,
     queryFn: () => api.get<FeeTerm[]>(`/manage/fees/terms?academicYearId=${yearId}`),
   });
 
@@ -331,7 +331,7 @@ function TermsStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; ye
  */
 function GridStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; yearId: string }) {
   const grid = useQuery({
-    queryKey: ['fee-grid', host, yearId],
+    queryKey: ['fee-grid', host, yearId], enabled: !!host,
     queryFn: () => api.get<FeeGrid>(`/manage/fees/grid?academicYearId=${yearId}`),
   });
 
@@ -500,14 +500,14 @@ function GridStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; yea
  */
 function BillsStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; yearId: string }) {
   const terms = useQuery({
-    queryKey: ['fee-terms', host, yearId],
+    queryKey: ['fee-terms', host, yearId], enabled: !!host,
     queryFn: () => api.get<FeeTerm[]>(`/manage/fees/terms?academicYearId=${yearId}`),
   });
   const [termId, setTermId] = useState('');
   useEffect(() => { if (!termId && terms.data?.length) setTermId(terms.data[0].id); }, [terms.data, termId]);
 
   const preview = useQuery({
-    queryKey: ['fee-preview', host, termId], enabled: !!termId, retry: false,
+    queryKey: ['fee-preview', host, termId], enabled: !!host && !!termId, retry: false,
     queryFn: () => api.get<import('@/lib/fees').BillingPreview>(`/manage/fees/billing/preview?termId=${termId}`),
   });
 
