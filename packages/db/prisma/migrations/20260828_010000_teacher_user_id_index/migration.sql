@@ -1,0 +1,13 @@
+-- Teacher.userId had no index at all, yet resolving "which teacher is this
+-- caller?" is on the hot path for attendance, leave, class notes, messages,
+-- diary and the teacher self-service endpoints.
+--
+-- Every one of those was a sequential scan whose cost grows with the total
+-- number of teachers on the platform rather than with the school's own size.
+--
+-- A plain (userId) index is used here rather than (schoolId, userId) on
+-- purpose: several call sites are private helpers that receive only the
+-- transaction and a userId, with no schoolId in scope. userId is effectively
+-- unique per teacher, so this single index serves both the school-scoped and
+-- the unscoped lookups.
+CREATE INDEX "Teacher_userId_idx" ON "Teacher" ("userId");

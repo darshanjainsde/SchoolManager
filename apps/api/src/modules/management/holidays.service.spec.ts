@@ -102,6 +102,7 @@ describe('HolidaysService', () => {
       const result = await svc.list(SCHOOL);
 
       expect(txMock.holiday.findMany).toHaveBeenCalledWith({
+        take: 500,
         where: { schoolId: SCHOOL, startDate: { gte: new Date('2026-07-21T00:00:00.000Z') } },
         orderBy: { startDate: 'asc' },
       });

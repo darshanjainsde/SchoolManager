@@ -989,3 +989,95 @@ export class SendTestEmailDto {
   @IsEmail()
   to!: string;
 }
+
+// ── Exam Hall ────────────────────────────────────────────────────────────────
+
+/**
+ * A room as the office drew it. `removedDesks` is the desk positions with no
+ * desk — a pillar, a broken desk, a walking lane.
+ *
+ * The bounds here are the OUTER limit (a shape the seating screen could still
+ * draw); the service re-checks them and also drops "row:col" entries that fall
+ * outside the grid, which is what shrinking a room in the editor leaves behind.
+ */
+export class SaveRoomDto {
+  @IsString()
+  @Length(1, 60)
+  name!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  rows!: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(30)
+  cols!: number;
+
+  /** 1 or 2. Two only where the desk is a bench. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2)
+  seatsPerDesk?: number;
+
+  /** "row:col", 0-based. Capped at a full 20×30 grid. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(600)
+  @IsString({ each: true })
+  @Length(3, 11, { each: true })
+  removedDesks?: string[];
+}
+
+export class SeatingRulesDto {
+  @IsOptional()
+  @IsBoolean()
+  noClassmates?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  alternateCols?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  spreadRolls?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  backRowFree?: boolean;
+}
+
+export class PreviewSeatingDto {
+  @IsUUID()
+  roomId!: string;
+
+  /** Sections to seat, in the order the office ticked them. */
+  @IsArray()
+  @ArrayMaxSize(24)
+  @IsUUID('4', { each: true })
+  classSectionIds!: string[];
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 120)
+  title?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SeatingRulesDto)
+  rules?: SeatingRulesDto;
+
+  /**
+   * The generator is seeded, so the same seed rebuilds the same hall. The
+   * office sends a new one to reshuffle after a chart leaks.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9972)
+  seed?: number;
+}
+
+export class SaveSeatingDto extends PreviewSeatingDto {}

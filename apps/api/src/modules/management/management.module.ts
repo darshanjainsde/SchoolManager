@@ -54,12 +54,18 @@ import { PhotoController } from './photo.controller';
 import { DiaryService } from './diary.service';
 import { DiaryController } from './diary.controller';
 import { AttendanceBarService } from './attendance-bar.service';
+import { RoomsService } from './rooms.service';
+import { RoomsController } from './rooms.controller';
+import { SeatingService } from './seating.service';
+import { SeatingController } from './seating.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService],
+  providers: [EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService],
   controllers: [
     CatalogController,
+    RoomsController,
+    SeatingController,
     TeachersController,
     StaffController,
     ClassesController,

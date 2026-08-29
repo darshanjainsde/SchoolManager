@@ -1,8 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { getPlatformPrisma, withTenant } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { isP2002, isP2025, isP2003 } from '../../common/errors/prisma-errors';
 import { CreateEventDto, UpdateEventDto } from './community.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 @Injectable()
 export class EventsService {
@@ -11,8 +12,55 @@ export class EventsService {
   async list() {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, (tx) =>
-      tx.event.findMany({ where: { schoolId }, orderBy: { startAt: 'desc' } }),
+      tx.event.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId }, orderBy: { startAt: 'desc' } }),
     );
+  }
+
+  /**
+   * Schools this event can be addressed to, for the audience picker.
+   *
+   * Cross-tenant BY PURPOSE — you cannot invite a school you cannot see. It
+   * returns only LIVE schools and only their public identity (name, slug,
+   * city): the same three fields the public directory already publishes, so
+   * this exposes nothing new. Results are capped, and an empty query returns
+   * the caller's own city first, which is the common case.
+   */
+  async audienceCandidates(
+    q?: string,
+  ): Promise<{ ownCity: string | null; schools: { id: string; name: string; city: string | null }[] }> {
+    const { schoolId } = this.tenant.requireTenant();
+    const term = q?.trim();
+    const platform = getPlatformPrisma();
+
+    const own = await platform.schoolProfile.findFirst({
+      where: { schoolId },
+      select: { city: true },
+    });
+
+    const rows = await platform.school.findMany({
+      where: {
+        status: 'LIVE',
+        id: { not: schoolId },
+        ...(term ? { name: { contains: term, mode: 'insensitive' as const } } : {}),
+      },
+      select: { id: true, name: true, profile: { select: { city: true } } },
+      orderBy: { name: 'asc' },
+      take: 25,
+    });
+
+    const mapped = rows.map((r) => ({ id: r.id, name: r.name, city: r.profile?.city ?? null }));
+    // ownCity travels with the list so the picker can label and enable the
+    // "my city" option from one request rather than two.
+    const city = own?.city?.trim() || null;
+    if (term) return { ownCity: city, schools: mapped };
+    // No search term: surface the caller's own city first, since "schools near
+    // me" is what a teacher is almost always looking for.
+    return {
+      ownCity: city,
+      schools: city
+        ? [...mapped.filter((m) => m.city === city), ...mapped.filter((m) => m.city !== city)]
+        : mapped,
+    };
   }
 
   async create(dto: CreateEventDto) {
@@ -34,7 +82,31 @@ export class EventsService {
         if (!asset) throw new BadRequestException('coverAssetId not found');
         coverUrl = asset.url;
       }
-      const status = dto.scope === 'NETWORK' ? 'PENDING' : 'APPROVED';
+      // Targeting. SCHOOL_ONLY is the safe default when the caller says nothing,
+      // so an old client that has not learned about audiences cannot accidentally
+      // publish platform-wide.
+      const audienceKind = dto.audienceKind ?? (dto.scope === 'NETWORK' ? 'CITY' : 'SCHOOL_ONLY');
+
+      // A CITY event is stamped with the host's city AT PUBLISH TIME rather than
+      // joined at read time — the public site is the hottest endpoint on the
+      // platform and must not resolve a city per row.
+      let audienceCity: string | null = null;
+      if (audienceKind === 'CITY') {
+        const profile = await tx.schoolProfile.findFirst({
+          where: { schoolId },
+          select: { city: true },
+        });
+        audienceCity = profile?.city?.trim() || null;
+        if (!audienceCity) {
+          throw new BadRequestException(
+            'Add your school\'s city in Settings before sharing an event with your city.',
+          );
+        }
+      }
+
+      // Only a shared event needs the platform owner's approval; an event that
+      // never leaves its own site does not.
+      const status = audienceKind === 'SCHOOL_ONLY' ? 'APPROVED' : 'PENDING';
       try {
         const created = await tx.event.create({
           data: {
@@ -47,8 +119,20 @@ export class EventsService {
             endAt: dto.endAt ? new Date(dto.endAt) : null,
             venue: dto.venue ?? null,
             scope: dto.scope,
+            audienceKind,
+            audienceCity,
             status,
             originSchoolName: school.name,
+            ...(audienceKind === 'SELECTED' && dto.audienceSchoolIds?.length
+              ? {
+                  audienceSchools: {
+                    createMany: {
+                      data: dto.audienceSchoolIds.map((id) => ({ schoolId: id })),
+                      skipDuplicates: true,
+                    },
+                  },
+                }
+              : {}),
           },
         });
 

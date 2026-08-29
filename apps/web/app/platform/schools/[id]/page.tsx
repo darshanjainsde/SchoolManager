@@ -57,6 +57,7 @@ const ALL_FEATURES = [
   'BLOG',
   'HIRING',
   'LIBRARY',
+  'ALUMNI',
   'FEES',
 ] as const;
 

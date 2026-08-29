@@ -1,0 +1,13 @@
+-- `ALUMNUS` gets a migration to itself, on purpose.
+--
+-- ALTER TYPE ... ADD VALUE succeeds inside a transaction on modern Postgres, so
+-- it LOOKS safe to bundle — but the new value cannot be REFERENCED until that
+-- transaction commits, and Prisma wraps each migration in one. Any migration
+-- that adds a value and then inserts it, backfills it, or names it in a CHECK
+-- fails at deploy, and on a fresh database it fails on the first replay, which
+-- is the scenario nobody rehearses. This project has that in its ledger as
+-- `enum-value-unusable-in-adding-transaction`.
+--
+-- Nothing else belongs in this file. The first row carrying it is written by
+-- the application, long after this has committed.
+ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'ALUMNUS';

@@ -7,6 +7,7 @@ import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/pris
 import { LoginInviteService } from './internal/login-invite.service';
 import type { CreateLoginDto, CreateStaffDto, UpdateStaffDto } from './management.dto';
 import type { LoginInviteResult } from './students.service';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 @Injectable()
 export class StaffService {
@@ -17,7 +18,7 @@ export class StaffService {
 
   async list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.staff.findMany({
+      tx.staff.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       }),
@@ -74,7 +75,7 @@ export class StaffService {
     const username = dto.username?.trim() || null;
 
     const { userId, email, loginName } = await withTenant(schoolId, async (tx) => {
-      const staff = await tx.staff.findFirst({ where: { id: staffId } });
+      const staff = await tx.staff.findFirst({ where: { schoolId, id: staffId } });
       if (!staff) throw new NotFoundException('Staff member not found');
       if (staff.userId) throw new ConflictException('Staff member already has a login');
 
@@ -112,7 +113,7 @@ export class StaffService {
   /** Re-sends the welcome invite for a staff member who already has a login. */
   async resendInvite(schoolId: string, staffId: string): Promise<LoginInviteResult> {
     const { userId, email, username, loginName } = await withTenant(schoolId, async (tx) => {
-      const staff = await tx.staff.findFirst({ where: { id: staffId } });
+      const staff = await tx.staff.findFirst({ where: { schoolId, id: staffId } });
       if (!staff) throw new NotFoundException('Staff member not found');
       if (!staff.userId) throw new NotFoundException('Staff member has no login to resend an invite for');
 

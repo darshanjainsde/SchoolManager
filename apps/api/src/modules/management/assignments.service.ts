@@ -14,6 +14,8 @@ import { emitNotifications, sectionStudentUserIds } from '../../common/notificat
 import { StorageService } from '../../common/storage/storage.service';
 import { AttendanceService } from './attendance.service';
 import type { CreateAssignmentDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { seenCountsByAssignment } from '../../common/lists/relation-counts';
 
 export type { Assignment, AssignmentList, AssignmentUploadResponse };
 
@@ -189,7 +191,7 @@ export class AssignmentsService {
     await this.assertClassOwned(schoolId, callerUserId, role, dto.classSectionId, 'post an assignment for');
 
     const assignment = await withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
@@ -273,25 +275,29 @@ export class AssignmentsService {
     await this.assertClassOwned(schoolId, callerUserId, role, classSectionId, 'view assignments for');
 
     return withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
       const rows = await tx.assignment.findMany({
+        take: LIST_CEILING.ACTIVITY,
         where: { schoolId, classSectionId },
-        include: { _count: { select: { seen: true } } },
         orderBy: [{ dueDate: 'asc' }],
       });
+      // Read receipts are counted for THESE assignments only — see
+      // relation-counts.ts for why `include: { _count }` cannot be.
+      const seen = await seenCountsByAssignment(tx, schoolId, rows.map((r) => r.id));
 
       const today = todayISTKey();
       const upcoming: Assignment[] = [];
       const past: Assignment[] = [];
       for (const row of rows) {
+        const withSeen = { ...row, _count: { seen: seen.get(row.id) ?? 0 } };
         if (dueDateKey(row.dueDate) >= today) {
-          upcoming.push(AssignmentsService.toAssignment(row));
+          upcoming.push(AssignmentsService.toAssignment(withSeen));
         } else {
-          past.push(AssignmentsService.toAssignment(row));
+          past.push(AssignmentsService.toAssignment(withSeen));
         }
       }
 

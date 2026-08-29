@@ -1,0 +1,1598 @@
+'use client';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
+import { ApiError } from '@/lib/api';
+import type {
+  AlumniListResult,
+  AlumniSummary,
+  ClaimRow,
+  GiftGroups,
+  GiftItemRow,
+  PledgeRow,
+  RollCallRow,
+  SchoolClass,
+  SessionConflicts,
+  SessionRow,
+  SlotsResult,
+  TeacherRow,
+} from './types';
+
+/**
+ * The Alumni Office — the school's side of Homecoming.
+ *
+ * Six tabs, and every one of them is a queue or a board the coordinator works
+ * through. The alumnus-facing half (the passwordless door, public batch pages,
+ * the Give and Sessions tabs an alumnus sees) is a separate slice; this screen
+ * deliberately contains everything a school does WITHOUT needing that to exist,
+ * so it can be tested and audited on its own.
+ */
+
+type Tab = 'office' | 'verify' | 'people' | 'rollcall' | 'gifts' | 'sessions';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'office', label: 'Alumni Office' },
+  { id: 'verify', label: 'Verification' },
+  { id: 'people', label: 'People' },
+  { id: 'rollcall', label: 'Roll Call' },
+  { id: 'gifts', label: 'Gifts' },
+  { id: 'sessions', label: 'Session requests' },
+];
+
+const rupees = (minor: number, currency = 'INR') =>
+  currency === 'INR'
+    ? `₹${(minor / 100).toLocaleString('en-IN')}`
+    : `${currency} ${(minor / 100).toLocaleString()}`;
+
+const fullName = (p: { firstName: string; lastName: string }) =>
+  `${p.firstName} ${p.lastName}`.trim();
+
+/** YYYY-MM-DD `n` days from today, in UTC so a device in IST does not shift it. */
+function ymdFromToday(days: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function errText(e: unknown, fallback: string): string {
+  return e instanceof ApiError ? e.message : fallback;
+}
+
+export default function AlumniOfficePage() {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<Tab>('office');
+
+  const summary = useQuery({
+    queryKey: ['alumni', 'summary'],
+    queryFn: () => api.get<AlumniSummary>('/manage/alumni/summary'),
+    enabled: !!host,
+    staleTime: 20_000,
+  });
+
+  const invalidateAll = () => qc.invalidateQueries({ queryKey: ['alumni'] });
+
+  return (
+    <div className="skosx">
+      <header className="sk-pagehead">
+        <div>
+          <h1>Alumni Office</h1>
+          <p>
+            The school never had an alumni database — it had a graduating class every March.
+            This is where the ones already lost get recovered, and where the ones still here
+            stop being lost.
+          </p>
+        </div>
+      </header>
+
+      <nav className="sk-tabs" style={{ marginBottom: 18 }} aria-label="Alumni Office sections">
+        {TABS.map((t) => {
+          const badge =
+            t.id === 'verify'
+              ? summary.data?.pendingClaims
+              : t.id === 'gifts'
+                ? summary.data?.openPledges
+                : t.id === 'sessions'
+                  ? summary.data?.openSessions
+                  : 0;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              className="sk-tab"
+              aria-current={tab === t.id ? 'page' : undefined}
+              style={
+                tab === t.id
+                  ? { borderBottomColor: 'var(--sk-brand)', color: 'var(--sk-brand-2)' }
+                  : undefined
+              }
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+              {badge ? (
+                <span className="sk-pill" style={{ background: 'var(--sk-amber-tint)', color: 'var(--sk-amber-ink)' }}>
+                  {badge}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </nav>
+
+      {tab === 'office' && <OfficeTab summary={summary.data} onGo={setTab} onChanged={invalidateAll} />}
+      {tab === 'verify' && <VerifyTab onChanged={invalidateAll} />}
+      {tab === 'people' && <PeopleTab onChanged={invalidateAll} />}
+      {tab === 'rollcall' && <RollCallTab />}
+      {tab === 'gifts' && <GiftsTab onChanged={invalidateAll} />}
+      {tab === 'sessions' && <SessionsTab onChanged={invalidateAll} />}
+    </div>
+  );
+}
+
+// ─── Office ──────────────────────────────────────────────────────────────────
+
+function OfficeTab({
+  summary,
+  onGo,
+  onChanged,
+}: {
+  summary?: AlumniSummary;
+  onGo: (t: Tab) => void;
+  onChanged: () => void;
+}) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const [picked, setPicked] = useState<string[]>([]);
+  const [batchYear, setBatchYear] = useState(new Date().getFullYear());
+
+  const classes = useQuery({
+    queryKey: ['alumni', 'classes'],
+    queryFn: () => api.get<SchoolClass[]>('/manage/classes'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+
+  const graduate = useMutation({
+    mutationFn: () =>
+      api.post<{ considered: number; created: number; alreadyPresent: number; guardianPhonesOnFile: number }>(
+        '/manage/alumni/graduate',
+        { classSectionIds: picked, batchYear },
+      ),
+    onSuccess: (r) => {
+      onChanged();
+      setPicked([]);
+      toast.success(
+        r.created === 0
+          ? `Nothing new — all ${r.considered} were already in the alumni roll.`
+          : `${r.created} alumni created from ${r.considered} children.` +
+              (r.alreadyPresent ? ` ${r.alreadyPresent} were already there.` : ''),
+      );
+    },
+    onError: (e) => toast.error(errText(e, 'Could not graduate that batch.')),
+  });
+
+  const total = picked.reduce(
+    (n, id) => n + (classes.data?.find((c) => c.id === id)?._count.students ?? 0),
+    0,
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="sk-kpis">
+        <Kpi label="Alumni traced" n={summary?.total ?? 0} hint={`${summary?.batches ?? 0} batches · ${summary?.cities ?? 0} cities`} />
+        <Kpi label="Verified" n={summary?.verified ?? 0} hint="a human matched them to the register" />
+        <Kpi
+          label="Awaiting verification"
+          n={summary?.pendingClaims ?? 0}
+          hint={summary?.pendingClaims ? 'nobody sees them until you decide' : 'queue is clear'}
+        />
+        <Kpi label="Open gifts" n={summary?.openPledges ?? 0} hint="waiting on the office" />
+      </div>
+
+      <section className="sk-card">
+        <div className="sk-card-h">
+          <h3>Graduate a batch</h3>
+          <p>
+            The forward engine. Every child in the classes you tick becomes an alumni record
+            carrying their admission number, class and photograph — with nothing typed. Press it
+            twice and you get the batch once, not twice.
+          </p>
+        </div>
+        <div className="sk-card-b">
+          <label className="sk-lab" htmlFor="batchYear">
+            Leaving year
+          </label>
+          <input
+            id="batchYear"
+            className="sk-input"
+            type="number"
+            min={1900}
+            max={2100}
+            style={{ maxWidth: 140 }}
+            value={batchYear}
+            onChange={(e) => setBatchYear(Number(e.target.value))}
+          />
+
+          {classes.isLoading ? (
+            <p className="sk-state">Loading classes…</p>
+          ) : !classes.data?.length ? (
+            <p className="sk-state">No classes are set up yet.</p>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+              {classes.data.map((c) => {
+                const on = picked.includes(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="sk-chip"
+                    aria-pressed={on}
+                    style={
+                      on
+                        ? {
+                            borderColor: 'var(--sk-brand)',
+                            background: 'var(--sk-brand-tint)',
+                            color: 'var(--sk-brand-2)',
+                          }
+                        : undefined
+                    }
+                    onClick={() =>
+                      setPicked((p) => (on ? p.filter((x) => x !== c.id) : [...p, c.id]))
+                    }
+                  >
+                    {c.grade ? `${c.grade.name} – ${c.name}` : c.name}
+                    <span className="sk-num" style={{ marginLeft: 6, opacity: 0.7 }}>
+                      {c._count.students}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {picked.length > 0 && (
+            <div className="sk-notice" style={{ borderLeft: '3px solid var(--sk-amber)', background: 'var(--sk-amber-tint)', padding: '11px 14px', borderRadius: 9, color: 'var(--sk-amber-ink)', fontSize: 13, lineHeight: 1.55 }}>
+              <strong>{total} children</strong> become the Class of {batchYear}.
+              <br />
+              The phone number on file belongs to a <strong>parent</strong>, so it is kept for the
+              invite and never written into the alumnus&rsquo;s own phone field. Ask the
+              school-leaver for their own on the day they collect their certificate.
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="sk-btn"
+            style={{ background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff', alignSelf: 'flex-start' }}
+            disabled={picked.length === 0 || graduate.isPending}
+            onClick={() => graduate.mutate()}
+          >
+            {graduate.isPending ? 'Graduating…' : `Graduate ${picked.length || ''} ${picked.length === 1 ? 'class' : 'classes'}`}
+          </button>
+        </div>
+      </section>
+
+      <div className="sk-cardgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 14 }}>
+        <QueueCard
+          title="Verification"
+          body={
+            summary?.pendingClaims
+              ? `${summary.pendingClaims} claim${summary.pendingClaims === 1 ? '' : 's'} waiting. Each sits beside the register row it probably matches.`
+              : 'Nothing waiting. A claim never becomes visible by ageing — only by you deciding.'
+          }
+          onGo={() => onGo('verify')}
+        />
+        <QueueCard
+          title="Gifts"
+          body={
+            summary?.openPledges
+              ? `${summary.openPledges} pledge${summary.openPledges === 1 ? '' : 's'} need a decision.`
+              : 'No pledges waiting.'
+          }
+          onGo={() => onGo('gifts')}
+        />
+        <QueueCard
+          title="Session requests"
+          body={
+            summary?.openSessions
+              ? `${summary.openSessions} request${summary.openSessions === 1 ? '' : 's'}. You can suggest another time instead of refusing.`
+              : 'No requests waiting.'
+          }
+          onGo={() => onGo('sessions')}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Kpi({ label, n, hint }: { label: string; n: number; hint: string }) {
+  return (
+    <div className="sk-kpi">
+      <span className="lab">{label}</span>
+      <span className="n sk-num">{n.toLocaleString('en-IN')}</span>
+      <span className="hint">{hint}</span>
+    </div>
+  );
+}
+
+function QueueCard({ title, body, onGo }: { title: string; body: string; onGo: () => void }) {
+  return (
+    <section className="sk-card">
+      <div className="sk-card-h">
+        <h3>{title}</h3>
+      </div>
+      <div className="sk-card-b">
+        <p className="sk-muted">{body}</p>
+        <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start' }} onClick={onGo}>
+          Open
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ─── Verification ────────────────────────────────────────────────────────────
+
+interface Suggestion {
+  alumniId: string; name: string; admissionNo: string | null;
+  guardianName: string | null; status: string;
+  strength: 'STRONG' | 'WEAK'; reasons: string[];
+}
+
+interface LinkRequestRow {
+  id: string;
+  alumni: { id: string; firstName: string; lastName: string; batchYear: number; email: string | null; phone: string | null };
+}
+
+/** Shown once, then gone. Nothing stores it and there is no way to read it back,
+ *  so the office copies it out now or provisions again. */
+function Handover({ title, lines }: { title: string; lines: string[] }) {
+  return (
+    <div style={{ borderLeft: '3px solid var(--sk-good)', background: 'var(--sk-good-tint)', padding: '12px 15px', borderRadius: 9 }}>
+      <div style={{ fontWeight: 650, fontSize: 14 }}>{title}</div>
+      {lines.map((l) => (
+        <div key={l} className="sk-num" style={{ fontSize: 13, marginTop: 4, wordBreak: 'break-all' }}>{l}</div>
+      ))}
+      <p className="sk-muted" style={{ marginTop: 8 }}>
+        Copy this now — it is shown once and cannot be read back. Paste it into the batch WhatsApp group.
+      </p>
+    </div>
+  );
+}
+
+function VerifyTab({ onChanged }: { onChanged: () => void }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+
+  const [handover, setHandover] = useState<{ title: string; lines: string[] } | null>(null);
+
+  const claims = useQuery({
+    queryKey: ['alumni', 'claims'],
+    queryFn: () => api.get<(ClaimRow & { suggestions: Suggestion[] })[]>('/manage/alumni/claims?status=PENDING'),
+    enabled: !!host,
+  });
+
+  const linkReqs = useQuery({
+    queryKey: ['alumni', 'link-requests'],
+    queryFn: () => api.get<LinkRequestRow[]>('/manage/alumni/link-requests'),
+    enabled: !!host,
+  });
+
+  /** Mints a fresh claim link. The office pastes it into WhatsApp — there is no
+   *  email yet, and this is where these people actually are. */
+  const sendLink = useMutation({
+    mutationFn: (v: { alumniId: string; requestId?: string; name: string }) =>
+      api.post<{ token: string }>(`/manage/alumni/${v.alumniId}/claim-link`, {}).then(async (r) => {
+        if (v.requestId) await api.post(`/manage/alumni/link-requests/${v.requestId}/sent`, {});
+        return { ...r, name: v.name };
+      }),
+    onSuccess: (r) => {
+      onChanged();
+      setHandover({
+        title: `Link for ${r.name} — expires in 30 minutes`,
+        lines: [`${window.location.origin}/alumni#claim=${r.token}`],
+      });
+    },
+    onError: (e) => toast.error(errText(e, 'Could not make a link.')),
+  });
+
+  const decide = useMutation({
+    mutationFn: (v: { id: string; action: 'VERIFY' | 'DECLINE'; reason?: string; mergeIntoAlumniId?: string }) =>
+      api.post(`/manage/alumni/claims/${v.id}/decide`, {
+        action: v.action, reason: v.reason, mergeIntoAlumniId: v.mergeIntoAlumniId,
+      }),
+    onSuccess: (_r, v) => {
+      onChanged();
+      toast.success(v.action === 'VERIFY' ? 'Verified.' : 'Declined, with the reason sent.');
+    },
+    onError: (e) => toast.error(errText(e, 'Could not decide that claim.')),
+  });
+
+  if (claims.isLoading) return <p className="sk-state">Loading the queue…</p>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {handover && <Handover title={handover.title} lines={handover.lines} />}
+
+      {/* People who already exist and just cannot get back in. Kept ABOVE the
+          claims: it is one button and it unblocks somebody who is already
+          approved, where a claim needs a judgement. */}
+      {!!linkReqs.data?.length && (
+        <section className="sk-card">
+          <div className="sk-card-h">
+            <h3>Wants their link back</h3>
+            <p>Already verified. They asked from the alumni page; one button makes a fresh link.</p>
+          </div>
+          <div className="sk-card-b">
+            {linkReqs.data.map((r) => (
+              <div className="sk-row" key={r.id}>
+                <div className="sp">
+                  <div className="nm">{fullName(r.alumni)} <span className="sk-pill" style={{ background: 'var(--sk-bg-2)', color: 'var(--sk-ink-3)' }}>{r.alumni.batchYear}</span></div>
+                  <div className="meta">{[r.alumni.email, r.alumni.phone].filter(Boolean).join(' · ') || 'no contact on file'}</div>
+                </div>
+                <button type="button" className="sk-btn"
+                  style={{ background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
+                  onClick={() => sendLink.mutate({ alumniId: r.alumni.id, requestId: r.id, name: r.alumni.firstName })}>
+                  Make a link
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!claims.data?.length && (
+        <section className="sk-card">
+          <div className="sk-card-b">
+            <p className="sk-state">
+              No claims waiting. Nobody unverified is visible to another human being.
+            </p>
+          </div>
+        </section>
+      )}
+      {claims.data?.map((c) => (
+        <section className="sk-card" key={c.id}>
+          <div className="sk-card-h">
+            <h3>{fullName(c)}</h3>
+            <span className="sk-pill" style={{ background: 'var(--sk-bg-2)', color: 'var(--sk-ink-3)' }}>
+              Class of {c.batchYear}
+            </span>
+            {c.vouchedByAlumniId && (
+              <span className="sk-pill" style={{ background: 'var(--sk-good-tint)', color: 'var(--sk-good)' }}>
+                vouched
+              </span>
+            )}
+          </div>
+          <div className="sk-card-b">
+            <p className="sk-muted">
+              <strong>Date of birth given:</strong>{' '}
+              {c.claimedDob ? c.claimedDob.slice(0, 10) : '— not given —'}
+              {c.claimedClass ? <> · <strong>Class:</strong> {c.claimedClass}</> : null}
+              <br />
+              <strong>Admission number claimed:</strong> {c.claimedAdmissionNo || '— not remembered —'}
+              <br />
+              <strong>Proof offered:</strong> {c.proof}
+              {(c.email || c.phone) && (
+                <>
+                  <br />
+                  <strong>Contact:</strong> {[c.email, c.phone].filter(Boolean).join(' · ')}
+                </>
+              )}
+            </p>
+            {c.suggestions?.length ? (
+              <div style={{ background: 'var(--sk-bg-2)', borderRadius: 11, padding: '12px 14px' }}>
+                <div className="sk-lab" style={{ marginBottom: 6 }}>Who this might be on the roll</div>
+                {c.suggestions.map((sg) => (
+                  <div className="sk-row" key={sg.alumniId} style={{ borderTop: '1px solid var(--sk-line)' }}>
+                    <div className="sp">
+                      <div className="nm">
+                        {sg.name}{' '}
+                        <span className="sk-pill" style={sg.strength === 'STRONG'
+                          ? { background: 'var(--sk-good-tint)', color: 'var(--sk-good)' }
+                          : { background: 'var(--sk-amber-tint)', color: 'var(--sk-amber-ink)' }}>
+                          {sg.strength === 'STRONG' ? 'strong match' : 'weak — check by hand'}
+                        </span>
+                      </div>
+                      <div className="meta">
+                        {sg.reasons.join(' · ')}
+                        {sg.admissionNo ? ` · adm ${sg.admissionNo}` : ''}
+                        {sg.guardianName ? ` · parent ${sg.guardianName}` : ''}
+                      </div>
+                    </div>
+                    <button type="button" className="sk-btn"
+                      disabled={decide.isPending}
+                      onClick={() => decide.mutate({ id: c.id, action: 'VERIFY', mergeIntoAlumniId: sg.alumniId })}>
+                      This is them
+                    </button>
+                  </div>
+                ))}
+                <p className="sk-muted" style={{ marginTop: 8 }}>
+                  A suggestion decides nothing. A strong match is name, year AND date of birth —
+                  name and year alone fit every sibling and namesake in a batch.
+                </p>
+              </div>
+            ) : null}
+
+            <label className="sk-lab" htmlFor={`reason-${c.id}`}>
+              Reason (required to decline)
+            </label>
+            <input
+              id={`reason-${c.id}`}
+              className="sk-input"
+              placeholder="No matching row in the 1992 register…"
+              value={reasons[c.id] ?? ''}
+              onChange={(e) => setReasons((r) => ({ ...r, [c.id]: e.target.value }))}
+            />
+            <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="sk-btn"
+                style={{ background: 'var(--sk-good)', borderColor: 'var(--sk-good)', color: '#fff' }}
+                disabled={decide.isPending}
+                onClick={() => decide.mutate({ id: c.id, action: 'VERIFY' })}
+              >
+                Verify
+              </button>
+              <button
+                type="button"
+                className="sk-btn"
+                style={{ color: 'var(--sk-bad)' }}
+                disabled={decide.isPending || !(reasons[c.id] ?? '').trim()}
+                onClick={() => decide.mutate({ id: c.id, action: 'DECLINE', reason: reasons[c.id] })}
+              >
+                Decline
+              </button>
+            </div>
+            <p className="sk-muted">
+              Declining requires a reason — the office owes one, and requiring it is the cheapest
+              way to make &ldquo;ask them for more proof&rdquo; the easier path.
+            </p>
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+// ─── Roll Call ───────────────────────────────────────────────────────────────
+
+/**
+ * The roll — every alumnus the school holds, and the three things the office
+ * does to one of them.
+ *
+ * This tab existed as an API and nothing else, which meant `trustedForStudents`
+ * could never be granted: the flag gates every guest-session route, so the
+ * whole sessions half of Homecoming was unreachable from the interface. A
+ * capability with no control is a capability the school does not have.
+ */
+function PeopleTab({ onChanged }: { onChanged: () => void }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const [q, setQ] = useState('');
+  const [handover, setHandover] = useState<{ title: string; lines: string[] } | null>(null);
+  const [emailFor, setEmailFor] = useState<Record<string, string>>({});
+
+  const people = useQuery({
+    queryKey: ['alumni', 'people', q],
+    queryFn: () => api.get<AlumniListResult>(`/manage/alumni?take=50${q ? `&q=${encodeURIComponent(q)}` : ''}`),
+    enabled: !!host,
+  });
+
+  const refresh = () => {
+    onChanged();
+    void people.refetch();
+  };
+
+  const trust = useMutation({
+    mutationFn: (v: { id: string; trusted: boolean }) =>
+      api.put(`/manage/alumni/${v.id}/trusted`, { trusted: v.trusted }),
+    onSuccess: refresh,
+    onError: (e) => toast.error(errText(e, 'Could not change that.')),
+  });
+
+  const sendLink = useMutation({
+    mutationFn: (v: { id: string; name: string }) =>
+      api.post<{ token: string }>(`/manage/alumni/${v.id}/claim-link`, {}).then((r) => ({ ...r, name: v.name })),
+    onSuccess: (r) => setHandover({
+      title: `Link for ${r.name} — expires in 30 minutes`,
+      lines: [`${window.location.origin}/alumni#claim=${r.token}`],
+    }),
+    onError: (e) => toast.error(errText(e, 'Could not make a link.')),
+  });
+
+  const makeAccount = useMutation({
+    mutationFn: (v: { id: string; email: string; name: string }) =>
+      api.post<{ email: string; tempPassword: string }>(`/manage/alumni/${v.id}/account`, { email: v.email })
+        .then((r) => ({ ...r, name: v.name })),
+    onSuccess: (r) => {
+      refresh();
+      setHandover({
+        title: `Account for ${r.name}`,
+        lines: [`Email: ${r.email}`, `Temporary password: ${r.tempPassword}`],
+      });
+    },
+    onError: (e) => toast.error(errText(e, 'Could not create that account.')),
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {handover && <Handover title={handover.title} lines={handover.lines} />}
+
+      <section className="sk-card">
+        <div className="sk-card-h">
+          <h3>The roll</h3>
+          <p>Everyone the school holds. Search by name, batch year, city or trade.</p>
+        </div>
+        <div className="sk-card-b">
+          <input
+            className="sk-input"
+            placeholder="Search the roll…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label="Search alumni"
+          />
+
+          {people.isLoading && <p className="sk-state">Loading…</p>}
+          {people.data && !people.data.rows.length && (
+            <p className="sk-state">Nobody matches that.</p>
+          )}
+
+          {people.data?.rows.map((a) => (
+            <div key={a.id} style={{ borderTop: '1px solid var(--sk-line)', padding: '12px 0' }}>
+              <div className="sk-row">
+                <div className="sp">
+                  <div className="nm">
+                    {fullName(a)} <span className="sk-pill" style={{ background: 'var(--sk-bg-2)', color: 'var(--sk-ink-3)' }}>{a.batchYear}</span>
+                    {a.status !== 'VERIFIED' && (
+                      <span className="sk-pill" style={{ marginLeft: 6, background: 'var(--sk-amber-tint)', color: 'var(--sk-amber-ink)' }}>{a.status.toLowerCase()}</span>
+                    )}
+                    {a.trustedForStudents && (
+                      <span className="sk-pill" style={{ marginLeft: 6, background: 'var(--sk-good-tint)', color: 'var(--sk-good)' }}>cleared for students</span>
+                    )}
+                  </div>
+                  <div className="meta">
+                    {[a.profession, a.city, a.email, a.phone].filter(Boolean).join(' · ') || 'nothing on file'}
+                  </div>
+                </div>
+              </div>
+
+              {a.status === 'VERIFIED' && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+                  <button type="button" className="sk-btn"
+                    disabled={sendLink.isPending}
+                    onClick={() => sendLink.mutate({ id: a.id, name: a.firstName })}>
+                    Make a sign-in link
+                  </button>
+
+                  <input
+                    className="sk-input"
+                    style={{ width: 230 }}
+                    placeholder={a.email || 'email for their login'}
+                    value={emailFor[a.id] ?? ''}
+                    onChange={(e) => setEmailFor((m) => ({ ...m, [a.id]: e.target.value }))}
+                    aria-label={`Login email for ${fullName(a)}`}
+                  />
+                  <button type="button" className="sk-btn"
+                    disabled={makeAccount.isPending || !(emailFor[a.id] || a.email)}
+                    onClick={() => makeAccount.mutate({
+                      id: a.id, email: emailFor[a.id] || a.email || '', name: a.firstName,
+                    })}>
+                    Create a login
+                  </button>
+
+                  {/* The only control that puts an adult in a room with children.
+                      Kept last, worded as what it does, and reversible in one click. */}
+                  <button type="button"
+                    className="sk-btn"
+                    style={a.trustedForStudents
+                      ? undefined
+                      : { background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
+                    disabled={trust.isPending}
+                    onClick={() => trust.mutate({ id: a.id, trusted: !a.trustedForStudents })}>
+                    {a.trustedForStudents ? 'Withdraw clearance' : 'Clear to teach a class'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <p className="sk-muted">
+        Clearing somebody lets them book a period with a class. Withdrawing it cancels
+        any session they have scheduled — the class gets its teacher back automatically.
+      </p>
+    </div>
+  );
+}
+
+function RollCallTab() {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const qc = useQueryClient();
+  const [edit, setEdit] = useState<Record<number, string>>({});
+
+  const roll = useQuery({
+    queryKey: ['alumni', 'rollcall'],
+    queryFn: () => api.get<RollCallRow[]>('/manage/alumni/roll-call'),
+    enabled: !!host,
+  });
+
+  const save = useMutation({
+    mutationFn: (v: { batchYear: number; registerStrength: number }) =>
+      api.put('/manage/alumni/roll-call', v),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['alumni', 'rollcall'] });
+      toast.success('Strength recorded.');
+    },
+    onError: (e) => toast.error(errText(e, 'Could not save that.')),
+  });
+
+  if (roll.isLoading) return <p className="sk-state">Loading the board…</p>;
+  if (!roll.data?.length) {
+    return (
+      <section className="sk-card">
+        <div className="sk-card-b">
+          <p className="sk-state">
+            No batches yet. Graduate a class, or type in a year&rsquo;s strength from the bound
+            register to start the board.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="sk-card">
+      <div className="sk-card-h">
+        <h3>Batch coverage</h3>
+        <p>
+          One row per year: how many of that batch have been found. The strength for years
+          before Sckools comes from the bound register and is typed in once — until it is, the
+          bar has no denominator and says so rather than drawing a full one.
+        </p>
+      </div>
+      <div className="sk-card-b">
+        {roll.data.map((r) => {
+          const draft = edit[r.batchYear] ?? String(r.registerStrength || '');
+          return (
+            <div key={r.batchYear} className="sk-row" style={{ alignItems: 'center', gap: 12 }}>
+              <span className="sk-num" style={{ width: 52, fontWeight: 600 }}>
+                {r.batchYear}
+              </span>
+              <div className="sp" style={{ flex: 1, minWidth: 0 }}>
+                {r.coverage === null ? (
+                  <p className="sk-muted" style={{ margin: 0 }}>
+                    {r.found} found · strength not recorded
+                  </p>
+                ) : (
+                  <>
+                    <div className="sk-progress" style={{ marginTop: 0 }}>
+                      <div
+                        className="sk-progress-fill"
+                        style={{
+                          width: `${r.coverage}%`,
+                          background: r.fromSckools
+                            ? 'var(--sk-brand)'
+                            : 'color-mix(in srgb, var(--sk-brand) 44%, var(--sk-line))',
+                        }}
+                      />
+                    </div>
+                    <p className="sk-muted" style={{ margin: '4px 0 0' }}>
+                      <span className="sk-num">{r.found}</span> of{' '}
+                      <span className="sk-num">{r.registerStrength}</span> found ·{' '}
+                      <span className="sk-num">{r.verified}</span> verified
+                      {r.fromSckools ? ' · graduated through Sckools' : ''}
+                    </p>
+                  </>
+                )}
+              </div>
+              <input
+                className="sk-input"
+                type="number"
+                min={0}
+                max={5000}
+                aria-label={`Register strength for ${r.batchYear}`}
+                style={{ width: 96 }}
+                value={draft}
+                onChange={(e) => setEdit((x) => ({ ...x, [r.batchYear]: e.target.value }))}
+              />
+              <button
+                type="button"
+                className="sk-btn"
+                disabled={save.isPending || draft === '' || Number(draft) === r.registerStrength}
+                onClick={() =>
+                  save.mutate({ batchYear: r.batchYear, registerStrength: Number(draft) })
+                }
+              >
+                Save
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ─── Gifts ───────────────────────────────────────────────────────────────────
+
+function GiftsTab({ onChanged }: { onChanged: () => void }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const qc = useQueryClient();
+  const [recv, setRecv] = useState<Record<string, string>>({});
+  const [absent, setAbsent] = useState<Record<string, string>>({});
+  const [note, setNote] = useState<Record<string, string>>({});
+  const [pick, setPick] = useState<Record<string, { address: string; contact: string; phone: string }>>({});
+  const [ship, setShip] = useState<Record<string, { courier: string; ref: string }>>({});
+  const [thanks, setThanks] = useState<Record<string, string>>({});
+  const upd = <T,>(set: React.Dispatch<React.SetStateAction<Record<string, T>>>, id: string, patch: Partial<T>, empty: T) =>
+    set((m) => ({ ...m, [id]: { ...(m[id] ?? empty), ...patch } as T }));
+
+  /** Bills and photographs. Multipart, so it does not go through api.post. */
+  const attach = useMutation({
+    mutationFn: async (v: { id: string; kind: string; file: File; caption?: string }) => {
+      const fd = new FormData();
+      fd.append('file', v.file);
+      fd.append('kind', v.kind);
+      if (v.caption) fd.append('caption', v.caption);
+      return api.postForm(`/manage/alumni/pledges/${v.id}/attachments`, fd);
+    },
+    onSuccess: () => refresh(),
+    onError: (e) => toast.error(errText(e, 'That file did not upload.')),
+  });
+
+  const pledges = useQuery({
+    queryKey: ['alumni', 'pledges'],
+    queryFn: () => api.get<PledgeRow[]>('/manage/alumni/pledges'),
+    enabled: !!host,
+  });
+  const items = useQuery({
+    queryKey: ['alumni', 'gift-items'],
+    queryFn: () => api.get<GiftItemRow[]>('/manage/alumni/gift-items?all=1'),
+    enabled: !!host,
+  });
+  const groups = useQuery({
+    queryKey: ['alumni', 'gift-groups'],
+    queryFn: () => api.get<GiftGroups>('/manage/alumni/gift-groups'),
+    enabled: !!host,
+  });
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['alumni', 'pledges'] });
+    onChanged();
+  };
+
+  const act = useMutation({
+    mutationFn: (v: { id: string; path: string; body: unknown }) =>
+      api.post(`/manage/alumni/pledges/${v.id}/${v.path}`, v.body),
+    onSuccess: () => refresh(),
+    onError: (e) => toast.error(errText(e, 'That did not work.')),
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <CatalogueCard items={items.data ?? []} groups={groups.data} onChanged={() => qc.invalidateQueries({ queryKey: ['alumni', 'gift-items'] })} />
+
+      {pledges.isLoading && <p className="sk-state">Loading pledges…</p>}
+      {pledges.data?.length === 0 && (
+        <section className="sk-card">
+          <div className="sk-card-b">
+            <p className="sk-state">No pledges yet.</p>
+          </div>
+        </section>
+      )}
+
+      {pledges.data?.map((p) => {
+        const who = p.alumni ? `${fullName(p.alumni)}, Class of ${p.alumni.batchYear}` : (p.donorName ?? 'A donor');
+        const what = p.giftItem?.name ?? p.customRequest ?? 'Something off-list';
+        return (
+          <section className="sk-card" key={p.id}>
+            <div className="sk-card-h">
+              <h3>
+                {p.quantity} × {what.toLowerCase()}
+              </h3>
+              <span className="sk-pill" style={{ background: p.mode === 'FUND' ? 'var(--sk-brand-tint)' : 'var(--sk-amber-tint)', color: p.mode === 'FUND' ? 'var(--sk-brand-2)' : 'var(--sk-amber-ink)' }}>
+                {p.mode === 'FUND' ? 'FUND' : 'SUPPLY · no valuation'}
+              </span>
+              <span className="sp" style={{ flex: 1 }} />
+              <span className="sk-pill" style={{ background: 'var(--sk-bg-2)', color: 'var(--sk-ink-3)' }}>
+                {p.status}
+              </span>
+              <p>
+                {who} · for a group of {p.headcountAtPledge} children
+                {p.mode === 'FUND' && p.amountMinor != null ? ` · ${rupees(p.amountMinor, p.currency)}` : ''}
+                {p.dedicationText ? ` · “${p.dedicationText}”` : ''}
+              </p>
+            </div>
+            <div className="sk-card-b">
+              {p.status === 'PROPOSED' && (
+                <>
+                  <p className="sk-muted">
+                    Three answers, and the middle one matters most — a flat decline ends the
+                    conversation and the donor does not come back.
+                  </p>
+                  <input
+                    className="sk-input"
+                    placeholder="Reason, or what the school needs instead…"
+                    value={note[p.id] ?? ''}
+                    onChange={(e) => setNote((n) => ({ ...n, [p.id]: e.target.value }))}
+                  />
+                  <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                    <button type="button" className="sk-btn" style={{ background: 'var(--sk-good)', borderColor: 'var(--sk-good)', color: '#fff' }}
+                      onClick={() => act.mutate({ id: p.id, path: 'decide', body: { action: 'ACCEPT' } })}>
+                      Accept
+                    </button>
+                    <button type="button" className="sk-btn" style={{ background: 'var(--sk-amber-tint)', borderColor: 'var(--sk-amber)', color: 'var(--sk-amber-ink)' }}
+                      disabled={!(note[p.id] ?? '').trim()}
+                      onClick={() => act.mutate({ id: p.id, path: 'decide', body: { action: 'COUNTER', counterNote: note[p.id] } })}>
+                      Suggest something else
+                    </button>
+                    <button type="button" className="sk-btn" style={{ color: 'var(--sk-bad)' }}
+                      disabled={!(note[p.id] ?? '').trim()}
+                      onClick={() => act.mutate({ id: p.id, path: 'decide', body: { action: 'DECLINE', reason: note[p.id] } })}>
+                      Decline
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {p.status === 'ACCEPTED' && (
+                <>
+                  <p className="sk-muted">
+                    Accepted{p.dueAt ? ` — due ${p.dueAt.slice(0, 10)}` : ''}.{' '}
+                    {p.mode === 'FUND'
+                      ? 'Record the money once it lands, then what you bought with it.'
+                      : 'Arrange collection, or record it straight away if the donor brought it in themselves.'}
+                  </p>
+
+                  {/* Only for goods. A donor funding a purchase is never asked
+                      where to send a courier. */}
+                  {p.mode === 'SUPPLY' && (
+                    <div style={{ background: 'var(--sk-bg-2)', borderRadius: 11, padding: '12px 14px' }}>
+                      <div className="sk-lab" style={{ marginBottom: 6 }}>Arrange collection</div>
+                      <input className="sk-input" placeholder={p.pickupAddress || 'Pickup address'}
+                        value={pick[p.id]?.address ?? p.pickupAddress ?? ''}
+                        onChange={(e) => upd(setPick, p.id, { address: e.target.value }, { address: '', contact: '', phone: '' })} />
+                      <div style={{ display: 'flex', gap: 9, marginTop: 8, flexWrap: 'wrap' }}>
+                        <input className="sk-input" style={{ flex: 1, minWidth: 150 }} placeholder={p.pickupContact || 'Who hands it over'}
+                          value={pick[p.id]?.contact ?? p.pickupContact ?? ''}
+                          onChange={(e) => upd(setPick, p.id, { contact: e.target.value }, { address: '', contact: '', phone: '' })} />
+                        <input className="sk-input" style={{ flex: 1, minWidth: 150 }} placeholder={p.pickupPhone || 'Phone'}
+                          value={pick[p.id]?.phone ?? p.pickupPhone ?? ''}
+                          onChange={(e) => upd(setPick, p.id, { phone: e.target.value }, { address: '', contact: '', phone: '' })} />
+                      </div>
+                      <button type="button" className="sk-btn" style={{ marginTop: 9 }}
+                        disabled={!((pick[p.id]?.address ?? p.pickupAddress ?? '').trim().length >= 5)}
+                        onClick={() => act.mutate({
+                          id: p.id, path: 'request-pickup',
+                          body: {
+                            pickupAddress: (pick[p.id]?.address ?? p.pickupAddress ?? '').trim(),
+                            pickupContact: (pick[p.id]?.contact ?? p.pickupContact ?? '').trim() || undefined,
+                            pickupPhone: (pick[p.id]?.phone ?? p.pickupPhone ?? '').trim() || undefined,
+                          },
+                        })}>
+                        Book the collection
+                      </button>
+                    </div>
+                  )}
+
+                  <label className="sk-lab" htmlFor={`recv-${p.id}`}>
+                    {p.mode === 'FUND'
+                      ? `How many children the money covers (pledged ${p.quantity})`
+                      : `How many actually arrived (pledged ${p.quantity})`}
+                  </label>
+                  <input id={`recv-${p.id}`} className="sk-input" type="number" min={1} style={{ maxWidth: 140 }}
+                    value={recv[p.id] ?? String(p.quantity)}
+                    onChange={(e) => setRecv((r) => ({ ...r, [p.id]: e.target.value }))} />
+                  <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start', background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
+                    onClick={() => act.mutate({ id: p.id, path: 'receive', body: { receivedQty: Number(recv[p.id] ?? p.quantity) } })}>
+                    {p.mode === 'FUND' ? 'Money has landed' : 'It arrived — record it'}
+                  </button>
+                </>
+              )}
+
+              {p.status === 'PICKUP_REQUESTED' && (
+                <>
+                  <p className="sk-muted">
+                    Waiting to be collected from <strong>{p.pickupAddress}</strong>
+                    {p.pickupContact ? ` — ${p.pickupContact}` : ''}
+                    {p.pickupPhone ? `, ${p.pickupPhone}` : ''}.
+                    {p.pickupNote ? ` ${p.pickupNote}` : ''}
+                  </p>
+                  <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                    <input className="sk-input" style={{ flex: 1, minWidth: 150 }} placeholder="Who is carrying it"
+                      value={ship[p.id]?.courier ?? ''}
+                      onChange={(e) => upd(setShip, p.id, { courier: e.target.value }, { courier: '', ref: '' })} />
+                    <input className="sk-input" style={{ flex: 1, minWidth: 150 }} placeholder="Tracking / AWB number"
+                      value={ship[p.id]?.ref ?? ''}
+                      onChange={(e) => upd(setShip, p.id, { ref: e.target.value }, { courier: '', ref: '' })} />
+                  </div>
+                  <p className="sk-muted">
+                    A tracking number with no carrier cannot be looked up, so both go together — or
+                    leave them empty if somebody is simply driving it over.
+                  </p>
+                  <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                    <button type="button" className="sk-btn"
+                      onClick={() => act.mutate({
+                        id: p.id, path: 'picked-up',
+                        body: {
+                          courier: ship[p.id]?.courier?.trim() || undefined,
+                          trackingRef: ship[p.id]?.ref?.trim() || undefined,
+                        },
+                      })}>
+                      It has been collected
+                    </button>
+                    <button type="button" className="sk-btn"
+                      onClick={() => act.mutate({ id: p.id, path: 'receive', body: { receivedQty: p.quantity } })}>
+                      It is already here
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {p.status === 'PICKED_UP' && (
+                <>
+                  <p className="sk-muted">
+                    On its way{p.courier ? ` with ${p.courier}` : ''}
+                    {p.trackingRef ? ` · ${p.trackingRef}` : ''}. Only the school confirms arrival —
+                    a courier marking itself delivered is not the goods being in the building.
+                  </p>
+                  <label className="sk-lab" htmlFor={`arr-${p.id}`}>How many arrived (sent {p.quantity})</label>
+                  <input id={`arr-${p.id}`} className="sk-input" type="number" min={1} style={{ maxWidth: 140 }}
+                    value={recv[p.id] ?? String(p.quantity)}
+                    onChange={(e) => setRecv((r) => ({ ...r, [p.id]: e.target.value }))} />
+                  <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start', background: 'var(--sk-good)', borderColor: 'var(--sk-good)', color: '#fff' }}
+                    onClick={() => act.mutate({ id: p.id, path: 'receive', body: { receivedQty: Number(recv[p.id] ?? p.quantity) } })}>
+                    Confirm it arrived
+                  </button>
+                </>
+              )}
+
+              {p.status === 'RECEIVED' && !p.canDistribute && (
+                <>
+                  <div style={{ borderLeft: '3px solid var(--sk-amber)', background: 'var(--sk-amber-tint)', color: 'var(--sk-amber-ink)', padding: '11px 14px', borderRadius: 9, fontSize: 13, lineHeight: 1.55 }}>
+                    <strong>Short by {p.short}.</strong> This cannot be handed out yet — a class of{' '}
+                    {p.quantity} with {p.received} is a worse place than one with none. The pledge
+                    stays open so somebody can close it.
+                  </div>
+                  <label className="sk-lab" htmlFor={`top-${p.id}`}>
+                    A second consignment arrived
+                  </label>
+                  <input id={`top-${p.id}`} className="sk-input" type="number" min={1} style={{ maxWidth: 140 }}
+                    value={recv[p.id] ?? String(p.short)}
+                    onChange={(e) => setRecv((r) => ({ ...r, [p.id]: e.target.value }))} />
+                  <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start' }}
+                    onClick={() => act.mutate({ id: p.id, path: 'receive', body: { receivedQty: Number(recv[p.id] ?? p.short) } })}>
+                    Record it
+                  </button>
+                </>
+              )}
+
+              {p.mode === 'FUND' && p.status === 'RECEIVED' && p.canDistribute && (
+                <>
+                  <p className="sk-muted">
+                    The money is in. Record what you bought with it before handing anything out —
+                    skipping that would have the school reporting a distribution of something it
+                    had not purchased.
+                  </p>
+                  <input className="sk-input" placeholder="What you bought, and where from — optional"
+                    value={note[`buy${p.id}`] ?? ''}
+                    onChange={(e) => setNote((n) => ({ ...n, [`buy${p.id}`]: e.target.value }))} />
+                  <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start', background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
+                    onClick={() => act.mutate({ id: p.id, path: 'purchase', body: { note: note[`buy${p.id}`]?.trim() || undefined } })}>
+                    Bought it
+                  </button>
+                </>
+              )}
+
+              {((p.mode === 'SUPPLY' && p.status === 'RECEIVED') || p.status === 'PURCHASED') && p.canDistribute && (
+                <>
+                  <p className="sk-muted">
+                    All {p.received} received{p.surplus ? ` (${p.surplus} spare)` : ''}. Given plus
+                    absent must equal {p.quantity} — children who were away are still owed theirs.
+                  </p>
+                  <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div>
+                      <label className="sk-lab" htmlFor={`dist-${p.id}`}>Given out</label>
+                      <input id={`dist-${p.id}`} className="sk-input" type="number" min={0} style={{ width: 120 }}
+                        value={recv[`d${p.id}`] ?? String(p.quantity)}
+                        onChange={(e) => setRecv((r) => ({ ...r, [`d${p.id}`]: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="sk-lab" htmlFor={`abs-${p.id}`}>Absent</label>
+                      <input id={`abs-${p.id}`} className="sk-input" type="number" min={0} style={{ width: 120 }}
+                        value={absent[p.id] ?? '0'}
+                        onChange={(e) => setAbsent((a) => ({ ...a, [p.id]: e.target.value }))} />
+                    </div>
+                    <button type="button" className="sk-btn" style={{ background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
+                      onClick={() =>
+                        act.mutate({
+                          id: p.id,
+                          path: 'distribute',
+                          body: {
+                            distributedQty: Number(recv[`d${p.id}`] ?? p.quantity),
+                            absentQty: Number(absent[p.id] ?? 0),
+                          },
+                        })
+                      }>
+                      Distribute
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {p.status === 'DISTRIBUTED' && (
+                <>
+                  <p className="sk-muted">
+                    {p.distributions[0]
+                      ? `${p.distributions[0].distributedQty} given out, ${p.distributions[0].absentQty} absent.`
+                      : 'Handed out.'}{' '}
+                    That sentence, sent back with a photograph, is the entire reason a second gift
+                    ever happens.
+                  </p>
+                  <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start', background: 'var(--sk-brand)', borderColor: 'var(--sk-brand)', color: '#fff' }}
+                    onClick={() => act.mutate({ id: p.id, path: 'report', body: {} })}>
+                    Send the report to the donor
+                  </button>
+                </>
+              )}
+
+              {/* What the donor actually gets back. Available from the moment
+                  the gift is real rather than only at the end — a thank you is
+                  not a stage of a workflow, and making it one would mean
+                  reaching the last step before being allowed to say it. */}
+              {p.status !== 'PROPOSED' && p.status !== 'DECLINED' && p.status !== 'CANCELLED' && (
+                <details style={{ borderTop: '1px solid var(--sk-line)', paddingTop: 12 }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 650, fontSize: 13 }}>
+                    What the donor sees
+                    {(p.attachments?.length || p.thankYouNote) ? ' — added' : ' — nothing yet'}
+                  </summary>
+
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                      <label className="sk-lab" htmlFor={`ty-${p.id}`}>A note back to them</label>
+                      <textarea id={`ty-${p.id}`} className="sk-input" rows={3}
+                        placeholder="The children wore them the same morning. Thank you — it made a real difference to a cold week."
+                        value={thanks[p.id] ?? p.thankYouNote ?? ''}
+                        onChange={(e) => setThanks((t) => ({ ...t, [p.id]: e.target.value }))} />
+                      <button type="button" className="sk-btn" style={{ marginTop: 8 }}
+                        disabled={(thanks[p.id] ?? p.thankYouNote ?? '').trim().length < 10}
+                        onClick={() => act.mutate({ id: p.id, path: 'thank-you', body: { note: (thanks[p.id] ?? p.thankYouNote ?? '').trim() } })}>
+                        {p.thankYouNote ? 'Update the note' : 'Send the note'}
+                      </button>
+                    </div>
+
+                    <div>
+                      <div className="sk-lab">Bills and photographs</div>
+                      <p className="sk-muted">
+                        The donor sees these and nobody else — they are stored under the gift, not
+                        in the school&rsquo;s media library, so a photograph of children can never
+                        be dropped onto a public page by accident. Have whatever consent your
+                        school normally requires before adding one.
+                      </p>
+                      <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', marginTop: 8 }}>
+                        {([
+                          ['BILL', 'Add the bill'],
+                          ['CONSIGNMENT', 'Photo of what arrived'],
+                          ['DISTRIBUTION', 'Photo of the handover'],
+                        ] as const).map(([kind, label]) => (
+                          <label key={kind} className="sk-btn" style={{ cursor: 'pointer' }}>
+                            {label}
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,application/pdf"
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) attach.mutate({ id: p.id, kind, file: f });
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        ))}
+                      </div>
+
+                      {!!p.attachments?.length && (
+                        <div style={{ display: 'grid', gap: 10, marginTop: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+                          {p.attachments.map((a) => (
+                            <div key={a.id}>
+                              {a.url.toLowerCase().endsWith('.pdf') ? (
+                                <a className="sk-btn" href={a.url} target="_blank" rel="noreferrer">Open the bill</a>
+                              ) : (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img src={a.url} alt={a.caption ?? a.kind.toLowerCase()} loading="lazy"
+                                  style={{ width: '100%', borderRadius: 9, display: 'block' }} />
+                              )}
+                              <button type="button"
+                                className="sk-btn" style={{ marginTop: 6, color: 'var(--sk-bad)' }}
+                                onClick={() => api.del(`/manage/alumni/pledges/${p.id}/attachments/${a.id}`).then(refresh)}>
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </details>
+              )}
+
+              {(p.status === 'REPORTED' || p.status === 'DECLINED' || p.status === 'CANCELLED' || p.status === 'COUNTERED') && (
+                <p className="sk-muted">
+                  {p.status === 'REPORTED' && 'Reported back. Closed.'}
+                  {p.status === 'DECLINED' && `Declined — ${p.declineReason}`}
+                  {p.status === 'CANCELLED' && 'Cancelled.'}
+                  {p.status === 'COUNTERED' && `Waiting on the donor — “${p.counterNote}”`}
+                </p>
+              )}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function CatalogueCard({
+  items,
+  groups,
+  onChanged,
+}: {
+  items: GiftItemRow[];
+  groups?: GiftGroups;
+  onChanged: () => void;
+}) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const [name, setName] = useState('');
+  const [cost, setCost] = useState('');
+
+  const add = useMutation({
+    mutationFn: () =>
+      api.post('/manage/alumni/gift-items', {
+        name: name.trim(),
+        indicativeCostMinor: Math.round(Number(cost || 0) * 100),
+      }),
+    onSuccess: () => {
+      setName('');
+      setCost('');
+      onChanged();
+      toast.success('Added to the list.');
+    },
+    onError: (e) => toast.error(errText(e, 'Could not add that.')),
+  });
+
+  return (
+    <section className="sk-card">
+      <div className="sk-card-h">
+        <h3>The wish list</h3>
+        <p>
+          Written by the school, never by a donor. Anything off this list arrives as a proposal
+          you can redirect — which is what stops the store room filling with three hundred
+          unwanted T-shirts nobody can refuse politely.
+        </p>
+      </div>
+      <div className="sk-card-b">
+        {items.length === 0 ? (
+          <p className="sk-state">Nothing on the list yet. Add what the school actually needs.</p>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {items.map((i) => (
+              <span key={i.id} className="sk-chip" style={{ cursor: 'default', opacity: i.isActive ? 1 : 0.5 }}>
+                {i.name}
+                <span className="sk-num" style={{ marginLeft: 6, opacity: 0.7 }}>
+                  {rupees(i.indicativeCostMinor, i.currency)}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ flex: 2, minWidth: 180 }}>
+            <label className="sk-lab" htmlFor="gi-name">Item</label>
+            <input id="gi-name" className="sk-input" placeholder="Sweater" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div style={{ flex: 1, minWidth: 120 }}>
+            <label className="sk-lab" htmlFor="gi-cost">Indicative cost each (₹)</label>
+            <input id="gi-cost" className="sk-input" type="number" min={0} placeholder="380" value={cost} onChange={(e) => setCost(e.target.value)} />
+          </div>
+          <button type="button" className="sk-btn" disabled={!name.trim() || add.isPending} onClick={() => add.mutate()}>
+            Add
+          </button>
+        </div>
+        {groups && (
+          <p className="sk-muted">
+            Live roster a donor would see: <strong>{groups.school.headcount}</strong> children
+            across {groups.sections.length} sections. Counts only — never a name, a photograph or
+            a fee status.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── Session requests ────────────────────────────────────────────────────────
+
+function SessionsTab({ onChanged }: { onChanged: () => void }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const qc = useQueryClient();
+  const [open, setOpen] = useState<string | null>(null);
+  const [teacher, setTeacher] = useState<Record<string, string>>({});
+  const [reason, setReason] = useState<Record<string, string>>({});
+  const [counterDate, setCounterDate] = useState<Record<string, string>>({});
+  const [counterPeriod, setCounterPeriod] = useState<Record<string, string>>({});
+
+  const sessions = useQuery({
+    queryKey: ['alumni', 'sessions'],
+    queryFn: () => api.get<SessionRow[]>('/manage/alumni/sessions'),
+    enabled: !!host,
+  });
+  const teachers = useQuery({
+    queryKey: ['alumni', 'teachers'],
+    queryFn: () => api.get<TeacherRow[]>('/manage/teachers'),
+    enabled: !!host,
+    staleTime: 60_000,
+  });
+
+  const decide = useMutation({
+    mutationFn: (v: { id: string; body: unknown; asHost?: boolean }) =>
+      api.post(`/manage/alumni/sessions/${v.id}/${v.asHost ? 'decide-as-host' : 'decide'}`, v.body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['alumni', 'sessions'] });
+      onChanged();
+      toast.success('Done.');
+    },
+    onError: (e) => toast.error(errText(e, 'That did not work.')),
+  });
+
+  if (sessions.isLoading) return <p className="sk-state">Loading requests…</p>;
+  if (!sessions.data?.length) {
+    return (
+      <section className="sk-card">
+        <div className="sk-card-b">
+          <p className="sk-state">No session requests.</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {sessions.data.map((s) => {
+        const picked = teacher[s.id] ?? s.accompanyingTeacherId ?? '';
+        const live = s.status === 'REQUESTED' || s.status === 'COUNTERED';
+        return (
+          <section className="sk-card" key={s.id}>
+            <div className="sk-card-h">
+              <h3>{s.title}</h3>
+              <span className="sk-pill" style={{ background: 'var(--sk-bg-2)', color: 'var(--sk-ink-3)' }}>{s.status}</span>
+              <span className="sp" style={{ flex: 1 }} />
+              {s.alumni?.trustedForStudents && (
+                <span className="sk-pill" style={{ background: 'var(--sk-good-tint)', color: 'var(--sk-good)' }}>
+                  trusted for students
+                </span>
+              )}
+              <p>
+                {s.alumni ? `${fullName(s.alumni)}, Class of ${s.alumni.batchYear}` : 'An alumnus'}
+                {s.alumni?.profession ? ` · ${s.alumni.profession}` : ''}
+                {s.alumni?.employer ? `, ${s.alumni.employer}` : ''} · asked for{' '}
+                {s.requestedDate.slice(0, 10)} · {s.headcountAtBooking} children ·{' '}
+                {s.mode === 'ONLINE' ? 'online' : 'in person'}
+              </p>
+            </div>
+            <div className="sk-card-b">
+              {open === s.id ? (
+                <ConflictPanel id={s.id} />
+              ) : (
+                <button type="button" className="sk-btn" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(s.id)}>
+                  What does this cost?
+                </button>
+              )}
+
+              {s.status === 'COUNTERED' && (
+                <div style={{ borderLeft: '3px solid var(--sk-amber)', background: 'var(--sk-amber-tint)', color: 'var(--sk-amber-ink)', padding: '11px 14px', borderRadius: 9, fontSize: 13, lineHeight: 1.55 }}>
+                  You suggested {s.counterDate?.slice(0, 10)}
+                  {s.counterNote ? ` — “${s.counterNote}”` : ''}. Both slots are held until the
+                  alumnus answers, so accepting cannot lose them the time.
+                  <div style={{ marginTop: 9 }}>
+                    <button type="button" className="sk-btn"
+                      onClick={() => decide.mutate({ id: s.id, asHost: true, body: { action: 'ACCEPT' } })}>
+                      Record that they accepted
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {live && (
+                <>
+                  <label className="sk-lab" htmlFor={`t-${s.id}`}>
+                    Who will be in the room (required)
+                  </label>
+                  <select id={`t-${s.id}`} className="sk-input" style={{ maxWidth: 320 }} value={picked}
+                    onChange={(e) => setTeacher((t) => ({ ...t, [s.id]: e.target.value }))}>
+                    <option value="">— nobody named yet —</option>
+                    {teachers.data?.map((t) => (
+                      <option key={t.id} value={t.id}>{fullName(t)}</option>
+                    ))}
+                  </select>
+                  <p className="sk-muted">
+                    {picked
+                      ? 'Naming the teacher whose period it is means they are in the room, not free. Naming anyone else gives that teacher forty minutes back. Both cannot be true of one person.'
+                      : 'Nothing below works until somebody is named. That is the safeguarding rule, enforced rather than described.'}
+                  </p>
+                </>
+              )}
+
+              {s.status === 'REQUESTED' && (
+                <>
+                  <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div>
+                      <label className="sk-lab" htmlFor={`cd-${s.id}`}>Suggest another date</label>
+                      <input id={`cd-${s.id}`} className="sk-input" type="date" style={{ width: 170 }}
+                        min={ymdFromToday(0)}
+                        value={counterDate[s.id] ?? ''}
+                        onChange={(e) => setCounterDate((d) => ({ ...d, [s.id]: e.target.value }))} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <label className="sk-lab" htmlFor={`cp-${s.id}`}>…and which period</label>
+                      <PeriodPicker
+                        id={`cp-${s.id}`}
+                        classSectionId={s.classSectionId}
+                        date={counterDate[s.id]}
+                        value={counterPeriod[s.id] ?? ''}
+                        onChange={(v) => setCounterPeriod((p) => ({ ...p, [s.id]: v }))}
+                      />
+                    </div>
+                  </div>
+                  <input className="sk-input" placeholder="Why — “Class 9 has a unit test that week…”"
+                    value={reason[s.id] ?? ''}
+                    onChange={(e) => setReason((r) => ({ ...r, [s.id]: e.target.value }))} />
+                  <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+                    <button type="button" className="sk-btn" style={{ background: 'var(--sk-good)', borderColor: 'var(--sk-good)', color: '#fff' }}
+                      disabled={!picked || decide.isPending}
+                      onClick={() => decide.mutate({ id: s.id, body: { action: 'ACCEPT', accompanyingTeacherId: picked } })}>
+                      Accept as asked
+                    </button>
+                    <button type="button" className="sk-btn" style={{ background: 'var(--sk-amber-tint)', borderColor: 'var(--sk-amber)', color: 'var(--sk-amber-ink)' }}
+                      disabled={!picked || !counterDate[s.id] || !counterPeriod[s.id] || decide.isPending}
+                      onClick={() =>
+                        decide.mutate({
+                          id: s.id,
+                          body: {
+                            action: 'COUNTER',
+                            accompanyingTeacherId: picked,
+                            counterDate: counterDate[s.id],
+                            counterPeriodId: counterPeriod[s.id],
+                            counterNote: reason[s.id] || 'The school suggested another time.',
+                          },
+                        })
+                      }>
+                      Suggest another time
+                    </button>
+                    <button type="button" className="sk-btn" style={{ color: 'var(--sk-bad)' }}
+                      disabled={!(reason[s.id] ?? '').trim() || decide.isPending}
+                      onClick={() => decide.mutate({ id: s.id, body: { action: 'DECLINE', reason: reason[s.id] } })}>
+                      Decline
+                    </button>
+                  </div>
+                  <p className="sk-muted">
+                    Whoever moves last schedules it. Accepting books it now; suggesting another
+                    time and the alumnus accepting books it then — there is no third approval,
+                    because proposing a time <em>is</em> approving it.
+                  </p>
+                </>
+              )}
+
+              {s.status === 'SCHEDULED' && (
+                <div style={{ borderLeft: '3px solid var(--sk-good)', background: 'var(--sk-good-tint)', padding: '11px 14px', borderRadius: 9, fontSize: 13, lineHeight: 1.55 }}>
+                  Scheduled for {s.scheduledDate?.slice(0, 10)}. Written into the timetable — the
+                  displaced teacher&rsquo;s own week now reads <em>free</em> for that period.
+                </div>
+              )}
+              {s.status === 'DECLINED' && <p className="sk-muted">Declined — {s.declineReason}</p>}
+              {s.status === 'CANCELLED' && <p className="sk-muted">Cancelled. {s.declineReason}</p>}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function ConflictPanel({ id }: { id: string }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const q = useQuery({
+    queryKey: ['alumni', 'conflicts', id],
+    queryFn: () => api.get<SessionConflicts>(`/manage/alumni/sessions/${id}/conflicts`),
+    enabled: !!host,
+  });
+  if (q.isLoading) return <p className="sk-state">Checking…</p>;
+  if (!q.data) return <p className="sk-state">Could not read the timetable.</p>;
+  const c = q.data;
+  return (
+    <div style={{ background: 'var(--sk-bg-2)', borderRadius: 11, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <Line ok>
+        {c.displaced
+          ? `That class gives up ${c.displaced.subjectName ?? 'a lesson'}${c.displaced.teacherName ? ` with ${c.displaced.teacherName}` : ''}.`
+          : 'Nothing is timetabled then — no lesson is displaced.'}
+      </Line>
+      {c.examsWithinAWeek.length > 0 ? (
+        <Line ok={false}>
+          {c.examsWithinAWeek.map((e) => `${e.title} on ${e.on}`).join(', ')} — within a week. Your call.
+        </Line>
+      ) : (
+        <Line ok>No exam for that class within the week.</Line>
+      )}
+      <Line ok>This class has had {c.sessionsThisClass} guest session{c.sessionsThisClass === 1 ? '' : 's'}.</Line>
+      {c.siblingSections.length > 0 && (
+        <Line ok>
+          Least visited elsewhere: {c.siblingSections.slice(0, 3).map((s) => `${s.label} (${s.sessions})`).join(', ')}.
+        </Line>
+      )}
+    </div>
+  );
+}
+
+function Line({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '18px 1fr', gap: 10, fontSize: 13, lineHeight: 1.5, color: 'var(--sk-ink-2)' }}>
+      <span style={{ color: ok ? 'var(--sk-good)' : 'var(--sk-amber-ink)', fontWeight: 700 }}>{ok ? '✓' : '!'}</span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+/** Only offers periods the API says are actually free on that date. Letting the
+ *  office suggest a period that is itself taken is how a counter-offer becomes a
+ *  second round of the same argument. */
+function PeriodPicker({
+  id,
+  classSectionId,
+  date,
+  value,
+  onChange,
+}: {
+  id: string;
+  classSectionId: string;
+  date?: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const q = useQuery({
+    queryKey: ['alumni', 'slots', classSectionId, date],
+    queryFn: () =>
+      api.get<SlotsResult>(
+        `/manage/alumni/slots?classSectionId=${classSectionId}&from=${date}&to=${date}`,
+      ),
+    enabled: !!host && !!date,
+  });
+  const free = useMemo(() => (q.data?.slots ?? []).filter((s) => s.state === 'FREE'), [q.data]);
+
+  if (!date) return <select id={id} className="sk-input" disabled><option>Pick a date first</option></select>;
+  if (q.isLoading) return <select id={id} className="sk-input" disabled><option>Checking…</option></select>;
+  if (free.length === 0)
+    return <select id={id} className="sk-input" disabled><option>Nothing free that day</option></select>;
+
+  return (
+    <select id={id} className="sk-input" value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">— pick a period —</option>
+      {free.map((s) => (
+        <option key={s.periodId} value={s.periodId}>
+          {s.periodLabel} · {s.startTime}–{s.endTime}
+          {s.subjectName ? ` · ${s.subjectName}` : ''}
+        </option>
+      ))}
+    </select>
+  );
+}

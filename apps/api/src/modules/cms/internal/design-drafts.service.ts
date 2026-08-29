@@ -3,6 +3,7 @@ import { Prisma, withTenant } from '@skoolos/db';
 import { SiteContentService } from './site-content.service';
 import type { UpsertDesignDraftDto } from './cms.dto';
 import { mergeSectionVariantContent, pickDesignConfig } from './design-config';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /**
  * Saved website looks. A draft is the DESIGN subset of the profile as one
@@ -33,7 +34,7 @@ export class DesignDraftsService {
 
   list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.designDraft.findMany({ where: { schoolId }, orderBy: { updatedAt: 'desc' } }),
+      tx.designDraft.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId }, orderBy: { updatedAt: 'desc' } }),
     );
   }
 

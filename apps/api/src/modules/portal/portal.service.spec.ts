@@ -188,6 +188,7 @@ describe('PortalService', () => {
       await svc.attendance(USER, '2026-07');
 
       expect(txMock.attendance.findMany).toHaveBeenCalledWith({
+        take: 2000,
         where: {
           schoolId: SCHOOL,
           studentId: STUDENT,
@@ -199,7 +200,7 @@ describe('PortalService', () => {
       });
       // …and the student row itself was found by the JWT sub, not a client id.
       expect(txMock.student.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { userId: USER } }),
+        expect.objectContaining({ where: { schoolId: SCHOOL, userId: USER } }),
       );
     });
 
@@ -296,6 +297,7 @@ describe('PortalService', () => {
       ]);
       // Past exams are excluded by the DB filter, not in JS — assert the where.
       expect(txMock.exam.findMany).toHaveBeenCalledWith({
+        take: 2000,
         where: {
           schoolId: SCHOOL,
           classSectionId: CLASS_SECTION,
@@ -356,6 +358,7 @@ describe('PortalService', () => {
       await svc.exams(USER);
 
       expect(txMock.subject.findMany).toHaveBeenCalledWith({
+        take: 500,
         where: { schoolId: SCHOOL, id: { in: [SUBJECT] } },
         select: { id: true, name: true },
       });
@@ -436,7 +439,8 @@ describe('PortalService', () => {
       // The individual-marks read is keyed on the caller's own Student.id and
       // filtered to published rows.
       expect(txMock.result.findMany).toHaveBeenCalledWith({
-        where: { studentId: STUDENT, publishedAt: { not: null } },
+        take: 2000,
+        where: { schoolId: SCHOOL, studentId: STUDENT, publishedAt: { not: null } },
         select: { examId: true, marks: true },
       });
       expect(txMock.result.findMany).toHaveBeenCalledTimes(1);
@@ -444,7 +448,7 @@ describe('PortalService', () => {
       // could pull a classmate's mark into this process.
       expect(txMock.result.groupBy).toHaveBeenCalledWith({
         by: ['examId'],
-        where: { examId: { in: ['exam-a'] }, publishedAt: { not: null } },
+        where: { schoolId: SCHOOL, examId: { in: ['exam-a'] }, publishedAt: { not: null } },
         _avg: { marks: true },
       });
       // …and nothing in the response is keyed to another student.
@@ -493,6 +497,7 @@ describe('PortalService', () => {
       const result = await svc.results(USER);
 
       expect(txMock.exam.findMany).toHaveBeenCalledWith({
+        take: 2000,
         where: { schoolId: SCHOOL, id: { in: ['exam-a', 'exam-foreign'] } },
       });
       expect(result.map((r) => r.examId)).toEqual(['exam-a']);
@@ -569,6 +574,7 @@ describe('PortalService', () => {
         },
       ]);
       expect(txMock.assignment.findMany).toHaveBeenCalledWith({
+        take: 2000,
         where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION },
         orderBy: [{ dueDate: 'asc' }],
       });

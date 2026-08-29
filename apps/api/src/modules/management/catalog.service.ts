@@ -11,6 +11,7 @@ import type {
   CreatePeriodDto,
   UpdatePeriodDto,
 } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 /** Dedupe + ascending-sort a raw day-of-week list (1=Mon … 7=Sun). */
 function normalizeWorkingDays(days: number[]): number[] {
@@ -23,7 +24,7 @@ export class CatalogService {
 
   async listYears(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.academicYear.findMany({
+      tx.academicYear.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: { startDate: 'asc' },
       }),
@@ -52,7 +53,7 @@ export class CatalogService {
 
   async listGrades(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.grade.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+      tx.grade.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
     );
   }
 
@@ -94,7 +95,7 @@ export class CatalogService {
   /** Matches the shared `Subject` contract (`@skoolos/types`) field for field — `GET /manage/subjects`. */
   async listSubjects(schoolId: string): Promise<Subject[]> {
     return withTenant(schoolId, (tx) =>
-      tx.subject.findMany({ where: { schoolId }, orderBy: { name: 'asc' } }),
+      tx.subject.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { name: 'asc' } }),
     );
   }
 
@@ -135,7 +136,7 @@ export class CatalogService {
 
   async listPeriods(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.period.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+      tx.period.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
     );
   }
 

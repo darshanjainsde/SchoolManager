@@ -54,6 +54,7 @@
   /* Amber is a fill, never legible as text on its own tint — amber-ink is the
      readable partner for anything written on --sk-amber-tint. */
   --sk-amber-ink: #7a4e06;
+  --sk-cls-1: #4f46e5; --sk-cls-2: #0f766e; --sk-cls-3: #be185d; --sk-cls-4: #a16207;
   --sk-good: #178a5b;
   --sk-good-tint: #e3f4ec;
   --sk-bad: #c4453f;
@@ -108,6 +109,7 @@
     --sk-amber: #f5b23c;
     --sk-amber-tint: #3d2e14;
     --sk-amber-ink: #f5ce8a;
+    --sk-cls-1: #818cf8; --sk-cls-2: #2dd4bf; --sk-cls-3: #f472b6; --sk-cls-4: #fbbf24;
     --sk-good: #4cc08e;
     --sk-good-tint: #173327;
     --sk-bad: #e0656f;
@@ -475,11 +477,30 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
   /* A label never wraps inside its button — squeezed rows wrap AROUND it. */
   white-space: nowrap; flex: none;
 }
+
+/* Square, icon-only. Edit and Delete sat as full labelled buttons beside a
+   primary action, and on a grid card that row could not hold three: the last
+   one wrapped to its own line and the tile grew to fit it. Naming the action
+   twice — once in the row and again in a tooltip — is not what the space was
+   for. The icons keep an accessible name via aria-label; the hit area stays a
+   comfortable 34px square, so this is not a tap-target trade. */
+.sk-btn[data-icon] {
+  padding: 0; width: 34px; height: 34px; gap: 0; flex: none;
+}
+.sk-btn[data-icon][data-tone='bad'] { color: var(--sk-bad); }
+.sk-btn[data-icon][data-tone='bad']:hover:not(:disabled) { border-color: var(--sk-bad); }
 .sk-btn:hover { border-color: var(--sk-brand); }
 .sk-btn[data-variant="primary"] { background: var(--sk-brand); color: #fff; border-color: transparent; }
 @media (prefers-color-scheme: dark) { .sk-btn[data-variant="primary"] { color: #211d45; } }
 .sk-btn[data-variant="primary"]:hover { filter: brightness(1.06); }
-.sk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* NOT opacity. Fading the brand fill toward the card makes a washed indigo
+   that the white label sinks into — and a disabled button is usually disabled
+   BECAUSE its label is saying something ("Saving…", "Sending…"). A flat
+   neutral with muted ink stays readable and still reads as unavailable. */
+.sk-btn:disabled { cursor: not-allowed; background: var(--sk-bg-2); color: var(--sk-ink-3);
+  border-color: var(--sk-line); filter: none; }
+.sk-btn[data-variant="primary"]:disabled { background: var(--sk-bg-2); color: var(--sk-ink-3);
+  border-color: var(--sk-line); }
 
 /* ============================================================================
    Explicit theme choice — the toggle stamps data-theme on <html> and must beat
@@ -491,6 +512,7 @@ html[data-theme='light'] .skosx {
   --sk-card: #ffffff; --sk-bg-2: #f3f0e7; --sk-line: #e7e3d6; --sk-line-2: #d9d4c4;
   --sk-brand: #4f46e5; --sk-brand-2: #3730a3; --sk-brand-tint: #eef0ff;
   --sk-amber: #f59e0b; --sk-amber-tint: #fde9c8; --sk-amber-ink: #7a4e06;
+  --sk-cls-1: #4f46e5; --sk-cls-2: #0f766e; --sk-cls-3: #be185d; --sk-cls-4: #a16207;
   --sk-good: #178a5b; --sk-good-tint: #e3f4ec;
   --sk-bad: #c4453f; --sk-bad-tint: #fbe9e8; --sk-margin-red: #e86a6a; --sk-late: #7a4e06;
   --sk-shadow: 0 1px 2px rgba(33, 29, 69, 0.05), 0 14px 34px -22px rgba(33, 29, 69, 0.35);
@@ -502,6 +524,7 @@ html[data-theme='dark'] .skosx {
   --sk-card: #1b1830; --sk-bg-2: #100e1e; --sk-line: #2b2847; --sk-line-2: #37335a;
   --sk-brand: #8b87ff; --sk-brand-2: #a5a1ff; --sk-brand-tint: #232052;
   --sk-amber: #f5b23c; --sk-amber-tint: #3d2e14; --sk-amber-ink: #f5ce8a;
+  --sk-cls-1: #818cf8; --sk-cls-2: #2dd4bf; --sk-cls-3: #f472b6; --sk-cls-4: #fbbf24;
   --sk-good: #4cc08e; --sk-good-tint: #173327;
   --sk-bad: #e0656f; --sk-bad-tint: #3a1b1e; --sk-margin-red: #e0656f; --sk-late: #f5ce8a;
   --sk-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -24px rgba(0, 0, 0, 0.8);
@@ -522,6 +545,26 @@ html[data-theme='dark'] .skosx {
 .skosx .bg-white { background-color: var(--sk-card); }
 .skosx .bg-slate-50, .skosx .bg-slate-100 { background-color: var(--sk-paper); }
 .skosx .border-slate-200, .skosx .border-slate-100 { border-color: var(--sk-line); }
+/* border-slate-300 is the shadcn <Input> default. Left unmapped it stayed a
+   light grey hairline on a dark card — the field read as a pale outline round
+   a dark hole, which is the "the inputs look dark" report. */
+.skosx .border-slate-300 { border-color: var(--sk-line-2); }
+/* A placeholder must sit between the field's ink and its ground in BOTH
+   themes; slate-400 only does that in one. */
+.skosx .placeholder\:text-slate-400::placeholder { color: var(--sk-ink-3); }
+.skosx .ring-slate-400 { --tw-ring-color: var(--sk-brand); }
+
+/* A field with no background class inherits the page, so on a dark surface it
+   became a dark box with no edge and no fill — indistinguishable from the card
+   behind it. Any bare input/textarea/select inside the console gets the same
+   ground and ink as .sk-input, so a page that predates the theme is still
+   typable in the dark. Explicit classes on the element still win. */
+.skosx input:not([type='checkbox']):not([type='radio']):not([class*='bg-']),
+.skosx textarea:not([class*='bg-']),
+.skosx select:not([class*='bg-']) {
+  background-color: var(--sk-card);
+  color: var(--sk-ink);
+}
 .skosx .text-teal-700, .skosx .text-teal-600 { color: var(--sk-brand-2); }
 .skosx .bg-teal-50 { background-color: var(--sk-brand-tint); }
 .skosx .text-rose-600, .skosx .text-rose-500 { color: var(--sk-bad); }
@@ -2036,3 +2079,225 @@ button.sk-availcell:hover { filter: brightness(0.97); }
   .sk-lib-book-when { flex-direction: row; align-items: center; gap: 8px; }
   .sk-lib-shelf-row, .sk-lib-class-row { flex-wrap: wrap; }
 }
+
+/* ============================================================================
+   EXAM HALL — the room editor and the seating chart
+   ============================================================================
+   Three steps on one screen: draw the room, tick the classes, print. The
+   office is the only screen involved; the hall itself runs on paper, because
+   teachers do not carry phones into an exam room.
+
+   COLOUR IS THE CLASS, and it is the whole readability of the chart. A safe
+   plan reads as a checkerboard and an unsafe one reads as stripes — a
+   principal sees the difference before anyone explains it. The four class
+   tones are the four SEMANTIC tokens (brand / good / bad / amber) rather than
+   four new hexes: they are already defined per-scheme, so the chart follows
+   the theme toggle for free, and the ledger records twice what hard-coding a
+   brand hex into this file costs. Beyond four classes the tones cycle; the
+   class label is printed in the seat as well, so colour is never the only
+   carrier of which class a child is in.
+   ========================================================================== */
+
+/* ---- step strip ---- */
+.sk-eh-steps { display: flex; border-bottom: 1px solid var(--sk-line); background: var(--sk-bg-2); overflow-x: auto; }
+.sk-eh-steps > button {
+  flex: 1; min-width: 158px; display: flex; align-items: center; gap: 9px;
+  padding: 13px 15px; border: 0; border-right: 1px solid var(--sk-line);
+  background: transparent; cursor: pointer; font: inherit; font-size: 13.5px;
+  font-weight: 650; color: var(--sk-ink-3); text-align: left;
+}
+.sk-eh-steps > button:last-child { border-right: 0; }
+.sk-eh-steps > button > .n {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font-family: var(--sk-mono); font-size: 11px;
+  border: 1px solid var(--sk-line-2); color: var(--sk-ink-3);
+}
+.sk-eh-steps > button[aria-selected="true"] { background: var(--sk-card); color: var(--sk-ink); }
+.sk-eh-steps > button[aria-selected="true"] > .n { background: var(--sk-brand); border-color: var(--sk-brand); color: #fff; }
+
+/* ---- two-column pane: controls on the left, the room on the right ---- */
+.sk-eh-pane { display: grid; grid-template-columns: 268px minmax(0, 1fr); }
+.sk-eh-side { padding: 18px; border-right: 1px solid var(--sk-line); display: flex; flex-direction: column; gap: 18px; }
+.sk-eh-main { padding: 20px; min-width: 0; }
+.sk-eh-group { display: flex; flex-direction: column; gap: 9px; }
+@media (max-width: 900px) {
+  /* minmax(0,1fr), not 1fr: a `1fr` track takes its minimum from the item's
+     min-content, and the floor's 420px minimum would then widen the whole card
+     instead of scrolling inside it. */
+  .sk-eh-pane { grid-template-columns: minmax(0, 1fr); }
+  .sk-eh-side { border-right: 0; border-bottom: 1px solid var(--sk-line); }
+}
+
+/* On a phone all three steps must be reachable without discovering a sideways
+   swipe. The console's own tab strip hides behind one — that is why the layout
+   swaps it for a drawer — and three short labels genuinely fit. */
+@media (max-width: 640px) {
+  .sk-eh-steps { overflow-x: visible; }
+  .sk-eh-steps > button {
+    min-width: 0; flex: 1 1 0; gap: 6px;
+    padding: 11px 7px; font-size: 12px; letter-spacing: -0.015em;
+  }
+  .sk-eh-steps > button > .n { width: 18px; height: 18px; font-size: 10px; }
+  .sk-eh-main, .sk-eh-side { padding: 15px; }
+}
+
+/* A room chart is wider than a phone, so the floor scrolls — but a scroll
+   nothing announces is a scroll nobody finds. These are the classic
+   background-attachment shadows: the covers are `local` so they ride the
+   scroll, the shadows are `scroll` so they only show while there is more room
+   in that direction. */
+.sk-eh-floor {
+  background:
+    linear-gradient(to right, var(--sk-card) 40%, transparent) left center / 26px 100% no-repeat local,
+    linear-gradient(to left, var(--sk-card) 40%, transparent) right center / 26px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--sk-ink) 16%, transparent), transparent)
+      left center / 13px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--sk-ink) 16%, transparent), transparent)
+      right center / 13px 100% no-repeat scroll;
+}
+.sk-eh-swipe { display: none; }
+@media (max-width: 700px) {
+  .sk-eh-swipe {
+    display: block; margin-top: 9px;
+    font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3);
+  }
+}
+
+/* ---- blackboard: which end of the room the teacher stands at ---- */
+.sk-eh-board { height: 7px; border-radius: 4px; background: repeating-linear-gradient(90deg, var(--sk-line-2) 0 9px, transparent 9px 15px); }
+.sk-eh-boardcap { font-family: var(--sk-mono); font-size: 10px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--sk-ink-3); text-align: center; margin: 6px 0 14px; }
+
+/* ---- the floor ---- */
+.sk-eh-floor { overflow-x: auto; padding-bottom: 4px; }
+.sk-eh-rows { display: flex; flex-direction: column; gap: 6px; min-width: 420px; }
+.sk-eh-rowline { display: flex; gap: 8px; }
+/* A desk is one unit; when two children share it they sit tight together, so
+   the wide gap between DESKS and the hairline between SEATS is what tells a
+   reader where a bench begins. */
+.sk-eh-desk { flex: 1; display: flex; gap: 2px; min-width: 38px; }
+
+.sk-eh-cell {
+  flex: 1; aspect-ratio: 1.5; border-radius: 6px;
+  border: 1px solid var(--sk-line-2); background: var(--sk-bg-2);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: var(--sk-mono); font-size: 10px; line-height: 1.15;
+  color: var(--sk-ink-3); padding: 2px; cursor: pointer;
+  transition: transform 0.12s var(--sk-ease), border-color 0.12s;
+}
+.sk-eh-desk > .sk-eh-cell:first-child:not(:last-child) { border-top-right-radius: 2px; border-bottom-right-radius: 2px; }
+.sk-eh-desk > .sk-eh-cell:last-child:not(:first-child) { border-top-left-radius: 2px; border-bottom-left-radius: 2px; }
+.sk-eh-cell:hover { transform: translateY(-1px); }
+.sk-eh-cell:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; }
+.sk-eh-cell > b { font-weight: 700; font-size: 10.5px; letter-spacing: -0.01em; }
+/* The roll number is what an invigilator reads off the chart while walking the
+   aisle, so it is not a footnote. */
+.sk-eh-cell > i { font-style: normal; font-size: 11px; font-weight: 500; opacity: 1; color: var(--sk-ink-2); }
+
+/* NO DESK HERE — a pillar, a broken desk, a walking lane the school keeps.
+   Taking a desk out is the main thing this screen does, so it has to be
+   unmistakable: the audit showed a faint dashed box with a 13px "x" that was
+   indistinguishable from an empty desk at a glance, in both themes. Now it is
+   struck through and sunk into the floor. */
+.sk-eh-cell[data-state="gone"] {
+  background: repeating-linear-gradient(135deg, var(--sk-line) 0 2px, transparent 2px 7px);
+  border-style: dashed; border-color: var(--sk-line-2); color: var(--sk-ink-3);
+}
+.sk-eh-cell[data-state="gone"]::after { content: 'no desk'; font-size: 8.5px; letter-spacing: 0.04em; }
+/* A desk that exists but is deliberately unused — the spare back row. */
+.sk-eh-cell[data-state="spare"] { background: transparent; border-style: dashed; color: var(--sk-ink-3); font-size: 9px; }
+/* A real desk with nobody in it yet still looks like FURNITURE. Painting it
+   transparent-and-dashed made a full room read as an empty one. */
+.sk-eh-cell[data-state="empty"] { background: var(--sk-bg-2); }
+
+/* Class tones use --sk-cls-*, NOT the semantic state colours. Two reasons,
+   both found in the audit: a class painted --sk-bad reads as an error in a
+   product where red means absent, and the clash ring is itself --sk-bad, so a
+   red class beside a red warning was unreadable. --sk-amber-ink was the other
+   casualty: correct as dark ink on a light tint, invisible on a dark one. */
+.sk-eh-cell[data-tone="c1"] { background: color-mix(in srgb, var(--sk-cls-1) 14%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-cls-1) 38%, transparent); color: var(--sk-cls-1); }
+.sk-eh-cell[data-tone="c2"] { background: color-mix(in srgb, var(--sk-cls-2) 14%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-cls-2) 38%, transparent); color: var(--sk-cls-2); }
+.sk-eh-cell[data-tone="c3"] { background: color-mix(in srgb, var(--sk-cls-3) 14%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-cls-3) 38%, transparent); color: var(--sk-cls-3); }
+.sk-eh-cell[data-tone="c4"] { background: color-mix(in srgb, var(--sk-cls-4) 14%, var(--sk-card)); border-color: color-mix(in srgb, var(--sk-cls-4) 38%, transparent); color: var(--sk-cls-4); }
+
+.sk-eh-cell[data-clash="true"] { box-shadow: 0 0 0 2px var(--sk-bad); }
+.sk-eh-cell[data-chosen="true"] { box-shadow: 0 0 0 2px var(--sk-ink); }
+
+/* ---- class key ---- */
+.sk-eh-key { display: flex; flex-wrap: wrap; gap: 6px 15px; margin-top: 14px; font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); }
+.sk-eh-key > span { display: inline-flex; align-items: center; gap: 6px; }
+.sk-eh-key i { width: 10px; height: 10px; border-radius: 3px; }
+.sk-eh-key i[data-tone="c1"] { background: var(--sk-cls-1); }
+.sk-eh-key i[data-tone="c2"] { background: var(--sk-cls-2); }
+.sk-eh-key i[data-tone="c3"] { background: var(--sk-cls-3); }
+.sk-eh-key i[data-tone="c4"] { background: var(--sk-cls-4); }
+
+/* ---- "why is this child here" ---- */
+.sk-eh-why { margin-top: 14px; border-top: 1px solid var(--sk-line); padding-top: 12px; font-size: 13.5px; line-height: 1.5; color: var(--sk-ink-2); min-height: 46px; }
+/* The run result is a sentence with a number in it, not a dashboard tile — the
+   92px KPI min-height left a dead band under a one-line note. */
+.sk-eh-result { min-height: 0; }
+.sk-eh-result .hint { margin-top: 4px; }
+.sk-eh-why b { color: var(--sk-ink); font-weight: 650; }
+
+/* ---- a tickable row (a class, a rule) ---- */
+.sk-eh-tick {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%;
+  padding: 7px 0; border: 0; background: none; cursor: pointer;
+  text-align: left; color: inherit; font: inherit;
+}
+.sk-eh-tick > .box {
+  flex: none; width: 18px; height: 18px; margin-top: 2px; border-radius: 5px;
+  border: 1.5px solid var(--sk-line-2); background: var(--sk-card);
+  display: grid; place-items: center; transition: background 0.12s, border-color 0.12s;
+}
+.sk-eh-tick > .box::after {
+  content: ''; width: 8px; height: 4px; opacity: 0;
+  border-left: 2px solid #fff; border-bottom: 2px solid #fff;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.sk-eh-tick[aria-pressed="true"] > .box { background: var(--sk-brand); border-color: var(--sk-brand); }
+.sk-eh-tick[aria-pressed="true"] > .box::after { opacity: 1; }
+.sk-eh-tick:hover > .box { border-color: var(--sk-brand); }
+.sk-eh-tick .lbl { display: block; font-size: 13.5px; font-weight: 650; line-height: 1.3; }
+.sk-eh-tick .sub { display: block; font-size: 12px; color: var(--sk-ink-3); line-height: 1.4; margin-top: 2px; }
+.sk-eh-tick .cnt { margin-left: auto; font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); padding-top: 2px; }
+.sk-eh-tick .swatch { flex: none; width: 9px; height: 9px; border-radius: 3px; margin-top: 6px; }
+.sk-eh-tick .swatch[data-tone="c1"] { background: var(--sk-cls-1); }
+.sk-eh-tick .swatch[data-tone="c2"] { background: var(--sk-cls-2); }
+.sk-eh-tick .swatch[data-tone="c3"] { background: var(--sk-cls-3); }
+.sk-eh-tick .swatch[data-tone="c4"] { background: var(--sk-cls-4); }
+
+/* ---- room list ---- */
+.sk-eh-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.sk-eh-room {
+  border: 1.5px solid var(--sk-line); border-radius: var(--sk-r-sm); background: var(--sk-card);
+  padding: 11px 13px; cursor: pointer; text-align: left; font: inherit; color: inherit;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sk-eh-room:hover { border-color: var(--sk-brand); }
+.sk-eh-room[aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); }
+.sk-eh-room .nm { font-family: var(--sk-serif); font-size: 15px; font-weight: 650; }
+.sk-eh-room .meta { font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); }
+
+/* On-brand fills carry white text in BOTH schemes; the dark scheme flips the
+   ink of anything sitting on --sk-brand, the same convention .sk-btn uses. */
+@media (prefers-color-scheme: dark) {
+  .sk-eh-steps > button[aria-selected="true"] > .n,
+  .sk-eh-tick[aria-pressed="true"] > .box::after { border-color: #211d45; color: #211d45; }
+}
+html[data-theme='dark'] .sk-eh-steps > button[aria-selected="true"] > .n,
+html[data-theme='dark'] .sk-eh-tick[aria-pressed="true"] > .box::after { border-color: #211d45; color: #211d45; }
+html[data-theme='light'] .sk-eh-steps > button[aria-selected="true"] > .n,
+html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border-color: #fff; color: #fff; }
+
+/* ---- saved seatings ---- */
+.sk-eh-saved { display: flex; align-items: stretch; gap: 6px; }
+.sk-eh-saved .open {
+  flex: 1; min-width: 0; text-align: left; cursor: pointer; font: inherit; color: inherit;
+  border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm);
+  background: var(--sk-card); padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sk-eh-saved .open:hover { border-color: var(--sk-brand); }
+.sk-eh-saved .open .nm { font-family: var(--sk-serif); font-size: 14px; font-weight: 650; }
+.sk-eh-saved .open .meta { font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); }

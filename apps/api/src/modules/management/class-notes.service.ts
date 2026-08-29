@@ -6,6 +6,7 @@ import { assertTenantOwned } from '../../common/tenancy/assert-tenant-owned';
 import { canReadClassNotes, requireClassAccess } from './internal/class-access';
 import { resolveAsOfDate } from './internal/timetable-date';
 import type { CreateClassNoteDto, CreateClassTodoDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const READ_FORBIDDEN_MESSAGE = 'These notes are visible to the teachers of this subject.';
@@ -89,8 +90,8 @@ export class ClassNotesService {
           : { classSectionId, date: day };
 
       const [notes, todos] = await Promise.all([
-        tx.classNote.findMany({ where, orderBy: { createdAt: 'asc' } }),
-        tx.classTodo.findMany({ where, orderBy: { createdAt: 'asc' } }),
+        tx.classNote.findMany({ take: LIST_CEILING.ACTIVITY, where, orderBy: { createdAt: 'asc' } }),
+        tx.classTodo.findMany({ take: LIST_CEILING.ACTIVITY, where, orderBy: { createdAt: 'asc' } }),
       ]);
       return {
         notes: notes.map((n) => ({
@@ -213,11 +214,11 @@ export class ClassNotesService {
    */
   async noteClasses(schoolId: string, userId: string): Promise<NoteClass[]> {
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { userId }, select: { id: true } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId }, select: { id: true } });
       if (!teacher) return [];
       const asOf = resolveAsOfDate(undefined, new Date());
-      const slots = await tx.timetableSlot.findMany({
-        where: {
+      const slots = await tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId,
           teacherId: teacher.id,
           effectiveFrom: { lte: asOf },
           OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
@@ -264,12 +265,12 @@ export class ClassNotesService {
       const [noteCounts, todoCounts] = await Promise.all([
         tx.classNote.groupBy({
           by: ['classSectionId', 'subjectId'],
-          where: { classSectionId: { in: sectionIds }, subjectId: { in: subjectIds } },
+          where: { schoolId, classSectionId: { in: sectionIds }, subjectId: { in: subjectIds } },
           _count: { _all: true },
         }),
         tx.classTodo.groupBy({
           by: ['classSectionId', 'subjectId'],
-          where: { classSectionId: { in: sectionIds }, subjectId: { in: subjectIds }, done: false },
+          where: { schoolId, classSectionId: { in: sectionIds }, subjectId: { in: subjectIds }, done: false },
           _count: { _all: true },
         }),
       ]);
@@ -302,17 +303,24 @@ export class ClassNotesService {
    * through a class's whole history. */
   private async assertTeachesPair(
     tx: Tx,
+    schoolId: string,
     userId: string,
     role: string,
     classSectionId: string,
     subjectId: string,
   ): Promise<void> {
     if (role === 'SCHOOL_ADMIN') return;
-    const teacher = await tx.teacher.findFirst({ where: { userId }, select: { id: true } });
+    const teacher = await tx.teacher.findFirst({
+      where: { schoolId, userId },
+      select: { id: true },
+    });
     if (teacher) {
       const asOf = resolveAsOfDate(undefined, new Date());
       const slot = await tx.timetableSlot.findFirst({
         where: {
+          // schoolId leads every TimetableSlot index; without it this filtered
+          // the whole table rather than seeking.
+          schoolId,
           classSectionId,
           subjectId,
           teacherId: teacher.id,
@@ -339,13 +347,13 @@ export class ClassNotesService {
     role: string,
   ): Promise<ClassLog> {
     return withTenant(schoolId, async (tx) => {
-      await this.assertTeachesPair(tx, userId, role, classSectionId, subjectId);
+      await this.assertTeachesPair(tx, schoolId, userId, role, classSectionId, subjectId);
       const since = new Date();
       since.setDate(since.getDate() - 120);
       const where = { classSectionId, subjectId, date: { gte: since } };
       const [notes, todos] = await Promise.all([
-        tx.classNote.findMany({ where, orderBy: [{ date: 'desc' }, { createdAt: 'asc' }] }),
-        tx.classTodo.findMany({ where, orderBy: [{ date: 'desc' }, { createdAt: 'asc' }] }),
+        tx.classNote.findMany({ take: LIST_CEILING.ACTIVITY, where, orderBy: [{ date: 'desc' }, { createdAt: 'asc' }] }),
+        tx.classTodo.findMany({ take: LIST_CEILING.ACTIVITY, where, orderBy: [{ date: 'desc' }, { createdAt: 'asc' }] }),
       ]);
       return {
         notes: notes.map((n) => ({

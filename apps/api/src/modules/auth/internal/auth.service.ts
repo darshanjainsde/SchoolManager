@@ -102,7 +102,7 @@ export class AuthService {
       if (existing0) {
         await withTenant(payload.schoolId, async (tx) => {
           await tx.refreshToken.updateMany({
-            where: { familyId: existing0.familyId, revokedAt: null },
+            where: { schoolId: payload.schoolId, familyId: existing0.familyId, revokedAt: null },
             data: { revokedAt: new Date() },
           });
         });
@@ -201,7 +201,7 @@ export class AuthService {
     const hash = sha256(rawToken);
     await withTenant(schoolId, async (tx) => {
       await tx.refreshToken.updateMany({
-        where: { tokenHash: hash, revokedAt: null },
+        where: { schoolId, tokenHash: hash, revokedAt: null },
         data: { revokedAt: new Date() },
       });
     }).catch(() => undefined);

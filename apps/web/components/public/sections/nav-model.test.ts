@@ -22,7 +22,7 @@ const ALL_ON: NavFlags = {
   hasAdmissions: true,
   hasHof: true,
   hasGallery: true,
-  hasEvents: true,
+  hasEvents: true, hasAlumni: true,
   hasBlog: true,
   hasContact: true,
   hasEnquiry: true,
@@ -34,7 +34,7 @@ const NONE_ON: NavFlags = {
   hasAdmissions: false,
   hasHof: false,
   hasGallery: false,
-  hasEvents: false,
+  hasEvents: false, hasAlumni: false,
   hasBlog: false,
   hasContact: false,
   hasEnquiry: false,
@@ -82,6 +82,7 @@ describe('reachability', () => {
    * `events` is served at /connect — the map is where that stops being folklore.
    */
   const ROUTE_OF: Record<keyof typeof SUBPAGES, string> = {
+    alumni: '/alumni',
     academics: '/academics',
     admissions: '/admissions',
     gallery: '/gallery',
@@ -121,13 +122,34 @@ describe('reachability', () => {
   });
 });
 
+describe('the alumni wing is reachable from the school menu', () => {
+  it('appears inside "Our school", not as a seventh top-level control', () => {
+    // NAV_CAP is six because a school name of typical length starts truncating
+    // at 1280px beyond that. Alumni are the school's own people — the same
+    // group as About and Hall of Fame, which the wall of faces feeds.
+    const nodes = model();
+    const ours = nodes.find((n) => n.label === 'Our school');
+    expect(ours?.kind).toBe('group');
+    expect(hrefs(nodes)).toContain('/alumni');
+    expect(nodes.length).toBeLessThanOrEqual(6);
+  });
+
+  it('disappears entirely for a school without the feature', () => {
+    // ALUMNI is in no tier: a school that has not switched it on must not show
+    // a tab that 404s.
+    expect(hrefs(model({ hasAlumni: false }))).not.toContain('/alumni');
+  });
+});
+
 describe('a group is only worth the slot it costs', () => {
   it('drops a group whose every child is unpublished, rather than opening an empty menu', () => {
     expect(labels(model({ hasEvents: false, hasBlog: false }))).not.toContain('News & events');
   });
 
   it('collapses a one-child group to that child, named for the page it opens', () => {
-    const nodes = model({ hasAbout: false, hasHof: false });
+    // Alumni also lives in "Our school", so it is off here — otherwise the
+    // group has two children and this test would be asserting nothing.
+    const nodes = model({ hasAbout: false, hasHof: false, hasAlumni: false });
     expect(labels(nodes)).not.toContain('Our school');
     expect(labels(nodes)).toContain('Gallery');
   });

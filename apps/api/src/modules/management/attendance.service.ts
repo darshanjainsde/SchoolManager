@@ -11,6 +11,8 @@ import { isP2002 } from '../../common/errors/prisma-errors';
 import { requireClassAccess } from './internal/class-access';
 import { istTodayISO, resolveAsOfDate } from './internal/timetable-date';
 import type { SaveAttendanceDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { studentCountsBySection } from '../../common/lists/relation-counts';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -50,19 +52,22 @@ export class AttendanceService {
     const day = new Date(date);
 
     return withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
+      // Deliberately uncapped: this roster drives the mark map, so a partial
+      // read would silently drop children from the register. Bounded by class
+      // size, which does not grow with the platform.
       const students = await tx.student.findMany({
-        where: { classSectionId },
+        where: { schoolId, classSectionId },
         orderBy: [{ admissionNo: 'asc' }],
         select: { id: true },
       });
 
-      const marks = await tx.attendance.findMany({
-        where: { classSectionId, date: day },
+      const marks = await tx.attendance.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, classSectionId, date: day },
         select: { studentId: true, status: true },
       });
       const byStudent = new Map(marks.map((m) => [m.studentId, m.status]));
@@ -79,17 +84,17 @@ export class AttendanceService {
     id: true,
     name: true,
     grade: { select: { name: true } },
-    _count: { select: { students: true } },
   } as const;
 
   private static toMyClassSection(
-    c: { id: string; name: string; grade: { name: string }; _count: { students: number } },
+    c: { id: string; name: string; grade: { name: string } },
+    roll: Map<string, number>,
     covering = false,
   ): MyClassSection {
     return {
       classSectionId: c.id,
       name: `${c.grade.name}-${c.name}`,
-      studentCount: c._count.students,
+      studentCount: roll.get(c.id) ?? 0,
       covering,
     };
   }
@@ -115,14 +120,17 @@ export class AttendanceService {
 
     return withTenant(schoolId, async (tx) => {
       if (role === 'SCHOOL_ADMIN') {
-        const sections = await tx.classSection.findMany({
-          select: AttendanceService.CLASS_SELECT,
-          orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
-        });
-        return sections.map((c) => AttendanceService.toMyClassSection(c));
+        const [sections, roll] = await Promise.all([
+          tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
+            select: AttendanceService.CLASS_SELECT,
+            orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
+          }),
+          studentCountsBySection(tx, schoolId),
+        ]);
+        return sections.map((c) => AttendanceService.toMyClassSection(c, roll));
       }
 
-      const teacher = await tx.teacher.findFirst({ where: { userId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId } });
       if (!teacher) return [];
 
       // TWO DIFFERENT QUESTIONS, one method.
@@ -151,8 +159,8 @@ export class AttendanceService {
           }
         : {};
 
-      const owned = await tx.classSection.findMany({
-        where: {
+      const owned = await tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
+        where: { schoolId,
           OR: [
             // A class teacher takes their form class's register — but only on
             // days that class actually meets. Without the `some`, their class
@@ -169,8 +177,8 @@ export class AttendanceService {
       });
       const ownedIds = new Set(owned.map((c) => c.id));
 
-      const subs = await tx.substitution.findMany({
-        where: { date: new Date(date), substituteTeacherId: teacher.id },
+      const subs = await tx.substitution.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, date: new Date(date), substituteTeacherId: teacher.id },
         select: { classSectionId: true },
       });
       const coveredIds = [...new Set(subs.map((s) => s.classSectionId))].filter(
@@ -178,16 +186,17 @@ export class AttendanceService {
       );
 
       const covered = coveredIds.length
-        ? await tx.classSection.findMany({
+        ? await tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
             where: { id: { in: coveredIds } },
             select: AttendanceService.CLASS_SELECT,
             orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
           })
         : [];
 
+      const roll = await studentCountsBySection(tx, schoolId);
       return [
-        ...owned.map((c) => AttendanceService.toMyClassSection(c, false)),
-        ...covered.map((c) => AttendanceService.toMyClassSection(c, true)),
+        ...owned.map((c) => AttendanceService.toMyClassSection(c, roll, false)),
+        ...covered.map((c) => AttendanceService.toMyClassSection(c, roll, true)),
       ];
     });
   }
@@ -237,8 +246,8 @@ export class AttendanceService {
     const classSectionIds = classes.map((c) => c.classSectionId);
 
     return withTenant(schoolId, async (tx) => {
-      const rows = await tx.attendance.findMany({
-        where: { classSectionId: { in: classSectionIds }, date: day },
+      const rows = await tx.attendance.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, classSectionId: { in: classSectionIds }, date: day },
         select: { classSectionId: true, status: true, markedById: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       });
@@ -259,7 +268,7 @@ export class AttendanceService {
       }
       const markers =
         markerIds.size > 0
-          ? await tx.teacher.findMany({
+          ? await tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
               where: { id: { in: [...markerIds] } },
               select: { id: true, firstName: true, lastName: true },
             })
@@ -313,12 +322,12 @@ export class AttendanceService {
     const day = new Date(dto.date);
 
     const result = await withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
-      const teacher = await tx.teacher.findFirst({ where: { userId: callerUserId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
 
       // A SCHOOL_ADMIN may mark any section; a TEACHER may not. This is the
       // server-side twin of the client only showing their own classes —
@@ -352,7 +361,7 @@ export class AttendanceService {
           // or seeded APPROVED row with a null expiry can never become a
           // silent, permanent unlock either.
           const unlock = await tx.registerChangeRequest.findFirst({
-            where: {
+            where: { schoolId,
               classSectionId: dto.classSectionId,
               date: day,
               status: 'APPROVED',
@@ -372,12 +381,14 @@ export class AttendanceService {
       }
 
       // Every mark must target a student who is actually enrolled in this
-      // class section. `Student` has active RLS, so a foreign-school
-      // studentId will not appear in this query at all — closing the
-      // cross-tenant write hole (Attendance itself has no RLS and its
-      // unique key [studentId, date] is not school-scoped).
+      // class section. Student is RLS-scoped and now also filtered by
+      // schoolId, so a foreign-school studentId cannot appear here — closing
+      // the cross-tenant write hole, since Attendance's unique key
+      // [studentId, date] is not itself school-scoped.
+      // Deliberately uncapped: every submitted mark is validated against this
+      // roster, so a partial read would reject marks for real pupils.
       const roster = await tx.student.findMany({
-        where: { classSectionId: dto.classSectionId },
+        where: { schoolId, classSectionId: dto.classSectionId },
         select: { id: true },
       });
       const rosterIds = new Set(roster.map((s) => s.id));
@@ -399,8 +410,8 @@ export class AttendanceService {
       // no stored row yet and therefore counts as newly absent. This same
       // snapshot also feeds the retake audit entry below — `markedById` is
       // selected for that purpose (unused by the newly-absent diff).
-      const before = await tx.attendance.findMany({
-        where: { classSectionId: dto.classSectionId, date: day },
+      const before = await tx.attendance.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, classSectionId: dto.classSectionId, date: day },
         select: { studentId: true, status: true, markedById: true },
       });
       const previousStatus = new Map(before.map((m) => [m.studentId, m.status]));
@@ -432,7 +443,7 @@ export class AttendanceService {
       const studentIds = dto.marks.map((m) => m.studentId);
       try {
         await tx.attendance.deleteMany({
-          where: { date: day, studentId: { in: studentIds } },
+          where: { schoolId, date: day, studentId: { in: studentIds } },
         });
         await tx.attendance.createMany({
           data: dto.marks.map((mark) => ({

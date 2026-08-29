@@ -20,7 +20,9 @@ import type {
 import { resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
 import { AttendanceService } from './attendance.service';
+import { NotificationOutboxService } from './notification-outbox.service';
 import type { CreateExamDto, SaveExamResultsDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 /**
  * Push for TEST_SCHEDULED/RESULTS_PUBLISHED now flows EXCLUSIVELY through the
@@ -73,6 +75,7 @@ export class ExamsService {
   constructor(
     private readonly notifications: NotificationService,
     private readonly attendance: AttendanceService,
+    private readonly outbox: NotificationOutboxService,
   ) {}
 
   /**
@@ -228,7 +231,7 @@ export class ExamsService {
     await this.assertClassOwned(schoolId, callerUserId, role, dto.classSectionId, 'schedule an exam for');
 
     const exam = await withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: dto.classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: dto.classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
@@ -349,12 +352,13 @@ export class ExamsService {
   ): Promise<ExamList> {
     await this.assertClassOwned(schoolId, callerUserId, role, classSectionId, 'view exams for');
     return withTenant(schoolId, async (tx) => {
-      const section = await tx.classSection.findFirst({ where: { id: classSectionId } });
+      const section = await tx.classSection.findFirst({ where: { schoolId, id: classSectionId } });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
       const exams = await tx.exam.findMany({
+        take: LIST_CEILING.ACTIVITY,
         where: { schoolId, classSectionId },
         orderBy: [{ scheduledAt: 'asc' }],
       });
@@ -405,8 +409,8 @@ export class ExamsService {
         throw new ApiError('NOT_FOUND', 'exam not found', 404, 'id');
       }
 
-      const rows = await tx.result.findMany({
-        where: { examId },
+      const rows = await tx.result.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, examId },
         select: { studentId: true, marks: true, publishedAt: true },
         orderBy: [{ studentId: 'asc' }],
       });
@@ -453,8 +457,8 @@ export class ExamsService {
         throw new ApiError('NOT_FOUND', 'exam not found', 404, 'id');
       }
 
-      const roster = await tx.student.findMany({
-        where: { classSectionId: exam.classSectionId },
+      const roster = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
+        where: { schoolId, classSectionId: exam.classSectionId },
         select: { id: true },
       });
       const rosterIds = new Set(roster.map((s) => s.id));
@@ -517,7 +521,7 @@ export class ExamsService {
       }
 
       const { count } = await tx.result.updateMany({
-        where: { examId },
+        where: { schoolId, examId },
         data: { publishedAt: new Date() },
       });
 
@@ -569,6 +573,11 @@ export class ExamsService {
 
       return { published: count, exam };
     });
+
+    // The cron is the safety net, not the delivery path — on Hobby it cannot run
+    // more than once a day. Kick a drain now so a published result reaches parents
+    // in seconds. Claim-safe: the drain uses FOR UPDATE SKIP LOCKED.
+    this.outbox.drainSoon();
 
     // Nothing was actually published (no Results saved for this exam yet) —
     // telling parents results are out would be a lie.

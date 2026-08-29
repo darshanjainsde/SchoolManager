@@ -10,6 +10,7 @@ import { istTodayISO } from '../../management';
 import { LibrarySettingsService } from './library-settings.service';
 import { accruedFineRupees, dateOnlyISO, finesApply, type BorrowerKind } from './library-policy';
 import type { RemindFinesDto } from './library.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /** One line on the Fines tab — either a crystallized row or a still-growing accrual. */
 export interface FineEntry {
@@ -63,13 +64,13 @@ export class LibraryFinesService {
       const settings = await this.settings.ensure(tx, schoolId);
       const rules = this.settings.rules(settings);
       const [fixed, openLate, collected] = await Promise.all([
-        tx.libraryFine.findMany({
-          where: { status: 'DUE' },
+        tx.libraryFine.findMany({ take: LIST_CEILING.ACTIVITY,
+          where: { schoolId, status: 'DUE' },
           orderBy: { createdAt: 'asc' },
           include: FINE_INCLUDE,
         }),
-        tx.libraryIssue.findMany({
-          where: { returnedOn: null, dueOn: { lt: new Date(`${todayISO}T00:00:00.000Z`) } },
+        tx.libraryIssue.findMany({ take: LIST_CEILING.ACTIVITY,
+          where: { schoolId, returnedOn: null, dueOn: { lt: new Date(`${todayISO}T00:00:00.000Z`) } },
           include: {
             copy: { select: { accessionNo: true, title: { select: { title: true } } } },
             student: {
@@ -82,7 +83,7 @@ export class LibraryFinesService {
             teacher: { select: { id: true, firstName: true, lastName: true, userId: true } },
           },
         }),
-        tx.libraryFine.aggregate({ where: { status: 'PAID' }, _sum: { amountRupees: true } }),
+        tx.libraryFine.aggregate({ where: { schoolId, status: 'PAID' }, _sum: { amountRupees: true } }),
       ]);
 
       const borrowerIds = {
@@ -90,7 +91,7 @@ export class LibraryFinesService {
         teachers: fixed.map((f) => f.teacherId).filter((x): x is string => !!x),
       };
       const [students, teachers] = await Promise.all([
-        tx.student.findMany({
+        tx.student.findMany({ take: LIST_CEILING.ROSTER,
           where: { id: { in: borrowerIds.students } },
           select: {
             id: true, firstName: true, lastName: true, code: true, userId: true,
@@ -98,7 +99,7 @@ export class LibraryFinesService {
             classSection: { select: { name: true, grade: { select: { name: true } } } },
           },
         }),
-        tx.teacher.findMany({
+        tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { id: { in: borrowerIds.teachers } },
           select: { id: true, firstName: true, lastName: true, userId: true },
         }),

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { StorageService } from '../../../common/storage/storage.service';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL'] as const;
 type Kind = (typeof KINDS)[number];
@@ -84,7 +85,7 @@ export class MediaService {
 
   async list(schoolId: string, kind?: Kind) {
     return withTenant(schoolId, (tx) =>
-      tx.mediaAsset.findMany({
+      tx.mediaAsset.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, ...(kind ? { kind } : {}) },
         orderBy: { createdAt: 'desc' },
       }),

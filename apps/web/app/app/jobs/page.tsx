@@ -9,6 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MAX_QUESTIONS, filterableKinds, type JobQuestionDraft } from '@/lib/jobs-admin';
 import { JOB_TEMPLATES, type JobTemplate } from '@/lib/job-templates';
+// The public listing's own labels — imported, not restated, so the preview
+// cannot drift from the page it is previewing.
+import { EMPLOYMENT_LABEL } from '@/lib/jobs-api';
 
 interface Job {
   id: string;
@@ -350,6 +353,55 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
           >
             {budgetLeft === 0 ? 'Four is the maximum' : 'Add a question'}
           </Button>
+        </section>
+
+        {/* WHAT THE CANDIDATE SEES.
+            The form asks for a title, a summary and a description without ever
+            showing which of them a candidate actually reads first — so a
+            summary written as an afterthought ended up being the whole advert
+            on the jobs board. This mirrors the public listing's own layout, so
+            the writing is judged in the shape it will be read in. */}
+        <section className="space-y-2 border-t pt-4" style={{ borderColor: 'var(--sk-line)' }}>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            How candidates will see it
+          </h3>
+          <div
+            className="rounded-xl p-4"
+            style={{ background: 'var(--sk-paper)', border: '1px solid var(--sk-line)' }}
+          >
+            <p className="text-lg font-bold" style={{ color: 'var(--sk-ink)' }}>
+              {title.trim() || 'Job title'}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="sk-pill" data-tone="info">
+                {EMPLOYMENT_LABEL[employmentType as keyof typeof EMPLOYMENT_LABEL] ?? employmentType}
+              </span>
+              {subject.trim() && <span className="sk-pill">{subject.trim()}</span>}
+              {posts > 1 && (
+                <span className="sk-pill" data-tone="warn">
+                  {posts} positions
+                </span>
+              )}
+            </div>
+            <p className="mt-3 text-sm" style={{ color: 'var(--sk-ink-2)' }}>
+              {summary.trim() || 'Your one-line summary appears here — this is the line candidates read on the board before they click.'}
+            </p>
+            {description.trim() && (
+              <p
+                className="mt-3 whitespace-pre-wrap text-[13px]"
+                style={{ color: 'var(--sk-ink-3)' }}
+              >
+                {description.trim().slice(0, 300)}
+                {description.trim().length > 300 ? '…' : ''}
+              </p>
+            )}
+            {questions.filter((q) => q.prompt.trim()).length > 0 && (
+              <p className="mt-3 text-[11px]" style={{ color: 'var(--sk-ink-3)' }}>
+                Then {questions.filter((q) => q.prompt.trim()).length} screening question
+                {questions.filter((q) => q.prompt.trim()).length === 1 ? '' : 's'} before they can apply.
+              </p>
+            )}
+          </div>
         </section>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">

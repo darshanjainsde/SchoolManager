@@ -15,21 +15,29 @@ import type { MessageReceivedOutboxPayload } from '../../common/notifications/no
 import { emitNotifications } from '../../common/notifications/notification-inbox';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from './timetable.service';
+import { NotificationOutboxService } from './notification-outbox.service';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { unreadCountsByThread } from '../../common/lists/relation-counts';
 
 const FALLBACK_SCHOOL_NAME = 'Your school';
 const FALLBACK_SUBJECT_NAME = 'General';
 const PREVIEW_LEN = 140;
 
-/** Raw thread row shape with the includes both `toThreadRow` reads. */
+/**
+ * Raw thread row shape with the includes both `toThreadRow` reads.
+ *
+ * `_count` is attached by us, not by Prisma. Asking Prisma for it aggregated
+ * every message on the platform to render one school's inbox — see
+ * relation-counts.ts.
+ */
 type ThreadWithRelations = Prisma.MessageThreadGetPayload<{
   include: {
     student: { select: { firstName: true; lastName: true } };
     teacher: { select: { firstName: true; lastName: true } };
     subject: { select: { name: true } };
     messages: { select: { body: true } };
-    _count: { select: { messages: true } };
   };
-}>;
+}> & { _count: { messages: number } };
 
 function fullName(p: { firstName: string; lastName: string }): string {
   return `${p.firstName} ${p.lastName}`.trim();
@@ -51,6 +59,7 @@ export class MessagesService {
   constructor(
     private readonly tenant: TenantContextService,
     private readonly timetable: TimetableService,
+    private readonly outbox: NotificationOutboxService,
   ) {}
 
   // ── shared helpers ──────────────────────────────────────────────────────────
@@ -86,7 +95,7 @@ export class MessagesService {
     return withTenant(schoolId, async (tx) => {
       const me = await this.myStudent(tx, userId);
       const count = await tx.message.count({
-        where: { senderRole: 'TEACHER', readAt: null, thread: { studentId: me.id } },
+        where: { schoolId, senderRole: 'TEACHER', readAt: null, thread: { studentId: me.id } },
       });
       return { count };
     });
@@ -98,7 +107,7 @@ export class MessagesService {
     return withTenant(schoolId, async (tx) => {
       const me = await this.myTeacher(tx, userId);
       const count = await tx.message.count({
-        where: { senderRole: 'STUDENT', readAt: null, thread: { teacherId: me.id } },
+        where: { schoolId, senderRole: 'STUDENT', readAt: null, thread: { teacherId: me.id } },
       });
       return { count };
     });
@@ -141,13 +150,12 @@ export class MessagesService {
   /** The include used for every thread-LIST query: names, the newest message
    * for a preview, and a filtered unread count. `unreadFrom` is the sender
    * whose unread messages the CALLER cares about (the OTHER party). */
-  private static listInclude(unreadFrom: MessageSenderRole) {
+  private static listInclude() {
     return {
       student: { select: { firstName: true, lastName: true } },
       teacher: { select: { firstName: true, lastName: true } },
       subject: { select: { name: true } },
       messages: { orderBy: { createdAt: 'desc' as const }, take: 1, select: { body: true } },
-      _count: { select: { messages: { where: { senderRole: unreadFrom, readAt: null } } } },
     };
   }
 
@@ -186,12 +194,15 @@ export class MessagesService {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
       const s = await this.myStudent(tx, userId);
-      const rows = await tx.messageThread.findMany({
-        where: { studentId: s.id },
+      const rows = await tx.messageThread.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, studentId: s.id },
         orderBy: { lastMessageAt: 'desc' },
-        include: MessagesService.listInclude('TEACHER'),
+        include: MessagesService.listInclude(),
       });
-      return rows.map(MessagesService.toThreadRow);
+      const unread = await unreadCountsByThread(tx, schoolId, 'TEACHER');
+      return rows.map((t) =>
+        MessagesService.toThreadRow({ ...t, _count: { messages: unread.get(t.id) ?? 0 } }),
+      );
     });
   }
 
@@ -201,12 +212,12 @@ export class MessagesService {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
       const s = await this.myStudent(tx, userId);
-      const thread = await MessagesService.loadThreadForList(tx, threadId, 'TEACHER');
+      const thread = await MessagesService.loadThreadForList(tx, schoolId, threadId, 'TEACHER');
       if (!thread || thread.studentId !== s.id) {
         throw new ApiError('NOT_FOUND', 'thread not found', 404, 'threadId');
       }
       await tx.message.updateMany({
-        where: { threadId, senderRole: 'TEACHER', readAt: null },
+        where: { schoolId, threadId, senderRole: 'TEACHER', readAt: null },
         data: { readAt: new Date() },
       });
       return MessagesService.detail(tx, thread);
@@ -233,7 +244,7 @@ export class MessagesService {
       );
     }
 
-    return withTenant(schoolId, async (tx) => {
+    const sent = await withTenant(schoolId, async (tx) => {
       const s = await this.myStudent(tx, userId);
       if (!s.classSectionId) {
         throw new ApiError('NO_CLASS_SECTION', 'You are not in a class section yet.', 409);
@@ -266,9 +277,15 @@ export class MessagesService {
         targetUserId: await MessagesService.teacherUserId(tx, dto.teacherId),
       });
 
-      const fresh = await MessagesService.loadThreadForList(tx, thread.id, 'TEACHER');
+      const fresh = await MessagesService.loadThreadForList(tx, schoolId, thread.id, 'TEACHER');
       return MessagesService.detail(tx, fresh!);
     });
+
+    // Kick the outbox now rather than waiting for the daily cron — on Hobby the
+    // cron cannot run more often, and a parent message that lands tomorrow is
+    // not a message. Claim-safe (FOR UPDATE SKIP LOCKED) so it cannot race the cron.
+    this.outbox.drainSoon();
+    return sent;
   }
 
   // ── teacher side (/manage/messages) ─────────────────────────────────────────
@@ -277,12 +294,15 @@ export class MessagesService {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
       const t = await this.myTeacher(tx, userId);
-      const rows = await tx.messageThread.findMany({
-        where: { teacherId: t.id },
+      const rows = await tx.messageThread.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, teacherId: t.id },
         orderBy: { lastMessageAt: 'desc' },
-        include: MessagesService.listInclude('STUDENT'),
+        include: MessagesService.listInclude(),
       });
-      return rows.map(MessagesService.toThreadRow);
+      const unread = await unreadCountsByThread(tx, schoolId, 'STUDENT');
+      return rows.map((t) =>
+        MessagesService.toThreadRow({ ...t, _count: { messages: unread.get(t.id) ?? 0 } }),
+      );
     });
   }
 
@@ -290,12 +310,12 @@ export class MessagesService {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
       const t = await this.myTeacher(tx, userId);
-      const thread = await MessagesService.loadThreadForList(tx, threadId, 'STUDENT');
+      const thread = await MessagesService.loadThreadForList(tx, schoolId, threadId, 'STUDENT');
       if (!thread || thread.teacherId !== t.id) {
         throw new ApiError('NOT_FOUND', 'thread not found', 404, 'threadId');
       }
       await tx.message.updateMany({
-        where: { threadId, senderRole: 'STUDENT', readAt: null },
+        where: { schoolId, threadId, senderRole: 'STUDENT', readAt: null },
         data: { readAt: new Date() },
       });
       return MessagesService.detail(tx, thread);
@@ -312,7 +332,7 @@ export class MessagesService {
       const t = await this.myTeacher(tx, userId);
       // Ownership from the STORED thread, never caller input: a teacher may
       // only post to a thread whose teacherId is their own (403 otherwise).
-      const thread = await tx.messageThread.findFirst({ where: { id: threadId } });
+      const thread = await tx.messageThread.findFirst({ where: { schoolId, id: threadId } });
       if (!thread || thread.teacherId !== t.id) {
         throw new ApiError('NOT_YOUR_THREAD', 'Thread not found', 404, 'threadId');
       }
@@ -327,7 +347,7 @@ export class MessagesService {
         targetUserId: await MessagesService.studentUserId(tx, thread.studentId),
       });
 
-      const fresh = await MessagesService.loadThreadForList(tx, thread.id, 'STUDENT');
+      const fresh = await MessagesService.loadThreadForList(tx, schoolId, thread.id, 'STUDENT');
       return MessagesService.detail(tx, fresh!);
     });
   }
@@ -410,11 +430,21 @@ export class MessagesService {
     return s?.userId ?? null;
   }
 
-  private static loadThreadForList(tx: TenantTx, threadId: string, unreadFrom: MessageSenderRole) {
-    return tx.messageThread.findFirst({
+  private static async loadThreadForList(
+    tx: TenantTx,
+    schoolId: string,
+    threadId: string,
+    unreadFrom: MessageSenderRole,
+  ): Promise<ThreadWithRelations | null> {
+    const thread = await tx.messageThread.findFirst({
       where: { id: threadId },
-      include: MessagesService.listInclude(unreadFrom),
+      include: MessagesService.listInclude(),
     });
+    if (!thread) return null;
+    const messages = await tx.message.count({
+      where: { schoolId, threadId, senderRole: unreadFrom, readAt: null },
+    });
+    return { ...thread, _count: { messages } };
   }
 
   /** Builds a full `MessageThreadDetail` (row + chronological messages) — read
@@ -423,7 +453,7 @@ export class MessagesService {
     tx: TenantTx,
     thread: ThreadWithRelations,
   ): Promise<MessageThreadDetail> {
-    const messages = await tx.message.findMany({
+    const messages = await tx.message.findMany({ take: LIST_CEILING.ACTIVITY,
       where: { threadId: thread.id },
       orderBy: { createdAt: 'asc' },
     });

@@ -76,6 +76,7 @@ describe('AnnouncementsService — mine / authorship-scoped edit+delete', () => 
       const rows = await svc.mine(SCHOOL, TEACHER_A);
 
       expect(txMock.announcement.findMany).toHaveBeenCalledWith({
+        take: 2000,
         where: { schoolId: SCHOOL, createdByUserId: TEACHER_A },
         orderBy: { createdAt: 'desc' },
         include: { classSection: { select: { name: true, grade: { select: { name: true } } } } },

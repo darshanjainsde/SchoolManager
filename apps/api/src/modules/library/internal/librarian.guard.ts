@@ -31,7 +31,7 @@ export class LibrarianGuard implements CanActivate {
     const { schoolId } = this.tenant.requireTenant();
     const staff = await withTenant(schoolId, (tx) =>
       tx.staff.findFirst({
-        where: { userId: user.sub, role: 'LIBRARIAN', isActive: true },
+        where: { schoolId, userId: user.sub, role: 'LIBRARIAN', isActive: true },
         select: { id: true },
       }),
     );

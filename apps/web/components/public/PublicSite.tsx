@@ -13,6 +13,7 @@ import HallOfFame, { hofCourses } from './sections/HallOfFame';
 import GallerySection from './sections/GallerySection';
 import EventsSection from './sections/EventsSection';
 import ConnectSection from './sections/ConnectSection';
+import AlumniSection from './sections/AlumniSection';
 import { SUBPAGES } from './subpages';
 import { PS_CSS } from './ps-css';
 import { themeRootProps } from './site-theme';
@@ -32,7 +33,7 @@ import {
   type SectionKey,
 } from './site-variants';
 
-export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'contact' | 'page';
+export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'alumni' | 'contact' | 'page';
 
 interface Props {
   data: PublicSiteData;
@@ -102,6 +103,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
   );
   const hasEnquiry = data.school.features.includes('ENQUIRY');
   const hasEvents = data.school.features.includes('EVENTS');
+  const hasAlumni = data.school.features.includes('ALUMNI');
   const hasBlog = data.school.features.includes('BLOG');
   const hasAcademics = data.courses.length > 0;
   const hasAdmissions = admissionsHasContent(data.admissions, data.courses);
@@ -480,7 +482,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
       {/* ── NAV (style selected by the school admin) ── */}
       <SiteNav
         data={data}
-        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasBlog, hasContact, hasEnquiry }}
+        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBlog, hasContact, hasEnquiry }}
         base={base}
         view={view}
         onAcademicsPage={onAcademicsPage}
@@ -551,6 +553,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
           {view === 'events' && (
             <ConnectSection events={data.events} timezone={data.school.timezone} schoolName={schoolName} />
           )}
+          {view === 'alumni' && <AlumniSection schoolName={schoolName} />}
           {view === 'contact' && (
             <ContactSection
               profile={data.profile}
@@ -567,7 +570,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
               <p className="mt-2 text-slate-600">Our admissions team is happy to help with any question.</p>
               <a
                 href="/contact"
-                className="btn-glow ps-cta-btn inline-block mt-6 font-semibold px-6 py-3.5 rounded-xl ps-soft hover:scale-[1.03] transition"
+                className="btn-glow ps-cta ps-cta-1 mt-6"
               >
                 Enquire now →
               </a>
@@ -603,7 +606,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
       {/* ── FOOTER (extracted; answers to footerConfig) ── */}
       <FooterSection
         data={data}
-        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasBlog, hasContact, hasEnquiry }}
+        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBlog, hasContact, hasEnquiry }}
         base={base}
         year={new Date().getFullYear()}
       />

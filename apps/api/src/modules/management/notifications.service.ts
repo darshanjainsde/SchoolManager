@@ -57,11 +57,11 @@ export class NotificationsService {
     return withTenant(schoolId, async (tx) => {
       const [rows, unreadCount] = await Promise.all([
         tx.notification.findMany({
-          where: { userId, clearedAt: null },
+          where: { schoolId, userId, clearedAt: null },
           orderBy: { createdAt: 'desc' },
           take: LIST_CAP,
         }),
-        tx.notification.count({ where: { userId, readAt: null, clearedAt: null } }),
+        tx.notification.count({ where: { schoolId, userId, readAt: null, clearedAt: null } }),
       ]);
       return { notifications: rows.map(toRow), unreadCount };
     });
@@ -71,7 +71,7 @@ export class NotificationsService {
   async unreadCount(userId: string): Promise<UnreadCountResult> {
     const { schoolId } = this.tenant.requireTenant();
     const count = await withTenant(schoolId, (tx) =>
-      tx.notification.count({ where: { userId, readAt: null, clearedAt: null } }),
+      tx.notification.count({ where: { schoolId, userId, readAt: null, clearedAt: null } }),
     );
     return { count };
   }
@@ -86,7 +86,7 @@ export class NotificationsService {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
       await tx.notification.updateMany({
-        where: {
+        where: { schoolId,
           userId,
           readAt: null,
           clearedAt: null,
@@ -95,7 +95,7 @@ export class NotificationsService {
         data: { readAt: new Date() },
       });
       const count = await tx.notification.count({
-        where: { userId, readAt: null, clearedAt: null },
+        where: { schoolId, userId, readAt: null, clearedAt: null },
       });
       return { count };
     });
@@ -117,15 +117,15 @@ export class NotificationsService {
       // Two updates, not one: readAt must only be stamped where it is null,
       // while clearedAt applies to every targeted row.
       await tx.notification.updateMany({
-        where: { userId, clearedAt: null, readAt: null, ...scope },
+        where: { schoolId, userId, clearedAt: null, readAt: null, ...scope },
         data: { readAt: now },
       });
       await tx.notification.updateMany({
-        where: { userId, clearedAt: null, ...scope },
+        where: { schoolId, userId, clearedAt: null, ...scope },
         data: { clearedAt: now },
       });
       const count = await tx.notification.count({
-        where: { userId, readAt: null, clearedAt: null },
+        where: { schoolId, userId, readAt: null, clearedAt: null },
       });
       return { count };
     });

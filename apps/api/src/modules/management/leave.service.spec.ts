@@ -75,7 +75,7 @@ describe('LeaveService', () => {
 
       const result = await svc.apply(SCHOOL, TEACHER_USER, dto);
 
-      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { userId: TEACHER_USER } });
+      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, userId: TEACHER_USER } });
       expect(txMock.leaveApplication.create).toHaveBeenCalledWith({
         data: {
           schoolId: SCHOOL,
@@ -363,7 +363,7 @@ describe('LeaveService', () => {
 
       const result = await svc.cancel(SCHOOL, LEAVE_ID, TEACHER_USER, 'TEACHER');
 
-      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { userId: TEACHER_USER } });
+      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, userId: TEACHER_USER } });
       expect(result).toEqual({ status: 'CANCELLED', restoredDates: 0 });
     });
 

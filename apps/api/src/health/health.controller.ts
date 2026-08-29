@@ -1,18 +1,12 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject, Optional } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { getPlatformPrisma } from '@skoolos/db';
-import Redis from 'ioredis';
-import { loadEnv } from '@skoolos/config';
+import { REDIS_CLIENT, ensureConnected, sharedRedis, type SharedRedis } from '../common/redis/redis.client';
 
 @ApiTags('health')
 @Controller()
 export class HealthController {
-  private readonly redis: Redis;
-
-  constructor() {
-    const env = loadEnv();
-    this.redis = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 });
-  }
+  constructor(@Optional() @Inject(REDIS_CLIENT) private readonly redis: SharedRedis = sharedRedis()) {}
 
   @Get('health')
   health() {
@@ -38,10 +32,8 @@ export class HealthController {
 
   private async checkRedis(): Promise<'ok' | string> {
     try {
-      if (this.redis.status !== 'ready' && this.redis.status !== 'connecting') {
-        await this.redis.connect().catch(() => undefined);
-      }
-      const pong = await this.redis.ping();
+      if (!(await ensureConnected(this.redis))) return 'unavailable';
+      const pong = await this.redis!.ping();
       return pong === 'PONG' ? 'ok' : `unexpected:${pong}`;
     } catch (e) {
       return (e as Error).message;

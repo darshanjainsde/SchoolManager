@@ -72,6 +72,7 @@ export function pageTable(
     about: { href: `${base}#about`, has: flags.hasAbout, label: 'About' },
     hof: { href: `${base}#hall-of-fame`, has: flags.hasHof, label: 'Hall of Fame' },
     gallery: { href: '/gallery', has: flags.hasGallery, label: 'Gallery' },
+    alumni: { href: '/alumni', has: flags.hasAlumni, label: 'Alumni' },
     academics: { href: '/academics', has: flags.hasAcademics, label: 'Academics' },
     admissions: { href: '/admissions', has: flags.hasAdmissions, label: 'Admissions' },
     connect: { href: '/connect', has: flags.hasEvents, label: 'Connect' },
@@ -166,6 +167,11 @@ export function navModel(input: NavModelInput): NavNode[] {
     ...(flags.hasAbout ? [{ key: 'about', label: 'About', href: `${base}#about` }] : []),
     ...(flags.hasHof ? [{ key: 'hof', label: 'Hall of Fame', href: `${base}#hall-of-fame` }] : []),
     ...(flags.hasGallery ? [{ key: 'gallery', label: 'Gallery', href: '/gallery' }] : []),
+    // Inside "Our school" rather than a seventh top-level control: NAV_CAP is
+    // six because a school name of typical length starts truncating at 1280px
+    // beyond that, and alumni ARE the school's own people — the same group as
+    // About and Hall of Fame, which the wall of faces feeds.
+    ...(flags.hasAlumni ? [{ key: 'alumni', label: 'Alumni', href: '/alumni' }] : []),
   ];
 
   const news: NavLeaf[] = [

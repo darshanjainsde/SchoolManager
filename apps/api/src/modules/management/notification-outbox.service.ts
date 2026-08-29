@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { runInBackground } from '../../common/notifications/run-in-background';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
 import { PushChannel } from '../../common/notifications/push.channel';
@@ -37,6 +38,17 @@ const DRAIN_BATCH_CAP = 200;
  * long ago, "no Kafka", keep it small).
  */
 const MAX_ATTEMPTS = 5;
+
+/**
+ * How long a claim is honoured before another drain may take the row.
+ *
+ * A drain that crashes between claiming and finishing leaves `claimedAt` set
+ * forever, so without a ceiling the row would never be retried. Five minutes is
+ * comfortably longer than a full DRAIN_BATCH_CAP run (sequential push sends,
+ * bounded by the function's maxDuration of 60s) and short enough that a genuine
+ * crash costs one cron cycle, not a day.
+ */
+const CLAIM_TTL_MS = 5 * 60_000;
 
 /**
  * Delivered rows are kept this long, then removed.
@@ -165,20 +177,69 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
  * silently losing the notification forever, which a naive "mark sent before
  * sending" ordering would risk instead).
  */
+/** Exactly the columns the claim statement returns. */
+interface OutboxRow {
+  id: string;
+  schoolId: string;
+  kind: string;
+  payload: unknown;
+  classSectionId: string | null;
+  targetUserId: string | null;
+}
+
 @Injectable()
 export class NotificationOutboxService {
   private readonly logger = new Logger(NotificationOutboxService.name);
 
   constructor(private readonly push: PushChannel) {}
 
+  /**
+   * Drain shortly, without blocking the caller.
+   *
+   * The cron is the safety net, not the delivery path. On a Vercel Hobby plan
+   * it CANNOT be the delivery path: Hobby rejects any cron more frequent than
+   * daily at deploy time, and fires it anywhere within the scheduled hour. A
+   * notification enqueued at 09:00 would wait until the small hours.
+   *
+   * `runInBackground` wraps Vercel's `waitUntil`, so the work survives the
+   * response being sent instead of being frozen with the instance. Failures are
+   * swallowed: the row is still in the outbox and the cron will retry it, so a
+   * failed opportunistic drain costs latency, never delivery.
+   *
+   * Safe to call concurrently with the cron — the drain claims its batch with
+   * FOR UPDATE SKIP LOCKED, so two runs never take the same row.
+   */
+  drainSoon(): void {
+    runInBackground(
+      () => this.drain(),
+      (e) => this.logger.warn(`opportunistic outbox drain failed: ${(e as Error)?.message}`),
+    );
+  }
+
   async drain(): Promise<NotificationOutboxDrainResult> {
     const db = getPlatformPrisma();
 
-    const rows = await db.notificationOutbox.findMany({
-      where: { sentAt: null, attempts: { lt: MAX_ATTEMPTS } },
-      orderBy: [{ createdAt: 'asc' }],
-      take: DRAIN_BATCH_CAP,
-    });
+    // Claim the batch in ONE statement. `FOR UPDATE SKIP LOCKED` makes a second
+    // concurrent drain step over rows this one already holds rather than block
+    // on them, and stamping `claimedAt` in the same statement means the claim
+    // survives after the row lock is released at commit.
+    //
+    // Written as raw SQL because Prisma has no way to express SKIP LOCKED. The
+    // only interpolated values are bound parameters.
+    const staleBefore = new Date(Date.now() - CLAIM_TTL_MS);
+    const rows = await db.$queryRaw<OutboxRow[]>`
+      UPDATE "NotificationOutbox" SET "claimedAt" = now()
+      WHERE id IN (
+        SELECT id FROM "NotificationOutbox"
+        WHERE "sentAt" IS NULL
+          AND attempts < ${MAX_ATTEMPTS}
+          AND ("claimedAt" IS NULL OR "claimedAt" < ${staleBefore})
+        ORDER BY "createdAt" ASC
+        LIMIT ${DRAIN_BATCH_CAP}
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id, "schoolId", kind, payload, "classSectionId", "targetUserId"
+    `;
 
     if (rows.length === DRAIN_BATCH_CAP) {
       this.logger.warn(
@@ -222,7 +283,12 @@ export class NotificationOutboxService {
         try {
           await db.notificationOutbox.update({
             where: { id: row.id },
-            data: { attempts: { increment: 1 }, lastError: errorMessage.slice(0, 500) },
+            // claimedAt back to null: this row is released for the next run.
+            data: {
+              attempts: { increment: 1 },
+              lastError: errorMessage.slice(0, 500),
+              claimedAt: null,
+            },
           });
         } catch (updateError) {
           // Even the failure-bookkeeping write failed — log and move on; the

@@ -70,7 +70,7 @@ export default function PageBlocks({ blocks }: { blocks: unknown }) {
               <div key={i} className="reveal" style={delay}>
                 <a
                   href={b.href ?? '/contact'}
-                  className="btn-glow ps-cta-btn inline-block font-semibold px-6 py-3.5 ps-btn hover:scale-[1.03] transition"
+                  className="btn-glow ps-cta ps-cta-1"
                 >
                   {b.label}
                 </a>

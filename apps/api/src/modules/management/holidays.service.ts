@@ -5,6 +5,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { isP2025 } from '../../common/errors/prisma-errors';
 import { todayIstDateStr } from './internal/leave-dates';
 import type { CreateHolidayDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 export type { Holiday };
 
@@ -71,7 +72,7 @@ export class HolidaysService {
     const todayUtcMidnight = new Date(`${todayIstDateStr(new Date())}T00:00:00.000Z`);
 
     const rows = await withTenant(schoolId, (tx) =>
-      tx.holiday.findMany({
+      tx.holiday.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, startDate: { gte: todayUtcMidnight } },
         orderBy: { startDate: 'asc' },
       }),

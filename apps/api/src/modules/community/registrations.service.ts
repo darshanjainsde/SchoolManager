@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { withTenant } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import type { PublicRegisterDto, RegisterDto } from './community.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 /**
  * Who is coming to an event.
@@ -31,11 +32,18 @@ export class RegistrationsService {
    * oversell the hall.
    */
   private async seatsTaken(tx: TenantTxLike, ticketTypeId: string): Promise<number> {
-    const rows = await tx.eventRegistration.findMany({
+    // Summed in the database, not in this process.
+    //
+    // This read decides whether a seat is free, so it must be EXACT. Fetching
+    // rows and adding them up is exact only while every row fits in one read —
+    // a row ceiling here would silently undercount a popular event and oversell
+    // the hall, which is the precise failure the surrounding transaction exists
+    // to prevent. An aggregate has no such ceiling to reach.
+    const agg = await tx.eventRegistration.aggregate({
       where: { ticketTypeId, status: { in: ['HELD', 'CONFIRMED'] } },
-      select: { quantity: true },
+      _sum: { quantity: true },
     });
-    return rows.reduce((n, r) => n + r.quantity, 0);
+    return agg._sum.quantity ?? 0;
   }
 
   /** The host's own view: every registration for one of its events. */
@@ -46,11 +54,11 @@ export class RegistrationsService {
       if (!event) throw new NotFoundException('Event not found');
 
       const [rows, ticketTypes] = await Promise.all([
-        tx.eventRegistration.findMany({
+        tx.eventRegistration.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { eventId, schoolId },
           orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
         }),
-        tx.eventTicketType.findMany({ where: { eventId }, orderBy: { createdAt: 'asc' } }),
+        tx.eventTicketType.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, eventId }, orderBy: { createdAt: 'asc' } }),
       ]);
 
       // Student names are resolved separately: a registration may reference a
@@ -60,7 +68,7 @@ export class RegistrationsService {
       // Bloom Public" is useful and an empty row is not.
       const studentIds = rows.map((r) => r.studentId).filter((x): x is string => !!x);
       const students = studentIds.length
-        ? await tx.student.findMany({
+        ? await tx.student.findMany({ take: LIST_CEILING.ROSTER,
             where: { id: { in: studentIds } },
             select: { id: true, firstName: true, lastName: true, admissionNo: true },
           })
@@ -168,8 +176,8 @@ export class RegistrationsService {
       }
 
       const ticket = dto.ticketTypeId
-        ? await tx.eventTicketType.findFirst({ where: { id: dto.ticketTypeId, eventId } })
-        : await tx.eventTicketType.findFirst({ where: { eventId }, orderBy: { createdAt: 'asc' } });
+        ? await tx.eventTicketType.findFirst({ where: { schoolId, id: dto.ticketTypeId, eventId } })
+        : await tx.eventTicketType.findFirst({ where: { schoolId, eventId }, orderBy: { createdAt: 'asc' } });
       if (!ticket) throw new BadRequestException('That event has no ticket type to register against');
 
       const now = new Date();
@@ -189,7 +197,7 @@ export class RegistrationsService {
       // waitlist is information the school can act on.
       const waitlisted = overCapacity;
       const waitlistPos = waitlisted
-        ? (await tx.eventRegistration.count({ where: { eventId, status: 'WAITLISTED' } })) + 1
+        ? (await tx.eventRegistration.count({ where: { schoolId, eventId, status: 'WAITLISTED' } })) + 1
         : null;
 
       const amountMinor = ticket.priceMinor * quantity;
@@ -244,5 +252,15 @@ export class RegistrationsService {
 interface TenantTxLike {
   eventRegistration: {
     findMany(args: unknown): Promise<{ quantity: number }[]>;
+    /**
+     * Sums seats in the database — see seatsTaken for why this must not page.
+     *
+     * Loosely typed on purpose: Prisma's generated aggregate signature is far
+     * wider than this shim needs, and pinning it here makes the real client
+     * un-assignable. The shim exists so the unit tests can pass a plain object,
+     * not to re-describe Prisma.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    aggregate(args: any): Promise<any>;
   };
 }

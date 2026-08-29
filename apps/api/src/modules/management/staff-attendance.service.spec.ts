@@ -271,6 +271,7 @@ describe('StaffAttendanceService', () => {
       await svc.person(SCHOOL, 'STAFF', STAFF_1, '2026-07');
 
       expect(txMock.staffAttendance.findMany).toHaveBeenCalledWith({
+        take: 2000,
         where: {
           schoolId: SCHOOL,
           date: { gte: new Date(Date.UTC(2026, 6, 1)), lt: new Date(Date.UTC(2026, 7, 1)) },
@@ -359,6 +360,7 @@ describe('StaffAttendanceService', () => {
       await svc.mine(SCHOOL, 'user-1', '2026-07');
 
       expect(txMock.staffAttendance.findMany).toHaveBeenCalledWith({
+        take: 2000,
         where: {
           schoolId: SCHOOL,
           staffId: STAFF_1,

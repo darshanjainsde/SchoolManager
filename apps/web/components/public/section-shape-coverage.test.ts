@@ -23,6 +23,10 @@ const BELOW_THE_FOLD = [
   'sections/ContactSection.tsx',
   'sections/EventsSection.tsx',
   'sections/GallerySection.tsx',
+  // Alumni is a full SiteView of its own, entirely below the fold. It was
+  // absent from this list while it was being built, which is how it came to
+  // carry eight hardcoded `rounded-full` pills that no shape could reach.
+  'sections/AlumniSection.tsx',
 ];
 
 function source(rel: string): string {
@@ -75,5 +79,119 @@ describe('the shapes are real systems, not three radius values', () => {
     // The hero's floating cards wear .ps-card. If shape were hung off that
     // class instead, picking Editorial would put a rule through the hero.
     expect(source('sections/HeroSection.tsx')).not.toContain('ps-panel');
+  });
+});
+
+/**
+ * ONE RECIPE FOR A BUTTON OF WEIGHT.
+ *
+ * The site had exactly one real call-to-action — "Enquire now" — assembled at
+ * its single call site from six Tailwind utilities. Nothing named that recipe,
+ * so the next eight buttons were rebuilt by eye from `.ps-btn`, which sets a
+ * radius and a shadow and NO PADDING AT ALL. They rendered as cramped little
+ * pills beside the confident one, which is exactly how it was reported.
+ *
+ * These assertions are cheap and they are the reason it cannot happen twice.
+ */
+describe('a call to action is a class, not six utilities', () => {
+  const CSS = source('ps-css.ts');
+
+  it('gives .ps-cta its own padding, so a bare .ps-cta is never cramped', () => {
+    expect(CSS).toMatch(/\.ps-cta\s*\{[^}]*padding:/);
+    expect(CSS).toMatch(/\.ps-cta\s*\{[^}]*font-weight:/);
+  });
+
+  it('takes the CTA corner from the shape token, not a fixed pill', () => {
+    expect(CSS).toMatch(/\.ps-cta\s*\{[^}]*border-radius:\s*var\(--ps-radius-sm\)/);
+  });
+
+  it('drops the CTA shadow for the two shapes that asked for none', () => {
+    expect(CSS).toMatch(/\.ps-shape-editorial \.ps-cta[^{]*\{[^}]*box-shadow:\s*none/);
+    expect(CSS).toMatch(/\.ps-shape-crisp \.ps-cta[^{]*\{[^}]*box-shadow:\s*none/);
+  });
+
+  it('offers a contrast fill whose legibility does not depend on a school choice', () => {
+    // --ps2 is the school's accent and may be a pale marigold that cannot
+    // carry white text. Ink is the colour the site already trusts to be read.
+    expect(CSS).toMatch(/\.ps-cta-ink\s*\{[^}]*background:\s*var\(--ink\)/);
+  });
+
+  it('keeps a segmented item legible BEFORE it is selected', () => {
+    // The washed-out version tinted the item 12% of the brand hue and then set
+    // its text to that same hue — almost no chroma separation, so the row read
+    // as a smudge. The track carries the tint now; the label wears ink.
+    expect(CSS).toMatch(/\.ps-seg-btn\s*\{[^}]*color:\s*color-mix\(in srgb, var\(--ink\)/);
+    expect(CSS).toMatch(/\.ps-seg\s*\{[^}]*background:\s*color-mix/);
+  });
+
+  it('drives the selected item from aria-pressed, so state cannot drift from style', () => {
+    expect(CSS).toMatch(/\.ps-seg-btn\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--ps1\)/);
+  });
+
+  it('leaves no hand-rolled chip selector behind in the alumni section', () => {
+    const src = source('sections/AlumniSection.tsx');
+    expect(src).not.toContain('ps-chip px-4 py-2 rounded-full');
+    expect(src).not.toContain('ps-btn ps-cta-btn');
+    // The inline active override the segmented control replaced.
+    expect(src).not.toContain("borderColor: 'var(--ps1)'");
+  });
+});
+
+describe('a brand fill never assumes its label is white', () => {
+  const CSS = source('ps-css.ts');
+
+  it('takes the CTA label from the resolved token', () => {
+    // Beacon's brand is a mint; white on it measures 1.6:1. Hardcoding #fff
+    // made every primary button on that school's site unreadable.
+    expect(CSS).toMatch(/\.ps-cta-1\s*\{[^}]*color:\s*var\(--ps1-on/);
+    expect(CSS).toMatch(/\.ps-cta-btn\s*\{[^}]*color:\s*var\(--ps1-on/);
+  });
+
+  it('takes the selected segment label from it too', () => {
+    expect(CSS).toMatch(/\.ps-seg-btn\[aria-pressed="true"\]\s*\{[^}]*color:\s*var\(--ps1-on/);
+  });
+
+  it('keeps a track hugging its contents, at any length', () => {
+    // .ps-seg-wrap set display:flex, which made the track block-level: the
+    // batch row stretched the full page with four chips at its left end.
+    expect(CSS).not.toMatch(/\.ps-seg-wrap\s*\{/);
+    expect(CSS).toMatch(/\.ps-seg\s*\{[^}]*display:\s*inline-flex/);
+    expect(CSS).toMatch(/\.ps-seg\s*\{[^}]*flex-wrap:\s*wrap/);
+  });
+
+  it('leaves no stretched track behind in the alumni section', () => {
+    expect(source('sections/AlumniSection.tsx')).not.toContain('ps-seg-wrap');
+  });
+});
+
+describe('choosing a THING is not the same control as switching a view', () => {
+  const CSS = source('ps-css.ts');
+
+  it('gives a choice its own surface, a price line and a mark', () => {
+    // The gift list was first built as a segmented control. A track is for a
+    // handful of short mutually-exclusive labels in ONE row; four product names
+    // with prices wrapped it onto two lines and read as a blob.
+    expect(CSS).toMatch(/\.ps-choice\s*\{[^}]*background:\s*#fff/);
+    expect(CSS).toMatch(/\.ps-choice\[aria-pressed="true"\]\s*\{[^}]*border-color:\s*var\(--ps1\)/);
+    expect(CSS).toMatch(/\.ps-choice-mark\s*\{/);
+  });
+
+  it('stacks the name above its price rather than running them together', () => {
+    // Both are spans; without display:block they render as one run-on string
+    // ("Winter sweaterabout ₹450 per child"), which is what shipped first.
+    expect(CSS).toMatch(/\.ps-choice-name\s*\{[^}]*display:\s*block/);
+    expect(CSS).toMatch(/\.ps-choice-meta\s*\{[^}]*display:\s*block/);
+  });
+
+  it('takes the card corner from the shape token', () => {
+    expect(CSS).toMatch(/\.ps-choice\s*\{[^}]*border-radius:\s*var\(--ps-radius-sm\)/);
+  });
+
+  it('leaves no product list on a segmented track in the alumni section', () => {
+    const src = source('sections/AlumniSection.tsx');
+    // The tab row is still a track, and should be — this checks the two
+    // PICKERS moved off it.
+    expect(src).toContain('ps-choices');
+    expect(src).not.toMatch(/items\.map\([^)]*\)\s*=>\s*\([\s\S]{0,200}ps-seg-btn/);
   });
 });

@@ -1,0 +1,428 @@
+/* ============================================================================
+   Exam Hall — the sheets that actually leave the office
+   ============================================================================
+   Teachers carry no phone into a hall, so the paper is the product and these
+   rules are load-bearing rather than cosmetic.
+
+   THREE THINGS THIS FILE IS DELIBERATE ABOUT:
+
+   1. Literal ink, not theme tokens. A sheet is paper in both themes. A chart
+      printed out of a dark-mode browser as white-on-black wastes a cartridge
+      and is unreadable in a hall, so nothing here reads `--sk-*`.
+
+   2. Millimetres and points, never pixels. `@page { size: A4; margin: 0 }`
+      plus mm geometry is what makes a 21-up sticker sheet land on real
+      die-cut stationery. Avery L7160 (63.5 x 38.1) and L7164 (99.1 x 42.3)
+      are the two sheets any Indian stationery shop stocks.
+
+   3. Hairline borders, never box-shadow. Chrome's print-to-PDF flattens a
+      blurred shadow into a solid grey rectangle — this cost a whole print run
+      on the sales booklet, and every rule below inherits that lesson.
+
+   `#eh-print` is hidden on screen. `body.eh-printing` is set for the length of
+   the print only, so a stray Cmd+P still prints the page a person is looking
+   at rather than a sheet they did not ask for.
+   ========================================================================== */
+
+/* The print container is invisible on screen; the preview beside the picker
+   uses the SAME `.eh-sheets` styling, which is what stops a preview from ever
+   showing something the printer would not. */
+#eh-print {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  /* Only the sheets. The console around them is not what the office wants. */
+  body.eh-printing > * {
+    display: none !important;
+  }
+  body.eh-printing > #eh-print {
+    display: block !important;
+  }
+
+  #eh-print .eh-page {
+    break-after: page;
+    page-break-after: always;
+    border: none !important;
+  }
+  #eh-print .eh-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  /* A class colour that does not print is not a class colour. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+/* ── the page ────────────────────────────────────────────────────────────── */
+
+.eh-sheets .eh-page {
+  position: relative;
+  width: 210mm;
+  min-height: 297mm;
+  background: #ffffff;
+  color: #191627;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  padding: 14mm 12mm;
+  box-sizing: border-box;
+}
+
+.eh-sheets .eh-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8mm;
+  border-bottom: 0.4mm solid #191627;
+  padding-bottom: 3mm;
+  margin-bottom: 5mm;
+}
+.eh-sheets .eh-room {
+  font-size: 20pt;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.eh-sheets .eh-title {
+  font-size: 10pt;
+  color: #4e4a63;
+  margin-top: 1.5mm;
+}
+.eh-sheets .eh-note {
+  font-size: 8.5pt;
+  color: #4e4a63;
+  text-align: right;
+}
+
+.eh-sheets .eh-board {
+  height: 1.6mm;
+  background: repeating-linear-gradient(90deg, #b9b3a4 0 3mm, transparent 3mm 5mm);
+}
+.eh-sheets .eh-boardcap {
+  font-size: 7pt;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b6784;
+  text-align: center;
+  margin: 1.5mm 0 4mm;
+}
+
+/* ── seating chart ───────────────────────────────────────────────────────── */
+
+.eh-sheets .eh-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6mm;
+}
+.eh-sheets .eh-crow {
+  display: flex;
+  align-items: stretch;
+  gap: 2mm;
+}
+.eh-sheets .eh-rowno {
+  flex: none;
+  width: 5mm;
+  font-size: 7pt;
+  color: #8a85a2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.eh-sheets .eh-cdesk {
+  flex: 1;
+  display: flex;
+  gap: 0.6mm;
+  min-width: 0;
+}
+.eh-sheets .eh-ccell {
+  flex: 1;
+  min-width: 0;
+  border: 0.25mm solid #cfc9be;
+  border-radius: 1mm;
+  padding: 1.4mm 1.6mm;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3mm;
+  overflow: hidden;
+}
+.eh-sheets .eh-ccell.eh-gone {
+  border-style: dashed;
+  border-color: #e2ded6;
+}
+.eh-sheets .eh-ccell.eh-empty {
+  border-style: dashed;
+}
+.eh-sheets .eh-cseat {
+  font-size: 6pt;
+  color: #8a85a2;
+  letter-spacing: 0.04em;
+}
+/* Two lines, never an ellipsis: a truncated surname is a wrong sheet, and
+   Indian names are long. */
+.eh-sheets .eh-cname {
+  font-size: 8pt;
+  font-weight: 700;
+  line-height: 1.12;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.eh-sheets .eh-cclass {
+  font-size: 6.5pt;
+  color: #4e4a63;
+}
+
+/* ── door list ───────────────────────────────────────────────────────────── */
+
+.eh-sheets .eh-doorgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6mm;
+}
+.eh-sheets .eh-doorcol {
+  break-inside: avoid;
+}
+.eh-sheets .eh-doorclass {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11pt;
+  font-weight: 800;
+  border-bottom: 0.3mm solid #191627;
+  padding-bottom: 1mm;
+  margin-bottom: 1.5mm;
+}
+.eh-sheets .eh-doorclass span {
+  font-weight: 500;
+  color: #6b6784;
+}
+.eh-sheets .eh-doorrow {
+  display: flex;
+  align-items: baseline;
+  gap: 2mm;
+  font-size: 8.5pt;
+  padding: 0.7mm 0;
+  border-bottom: 0.2mm solid #eeebe3;
+}
+.eh-sheets .eh-roll {
+  flex: none;
+  width: 7mm;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.eh-sheets .eh-dname {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eh-sheets .eh-dseat {
+  flex: none;
+  font-size: 7.5pt;
+  color: #4e4a63;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── attendance sheet ────────────────────────────────────────────────────── */
+
+.eh-sheets .eh-att {
+  width: 100%;
+  border-collapse: collapse;
+}
+.eh-sheets .eh-att th,
+.eh-sheets .eh-att td {
+  border: 0.25mm solid #cfc9be;
+  padding: 1.6mm 2mm;
+  font-size: 8.5pt;
+  text-align: left;
+  height: 7mm;
+}
+.eh-sheets .eh-att th {
+  font-size: 7pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4e4a63;
+  background: #f4f2ed;
+  height: auto;
+}
+.eh-sheets .eh-att .w-seat {
+  width: 18mm;
+}
+.eh-sheets .eh-att .w-class {
+  width: 18mm;
+}
+.eh-sheets .eh-att .w-roll {
+  width: 13mm;
+}
+.eh-sheets .eh-att .w-sign {
+  width: 42mm;
+}
+.eh-sheets .eh-att .w-abs {
+  width: 16mm;
+}
+.eh-sheets .eh-mono {
+  font-variant-numeric: tabular-nums;
+}
+.eh-sheets .eh-sign {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4mm 10mm;
+  margin-top: 6mm;
+  font-size: 9pt;
+  color: #4e4a63;
+}
+
+/* ── label sheets ────────────────────────────────────────────────────────── */
+/* Avery L7160 (21-up) and L7164 (12-up). Margins are the die-cut's own, so a
+   sheet lands on real stationery; 3mm of inner padding keeps anything that
+   matters away from a cut edge, because die-cuts shift. */
+
+.eh-sheets .eh-sheet-21,
+.eh-sheets .eh-sheet-12 {
+  padding: 0;
+  display: grid;
+}
+.eh-sheets .eh-sheet-21 {
+  grid-template-columns: repeat(3, 63.5mm);
+  grid-auto-rows: 38.1mm;
+  column-gap: 2.5mm;
+  padding: 15.15mm 7.25mm;
+}
+.eh-sheets .eh-sheet-12 {
+  grid-template-columns: repeat(2, 99.1mm);
+  grid-auto-rows: 42.3mm;
+  column-gap: 2.5mm;
+  padding: 21.6mm 4.65mm;
+}
+
+.eh-sheets .eh-lab {
+  overflow: hidden;
+  background: #ffffff;
+  color: #191627;
+}
+
+.eh-sheets .eh-lab-seat {
+  padding: 3mm 3.4mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1mm;
+}
+.eh-sheets .eh-lab-seat .t {
+  font-size: 6.5pt;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #5e5978;
+}
+.eh-sheets .eh-lab-seat .c {
+  font-size: 26pt;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.eh-sheets .eh-lab-seat .f {
+  font-size: 5.5pt;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #8a85a2;
+}
+
+.eh-sheets .eh-lab-slip {
+  display: flex;
+}
+.eh-sheets .eh-lab-slip .tint {
+  width: 1.7mm;
+  flex: none;
+  align-self: stretch;
+}
+.eh-sheets .eh-lab-slip .in {
+  flex: 1;
+  min-width: 0;
+  padding: 3.2mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2.2mm;
+}
+.eh-sheets .eh-lab-slip .r1 {
+  display: flex;
+  justify-content: space-between;
+  gap: 3mm;
+  font-size: 6.5pt;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #5e5978;
+}
+.eh-sheets .eh-lab-slip .nm {
+  font-size: 12.5pt;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  line-height: 1.14;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.eh-sheets .eh-lab-slip .r3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 3mm;
+  align-items: baseline;
+  font-size: 7pt;
+  color: #4e4a63;
+}
+.eh-sheets .eh-lab-slip .r3 b {
+  font-size: 8.5pt;
+  font-weight: 500;
+  color: #191627;
+  white-space: nowrap;
+}
+
+/* ── on-screen preview ─────────────────────────────────────────────────────
+   The same sheet components, shrunk. A4 is 210mm ≈ 794px, so the page is
+   scaled to fit the pane and the wrapper's height is scaled to match — a
+   transform alone does not change layout height, which would leave a tall
+   gap under every preview. */
+
+.sk-eh-preview { display: flex; flex-direction: column; gap: 20px; margin-top: 20px; }
+.sk-eh-preview figure { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+.sk-eh-preview figcaption {
+  font-family: var(--sk-mono); font-size: 10.5px; letter-spacing: 0.11em;
+  text-transform: uppercase; color: var(--sk-ink-3);
+}
+.sk-eh-paper {
+  --eh-zoom: 0.56;
+  width: calc(210mm * var(--eh-zoom));
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--sk-line-2);
+  border-radius: var(--sk-r-sm);
+  background: #fff;
+}
+/* `zoom`, not `transform: scale()`. A transform does not affect layout, so the
+   wrapper kept the sheet's UNSCALED height — measured at 611px of box holding
+   256px of visible sheet, i.e. 355px of dead white space under every preview,
+   five times over. `zoom` scales the box too. */
+.sk-eh-paper-in { width: 210mm; zoom: var(--eh-zoom); }
+/* Only the first page of a multi-page sheet is previewed; the rest print. */
+.sk-eh-paper-in .eh-page ~ .eh-page { display: none; }
+.sk-eh-paper-in .eh-page { min-height: 0; }
+
+/* The zoom has to leave the sheet NARROWER than the pane at every width, or
+   `overflow: hidden` quietly eats the right edge — it was clipping 15px on a
+   390px phone. */
+@media (max-width: 1100px) { .sk-eh-paper { --eh-zoom: 0.44; } }
+@media (max-width: 700px) { .sk-eh-paper { --eh-zoom: 0.33; } }

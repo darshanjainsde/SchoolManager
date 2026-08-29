@@ -12,6 +12,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
 import type { CreateLoginDto, CreateStudentDto, UpdateStudentDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 export interface LoginInviteResult {
   email: string;
@@ -75,12 +76,12 @@ export class StudentsService {
       // Narrow projection: nothing here is minor PII, so a TEACHER may read it
       // for the one class section they asked about.
       return withTenant(schoolId, (tx) =>
-        tx.student.findMany({ where, orderBy, select: { ...ROSTER_SELECT } }),
+        tx.student.findMany({ take: LIST_CEILING.ROSTER, where, orderBy, select: { ...ROSTER_SELECT } }),
       ) as Promise<RosterStudent[]>;
     }
 
     return withTenant(schoolId, (tx) =>
-      tx.student.findMany({
+      tx.student.findMany({ take: LIST_CEILING.ROSTER,
         where,
         orderBy,
         include: {
@@ -188,7 +189,7 @@ export class StudentsService {
     const username = dto.username?.trim() || null;
 
     const { userId, code } = await withTenant(schoolId, async (tx) => {
-      const student = await tx.student.findFirst({ where: { id: studentId } });
+      const student = await tx.student.findFirst({ where: { schoolId, id: studentId } });
       if (!student) throw new NotFoundException('Student not found');
       if (student.userId) throw new ConflictException('Student already has a login');
 
@@ -258,7 +259,7 @@ export class StudentsService {
    */
   async resendInvite(schoolId: string, studentId: string): Promise<LoginInviteResult> {
     const { userId, email, username, code } = await withTenant(schoolId, async (tx) => {
-      const student = await tx.student.findFirst({ where: { id: studentId } });
+      const student = await tx.student.findFirst({ where: { schoolId, id: studentId } });
       if (!student) throw new NotFoundException('Student not found');
       if (!student.userId) throw new NotFoundException('Student has no login to resend an invite for');
 

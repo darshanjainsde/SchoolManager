@@ -933,22 +933,26 @@ export default function StudentsPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <button
                           className="sk-btn sk-press"
+                          data-icon
+                          aria-label={`Edit ${student.firstName} ${student.lastName}`}
+                          title="Edit"
                           onClick={() => {
                             setShowAdd(false);
                             setEditId(student.id);
                           }}
                         >
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edit
+                          <Pencil className="h-4 w-4" />
                         </button>
                         <button
                           className="sk-btn sk-press"
+                          data-icon
+                          data-tone="bad"
+                          aria-label={`Delete ${student.firstName} ${student.lastName}`}
+                          title="Delete"
                           disabled={deleteMutation.isPending}
                           onClick={() => confirmDeleteStudent(student)}
-                          style={{ color: 'var(--sk-bad)' }}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
