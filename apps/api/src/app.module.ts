@@ -27,6 +27,7 @@ import { DirectoryModule } from './modules/directory/directory.module';
 import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
 import { BlogModule } from './modules/blog';
+import { FeesModule } from './modules/fees';
 import { RedisThrottlerModule } from './common/throttler/redis-throttler.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 
@@ -85,6 +86,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     DirectoryModule,
     MarketingModule,
     BlogModule,
+    FeesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

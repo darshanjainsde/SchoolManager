@@ -79,6 +79,24 @@ export type ErrorCode =
   /** Caller is authenticated but the school's plan does not include this — 403. */
   | 'FORBIDDEN_FEATURE'
   | 'NOT_FOUND'
+  /** No payment provider is registered under that key — pair with 400. */
+  | 'UNKNOWN_PAYMENT_PROVIDER'
+  /** Sckools has not finished onboarding with this gateway yet, so it cannot
+   *  take money. The parent's Pay Now button renders disabled off the same
+   *  fact; this code is the belt to that braces. Pair with 409. */
+  | 'PAYMENT_PROVIDER_UNAVAILABLE'
+  /** The school has not switched on any way for parents to pay — pair with 409. */
+  | 'NO_PAYMENT_METHOD'
+  /** That UTR / reference has already been claimed at this school — pair with 409. */
+  | 'DUPLICATE_PAYMENT_REFERENCE'
+  /** The payment is no longer awaiting review (already verified or rejected) — pair with 409. */
+  | 'PAYMENT_NOT_PENDING'
+  /** Bills already exist for this term, so the plan behind them is frozen — pair with 409. */
+  | 'FEE_PLAN_FROZEN'
+  /** A concession must be either a percentage or an amount, never both or neither. */
+  | 'CONCESSION_BASIS'
+  /** No fee structure has been set up for the year being billed — pair with 409. */
+  | 'FEE_SETUP_INCOMPLETE'
   | 'INTERNAL';
 
 export interface ApiErrorBody {
