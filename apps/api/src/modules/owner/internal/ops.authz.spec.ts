@@ -28,11 +28,18 @@ describe('GET /owner/ops authorization', () => {
     expect(guards).toContain(OwnerHostGuard);
   });
 
-  it('exposes counts only, never tenant row content', () => {
-    // The BYPASSRLS allow-list entry claims this; keep the claim honest by
-    // failing if the service ever starts selecting tenant fields.
+  it('reads only platform tables, never tenant row content', () => {
+    // The BYPASSRLS allow-list entry claims this; keep the claim honest.
+    //
+    // Originally this asserted "no findMany at all", which held while the
+    // dashboard only counted. It now reads MetricRollup for the trend line —
+    // a platform table of route names and numbers with no schoolId — so the
+    // assertion states the actual property instead of a proxy for it.
     const src = readFileSync(join(__dirname, 'ops.service.ts'), 'utf8');
-    expect(src).not.toMatch(/\bfindMany\b/);
-    expect(src).toMatch(/\.count\(/);
+    const models = [...src.matchAll(/\bdb\.(\w+)\.|getPlatformPrisma\(\)\.(\w+)\./g)]
+      .map((m) => m[1] ?? m[2]);
+    expect(new Set(models)).toEqual(new Set(['notificationOutbox', 'metricRollup']));
+    // and it still only ever counts the outbox, never reads its payloads
+    expect(src).toMatch(/notificationOutbox\.count\(/);
   });
 });

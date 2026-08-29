@@ -17,6 +17,15 @@ export interface RouteRow {
   dbHoldP95Ms: number | null;
 }
 
+export interface HistoryPoint {
+  hour: string;
+  requests: number;
+  errors: number;
+  p95Ms: number | null;
+  dbHoldP95Ms: number | null;
+  txTimeouts: number;
+}
+
 export interface OpsResponse {
   windowMinutes: number;
   severity: Severity;
@@ -34,6 +43,8 @@ export interface OpsResponse {
   routes: RouteRow[];
   outbox: { pending: number; oldestMinutes: number | null; exhausted: number };
   metricsAvailable: boolean;
+  /** Hourly history, oldest first. Empty until the first promotion has run. */
+  history: HistoryPoint[];
 }
 
 interface Agg {
@@ -65,7 +76,11 @@ export class OpsService {
   constructor(@Optional() @Inject(REDIS_CLIENT) private readonly redis: SharedRedis = sharedRedis()) {}
 
   async snapshot(): Promise<OpsResponse> {
-    const [metrics, outbox] = await Promise.all([this.readMetrics(), this.readOutbox()]);
+    const [metrics, outbox, history] = await Promise.all([
+      this.readMetrics(),
+      this.readOutbox(),
+      this.readHistory(),
+    ]);
 
     const totalsAgg = metrics.total;
     const requests = totalsAgg.count;
@@ -102,6 +117,7 @@ export class OpsService {
       routes: metrics.routes,
       outbox,
       metricsAvailable: metrics.available,
+      history,
     };
   }
 
@@ -157,6 +173,46 @@ export class OpsService {
       .slice(0, 25);
 
     return { total, routes, logins, available };
+  }
+
+  /**
+   * Hourly history from Postgres.
+   *
+   * Redis holds only the live minutes, so "is this worse than last week" can
+   * only be answered here. Seven days covers the weekly rhythm a school runs on
+   * while keeping the query small.
+   */
+  private async readHistory(): Promise<HistoryPoint[]> {
+    try {
+      const since = new Date(Date.now() - 7 * 24 * 3_600_000);
+      const rows = await getPlatformPrisma().metricRollup.findMany({
+        where: { hour: { gte: since } },
+        orderBy: { hour: 'asc' },
+      });
+      // Collapse routes into one point per hour: the trend line is about the
+      // platform, and per-route detail already sits in the live table above.
+      const byHour = new Map<number, Agg>();
+      for (const r of rows) {
+        const key = r.hour.getTime();
+        let a = byHour.get(key);
+        if (!a) { a = emptyAgg(); byHour.set(key, a); }
+        a.count += r.count; a.errors += r.errors;
+        a.tx += r.txTimeouts; a.pool += r.poolTimeouts;
+        a.latency = mergeBuckets(a.latency, r.latency);
+        a.dbHold = mergeBuckets(a.dbHold, r.dbHold);
+      }
+      return [...byHour.entries()].map(([hourMs, a]) => ({
+        hour: new Date(hourMs).toISOString(),
+        requests: a.count,
+        errors: a.errors,
+        p95Ms: finite(percentileFromBuckets(a.latency, 0.95)),
+        dbHoldP95Ms: finite(percentileFromBuckets(a.dbHold, 0.95)),
+        txTimeouts: a.tx,
+      }));
+    } catch {
+      // History is a nice-to-have; the live view must render without it.
+      return [];
+    }
   }
 
   private async readOutbox(): Promise<{ pending: number; oldestMinutes: number | null; exhausted: number }> {
