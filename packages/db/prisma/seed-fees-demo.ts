@@ -43,7 +43,28 @@ process.env.DATABASE_URL = DB_URL;
 process.env.DATABASE_URL_APP = DB_URL;
 process.env.DATABASE_URL_PLATFORM = DB_URL;
 
+import { randomUUID } from 'node:crypto';
 import { getPlatformPrisma, withTenant, disconnectAll, type TenantTx } from '@skoolos/db';
+
+/**
+ * Every write below is batched, and that is not a micro-optimisation.
+ *
+ * The first version wrote a row per student in a loop — about 3,000 round trips
+ * inside one interactive transaction. On localhost that finished in under a
+ * second. Against staging's pooler each round trip costs tens of milliseconds,
+ * so it blew Prisma's 5s transaction budget and died with P2028 halfway through
+ * the assignments. A seed that only works on the developer's own machine is not
+ * a seed.
+ *
+ * So: read once, compute in memory, write with createMany, and keep each
+ * transaction short enough that latency cannot end it.
+ */
+const CHUNK = 500;
+function chunked<T>(rows: T[], size = CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
+  return out;
+}
 
 const SLUG = process.env.DEMO_SCHOOL_SLUG ?? 'raffles';
 const DRY_RUN = process.env.DEMO_DRY_RUN === 'true';
@@ -125,7 +146,7 @@ async function main() {
   });
   // Billing and payments each need the previous transaction committed, because
   // they read what it wrote (the plan, then the invoices).
-  await withTenant(schoolId, (tx) => seedBills(tx, schoolId, year.id));
+  await seedBills(schoolId, year.id);
   await withTenant(schoolId, (tx) => seedPayments(tx, schoolId));
 
   console.log('\nDone. Sign in as admin@' + SLUG + '.test and open Fees.');
@@ -220,18 +241,19 @@ async function seedExceptions(
   const rte = students.filter((_, i) => i % 17 === 5).slice(0, 4);
   const rteIds = new Set(rte.map((s) => s.id));
 
-  for (const s of students) {
-    const optIn = onBus.some((b) => b.id === s.id) && transport ? [transport.id] : [];
-    const isRte = rteIds.has(s.id);
-    const existing = await tx.feeAssignment.findFirst({ where: { studentId: s.id, planId: plan.id } });
-    if (existing) {
-      await tx.feeAssignment.update({ where: { id: existing.id }, data: { optInCategoryIds: optIn, isRte } });
-    } else {
-      await tx.feeAssignment.create({
-        data: { schoolId, studentId: s.id, planId: plan.id, optInCategoryIds: optIn, isRte },
-      });
-    }
-  }
+  // Replace wholesale rather than upserting row by row: 491 findFirst+create
+  // pairs is ~1,000 round trips and times the transaction out against a remote
+  // database. Assignments carry no history worth preserving — they are derived.
+  const onBusIds = new Set(onBus.map((b) => b.id));
+  await tx.feeAssignment.deleteMany({ where: { schoolId, planId: plan.id } });
+  const assignRows = students.map((s) => ({
+    schoolId,
+    studentId: s.id,
+    planId: plan.id,
+    optInCategoryIds: onBusIds.has(s.id) && transport ? [transport.id] : [],
+    isRte: rteIds.has(s.id),
+  }));
+  for (const batch of chunked(assignRows)) await tx.feeAssignment.createMany({ data: batch });
 
   // Two sibling concessions and one staff-ward, on students who are NOT RTE —
   // stacking a discount on a bill nobody pays would demonstrate nothing.
@@ -258,102 +280,139 @@ async function seedExceptions(
   console.log(`  exceptions: ${onBus.length} on the bus, ${rte.length} RTE, ${picks.length} concessions`);
 }
 
-/** Bills for every term whose due date has arrived or is close. */
-async function seedBills(tx: TenantTx, schoolId: string, academicYearId: string) {
-  const terms = await tx.feeTerm.findMany({ where: { schoolId, academicYearId }, orderBy: { order: 'asc' } });
-  const plan = await tx.feePlan.findFirstOrThrow({
-    where: { schoolId, academicYearId, isActive: true }, orderBy: { version: 'desc' },
-  });
-  const cats = await tx.feeCategory.findMany({ where: { schoolId, archivedAt: null } });
-  const items = await tx.feePlanItem.findMany({ where: { schoolId, planId: plan.id } });
-  const sections = await tx.classSection.findMany({
-    where: { schoolId, academicYearId }, select: { id: true, gradeId: true },
-  });
-  const students = await tx.student.findMany({
-    where: { schoolId, isActive: true, classSectionId: { in: sections.map((s) => s.id) } },
-    select: { id: true, classSectionId: true },
-    orderBy: { admissionNo: 'asc' },
-  });
-  const assigns = await tx.feeAssignment.findMany({ where: { schoolId, planId: plan.id } });
-  const concessions = await tx.feeConcession.findMany({ where: { schoolId } });
-  const yearName = (await tx.academicYear.findFirstOrThrow({ where: { id: academicYearId } })).name;
+/**
+ * Bills for every term whose due date has arrived or is close.
+ *
+ * Reads once, computes the whole term in memory, reserves a block of invoice
+ * numbers with a single UPDATE, then writes with createMany. The row-at-a-time
+ * version was ~3,000 round trips and could not survive a remote database.
+ */
+async function seedBills(schoolId: string, academicYearId: string) {
+  const plan = await withTenant(schoolId, (tx) =>
+    tx.feePlan.findFirstOrThrow({ where: { schoolId, academicYearId, isActive: true }, orderBy: { version: 'desc' } }),
+  );
 
-  const sectionById = new Map(sections.map((s) => [s.id, s]));
-  const assignBy = new Map(assigns.map((a) => [a.studentId, a]));
-  const cell = new Map(items.map((i) => [`${i.gradeId}|${i.categoryId}`, i.amountMinor]));
+  const ctx = await withTenant(schoolId, async (tx) => {
+    const [terms, cats, items, sections, assigns, concessions, year] = await Promise.all([
+      tx.feeTerm.findMany({ where: { schoolId, academicYearId }, orderBy: { order: 'asc' } }),
+      tx.feeCategory.findMany({ where: { schoolId, archivedAt: null } }),
+      tx.feePlanItem.findMany({ where: { schoolId, planId: plan.id } }),
+      tx.classSection.findMany({ where: { schoolId, academicYearId }, select: { id: true, gradeId: true } }),
+      tx.feeAssignment.findMany({ where: { schoolId, planId: plan.id } }),
+      tx.feeConcession.findMany({ where: { schoolId } }),
+      tx.academicYear.findFirstOrThrow({ where: { id: academicYearId } }),
+    ]);
+    const students = await tx.student.findMany({
+      where: { schoolId, isActive: true, classSectionId: { in: sections.map((x) => x.id) } },
+      select: { id: true, classSectionId: true },
+      orderBy: { admissionNo: 'asc' },
+    });
+    const billed = await tx.feeInvoice.findMany({
+      where: { schoolId, termId: { in: terms.map((t) => t.id) } },
+      select: { studentId: true, termId: true },
+    });
+    return { terms, cats, items, sections, assigns, concessions, year, students, billed };
+  });
 
-  // Only the first two terms — Term 3 is months out, and a school does not
-  // issue those bills yet. It is there so the "not billed yet" state exists.
-  let created = 0;
-  for (const term of terms.slice(0, 2)) {
+  const sectionById = new Map(ctx.sections.map((x) => [x.id, x]));
+  const assignBy = new Map(ctx.assigns.map((a) => [a.studentId, a]));
+  const cell = new Map(ctx.items.map((i) => [`${i.gradeId}|${i.categoryId}`, i.amountMinor]));
+  const alreadyBilled = new Set(ctx.billed.map((b) => `${b.studentId}|${b.termId}`));
+
+  type Line = {
+    id: string; schoolId: string; invoiceId: string; categoryId: string;
+    categoryName: string; categoryDescription: string;
+    grossMinor: number; concessionMinor: number; netMinor: number;
+    concessionReason: string | null; isCollectible: boolean; order: number;
+  };
+  const invoices: { id: string; schoolId: string; studentId: string; termId: string; planId: string; number: string; dueDate: Date; totalMinor: number }[] = [];
+  const lines: Line[] = [];
+  const ledger: { schoolId: string; studentId: string; kind: 'DEBIT'; amountMinor: number; refType: string; refId: string; narration: string }[] = [];
+
+  // Only the first two terms — Term 3 is months out, and a school does not issue
+  // those bills yet. It exists so the "not billed yet" state is reachable.
+  const pending: { termName: string; dueDate: Date; termId: string; studentId: string; total: number; lines: Omit<Line, 'id' | 'invoiceId'>[] }[] = [];
+  for (const term of ctx.terms.slice(0, 2)) {
     const isFirst = term.order === 0;
-    for (const s of students) {
-      const section = s.classSectionId ? sectionById.get(s.classSectionId) : undefined;
+    for (const st of ctx.students) {
+      if (alreadyBilled.has(`${st.id}|${term.id}`)) continue;
+      const section = st.classSectionId ? sectionById.get(st.classSectionId) : undefined;
       if (!section) continue;
-      const existing = await tx.feeInvoice.findFirst({ where: { studentId: s.id, termId: term.id } });
-      if (existing) continue;
-
-      const a = assignBy.get(s.id);
+      const a = assignBy.get(st.id);
       const optIn = new Set(a?.optInCategoryIds ?? []);
       const isRte = a?.isRte ?? false;
 
-      const lines: {
-        schoolId: string; categoryId: string; categoryName: string; categoryDescription: string;
-        grossMinor: number; concessionMinor: number; netMinor: number;
-        concessionReason: string | null; isCollectible: boolean; order: number;
-      }[] = [];
+      const ls: Omit<Line, 'id' | 'invoiceId'>[] = [];
       let order = 0;
-      for (const c of cats) {
+      for (const c of ctx.cats) {
         if (c.isOptional && !optIn.has(c.id)) continue;
-        if (c.frequency === 'ONE_TIME' && !isFirst) continue;
-        if (c.frequency === 'ANNUAL' && !isFirst) continue;
+        if ((c.frequency === 'ONE_TIME' || c.frequency === 'ANNUAL') && !isFirst) continue;
         const gross = cell.get(`${section.gradeId}|${c.id}`);
         if (!gross) continue;
-
-        const mine = concessions.filter((x) => x.studentId === s.id && (x.categoryId === c.id || x.categoryId === null));
+        const mine = ctx.concessions.filter((x) => x.studentId === st.id && (x.categoryId === c.id || x.categoryId === null));
         let cut = 0;
         const reasons: string[] = [];
         for (const x of mine) {
           const remaining = gross - cut;
           if (remaining <= 0) break;
-          const amt = x.percentBps != null
-            ? Math.round((remaining * x.percentBps) / 10_000)
-            : (x.amountMinor ?? 0);
+          const amt = x.percentBps != null ? Math.round((remaining * x.percentBps) / 10_000) : (x.amountMinor ?? 0);
           const applied = Math.min(Math.max(0, amt), remaining);
           if (applied > 0) { cut += applied; reasons.push(x.reason); }
         }
-        lines.push({
+        ls.push({
           schoolId, categoryId: c.id, categoryName: c.name, categoryDescription: c.description,
           grossMinor: gross, concessionMinor: cut, netMinor: gross - cut,
           concessionReason: reasons.length ? reasons.join(' · ') : null,
           isCollectible: c.isCollectible && !isRte, order: order++,
         });
       }
-      if (!lines.length) continue;
-
-      const total = lines.reduce((acc, l) => acc + l.netMinor, 0);
-      const series = `INV/${yearName}`;
-      const [{ fee_next_number: seq }] = await tx.$queryRaw<{ fee_next_number: number }[]>`
-        SELECT fee_next_number(${schoolId}::uuid, ${series}::text)
-      `;
-      const invoice = await tx.feeInvoice.create({
-        data: {
-          schoolId, studentId: s.id, termId: term.id, planId: plan.id,
-          number: `${series}/${String(seq).padStart(5, '0')}`,
-          dueDate: term.dueDate, totalMinor: total,
-          lines: { create: lines },
-        },
+      if (!ls.length) continue;
+      pending.push({
+        termName: term.name, dueDate: term.dueDate, termId: term.id, studentId: st.id,
+        total: ls.reduce((acc, l) => acc + l.netMinor, 0), lines: ls,
       });
-      await tx.feeLedgerEntry.create({
-        data: {
-          schoolId, studentId: s.id, kind: 'DEBIT', amountMinor: total,
-          refType: 'INVOICE', refId: invoice.id, narration: `${term.name} fees — ${invoice.number}`,
-        },
-      });
-      created++;
     }
   }
-  console.log(`  bills: ${created} issued across ${Math.min(2, terms.length)} terms`);
+
+  if (!pending.length) {
+    console.log('  bills: 0 issued (already billed)');
+    return;
+  }
+
+  // Reserve the whole number block in ONE statement. Calling fee_next_number
+  // per invoice would be another 982 round trips, and the numbers must stay
+  // gap-free and unique either way.
+  const series = `INV/${ctx.year.name}`;
+  const lastNumber = await withTenant(schoolId, async (tx) => {
+    const rows = await tx.$queryRaw<{ value: number }[]>`
+      INSERT INTO "FeeCounter" ("schoolId", "series", "value")
+      VALUES (${schoolId}::uuid, ${series}::text, ${pending.length}::int)
+      ON CONFLICT ("schoolId", "series")
+      DO UPDATE SET "value" = "FeeCounter"."value" + ${pending.length}::int
+      RETURNING "value"
+    `;
+    return rows[0].value;
+  });
+  let next = lastNumber - pending.length + 1;
+
+  for (const p of pending) {
+    const id = randomUUID();
+    const number = `${series}/${String(next++).padStart(5, '0')}`;
+    invoices.push({ id, schoolId, studentId: p.studentId, termId: p.termId, planId: plan.id, number, dueDate: p.dueDate, totalMinor: p.total });
+    for (const l of p.lines) lines.push({ id: randomUUID(), invoiceId: id, ...l });
+    ledger.push({
+      schoolId, studentId: p.studentId, kind: 'DEBIT', amountMinor: p.total,
+      refType: 'INVOICE', refId: id, narration: `${p.termName} fees — ${number}`,
+    });
+  }
+
+  // Chunked across several short transactions rather than one long one: a
+  // single transaction holding 5,000 inserts is exactly what timed out before.
+  for (const batch of chunked(invoices)) await withTenant(schoolId, (tx) => tx.feeInvoice.createMany({ data: batch }));
+  for (const batch of chunked(lines)) await withTenant(schoolId, (tx) => tx.feeInvoiceLine.createMany({ data: batch }));
+  for (const batch of chunked(ledger)) await withTenant(schoolId, (tx) => tx.feeLedgerEntry.createMany({ data: batch }));
+
+  console.log(`  bills: ${invoices.length} issued, ${lines.length} lines`);
 }
 
 /**
