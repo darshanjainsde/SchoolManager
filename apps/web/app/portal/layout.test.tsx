@@ -39,10 +39,17 @@ describe('student nav honesty', () => {
     expect(lib?.requiredFeature).toBe('LIBRARY');
   });
 
-  it('gates nothing else on the library', () => {
+  it('lists Fees, gated on the FEES feature', () => {
+    const fees = NAV_ITEMS.find((i) => i.href === '/portal/fees');
+    expect(fees?.label).toBe('Fees');
+    expect(fees?.requiredFeature).toBe('FEES');
+  });
+
+  it('gates ONLY the optional tabs', () => {
     // A stray requiredFeature on Timetable would hide a core tab for every
-    // school below PRO, and it would look like a data bug.
+    // school below PRO, and it would look like a data bug. Library and Fees
+    // are the only two a school can genuinely be without.
     const gated = NAV_ITEMS.filter((i) => i.requiredFeature).map((i) => i.href);
-    expect(gated).toEqual(['/portal/library']);
+    expect(gated).toEqual(['/portal/library', '/portal/fees']);
   });
 });

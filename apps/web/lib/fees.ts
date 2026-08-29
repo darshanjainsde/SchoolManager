@@ -1,0 +1,216 @@
+/**
+ * Shared fee types and money formatting for the web app.
+ *
+ * Amounts cross the wire as `amountMinor` — paise, an integer — and are turned
+ * into rupees only here, at the very edge. Nothing in a component does
+ * `/ 100` by hand; a stray division is how one screen ends up disagreeing with
+ * another about what a parent owes.
+ */
+
+/** 1240000 → "₹12,400". Indian grouping, paise only when there are any. */
+export function rupees(amountMinor: number): string {
+  const neg = amountMinor < 0;
+  const abs = Math.abs(amountMinor);
+  const whole = Math.floor(abs / 100);
+  const paise = abs % 100;
+  const grouped = whole.toLocaleString('en-IN');
+  return `${neg ? '−' : ''}₹${paise === 0 ? grouped : `${grouped}.${String(paise).padStart(2, '0')}`}`;
+}
+
+/** What the user types ("12,400" or "12400.50") → paise. */
+export function toMinor(input: string): number {
+  const cleaned = input.replace(/[^0-9.]/g, '');
+  if (!cleaned) return 0;
+  return Math.round(Number(cleaned) * 100);
+}
+
+/** Paise → the bare number a grid cell is edited as. */
+export function toRupeeInput(amountMinor: number): string {
+  return amountMinor === 0 ? '' : String(amountMinor / 100);
+}
+
+export function fmtDate(iso: string | Date): string {
+  return new Date(iso).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata',
+  });
+}
+
+export function fmtDay(iso: string | Date): string {
+  return new Date(iso).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata',
+  });
+}
+
+// ── API shapes ───────────────────────────────────────────────────────────────
+
+export type FeeFrequency = 'PER_TERM' | 'ANNUAL' | 'ONE_TIME';
+export type FeePaymentStatus = 'SUBMITTED' | 'VERIFIED' | 'REJECTED' | 'REVERSED';
+export type FeePaymentMethod =
+  | 'UPI' | 'NEFT_IMPS' | 'CHEQUE' | 'CASH' | 'CARD' | 'NETBANKING' | 'OTHER';
+
+export const METHOD_LABEL: Record<FeePaymentMethod, string> = {
+  UPI: 'UPI',
+  NEFT_IMPS: 'NEFT / IMPS',
+  CHEQUE: 'Cheque',
+  CASH: 'Cash at office',
+  CARD: 'Card',
+  NETBANKING: 'Net banking',
+  OTHER: 'Other',
+};
+
+export const FREQUENCY_LABEL: Record<FeeFrequency, string> = {
+  PER_TERM: 'every term',
+  ANNUAL: 'once a year',
+  ONE_TIME: 'one time',
+};
+
+export interface FeeCategory {
+  id: string;
+  name: string;
+  description: string;
+  frequency: FeeFrequency;
+  isOptional: boolean;
+  isCollectible: boolean;
+  order: number;
+}
+
+export interface FeeTerm {
+  id: string;
+  name: string;
+  dueDate: string;
+  order: number;
+}
+
+export interface GridGrade { id: string; name: string; order: number; studentCount: number }
+export interface GridCell { gradeId: string; categoryId: string; termId: string | null; amountMinor: number }
+
+export interface FeeGrid {
+  planId: string;
+  planVersion: number;
+  /** True once bills exist — editing mints a new version rather than rewriting. */
+  isFrozen: boolean;
+  grades: GridGrade[];
+  categories: FeeCategory[];
+  terms: FeeTerm[];
+  cells: GridCell[];
+}
+
+export interface PreviewLine {
+  categoryName: string;
+  categoryDescription: string;
+  grossMinor: number;
+  concessionMinor: number;
+  netMinor: number;
+  concessionReason: string | null;
+  isCollectible: boolean;
+}
+
+export interface BillingPreview {
+  termId: string;
+  termName: string;
+  students: number;
+  toBill: number;
+  alreadyBilled: number;
+  skippedNoPlan: number;
+  rteStudents: number;
+  totalMinor: number;
+  collectibleMinor: number;
+  invoices: {
+    studentId: string;
+    studentName: string;
+    admissionNo: string;
+    gradeName: string;
+    lines: PreviewLine[];
+    totalMinor: number;
+    isRte: boolean;
+    alreadyBilled: boolean;
+  }[];
+}
+
+export interface PaymentRow {
+  id: string;
+  status: FeePaymentStatus;
+  method: FeePaymentMethod;
+  amountMinor: number;
+  providerRef: string | null;
+  paidOn: string;
+  note: string | null;
+  submittedAt: string;
+  verifiedAt: string | null;
+  rejectionReason: string | null;
+  receiptNumber: string | null;
+  proofUrl: string | null;
+  student: { id: string; name: string; admissionNo: string; className: string | null };
+  invoice: { id: string; number: string; totalMinor: number; dueDate: string; termName: string } | null;
+  /** Pre-computed by the API so the clerk never does arithmetic. */
+  amountMatchesBill: boolean | null;
+}
+
+export interface CollectionSummary {
+  todayByMethod: { method: FeePaymentMethod; amountMinor: number; count: number }[];
+  todayTotalMinor: number;
+  awaitingReviewMinor: number;
+  awaitingReviewCount: number;
+  billedMinor: number;
+  collectedMinor: number;
+  outstandingMinor: number;
+}
+
+export interface ProviderField {
+  name: string; label: string; scope: 'PLATFORM' | 'SCHOOL';
+  secret: boolean; required: boolean; placeholder?: string; help?: string;
+  value: string | null; hasValue: boolean;
+}
+
+export interface PaymentSetup {
+  providers: {
+    key: string; displayName: string; blurb: string;
+    available: boolean; enabled: boolean;
+    status: 'NOT_CONFIGURED' | 'PENDING' | 'ACTIVE' | 'SUSPENDED';
+    statusNote: string | null;
+    fields: ProviderField[];
+  }[];
+  bank: {
+    accountName: string; accountNumber: string; ifsc: string; bankName: string;
+    branch: string | null; upiId: string | null; upiQrUrl: string | null;
+    instructions: string | null; isVisible: boolean;
+  } | null;
+}
+
+export interface StudentFees {
+  student: { id: string; name: string; admissionNo: string; className: string | null };
+  balanceMinor: number;
+  billedMinor: number;
+  paidMinor: number;
+  invoices: {
+    id: string; number: string; termName: string; dueDate: string;
+    totalMinor: number; paidMinor: number; dueMinor: number;
+    isPaid: boolean; isOverdue: boolean;
+    lines: PreviewLine[];
+  }[];
+  payments: {
+    id: string; status: FeePaymentStatus; method: FeePaymentMethod;
+    amountMinor: number; providerRef: string | null; paidOn: string;
+    submittedAt: string; verifiedAt: string | null;
+    rejectionReason: string | null; receiptNumber: string | null;
+  }[];
+  ledger: { kind: 'DEBIT' | 'CREDIT'; amountMinor: number; narration: string; occurredAt: string }[];
+}
+
+export interface HowToPay {
+  options: {
+    key: string; displayName: string; kind: 'MANUAL' | 'GATEWAY'; blurb: string;
+    available: boolean; enabled: boolean; status: string;
+  }[];
+  canPayOnline: boolean;
+  canPayByTransfer: boolean;
+}
+
+export interface BankInstructions {
+  kind: 'INSTRUCTIONS';
+  bank: {
+    accountName: string; accountNumber: string; ifsc: string; bankName: string;
+    branch: string | null; upiId: string | null; upiQrUrl: string | null;
+    upiIntentUri: string | null; instructions: string | null;
+  };
+}

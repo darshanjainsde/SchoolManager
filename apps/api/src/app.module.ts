@@ -31,6 +31,7 @@ import { AlumniModule } from './modules/alumni';
 import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
 import { BlogModule } from './modules/blog';
+import { FeesModule } from './modules/fees';
 import { RedisThrottlerModule } from './common/throttler/redis-throttler.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 
@@ -92,6 +93,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     AlumniModule,
     MarketingModule,
     BlogModule,
+    FeesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
