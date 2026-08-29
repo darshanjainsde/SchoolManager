@@ -589,9 +589,14 @@ export class LibraryCirculationService {
       const settings = await this.settings.ensure(tx, schoolId);
       const rules = this.settings.rules(settings);
       const [totalCopies, lostCopies, totalTitles, outNowCount, openRows, collected, fixedDue] = await Promise.all([
-        tx.libraryBookCopy.count(),
+        // Scoped, like every other count in this list. Unscoped, RLS still
+        // returned the right number — by counting every copy on the platform
+        // and discarding the rest (50ms of the dashboard's 66ms at 200k
+        // copies). See common/lists/relation-counts.ts for the same trap in
+        // its `_count` disguise.
+        tx.libraryBookCopy.count({ where: { schoolId } }),
         tx.libraryBookCopy.count({ where: { schoolId, lostAt: { not: null } } }),
-        tx.libraryBookTitle.count(),
+        tx.libraryBookTitle.count({ where: { schoolId } }),
         tx.libraryIssue.count({ where: { schoolId, returnedOn: null } }),
         tx.libraryIssue.findMany({
           where: { schoolId, returnedOn: null },
