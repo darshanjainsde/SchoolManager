@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { OwnerController } from './owner.controller';
 import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
@@ -29,7 +31,7 @@ describe('GET /owner/ops authorization', () => {
   it('exposes counts only, never tenant row content', () => {
     // The BYPASSRLS allow-list entry claims this; keep the claim honest by
     // failing if the service ever starts selecting tenant fields.
-    const src = require('node:fs').readFileSync(__dirname + '/ops.service.ts', 'utf8');
+    const src = readFileSync(join(__dirname, 'ops.service.ts'), 'utf8');
     expect(src).not.toMatch(/\bfindMany\b/);
     expect(src).toMatch(/\.count\(/);
   });
