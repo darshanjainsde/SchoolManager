@@ -86,6 +86,21 @@ export class SaveGridDto {
   cells!: GridCellDto[];
 }
 
+export const LATE_FEE_MODES = ['NONE', 'FLAT', 'PER_DAY'] as const;
+export type LateFeeModeValue = (typeof LATE_FEE_MODES)[number];
+
+export class SaveSettingsDto {
+  @IsIn(LATE_FEE_MODES) lateFeeMode!: LateFeeModeValue;
+
+  /** Paise. The whole fee for FLAT, the daily rate for PER_DAY. */
+  @IsInt() @Min(0) @Max(10_000_000) lateFeeAmountMinor!: number;
+
+  @IsInt() @Min(0) @Max(365) lateFeeGraceDays!: number;
+
+  /** 0 means uncapped. */
+  @IsInt() @Min(0) @Max(100_000_000) lateFeeCapMinor!: number;
+}
+
 export class SaveConcessionDto {
   @IsUUID() studentId!: string;
   @IsOptional() @IsUUID() categoryId?: string;

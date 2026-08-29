@@ -118,6 +118,28 @@ export default function PortalFeesPage() {
               </div>
             ))}
 
+            {inv.lateFeeMinor > 0 && (
+              <div className="flex items-start justify-between gap-3 border-t pt-2"
+                   style={{ borderColor: 'var(--sk-line)' }}>
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--sk-amber-ink)' }}>
+                    Late fee
+                  </div>
+                  {/* The rule, not just the number. A parent who can see how it
+                      was worked out asks the office one question fewer. */}
+                  {d.lateFeeRule && (
+                    <div className="text-[11px] leading-snug" style={{ color: 'var(--sk-ink-3)' }}>
+                      {d.lateFeeRule}
+                    </div>
+                  )}
+                </div>
+                <div className="whitespace-nowrap text-[13px] font-semibold tabular-nums"
+                     style={{ color: 'var(--sk-amber-ink)' }}>
+                  {rupees(inv.lateFeeMinor)}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between border-t pt-2"
                  style={{ borderColor: 'var(--sk-line-2)' }}>
               <span className="text-[13px] font-semibold">Due now</span>
@@ -129,6 +151,11 @@ export default function PortalFeesPage() {
             {inv.paidMinor > 0 && (
               <p className="text-[11px]" style={{ color: 'var(--sk-good)' }}>
                 {rupees(inv.paidMinor)} already received against this bill.
+              </p>
+            )}
+            {inv.lateFeeMinor === 0 && !inv.isOverdue && d.lateFeeRule && (
+              <p className="text-[11px]" style={{ color: 'var(--sk-ink-3)' }}>
+                Paid after {fmtDate(inv.dueDate)}? A late fee of {d.lateFeeRule.toLowerCase()} applies.
               </p>
             )}
 

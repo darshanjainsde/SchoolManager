@@ -7,7 +7,7 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import {
   FREQUENCY_LABEL, rupees, toMinor, toRupeeInput,
-  type FeeCategory, type FeeGrid, type FeeTerm,
+  type FeeCategory, type FeeGrid, type FeeSettings, type FeeTerm, type LateFeeMode,
 } from '@/lib/fees';
 
 interface Year { id: string; name: string; isCurrent: boolean }
@@ -24,7 +24,7 @@ interface Year { id: string; name: string; isCurrent: boolean }
 
 const STEPS = [
   { id: 'categories', n: 'Step 1', t: 'Categories', d: 'What you charge for, and how you explain it' },
-  { id: 'terms', n: 'Step 2', t: 'Terms', d: 'How many instalments and when each is due' },
+  { id: 'terms', n: 'Step 2', t: 'Terms & late fee', d: 'When each instalment is due, and what happens after' },
   { id: 'amounts', n: 'Step 3', t: 'Class amounts', d: 'One number per class, per category' },
   { id: 'bills', n: 'Step 4', t: 'Generate bills', d: 'Preview the whole term, then commit' },
 ] as const;
@@ -267,7 +267,8 @@ function TermsStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; ye
   if (list.isLoading) return <p className="sk-state">Loading terms…</p>;
 
   return (
-    <section className="sk-card">
+    <>
+      <section className="sk-card">
       <div className="sk-card-h">
         <h3>When is the fee due?</h3>
         <p>Each term is one instalment with one due date. Parents see the date on their bill.</p>
@@ -314,6 +315,154 @@ function TermsStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; ye
         {rows.some((r) => !r.dueDate) && (
           <p className="text-[11.5px]" style={{ color: 'var(--sk-ink-3)' }}>Every term needs a due date before you can save.</p>
         )}
+      </div>
+      </section>
+
+      <LateFeeCard api={api} qc={qc} host={host} />
+    </>
+  );
+}
+
+/**
+ * The late-fee rule, deliberately on the same step as the due dates: a due
+ * date only means something if something happens when it passes, and asking
+ * the clerk to set those two things in different places invites a school that
+ * has one without the other.
+ *
+ * The rule is stored, never the charge. The amount a parent owes is worked out
+ * from (rule, due date, today) whenever it is looked at — so there is no
+ * nightly job that can charge the wrong day, and the parent, the office and
+ * the ledger always agree.
+ */
+function LateFeeCard({ api, qc, host }: { api: Api; qc: Qc; host: Host }) {
+  const settings = useQuery({
+    queryKey: ['fee-settings', host], enabled: !!host,
+    queryFn: () => api.get<FeeSettings>('/manage/fees/settings'),
+  });
+
+  const [mode, setMode] = useState<LateFeeMode>('NONE');
+  const [amount, setAmount] = useState('');
+  const [grace, setGrace] = useState('0');
+  const [cap, setCap] = useState('');
+
+  useEffect(() => {
+    const d = settings.data;
+    if (!d) return;
+    setMode(d.lateFeeMode);
+    setAmount(d.lateFeeAmountMinor ? String(d.lateFeeAmountMinor / 100) : '');
+    setGrace(String(d.lateFeeGraceDays));
+    setCap(d.lateFeeCapMinor ? String(d.lateFeeCapMinor / 100) : '');
+  }, [settings.data]);
+
+  const save = useMutation({
+    mutationFn: () => api.put('/manage/fees/settings', {
+      lateFeeMode: mode,
+      lateFeeAmountMinor: mode === 'NONE' ? 0 : toMinor(amount),
+      lateFeeGraceDays: Number(grace) || 0,
+      lateFeeCapMinor: toMinor(cap),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fee-settings', host] });
+      toast.success(mode === 'NONE' ? 'No late fee will be charged' : 'Late fee saved');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // The same sentence the parent will read, built here so the clerk sees the
+  // consequence of what they typed before they save it.
+  const preview = (() => {
+    const amt = toMinor(amount);
+    if (mode === 'NONE' || amt <= 0) return null;
+    const g = Number(grace) || 0;
+    const graceText = g > 0 ? ` after ${g} grace ${g === 1 ? 'day' : 'days'}` : '';
+    const capMinor = toMinor(cap);
+    const capText = capMinor > 0 ? `, up to ${rupees(capMinor)}` : '';
+    return mode === 'FLAT'
+      ? `${rupees(amt)} once the due date passes${graceText}`
+      : `${rupees(amt)} per day past the due date${graceText}${capText}`;
+  })();
+
+  if (settings.isLoading) return <p className="sk-state">Loading the late-fee rule…</p>;
+
+  return (
+    <section className="sk-card">
+      <div className="sk-card-h">
+        <h3>What happens after the due date?</h3>
+        <p>Optional. Whatever you set here is shown to parents in plain words on their bill.</p>
+      </div>
+      <div className="sk-card-b">
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            ['NONE', 'No late fee'],
+            ['PER_DAY', 'Charge per day'],
+            ['FLAT', 'Charge once'],
+          ] as [LateFeeMode, string][]).map(([m, label]) => (
+            <button key={m} onClick={() => setMode(m)}
+                    aria-pressed={mode === m}
+                    className="rounded-full border px-3 py-1.5 text-[12px] font-semibold"
+                    style={{
+                      borderColor: mode === m ? 'var(--sk-brand)' : 'var(--sk-line-2)',
+                      background: mode === m ? 'var(--sk-brand-tint)' : 'var(--sk-card)',
+                      color: mode === m ? 'var(--sk-brand-2)' : 'var(--sk-ink-2)',
+                    }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {mode !== 'NONE' && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label className="sk-lab" htmlFor="lf-amount">
+                {mode === 'PER_DAY' ? 'Amount per day (₹)' : 'Amount (₹)'}
+              </label>
+              <input id="lf-amount" className="sk-input" inputMode="decimal" placeholder="100"
+                     value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </div>
+            <div>
+              <label className="sk-lab" htmlFor="lf-grace">Grace days</label>
+              <input id="lf-grace" className="sk-input" inputMode="numeric" placeholder="0"
+                     value={grace} onChange={(e) => setGrace(e.target.value)} />
+              <p className="mt-0.5 text-[10.5px]" style={{ color: 'var(--sk-ink-3)' }}>
+                Days after the due date before anything is charged.
+              </p>
+            </div>
+            {mode === 'PER_DAY' && (
+              <div>
+                <label className="sk-lab" htmlFor="lf-cap">Maximum (₹)</label>
+                <input id="lf-cap" className="sk-input" inputMode="decimal" placeholder="no limit"
+                       value={cap} onChange={(e) => setCap(e.target.value)} />
+                <p className="mt-0.5 text-[10.5px]" style={{ color: 'var(--sk-ink-3)' }}>
+                  Leave blank for no limit — though an uncapped daily charge on a
+                  forgotten bill gets hard to defend by March.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {preview && (
+          <div className="rounded-[11px] border p-3"
+               style={{ borderColor: 'var(--sk-amber-line, var(--sk-line))', background: 'var(--sk-amber-tint)' }}>
+            <div className="sk-lab" style={{ color: 'var(--sk-amber-ink)' }}>Parents will see</div>
+            <p className="mt-1 text-[12.5px]" style={{ color: 'var(--sk-amber-ink)' }}>
+              Late fee — {preview}
+            </p>
+          </div>
+        )}
+
+        {mode === 'NONE' && (
+          <p className="sk-state">
+            Nothing is charged for paying late. The due date is still shown, and an
+            overdue bill is still flagged for your office.
+          </p>
+        )}
+
+        <button className="sk-btn self-start" data-variant="primary"
+                disabled={save.isPending || (mode !== 'NONE' && toMinor(amount) <= 0)}
+                onClick={() => save.mutate()}>
+          {save.isPending ? 'Saving…' : 'Save late-fee rule'}
+        </button>
       </div>
     </section>
   );

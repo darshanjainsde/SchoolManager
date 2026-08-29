@@ -18,7 +18,8 @@ import { FeeQueryService } from './fee-query.service';
 import { FeeSetupService } from './fee-setup.service';
 import {
   RejectPaymentDto, ReversePaymentDto, SaveBankDetailDto, SaveCategoryDto,
-  SaveConcessionDto, SaveGridDto, SaveProviderConfigDto, SaveTermsDto, SubmitPaymentDto,
+  SaveConcessionDto, SaveGridDto, SaveProviderConfigDto, SaveSettingsDto, SaveTermsDto,
+  SubmitPaymentDto,
 } from './fees.dto';
 
 /** 5 MB. A phone screenshot is well under this; a photo of a printed slip fits too. */
@@ -72,6 +73,17 @@ export class FeesController {
   }
 
   @Put('terms') saveTerms(@Body() dto: SaveTermsDto) { return this.setup.saveTerms(this.sid(), dto); }
+
+  /**
+   * The late-fee rule. Lives beside the terms because it is the other half of
+   * the same decision: a due date only means something if something happens
+   * when it passes.
+   */
+  @Get('settings') getSettings() { return this.setup.getSettings(this.sid()); }
+
+  @Put('settings') saveSettings(@Body() dto: SaveSettingsDto) {
+    return this.setup.saveSettings(this.sid(), dto);
+  }
 
   // ── Step 3 · the grid ─────────────────────────────────────────────────────
 

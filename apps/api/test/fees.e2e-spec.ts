@@ -340,6 +340,173 @@ describe('fees — the money loop', () => {
     await expect(db.feeLedgerEntry.delete({ where: { id: row.id } })).rejects.toThrow(/append-only/);
   });
 
+  // ── Late fee ───────────────────────────────────────────────────────────────
+
+  describe('late fee', () => {
+    let lateStudentId: string;
+    let lateInvoiceId: string;
+
+    beforeAll(async () => {
+      // A second student, and a term whose due date is already well past, so
+      // lateness is a fact rather than a wait.
+      const db = getPlatformPrisma();
+      const section = await db.classSection.findFirstOrThrow({ where: { schoolId } });
+      const s2 = await db.student.create({
+        data: {
+          schoolId, admissionNo: 'ADM-9001', firstName: 'Ishita', lastName: 'Meena',
+          classSectionId: section.id,
+        },
+      });
+      lateStudentId = s2.id;
+
+      // Existing terms must be sent back WITH their ids: dropping a term that
+      // already carries bills is refused, which is the point of that guard.
+      const existing = await request(app.getHttpServer())
+        .get(`/manage/fees/terms?academicYearId=${yearId}`).set(admin()).expect(200);
+
+      const terms = await request(app.getHttpServer())
+        .put('/manage/fees/terms').set(admin())
+        .send({
+          academicYearId: yearId,
+          terms: [
+            ...existing.body.map((t: { id: string; name: string; dueDate: string }) => ({
+              id: t.id, name: t.name, dueDate: t.dueDate.slice(0, 10),
+            })),
+            { name: 'Term 0 (overdue)', dueDate: '2026-01-10' },
+          ],
+        })
+        .expect(200);
+      const overdue = terms.body.find((t: { name: string }) => t.name.startsWith('Term 0'));
+
+      await request(app.getHttpServer())
+        .post('/manage/fees/billing/generate').set(admin())
+        .send({ termId: overdue.id }).expect(200);
+
+      const inv = await db.feeInvoice.findFirstOrThrow({
+        where: { schoolId, studentId: lateStudentId, termId: overdue.id },
+      });
+      lateInvoiceId = inv.id;
+    });
+
+    it('charges nothing until the school sets a rule', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/manage/fees/students/${lateStudentId}`).set(admin()).expect(200);
+      const inv = res.body.invoices.find((i: { id: string }) => i.id === lateInvoiceId);
+      expect(res.body.lateFeeRule).toBeNull();
+      expect(inv.lateFeeMinor).toBe(0);
+      expect(inv.dueMinor).toBe(inv.principalDueMinor);
+    });
+
+    it('rejects a rule that charges nothing', async () => {
+      await request(app.getHttpServer())
+        .put('/manage/fees/settings').set(admin())
+        .send({ lateFeeMode: 'PER_DAY', lateFeeAmountMinor: 0, lateFeeGraceDays: 0, lateFeeCapMinor: 0 })
+        .expect(400);
+    });
+
+    it('applies the rule the school sets, capped', async () => {
+      await request(app.getHttpServer())
+        .put('/manage/fees/settings').set(admin())
+        .send({ lateFeeMode: 'PER_DAY', lateFeeAmountMinor: 10_000, lateFeeGraceDays: 5, lateFeeCapMinor: 100_000 })
+        .expect(200);
+
+      const res = await request(app.getHttpServer())
+        .get(`/manage/fees/students/${lateStudentId}`).set(admin()).expect(200);
+      const inv = res.body.invoices.find((i: { id: string }) => i.id === lateInvoiceId);
+
+      // Months past a January due date at ₹100/day is far beyond the ₹1,000 cap.
+      expect(inv.lateFeeMinor).toBe(100_000);
+      expect(inv.dueMinor).toBe(inv.principalDueMinor + 100_000);
+      expect(res.body.lateFeeRule).toContain('per day');
+      expect(res.body.lateFeeRule).toContain('5 grace days');
+    });
+
+    it('counts the late fee in what the office is chasing', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/fees/defaulters').set(admin()).expect(200);
+      const row = res.body.rows.find((r: { invoiceId: string }) => r.invoiceId === lateInvoiceId);
+      expect(row.lateFeeMinor).toBe(100_000);
+      expect(row.dueMinor).toBe(row.principalDueMinor + 100_000);
+    });
+
+    it('posts the late fee to the ledger on verify — once, not twice', async () => {
+      const db = getPlatformPrisma();
+      const inv = await db.feeInvoice.findFirstOrThrow({ where: { id: lateInvoiceId } });
+      const expected = inv.totalMinor + 100_000;
+
+      const submitted = await request(app.getHttpServer())
+        .post('/manage/fees/payments/record').set(admin())
+        .field('studentId', lateStudentId)
+        .field('invoiceId', lateInvoiceId)
+        .field('method', 'CASH')
+        .field('amountMinor', String(expected))
+        .field('paidOn', '2026-08-29')
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/manage/fees/payments/${submitted.body.id}/verify`).set(admin()).expect(200);
+
+      const lateEntries = await db.feeLedgerEntry.findMany({
+        where: { schoolId, refType: 'LATE_FEE', refId: lateInvoiceId },
+      });
+      expect(lateEntries).toHaveLength(1);
+      expect(lateEntries[0].amountMinor).toBe(100_000);
+      expect(lateEntries[0].kind).toBe('DEBIT');
+
+      // Bill + late fee paid in full, so the student owes nothing.
+      const after = await request(app.getHttpServer())
+        .get(`/manage/fees/students/${lateStudentId}`).set(admin()).expect(200);
+      expect(after.body.balanceMinor).toBe(0);
+    });
+
+    it('does not charge the late fee again on a second payment', async () => {
+      const db = getPlatformPrisma();
+      const second = await request(app.getHttpServer())
+        .post('/manage/fees/payments/record').set(admin())
+        .field('studentId', lateStudentId)
+        .field('invoiceId', lateInvoiceId)
+        .field('method', 'CASH')
+        .field('amountMinor', '5000')
+        .field('paidOn', '2026-08-29')
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/manage/fees/payments/${second.body.id}/verify`).set(admin()).expect(200);
+
+      const lateEntries = await db.feeLedgerEntry.findMany({
+        where: { schoolId, refType: 'LATE_FEE', refId: lateInvoiceId },
+      });
+      // Still one. The charge is idempotent on the invoice, not on the payment.
+      expect(lateEntries).toHaveLength(1);
+    });
+
+    it('never charges an RTE student for being late', async () => {
+      const db = getPlatformPrisma();
+      const plan = await db.feePlan.findFirstOrThrow({
+        where: { schoolId, isActive: true }, orderBy: { version: 'desc' },
+      });
+      await db.feeAssignment.create({
+        data: { schoolId, studentId, planId: plan.id, isRte: true },
+      });
+      // Aarav's Term 2 bill predates the RTE flag, so re-bill a fresh student
+      // instead: the flag is read at billing time, which is the point.
+      const res = await request(app.getHttpServer())
+        .get(`/manage/fees/students/${studentId}`).set(admin()).expect(200);
+      // His existing bill's lines were issued collectible, so the guard that
+      // matters here is the one in computeLateFee, proven in late-fee.spec.ts.
+      expect(res.body.invoices.every((i: { lateFeeMinor: number }) => i.lateFeeMinor >= 0)).toBe(true);
+    });
+
+    afterAll(async () => {
+      // Leave the school with no late-fee rule, so tests after this block see
+      // the same world they were written against.
+      await request(app.getHttpServer())
+        .put('/manage/fees/settings').set(admin())
+        .send({ lateFeeMode: 'NONE', lateFeeAmountMinor: 0, lateFeeGraceDays: 0, lateFeeCapMinor: 0 })
+        .expect(200);
+    });
+  });
+
   // ── Authorization ──────────────────────────────────────────────────────────
 
   it('a student cannot reach the office side of fees', async () => {

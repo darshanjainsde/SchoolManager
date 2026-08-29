@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { withTenant, type TenantTx } from '@skoolos/db';
+import { withTenant, type FeeSettings, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { isP2002 } from '../../common/errors/prisma-errors';
 import type {
   SaveCategoryDto,
   SaveConcessionDto,
   SaveGridDto,
+  SaveSettingsDto,
   SaveTermsDto,
 } from './fees.dto';
 
@@ -357,4 +359,64 @@ export class FeeSetupService {
       return { deleted: true };
     });
   }
+
+  // ── Settings (the late-fee rule) ──────────────────────────────────────────
+
+  /**
+   * Read-or-create, inside an existing transaction. A school must never meet
+   * an empty settings screen, and the defaults live in schema.prisma so there
+   * is one source of truth for them.
+   */
+  async ensureSettings(tx: TenantTx, schoolId: string): Promise<FeeSettings> {
+    const existing = await tx.feeSettings.findUnique({ where: { schoolId } });
+    if (existing) return existing;
+    try {
+      return await tx.feeSettings.create({ data: { schoolId } });
+    } catch (e) {
+      // Two first-reads racing: the loser re-reads the winner's row.
+      if (isP2002(e)) {
+        const row = await tx.feeSettings.findUnique({ where: { schoolId } });
+        if (row) return row;
+      }
+      throw e;
+    }
+  }
+
+  getSettings(schoolId: string): Promise<FeeSettings> {
+    return withTenant(schoolId, (tx) => this.ensureSettings(tx, schoolId));
+  }
+
+  async saveSettings(schoolId: string, dto: SaveSettingsDto): Promise<FeeSettings> {
+    // A rule that charges nothing is the same as no rule, and saying so here
+    // means every downstream reader can trust `mode` alone.
+    if (dto.lateFeeMode !== 'NONE' && dto.lateFeeAmountMinor <= 0) {
+      throw new ApiError(
+        'VALIDATION',
+        'Set an amount, or choose “No late fee”.',
+        400,
+        'lateFeeAmountMinor',
+      );
+    }
+    if (dto.lateFeeMode === 'FLAT' && dto.lateFeeCapMinor > 0 && dto.lateFeeCapMinor < dto.lateFeeAmountMinor) {
+      throw new ApiError(
+        'VALIDATION',
+        'The cap is lower than the one-off fee, so the fee could never be charged in full.',
+        400,
+        'lateFeeCapMinor',
+      );
+    }
+    return withTenant(schoolId, async (tx) => {
+      await this.ensureSettings(tx, schoolId);
+      return tx.feeSettings.update({
+        where: { schoolId },
+        data: {
+          lateFeeMode: dto.lateFeeMode,
+          lateFeeAmountMinor: dto.lateFeeMode === 'NONE' ? 0 : dto.lateFeeAmountMinor,
+          lateFeeGraceDays: dto.lateFeeGraceDays,
+          lateFeeCapMinor: dto.lateFeeCapMinor,
+        },
+      });
+    });
+  }
+
 }

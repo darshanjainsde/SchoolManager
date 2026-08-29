@@ -173,8 +173,14 @@ function PaymentDetail({
       <div className="sk-card-b">
         <div className="grid grid-cols-2 gap-2">
           <div className="sk-kpi" style={{ minHeight: 0 }}>
-            <div className="lab">Bill amount</div>
-            <div className="n" style={{ fontSize: 20 }}>{p.invoice ? rupees(p.invoice.totalMinor) : '—'}</div>
+            <div className="lab">Should have paid</div>
+            <div className="n" style={{ fontSize: 20 }}>{p.invoice ? rupees(p.invoice.expectedMinor) : '—'}</div>
+            {p.invoice && p.invoice.lateFeeMinor > 0 && (
+              <div className="hint">
+                {rupees(p.invoice.expectedMinor - p.invoice.lateFeeMinor)} bill
+                {' + '}{rupees(p.invoice.lateFeeMinor)} late fee
+              </div>
+            )}
           </div>
           <div className="sk-kpi" style={{ minHeight: 0, borderColor: match === false ? 'var(--sk-bad)' : match ? 'var(--sk-good)' : 'var(--sk-line)' }}>
             <div className="lab">Parent says they paid</div>
@@ -189,9 +195,10 @@ function PaymentDetail({
         )}
         {match === false && p.invoice && (
           <p className="text-[11.5px]" style={{ color: 'var(--sk-bad)' }}>
-            {p.amountMinor < p.invoice.totalMinor
-              ? `Short by ${rupees(p.invoice.totalMinor - p.amountMinor)} — accepting records a part payment.`
-              : `Over by ${rupees(p.amountMinor - p.invoice.totalMinor)} — the extra stays as credit on the student.`}
+            {p.amountMinor < p.invoice.expectedMinor
+              ? `Short by ${rupees(p.invoice.expectedMinor - p.amountMinor)} — accepting records a part payment.`
+              : `Over by ${rupees(p.amountMinor - p.invoice.expectedMinor)} — the extra stays as credit on the student.`}
+            {p.invoice.lateFeeMinor > 0 && ' The late fee is worked out to the day they say they paid, not today.'}
           </p>
         )}
         {match === null && (
