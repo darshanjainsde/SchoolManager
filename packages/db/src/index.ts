@@ -24,11 +24,30 @@ let tenantClient: PrismaClient | undefined;
 let platformClient: PrismaClient | undefined;
 
 function makeClient(connectionUrl: string, opts: ClientOptions = {}): PrismaClient {
-  return new PrismaClient({
+  const base = new PrismaClient({
     ...opts,
     datasources: { db: { url: connectionUrl } },
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
   });
+
+  // One place catches truncation everywhere, rather than 150 call sites each
+  // remembering to check. `$extends` returns a new client whose type is a
+  // structural superset of PrismaClient, so the cast is safe and keeps the
+  // public signature unchanged.
+  return base.$extends({
+    query: {
+      $allModels: {
+        async findMany({ args, query, model }) {
+          const result = await query(args);
+          const take = typeof args?.take === 'number' ? args.take : null;
+          if (take !== null && Array.isArray(result) && result.length === take) {
+            reportOverflow(model, take);
+          }
+          return result;
+        },
+      },
+    },
+  }) as unknown as PrismaClient;
 }
 
 export function getTenantPrisma(): PrismaClient {
@@ -74,6 +93,37 @@ let txObserver: TxObserver | null = null;
 
 export function setTenantTxObserver(fn: TxObserver | null): void {
   txObserver = fn;
+}
+
+
+/**
+ * Reports a list query that came back exactly full.
+ *
+ * A `findMany` returning precisely its `take` is the signature of a truncated
+ * read: either the ceiling is doing its job on a query that should have been
+ * scoped, or a real tenant has outgrown it. Both need to be visible. Silent
+ * server-side truncation is the failure this whole guard exists to avoid — an
+ * unbounded query at least fails loudly when it blows the response cap, while
+ * a quietly clipped list looks correct and is not.
+ *
+ * Wired by the API to its logger and metrics; a no-op elsewhere, so packages/db
+ * keeps no opinion about how it is reported.
+ */
+type ListOverflowObserver = (info: { model: string; take: number }) => void;
+let overflowObserver: ListOverflowObserver | null = null;
+
+export function setListOverflowObserver(fn: ListOverflowObserver | null): void {
+  overflowObserver = fn;
+}
+
+/** Internal: called by the client extension below. Never throws. */
+function reportOverflow(model: string, take: number): void {
+  if (!overflowObserver) return;
+  try {
+    overflowObserver({ model, take });
+  } catch {
+    /* an observer must never fail the query it is watching */
+  }
 }
 
 export async function withTenant<T>(

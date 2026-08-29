@@ -8,6 +8,8 @@ import { withTenant } from '@skoolos/db';
 import type { ClassSectionSummary } from '@skoolos/types';
 import { isP2002, isP2003, isP2025 } from '../../common/errors/prisma-errors';
 import type { CreateClassDto, UpdateClassDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { studentCountsBySection } from '../../common/lists/relation-counts';
 
 interface RefOptions {
   gradeId?: string;
@@ -28,17 +30,22 @@ type ClassSectionAdminRow = ClassSectionSummary & {
 @Injectable()
 export class ClassesService {
   async list(schoolId: string): Promise<ClassSectionAdminRow[]> {
-    return withTenant(schoolId, (tx) =>
-      tx.classSection.findMany({
-        where: { schoolId },
-        orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
-        include: {
-          grade: { select: { name: true } },
-          classTeacher: { select: { firstName: true, lastName: true } },
-          _count: { select: { students: true } },
-        },
-      }),
-    );
+    return withTenant(schoolId, async (tx) => {
+      // The roll count is counted separately, not via `include: { _count }` —
+      // see relation-counts.ts. The response shape is unchanged.
+      const [sections, roll] = await Promise.all([
+        tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
+          where: { schoolId },
+          orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
+          include: {
+            grade: { select: { name: true } },
+            classTeacher: { select: { firstName: true, lastName: true } },
+          },
+        }),
+        studentCountsBySection(tx, schoolId),
+      ]);
+      return sections.map((s) => ({ ...s, _count: { students: roll.get(s.id) ?? 0 } }));
+    });
   }
 
   async create(schoolId: string, dto: CreateClassDto) {

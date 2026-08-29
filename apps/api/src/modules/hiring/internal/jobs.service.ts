@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { getPlatformPrisma, Prisma, withTenant } from '@skoolos/db';
 import { TenantContextService } from '../../tenancy';
 import type { ApplyDto, CreateJobDto, ModerateJobDto, UpdateJobDto } from './hiring.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /** Four questions maximum. The cost lands on the candidate; the benefit on the admin. */
 export const MAX_QUESTIONS = 4;
@@ -26,7 +27,7 @@ export class JobsService {
   async list() {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, (tx) =>
-      tx.jobPost.findMany({ where: { schoolId }, orderBy: { createdAt: 'desc' }, include: { questions: true } }),
+      tx.jobPost.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId }, orderBy: { createdAt: 'desc' }, include: { questions: true } }),
     );
   }
 
@@ -105,7 +106,7 @@ export class JobsService {
     return withTenant(schoolId, async (tx) => {
       const post = await tx.jobPost.findFirst({ where: { id: jobPostId, schoolId }, include: { questions: true } });
       if (!post) throw new NotFoundException('Vacancy not found');
-      const applications = await tx.jobApplication.findMany({
+      const applications = await tx.jobApplication.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { jobPostId, schoolId },
         orderBy: { createdAt: 'desc' },
       });

@@ -545,6 +545,7 @@ describe('AttendanceService', () => {
       });
 
       expect(txMock.attendance.findMany).toHaveBeenCalledWith({
+        take: 2000,
         where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION, date: new Date('2026-07-21') },
         select: { studentId: true, status: true, markedById: true },
       });

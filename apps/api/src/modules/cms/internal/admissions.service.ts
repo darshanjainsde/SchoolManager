@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import type { AdmissionStepDto, UpdateAdmissionsSettingsDto } from './cms.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 @Injectable()
 export class AdmissionsService {
   get(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
       const [steps, settings] = await Promise.all([
-        tx.admissionStep.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+        tx.admissionStep.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
         tx.admissionsSettings.findUnique({ where: { schoolId } }),
       ]);
       return {

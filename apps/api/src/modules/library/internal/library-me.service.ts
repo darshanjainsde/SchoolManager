@@ -10,6 +10,7 @@ import {
   loanLimitFor,
   type BorrowerKind,
 } from './library-policy';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /**
  * The reader's own view (`/me/library`) — what the student's phone ribbon and
@@ -46,7 +47,7 @@ export class LibraryMeService {
       const showFines = finesApply(rules, kind);
 
       const [open, history, fixedDue] = await Promise.all([
-        tx.libraryIssue.findMany({
+        tx.libraryIssue.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { schoolId, ...where, returnedOn: null },
           orderBy: { dueOn: 'asc' },
           include: { copy: { select: { accessionNo: true, title: { select: { title: true, author: true } } } } },
@@ -57,7 +58,7 @@ export class LibraryMeService {
           take: 50,
           include: { copy: { select: { accessionNo: true, title: { select: { title: true, author: true } } } } },
         }),
-        tx.libraryFine.findMany({
+        tx.libraryFine.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { schoolId, ...where, status: 'DUE' },
           orderBy: { createdAt: 'asc' },
           include: { issue: { select: { copy: { select: { title: { select: { title: true } } } } } } },

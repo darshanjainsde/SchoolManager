@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import type { HallOfFameEntryDto } from './cms.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 @Injectable()
 export class HallOfFameService {
   list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.hallOfFameEntry.findMany({
+      tx.hallOfFameEntry.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: [{ courseId: 'asc' }, { rank: 'asc' }],
       }),

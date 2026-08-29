@@ -4,7 +4,8 @@ const txMock = {
   school: { findFirst: jest.fn() },
   subject: { findFirst: jest.fn() },
   notificationOutbox: { create: jest.fn() },
-  student: { findMany: jest.fn() },
+  student: { findMany: jest.fn(), groupBy: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+  assignmentSeen: { groupBy: jest.fn().mockResolvedValue([]) },
   notification: { createMany: jest.fn() },
 };
 
@@ -278,15 +279,25 @@ describe('AssignmentsService', () => {
           createdByTeacherId: CALLER,
           createdAt: new Date('2026-07-01T00:00:00.000Z'),
           dueDate: new Date('2026-09-01T00:00:00.000Z'),
-          _count: { seen: 7 },
         },
+      ]);
+      txMock.assignmentSeen.groupBy.mockResolvedValue([
+        { assignmentId: 'a1', _count: { _all: 7 } },
       ]);
 
       const result = await svc.list(SCHOOL, CLASS_SECTION, CALLER, 'SCHOOL_ADMIN');
 
       expect(result.upcoming[0].seenCount).toBe(7);
+      // Read receipts must be counted with a schoolId predicate. Prisma's
+      // `include: { _count }` compiles to `WHERE 1=1` over the whole table, so
+      // asserting its ABSENCE is what keeps that regression from returning.
       expect(txMock.assignment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ include: { _count: { select: { seen: true } } } }),
+        expect.not.objectContaining({ include: expect.anything() }),
+      );
+      expect(txMock.assignmentSeen.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ schoolId: SCHOOL }),
+        }),
       );
     });
 

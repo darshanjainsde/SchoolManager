@@ -1,0 +1,26 @@
+-- MetricRollup was created without row-level security.
+--
+-- Caught by packages/db rls-coverage.spec.ts in the pull request that added
+-- the table, which is exactly what that check exists for — the last time this
+-- gap opened, a Supabase scanner found it in production weeks later.
+--
+-- It is tempting to call this one harmless: MetricRollup holds route labels,
+-- latency buckets and error counts, and carries no schoolId, so there is no
+-- tenant data to leak between schools. That reasoning is wrong twice over.
+-- Supabase exposes the whole public schema through its Data API, so a table
+-- without RLS is readable AND WRITABLE by anyone holding the project's anon
+-- key: the read hands out platform-wide traffic patterns, and the write lets a
+-- stranger put whatever they like on the dashboard the operator uses to decide
+-- whether to scale.
+--
+-- So it takes the platform-only shape used by every other table reached solely
+-- through getPlatformPrisma(): RLS enabled plus an explicit deny-all. The
+-- BYPASSRLS platform role still passes; the app role and Supabase's
+-- anon/authenticated roles get nothing. A deny-all policy rather than no
+-- policy at all, so the intent is stated in the schema instead of inferred
+-- from an absence.
+--
+-- ENABLE without FORCE, matching the other platform tables: FORCE would bind
+-- the table owner too, and the owner is the role that runs migrations.
+ALTER TABLE "MetricRollup" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY platform_only ON "MetricRollup" USING (false) WITH CHECK (false);

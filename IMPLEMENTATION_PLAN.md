@@ -1,3 +1,7 @@
+> **HISTORICAL — describes the original build plan, not the running system.**
+> Where it says Neon, the database is **Supabase**. Where it describes
+> deployment, see `docs/DATABASE.md` and `apps/api/vercel.json`.
+
 # SkoolOS — Complete Remaining Implementation Plan
 
 > **Goal.** Take SkoolOS from its current state (Phase 0, 1, and Phase-2 backend done) all the way to a production-deployable, fully-tested, multi-tenant school SaaS that can be hosted on Vercel + managed services. Every feature ships with tests. No half-implementations.

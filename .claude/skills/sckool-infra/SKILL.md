@@ -11,7 +11,7 @@ made. Every number here was measured, and says how.
 
 ## Freshness protocol (run FIRST, every invocation)
 
-Trained at commit **`69f3b6a`** (`perf/phase4-ops-dashboard`, 2026-08-28),
+Trained at commit **`a81a321`** (`fix/list-ceilings`, 2026-08-29),
 which branches off `origin/staging` at `a724f4e`.
 
 1. `git fetch origin && git log --oneline a24a216..origin/staging | head -30`
@@ -156,6 +156,24 @@ a Redis outage would have queued cache commands through connect-timeout cycles
 instead of falling through to Postgres. `withTenant` binds the tenant id via
 `set_config` instead of splicing it into `$executeRawUnsafe`, and sets explicit
 `timeout: 10s` / `maxWait: 3s`.
+
+**List ceilings (2026-08-29).** 158 tenant lists returned however many rows a
+tenant owned — the same 4.5 MB payload class as the public-site events. Now
+guarded per growth class (STRUCTURE 500 / ACTIVITY 2,000 / ROSTER 20,000), set
+above what any query legitimately returns so no screen changed behaviour.
+**Truncation is reported, never silent**: `packages/db` flags any findMany
+returning exactly its take. Three attendance rosters stay uncapped on purpose —
+a partial roster drops children from the register.
+
+Two things that round also fixed: `seatsTaken` now sums in the database (a
+ceiling there would have oversold the hall) with a matching
+`(ticketTypeId, status)` index, and class-notes' timetable guard gained the
+`schoolId` every TimetableSlot index leads with.
+
+**Metrics history (2026-08-29).** Redis is now explicitly a buffer; completed
+minutes promote to hourly `MetricRollup` rows and are deleted. Promotion runs
+off the flush timer, not cron, because Hobby cannot schedule more often than
+daily and the 2h TTL would lose everything in between.
 
 **#37 — ops dashboard.** `/platform/ops` answers "which rung are we on" from the
 ladder in ARCHITECTURE.md §5. Fixed-bucket histograms because they are the only

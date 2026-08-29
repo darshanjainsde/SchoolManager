@@ -22,6 +22,15 @@ interface RouteRow {
   dbHoldP95Ms: number | null;
 }
 
+interface HistoryPoint {
+  hour: string;
+  requests: number;
+  errors: number;
+  p95Ms: number | null;
+  dbHoldP95Ms: number | null;
+  txTimeouts: number;
+}
+
 interface OpsResponse {
   windowMinutes: number;
   severity: Severity;
@@ -39,6 +48,7 @@ interface OpsResponse {
   routes: RouteRow[];
   outbox: { pending: number; oldestMinutes: number | null; exhausted: number };
   metricsAvailable: boolean;
+  history: HistoryPoint[];
 }
 
 const TONE: Record<Severity, { color: string; word: string }> = {
@@ -164,6 +174,22 @@ export default function OpsPage() {
       </section>
 
       <section className="sk-card" style={{ marginTop: 18 }}>
+        <div className="sk-card-h">
+          <h3>Last 7 days</h3>
+        </div>
+        <div className="sk-card-b">
+          {(data.history?.length ?? 0) === 0 ? (
+            <p className="sk-muted" style={{ fontSize: 13 }}>
+              No history yet — it starts filling once metrics have been promoted out of the live
+              buffer, within a few minutes of the first traffic.
+            </p>
+          ) : (
+            <Trend points={data.history} />
+          )}
+        </div>
+      </section>
+
+      <section className="sk-card" style={{ marginTop: 18 }}>
         <div className="sk-card-h"><h3>Busiest routes</h3></div>
         <div className="sk-card-b" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -221,6 +247,56 @@ function Stat({ label, value, tone, hint }: { label: string; value: string; tone
       <div className="sk-lab">{label}</div>
       <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', color: tone }}>{value}</div>
       {hint && <div className="sk-muted" style={{ fontSize: 11 }}>{hint}</div>}
+    </div>
+  );
+}
+
+/**
+ * Requests per hour with the error hours called out.
+ *
+ * A sparkline rather than a full chart: the question this answers is "is the
+ * shape changing", not "what exactly happened at 14:00" — the live table above
+ * already has the detail. Hours with a 5xx are drawn in the bad hue so a bad
+ * patch is visible without reading any number.
+ */
+function Trend({ points }: { points: HistoryPoint[] }) {
+  const max = Math.max(1, ...points.map((p) => p.requests));
+  const W = 720;
+  const H = 90;
+  const step = points.length > 1 ? W / (points.length - 1) : W;
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <svg viewBox={`0 0 ${W} ${H + 22}`} width={W} role="img"
+        aria-label={`Requests per hour over the last ${points.length} hours`}>
+        <line x1="0" y1={H} x2={W} y2={H} stroke="var(--sk-line)" strokeWidth="1" />
+        <polyline
+          fill="none"
+          stroke="var(--sk-brand)"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          points={points
+            .map((p, i) => `${i * step},${H - (p.requests / max) * (H - 8)}`)
+            .join(' ')}
+        />
+        {points.map((p, i) =>
+          p.errors > 0 || p.txTimeouts > 0 ? (
+            <circle
+              key={p.hour}
+              cx={i * step}
+              cy={H - (p.requests / max) * (H - 8)}
+              r="3.5"
+              fill="var(--sk-bad)"
+            />
+          ) : null,
+        )}
+        <text x="0" y={H + 16} fontSize="11" fill="var(--sk-ink-3)">
+          {new Date(points[0].hour).toLocaleDateString()}
+        </text>
+        <text x={W} y={H + 16} fontSize="11" fill="var(--sk-ink-3)" textAnchor="end">
+          peak {max.toLocaleString()}/hr
+        </text>
+      </svg>
     </div>
   );
 }

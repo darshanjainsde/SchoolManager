@@ -8,6 +8,7 @@ import { runInBackground } from '../../common/notifications/run-in-background';
 import { isP2002, isP2025 } from '../../common/errors/prisma-errors';
 import { AttendanceService } from './attendance.service';
 import type { CreateAnnouncementDto, UpdateAnnouncementDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 /** Never let a missing School row render as `undefined` in a parent's inbox. */
 const FALLBACK_SCHOOL_NAME = 'Your school';
@@ -30,7 +31,7 @@ export class AnnouncementsService {
 
   async list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.announcement.findMany({
+      tx.announcement.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId },
         orderBy: { createdAt: 'desc' },
         include: { classSection: { select: { name: true } } },
@@ -51,7 +52,7 @@ export class AnnouncementsService {
    */
   async mine(schoolId: string, userId: string): Promise<AnnouncementMine[]> {
     const rows = await withTenant(schoolId, (tx) =>
-      tx.announcement.findMany({
+      tx.announcement.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, createdByUserId: userId },
         orderBy: { createdAt: 'desc' },
         include: { classSection: { select: { name: true, grade: { select: { name: true } } } } },
@@ -146,7 +147,7 @@ export class AnnouncementsService {
     const { rows, sectionNames } = await withTenant(schoolId, async (tx) => {
       const names = new Map<string, string>();
       if (targetIds) {
-        const sections = await tx.classSection.findMany({
+        const sections = await tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { id: { in: targetIds } },
           select: { id: true, name: true, grade: { select: { name: true } } },
         });

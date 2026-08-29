@@ -1280,6 +1280,8 @@ model AssignmentSeen {
 
   @@unique([assignmentId, studentId], name: "one_seen_per_assignment_student")
   @@index([schoolId, studentId])
+  /// Serves the read-receipt count per assignment, scoped to one school.
+  @@index([schoolId, assignmentId])
 }
 
 // Messaging (Phase 4 Task 5 / item T17). A student asks one of the teachers who
@@ -1323,6 +1325,10 @@ model Message {
   thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
+  /// Serves the unread-per-thread aggregate behind every inbox. Without it
+  /// that count seq-scanned every message on the platform (2,432ms -> 1.77ms
+  /// on the 200-school bench, 2026-08-29).
+  @@index([schoolId, senderRole, readAt])
 }
 
 /// In-app notification inbox — the per-user, per-event rows behind the bell in
@@ -1567,6 +1573,7 @@ model EventRegistration {
   @@unique([eventId, studentId])
   @@index([schoolId, eventId])
   @@index([eventId, status])
+  @@index([ticketTypeId, status])
   @@index([fromSchoolId])
   @@index([schoolId, ticketTypeId])
 }
@@ -2824,4 +2831,30 @@ model AlumniLinkRequest {
 
   @@index([schoolId, status])
   @@index([alumniId])
+}
+
+/// One hour of traffic for one route, promoted out of Redis.
+///
+/// Redis holds only the live minutes — it is a buffer, not a store, and its
+/// keys expire. History lives here so the ops dashboard can answer "was last
+/// Monday worse", which is the question that catches a limit before it is hit.
+///
+/// Hourly rather than per-minute on purpose: 25 routes x 24 hours is ~600 rows
+/// a day, where minutes would be 36,000. Trend does not need the resolution,
+/// and the live view already has it.
+model MetricRollup {
+  /// Truncated to the hour, UTC.
+  hour          DateTime
+  route         String
+  count         Int      @default(0)
+  errors        Int      @default(0)
+  txTimeouts    Int      @default(0)
+  poolTimeouts  Int      @default(0)
+  /// Fixed-bucket histograms. Summable across instances and across minutes,
+  /// which is the property that lets an hour be built from sixty of them.
+  latency       Int[]
+  dbHold        Int[]
+
+  @@id([hour, route])
+  @@index([hour])
 }

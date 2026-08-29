@@ -11,6 +11,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { isP2025 } from '../../common/errors/prisma-errors';
 import { generateSeating, type SeatingClass } from './seating-engine';
 import type { PreviewSeatingDto, SaveSeatingDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 @Injectable()
 export class SeatingService {
@@ -44,7 +45,7 @@ export class SeatingService {
     }
 
     const sections = await withTenant(schoolId, (tx) =>
-      tx.classSection.findMany({
+      tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, id: { in: unique } },
         include: {
           grade: { select: { name: true, order: true } },

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, withTenant } from '@skoolos/db';
 import type { UpsertSchoolPageDto } from './cms.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /**
  * Admin-built pages: typed blocks (validated shape-wise on the web, stored as
@@ -35,7 +36,7 @@ function normalizeBlocks(blocks: unknown[]): Prisma.InputJsonValue {
 export class SchoolPagesService {
   list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.schoolPage.findMany({ where: { schoolId }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }),
+      tx.schoolPage.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }),
     );
   }
 

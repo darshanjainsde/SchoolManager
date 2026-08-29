@@ -44,6 +44,14 @@ on:
         required: false
         type: boolean
         default: false
+      password:
+        description: >-
+          The password every demo login gets. Staging's demo accounts have a
+          KNOWN password on purpose — see the header. Leave it alone unless you
+          have a reason to change it.
+        required: false
+        type: string
+        default: password
 
   # workflow_dispatch alone is not enough: GitHub only registers that trigger
   # for workflows present on the DEFAULT branch, and this one deliberately
@@ -123,6 +131,11 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school || 'raffles' }}
           DEMO_DRY_RUN: 'false'
+          # Spelled out rather than left to the script's fallback. Both seeds
+          # read a password from the environment and quietly fall back to a
+          # built-in default, so that default was the only thing staging ever
+          # had — and nothing in this workflow said what it was.
+          DEMO_PASSWORD: ${{ github.event.inputs.password || 'password' }}
         run: pnpm --filter @skoolos/db exec tsx prisma/seed-school-demo.ts
 
       - name: Load the alumni demo data
@@ -138,10 +151,18 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school || 'raffles' }}
           DEMO_DRY_RUN: 'false'
+          DEMO_ALUMNUS_PASSWORD: ${{ github.event.inputs.password || 'password' }}
         run: pnpm --filter @skoolos/db exec tsx prisma/seed-alumni-demo.ts
 
       - name: What to do next
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
+          echo "Every demo login for ${{ github.event.inputs.school || 'raffles' }} now has this password:"
+          echo "  ${{ github.event.inputs.password || 'password' }}"
+          echo "Admin is admin@${{ github.event.inputs.school || 'raffles' }}.test"
+          echo
+          echo "Five failed attempts locks an account for 15 minutes, so a"
+          echo "stale password in a password manager costs a quarter of an hour."
+          echo
           echo "Feature flags are cached in Redis for 300s — give it five"
           echo "minutes, or hard-refresh, before the alumni tab appears."
