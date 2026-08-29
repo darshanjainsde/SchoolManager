@@ -272,6 +272,22 @@ model School {
   libraryHallMarks       LibraryHallMark[]
   results                Result[]
   assignmentsSeen        AssignmentSeen[]
+  feeCategories          FeeCategory[]
+  feeTerms               FeeTerm[]
+  feePlans               FeePlan[]
+  feePlanItems           FeePlanItem[]
+  feeAssignments         FeeAssignment[]
+  feeConcessions         FeeConcession[]
+  feeInvoices            FeeInvoice[]
+  feeInvoiceLines        FeeInvoiceLine[]
+  feePayments            FeePayment[]
+  feeAllocations         FeeAllocation[]
+  feeLedgerEntries       FeeLedgerEntry[]
+  feeReceipts            FeeReceipt[]
+  paymentConfigs         SchoolPaymentConfig[]
+  bankDetail             SchoolBankDetail?
+  feeAudits              FeeAudit[]
+  feeCounters            FeeCounter[]
 }
 
 model Domain {
@@ -759,6 +775,8 @@ model AcademicYear {
   classSections    ClassSection[]
   timetableSlots   TimetableSlot[]
   leaveAllocations LeaveAllocation[]
+  feeTerms         FeeTerm[]
+  feePlans         FeePlan[]
 
   @@unique([schoolId, name])
   @@index([schoolId])
@@ -771,6 +789,7 @@ model Grade {
   order         Int            @default(0)
   school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSections ClassSection[]
+  feePlanItems  FeePlanItem[]
 
   @@unique([schoolId, name])
   @@index([schoolId])
@@ -886,6 +905,11 @@ model Student {
   diaryAcks         DiaryAck[]
   attendanceNotices AttendanceNotice[]
   libraryIssues     LibraryIssue[]
+  feeAssignments    FeeAssignment[]
+  feeConcessions    FeeConcession[]
+  feeInvoices       FeeInvoice[]
+  feePayments       FeePayment[]
+  feeLedgerEntries  FeeLedgerEntry[]
 
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
@@ -2073,4 +2097,522 @@ model LibraryHallMark {
 
   @@unique([visitId, studentId])
   @@index([schoolId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEES
+//
+// Money the school is owed, money that arrived, and the ledger that reconciles
+// the two. Built to collect through a bank transfer a human verifies TODAY,
+// and through a payment gateway LATER — without either side of that change
+// touching anything above `FeePayment`. This mirrors the decision `EventPayment`
+// already made one level down ("the same row, which is the entire reason to
+// build this table before there is a gateway to fill it").
+//
+// Two rules govern the whole block:
+//   1. `FeeLedgerEntry` is append-only and is the ONLY source of a balance.
+//      Nothing stores a running total; a balance is SUM(signed amounts).
+//   2. Anything a parent has already been shown is immutable. Corrections are
+//      new rows (credit notes, reversals), never UPDATEs.
+//
+// Amounts are `amountMinor` — paise, Int — matching EventPayment's vocabulary.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// How often a category is charged. Drives invoice generation: ONE_TIME is
+/// billed on the first invoice a student is ever issued, ANNUAL on the first
+/// of each session, PER_TERM on every one.
+enum FeeFrequency {
+  PER_TERM
+  ANNUAL
+  ONE_TIME
+}
+
+/// Where a fee payment has got to. Extends the vocabulary `PaymentStatus`
+/// already uses with the two states a human-verified rail needs: a parent has
+/// claimed a payment (SUBMITTED) and the office did not accept it (REJECTED).
+/// Kept as its own enum rather than extending PaymentStatus because event
+/// registrations must never acquire a SUBMITTED state they have no screen for.
+enum FeePaymentStatus {
+  /// Parent says they paid; nobody has checked yet.
+  SUBMITTED
+  /// Verified by the office, or auto-verified by a gateway webhook. Money is
+  /// in the ledger from this moment.
+  VERIFIED
+  /// Not accepted. `rejectionReason` is shown to the parent verbatim.
+  REJECTED
+  /// Reversed after verification (bounced cheque, wrong student, duplicate).
+  /// The ledger keeps the original credit and adds a matching debit.
+  REVERSED
+}
+
+/// How the money physically moved. Recorded from what the parent says, then
+/// confirmed by whoever verifies. Not the same axis as `FeePayment.provider`:
+/// provider is which SYSTEM handled it, method is which INSTRUMENT was used.
+enum FeePaymentMethod {
+  UPI
+  NEFT_IMPS
+  CHEQUE
+  CASH
+  CARD
+  NETBANKING
+  OTHER
+}
+
+/// Direction of a ledger row. A student's balance is
+/// SUM(DEBIT) - SUM(CREDIT); positive means they owe.
+enum FeeLedgerKind {
+  /// The school billed the student (an invoice line).
+  DEBIT
+  /// Money arrived, or an amount was waived.
+  CREDIT
+}
+
+/// What a category is for, in the school's own words — and, critically, in the
+/// words the PARENT reads on their bill. `description` is not documentation:
+/// it is rendered under every line item, which is the whole transparency
+/// mechanism. "Exam ₹800" starts an argument; "Exam ₹800 — question papers,
+/// answer sheets and result processing" ends one.
+model FeeCategory {
+  id          String       @id @default(uuid()) @db.Uuid
+  schoolId    String       @db.Uuid
+  name        String
+  /// Shown to parents beneath the amount. Required, deliberately.
+  description String
+  frequency   FeeFrequency @default(PER_TERM)
+  /// Opt-in categories (transport, books) are billed only to students whose
+  /// `FeeAssignment.optIns` names them. Non-optional categories bill everyone
+  /// in the grade.
+  isOptional  Boolean      @default(false)
+  /// False for government-reimbursed heads (RTE). Such lines still appear on
+  /// the bill and in reports, but never make a student a defaulter and never
+  /// trigger a reminder.
+  isCollectible Boolean    @default(true)
+  order       Int          @default(0)
+  /// Soft delete. A category referenced by an issued invoice can never be
+  /// removed, because that invoice must keep rendering.
+  archivedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  school      School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  planItems   FeePlanItem[]
+  concessions FeeConcession[]
+  lines       FeeInvoiceLine[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+/// One instalment of a session. Due dates live here, so "when is Term 2 due"
+/// has exactly one answer for the whole school.
+model FeeTerm {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  academicYearId String   @db.Uuid
+  name           String
+  /// A DATE, not an instant — "due 10 September" is a calendar fact, and
+  /// lateness is decided against 23:59:59 in the school's timezone.
+  dueDate        DateTime @db.Date
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  planItems    FeePlanItem[]
+  invoices     FeeInvoice[]
+  concessions  FeeConcession[]
+
+  @@unique([schoolId, academicYearId, name])
+  @@index([schoolId, academicYearId])
+}
+
+/// A version of the whole fee structure for one session. Editing amounts after
+/// bills exist mints a NEW version; issued invoices keep pointing at the one
+/// they were built from, so last month's bill still reproduces exactly.
+model FeePlan {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  academicYearId String   @db.Uuid
+  version        Int      @default(1)
+  /// Only one version per year is open for editing; the rest are frozen the
+  /// moment they are used to issue a bill.
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  items        FeePlanItem[]
+  assignments  FeeAssignment[]
+  invoices     FeeInvoice[]
+
+  @@unique([schoolId, academicYearId, version])
+  @@index([schoolId, academicYearId])
+}
+
+/// One cell of the admin's grid: this grade pays this much for this category,
+/// in this term. `termId` null means "same in every term" — which is how the
+/// grid is filled in normally, with per-term rows written only where a school
+/// genuinely charges differently across the year.
+model FeePlanItem {
+  id          String @id @default(uuid()) @db.Uuid
+  schoolId    String @db.Uuid
+  planId      String @db.Uuid
+  gradeId     String @db.Uuid
+  categoryId  String @db.Uuid
+  /// Null = applies to every term of the session.
+  termId      String? @db.Uuid
+  amountMinor Int
+
+  school   School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  plan     FeePlan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  grade    Grade       @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  category FeeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  term     FeeTerm?    @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, gradeId, categoryId, termId])
+  @@index([schoolId, planId])
+  @@index([schoolId, gradeId])
+  @@index([schoolId, categoryId])
+  @@index([schoolId, termId])
+}
+
+/// Which plan version a student is billed from, and which optional categories
+/// they have opted into. Without this row a student is billed their grade's
+/// non-optional categories from the active plan — so assignment is only needed
+/// to record exceptions like a bus route.
+model FeeAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  studentId String   @db.Uuid
+  planId    String   @db.Uuid
+  /// FeeCategory ids the student has opted into (transport, books).
+  optInCategoryIds String[] @default([])
+  /// Government-reimbursed seat. Collectible lines still generate; reminders
+  /// and defaulter lists skip them.
+  isRte     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  plan    FeePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, planId])
+  @@index([schoolId, studentId])
+  @@index([schoolId, planId])
+}
+
+/// A discount for one student. Always rendered on the bill as its own named
+/// line — a parent who cannot see the concession does not know they got it.
+model FeeConcession {
+  id         String  @id @default(uuid()) @db.Uuid
+  schoolId   String  @db.Uuid
+  studentId  String  @db.Uuid
+  /// Null = applies to the whole bill rather than one category.
+  categoryId String? @db.Uuid
+  /// Null = every term. Set to scope a one-off waiver to a single instalment.
+  termId     String? @db.Uuid
+  /// Basis points (2000 = 20%), so a percentage never needs a float. Exactly
+  /// one of percentBps / amountMinor is set; the service enforces it.
+  percentBps  Int?
+  amountMinor Int?
+  /// Shown to the parent. "Sibling concession — second child at the school".
+  reason      String
+  createdBy   String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school   School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student  Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  category FeeCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  term     FeeTerm?     @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, studentId])
+  @@index([schoolId, categoryId])
+  @@index([schoolId, termId])
+}
+
+/// A bill. IMMUTABLE once issued — the parent has seen it. `number` is a
+/// gap-free per-school sequence allocated inside the issuing transaction.
+model FeeInvoice {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  studentId String   @db.Uuid
+  termId    String   @db.Uuid
+  planId    String   @db.Uuid
+  number    String
+  /// Copied from the term at issue time. If the school later moves the term's
+  /// due date, bills already sent keep the date printed on them.
+  dueDate   DateTime @db.Date
+  /// Sum of line netMinor. Denormalised because it is read on every list
+  /// screen and can never change — the invoice is immutable.
+  totalMinor Int
+  issuedAt  DateTime @default(now())
+  /// Set when the school explicitly cancels a bill. Cancelling does not delete
+  /// it; the ledger gets a reversing entry.
+  cancelledAt     DateTime?
+  cancelledReason String?
+
+  school      School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student     Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  term        FeeTerm           @relation(fields: [termId], references: [id], onDelete: Restrict)
+  plan        FeePlan           @relation(fields: [planId], references: [id], onDelete: Restrict)
+  lines       FeeInvoiceLine[]
+  allocations FeeAllocation[]
+  payments    FeePayment[]
+
+  /// One bill per student per term. This is what makes "generate bills" safe
+  /// to run twice.
+  @@unique([studentId, termId])
+  @@unique([schoolId, number])
+  @@index([schoolId, termId])
+  @@index([schoolId, studentId])
+  @@index([schoolId, dueDate])
+}
+
+/// One line of a bill. Gross, concession and net are all stored so the parent
+/// sees what was charged AND what was waived, and so a report can total either
+/// without re-deriving a rule that may since have changed.
+model FeeInvoiceLine {
+  id          String @id @default(uuid()) @db.Uuid
+  schoolId    String @db.Uuid
+  invoiceId   String @db.Uuid
+  categoryId  String @db.Uuid
+  /// Copied from the category at issue time — renaming a category must not
+  /// rewrite bills a parent already has.
+  categoryName        String
+  categoryDescription String
+  grossMinor      Int
+  concessionMinor Int    @default(0)
+  netMinor        Int
+  /// Why the concession applied, shown as its own line. Null when there is none.
+  concessionReason String?
+  isCollectible    Boolean @default(true)
+  order            Int     @default(0)
+
+  school      School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  invoice     FeeInvoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  category    FeeCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  allocations FeeAllocation[]
+
+  @@index([schoolId, invoiceId])
+  @@index([schoolId, categoryId])
+}
+
+/// Money that changed hands — whoever moved it.
+///
+/// Written today by a parent claiming a bank transfer (`provider = 'MANUAL'`,
+/// status SUBMITTED) and by a clerk recording cash; written by a gateway
+/// webhook later (`provider = 'PHONEPE'`, status VERIFIED on capture). The
+/// same row either way, which is why the ledger, receipts, reports and every
+/// parent-facing screen never learn which rail was used.
+model FeePayment {
+  id        String @id @default(uuid()) @db.Uuid
+  schoolId  String @db.Uuid
+  studentId String @db.Uuid
+  /// Which bill this is against. Null is legal for an advance payment made
+  /// before a bill exists.
+  invoiceId String? @db.Uuid
+
+  /// Matches PaymentProvider.key — 'MANUAL' | 'PHONEPE' | 'RAZORPAY'. A string
+  /// rather than an enum so adding a provider is an adapter file, not a
+  /// migration.
+  provider    String           @default("MANUAL")
+  /// The UTR / UPI reference / gateway payment id. Unique per school, which is
+  /// what catches the same transfer being submitted twice.
+  providerRef String?
+  method      FeePaymentMethod
+  amountMinor Int
+  currency    String           @default("INR")
+  status      FeePaymentStatus @default(SUBMITTED)
+
+  /// A DATE — what the parent says is on their bank statement.
+  paidOn      DateTime @db.Date
+  /// S3 key of the screenshot or receipt image. Read through a presigned URL;
+  /// never public.
+  proofKey    String?
+  note        String?
+
+  /// The parent (or the clerk, for cash at the counter) who claimed it.
+  submittedBy String?  @db.Uuid
+  submittedAt DateTime @default(now())
+  /// The staff member who accepted or rejected it.
+  verifiedBy      String?   @db.Uuid
+  verifiedAt      DateTime?
+  /// Shown to the parent verbatim, so it must be actionable.
+  rejectionReason String?
+  reversedAt      DateTime?
+  reversedReason  String?
+
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student      Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  invoice      FeeInvoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  allocations  FeeAllocation[]
+  receipt      FeeReceipt?
+
+  /// NOTE: the duplicate-reference guard is a PARTIAL unique index
+  /// (`WHERE "providerRef" IS NOT NULL`) created in the migration, not an
+  /// `@@unique` here — Prisma cannot express a partial index, and declaring a
+  /// full one would both break cash payments (many null refs) and read as
+  /// permanent drift. Grep `FeePayment_schoolId_provider_providerRef_key`.
+  @@index([schoolId, status])
+  @@index([schoolId, studentId])
+  @@index([schoolId, invoiceId])
+  @@index([schoolId, submittedAt])
+}
+
+/// Which lines of which bill a payment actually paid. Written by the
+/// allocation waterfall when a payment is verified, so partial payments,
+/// advances and reversals all have somewhere honest to land.
+model FeeAllocation {
+  id            String @id @default(uuid()) @db.Uuid
+  schoolId      String @db.Uuid
+  paymentId     String @db.Uuid
+  invoiceId     String @db.Uuid
+  invoiceLineId String @db.Uuid
+  amountMinor   Int
+
+  school      School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payment     FeePayment     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice     FeeInvoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceLine FeeInvoiceLine @relation(fields: [invoiceLineId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, paymentId])
+  @@index([schoolId, invoiceId])
+  @@index([schoolId, invoiceLineId])
+}
+
+/// THE TRUTH. Append-only: no row is ever updated or deleted, and a balance is
+/// SUM over this table and nowhere else. Every other fee table is a writer
+/// into it. A correction is a new opposing row, never an edit.
+model FeeLedgerEntry {
+  id        String        @id @default(uuid()) @db.Uuid
+  schoolId  String        @db.Uuid
+  studentId String        @db.Uuid
+  kind      FeeLedgerKind
+  amountMinor Int
+  /// What caused it — 'INVOICE' | 'PAYMENT' | 'CONCESSION' | 'REVERSAL' |
+  /// 'CANCELLATION'. A string for the same reason `provider` is.
+  refType   String
+  refId     String        @db.Uuid
+  /// Rendered on the student's fee ledger screen.
+  narration String
+  /// When the money moved, which is not always when the row was written.
+  occurredAt DateTime     @default(now())
+  createdAt  DateTime     @default(now())
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, studentId, occurredAt])
+  @@index([schoolId, refType, refId])
+}
+
+/// Issued the moment a payment is verified. `number` comes from a per-school
+/// sequence inside that same transaction, so two clerks accepting at once
+/// cannot collide. Allocated on SAVE, never on print — reprints keep the number.
+model FeeReceipt {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @db.Uuid
+  paymentId   String   @unique @db.Uuid
+  studentId   String   @db.Uuid
+  number      String
+  amountMinor Int
+  issuedAt    DateTime @default(now())
+
+  school  School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payment FeePayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, number])
+  @@index([schoolId, studentId])
+}
+
+/// Per-school, per-provider gateway configuration. One row per provider a
+/// school has touched. `config` holds the provider's own declared fields;
+/// `secrets` holds the encrypted half and is NEVER selected into a response —
+/// the API returns only which keys are present, never their values.
+model SchoolPaymentConfig {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  /// Matches PaymentProvider.key.
+  provider String
+  enabled  Boolean @default(false)
+  /// Non-secret declared fields (merchant id, account id).
+  config   Json    @default("{}")
+  /// Encrypted at rest. Write-only from the admin screen's point of view.
+  secrets  Json    @default("{}")
+  /// 'NOT_CONFIGURED' | 'PENDING' | 'ACTIVE' | 'SUSPENDED' — what the school
+  /// sees as a status pill, and what disables the parent's Pay Now button.
+  status   String  @default("NOT_CONFIGURED")
+  statusNote String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, provider])
+  @@index([schoolId])
+}
+
+/// The bank account parents transfer into. Deliberately NOT secret — it is a
+/// deposit account, printed on the bill and shown in the portal. `isVisible`
+/// is the switch that reveals the whole block to parents.
+model SchoolBankDetail {
+  id            String  @id @default(uuid()) @db.Uuid
+  schoolId      String  @unique @db.Uuid
+  accountName   String
+  accountNumber String
+  ifsc          String
+  bankName      String
+  branch        String?
+  upiId         String?
+  /// S3 key of the uploaded UPI QR image.
+  upiQrKey      String?
+  /// Free text shown under the details — "write your child's admission number
+  /// in the remark".
+  instructions  String?
+  isVisible     Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+/// Every financial mutation, hash-chained so tampering is detectable rather
+/// than merely discouraged. `prevHash` is the previous row's `hash` for this
+/// school; `hash` is sha256 over the row's own content plus prevHash.
+model FeeAudit {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  actorId   String?  @db.Uuid
+  action    String
+  refType   String
+  refId     String   @db.Uuid
+  before    Json?
+  after     Json?
+  prevHash  String?
+  hash      String
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+  @@index([schoolId, refType, refId])
+}
+
+/// Per-school, per-series counter behind receipt and invoice numbers. Bumped
+/// by the `fee_next_number(school, series)` SQL function inside the caller's
+/// transaction, so two clerks accepting at the same instant cannot collide and
+/// the series stays gap-free. A counter row rather than a Postgres SEQUENCE
+/// because a sequence is global, while these must restart per school.
+model FeeCounter {
+  schoolId String @db.Uuid
+  series   String
+  value    Int    @default(0)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@id([schoolId, series])
 }
