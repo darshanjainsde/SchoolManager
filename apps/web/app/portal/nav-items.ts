@@ -9,6 +9,7 @@ import {
   User,
   NotebookPen,
   Library,
+  Wallet,
 } from 'lucide-react';
 
 /**
@@ -41,5 +42,6 @@ export const NAV_ITEMS: {
   { href: '/portal/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/portal/messages', label: 'Messages', icon: MessageSquare },
   { href: '/portal/library', label: 'Library', icon: Library, requiredFeature: 'LIBRARY' },
+  { href: '/portal/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' },
   { href: '/portal/profile', label: 'Profile', icon: User },
 ];
