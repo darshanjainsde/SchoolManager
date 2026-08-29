@@ -1,5 +1,23 @@
 # SkoolOS — Production deploy checklist
 
+> **THIS DOCUMENT DESCRIBED A DEPLOYMENT THAT DOES NOT EXIST.**
+>
+> It documented API + worker on Railway with a Neon database. Neither is true:
+> the API runs as a Vercel Function (project `skoolos-api`, region `bom1`) and
+> the database is **Supabase**, which three CI workflows deploy against
+> (`db-backup`, `db-migrate`, `db-restore-drill`).
+>
+> Trusting it cost real time — it is why a round of scale work documented
+> Neon-specific connection settings for a Supabase database, and why a
+> `connection_limit` value quoted below was treated as production truth when
+> nothing verifies it.
+>
+> **Authoritative sources, in order:** the CI workflows, then
+> `docs/DATABASE.md`, then `apps/api/vercel.json`. Read those, not this.
+> The Railway path below is kept only because the Dockerfile still exists and
+> the option is real — it is not what is deployed.
+
+
 Two supported targets:
 
 | Target | What goes where |
@@ -145,7 +163,10 @@ Once in:
   - **API replicas** — add Railway replicas. Stateless, share Redis + Postgres.
   - **Worker replicas** — same, BullMQ handles concurrency.
   - **SSE realtime** — the in-process `SseBusService` is single-instance. For multi-API-replica fan-out, swap it for a Redis pub/sub bridge (`PUBLISH`/`PSUBSCRIBE`) or move to Ably (already config-ready via the settings page).
-  - **Postgres** — Neon-style pgbouncer is enabled at `?pgbouncer=true&connection_limit=1` on the connection string.
+  - **Postgres** — Supabase transaction pooler (port 6543) with `?pgbouncer=true`.
+    The `connection_limit` is NOT verified from here — read it from the Vercel
+    dashboard. Measured at 100 concurrent users: limit 1 gives ~285 req/s,
+    limit 5 gives ~755. See `.env.production.example` for the full curve.
 
 ---
 

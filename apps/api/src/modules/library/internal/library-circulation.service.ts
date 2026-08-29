@@ -14,6 +14,7 @@ import {
   type LibraryRules,
 } from './library-policy';
 import type { IssueDto } from './library.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 export interface BorrowerRef {
   kind: BorrowerKind;
@@ -250,7 +251,7 @@ export class LibraryCirculationService {
       const rules = this.settings.rules(settings);
       const where = kind === 'STUDENT' ? { studentId: id } : { teacherId: id };
       const [holdings, borrower] = await Promise.all([
-        tx.libraryIssue.findMany({
+        tx.libraryIssue.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { schoolId, ...where, returnedOn: null },
           orderBy: { dueOn: 'asc' },
           include: ISSUE_INCLUDE,
@@ -588,9 +589,14 @@ export class LibraryCirculationService {
       const settings = await this.settings.ensure(tx, schoolId);
       const rules = this.settings.rules(settings);
       const [totalCopies, lostCopies, totalTitles, outNowCount, openRows, collected, fixedDue] = await Promise.all([
-        tx.libraryBookCopy.count(),
+        // Scoped, like every other count in this list. Unscoped, RLS still
+        // returned the right number — by counting every copy on the platform
+        // and discarding the rest (50ms of the dashboard's 66ms at 200k
+        // copies). See common/lists/relation-counts.ts for the same trap in
+        // its `_count` disguise.
+        tx.libraryBookCopy.count({ where: { schoolId } }),
         tx.libraryBookCopy.count({ where: { schoolId, lostAt: { not: null } } }),
-        tx.libraryBookTitle.count(),
+        tx.libraryBookTitle.count({ where: { schoolId } }),
         tx.libraryIssue.count({ where: { schoolId, returnedOn: null } }),
         tx.libraryIssue.findMany({
           where: { schoolId, returnedOn: null },
@@ -599,7 +605,7 @@ export class LibraryCirculationService {
           include: ISSUE_INCLUDE,
         }),
         tx.libraryFine.aggregate({ where: { schoolId, status: 'PAID' }, _sum: { amountRupees: true } }),
-        tx.libraryFine.findMany({ where: { schoolId, status: 'DUE' }, select: { amountRupees: true, teacherId: true } }),
+        tx.libraryFine.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, status: 'DUE' }, select: { amountRupees: true, teacherId: true } }),
       ]);
       const openCards = openRows.map((r) => toIssueCard(r, rules, todayISO));
       const dueSoon = openCards.filter((c) => c.dueOn >= todayISO && c.dueOn <= dateOnlyISO(weekOut));

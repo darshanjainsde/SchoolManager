@@ -8,6 +8,7 @@ import type {
   SetLeaveAllocationDto,
   UpdateLeaveTypeDefDto,
 } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 /**
  * The five types every school starts from — mirrors the `LeaveType` enum so
@@ -43,7 +44,7 @@ export class LeavePolicyService {
   /** All defs, seeding the five built-ins the first time a school looks. */
   async types(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
-      const existing = await tx.leaveTypeDef.findMany({
+      const existing = await tx.leaveTypeDef.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: { createdAt: 'asc' },
       });
@@ -55,7 +56,7 @@ export class LeavePolicyService {
         // makes the duplicate a no-op instead of an error.
         skipDuplicates: true,
       });
-      return tx.leaveTypeDef.findMany({ where: { schoolId }, orderBy: { createdAt: 'asc' } });
+      return tx.leaveTypeDef.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { createdAt: 'asc' } });
     });
   }
 
@@ -115,16 +116,16 @@ export class LeavePolicyService {
     return withTenant(schoolId, async (tx) => {
       const year = await this.resolveYear(tx, schoolId, academicYearId);
       const [defs, teachers, allocations] = await Promise.all([
-        tx.leaveTypeDef.findMany({
+        tx.leaveTypeDef.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId, isActive: true },
           orderBy: { createdAt: 'asc' },
         }),
-        tx.teacher.findMany({
+        tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId, isActive: true },
           select: { id: true, firstName: true, lastName: true },
           orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
         }),
-        tx.leaveAllocation.findMany({ where: { schoolId, academicYearId: year.id } }),
+        tx.leaveAllocation.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, academicYearId: year.id } }),
       ]);
 
       const used = await this.usedDays(tx, schoolId, defs, year.startDate, year.endDate);
@@ -169,9 +170,9 @@ export class LeavePolicyService {
     return withTenant(schoolId, async (tx) => {
       const year = await this.resolveYear(tx, schoolId, academicYearId);
       const [defs, teachers, existing] = await Promise.all([
-        tx.leaveTypeDef.findMany({ where: { schoolId, isActive: true, defaultAnnual: { gt: 0 } } }),
-        tx.teacher.findMany({ where: { schoolId, isActive: true }, select: { id: true } }),
-        tx.leaveAllocation.findMany({
+        tx.leaveTypeDef.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, isActive: true, defaultAnnual: { gt: 0 } } }),
+        tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, isActive: true }, select: { id: true } }),
+        tx.leaveAllocation.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId, academicYearId: year.id },
           select: { teacherId: true, typeDefId: true },
         }),
@@ -250,12 +251,12 @@ export class LeavePolicyService {
       ]);
       if (!from || !to) throw new NotFoundException('Academic year not found');
 
-      const defs = await tx.leaveTypeDef.findMany({
+      const defs = await tx.leaveTypeDef.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, isActive: true, carryForwardCap: { gt: 0 } },
       });
       if (defs.length === 0) return { carried: 0 };
 
-      const allocations = await tx.leaveAllocation.findMany({
+      const allocations = await tx.leaveAllocation.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, academicYearId: from.id, typeDefId: { in: defs.map((d) => d.id) } },
       });
       const used = await this.usedDays(tx, schoolId, defs, from.startDate, from.endDate);
@@ -302,11 +303,11 @@ export class LeavePolicyService {
       const teacher = await tx.teacher.findFirst({ where: { schoolId, userId }, select: { id: true } });
       if (!teacher) throw new NotFoundException('No teacher record for this login');
       const year = await this.resolveYear(tx, schoolId, undefined);
-      const defs = await tx.leaveTypeDef.findMany({
+      const defs = await tx.leaveTypeDef.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, isActive: true },
         orderBy: { createdAt: 'asc' },
       });
-      const allocations = await tx.leaveAllocation.findMany({
+      const allocations = await tx.leaveAllocation.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, academicYearId: year.id, teacherId: teacher.id },
       });
       const used = await this.usedDays(tx, schoolId, defs, year.startDate, year.endDate, teacher.id);
@@ -347,16 +348,16 @@ export class LeavePolicyService {
       const year = await tx.academicYear.findFirst({ where: { schoolId, isCurrent: true } });
       if (!year) return {};
 
-      const pending = await tx.leaveApplication.findMany({
+      const pending = await tx.leaveApplication.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, status: 'PENDING' },
         select: { id: true, teacherId: true, type: true, typeDefId: true, startDate: true, endDate: true },
       });
       if (pending.length === 0) return {};
 
-      const defs = await tx.leaveTypeDef.findMany({ where: { schoolId, isActive: true } });
+      const defs = await tx.leaveTypeDef.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, isActive: true } });
       const defByBuiltin = new Map(defs.filter((d) => d.builtin).map((d) => [d.builtin as string, d.id]));
       const defNameById = new Map(defs.map((d) => [d.id, d.name]));
-      const allocations = await tx.leaveAllocation.findMany({
+      const allocations = await tx.leaveAllocation.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, academicYearId: year.id },
       });
       const allocByKey = new Map(allocations.map((a) => [`${a.teacherId}:${a.typeDefId}`, a]));
@@ -418,7 +419,7 @@ export class LeavePolicyService {
     yearEnd: Date,
     teacherId?: string,
   ): Promise<Map<UsedKey, number>> {
-    const apps = await tx.leaveApplication.findMany({
+    const apps = await tx.leaveApplication.findMany({ take: LIST_CEILING.ACTIVITY,
       where: {
         schoolId,
         status: 'APPROVED',
@@ -457,7 +458,7 @@ export class LeavePolicyService {
 
   /** Every holiday date string inside `[from, to]`, ranges expanded. */
   private async holidaySet(tx: TenantTx, schoolId: string, from: Date, to: Date): Promise<Set<string>> {
-    const rows = await tx.holiday.findMany({
+    const rows = await tx.holiday.findMany({ take: LIST_CEILING.STRUCTURE,
       where: { schoolId, startDate: { lte: to }, OR: [{ endDate: null }, { endDate: { gte: from } }] },
       select: { startDate: true, endDate: true },
     });

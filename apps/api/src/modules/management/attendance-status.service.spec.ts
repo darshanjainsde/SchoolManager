@@ -1,10 +1,32 @@
 const txMock = {
   classSection: { findFirst: jest.fn(), findMany: jest.fn() },
-  student: { findMany: jest.fn() },
+  student: { findMany: jest.fn(), groupBy: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   attendance: { findMany: jest.fn() },
   teacher: { findFirst: jest.fn(), findMany: jest.fn() },
   substitution: { findFirst: jest.fn(), findMany: jest.fn() },
 };
+
+/**
+ * Fixture helper: a section list PLUS the scoped roll aggregate that now
+ * supplies `studentCount`.
+ *
+ * `studentCount` used to ride along on the section row as Prisma's
+ * `include: { _count: { select: { students: true } } }`. That compiled to a
+ * subquery with `WHERE 1=1` — every school's students aggregated to render one
+ * school's list — so it is now a separate scoped `groupBy`
+ * (common/lists/relation-counts.ts). The fixtures still declare `_count` on
+ * each row because that is where the expected numbers read most clearly; this
+ * derives the aggregate from them so the two cannot drift apart.
+ */
+type SectionFixture = { id: string; name: string; grade: { name: string }; _count: { students: number } };
+let roll: Record<string, number> = {};
+function sections<T extends SectionFixture>(rows: T[]): T[] {
+  for (const r of rows) roll[r.id] = r._count.students;
+  txMock.student.groupBy.mockResolvedValue(
+    Object.entries(roll).map(([classSectionId, n]) => ({ classSectionId, _count: { _all: n } })),
+  );
+  return rows;
+}
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
 
@@ -30,6 +52,7 @@ describe('AttendanceService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    roll = {};
     withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) =>
       fn(txMock),
     );
@@ -42,7 +65,7 @@ describe('AttendanceService', () => {
   describe('myClassSections', () => {
     it('a class PICKER is not day-scoped — you can post to a class you next see on Thursday', async () => {
       txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID });
-      txMock.classSection.findMany.mockResolvedValue([]);
+      txMock.classSection.findMany.mockResolvedValue(sections([]));
 
       // No `scheduledOnly`: this is the shape announcements, assignments,
       // diary and results ask for. Day-scoping it would stop a teacher
@@ -56,7 +79,7 @@ describe('AttendanceService', () => {
 
     it('asks for the DAY the date falls on — a Sunday register is not everything you teach', async () => {
       txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID });
-      txMock.classSection.findMany.mockResolvedValue([]);
+      txMock.classSection.findMany.mockResolvedValue(sections([]));
 
       // 2026-08-02 is a Sunday. With no slots that weekday the query returns
       // nothing, which is the point: the page showed every class a teacher had
@@ -73,7 +96,7 @@ describe('AttendanceService', () => {
 
     it('returns sections where the user is class teacher or has timetable slots (deduped)', async () => {
       txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID });
-      txMock.classSection.findMany.mockResolvedValue([
+      txMock.classSection.findMany.mockResolvedValue(sections([
         {
           id: 'section-5b',
           name: 'B',
@@ -86,7 +109,7 @@ describe('AttendanceService', () => {
           grade: { name: '6' },
           _count: { students: 30 },
         },
-      ]);
+      ]));
 
       // A MONDAY, asked as the REGISTER asks it.
       const result = await svc.myClassSections(SCHOOL, TEACHER_USER, 'TEACHER', {
@@ -122,14 +145,14 @@ describe('AttendanceService', () => {
     });
 
     it('returns all sections for SCHOOL_ADMIN without a Teacher lookup', async () => {
-      txMock.classSection.findMany.mockResolvedValue([
+      txMock.classSection.findMany.mockResolvedValue(sections([
         {
           id: 'section-5b',
           name: 'B',
           grade: { name: '5' },
           _count: { students: 28 },
         },
-      ]);
+      ]));
 
       const result = await svc.myClassSections(SCHOOL, 'admin-user-1', 'SCHOOL_ADMIN');
 
@@ -143,14 +166,14 @@ describe('AttendanceService', () => {
   describe('dayStatus', () => {
     it('marks taken=true with counts and marker name when rows exist', async () => {
       txMock.teacher.findFirst.mockResolvedValueOnce({ id: TEACHER_ID }); // caller lookup in myClassSections
-      txMock.classSection.findMany.mockResolvedValue([
+      txMock.classSection.findMany.mockResolvedValue(sections([
         {
           id: 'section-5b',
           name: 'B',
           grade: { name: '5' },
           _count: { students: 28 },
         },
-      ]);
+      ]));
       const rows = [
         ...Array.from({ length: 26 }, () => ({
           classSectionId: 'section-5b',
@@ -190,14 +213,14 @@ describe('AttendanceService', () => {
 
     it('marks taken=false with the live roster count and null marker when no rows exist', async () => {
       txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID });
-      txMock.classSection.findMany.mockResolvedValue([
+      txMock.classSection.findMany.mockResolvedValue(sections([
         {
           id: 'section-5b',
           name: 'B',
           grade: { name: '5' },
           _count: { students: 28 },
         },
-      ]);
+      ]));
       txMock.attendance.findMany.mockResolvedValue([]);
 
       const result = await svc.dayStatus(SCHOOL, TEACHER_USER, 'TEACHER', '2026-07-21');
@@ -221,14 +244,14 @@ describe('AttendanceService', () => {
       // The roster has grown to 30 since this date was taken (e.g. new
       // admissions) — the day's `total` must still reflect the 28 students
       // who were actually marked, not today's roster size.
-      txMock.classSection.findMany.mockResolvedValue([
+      txMock.classSection.findMany.mockResolvedValue(sections([
         {
           id: 'section-5b',
           name: 'B',
           grade: { name: '5' },
           _count: { students: 30 },
         },
-      ]);
+      ]));
       const rows = [
         ...Array.from({ length: 26 }, () => ({
           classSectionId: 'section-5b',
@@ -254,14 +277,14 @@ describe('AttendanceService', () => {
     });
 
     it('falls back to the live roster count when the day is not taken, even if the roster later grows', async () => {
-      txMock.classSection.findMany.mockResolvedValue([
+      txMock.classSection.findMany.mockResolvedValue(sections([
         {
           id: 'section-5b',
           name: 'B',
           grade: { name: '5' },
           _count: { students: 30 },
         },
-      ]);
+      ]));
       txMock.attendance.findMany.mockResolvedValue([]);
 
       const result = await svc.dayStatus(SCHOOL, 'admin-user-1', 'SCHOOL_ADMIN', '2026-07-21');
@@ -271,14 +294,14 @@ describe('AttendanceService', () => {
 
     it('falls back to "School admin" when markedById does not resolve to a Teacher row', async () => {
       txMock.teacher.findFirst.mockResolvedValueOnce({ id: TEACHER_ID }); // caller lookup
-      txMock.classSection.findMany.mockResolvedValue([
+      txMock.classSection.findMany.mockResolvedValue(sections([
         {
           id: 'section-5b',
           name: 'B',
           grade: { name: '5' },
           _count: { students: 2 },
         },
-      ]);
+      ]));
       txMock.attendance.findMany.mockResolvedValue([
         {
           classSectionId: 'section-5b',
@@ -297,12 +320,12 @@ describe('AttendanceService', () => {
     it('resolves every section from ONE batched attendance read and ONE batched teacher lookup, regardless of section count (no per-section N+1)', async () => {
       // SCHOOL_ADMIN can see every section in the school — this is the path
       // where a per-section loop would have hurt most.
-      txMock.classSection.findMany.mockResolvedValue([
+      txMock.classSection.findMany.mockResolvedValue(sections([
         { id: 's1', name: 'A', grade: { name: '5' }, _count: { students: 25 } },
         { id: 's2', name: 'B', grade: { name: '5' }, _count: { students: 28 } },
         { id: 's3', name: 'A', grade: { name: '6' }, _count: { students: 20 } }, // untaken
         { id: 's4', name: 'B', grade: { name: '6' }, _count: { students: 22 } },
-      ]);
+      ]));
       const at = (t: string) => new Date(t);
       const rows = [
         ...Array.from({ length: 25 }, () => ({

@@ -4,6 +4,7 @@ import { LEAVE_STATUSES, type LeaveApplication, type LeaveStatusValue } from '@s
 import { ApiError } from '../../common/errors/api-error';
 import { dateRangeInclusive, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 export type { LeaveApplication };
 
@@ -83,7 +84,7 @@ export class LeaveService {
       const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
       if (!teacher) return [];
 
-      const rows = await tx.leaveApplication.findMany({
+      const rows = await tx.leaveApplication.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, teacherId: teacher.id },
         orderBy: { createdAt: 'desc' },
       });
@@ -113,14 +114,14 @@ export class LeaveService {
     const resolved = this.resolveStatus(status);
 
     return withTenant(schoolId, async (tx) => {
-      const apps = await tx.leaveApplication.findMany({
+      const apps = await tx.leaveApplication.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, status: resolved },
         orderBy: { createdAt: 'desc' },
       });
       if (apps.length === 0) return [];
 
       const teacherIds = [...new Set(apps.map((a) => a.teacherId))];
-      const teachers = await tx.teacher.findMany({
+      const teachers = await tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { id: { in: teacherIds } },
         select: { id: true, firstName: true, lastName: true },
       });
@@ -190,7 +191,7 @@ export class LeaveService {
         const weekday = isoWeekdayOf(dateStr);
         const date = new Date(dateStr);
 
-        const slots = await tx.timetableSlot.findMany({
+        const slots = await tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { schoolId, teacherId: app.teacherId, dayOfWeek: weekday, effectiveTo: null },
           select: { classSectionId: true, periodId: true },
         });
@@ -334,7 +335,7 @@ export class LeaveService {
     }
 
     return withTenant(schoolId, async (tx) => {
-      const rows = await tx.substitution.findMany({
+      const rows = await tx.substitution.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, date: { gte: new Date(from), lte: new Date(to) } },
       });
       if (rows.length === 0) return [];
@@ -348,12 +349,12 @@ export class LeaveService {
       ];
 
       const [sections, periods, teachers] = await Promise.all([
-        tx.classSection.findMany({
+        tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { id: { in: classSectionIds } },
           select: { id: true, name: true, grade: { select: { name: true } } },
         }),
-        tx.period.findMany({ where: { id: { in: periodIds } }, select: { id: true, label: true, order: true } }),
-        tx.teacher.findMany({
+        tx.period.findMany({ take: LIST_CEILING.STRUCTURE, where: { id: { in: periodIds } }, select: { id: true, label: true, order: true } }),
+        tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { id: { in: teacherIds } },
           select: { id: true, firstName: true, lastName: true },
         }),

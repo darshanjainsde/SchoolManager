@@ -4,6 +4,7 @@ import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
 import { resolveAsOfDate } from './internal/timetable-date';
 import { ApiError } from '../../common/errors/api-error';
 import { AttendanceService } from './attendance.service';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -35,7 +36,7 @@ export class TeacherDayService {
     const bySection = new Map(status.map((s) => [s.classSectionId, s]));
 
     const entries = await withTenant(schoolId, async (tx) => {
-      const periods = await tx.period.findMany({
+      const periods = await tx.period.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: { order: 'asc' },
         select: { id: true, label: true, startTime: true, endTime: true, kind: true },
@@ -54,7 +55,7 @@ export class TeacherDayService {
         }));
       }
 
-      const subs = await tx.substitution.findMany({
+      const subs = await tx.substitution.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, date: new Date(date), substituteTeacherId: teacher.id },
         select: { periodId: true, classSectionId: true, originalTeacherId: true },
       });
@@ -71,7 +72,7 @@ export class TeacherDayService {
       // is only written via startOfIstDay), so future backfills can't drift this
       // query out of sync with listForClass and listForTeacher.
       const asOf = resolveAsOfDate(date, new Date());
-      const slots = await tx.timetableSlot.findMany({
+      const slots = await tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId,
           dayOfWeek,
           effectiveFrom: { lte: asOf },
@@ -101,7 +102,7 @@ export class TeacherDayService {
 
       const originalIds = [...new Set(subs.map((s) => s.originalTeacherId))];
       const originals = originalIds.length
-        ? await tx.teacher.findMany({
+        ? await tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
             where: { id: { in: originalIds } },
             select: { id: true, firstName: true, lastName: true },
           })

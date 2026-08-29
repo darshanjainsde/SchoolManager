@@ -25,6 +25,8 @@ import type {
   SaveGiftItemDto,
   ThankYouDto,
 } from './alumni.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
+import { studentCountsBySection } from '../../../common/lists/relation-counts';
 
 @Injectable()
 export class GiftsService {
@@ -41,7 +43,7 @@ export class GiftsService {
    *  refuse politely, and an open catalogue is how that happens. */
   listItems(schoolId: string, includeInactive = false) {
     return withTenant(schoolId, (tx) =>
-      tx.giftItem.findMany({
+      tx.giftItem.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, ...(includeInactive ? {} : { isActive: true }) },
         orderBy: [{ order: 'asc' }, { name: 'asc' }],
       }),
@@ -78,25 +80,26 @@ export class GiftsService {
   async groups(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
       const [sections, wholeSchool] = await Promise.all([
-        tx.classSection.findMany({
+        tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId },
           select: {
             id: true,
             name: true,
             gradeId: true,
             grade: { select: { id: true, name: true, order: true } },
-            _count: { select: { students: { where: { isActive: true } } } },
           },
           orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
         }),
         tx.student.count({ where: { schoolId, isActive: true } }),
       ]);
+      // Active roll per section, scoped — see relation-counts.ts.
+      const roll = await studentCountsBySection(tx, schoolId, { activeOnly: true });
 
       const byGrade = new Map<string, { id: string; name: string; order: number; n: number }>();
       for (const s of sections) {
         if (!s.grade) continue;
         const g = byGrade.get(s.grade.id) ?? { id: s.grade.id, name: s.grade.name, order: s.grade.order, n: 0 };
-        g.n += s._count.students;
+        g.n += roll.get(s.id) ?? 0;
         byGrade.set(s.grade.id, g);
       }
 
@@ -110,7 +113,7 @@ export class GiftsService {
           classSectionId: s.id,
           gradeId: s.gradeId,
           label: s.grade ? `${s.grade.name} – ${s.name}` : s.name,
-          headcount: s._count.students,
+          headcount: roll.get(s.id) ?? 0,
         })),
       };
     });
@@ -306,7 +309,7 @@ export class GiftsService {
    */
   async givingSummary(schoolId: string, alumniId: string) {
     return withTenant(schoolId, async (tx) => {
-      const rows = await tx.giftPledge.findMany({
+      const rows = await tx.giftPledge.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, alumniId, status: { notIn: ['DECLINED', 'CANCELLED'] } },
         select: { quantity: true, status: true, mode: true, amountMinor: true, currency: true },
       });

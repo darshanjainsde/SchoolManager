@@ -3,6 +3,7 @@ import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
 import { istTodayISO } from '../../management';
 import type { SaveHallVisitDto } from './library.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 const TIME_ZONE = 'Asia/Kolkata';
 
@@ -44,7 +45,7 @@ export class LibraryHallService {
     const asOf = new Date(`${dateISO}T00:00:00+05:30`);
 
     return withTenant(schoolId, async (tx) => {
-      const periods = await tx.period.findMany({
+      const periods = await tx.period.findMany({ take: LIST_CEILING.STRUCTURE,
         orderBy: { order: 'asc' },
         select: { id: true, label: true, startTime: true, endTime: true, kind: true },
       });
@@ -53,7 +54,7 @@ export class LibraryHallService {
 
       // Every library period scheduled today (for the "hall in use N of M" meter),
       // and the one happening right now.
-      const librarySlots = await tx.timetableSlot.findMany({
+      const librarySlots = await tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId,
           dayOfWeek,
           subject: { name: { contains: 'librar', mode: 'insensitive' } },
@@ -91,12 +92,12 @@ export class LibraryHallService {
         section = { id: sec.id, name: sec.name, className: `${sec.grade.name}${sec.name}` };
 
         const [students, marks, visit] = await Promise.all([
-          tx.student.findMany({
+          tx.student.findMany({ take: LIST_CEILING.ROSTER,
             where: { schoolId, classSectionId: sectionId, isActive: true },
             orderBy: [{ rollNo: 'asc' }, { firstName: 'asc' }],
             select: { id: true, firstName: true, lastName: true, rollNo: true },
           }),
-          tx.attendance.findMany({
+          tx.attendance.findMany({ take: LIST_CEILING.ACTIVITY,
             where: { schoolId, classSectionId: sectionId, date },
             select: { studentId: true, status: true, markedById: true, createdAt: true },
           }),
@@ -141,7 +142,7 @@ export class LibraryHallService {
 
       const [settingsRow, sections] = await Promise.all([
         tx.librarySettings.findUnique({ where: { schoolId }, select: { hallCapacityClasses: true } }),
-        tx.classSection.findMany({
+        tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
           orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
           select: { id: true, name: true, grade: { select: { name: true } } },
         }),
@@ -182,7 +183,7 @@ export class LibraryHallService {
 
       const rosterIds = new Set(
         (
-          await tx.student.findMany({
+          await tx.student.findMany({ take: LIST_CEILING.ROSTER,
             where: { schoolId, classSectionId: dto.classSectionId, isActive: true },
             select: { id: true },
           })

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { TenantTx } from '@skoolos/db';
 import type { PublicEvent } from './community.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 /**
  * Events stay listed through the end of their (UTC) day, not until the exact
@@ -84,7 +85,7 @@ export class PublicEventsService {
     // The ticket a public join registers against is the earliest one — the same
     // choice RegistrationsService makes when no ticket is named, so the page
     // cannot advertise a different ticket from the one the booking uses.
-    const ticketTypes = await tx.eventTicketType.findMany({
+    const ticketTypes = await tx.eventTicketType.findMany({ take: LIST_CEILING.STRUCTURE,
       where: { eventId: { in: eventIds } },
       orderBy: { createdAt: 'asc' },
     });
@@ -96,7 +97,7 @@ export class PublicEventsService {
     const ownIds = rows.filter((e) => e.schoolId === hostSchoolId).map((e) => e.id);
     const taken = new Map<string, number>();
     if (ownIds.length > 0) {
-      const held = await tx.eventRegistration.findMany({
+      const held = await tx.eventRegistration.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { eventId: { in: ownIds }, status: { in: ['HELD', 'CONFIRMED'] } },
         select: { eventId: true, quantity: true },
       });

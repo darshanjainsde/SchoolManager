@@ -17,6 +17,7 @@ import { runInBackground } from '../../common/notifications/run-in-background';
 import { requireClassAccess } from './internal/class-access';
 import { istTodayISO } from './internal/timetable-date';
 import type { CreateDiaryEntryDto, UpdateDiaryEntryDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -84,7 +85,7 @@ export class DiaryService {
   private async teacherNames(tx: Tx, ids: string[]): Promise<Map<string, string>> {
     const unique = [...new Set(ids)];
     if (unique.length === 0) return new Map();
-    const teachers = await tx.teacher.findMany({
+    const teachers = await tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
       where: { id: { in: unique } },
       select: { id: true, firstName: true, lastName: true },
     });
@@ -113,13 +114,13 @@ export class DiaryService {
 
       const section = await tx.classSection.findFirst({
         where: { schoolId, id: classSectionId },
-        select: { name: true, grade: { select: { name: true } }, _count: { select: { students: true } } },
+        select: { name: true, grade: { select: { name: true } } },
       });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
 
-      const entries = await tx.diaryEntry.findMany({
+      const entries = await tx.diaryEntry.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, classSectionId, date: day },
         orderBy: { createdAt: 'asc' },
         include: {
@@ -133,7 +134,7 @@ export class DiaryService {
 
       const names = await this.teacherNames(tx, entries.map((e) => e.authorTeacherId));
       const editable = date === istTodayISO();
-      const rosterCount = section._count.students;
+      const rosterCount = await tx.student.count({ where: { schoolId, classSectionId } });
 
       return {
         date,
@@ -202,11 +203,14 @@ export class DiaryService {
 
       const section = await tx.classSection.findFirst({
         where: { schoolId, id: dto.classSectionId },
-        select: { name: true, grade: { select: { name: true } }, _count: { select: { students: true } } },
+        select: { name: true, grade: { select: { name: true } } },
       });
       if (!section) {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
+      const rosterCount = await tx.student.count({
+        where: { schoolId, classSectionId: dto.classSectionId },
+      });
       // An admin with no Teacher row still has to be attributable; there is no
       // Teacher.id to store, so refuse rather than write an unattributed line.
       if (!teacherId) {
@@ -219,7 +223,7 @@ export class DiaryService {
 
       let named: { id: string; firstName: string; lastName: string }[] = [];
       if (studentIds.length > 0) {
-        named = await tx.student.findMany({
+        named = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
           where: { schoolId, id: { in: studentIds }, classSectionId: dto.classSectionId },
           select: { id: true, firstName: true, lastName: true },
         });
@@ -296,7 +300,7 @@ export class DiaryService {
         })),
         seenCount: 0,
         signedCount: 0,
-        recipientCount: audience === 'SELECTED' ? named.length : section._count.students,
+        recipientCount: audience === 'SELECTED' ? named.length : rosterCount,
         createdAt: entry.createdAt.toISOString(),
         editable: true,
       };
@@ -322,7 +326,7 @@ export class DiaryService {
     classSectionId: string,
     studentIds: string[] | null,
   ): Promise<string[]> {
-    const students = await tx.student.findMany({
+    const students = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
       where: {
         schoolId,
         userId: { not: null },
@@ -400,7 +404,6 @@ export class DiaryService {
             select: { student: { select: { id: true, firstName: true, lastName: true } } },
           },
           acks: { select: { seenAt: true, signedAt: true } },
-          classSection: { select: { _count: { select: { students: true } } } },
         },
       });
       const names = await this.teacherNames(tx, [entry.authorTeacherId]);
@@ -423,7 +426,9 @@ export class DiaryService {
         recipientCount:
           entry.audience === 'SELECTED'
             ? entry.recipients.length
-            : entry.classSection._count.students,
+            : await tx.student.count({
+                where: { schoolId, classSectionId: entry.classSectionId },
+              }),
         createdAt: entry.createdAt.toISOString(),
         editable: true,
       };
@@ -495,7 +500,7 @@ export class DiaryService {
       const since = new Date();
       since.setDate(since.getDate() - STUDENT_WINDOW_DAYS);
 
-      const entries = await tx.diaryEntry.findMany({
+      const entries = await tx.diaryEntry.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId,
           classSectionId: student.classSectionId,
           ...(date ? { date: new Date(date) } : { date: { gte: since } }),
@@ -602,7 +607,7 @@ export class DiaryService {
 
       const since = new Date();
       since.setDate(since.getDate() - STUDENT_WINDOW_DAYS);
-      const unsigned = await tx.diaryEntry.findMany({
+      const unsigned = await tx.diaryEntry.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId,
           classSectionId: student.classSectionId,
           date: { gte: since },

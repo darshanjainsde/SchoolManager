@@ -3,6 +3,7 @@ import { getPlatformPrisma, withTenant } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { isP2002, isP2025, isP2003 } from '../../common/errors/prisma-errors';
 import { CreateEventDto, UpdateEventDto } from './community.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 @Injectable()
 export class EventsService {
@@ -11,7 +12,7 @@ export class EventsService {
   async list() {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, (tx) =>
-      tx.event.findMany({ where: { schoolId }, orderBy: { startAt: 'desc' } }),
+      tx.event.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId }, orderBy: { startAt: 'desc' } }),
     );
   }
 

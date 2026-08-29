@@ -9,6 +9,10 @@ const txMock = {
     count: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    // seatsTaken sums in the database now. The mock derives its answer from the
+    // SAME findMany fixture the tests already set, so "counts SEATS, not rows"
+    // still proves what it says rather than trusting a hand-written total.
+    aggregate: jest.fn(),
   },
   student: { findMany: jest.fn() },
 };
@@ -59,6 +63,10 @@ beforeEach(() => {
     salesCloseAt: null,
   });
   txMock.eventRegistration.findMany.mockResolvedValue([]);
+  txMock.eventRegistration.aggregate.mockImplementation(async () => {
+    const rows = (await txMock.eventRegistration.findMany()) as { quantity: number }[];
+    return { _sum: { quantity: rows.reduce((n, r) => n + r.quantity, 0) || null } };
+  });
   txMock.eventRegistration.count.mockResolvedValue(0);
   txMock.eventRegistration.create.mockImplementation((args: { data: Record<string, unknown> }) => ({
     id: 'reg-1',
