@@ -154,6 +154,19 @@ jobs:
           DEMO_ALUMNUS_PASSWORD: ${{ github.event.inputs.password || 'password' }}
         run: pnpm --filter @skoolos/db exec tsx prisma/seed-alumni-demo.ts
 
+      # Last, because it reads the roll: it prices the grid per grade, puts a
+      # third of the students on a bus and bills every one of them. Seeding it
+      # into a school with no children produces four bills and a screen that
+      # looks broken rather than empty.
+      - name: Load the fees demo data
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school || 'raffles' }}
+          DEMO_DRY_RUN: 'false'
+        run: pnpm --filter @skoolos/db exec tsx prisma/seed-fees-demo.ts
+
       - name: What to do next
         if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
@@ -163,6 +176,10 @@ jobs:
           echo
           echo "Five failed attempts locks an account for 15 minutes, so a"
           echo "stale password in a password manager costs a quarter of an hour."
+          echo
+          echo "Fees now has: an overdue term, a live late-fee rule, bills for"
+          echo "two terms, and four payments — one exact and one SHORT awaiting"
+          echo "review, one verified with a receipt, one rejected."
           echo
           echo "Feature flags are cached in Redis for 300s — give it five"
           echo "minutes, or hard-refresh, before the alumni tab appears."

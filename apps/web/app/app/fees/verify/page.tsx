@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AlertTriangle, Check, ExternalLink, X } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
+import { BackToFees } from '@/components/fees/back-to-fees';
 import { useHost } from '@/components/use-host';
 import { METHOD_LABEL, fmtDate, rupees, type FeePaymentStatus, type PaymentRow } from '@/lib/fees';
 
@@ -73,6 +74,7 @@ export default function VerifyPage() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <BackToFees />
       <header className="sk-pagehead flex items-end justify-between">
         <div>
           <h1>Payments to check</h1>
@@ -80,16 +82,22 @@ export default function VerifyPage() {
         </div>
       </header>
 
-      <div className="sk-tabs flex flex-wrap gap-1">
+      {/*
+        NOT `.sk-tabs` / `.sk-tab`: those are the page-level nav-bar classes
+        (max-width 68rem, `margin: 0 auto`, their own padding). An auto margin on
+        a flex item beats `stretch`, so the row shrank to its content and sat
+        319px right of everything else on the page. These are filter chips.
+      */}
+      <div className="flex flex-wrap gap-1.5">
         {TABS.map((t) => (
-          <button key={t.id} className="sk-tab" onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => setTab(t.id)}
                   aria-current={tab === t.id ? 'page' : undefined}
                   style={{
                     borderColor: tab === t.id ? 'var(--sk-brand)' : 'var(--sk-line-2)',
                     background: tab === t.id ? 'var(--sk-brand-tint)' : 'var(--sk-card)',
                     color: tab === t.id ? 'var(--sk-brand-2)' : 'var(--sk-ink-2)',
-                    border: '1px solid', borderRadius: 999, padding: '5px 13px',
-                    fontSize: 12, fontWeight: 650,
+                    border: '1px solid', borderRadius: 999, padding: '6px 14px',
+                    fontSize: 12.5, fontWeight: 650, cursor: 'pointer', whiteSpace: 'nowrap',
                   }}>
             {t.label}
             {t.id === 'SUBMITTED' && (rows.data?.length ?? 0) > 0 && tab === 'SUBMITTED' && ` · ${rows.data?.length}`}
