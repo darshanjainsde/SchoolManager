@@ -11,10 +11,10 @@ made. Every number here was measured, and says how.
 
 ## Freshness protocol (run FIRST, every invocation)
 
-Trained at commit **`a81a321`** (`fix/list-ceilings`, 2026-08-29),
-which branches off `origin/staging` at `a724f4e`.
+Trained at commit **`daffe40`** (`origin/staging`, 2026-08-29) — PRs #40–#43
+all merged; staging is green and every migration is applied.
 
-1. `git fetch origin && git log --oneline a24a216..origin/staging | head -30`
+1. `git fetch origin && git log --oneline daffe40..origin/staging | head -30`
 2. Empty → current; proceed.
 3. Otherwise skim (`git show --stat`), read anything contradicting this file,
    answer from CURRENT code, then **update this file** and bump the commit
@@ -111,6 +111,65 @@ Attendance bulk insert: 43,000 rows/s at 1M rows → 13,700 rows/s at 9M
 arrives as a synchronised morning burst.
 
 ---
+
+### Where we stand — full-surface measurement, 2026-08-29
+
+Every parameterless GET the API exposes, against the 200-school / 2.8 GB bench,
+on merged staging. 61 routes returned 200 for a SCHOOL_ADMIN token:
+
+| | |
+|---|---|
+| median | 12.6 ms |
+| p95 | 18.3 ms |
+| slowest single route | 30.6 ms (`/public/site`) |
+| largest payload | 233 KB (`/manage/students`) — cap is 4.5 MB |
+
+Mixed-workload throughput, one API process, one local Postgres:
+
+| VUs | req/s | p95 | errors |
+|---|---|---|---|
+| 10 | 418 | 56 ms | 0% |
+| 50 | 462 | 246 ms | 0% |
+| 150 | 400 | 946 ms | 0% |
+
+Throughput is flat from 50 VUs while latency grows linearly — a saturated
+single Node process, which is what horizontal scale fixes. **Zero errors at
+every level**; the pre-#34 build returned 20.8% at 100 VUs.
+
+Sampled during the 150-VU run: **35 connections, 1–5 active, 13–17 idle in
+transaction.** At 150 concurrent users only about three connections are
+executing. The database is not the constraint and is nowhere near becoming one.
+
+### The `_count` trap — the third disguise of the same bug (2026-08-29)
+
+`include: { _count: { select: { students: true } } }` reads like a scoped count
+and is not. Prisma compiles it to a LEFT JOIN over a subquery whose WHERE
+clause is literally `1=1`: the whole table is aggregated and the join discards
+other schools' rows afterwards. Correct answer, cost proportional to the
+platform.
+
+**The `where` inside `_count` filters the RELATION, not the parent — there is
+no way to push a tenant predicate into that subquery through Prisma's API.**
+Use an explicit scoped `groupBy`; `apps/api/src/common/lists/relation-counts.ts`
+holds the four helpers.
+
+| site | Prisma's `_count` | scoped |
+|---|---:|---:|
+| unread messages per thread | 2,432 ms | 1.77 ms |
+| `GET /manage/classes` end to end | 270 ms | 6 ms |
+| students per class section | 27 ms | 0.19 ms |
+
+The messages one was a full parallel seq scan of 1M rows to draw one school's
+inbox. `Message` had no index on `schoolId` at all.
+
+A third variant, same root: **`count()` called with no `where` whatsoever** —
+`libraryBookCopy.count()` and `libraryBookTitle.count()`, 50 ms of the library
+dashboard's 66 ms. When auditing, grep for all three shapes: unscoped
+`findMany`, relation `_count`, and bare `count()`/`aggregate()`.
+
+**Why the #34 scoping pass missed all of them:** it searched for queries
+missing `schoolId` in a `where`. These have no `where` to inspect — the tenant
+predicate is absent somewhere the reviewer cannot see it.
 
 ## 3. Why RLS cannot save you from a missing `schoolId`
 
@@ -211,6 +270,22 @@ cannot double-send.
 - **Still-open drift:** `ImpersonationToken.id`, `LibrarySettings.id`,
   `MarketingLead.id` carry `gen_random_uuid()` defaults in migrations that the
   Prisma models do not declare. `prisma migrate dev` may try to "correct" them.
+
+- **A new table can ship without RLS and nothing at runtime will say so.**
+  `MetricRollup` did. Supabase exposes the whole `public` schema through its
+  Data API, so a table without RLS is readable AND WRITABLE by anyone holding
+  the anon key — for a metrics table that means handing out platform traffic
+  patterns and letting a stranger write the operator's dashboard. Caught by
+  `packages/db/src/rls-coverage.spec.ts` in the PR that added it, which is what
+  that check is for. Platform-only tables take `ENABLE` plus an explicit
+  deny-all (`USING (false) WITH CHECK (false)`); the BYPASSRLS platform role
+  still passes.
+
+- **CI's Lint step runs first, so one lint error hides every other result.**
+  A `require()` inside a test body sat on staging from #39 and made Typecheck,
+  Build and Unit tests *skip* — two unrelated PRs showed red for something
+  neither had written. When a PR is red, check WHICH STEP failed before
+  reading the failure as yours.
 
 ---
 
