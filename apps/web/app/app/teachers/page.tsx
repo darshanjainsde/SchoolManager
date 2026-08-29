@@ -665,7 +665,7 @@ export default function TeachersPage() {
                     </div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {teacher.userId ? (
                     <button
                       className="sk-btn sk-press"
@@ -689,23 +689,27 @@ export default function TeachersPage() {
                   )}
                   <button
                     className="sk-btn sk-press"
+                    data-icon
+                    aria-label={`Edit ${fullName(teacher)}`}
+                    title="Edit"
                     onClick={() => {
                       setShowAdd(false);
                       setEditId(teacher.id);
                       resetEditForm();
                     }}
                   >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit
+                    <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     className="sk-btn sk-press"
+                    data-icon
+                    data-tone="bad"
+                    aria-label={`Delete ${fullName(teacher)}`}
+                    title="Delete"
                     disabled={deleteMutation.isPending}
                     onClick={() => confirmDeleteTeacher(teacher)}
-                    style={{ color: 'var(--sk-bad)' }}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
