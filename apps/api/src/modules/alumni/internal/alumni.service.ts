@@ -11,6 +11,7 @@ import type {
   SaveBatchStrengthDto,
   SetTrustedDto,
 } from './alumni.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /** How many unverified claims one school may have waiting. Not a rate limit on
  *  a caller — a ceiling on the damage, so a script cannot bury a real claim
@@ -89,7 +90,7 @@ export class AlumniService {
     return withTenant(schoolId, async (tx) => {
       // schoolId in the WHERE as well as RLS: the policy is the backstop, an
       // explicit scope is the intent. Every other service here does the same.
-      const sections = await tx.classSection.findMany({
+      const sections = await tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { id: { in: dto.classSectionIds }, schoolId },
         select: { id: true, name: true, grade: { select: { name: true } } },
       });
@@ -100,7 +101,7 @@ export class AlumniService {
         sections.map((s) => [s.id, s.grade ? `${s.grade.name} – ${s.name}` : s.name]),
       );
 
-      const students = await tx.student.findMany({
+      const students = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
         where: { schoolId, classSectionId: { in: dto.classSectionIds }, isActive: true },
         select: {
           id: true, admissionNo: true, firstName: true, lastName: true, email: true,
@@ -186,7 +187,7 @@ export class AlumniService {
   async rollCall(schoolId: string): Promise<RollCallRow[]> {
     return withTenant(schoolId, async (tx) => {
       const [batches, grouped, verifiedGrouped, sckoolsGrouped] = await Promise.all([
-        tx.alumniBatch.findMany({ where: { schoolId }, orderBy: { batchYear: 'desc' } }),
+        tx.alumniBatch.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { batchYear: 'desc' } }),
         tx.alumni.groupBy({ by: ['batchYear'], where: { schoolId }, _count: { _all: true } }),
         tx.alumni.groupBy({
           by: ['batchYear'],
@@ -267,6 +268,7 @@ export class AlumniService {
       // One query for every year in the queue, not one per claim.
       const years = [...new Set(claims.map((c) => c.batchYear))];
       const roll = await tx.alumni.findMany({
+        take: LIST_CEILING.ROSTER,
         where: { schoolId, batchYear: { in: years } },
         select: {
           id: true, firstName: true, lastName: true, batchYear: true,

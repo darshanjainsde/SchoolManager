@@ -25,6 +25,7 @@ import type {
   SaveGiftItemDto,
   ThankYouDto,
 } from './alumni.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 @Injectable()
 export class GiftsService {
@@ -41,7 +42,7 @@ export class GiftsService {
    *  refuse politely, and an open catalogue is how that happens. */
   listItems(schoolId: string, includeInactive = false) {
     return withTenant(schoolId, (tx) =>
-      tx.giftItem.findMany({
+      tx.giftItem.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, ...(includeInactive ? {} : { isActive: true }) },
         orderBy: [{ order: 'asc' }, { name: 'asc' }],
       }),
@@ -78,7 +79,7 @@ export class GiftsService {
   async groups(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
       const [sections, wholeSchool] = await Promise.all([
-        tx.classSection.findMany({
+        tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId },
           select: {
             id: true,
@@ -306,7 +307,7 @@ export class GiftsService {
    */
   async givingSummary(schoolId: string, alumniId: string) {
     return withTenant(schoolId, async (tx) => {
-      const rows = await tx.giftPledge.findMany({
+      const rows = await tx.giftPledge.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, alumniId, status: { notIn: ['DECLINED', 'CANCELLED'] } },
         select: { quantity: true, status: true, mode: true, amountMinor: true, currency: true },
       });

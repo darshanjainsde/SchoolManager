@@ -14,6 +14,7 @@ import { Roles } from '../../../common/auth/roles.decorator';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
 import { TenantContextService } from './tenant-context.service';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /**
  * Minimal people endpoints. Implemented in Phase 1 to (a) demonstrate the
@@ -44,7 +45,7 @@ export class UsersController {
   async listUsers() {
     const ctx = this.tenantCtx.requireTenant();
     return withTenant(ctx.schoolId, (tx) =>
-      tx.user.findMany({
+      tx.user.findMany({ take: LIST_CEILING.ROSTER,
         select: { id: true, email: true, role: true, isActive: true, createdAt: true },
         orderBy: [{ role: 'asc' }, { email: 'asc' }],
       }),
@@ -57,7 +58,7 @@ export class UsersController {
   async listStudents() {
     const ctx = this.tenantCtx.requireTenant();
     return withTenant(ctx.schoolId, (tx) =>
-      tx.user.findMany({
+      tx.user.findMany({ take: LIST_CEILING.ROSTER,
         where: { schoolId: ctx.schoolId, role: UserRole.STUDENT },
         select: { id: true, email: true, isActive: true, createdAt: true },
         orderBy: { email: 'asc' },

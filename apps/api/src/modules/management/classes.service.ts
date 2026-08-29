@@ -8,6 +8,7 @@ import { withTenant } from '@skoolos/db';
 import type { ClassSectionSummary } from '@skoolos/types';
 import { isP2002, isP2003, isP2025 } from '../../common/errors/prisma-errors';
 import type { CreateClassDto, UpdateClassDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 interface RefOptions {
   gradeId?: string;
@@ -29,7 +30,7 @@ type ClassSectionAdminRow = ClassSectionSummary & {
 export class ClassesService {
   async list(schoolId: string): Promise<ClassSectionAdminRow[]> {
     return withTenant(schoolId, (tx) =>
-      tx.classSection.findMany({
+      tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
         include: {

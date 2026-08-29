@@ -8,6 +8,7 @@ import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/pris
 import { LoginInviteService } from './internal/login-invite.service';
 import type { CreateLoginDto, CreateTeacherDto, UpdateTeacherDto } from './management.dto';
 import type { LoginInviteResult } from './students.service';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 export type { TeacherProfile };
 
@@ -20,7 +21,7 @@ export class TeachersService {
 
   async list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.teacher.findMany({
+      tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         include: {

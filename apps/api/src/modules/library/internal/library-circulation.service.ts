@@ -14,6 +14,7 @@ import {
   type LibraryRules,
 } from './library-policy';
 import type { IssueDto } from './library.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 export interface BorrowerRef {
   kind: BorrowerKind;
@@ -250,7 +251,7 @@ export class LibraryCirculationService {
       const rules = this.settings.rules(settings);
       const where = kind === 'STUDENT' ? { studentId: id } : { teacherId: id };
       const [holdings, borrower] = await Promise.all([
-        tx.libraryIssue.findMany({
+        tx.libraryIssue.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { schoolId, ...where, returnedOn: null },
           orderBy: { dueOn: 'asc' },
           include: ISSUE_INCLUDE,
@@ -599,7 +600,7 @@ export class LibraryCirculationService {
           include: ISSUE_INCLUDE,
         }),
         tx.libraryFine.aggregate({ where: { schoolId, status: 'PAID' }, _sum: { amountRupees: true } }),
-        tx.libraryFine.findMany({ where: { schoolId, status: 'DUE' }, select: { amountRupees: true, teacherId: true } }),
+        tx.libraryFine.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, status: 'DUE' }, select: { amountRupees: true, teacherId: true } }),
       ]);
       const openCards = openRows.map((r) => toIssueCard(r, rules, todayISO));
       const dueSoon = openCards.filter((c) => c.dueOn >= todayISO && c.dueOn <= dateOnlyISO(weekOut));

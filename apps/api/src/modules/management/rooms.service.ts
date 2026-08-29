@@ -5,6 +5,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2025 } from '../../common/errors/prisma-errors';
 import { roomCapacity } from './seating-engine';
 import type { SaveRoomDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 /** A room bigger than this is not a room — it is a typo, and it would render as one. */
 const MAX_ROWS = 20;
@@ -83,7 +84,7 @@ export class RoomsService {
 
   async list(schoolId: string): Promise<RoomRow[]> {
     const rows = await withTenant(schoolId, (tx) =>
-      tx.room.findMany({
+      tx.room.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: { name: 'asc' },
         include: { _count: { select: { seatingPlans: true } } },
@@ -135,7 +136,7 @@ export class RoomsService {
     if (!source) throw new NotFoundException('Room not found');
 
     const taken = new Set(
-      (await withTenant(schoolId, (tx) => tx.room.findMany({ where: { schoolId }, select: { name: true } }))).map(
+      (await withTenant(schoolId, (tx) => tx.room.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, select: { name: true } }))).map(
         (r) => r.name,
       ),
     );

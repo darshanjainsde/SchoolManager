@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import type { UpsertCourseDto, UpsertCourseFeeDto } from './cms.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 @Injectable()
 export class CoursesService {
   list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.course.findMany({
+      tx.course.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: { order: 'asc' },
         include: { fee: true },

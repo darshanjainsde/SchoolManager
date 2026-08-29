@@ -12,6 +12,7 @@ import {
   type SlotView,
 } from './homecoming-rules';
 import type { DecideSessionDto, RequestSessionDto, SlotsQueryDto } from './alumni.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /** A fortnight. Longer windows make an enormous grid nobody reads, and they make
  *  the holiday/exam queries scan a range the indexes are not shaped for. */
@@ -91,12 +92,12 @@ export class GuestSessionsService {
       if (!section) throw new NotFoundException('That class is not in this school.');
 
       const [periods, slots, holidays, exams, sessions, headcount] = await Promise.all([
-        tx.period.findMany({
+        tx.period.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId, kind: 'CLASS' },
           orderBy: { order: 'asc' },
           select: { id: true, order: true, label: true, startTime: true, endTime: true },
         }),
-        tx.timetableSlot.findMany({
+        tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
           where: {
             schoolId,
             classSectionId: q.classSectionId,
@@ -114,7 +115,7 @@ export class GuestSessionsService {
             teacher: { select: { firstName: true, lastName: true } },
           },
         }),
-        tx.holiday.findMany({
+        tx.holiday.findMany({ take: LIST_CEILING.STRUCTURE,
           where: {
             schoolId,
             startDate: { lte: last },
@@ -122,7 +123,7 @@ export class GuestSessionsService {
           },
           select: { startDate: true, endDate: true },
         }),
-        tx.exam.findMany({
+        tx.exam.findMany({ take: LIST_CEILING.ACTIVITY,
           where: {
             schoolId,
             classSectionId: q.classSectionId,
@@ -130,7 +131,7 @@ export class GuestSessionsService {
           },
           select: { scheduledAt: true },
         }),
-        tx.guestSession.findMany({
+        tx.guestSession.findMany({ take: LIST_CEILING.ACTIVITY,
           where: {
             schoolId,
             classSectionId: q.classSectionId,

@@ -64,6 +64,7 @@ describe('StaffService.list / create', () => {
     const result = await svc.list(SCHOOL);
 
     expect(txMock.staff.findMany).toHaveBeenCalledWith({
+        take: 500,
       where: { schoolId: SCHOOL },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });

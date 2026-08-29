@@ -1567,6 +1567,7 @@ model EventRegistration {
   @@unique([eventId, studentId])
   @@index([schoolId, eventId])
   @@index([eventId, status])
+  @@index([ticketTypeId, status])
   @@index([fromSchoolId])
   @@index([schoolId, ticketTypeId])
 }

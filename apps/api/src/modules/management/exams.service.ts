@@ -22,6 +22,7 @@ import { runInBackground } from '../../common/notifications/run-in-background';
 import { AttendanceService } from './attendance.service';
 import { NotificationOutboxService } from './notification-outbox.service';
 import type { CreateExamDto, SaveExamResultsDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 /**
  * Push for TEST_SCHEDULED/RESULTS_PUBLISHED now flows EXCLUSIVELY through the
@@ -357,6 +358,7 @@ export class ExamsService {
       }
 
       const exams = await tx.exam.findMany({
+        take: LIST_CEILING.ACTIVITY,
         where: { schoolId, classSectionId },
         orderBy: [{ scheduledAt: 'asc' }],
       });
@@ -407,7 +409,7 @@ export class ExamsService {
         throw new ApiError('NOT_FOUND', 'exam not found', 404, 'id');
       }
 
-      const rows = await tx.result.findMany({
+      const rows = await tx.result.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, examId },
         select: { studentId: true, marks: true, publishedAt: true },
         orderBy: [{ studentId: 'asc' }],
@@ -455,7 +457,7 @@ export class ExamsService {
         throw new ApiError('NOT_FOUND', 'exam not found', 404, 'id');
       }
 
-      const roster = await tx.student.findMany({
+      const roster = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
         where: { schoolId, classSectionId: exam.classSectionId },
         select: { id: true },
       });

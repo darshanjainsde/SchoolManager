@@ -5,6 +5,7 @@ import { FeatureResolverService } from '../features';
 import { PublicEventsService } from '../community';
 import { mergeSectionVariantContent, pickDesignConfig } from '../cms';
 import type { PublicSiteData } from './public.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 @Injectable()
 export class PublicSiteService {
@@ -33,18 +34,18 @@ export class PublicSiteService {
         await Promise.all([
           tx.schoolProfile.findUnique({ where: { schoolId } }),
           tx.homepageContent.findUnique({ where: { schoolId } }),
-          tx.statItem.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
-          tx.socialLink.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
-          tx.mediaAsset.findMany({ where: { schoolId, kind: 'GALLERY' }, orderBy: { order: 'asc' } }),
-          tx.featuredStaff.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
-          tx.course.findMany({
+          tx.statItem.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
+          tx.socialLink.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
+          tx.mediaAsset.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, kind: 'GALLERY' }, orderBy: { order: 'asc' } }),
+          tx.featuredStaff.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
+          tx.course.findMany({ take: LIST_CEILING.STRUCTURE,
             where: { schoolId },
             orderBy: { order: 'asc' },
             include: { fee: true, hallOfFame: { orderBy: { rank: 'asc' } } },
           }),
-          tx.admissionStep.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+          tx.admissionStep.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
           tx.admissionsSettings.findUnique({ where: { schoolId } }),
-          tx.schoolPage.findMany({
+          tx.schoolPage.findMany({ take: LIST_CEILING.STRUCTURE,
             where: { schoolId, published: true },
             orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
             select: { slug: true, title: true, blocks: true, showInNav: true },
@@ -91,7 +92,7 @@ export class PublicSiteService {
 
       const assets =
         ids.length
-          ? await tx.mediaAsset.findMany({
+          ? await tx.mediaAsset.findMany({ take: LIST_CEILING.ACTIVITY,
               where: { schoolId, id: { in: ids } },
               select: { id: true, url: true },
             })

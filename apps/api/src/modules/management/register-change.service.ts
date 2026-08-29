@@ -5,6 +5,7 @@ import { AuditService } from '../../common/audit/audit.service';
 import { ApiError } from '../../common/errors/api-error';
 import { requireClassAccess } from './internal/class-access';
 import type { CreateRegisterChangeDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -136,7 +137,7 @@ export class RegisterChangeService {
     return withTenant(schoolId, async (tx) => {
       const teacher = await tx.teacher.findFirst({ where: { schoolId, userId } });
       if (!teacher) return [];
-      const rows = await tx.registerChangeRequest.findMany({
+      const rows = await tx.registerChangeRequest.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, requestedByTeacherId: teacher.id },
         orderBy: { createdAt: 'desc' },
         include: RegisterChangeService.ROW_INCLUDE,
@@ -159,14 +160,14 @@ export class RegisterChangeService {
 
   async pending(schoolId: string): Promise<RegisterChangeRow[]> {
     return withTenant(schoolId, async (tx) => {
-      const rows = await tx.registerChangeRequest.findMany({
+      const rows = await tx.registerChangeRequest.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, status: 'PENDING' },
         orderBy: { createdAt: 'asc' },
         include: RegisterChangeService.ROW_INCLUDE,
       });
       const teacherIds = [...new Set(rows.map((r) => r.requestedByTeacherId))];
       const teachers = teacherIds.length
-        ? await tx.teacher.findMany({
+        ? await tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
             where: { id: { in: teacherIds } },
             select: { id: true, firstName: true, lastName: true },
           })

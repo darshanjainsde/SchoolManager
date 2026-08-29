@@ -5,6 +5,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { isP2002, p2002Target } from '../../common/errors/prisma-errors';
 import { isSameIstDay, resolveAsOfDate, startOfIstDay } from './internal/timetable-date';
 import type { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 export type { TimetableSlot };
 
@@ -29,7 +30,7 @@ export class TimetableService {
   async listForClass(schoolId: string, classSectionId: string, date?: string): Promise<TimetableSlot[]> {
     const asOf = resolveAsOfDate(date, new Date());
     return withTenant(schoolId, (tx) =>
-      tx.timetableSlot.findMany({
+      tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
         where: {
           schoolId,
           classSectionId,
@@ -222,12 +223,12 @@ export class TimetableService {
         if (!current) {
           // No current year — return teachers + periods with an empty busy list.
           const [teachers, periods] = await Promise.all([
-            tx.teacher.findMany({
+            tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
               where: { schoolId, isActive: true },
               select: { id: true, firstName: true, lastName: true },
               orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
             }),
-            tx.period.findMany({
+            tx.period.findMany({ take: LIST_CEILING.STRUCTURE,
               where: { schoolId },
               select: TimetableService.PERIOD_FIELDS,
               orderBy: { order: 'asc' },
@@ -239,17 +240,17 @@ export class TimetableService {
       }
 
       const [teachers, periods, slots] = await Promise.all([
-        tx.teacher.findMany({
+        tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId, isActive: true },
           select: { id: true, firstName: true, lastName: true },
           orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         }),
-        tx.period.findMany({
+        tx.period.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId },
           select: TimetableService.PERIOD_FIELDS,
           orderBy: { order: 'asc' },
         }),
-        tx.timetableSlot.findMany({
+        tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { schoolId, academicYearId, effectiveTo: null },
           select: { teacherId: true, dayOfWeek: true, periodId: true },
         }),
@@ -269,7 +270,7 @@ export class TimetableService {
     return withTenant(schoolId, async (tx) => {
       const teacher = await tx.teacher.findFirst({ where: { schoolId, userId } });
       if (!teacher) return [];
-      return tx.timetableSlot.findMany({
+      return tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
         where: {
           schoolId,
           teacherId: teacher.id,

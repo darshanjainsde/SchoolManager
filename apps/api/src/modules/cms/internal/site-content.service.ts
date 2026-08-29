@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, withTenant } from '@skoolos/db';
 import type { UpdateProfileDto, UpdateHomepageDto, StatItemDto, SocialLinkDto } from './cms.dto';
 import { sanitizeCustomCssMap, sanitizeHtmlBlock } from './custom-code';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /** SchoolProfile's Json columns. Prisma types Json input as InputJsonValue, so
  *  none of them can ride along in the scalar spread (see updateProfile). */
@@ -20,8 +21,8 @@ export class SiteContentService {
       const [profile, homepage, stats, socialLinks] = await Promise.all([
         tx.schoolProfile.findUnique({ where: { schoolId } }),
         tx.homepageContent.findUnique({ where: { schoolId } }),
-        tx.statItem.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
-        tx.socialLink.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+        tx.statItem.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
+        tx.socialLink.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
       ]);
       return { profile, homepage, stats, socialLinks };
     });

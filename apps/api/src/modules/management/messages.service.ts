@@ -16,6 +16,7 @@ import { emitNotifications } from '../../common/notifications/notification-inbox
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from './timetable.service';
 import { NotificationOutboxService } from './notification-outbox.service';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 const FALLBACK_SCHOOL_NAME = 'Your school';
 const FALLBACK_SUBJECT_NAME = 'General';
@@ -188,7 +189,7 @@ export class MessagesService {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
       const s = await this.myStudent(tx, userId);
-      const rows = await tx.messageThread.findMany({
+      const rows = await tx.messageThread.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, studentId: s.id },
         orderBy: { lastMessageAt: 'desc' },
         include: MessagesService.listInclude('TEACHER'),
@@ -285,7 +286,7 @@ export class MessagesService {
     const { schoolId } = this.tenant.requireTenant();
     return withTenant(schoolId, async (tx) => {
       const t = await this.myTeacher(tx, userId);
-      const rows = await tx.messageThread.findMany({
+      const rows = await tx.messageThread.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, teacherId: t.id },
         orderBy: { lastMessageAt: 'desc' },
         include: MessagesService.listInclude('STUDENT'),
@@ -431,7 +432,7 @@ export class MessagesService {
     tx: TenantTx,
     thread: ThreadWithRelations,
   ): Promise<MessageThreadDetail> {
-    const messages = await tx.message.findMany({
+    const messages = await tx.message.findMany({ take: LIST_CEILING.ACTIVITY,
       where: { threadId: thread.id },
       orderBy: { createdAt: 'asc' },
     });

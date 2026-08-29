@@ -14,6 +14,7 @@ import { emitNotifications, sectionStudentUserIds } from '../../common/notificat
 import { StorageService } from '../../common/storage/storage.service';
 import { AttendanceService } from './attendance.service';
 import type { CreateAssignmentDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 export type { Assignment, AssignmentList, AssignmentUploadResponse };
 
@@ -279,6 +280,7 @@ export class AssignmentsService {
       }
 
       const rows = await tx.assignment.findMany({
+        take: LIST_CEILING.ACTIVITY,
         where: { schoolId, classSectionId },
         include: { _count: { select: { seen: true } } },
         orderBy: [{ dueDate: 'asc' }],

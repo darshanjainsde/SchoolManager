@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { privacyOf, type PrivacyField, type PrivacyLevel } from './homecoming-rules';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /**
  * What an alumnus, or the public, is allowed to see.
@@ -188,7 +189,7 @@ export class AlumniPortalService {
           where: { schoolId, status: 'VERIFIED' },
           _count: { _all: true },
         }),
-        tx.alumniBatch.findMany({ where: { schoolId }, select: { batchYear: true, registerStrength: true } }),
+        tx.alumniBatch.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, select: { batchYear: true, registerStrength: true } }),
       ]);
       const strength = new Map(batches.map((b) => [b.batchYear, b.registerStrength]));
       const years = [...new Set([...grouped.map((g) => g.batchYear), ...strength.keys()])];

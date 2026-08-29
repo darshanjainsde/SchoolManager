@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import type { UpsertStaffDto } from './cms.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 @Injectable()
 export class StaffService {
   list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.featuredStaff.findMany({ where: { schoolId }, orderBy: { order: 'asc' } }),
+      tx.featuredStaff.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
     );
   }
 
