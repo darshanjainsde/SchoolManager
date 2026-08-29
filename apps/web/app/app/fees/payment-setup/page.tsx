@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Copy, Lock, Upload } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
+import { BackToFees } from '@/components/fees/back-to-fees';
 import { useHost } from '@/components/use-host';
 import type { PaymentSetup } from '@/lib/fees';
 
@@ -59,6 +60,7 @@ export default function PaymentSetupPage() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
+      <BackToFees />
       <header className="sk-pagehead">
         <h1>How can parents pay?</h1>
         <p>Bank transfer works today. Online payment switches on once your school is set up with a gateway.</p>

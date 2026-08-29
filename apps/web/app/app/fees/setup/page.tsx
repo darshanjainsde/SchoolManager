@@ -1,9 +1,11 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowDown, Check, Plus, Trash2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
+import { BackToFees } from '@/components/fees/back-to-fees';
 import { useHost } from '@/components/use-host';
 import {
   FREQUENCY_LABEL, rupees, toMinor, toRupeeInput,
@@ -46,6 +48,7 @@ export default function FeeSetupPage() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
+      <BackToFees />
       <header className="sk-pagehead flex items-end justify-between">
         <div>
           <h1>Fee setup</h1>
@@ -191,10 +194,27 @@ function CategoryDialog({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ background: 'rgba(20,18,36,0.45)' }}>
+  if (typeof document === 'undefined') return null;
+
+  /*
+    PORTALLED TO <body>, and this is not optional.
+
+    `.sk-anim > *` animates `transform` on the page root, and a live transform
+    makes that element the containing block for `position: fixed` descendants.
+    Rendered in place, `fixed inset-0` therefore sized itself to the PAGE
+    (measured: 1024x1012 at 368,48) instead of the viewport (1500x676) — so the
+    scrim covered only the content column and `place-items-center` centred the
+    dialog 479px down, below the fold.
+
+    `.skosx` rides along on the portalled wrapper because the theme's custom
+    properties are scoped to it and would not otherwise reach a child of <body>.
+    Same trap, same fix as ConnectSection.tsx.
+  */
+  return createPortal(
+    <div className="skosx fixed inset-0 z-50 grid place-items-center p-4" style={{ background: 'rgba(20,18,36,0.45)' }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label="Fee category"
-           className="sk-card w-full max-w-md">
+           className="sk-card w-full max-w-md"
+           style={{ maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="sk-card-h"><h3>{value.id ? 'Edit category' : 'New category'}</h3></div>
         <div className="sk-card-b flex flex-col gap-1.5">
           <label className="sk-lab" htmlFor="cat-name">Name</label>
@@ -228,14 +248,16 @@ function CategoryDialog({
             Reimbursed by the government (RTE) — never chased from parents
           </label>
         </div>
-        <div className="flex justify-end gap-2 border-t p-3" style={{ borderColor: 'var(--sk-line)' }}>
+        <div className="flex justify-end gap-2 border-t p-3"
+             style={{ borderColor: 'var(--sk-line)', position: 'sticky', bottom: 0, background: 'var(--sk-card)' }}>
           <button className="sk-btn" onClick={onClose}>Cancel</button>
           <button className="sk-btn" data-variant="primary"
                   disabled={!v.name?.trim() || !v.description?.trim()}
                   onClick={() => onSave(v)}>Save</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
