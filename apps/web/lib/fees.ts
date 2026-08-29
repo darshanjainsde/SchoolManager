@@ -238,3 +238,54 @@ export interface BankInstructions {
     upiIntentUri: string | null; instructions: string | null;
   };
 }
+
+// ── Fees by student (one list; the defaulters view is a filter on it) ────────
+
+export type StudentFeeStatus = 'NOT_BILLED' | 'PAID' | 'PARTIAL' | 'UNPAID';
+
+export interface StudentFeeRow {
+  studentId: string;
+  name: string;
+  admissionNo: string;
+  className: string | null;
+  gradeId: string | null;
+  gradeOrder: number;
+  guardianPhone: string | null;
+  isRte: boolean;
+  billedMinor: number;
+  paidMinor: number;
+  /** Owed on the bills themselves, before any late fee. */
+  principalDueMinor: number;
+  lateFeeMinor: number;
+  /** What the family actually owes today — principal plus late fee. */
+  dueMinor: number;
+  daysOverdue: number;
+  invoiceCount: number;
+  status: StudentFeeStatus;
+}
+
+export interface StudentFeeList {
+  /** Over the WHOLE filtered set, never summed from the visible page. */
+  totals: {
+    students: number; owing: number;
+    billedMinor: number; paidMinor: number; lateFeeMinor: number; dueMinor: number;
+  };
+  rows: StudentFeeRow[];
+  returned: number;
+  truncated: boolean;
+}
+
+export const STATUS_LABEL: Record<StudentFeeStatus, string> = {
+  NOT_BILLED: 'Not billed',
+  PAID: 'Paid',
+  PARTIAL: 'Part paid',
+  UNPAID: 'Unpaid',
+};
+
+/** Semantic tone, kept off the brand accent so state reads at a glance. */
+export const STATUS_TONE: Record<StudentFeeStatus, 'good' | 'warn' | 'bad' | 'neutral'> = {
+  NOT_BILLED: 'neutral',
+  PAID: 'good',
+  PARTIAL: 'warn',
+  UNPAID: 'bad',
+};

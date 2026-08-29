@@ -190,16 +190,41 @@ export class FeesController {
     return this.query.studentFees(this.sid(), id);
   }
 
-  @Get('defaulters') defaulters(
+  /**
+   * Fees by student. ONE list, and the defaulters view is a FILTER on it
+   * (`owing=1`) rather than a second screen computing the same numbers a second
+   * way — Darshan's call, and it means one component and one place a bug lives.
+   *
+   * Every query param is a string on the wire, so the numeric and boolean ones
+   * are parsed here explicitly. `apps/api`'s ValidationPipe runs WITHOUT
+   * `enableImplicitConversion` on purpose, so a bare `@IsInt()` on a query DTO
+   * 400s the endpoint on its own first page load.
+   */
+  @Get('students') studentFeeList(
     @Query('termId') termId?: string,
     @Query('gradeId') gradeId?: string,
-    @Query('minDueMinor') minDueMinor?: string,
-    @Query('overdueOnly') overdueOnly?: string,
+    @Query('owing') owing?: string,
+    @Query('overdue') overdue?: string,
+    @Query('minDue') minDue?: string,
+    @Query('q') q?: string,
+    @Query('take') take?: string,
   ) {
-    return this.query.defaulters(this.sid(), {
-      termId, gradeId,
-      minDueMinor: minDueMinor ? Number(minDueMinor) : undefined,
-      overdueOnly: overdueOnly === 'true',
+    const minDueMinor = minDue !== undefined && minDue !== '' ? Number(minDue) : undefined;
+    const takeN = take !== undefined && take !== '' ? Number(take) : undefined;
+    if (minDueMinor !== undefined && !Number.isFinite(minDueMinor)) {
+      throw new ApiError('VALIDATION', 'minDue must be a number of paise.', 400, 'minDue');
+    }
+    if (takeN !== undefined && !Number.isInteger(takeN)) {
+      throw new ApiError('VALIDATION', 'take must be a whole number.', 400, 'take');
+    }
+    return this.query.studentFeeList(this.sid(), {
+      termId: termId || undefined,
+      gradeId: gradeId || undefined,
+      owingOnly: owing === '1' || owing === 'true',
+      overdueOnly: overdue === '1' || overdue === 'true',
+      minDueMinor,
+      q: q?.trim() || undefined,
+      take: takeN,
     });
   }
 }

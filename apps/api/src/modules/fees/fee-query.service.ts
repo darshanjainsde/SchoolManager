@@ -12,6 +12,11 @@ import { computeLateFee, describeLateFeeRule, ruleFromSettings } from './late-fe
  * because these are the queries that have to stay fast at 10,000 students.
  * List screens never fan out per row.
  */
+/** The zero row, so an empty result and a full one have the same shape. */
+const EMPTY_TOTALS = {
+  students: 0, owing: 0, billedMinor: 0, paidMinor: 0, lateFeeMinor: 0, dueMinor: 0,
+};
+
 @Injectable()
 export class FeeQueryService {
   constructor(private readonly storage: StorageService) {}
@@ -293,83 +298,197 @@ export class FeeQueryService {
   }
 
   /**
-   * The defaulters list. Server-side totals over the whole filtered set, never
-   * summed from the visible page — an accountant whose total changes when they
-   * paginate stops trusting the number, permanently.
+   * Fees by student — ONE row per child, and the only list of its kind.
+   *
+   * Deliberately not a "defaulters" endpoint. Darshan's call: show the whole
+   * roll and let a filter narrow it to who owes, rather than two screens
+   * computing the same numbers two ways and drifting apart. `owingOnly` is
+   * therefore a filter, not a different query.
+   *
+   * Aggregated in memory from four queries rather than one per student: the
+   * per-student loop is the shape that timed the fees seed out against a remote
+   * pooler, and a list screen is hit far more often than a seed.
    */
-  async defaulters(
+  async studentFeeList(
     schoolId: string,
-    opts: { termId?: string; gradeId?: string; minDueMinor?: number; overdueOnly?: boolean; take?: number; cursor?: string },
+    opts: {
+      termId?: string;
+      gradeId?: string;
+      /** Only students with something still due (late fee included). */
+      owingOnly?: boolean;
+      /** Only students whose due date has passed and who still owe. */
+      overdueOnly?: boolean;
+      minDueMinor?: number;
+      /** Name or admission number, case-insensitive. */
+      q?: string;
+      take?: number;
+    } = {},
   ) {
+    const take = Math.min(Math.max(opts.take ?? 200, 1), 500);
+
     return withTenant(schoolId, async (tx) => {
-      const rule = await this.lateFeeRule(tx, schoolId);
       const now = new Date();
-      const invoices = await tx.feeInvoice.findMany({
+      const rule = await this.lateFeeRule(tx, schoolId);
+
+      const sections = await tx.classSection.findMany({
+        where: { schoolId, ...(opts.gradeId ? { gradeId: opts.gradeId } : {}) },
+        select: { id: true, name: true, gradeId: true, grade: { select: { name: true, order: true } } },
+      });
+      const sectionIds = sections.map((x) => x.id);
+      const sectionById = new Map(sections.map((x) => [x.id, x]));
+
+      const students = await tx.student.findMany({
         where: {
           schoolId,
-          cancelledAt: null,
-          ...(opts.termId ? { termId: opts.termId } : {}),
-          ...(opts.overdueOnly ? { dueDate: { lt: new Date() } } : {}),
+          isActive: true,
+          classSectionId: { in: sectionIds },
+          ...(opts.q
+            ? {
+                OR: [
+                  { firstName: { contains: opts.q, mode: 'insensitive' } },
+                  { lastName: { contains: opts.q, mode: 'insensitive' } },
+                  { admissionNo: { contains: opts.q, mode: 'insensitive' } },
+                ],
+              }
+            : {}),
         },
-        include: {
-          allocations: { select: { amountMinor: true } },
-          lines: { select: { isCollectible: true } },
-          term: { select: { name: true } },
-          student: {
-            select: {
-              id: true, firstName: true, lastName: true, admissionNo: true, guardianPhone: true,
-              classSection: { select: { gradeId: true, name: true, grade: { select: { name: true } } } },
-            },
-          },
+        select: {
+          id: true, firstName: true, lastName: true, admissionNo: true,
+          classSectionId: true, guardianPhone: true,
         },
-        orderBy: { dueDate: 'asc' },
+        orderBy: [{ admissionNo: 'asc' }],
       });
+      const studentIds = students.map((x) => x.id);
+      if (studentIds.length === 0) {
+        return { totals: EMPTY_TOTALS, rows: [], returned: 0, truncated: false };
+      }
 
-      const rows = invoices
-        .map((inv) => {
-          const paid = inv.allocations.reduce((a, x) => a + x.amountMinor, 0);
-          const principal = inv.totalMinor - paid;
-          const lateFeeMinor = computeLateFee({
-            rule,
-            dueDate: inv.dueDate,
-            asOf: now,
-            outstandingMinor: principal,
-            isCollectible: inv.lines.some((l) => l.isCollectible),
-          });
-          const days = Math.max(
-            0,
+      const [invoices, allocations, assignments] = await Promise.all([
+        tx.feeInvoice.findMany({
+          where: {
+            schoolId,
+            cancelledAt: null,
+            studentId: { in: studentIds },
+            ...(opts.termId ? { termId: opts.termId } : {}),
+          },
+          select: {
+            id: true, studentId: true, dueDate: true, totalMinor: true,
+            // One collectible line is enough to answer "can this bill accrue a
+            // late fee": an RTE bill has none. `take: 1` keeps it a join rather
+            // than dragging every line back.
+            lines: { where: { isCollectible: true }, select: { id: true }, take: 1 },
+          },
+        }),
+        tx.feeAllocation.groupBy({
+          by: ['invoiceId'],
+          where: { schoolId, invoice: { studentId: { in: studentIds } } },
+          _sum: { amountMinor: true },
+        }),
+        tx.feeAssignment.findMany({
+          where: { schoolId, studentId: { in: studentIds } },
+          select: { studentId: true, isRte: true },
+        }),
+      ]);
+
+      const paidByInvoice = new Map(allocations.map((a) => [a.invoiceId, a._sum.amountMinor ?? 0]));
+      const rteBy = new Map(assignments.map((a) => [a.studentId, a.isRte]));
+
+      type Agg = {
+        billedMinor: number; paidMinor: number; principalDueMinor: number;
+        lateFeeMinor: number; daysOverdue: number; invoiceCount: number;
+      };
+      const agg = new Map<string, Agg>();
+      for (const inv of invoices) {
+        const a = agg.get(inv.studentId) ?? {
+          billedMinor: 0, paidMinor: 0, principalDueMinor: 0, lateFeeMinor: 0, daysOverdue: 0, invoiceCount: 0,
+        };
+        const paid = paidByInvoice.get(inv.id) ?? 0;
+        const outstanding = inv.totalMinor - paid;
+        const lateFee = computeLateFee({
+          rule,
+          dueDate: inv.dueDate,
+          asOf: now,
+          outstandingMinor: outstanding,
+          isCollectible: inv.lines.length > 0,
+        });
+        a.billedMinor += inv.totalMinor;
+        a.paidMinor += paid;
+        a.principalDueMinor += Math.max(0, outstanding);
+        a.lateFeeMinor += lateFee;
+        a.invoiceCount += 1;
+        if (outstanding > 0 && inv.dueDate < now) {
+          a.daysOverdue = Math.max(
+            a.daysOverdue,
             Math.floor((now.getTime() - inv.dueDate.getTime()) / 86_400_000),
           );
-          return {
-            invoiceId: inv.id,
-            number: inv.number,
-            termName: inv.term.name,
-            dueDate: inv.dueDate,
-            principalDueMinor: principal,
-            lateFeeMinor,
-            // What chasing this family is actually about, late fee included.
-            dueMinor: principal + lateFeeMinor,
-            daysOverdue: principal > 0 ? days : 0,
-            student: {
-              id: inv.student.id,
-              name: `${inv.student.firstName} ${inv.student.lastName}`.trim(),
-              admissionNo: inv.student.admissionNo,
-              guardianPhone: inv.student.guardianPhone,
-              gradeId: inv.student.classSection?.gradeId ?? null,
-              className: inv.student.classSection
-                ? `${inv.student.classSection.grade.name}-${inv.student.classSection.name}`
-                : null,
-            },
-          };
-        })
-        .filter((r) => r.principalDueMinor > 0)
-        .filter((r) => (opts.gradeId ? r.student.gradeId === opts.gradeId : true))
-        .filter((r) => (opts.minDueMinor ? r.dueMinor >= opts.minDueMinor : true));
+        }
+        agg.set(inv.studentId, a);
+      }
+
+      const all = students.map((st) => {
+        const a = agg.get(st.id);
+        const section = st.classSectionId ? sectionById.get(st.classSectionId) : undefined;
+        const billed = a?.billedMinor ?? 0;
+        const paid = a?.paidMinor ?? 0;
+        const principal = a?.principalDueMinor ?? 0;
+        const lateFee = a?.lateFeeMinor ?? 0;
+        const due = principal + lateFee;
+        const status: 'NOT_BILLED' | 'PAID' | 'PARTIAL' | 'UNPAID' =
+          !a || a.invoiceCount === 0 ? 'NOT_BILLED'
+          : due === 0 ? 'PAID'
+          : paid > 0 ? 'PARTIAL'
+          : 'UNPAID';
+        return {
+          studentId: st.id,
+          name: `${st.firstName} ${st.lastName}`.trim(),
+          admissionNo: st.admissionNo,
+          className: section ? `${section.grade.name}-${section.name}` : null,
+          gradeId: section?.gradeId ?? null,
+          gradeOrder: section?.grade.order ?? 0,
+          guardianPhone: st.guardianPhone,
+          isRte: rteBy.get(st.id) ?? false,
+          billedMinor: billed,
+          paidMinor: paid,
+          principalDueMinor: principal,
+          lateFeeMinor: lateFee,
+          dueMinor: due,
+          daysOverdue: a?.daysOverdue ?? 0,
+          invoiceCount: a?.invoiceCount ?? 0,
+          status,
+        };
+      });
+
+      const filtered = all
+        .filter((r) => (opts.owingOnly ? r.dueMinor > 0 : true))
+        .filter((r) => (opts.overdueOnly ? r.daysOverdue > 0 && r.dueMinor > 0 : true))
+        .filter((r) => (opts.minDueMinor ? r.dueMinor >= opts.minDueMinor : true))
+        // Most overdue first when narrowed to who owes; otherwise by class then
+        // admission number, which is the order a register is kept in.
+        .sort((x, y) =>
+          opts.owingOnly || opts.overdueOnly
+            ? y.daysOverdue - x.daysOverdue || y.dueMinor - x.dueMinor
+            : x.gradeOrder - y.gradeOrder || x.admissionNo.localeCompare(y.admissionNo),
+        );
+
+      // Totals over the WHOLE filtered set, never summed from the page — a
+      // total that changes when you paginate is one nobody trusts again.
+      const totals = filtered.reduce(
+        (t, r) => ({
+          students: t.students + 1,
+          owing: t.owing + (r.dueMinor > 0 ? 1 : 0),
+          billedMinor: t.billedMinor + r.billedMinor,
+          paidMinor: t.paidMinor + r.paidMinor,
+          lateFeeMinor: t.lateFeeMinor + r.lateFeeMinor,
+          dueMinor: t.dueMinor + r.dueMinor,
+        }),
+        { ...EMPTY_TOTALS },
+      );
 
       return {
-        totalStudents: rows.length,
-        totalDueMinor: rows.reduce((a, r) => a + r.dueMinor, 0),
-        rows: rows.slice(0, opts.take ?? 100),
+        totals,
+        rows: filtered.slice(0, take),
+        returned: Math.min(filtered.length, take),
+        truncated: filtered.length > take,
       };
     });
   }
