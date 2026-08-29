@@ -140,12 +140,15 @@ async function main() {
     return;
   }
 
-  await withTenant(schoolId, async (tx) => {
-    await seedStructure(tx, schoolId, year.id, grades);
-    await seedExceptions(tx, schoolId, year.id, students, sections, grades);
-  });
-  // Billing and payments each need the previous transaction committed, because
-  // they read what it wrote (the plan, then the invoices).
+  // Each phase gets its OWN transaction, and none of them is long.
+  //
+  // Sharing one was the second P2028: `seedStructure` alone is ~20 statements,
+  // which is nothing locally and most of Prisma's 5s budget against a pooled
+  // remote database — so `seedExceptions` started on a transaction that had
+  // already spent itself. Each phase also reads what the previous one wrote, so
+  // they have to commit in order anyway.
+  await withTenant(schoolId, (tx) => seedStructure(tx, schoolId, year.id, grades));
+  await withTenant(schoolId, (tx) => seedExceptions(tx, schoolId, year.id, students, sections, grades));
   await seedBills(schoolId, year.id);
   await withTenant(schoolId, (tx) => seedPayments(tx, schoolId));
 
@@ -153,14 +156,16 @@ async function main() {
 }
 
 async function seedStructure(tx: TenantTx, schoolId: string, academicYearId: string, grades: { id: string; order: number }[]) {
-  for (const c of CATEGORIES) {
-    const existing = await tx.feeCategory.findFirst({ where: { schoolId, name: c.name } });
-    if (existing) {
-      await tx.feeCategory.update({ where: { id: existing.id }, data: { archivedAt: null } });
-    } else {
-      await tx.feeCategory.create({ data: { schoolId, ...c } });
-    }
-  }
+  // One read, then two bulk writes — not a findFirst per category. Trivial
+  // locally; two thirds of the transaction budget against a remote database.
+  const present = await tx.feeCategory.findMany({ where: { schoolId }, select: { name: true } });
+  const have = new Set(present.map((c) => c.name));
+  const missing = CATEGORIES.filter((c) => !have.has(c.name));
+  if (missing.length) await tx.feeCategory.createMany({ data: missing.map((c) => ({ schoolId, ...c })) });
+  await tx.feeCategory.updateMany({
+    where: { schoolId, name: { in: CATEGORIES.map((c) => c.name) } },
+    data: { archivedAt: null },
+  });
   const cats = await tx.feeCategory.findMany({ where: { schoolId, archivedAt: null } });
   const catByName = new Map(cats.map((c) => [c.name, c.id]));
 
@@ -171,10 +176,16 @@ async function seedStructure(tx: TenantTx, schoolId: string, academicYearId: str
     { name: 'Term 2', dueDate: daysAhead(6), order: 1 },
     { name: 'Term 3', dueDate: daysAhead(96), order: 2 },
   ];
-  for (const t of TERMS) {
-    const existing = await tx.feeTerm.findFirst({ where: { schoolId, academicYearId, name: t.name } });
-    if (existing) await tx.feeTerm.update({ where: { id: existing.id }, data: { dueDate: t.dueDate, order: t.order } });
-    else await tx.feeTerm.create({ data: { schoolId, academicYearId, ...t } });
+  const haveTerms = await tx.feeTerm.findMany({ where: { schoolId, academicYearId }, select: { id: true, name: true } });
+  const termByName = new Map(haveTerms.map((t) => [t.name, t.id]));
+  const newTerms = TERMS.filter((t) => !termByName.has(t.name));
+  if (newTerms.length) {
+    await tx.feeTerm.createMany({ data: newTerms.map((t) => ({ schoolId, academicYearId, ...t })) });
+  }
+  // Dates move on every seed so the demo stays "overdue by 24 days" rather than
+  // drifting; only the ones that already existed need updating.
+  for (const t of TERMS.filter((t) => termByName.has(t.name))) {
+    await tx.feeTerm.update({ where: { id: termByName.get(t.name)! }, data: { dueDate: t.dueDate, order: t.order } });
   }
 
   const plan = (await tx.feePlan.findFirst({ where: { schoolId, academicYearId, isActive: true }, orderBy: { version: 'desc' } }))
@@ -514,15 +525,15 @@ async function seedPayments(tx: TenantTx, schoolId: string) {
   });
   const vLines = await tx.feeInvoiceLine.findMany({ where: { invoiceId: verified.id }, orderBy: { order: 'asc' } });
   let left = verified.totalMinor;
+  const allocations: { schoolId: string; paymentId: string; invoiceId: string; invoiceLineId: string; amountMinor: number }[] = [];
   for (const l of vLines) {
     if (left <= 0) break;
     const take = Math.min(l.netMinor, left);
     if (take <= 0) continue;
-    await tx.feeAllocation.create({
-      data: { schoolId, paymentId: vPayment.id, invoiceId: verified.id, invoiceLineId: l.id, amountMinor: take },
-    });
+    allocations.push({ schoolId, paymentId: vPayment.id, invoiceId: verified.id, invoiceLineId: l.id, amountMinor: take });
     left -= take;
   }
+  if (allocations.length) await tx.feeAllocation.createMany({ data: allocations });
   const series = `RCP/${new Date().getFullYear()}`;
   const [{ fee_next_number: rseq }] = await tx.$queryRaw<{ fee_next_number: number }[]>`
     SELECT fee_next_number(${schoolId}::uuid, ${series}::text)
