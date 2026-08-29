@@ -13,6 +13,41 @@ import { METHOD_LABEL, rupees, type CollectionSummary } from '@/lib/fees';
  * in today, and what is still owed — and with the queue of payments waiting on
  * a decision, because that is the only thing on this page that is time-bound.
  */
+/**
+ * The three places to go from here. Data rather than three hand-written
+ * blocks, so a change to one card's markup cannot leave the other two behind —
+ * which is how the title/description ran together on all three at once.
+ */
+const ACTIONS: {
+  href: string;
+  title: string;
+  tint: string;
+  icon: typeof ClipboardCheck;
+  meta: (s: CollectionSummary) => string;
+}[] = [
+  {
+    href: '/app/fees/verify',
+    title: 'Payments to check',
+    tint: 'var(--sk-brand)',
+    icon: ClipboardCheck,
+    meta: (s) => (s.awaitingReviewCount ? `${s.awaitingReviewCount} waiting` : 'nothing waiting'),
+  },
+  {
+    href: '/app/fees/setup',
+    title: 'Fee setup',
+    tint: 'var(--sk-amber)',
+    icon: Settings2,
+    meta: () => 'Categories, terms, class amounts, bills',
+  },
+  {
+    href: '/app/fees/payment-setup',
+    title: 'How parents pay',
+    tint: 'var(--sk-good)',
+    icon: Wallet,
+    meta: () => 'Bank details and online payment',
+  },
+];
+
 export default function FeesHomePage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
@@ -46,7 +81,7 @@ export default function FeesHomePage() {
               </div>
             </div>
             <Link href="/app/fees/verify" className="sk-kpi" data-tone={s.awaitingReviewCount ? 'warn' : undefined}>
-              <div className="lab"><ClipboardCheck size={12} /> Waiting for you</div>
+              <div className="lab">Waiting for you</div>
               <div className="n">{s.awaitingReviewCount}</div>
               <div className="hint">{rupees(s.awaitingReviewMinor)} to confirm</div>
             </Link>
@@ -66,37 +101,29 @@ export default function FeesHomePage() {
             </div>
           </div>
 
-          <div className="sk-cardgrid">
-            <Link href="/app/fees/verify" className="sk-entity">
-              <span className="av" style={{ background: 'var(--sk-brand)' }}><ClipboardCheck size={20} /></span>
-              <span className="min-w-0">
-                <span className="nm">Payments to check</span>
-                <span className="meta">
-                  {s.awaitingReviewCount
-                    ? `${s.awaitingReviewCount} waiting`
-                    : 'nothing waiting'}
+          {/*
+            auto-FIT, not the class default of auto-fill: with three cards in a
+            wide container auto-fill leaves empty tracks, so the row stopped
+            short and its right edge did not line up with the four tiles above.
+          */}
+          <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            {ACTIONS.map((a) => (
+              <Link key={a.href} href={a.href} className="sk-entity sk-press">
+                <span className="av" style={{ background: a.tint }}>
+                  <a.icon size={20} aria-hidden="true" />
                 </span>
-              </span>
-              <ArrowUpRight size={16} style={{ marginLeft: 'auto', color: 'var(--sk-ink-3)' }} />
-            </Link>
-
-            <Link href="/app/fees/setup" className="sk-entity">
-              <span className="av" style={{ background: 'var(--sk-amber)' }}><Settings2 size={20} /></span>
-              <span className="min-w-0">
-                <span className="nm">Fee setup</span>
-                <span className="meta">Categories, terms, class amounts, bills</span>
-              </span>
-              <ArrowUpRight size={16} style={{ marginLeft: 'auto', color: 'var(--sk-ink-3)' }} />
-            </Link>
-
-            <Link href="/app/fees/payment-setup" className="sk-entity">
-              <span className="av" style={{ background: 'var(--sk-good)' }}><Wallet size={20} /></span>
-              <span className="min-w-0">
-                <span className="nm">How parents pay</span>
-                <span className="meta">Bank details and online payment</span>
-              </span>
-              <ArrowUpRight size={16} style={{ marginLeft: 'auto', color: 'var(--sk-ink-3)' }} />
-            </Link>
+                {/*
+                  Blocks, not spans. `.nm` and `.meta` carry no `display`, so as
+                  inline elements they ran together on one line — "Fee
+                  setupCategories, terms, class amounts, bills".
+                */}
+                <div className="min-w-0 flex-1">
+                  <div className="nm">{a.title}</div>
+                  <div className="meta">{a.meta(s)}</div>
+                </div>
+                <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
+              </Link>
+            ))}
           </div>
 
           {s.billedMinor === 0 && (

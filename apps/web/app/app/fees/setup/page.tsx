@@ -196,7 +196,7 @@ function CategoryDialog({
       <div ref={ref} role="dialog" aria-modal="true" aria-label="Fee category"
            className="sk-card w-full max-w-md">
         <div className="sk-card-h"><h3>{value.id ? 'Edit category' : 'New category'}</h3></div>
-        <div className="sk-card-b">
+        <div className="sk-card-b flex flex-col gap-1.5">
           <label className="sk-lab" htmlFor="cat-name">Name</label>
           <input id="cat-name" className="sk-input" value={v.name ?? ''}
                  onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="Tuition" />
@@ -287,12 +287,12 @@ function TermsStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; ye
 
         {rows.map((r, i) => (
           <div key={i} className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[140px] flex-1">
+            <div className="min-w-[140px] flex-1 flex flex-col gap-1.5">
               <label className="sk-lab" htmlFor={`term-name-${i}`}>Name</label>
               <input id={`term-name-${i}`} className="sk-input" value={r.name}
                      onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} />
             </div>
-            <div className="min-w-[150px] flex-1">
+            <div className="min-w-[150px] flex-1 flex flex-col gap-1.5">
               <label className="sk-lab" htmlFor={`term-due-${i}`}>Due on</label>
               <input id={`term-due-${i}`} type="date" className="sk-input" value={r.dueDate}
                      onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, dueDate: e.target.value } : x))} />
@@ -412,14 +412,14 @@ function LateFeeCard({ api, qc, host }: { api: Api; qc: Qc; host: Host }) {
 
         {mode !== 'NONE' && (
           <div className="grid gap-3 sm:grid-cols-3">
-            <div>
+            <div className="flex flex-col gap-1.5">
               <label className="sk-lab" htmlFor="lf-amount">
                 {mode === 'PER_DAY' ? 'Amount per day (₹)' : 'Amount (₹)'}
               </label>
               <input id="lf-amount" className="sk-input" inputMode="decimal" placeholder="100"
                      value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
-            <div>
+            <div className="flex flex-col gap-1.5">
               <label className="sk-lab" htmlFor="lf-grace">Grace days</label>
               <input id="lf-grace" className="sk-input" inputMode="numeric" placeholder="0"
                      value={grace} onChange={(e) => setGrace(e.target.value)} />
@@ -428,7 +428,7 @@ function LateFeeCard({ api, qc, host }: { api: Api; qc: Qc; host: Host }) {
               </p>
             </div>
             {mode === 'PER_DAY' && (
-              <div>
+              <div className="flex flex-col gap-1.5">
                 <label className="sk-lab" htmlFor="lf-cap">Maximum (₹)</label>
                 <input id="lf-cap" className="sk-input" inputMode="decimal" placeholder="no limit"
                        value={cap} onChange={(e) => setCap(e.target.value)} />
@@ -683,7 +683,7 @@ function BillsStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; ye
         <p>See the whole term before you commit. Running this twice never bills anyone twice.</p>
       </div>
       <div className="sk-card-b">
-        <div>
+        <div className="flex flex-col gap-1.5">
           <label className="sk-lab" htmlFor="bill-term">Term</label>
           <select id="bill-term" className="sk-input" value={termId} onChange={(e) => setTermId(e.target.value)}>
             {terms.data?.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
