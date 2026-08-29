@@ -48,7 +48,7 @@ const OFFICE_ROUTES: [method: 'get' | 'post' | 'put' | 'delete', path: string][]
   ['post', '/manage/fees/payments/record'],
   ['get', '/manage/fees/summary'],
   ['get', '/manage/fees/students/00000000-0000-0000-0000-000000000001'],
-  ['get', '/manage/fees/defaulters'],
+  ['get', '/manage/fees/students'],
 ];
 
 /** Every `/me/fees/*` route: the signed-in student/parent only. */

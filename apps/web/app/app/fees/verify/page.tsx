@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AlertTriangle, Check, ExternalLink, X } from 'lucide-react';
@@ -25,6 +26,8 @@ const REJECTION_REASONS = [
   'The payment details are incomplete.',
 ];
 
+const TAB_IDS: FeePaymentStatus[] = ['SUBMITTED', 'VERIFIED', 'REJECTED', 'REVERSED'];
+
 const TABS: { id: FeePaymentStatus; label: string }[] = [
   { id: 'SUBMITTED', label: 'Awaiting review' },
   { id: 'VERIFIED', label: 'Verified' },
@@ -33,10 +36,25 @@ const TABS: { id: FeePaymentStatus; label: string }[] = [
 ];
 
 export default function VerifyPage() {
+  // useSearchParams needs a Suspense boundary to prerender.
+  return (
+    <Suspense fallback={<p className="sk-state">Loading…</p>}>
+      <Verify />
+    </Suspense>
+  );
+}
+
+function Verify() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
   const qc = useQueryClient();
-  const [tab, setTab] = useState<FeePaymentStatus>('SUBMITTED');
+  const params = useSearchParams();
+  // The dashboard's "Collected today" tile deep-links to ?status=VERIFIED, so
+  // the number and the list it opens are the same set of payments.
+  const initial = params.get('status');
+  const [tab, setTab] = useState<FeePaymentStatus>(
+    TAB_IDS.includes(initial as FeePaymentStatus) ? (initial as FeePaymentStatus) : 'SUBMITTED',
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const rows = useQuery({

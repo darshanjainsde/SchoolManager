@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, ClipboardCheck, Settings2, Wallet } from 'lucide-react';
+import { ArrowUpRight, ClipboardCheck, Settings2, Users, Wallet } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { METHOD_LABEL, rupees, type CollectionSummary } from '@/lib/fees';
@@ -46,7 +46,28 @@ const ACTIONS: {
     icon: Wallet,
     meta: () => 'Bank details and online payment',
   },
+  {
+    href: '/app/fees/students',
+    title: 'Fees by student',
+    tint: 'var(--sk-ink-2)',
+    icon: Users,
+    meta: (s) => `${s.billedMinor > 0 ? 'Everyone on the roll' : 'Once bills are issued'} · filter to who owes`,
+  },
 ];
+
+/**
+ * A rounded percentage below 1 reads as "we have collected nothing" — ₹12,600
+ * against ₹2.23 crore is 0.056%, which rounds to a flat 0 on a school that has
+ * genuinely taken money.
+ */
+function collectedLabel(collectedMinor: number, billedMinor: number): string {
+  if (billedMinor <= 0) return 'nothing billed yet';
+  const pct = (collectedMinor / billedMinor) * 100;
+  if (pct === 0) return '0% collected';
+  if (pct < 1) return 'under 1% collected';
+  if (pct < 10) return `${pct.toFixed(1)}% collected`;
+  return `${Math.round(pct)}% collected`;
+}
 
 export default function FeesHomePage() {
   const host = useHost();
@@ -70,8 +91,14 @@ export default function FeesHomePage() {
 
       {s && (
         <>
+          {/*
+            Every tile is a link. `a.sk-kpi:hover` already lifts the card and
+            turns its border indigo, so the affordance comes free the moment
+            these are anchors — three of them used to be <div> and looked
+            identical to the one that worked.
+          */}
           <div className="sk-kpis">
-            <div className="sk-kpi">
+            <Link href="/app/fees/verify?status=VERIFIED" className="sk-kpi">
               <div className="lab">Collected today</div>
               <div className="n">{rupees(s.todayTotalMinor)}</div>
               <div className="hint">
@@ -79,26 +106,23 @@ export default function FeesHomePage() {
                   ? s.todayByMethod.map((m) => `${METHOD_LABEL[m.method]} ${rupees(m.amountMinor)}`).join(' · ')
                   : 'nothing yet today'}
               </div>
-            </div>
+            </Link>
             <Link href="/app/fees/verify" className="sk-kpi" data-tone={s.awaitingReviewCount ? 'warn' : undefined}>
               <div className="lab">Waiting for you</div>
               <div className="n">{s.awaitingReviewCount}</div>
               <div className="hint">{rupees(s.awaitingReviewMinor)} to confirm</div>
             </Link>
-            <div className="sk-kpi">
+            <Link href="/app/fees/students" className="sk-kpi">
               <div className="lab">Billed this session</div>
               <div className="n">{rupees(s.billedMinor)}</div>
               <div className="hint">{rupees(s.collectedMinor)} received</div>
-            </div>
-            <div className="sk-kpi" data-tone={s.outstandingMinor > 0 ? 'bad' : 'good'}>
+            </Link>
+            <Link href="/app/fees/students?owing=1" className="sk-kpi"
+                  data-tone={s.outstandingMinor > 0 ? 'bad' : 'good'}>
               <div className="lab">Still outstanding</div>
               <div className="n">{rupees(s.outstandingMinor)}</div>
-              <div className="hint">
-                {s.billedMinor > 0
-                  ? `${Math.round((s.collectedMinor / s.billedMinor) * 100)}% collected`
-                  : 'nothing billed yet'}
-              </div>
-            </div>
+              <div className="hint">{collectedLabel(s.collectedMinor, s.billedMinor)}</div>
+            </Link>
           </div>
 
           {/*

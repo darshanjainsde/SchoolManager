@@ -422,11 +422,14 @@ describe('fees — the money loop', () => {
     });
 
     it('counts the late fee in what the office is chasing', async () => {
+      // The list is now per STUDENT rather than per invoice — one row carrying
+      // everything that child owes, which is what the office chases.
       const res = await request(app.getHttpServer())
-        .get('/manage/fees/defaulters').set(admin()).expect(200);
-      const row = res.body.rows.find((r: { invoiceId: string }) => r.invoiceId === lateInvoiceId);
+        .get('/manage/fees/students?owing=1').set(admin()).expect(200);
+      const row = res.body.rows.find((r: { studentId: string }) => r.studentId === lateStudentId);
       expect(row.lateFeeMinor).toBe(100_000);
       expect(row.dueMinor).toBe(row.principalDueMinor + 100_000);
+      expect(row.daysOverdue).toBeGreaterThan(0);
     });
 
     it('posts the late fee to the ledger on verify — once, not twice', async () => {
@@ -504,6 +507,70 @@ describe('fees — the money loop', () => {
         .put('/manage/fees/settings').set(admin())
         .send({ lateFeeMode: 'NONE', lateFeeAmountMinor: 0, lateFeeGraceDays: 0, lateFeeCapMinor: 0 })
         .expect(200);
+    });
+  });
+
+  // ── Fees by student: one list, two views ───────────────────────────────────
+
+  describe('fees by student', () => {
+    it('lists the whole roll by default, not only the debtors', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/fees/students').set(admin()).expect(200);
+
+      // Aarav's Term 2 bill was paid and then reversed earlier in this file, so
+      // he owes; a list that only returned debtors would still contain him and
+      // the assertion would prove nothing. The point is that EVERY active
+      // student appears, including any with no bill at all.
+      const db = getPlatformPrisma();
+      const active = await db.student.count({ where: { schoolId, isActive: true } });
+      expect(res.body.totals.students).toBe(active);
+      expect(res.body.rows.length).toBe(active);
+      expect(res.body.rows.some((r: { status: string }) => r.status !== 'UNPAID')).toBe(true);
+    });
+
+    it('narrows to who owes when asked, and the totals follow the filter', async () => {
+      const all = await request(app.getHttpServer())
+        .get('/manage/fees/students').set(admin()).expect(200);
+      const owing = await request(app.getHttpServer())
+        .get('/manage/fees/students?owing=1').set(admin()).expect(200);
+
+      expect(owing.body.totals.students).toBeLessThanOrEqual(all.body.totals.students);
+      expect(owing.body.rows.every((r: { dueMinor: number }) => r.dueMinor > 0)).toBe(true);
+      // Totals describe the filtered set, not the page and not the whole roll.
+      expect(owing.body.totals.dueMinor).toBe(
+        owing.body.rows.reduce((a: number, r: { dueMinor: number }) => a + r.dueMinor, 0),
+      );
+    });
+
+    it('separates the late fee from the bill on every row', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/fees/students?owing=1').set(admin()).expect(200);
+      for (const r of res.body.rows) {
+        expect(r.dueMinor).toBe(r.principalDueMinor + r.lateFeeMinor);
+      }
+    });
+
+    it('finds a student by name or admission number', async () => {
+      const byName = await request(app.getHttpServer())
+        .get('/manage/fees/students?q=Aarav').set(admin()).expect(200);
+      expect(byName.body.rows.map((r: { name: string }) => r.name)).toContain('Aarav Sharma');
+
+      const byAdm = await request(app.getHttpServer())
+        .get('/manage/fees/students?q=ADM-2419').set(admin()).expect(200);
+      expect(byAdm.body.rows).toHaveLength(1);
+    });
+
+    it('refuses junk in a numeric query param rather than coercing it', async () => {
+      // A bare @IsInt() on a query DTO 400s on the good value instead, because
+      // the pipe has no implicit conversion — so both halves are asserted.
+      await request(app.getHttpServer())
+        .get('/manage/fees/students?take=50').set(admin()).expect(200);
+      await request(app.getHttpServer())
+        .get('/manage/fees/students?take=abc').set(admin())
+        .expect(400)
+        .expect((r) => expect(r.body.code).toBe('VALIDATION'));
+      await request(app.getHttpServer())
+        .get('/manage/fees/students?minDue=lots').set(admin()).expect(400);
     });
   });
 
