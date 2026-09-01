@@ -267,6 +267,11 @@ describe('AssignmentsService', () => {
     });
 
     it('includes each row\'s seenCount from the same query, never a second round trip', async () => {
+      // The clock is pinned because this test asserts on `upcoming`, which is
+      // decided by comparing the fixture's dueDate against NOW. Without it the
+      // fixture silently expires: it passed every day until 2026-09-01 and
+      // began failing on the 2nd, in a module nobody had touched for weeks.
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-15T12:00:00.000Z'));
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.assignment.findMany.mockResolvedValue([
         {
@@ -299,6 +304,8 @@ describe('AssignmentsService', () => {
           where: expect.objectContaining({ schoolId: SCHOOL }),
         }),
       );
+
+      jest.useRealTimers();
     });
 
     it('throws ApiError CLASS_NOT_FOUND for a foreign/invalid classSectionId', async () => {
