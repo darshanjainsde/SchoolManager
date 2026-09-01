@@ -1,0 +1,501 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { withTenant, type TenantTx } from '@skoolos/db';
+import type {
+  IssueReportCardsResponse,
+  PressSchoolHeader,
+  ReportCardBatch,
+  ReportCardSnapshot,
+  ReportCardStudent,
+  ReportSubjectLine,
+  ReportWindowRow,
+} from '@skoolos/types';
+import { ApiError } from '../../common/errors/api-error';
+import { isP2002 } from '../../common/errors/prisma-errors';
+import { gradeForPct, pctOf } from './grade-scale';
+import type { IssueReportCardsDto, SaveRemarkDto, SaveWindowDto } from './press.dto';
+
+/**
+ * Compiles report cards from what teachers already entered — and nothing else.
+ *
+ * There is deliberately NO stored mark, grade or percentage anywhere in this
+ * module. A card is a computation over `Exam`/`Result`/`Attendance` inside a
+ * `ReportWindow`'s date range, done identically for the office preview, the
+ * printed batch and the parent's copy (the `late-fee.ts` rule, applied to
+ * marks). The only stored artefacts are the window itself, the class
+ * teacher's remark, and — once the office issues — the immutable snapshot in
+ * the `PressIssue` register.
+ */
+
+/** IST year for serial series — a card issued at 11:30pm UTC on 31 Dec is next year's here. */
+export function seriesYear(now: Date): number {
+  return Number(new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric' }).format(now));
+}
+
+/** "Roll 8" must sort before "roll 10", and lettered rolls must not crash the sort. */
+export function rollOrder(a: { rollNo: string | null; name: string }, b: { rollNo: string | null; name: string }): number {
+  const na = a.rollNo === null ? NaN : Number(a.rollNo);
+  const nb = b.rollNo === null ? NaN : Number(b.rollNo);
+  if (!Number.isNaN(na) && !Number.isNaN(nb) && na !== nb) return na - nb;
+  if (!Number.isNaN(na) && Number.isNaN(nb)) return -1;
+  if (Number.isNaN(na) && !Number.isNaN(nb)) return 1;
+  return a.name.localeCompare(b.name);
+}
+
+/** The whole end day: `endDate` is a DATE column, exams carry timestamps. */
+function dayAfter(d: Date): Date {
+  const next = new Date(d);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next;
+}
+
+function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+@Injectable()
+export class ReportCardService {
+  private readonly logger = new Logger(ReportCardService.name);
+
+  // ── Windows ────────────────────────────────────────────────────────────────
+
+  async listWindows(schoolId: string): Promise<ReportWindowRow[]> {
+    return withTenant(schoolId, async (tx) => {
+      const rows = await tx.reportWindow.findMany({
+        include: { academicYear: { select: { name: true } } },
+        orderBy: [{ startDate: 'desc' }],
+      });
+      // Counted with an explicit windowId filter, not a relation `_count` —
+      // the tenant-aggregates guard forbids the relation form outright.
+      const counts = rows.length
+        ? await tx.pressIssue.groupBy({
+            by: ['windowId'],
+            where: { windowId: { in: rows.map((w) => w.id) } },
+            _count: { _all: true },
+          })
+        : [];
+      const countByWindow = new Map(counts.map((c) => [c.windowId, c._count._all]));
+      return rows.map((w) => ({
+        id: w.id,
+        academicYearId: w.academicYearId,
+        academicYearName: w.academicYear.name,
+        name: w.name,
+        startDate: isoDay(w.startDate),
+        endDate: isoDay(w.endDate),
+        issuedCount: countByWindow.get(w.id) ?? 0,
+      }));
+    });
+  }
+
+  async saveWindow(schoolId: string, dto: SaveWindowDto): Promise<ReportWindowRow> {
+    const start = new Date(dto.startDate);
+    const end = new Date(dto.endDate);
+    if (end < start) {
+      throw new ApiError('VALIDATION', 'The window must end after it starts.', 400, 'endDate');
+    }
+    return withTenant(schoolId, async (tx) => {
+      // The year must be THIS school's — an FK alone would accept another
+      // tenant's id, because referential integrity bypasses RLS.
+      const year = await tx.academicYear.findFirst({
+        where: { id: dto.academicYearId },
+        select: { id: true, name: true },
+      });
+      if (!year) throw new ApiError('NOT_FOUND', 'That academic year was not found.', 404);
+
+      const data = { name: dto.name.trim(), startDate: start, endDate: end };
+      try {
+        const row = dto.id
+          ? await tx.reportWindow.update({ where: { id: dto.id }, data })
+          : await tx.reportWindow.create({
+              data: { ...data, schoolId, academicYearId: dto.academicYearId },
+            });
+        const issuedCount = await tx.pressIssue.count({ where: { windowId: row.id } });
+        return {
+          id: row.id,
+          academicYearId: row.academicYearId,
+          academicYearName: year.name,
+          name: row.name,
+          startDate: isoDay(row.startDate),
+          endDate: isoDay(row.endDate),
+          issuedCount,
+        };
+      } catch (e) {
+        if (isP2002(e)) {
+          throw new ApiError('WINDOW_EXISTS', `A window named "${dto.name.trim()}" already exists for that year.`, 409, 'name');
+        }
+        throw e;
+      }
+    });
+  }
+
+  // ── Remarks ────────────────────────────────────────────────────────────────
+
+  async saveRemark(schoolId: string, dto: SaveRemarkDto, authorId: string): Promise<{ saved: true }> {
+    await withTenant(schoolId, async (tx) => {
+      // Both ids are client-supplied foreign keys: prove each belongs to this
+      // tenant before writing (the FK constraint would not).
+      const [window, student] = await Promise.all([
+        tx.reportWindow.findFirst({ where: { id: dto.windowId }, select: { id: true } }),
+        tx.student.findFirst({ where: { id: dto.studentId }, select: { id: true } }),
+      ]);
+      if (!window) throw new ApiError('NOT_FOUND', 'That report window was not found.', 404);
+      if (!student) throw new ApiError('NOT_FOUND', 'That student was not found.', 404);
+
+      const text = dto.text.trim();
+      if (text === '') {
+        // Clearing a remark is deleting it, not storing an empty sentence.
+        await tx.reportRemark.deleteMany({ where: { windowId: dto.windowId, studentId: dto.studentId } });
+        return;
+      }
+      await tx.reportRemark.upsert({
+        where: { windowId_studentId: { windowId: dto.windowId, studentId: dto.studentId } },
+        create: { schoolId, windowId: dto.windowId, studentId: dto.studentId, text, authorId },
+        update: { text, authorId },
+      });
+    });
+    return { saved: true };
+  }
+
+  // ── Compile ────────────────────────────────────────────────────────────────
+
+  async compileBatch(schoolId: string, windowId: string, classSectionId: string): Promise<ReportCardBatch> {
+    return withTenant(schoolId, async (tx) => {
+      const [window, section] = await Promise.all([
+        tx.reportWindow.findFirst({
+          where: { id: windowId },
+          include: { academicYear: { select: { name: true } } },
+        }),
+        tx.classSection.findFirst({
+          where: { id: classSectionId },
+          include: {
+            grade: { select: { name: true } },
+            classTeacher: { select: { firstName: true, lastName: true } },
+          },
+        }),
+      ]);
+      if (!window) throw new ApiError('NOT_FOUND', 'That report window was not found.', 404);
+      if (!section) throw new ApiError('NOT_FOUND', 'That class was not found.', 404);
+
+      const windowIssuedCount = await tx.pressIssue.count({ where: { windowId } });
+
+      const students = await tx.student.findMany({
+        where: { classSectionId, isActive: true },
+        select: {
+          id: true, firstName: true, lastName: true, rollNo: true,
+          admissionNo: true, dob: true, guardianName: true,
+        },
+      });
+
+      const compiled = await this.compileStudents(tx, {
+        schoolId, windowId, classSectionId,
+        startDate: window.startDate, endDate: window.endDate,
+        students,
+      });
+
+      return {
+        window: {
+          id: window.id,
+          academicYearId: window.academicYearId,
+          academicYearName: window.academicYear.name,
+          name: window.name,
+          startDate: isoDay(window.startDate),
+          endDate: isoDay(window.endDate),
+          issuedCount: windowIssuedCount,
+        },
+        classSection: {
+          id: section.id,
+          label: `${section.grade.name}-${section.name}`,
+          classTeacherName: section.classTeacher
+            ? `${section.classTeacher.firstName} ${section.classTeacher.lastName}`.trim()
+            : null,
+        },
+        school: await this.schoolHeader(tx, schoolId),
+        subjects: compiled.subjects,
+        students: compiled.students,
+      };
+    });
+  }
+
+  /**
+   * The aggregation core, shared by compile (preview) and issue (snapshot) so
+   * the two can never drift: per subject, sum a student's marks over the
+   * exams they have result rows for. A missing row is "no data" — shown as
+   * "—", never counted as a zero, because an absence and a failed paper are
+   * different facts and only one of them is in the database.
+   */
+  private async compileStudents(
+    tx: TenantTx,
+    input: {
+      schoolId: string;
+      windowId: string;
+      classSectionId: string;
+      startDate: Date;
+      endDate: Date;
+      students: {
+        id: string; firstName: string; lastName: string; rollNo: string | null;
+        admissionNo: string; dob: Date | null; guardianName: string | null;
+      }[];
+    },
+  ): Promise<{ subjects: { subjectId: string; subjectName: string }[]; students: ReportCardStudent[] }> {
+    const { windowId, classSectionId, startDate, endDate, students } = input;
+    const studentIds = students.map((s) => s.id);
+
+    const exams = await tx.exam.findMany({
+      where: {
+        classSectionId,
+        scheduledAt: { gte: startDate, lt: dayAfter(endDate) },
+      },
+      select: { id: true, subjectId: true, maxMarks: true },
+    });
+    const examIds = exams.map((e) => e.id);
+
+    const [results, subjectRows, attendanceRows, remarkRows, issuedRows] = await Promise.all([
+      examIds.length
+        ? tx.result.findMany({
+            where: { examId: { in: examIds }, studentId: { in: studentIds } },
+            select: { examId: true, studentId: true, marks: true },
+          })
+        : Promise.resolve([]),
+      exams.length
+        ? tx.subject.findMany({
+            where: { id: { in: [...new Set(exams.map((e) => e.subjectId))] } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+      studentIds.length
+        ? tx.attendance.groupBy({
+            by: ['studentId', 'status'],
+            where: {
+              classSectionId,
+              studentId: { in: studentIds },
+              date: { gte: startDate, lt: dayAfter(endDate) },
+            },
+            _count: { _all: true },
+          })
+        : Promise.resolve([]),
+      studentIds.length
+        ? tx.reportRemark.findMany({
+            where: { windowId, studentId: { in: studentIds } },
+            select: { studentId: true, text: true },
+          })
+        : Promise.resolve([]),
+      studentIds.length
+        ? tx.pressIssue.findMany({
+            where: { type: 'REPORT_CARD', windowId, studentId: { in: studentIds } },
+            select: { studentId: true, serial: true, issuedAt: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    // Column order: alphabetical, stable across preview and print.
+    const subjects = subjectRows
+      .map((s) => ({ subjectId: s.id, subjectName: s.name }))
+      .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
+
+    const examsBySubject = new Map<string, { id: string; maxMarks: number }[]>();
+    for (const e of exams) {
+      const list = examsBySubject.get(e.subjectId) ?? [];
+      list.push({ id: e.id, maxMarks: e.maxMarks });
+      examsBySubject.set(e.subjectId, list);
+    }
+    const resultByExamStudent = new Map<string, number>();
+    for (const r of results) resultByExamStudent.set(`${r.examId}:${r.studentId}`, r.marks);
+
+    const attendanceByStudent = new Map<string, { present: number; total: number }>();
+    for (const row of attendanceRows) {
+      const agg = attendanceByStudent.get(row.studentId) ?? { present: 0, total: 0 };
+      const n = row._count._all;
+      agg.total += n;
+      // LATE is "came, late" — a present child, not an absent one.
+      if (row.status === 'PRESENT' || row.status === 'LATE') agg.present += n;
+      attendanceByStudent.set(row.studentId, agg);
+    }
+
+    const remarkByStudent = new Map(remarkRows.map((r) => [r.studentId, r.text]));
+    const issuedByStudent = new Map(
+      issuedRows.map((r) => [r.studentId, { serial: r.serial, issuedAt: r.issuedAt.toISOString() }]),
+    );
+
+    const compiled = students
+      .map((s) => {
+        const lines: ReportSubjectLine[] = subjects.map(({ subjectId, subjectName }) => {
+          const subjectExams = examsBySubject.get(subjectId) ?? [];
+          let attempted = 0;
+          let marks = 0;
+          let attemptedMax = 0;
+          let totalMax = 0;
+          for (const e of subjectExams) {
+            totalMax += e.maxMarks;
+            const m = resultByExamStudent.get(`${e.id}:${s.id}`);
+            if (m !== undefined) {
+              attempted += 1;
+              marks += m;
+              attemptedMax += e.maxMarks;
+            }
+          }
+          const hasMarks = attempted > 0;
+          const pct = hasMarks ? pctOf(marks, attemptedMax) : null;
+          return {
+            subjectId,
+            subjectName,
+            examCount: subjectExams.length,
+            marks: hasMarks ? marks : null,
+            maxMarks: hasMarks ? attemptedMax : totalMax,
+            pct,
+            grade: gradeForPct(pct),
+          };
+        });
+
+        const marked = lines.filter((l) => l.marks !== null);
+        const overallMarks = marked.reduce((a, l) => a + (l.marks ?? 0), 0);
+        const overallMax = marked.reduce((a, l) => a + l.maxMarks, 0);
+        const overallPct = marked.length ? pctOf(overallMarks, overallMax) : null;
+
+        const att = attendanceByStudent.get(s.id) ?? { present: 0, total: 0 };
+
+        return {
+          studentId: s.id,
+          studentName: `${s.firstName} ${s.lastName}`.trim(),
+          rollNo: s.rollNo,
+          admissionNo: s.admissionNo,
+          subjects: lines,
+          overall: { marks: overallMarks, maxMarks: overallMax, pct: overallPct, grade: gradeForPct(overallPct) },
+          attendance: {
+            present: att.present,
+            total: att.total,
+            pct: att.total > 0 ? Math.round((att.present / att.total) * 100) : null,
+          },
+          remark: remarkByStudent.get(s.id) ?? null,
+          issued: issuedByStudent.get(s.id) ?? null,
+        };
+      })
+      .sort((a, b) => rollOrder({ rollNo: a.rollNo, name: a.studentName }, { rollNo: b.rollNo, name: b.studentName }));
+
+    return { subjects, students: compiled };
+  }
+
+  // ── Issue ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Issuing = one serial + one snapshot row per student, each in its OWN short
+   * transaction. A class of forty in a single transaction is exactly the shape
+   * Supabase's 5-second interactive-transaction cap kills (it killed the fees
+   * demo seed twice); forty small ones also mean a failure at student #23
+   * leaves 22 real register rows and a response that says precisely who is
+   * left. Retrying is safe: the (window, student) unique makes a second issue
+   * a skip, never a second serial.
+   */
+  async issueBatch(schoolId: string, dto: IssueReportCardsDto, issuedById: string): Promise<IssueReportCardsResponse> {
+    const batch = await this.compileBatch(schoolId, dto.windowId, dto.classSectionId);
+
+    const wanted = dto.studentIds?.length
+      ? batch.students.filter((s) => dto.studentIds!.includes(s.studentId))
+      : batch.students;
+    if (dto.studentIds?.length && wanted.length !== dto.studentIds.length) {
+      // An id that is not in this class/window compile is either another
+      // class's child or another school's — same answer either way.
+      throw new ApiError('NOT_FOUND', 'One of those students is not in this class.', 404);
+    }
+
+    // dob/guardian are not in the batch rows; fetch once for the snapshots.
+    const extras = await withTenant(schoolId, (tx) =>
+      tx.student.findMany({
+        where: { id: { in: wanted.map((s) => s.studentId) } },
+        select: { id: true, dob: true, guardianName: true },
+      }),
+    );
+    const extraById = new Map(extras.map((e) => [e.id, e]));
+
+    const series = `RC/${seriesYear(new Date())}`;
+    const issued: IssueReportCardsResponse['issued'] = [];
+    const skipped: IssueReportCardsResponse['skipped'] = [];
+
+    for (const s of wanted) {
+      if (s.issued) {
+        skipped.push({ studentId: s.studentId, reason: `Already issued (${s.issued.serial}).` });
+        continue;
+      }
+      const extra = extraById.get(s.studentId);
+      const snapshot: ReportCardSnapshot = {
+        kind: 'REPORT_CARD',
+        school: batch.school,
+        windowName: batch.window.name,
+        academicYearName: batch.window.academicYearName,
+        classLabel: batch.classSection.label,
+        classTeacherName: batch.classSection.classTeacherName,
+        student: {
+          name: s.studentName,
+          rollNo: s.rollNo,
+          admissionNo: s.admissionNo,
+          dob: extra?.dob ? isoDay(extra.dob) : null,
+          guardianName: extra?.guardianName ?? null,
+        },
+        subjects: s.subjects,
+        overall: s.overall,
+        attendance: s.attendance,
+        remark: s.remark,
+      };
+
+      try {
+        const serial = await withTenant(schoolId, async (tx) => {
+          const [{ press_next_number: seq }] = await tx.$queryRaw<{ press_next_number: number }[]>`
+            SELECT press_next_number(${schoolId}::uuid, ${series}::text)`;
+          const full = `${series}/${String(seq).padStart(4, '0')}`;
+          await tx.pressIssue.create({
+            data: {
+              schoolId,
+              type: 'REPORT_CARD',
+              serial: full,
+              studentId: s.studentId,
+              windowId: dto.windowId,
+              payload: snapshot as object,
+              issuedById,
+            },
+          });
+          return full;
+        });
+        issued.push({ studentId: s.studentId, serial });
+      } catch (e) {
+        if (isP2002(e)) {
+          // A concurrent clerk got there first — the register already has the
+          // card, which is the outcome the office wanted.
+          skipped.push({ studentId: s.studentId, reason: 'Already issued by someone else just now.' });
+          continue;
+        }
+        this.logger.error({ schoolId, studentId: s.studentId, err: e }, 'report card issue failed');
+        throw e;
+      }
+    }
+
+    return { issued, skipped };
+  }
+
+  // ── Shared ─────────────────────────────────────────────────────────────────
+
+  /** The masthead every sheet prints, resolved once per compile/issue. */
+  async schoolHeader(tx: TenantTx, schoolId: string): Promise<PressSchoolHeader> {
+    const [school, profile] = await Promise.all([
+      tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+      tx.schoolProfile.findFirst({
+        where: { schoolId },
+        select: { logoAssetId: true, addressLine1: true, city: true, region: true, phone: true, email: true },
+      }),
+    ]);
+    let logoUrl: string | null = null;
+    if (profile?.logoAssetId) {
+      const asset = await tx.mediaAsset.findFirst({
+        where: { id: profile.logoAssetId },
+        select: { url: true },
+      });
+      logoUrl = asset?.url ?? null;
+    }
+    const addressLine =
+      [profile?.addressLine1, profile?.city, profile?.region].filter(Boolean).join(', ') || null;
+    return {
+      name: school?.name ?? 'School',
+      logoUrl,
+      addressLine,
+      phone: profile?.phone ?? null,
+      email: profile?.email ?? null,
+    };
+  }
+}
