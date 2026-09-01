@@ -34,14 +34,21 @@ CREATE TABLE "PressIssue" (
   "payload" JSONB NOT NULL,
   "issuedById" UUID NOT NULL,
   "issuedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "voidedAt" TIMESTAMP(3),
+  "voidedById" UUID,
+  "voidNote" TEXT,
   CONSTRAINT "PressIssue_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "PressIssue_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "PressIssue_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE UNIQUE INDEX "PressIssue_schoolId_type_serial_key" ON "PressIssue"("schoolId", "type", "serial");
 -- NULL windowIds (certificates) never collide; report cards get database-level
--- once-per-window-per-student idempotency.
-CREATE UNIQUE INDEX "PressIssue_schoolId_type_windowId_studentId_key" ON "PressIssue"("schoolId", "type", "windowId", "studentId");
+-- once-per-window-per-student idempotency. PARTIAL: a voided card frees the
+-- slot, so the correction path is void -> issue afresh — the register keeps
+-- both rows, the way a struck-through entry stays in a paper book. (Partial
+-- uniques are not expressible in schema.prisma; this index is documented
+-- there as deliberate drift, like the fee-ledger triggers.)
+CREATE UNIQUE INDEX "PressIssue_schoolId_type_windowId_studentId_key" ON "PressIssue"("schoolId", "type", "windowId", "studentId") WHERE "voidedAt" IS NULL;
 CREATE INDEX "PressIssue_schoolId_studentId_idx" ON "PressIssue"("schoolId", "studentId");
 CREATE INDEX "PressIssue_schoolId_type_issuedAt_idx" ON "PressIssue"("schoolId", "type", "issuedAt");
 
@@ -104,6 +111,42 @@ BEGIN
   RETURN v;
 END;
 $fn$ LANGUAGE plpgsql;
+
+-- ── Immutability ────────────────────────────────────────────────────────────
+-- The register claims to be statutory, so the database holds it to that: the
+-- same belt FeeLedgerEntry wears. The ONLY permitted update is the one-way
+-- void transition (voidedAt/voidedById/voidNote set once, everything else
+-- byte-identical); deletes are refused outright.
+
+CREATE OR REPLACE FUNCTION "press_issue_guard"() RETURNS trigger AS $fn$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'PressIssue is append-only — register entries are never deleted';
+  END IF;
+  IF NEW."id" IS DISTINCT FROM OLD."id"
+     OR NEW."schoolId" IS DISTINCT FROM OLD."schoolId"
+     OR NEW."type" IS DISTINCT FROM OLD."type"
+     OR NEW."serial" IS DISTINCT FROM OLD."serial"
+     OR NEW."studentId" IS DISTINCT FROM OLD."studentId"
+     OR NEW."windowId" IS DISTINCT FROM OLD."windowId"
+     OR NEW."payload"::text IS DISTINCT FROM OLD."payload"::text
+     OR NEW."issuedById" IS DISTINCT FROM OLD."issuedById"
+     OR NEW."issuedAt" IS DISTINCT FROM OLD."issuedAt" THEN
+    RAISE EXCEPTION 'PressIssue is immutable — correct a wrong document by voiding it and issuing afresh';
+  END IF;
+  IF OLD."voidedAt" IS NOT NULL THEN
+    RAISE EXCEPTION 'This register entry is already voided';
+  END IF;
+  IF NEW."voidedAt" IS NULL THEN
+    RAISE EXCEPTION 'The only permitted update to a register entry is voiding it';
+  END IF;
+  RETURN NEW;
+END;
+$fn$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "press_issue_immutable"
+  BEFORE UPDATE OR DELETE ON "PressIssue"
+  FOR EACH ROW EXECUTE FUNCTION "press_issue_guard"();
 
 -- ── Row-level security ──────────────────────────────────────────────────────
 -- Same tenant_iso policy every other tenant table carries, comparing schoolId

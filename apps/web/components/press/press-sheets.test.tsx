@@ -60,11 +60,31 @@ describe('ReportCardSheet', () => {
     expect(screen.getByText(/A dash means no assessment was recorded/)).toBeInTheDocument();
   });
 
-  it('stamps DUPLICATE only when asked', () => {
+  it('stamps only when asked, and carries the register serial when given', () => {
     const { rerender } = render(<ReportCardSheet snapshot={cardSnapshot} />);
     expect(screen.queryByText('DUPLICATE')).not.toBeInTheDocument();
-    rerender(<ReportCardSheet snapshot={cardSnapshot} duplicate />);
+    expect(screen.queryByText('PROOF')).not.toBeInTheDocument();
+    rerender(<ReportCardSheet snapshot={cardSnapshot} stamp="PROOF" />);
+    expect(screen.getByText('PROOF')).toBeInTheDocument();
+    rerender(<ReportCardSheet snapshot={cardSnapshot} stamp="DUPLICATE" serial="RC/2026/0007" />);
     expect(screen.getByText('DUPLICATE')).toBeInTheDocument();
+    expect(screen.getByText('RC/2026/0007')).toBeInTheDocument();
+  });
+
+  it('never prints a float artifact in the Total row', () => {
+    render(
+      <ReportCardSheet
+        snapshot={{
+          ...cardSnapshot,
+          // 36.7+42.1 style sums arrive server-rounded to 1dp; the sheet must
+          // still trim trailing zeros and never render 78.80000000000001.
+          overall: { marks: 78.8, maxMarks: 100, pct: 79, grade: 'B1' },
+        }}
+      />,
+    );
+    const totalRow = screen.getByText('Total').closest('tr')!;
+    expect(totalRow.textContent).toContain('78.8');
+    expect(totalRow.textContent).not.toMatch(/78\.80+1/);
   });
 });
 
@@ -108,9 +128,15 @@ describe('CertificateSheet', () => {
     expect(body).not.toContain('stand cleared');
   });
 
-  it('stamps a register reprint as DUPLICATE', () => {
-    render(<CertificateSheet snapshot={tcSnapshot} serial="TC/2026/0041" issuedAt="2026-09-02T05:00:00Z" duplicate />);
+  it('stamps a register reprint as DUPLICATE and a voided one as CANCELLED', () => {
+    const { rerender } = render(
+      <CertificateSheet snapshot={tcSnapshot} serial="TC/2026/0041" issuedAt="2026-09-02T05:00:00Z" stamp="DUPLICATE" />,
+    );
     expect(screen.getByText('DUPLICATE')).toBeInTheDocument();
+    rerender(
+      <CertificateSheet snapshot={tcSnapshot} serial="TC/2026/0041" issuedAt="2026-09-02T05:00:00Z" stamp="CANCELLED" />,
+    );
+    expect(screen.getByText('CANCELLED')).toBeInTheDocument();
   });
 
   it('uses neutral wording when gender is not recorded', () => {

@@ -9,7 +9,7 @@ import type { ReportCardBatch, ReportCardSnapshot, ReportCardStudent, IssueRepor
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
-import { printPressSheets } from '@/lib/press';
+import { fmtMarks, printPressSheets } from '@/lib/press';
 import { ReportCardSheet } from '@/components/press/press-sheets';
 import { PressPrintPortal } from '@/components/press/press-print-portal';
 import '@/components/press/press-print.css';
@@ -153,6 +153,16 @@ export default function PressBatchPage() {
             </div></div>
           )}
 
+          {b.unpublishedCount > 0 && (
+            <div className="sk-card" style={{ borderColor: 'var(--sk-amber)' }}><div className="sk-card-b">
+              <p className="sk-state" style={{ color: 'var(--sk-amber-ink)' }}>
+                <b>{b.unpublishedCount} mark{b.unpublishedCount === 1 ? '' : 's'} in this window {b.unpublishedCount === 1 ? 'is' : 'are'} entered but not published.</b>{' '}
+                Cards only carry published marks — the same rule the family portal follows — so those show as dashes
+                here. Ask the teacher to publish from Tests &amp; Results, then this page recompiles itself.
+              </p>
+            </div></div>
+          )}
+
           {/* The checking table — wide data scrolls INSIDE this card. */}
           <div className="sk-card">
             <div style={{ overflowX: 'auto' }}>
@@ -185,7 +195,7 @@ export default function PressBatchPage() {
                             <span style={{ color: 'var(--sk-ink-3)' }}>—</span>
                           ) : (
                             <>
-                              {line.marks}/{line.maxMarks}{' '}
+                              {fmtMarks(line.marks)}/{line.maxMarks}{' '}
                               <span style={{ color: 'var(--sk-ink-3)', fontSize: 11.5 }}>{line.grade}</span>
                             </>
                           )}
@@ -217,8 +227,9 @@ export default function PressBatchPage() {
             </p>
           ) : (
             <p className="sk-state">
-              Print proofs first, red-pen them with the class teacher, then issue — issuing gives each card a serial in
-              the register and freezes exactly what was printed.
+              Print proofs first — they come out stamped PROOF — red-pen them with the class teacher, then issue.
+              Issuing freezes each card as it stands at that moment and gives it a register serial; official prints
+              come from the register.
             </p>
           )}
 
@@ -226,7 +237,7 @@ export default function PressBatchPage() {
           {snapshots[0] && (
             <div className="pr-preview">
               <div className="pr-zoom">
-                <ReportCardSheet snapshot={snapshots[0]} />
+                <ReportCardSheet snapshot={snapshots[0]} stamp="PROOF" />
               </div>
             </div>
           )}
@@ -235,7 +246,7 @@ export default function PressBatchPage() {
               Portaled to <body>: the print CSS hides every OTHER body child. */}
           <PressPrintPortal>
             {snapshots.map((snap, i) => (
-              <ReportCardSheet key={students[i]!.studentId} snapshot={snap} />
+              <ReportCardSheet key={students[i]!.studentId} snapshot={snap} stamp="PROOF" />
             ))}
           </PressPrintPortal>
         </>

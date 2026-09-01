@@ -29,12 +29,15 @@ const LINE = '#c9cfdd';
 const HEAD_BG = '#eef1f7';
 const BRAND = '#17325b';
 
+/** 73.5 stays 73.5; 73.0 prints as 73 — never a float artifact. */
+function trimMarks(n: number): string {
+  const r = Math.round(n * 10) / 10;
+  return String(r % 1 === 0 ? Math.trunc(r) : r);
+}
+
 /** "—" is the honest mark for "no data" — never 0, never E. */
 function marksLabel(line: ReportSubjectLine): string {
-  if (line.marks === null) return '—';
-  // 73.5 stays 73.5; 73.0 prints as 73.
-  const n = Math.round(line.marks * 10) / 10;
-  return String(n % 1 === 0 ? Math.trunc(n) : n);
+  return line.marks === null ? '—' : trimMarks(line.marks);
 }
 
 function gradeLabel(grade: GradeBand | null): string {
@@ -65,7 +68,12 @@ function Masthead({ school, line2 }: { school: ReportCardSnapshot['school']; lin
   );
 }
 
-function DuplicateStamp() {
+/**
+ * PROOF — an unissued check print for red-penning; DUPLICATE — a register
+ * reprint; CANCELLED — a voided entry. The stamp is what stops any of the
+ * three passing for an original.
+ */
+function Stamp({ text }: { text: string }) {
   return (
     <div
       aria-hidden="true"
@@ -75,7 +83,7 @@ function DuplicateStamp() {
         padding: '1.5mm 4mm', fontWeight: 800, fontSize: '13pt', letterSpacing: '0.2em', opacity: 0.55,
       }}
     >
-      DUPLICATE
+      {text}
     </div>
   );
 }
@@ -86,11 +94,18 @@ const headCell: React.CSSProperties = { ...cell, background: HEAD_BG, fontWeight
 
 // ── The report card ──────────────────────────────────────────────────────────
 
-export function ReportCardSheet({ snapshot, duplicate = false }: { snapshot: ReportCardSnapshot; duplicate?: boolean }) {
+export function ReportCardSheet({
+  snapshot, serial, stamp,
+}: {
+  snapshot: ReportCardSnapshot;
+  /** The register serial — official prints carry it; proofs have none. */
+  serial?: string;
+  stamp?: 'PROOF' | 'DUPLICATE' | 'CANCELLED';
+}) {
   const s = snapshot;
   return (
     <div className="pr-page" style={{ position: 'relative' }}>
-      {duplicate && <DuplicateStamp />}
+      {stamp && <Stamp text={stamp} />}
       <Masthead school={s.school} line2={`Progress Report · ${s.windowName} · ${s.academicYearName}`} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '4mm', margin: '4mm 0 3mm', fontSize: '9.5pt' }}>
@@ -130,7 +145,7 @@ export function ReportCardSheet({ snapshot, duplicate = false }: { snapshot: Rep
           ))}
           <tr>
             <td style={{ ...headCell }}>Total</td>
-            <td style={{ ...headCell, textAlign: 'right' }}>{s.overall.pct === null ? '—' : s.overall.marks}</td>
+            <td style={{ ...headCell, textAlign: 'right' }}>{s.overall.pct === null ? '—' : trimMarks(s.overall.marks)}</td>
             <td style={{ ...headCell, textAlign: 'right' }}>{s.overall.maxMarks}</td>
             <td style={{ ...headCell, textAlign: 'right' }}>{s.overall.pct ?? '—'}</td>
             <td style={{ ...headCell, textAlign: 'center' }}>{gradeLabel(s.overall.grade)}</td>
@@ -154,6 +169,7 @@ export function ReportCardSheet({ snapshot, duplicate = false }: { snapshot: Rep
       <div style={{ fontSize: '7.5pt', color: INK_SOFT, marginTop: 'auto', paddingTop: '6mm' }}>
         Grades: A1 91–100 · A2 81–90 · B1 71–80 · B2 61–70 · C1 51–60 · C2 41–50 · D 33–40 · E below 33. A dash means no
         assessment was recorded.
+        {serial ? <> · Register serial <b>{serial}</b></> : null}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12mm', fontSize: '8.5pt', color: INK_SOFT }}>
@@ -178,8 +194,11 @@ const CERT_TITLE: Record<CertificateSnapshot['type'], string> = {
 /** The certificate's sentence, assembled from the snapshot — no blanks printed. */
 function certBody(s: CertificateSnapshot): string {
   const { student, fields } = s;
-  const relation = student.gender === 'F' ? 'daughter' : student.gender === 'M' ? 'son' : 'ward';
-  const pronoun = student.gender === 'F' ? 'Her' : student.gender === 'M' ? 'His' : 'Their';
+  // gender is free text in the management DTOs — 'F', 'Female', 'female' all
+  // mean the same on a certificate; anything unrecognised stays neutral.
+  const g = student.gender?.trim().toUpperCase() ?? '';
+  const relation = g.startsWith('F') ? 'daughter' : g.startsWith('M') ? 'son' : 'ward';
+  const pronoun = g.startsWith('F') ? 'Her' : g.startsWith('M') ? 'His' : 'Their';
   const guardian = student.guardianName ? `, ${relation} of ${student.guardianName},` : '';
   const dob = student.dob ? ` (date of birth ${dateLabel(student.dob)})` : '';
   const span = `${dateLabel(fields.fromDate)}${fields.toDate ? ` to ${dateLabel(fields.toDate)}` : ' to date'}`;
@@ -210,14 +229,15 @@ function certBody(s: CertificateSnapshot): string {
 }
 
 export function CertificateSheet({
-  snapshot, serial, issuedAt, duplicate = false,
+  snapshot, serial, issuedAt, stamp,
 }: {
-  snapshot: CertificateSnapshot; serial: string; issuedAt: string; duplicate?: boolean;
+  snapshot: CertificateSnapshot; serial: string; issuedAt: string;
+  stamp?: 'DUPLICATE' | 'CANCELLED';
 }) {
   const s = snapshot;
   return (
     <div className="pr-page" style={{ position: 'relative' }}>
-      {duplicate && <DuplicateStamp />}
+      {stamp && <Stamp text={stamp} />}
       <Masthead school={s.school} line2="" />
 
       <div style={{

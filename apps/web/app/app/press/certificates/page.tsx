@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -41,6 +41,21 @@ export default function CertificateDeskPage() {
   const [duesOverride, setDuesOverride] = useState(false);
   /** The just-issued certificate, rendered into the print container. */
   const [printed, setPrinted] = useState<{ snapshot: CertificateSnapshot; serial: string; issuedAt: string; duplicate: boolean } | null>(null);
+  const printedSerialRef = useRef<string | null>(null);
+
+  /**
+   * Print AFTER the portal committed — a timer raced React and could open the
+   * dialog on an empty container, printing blank pages for a serial already
+   * burned into the register. The effect runs after the DOM holds the sheet.
+   * The first print is the original; the sheet in the container then flips to
+   * DUPLICATE so "Print again" says what it is.
+   */
+  useEffect(() => {
+    if (!printed || printed.duplicate || printedSerialRef.current === printed.serial) return;
+    printedSerialRef.current = printed.serial;
+    printPressSheets();
+    setPrinted({ ...printed, duplicate: true });
+  }, [printed]);
 
   const hits = useQuery({
     queryKey: ['press-student-search', host, q], enabled: !!host && q.trim().length >= 2,
@@ -75,7 +90,6 @@ export default function CertificateDeskPage() {
       setPrinted({ snapshot: row.snapshot, serial: row.serial, issuedAt: row.issuedAt, duplicate: false });
       qc.invalidateQueries({ queryKey: ['press-cert-prepare', host, studentId] });
       toast.success(`${PRESS_TYPE_LABEL[certType]} ${out.serial} entered in the register.`);
-      setTimeout(printPressSheets, 60);
     },
     onError: (e) => {
       const code = e instanceof ApiError ? (e.body as { code?: string } | null)?.code : undefined;
@@ -245,7 +259,7 @@ export default function CertificateDeskPage() {
             snapshot={printed.snapshot}
             serial={printed.serial}
             issuedAt={printed.issuedAt}
-            duplicate={printed.duplicate}
+            stamp={printed.duplicate ? 'DUPLICATE' : undefined}
           />
         </PressPrintPortal>
       )}

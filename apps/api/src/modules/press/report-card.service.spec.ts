@@ -5,7 +5,7 @@ const txMock = {
   classSection: { findFirst: jest.fn() },
   student: { findMany: jest.fn(), findFirst: jest.fn() },
   exam: { findMany: jest.fn() },
-  result: { findMany: jest.fn() },
+  result: { findMany: jest.fn(), count: jest.fn() },
   subject: { findMany: jest.fn() },
   attendance: { groupBy: jest.fn() },
   pressIssue: { findMany: jest.fn(), create: jest.fn(), count: jest.fn(), groupBy: jest.fn() },
@@ -65,6 +65,7 @@ describe('ReportCardService', () => {
     txMock.student.findMany.mockResolvedValue([]);
     txMock.exam.findMany.mockResolvedValue([]);
     txMock.result.findMany.mockResolvedValue([]);
+    txMock.result.count.mockResolvedValue(0);
     txMock.subject.findMany.mockResolvedValue([]);
     txMock.attendance.groupBy.mockResolvedValue([]);
     txMock.reportRemark.findMany.mockResolvedValue([]);
@@ -109,6 +110,7 @@ describe('ReportCardService', () => {
     txMock.exam.findMany.mockResolvedValue([{ id: 'e1', subjectId: 'maths', maxMarks: 100 }]);
     txMock.subject.findMany.mockResolvedValue([{ id: 'maths', name: 'Mathematics' }]);
     txMock.result.findMany.mockResolvedValue([]);
+    txMock.result.count.mockResolvedValue(0);
 
     const batch = await svc.compileBatch(SCHOOL, WINDOW, SECTION);
     const line = batch.students[0]!.subjects[0]!;
@@ -163,6 +165,57 @@ describe('ReportCardService', () => {
     expect(batch.students.map((s) => s.rollNo)).toEqual(['8', '10', null]);
   });
 
+  it('compiles from PUBLISHED results only, and tells the office how many are held back', async () => {
+    // The portal's invariant: draft marks never reach a family. The compile
+    // must carry the same filter, and the batch must SAY how many marks are
+    // sitting unpublished — a dash from a draft looks identical to a dash
+    // from absence, and the office deserves to know which it is.
+    txMock.student.findMany.mockResolvedValue([student('s1', 'Aarav', '1')]);
+    txMock.exam.findMany.mockResolvedValue([{ id: 'e1', subjectId: 'maths', maxMarks: 100 }]);
+    txMock.subject.findMany.mockResolvedValue([{ id: 'maths', name: 'Mathematics' }]);
+    txMock.result.count.mockResolvedValue(3);
+
+    const batch = await svc.compileBatch(SCHOOL, WINDOW, SECTION);
+
+    expect(batch.unpublishedCount).toBe(3);
+    const where = txMock.result.findMany.mock.calls[0]![0].where;
+    expect(where.publishedAt).toEqual({ not: null });
+    const countWhere = txMock.result.count.mock.calls[0]![0].where;
+    expect(countWhere.publishedAt).toBeNull();
+  });
+
+  it('bounds the window in IST, not UTC — a 2 AM exam belongs to ITS day', async () => {
+    txMock.student.findMany.mockResolvedValue([student('s1', 'Aarav', '1')]);
+    await svc.compileBatch(SCHOOL, WINDOW, SECTION);
+
+    const where = txMock.exam.findMany.mock.calls[0]![0].where;
+    // Window 2026-04-01 → 2026-09-30 (DATE columns land as UTC midnight).
+    // IST day 1 Apr starts 31 Mar 18:30 UTC; the day AFTER 30 Sep starts
+    // 30 Sep 18:30 UTC — the exclusive bound.
+    expect(where.scheduledAt.gte.toISOString()).toBe('2026-03-31T18:30:00.000Z');
+    expect(where.scheduledAt.lt.toISOString()).toBe('2026-09-30T18:30:00.000Z');
+  });
+
+  it('rounds float mark sums to one decimal at compile time', async () => {
+    txMock.student.findMany.mockResolvedValue([student('s1', 'Aarav', '1')]);
+    txMock.exam.findMany.mockResolvedValue([
+      { id: 'e1', subjectId: 'sci', maxMarks: 50 },
+      { id: 'e2', subjectId: 'sci', maxMarks: 50 },
+    ]);
+    txMock.subject.findMany.mockResolvedValue([{ id: 'sci', name: 'Science' }]);
+    // 36.7 + 42.1 = 78.80000000000001 in floats — the artifact must never
+    // leave the compile.
+    txMock.result.findMany.mockResolvedValue([
+      { examId: 'e1', studentId: 's1', marks: 36.7 },
+      { examId: 'e2', studentId: 's1', marks: 42.1 },
+    ]);
+
+    const batch = await svc.compileBatch(SCHOOL, WINDOW, SECTION);
+
+    expect(batch.students[0]!.subjects[0]!.marks).toBe(78.8);
+    expect(batch.students[0]!.overall.marks).toBe(78.8);
+  });
+
   it('404s on a window that is not this school’s', async () => {
     txMock.reportWindow.findFirst.mockResolvedValue(null);
     await expect(svc.compileBatch(SCHOOL, WINDOW, SECTION)).rejects.toMatchObject({ status: 404 });
@@ -174,6 +227,15 @@ describe('ReportCardService', () => {
     await expect(
       svc.saveWindow(SCHOOL, { academicYearId: YEAR, name: 'Term I', startDate: '2026-09-30', endDate: '2026-04-01' }),
     ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('404s an update to a window the tenant cannot see — never a 500', async () => {
+    txMock.academicYear.findFirst.mockResolvedValue({ id: YEAR, name: '2026-27' });
+    txMock.reportWindow.findFirst.mockResolvedValue(null); // RLS hid it
+    await expect(
+      svc.saveWindow(SCHOOL, { id: WINDOW, academicYearId: YEAR, name: 'Term I', startDate: '2026-04-01', endDate: '2026-09-30' }),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(txMock.reportWindow.update).not.toHaveBeenCalled();
   });
 
   it('refuses an academic year the tenant cannot see', async () => {
@@ -276,6 +338,32 @@ describe('ReportCardService', () => {
     expect(out.issued.map((i) => i.studentId)).toEqual(['s2']);
   });
 
+  it('reports a SERIAL clash as a failure, never as "already issued"', async () => {
+    primeIssuableClass();
+    const serialClash = new Prisma.PrismaClientKnownRequestError('unique constraint', {
+      code: 'P2002',
+      clientVersion: '5.22.0',
+      meta: { target: ['schoolId', 'type', 'serial'] },
+    });
+    txMock.pressIssue.create.mockRejectedValueOnce(serialClash).mockResolvedValueOnce({});
+
+    const out = await svc.issueBatch(SCHOOL, { windowId: WINDOW, classSectionId: SECTION }, USER);
+
+    // s1 got NO card — the response must not claim idempotent success.
+    expect(out.skipped[0]!.reason).toMatch(/Serial clash/);
+    expect(out.issued.map((i) => i.studentId)).toEqual(['s2']);
+  });
+
+  it('deduplicates requested studentIds instead of inventing an intruder', async () => {
+    primeIssuableClass();
+    const out = await svc.issueBatch(
+      SCHOOL,
+      { windowId: WINDOW, classSectionId: SECTION, studentIds: ['s1', 's1', 's2'] },
+      USER,
+    );
+    expect(out.issued.map((i) => i.studentId)).toEqual(['s1', 's2']);
+  });
+
   it('404s when a requested student is not in the class', async () => {
     txMock.student.findMany.mockResolvedValue([student('s1', 'Aarav', '1')]);
     await expect(
@@ -292,6 +380,13 @@ describe('rollOrder', () => {
     ];
     // Non-numeric rolls (letters, none) sort together AFTER numbers, by name.
     expect(rows.sort(rollOrder).map((r) => r.rollNo)).toEqual(['8', '10', 'A-2', null]);
+  });
+
+  it("an empty-string roll is no roll — it must not coerce to 0 and jump the queue", () => {
+    const rows = [
+      { rollNo: '', name: 'Blank' }, { rollNo: '3', name: 'Three' },
+    ];
+    expect(rows.sort(rollOrder).map((r) => r.name)).toEqual(['Three', 'Blank']);
   });
 });
 

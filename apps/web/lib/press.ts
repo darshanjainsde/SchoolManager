@@ -8,6 +8,13 @@ export const PRESS_TYPE_LABEL: Record<PressDocType, string> = {
   CHARACTER: 'Character certificate',
 };
 
+/** 73.5 stays 73.5; 73.0 shows 73; null shows the honest dash. */
+export function fmtMarks(n: number | null): string {
+  if (n === null) return '—';
+  const r = Math.round(n * 10) / 10;
+  return String(r % 1 === 0 ? Math.trunc(r) : r);
+}
+
 export function pressDateLabel(iso: string): string {
   return new Intl.DateTimeFormat('en-IN', {
     day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata',

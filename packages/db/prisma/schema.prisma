@@ -3490,13 +3490,25 @@ model PressIssue {
   payload    Json
   issuedById String   @db.Uuid // User.id
   issuedAt   DateTime @default(now())
+  /// The one-way correction path: a voided entry stays in the register (a
+  /// struck-through page in a paper book) and frees the once-per-window slot
+  /// so a corrected card can be issued afresh. Enforced by the
+  /// `press_issue_immutable` trigger — the ONLY update the database accepts
+  /// is this transition, and deletes are refused.
+  voidedAt   DateTime?
+  voidedById String?  @db.Uuid
+  voidNote   String?
 
   school  School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   student Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   window  ReportWindow? @relation(fields: [windowId], references: [id], onDelete: SetNull)
 
   @@unique([schoolId, type, serial])
-  @@unique([schoolId, type, windowId, studentId])
+  // Once-per-window idempotency lives in the migration as a PARTIAL unique
+  // (WHERE "voidedAt" IS NULL) — Prisma cannot express partial uniques, so
+  // the index is deliberate schema drift, documented here. The plain index
+  // below keeps the lookup fast either way.
+  @@index([schoolId, type, windowId, studentId])
   @@index([schoolId, studentId])
   @@index([schoolId, type, issuedAt])
 }

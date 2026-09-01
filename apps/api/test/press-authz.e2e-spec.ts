@@ -33,6 +33,7 @@ const OFFICE_ROUTES: [method: 'get' | 'post' | 'put', path: string][] = [
   ['post', '/manage/press/certificates/issue'],
   ['get', '/manage/press/register'],
   ['get', `/manage/press/register/${UUID}`],
+  ['post', `/manage/press/register/${UUID}/void`],
 ];
 
 /** Every `/me/report-cards*` route: the signed-in student/parent only. */
@@ -121,6 +122,53 @@ describe('press authorization', () => {
       const res = await call(method, path, studentToken);
       expect([401, 403]).not.toContain(res.status);
     });
+  });
+
+  it("a family can only open its OWN card — someone else's answers 404, not 403", async () => {
+    // The manifest claims the portal routes are the caller's-own-JWT only;
+    // this is the assertion that makes the claim true. Student A has an
+    // issued card; student B fetching it must get "not found" — whether a
+    // card exists is information about somebody else's child.
+    const db = getPlatformPrisma();
+    const seeded = await seedMinimalSchool();
+    await db.featureOverride.create({
+      data: { schoolId: seeded.schoolId, featureKey: 'PRESS', enabled: true },
+    });
+    const studentA = await db.student.findFirstOrThrow({
+      where: { schoolId: seeded.schoolId, userId: { not: null } },
+      select: { id: true, userId: true },
+    });
+    const issue = await db.pressIssue.create({
+      data: {
+        schoolId: seeded.schoolId,
+        type: 'REPORT_CARD',
+        serial: 'RC/2026/9001',
+        studentId: studentA.id,
+        payload: { kind: 'REPORT_CARD', windowName: 'Term I' },
+        issuedById: seeded.adminUserId,
+      },
+    });
+    const userB = await db.user.create({
+      data: { schoolId: seeded.schoolId, email: `b-${Date.now()}@press.test`, role: 'STUDENT', passwordHash: 'x' },
+    });
+    await db.student.create({
+      data: {
+        schoolId: seeded.schoolId, admissionNo: `B-${Date.now()}`,
+        firstName: 'Other', lastName: 'Child', userId: userB.id,
+      },
+    });
+
+    const tokenA = signSchoolToken({ sub: studentA.userId!, schoolId: seeded.schoolId, role: 'STUDENT' });
+    const tokenB = signSchoolToken({ sub: userB.id, schoolId: seeded.schoolId, role: 'STUDENT' });
+
+    await request(app.getHttpServer())
+      .get(`/me/report-cards/${issue.id}`)
+      .set({ Authorization: `Bearer ${tokenA}`, 'X-Skoolos-Host': seeded.host })
+      .expect(200);
+    await request(app.getHttpServer())
+      .get(`/me/report-cards/${issue.id}`)
+      .set({ Authorization: `Bearer ${tokenB}`, 'X-Skoolos-Host': seeded.host })
+      .expect(404);
   });
 
   it('gates the whole module behind the PRESS override — no tier grants it', async () => {

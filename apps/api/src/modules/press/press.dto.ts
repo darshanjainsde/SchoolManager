@@ -47,6 +47,14 @@ export class IssueReportCardsDto {
   studentIds?: string[];
 }
 
+export class VoidIssueDto {
+  /**
+   * Required, and required to say something: "wrong marks — reissued after
+   * correction" is what an inspector reads next to a struck-through entry.
+   */
+  @IsString() @Length(3, 300) note!: string;
+}
+
 export class IssueCertificateDto {
   @IsUUID() studentId!: string;
 

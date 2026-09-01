@@ -1006,6 +1006,11 @@ export interface ReportCardBatch {
   /** Column order — the union of subjects examined in this window for this class. */
   subjects: { subjectId: string; subjectName: string }[];
   students: ReportCardStudent[];
+  /** Result rows inside the window that are still UNPUBLISHED. The compile
+   *  ignores them (the portal's invariant), but a dash caused by an
+   *  unpublished mark looks identical to one caused by absence — the office
+   *  is told which it is before printing. */
+  unpublishedCount: number;
 }
 
 /** `PressIssue.payload` for a REPORT_CARD. */
@@ -1099,6 +1104,8 @@ export interface PressIssueRow {
   studentId: string;
   studentName: string;
   issuedAt: string;
+  /** Set when the entry was voided — struck through, never erased. */
+  voidedAt: string | null;
 }
 
 export interface PressRegisterPage {

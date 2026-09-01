@@ -12,7 +12,7 @@ import { CertificateService } from './certificate.service';
 import { PressRegisterService } from './press-register.service';
 import { ReportCardService } from './report-card.service';
 import {
-  IssueCertificateDto, IssueReportCardsDto, SaveRemarkDto, SaveWindowDto,
+  IssueCertificateDto, IssueReportCardsDto, SaveRemarkDto, SaveWindowDto, VoidIssueDto,
 } from './press.dto';
 
 /**
@@ -107,5 +107,15 @@ export class PressController {
   @Get('register/:id')
   oneIssue(@Param('id', ParseUUIDPipe) id: string) {
     return this.register.one(this.sid(), id);
+  }
+
+  /** Strike an entry through — the only correction the register accepts. */
+  @Post('register/:id/void') @HttpCode(200)
+  voidIssue(
+    @CurrentUser() u: SchoolJwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: VoidIssueDto,
+  ) {
+    return this.register.void(this.sid(), id, dto.note, u.sub);
   }
 }

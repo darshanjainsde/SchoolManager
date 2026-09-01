@@ -61,7 +61,7 @@ export class CertificateService {
       const [duesMinor, existing] = await Promise.all([
         this.ledgerBalanceMinor(tx, studentId),
         tx.pressIssue.findMany({
-          where: { studentId, type: { not: 'REPORT_CARD' } },
+          where: { studentId, type: { not: 'REPORT_CARD' }, voidedAt: null },
           select: { id: true, type: true, serial: true, issuedAt: true },
           orderBy: { issuedAt: 'desc' },
         }),
@@ -92,38 +92,62 @@ export class CertificateService {
 
   async issue(schoolId: string, dto: IssueCertificateDto, issuedById: string) {
     const type = dto.type as PressCertificateType;
-    const prepared = await this.prepare(schoolId, dto.studentId);
-
-    if (DUES_GATED.includes(type) && prepared.duesMinor > 0 && !dto.duesOverride) {
-      throw new ApiError(
-        'DUES_OUTSTANDING',
-        `Fees of ₹${(prepared.duesMinor / 100).toFixed(2)} are still outstanding. Clear them, or issue with an override — the register records both.`,
-        409,
-        'duesOverride',
-      );
-    }
-
-    const snapshot: CertificateSnapshot = {
-      kind: 'CERTIFICATE',
-      type,
-      school: await withTenant(schoolId, (tx) => this.reportCards.schoolHeader(tx, schoolId)),
-      student: prepared.student,
-      fields: {
-        conduct: dto.conduct?.trim() || 'good',
-        classLabel: dto.classLabel?.trim() || prepared.student.classLabel || '—',
-        ...(dto.reason ? { reason: dto.reason.trim() } : {}),
-        ...(dto.fromDate ? { fromDate: dto.fromDate } : { fromDate: prepared.student.onRollSince }),
-        ...(dto.toDate ? { toDate: dto.toDate } : {}),
-        ...(dto.purpose ? { purpose: dto.purpose.trim() } : {}),
-        ...(dto.note ? { note: dto.note.trim() } : {}),
-      },
-      duesMinor: prepared.duesMinor,
-      duesOverride: Boolean(dto.duesOverride && prepared.duesMinor > 0),
-    };
-
     const series = `${SERIES_PREFIX[type]}/${seriesYear(new Date())}`;
+
     try {
+      // ONE transaction: dues read, gate, snapshot and register row live or
+      // die together. Reading the balance in an earlier transaction let a
+      // DEBIT land in between and the paper then said "dues cleared" off a
+      // stale number — the snapshot must be the balance the gate SAW.
       return await withTenant(schoolId, async (tx) => {
+        const student = await tx.student.findFirst({
+          where: { id: dto.studentId },
+          include: { classSection: { include: { grade: { select: { name: true } } } } },
+        });
+        if (!student) throw new ApiError('NOT_FOUND', 'That student was not found.', 404);
+
+        const duesMinor = await this.ledgerBalanceMinor(tx, dto.studentId);
+        if (DUES_GATED.includes(type) && duesMinor > 0 && !dto.duesOverride) {
+          throw new ApiError(
+            'DUES_OUTSTANDING',
+            `Fees of ₹${(duesMinor / 100).toFixed(2)} are still outstanding. Clear them, or issue with an override — the register records both.`,
+            409,
+            'duesOverride',
+          );
+        }
+
+        const onRollSince = student.createdAt.toISOString().slice(0, 10);
+        const classLabel = student.classSection
+          ? `${student.classSection.grade.name}-${student.classSection.name}`
+          : null;
+        const snapshot: CertificateSnapshot = {
+          kind: 'CERTIFICATE',
+          type,
+          school: await this.reportCards.schoolHeader(tx, schoolId),
+          student: {
+            id: student.id,
+            name: `${student.firstName} ${student.lastName}`.trim(),
+            admissionNo: student.admissionNo,
+            rollNo: student.rollNo,
+            classLabel,
+            dob: student.dob ? student.dob.toISOString().slice(0, 10) : null,
+            guardianName: student.guardianName,
+            gender: student.gender,
+            onRollSince,
+          },
+          fields: {
+            conduct: dto.conduct?.trim() || 'good',
+            classLabel: dto.classLabel?.trim() || classLabel || '—',
+            ...(dto.reason ? { reason: dto.reason.trim() } : {}),
+            ...(dto.fromDate ? { fromDate: dto.fromDate } : { fromDate: onRollSince }),
+            ...(dto.toDate ? { toDate: dto.toDate } : {}),
+            ...(dto.purpose ? { purpose: dto.purpose.trim() } : {}),
+            ...(dto.note ? { note: dto.note.trim() } : {}),
+          },
+          duesMinor,
+          duesOverride: Boolean(dto.duesOverride && duesMinor > 0),
+        };
+
         const [{ press_next_number: seq }] = await tx.$queryRaw<{ press_next_number: number }[]>`
           SELECT press_next_number(${schoolId}::uuid, ${series}::text)`;
         const serial = `${series}/${String(seq).padStart(4, '0')}`;

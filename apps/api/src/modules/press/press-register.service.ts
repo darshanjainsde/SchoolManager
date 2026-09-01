@@ -25,23 +25,26 @@ export class PressRegisterService {
     schoolId: string,
     opts: { type?: string; q?: string; cursor?: string },
   ): Promise<PressRegisterPage> {
+    // A batch of forty issues can share one millisecond; without the id
+    // tiebreaker, cursor pages over a tied issuedAt skip or repeat rows.
+    const q = opts.q?.slice(0, 80);
     return withTenant(schoolId, async (tx) => {
       const rows = await tx.pressIssue.findMany({
         where: {
           ...(opts.type ? { type: opts.type } : {}),
-          ...(opts.q
+          ...(q
             ? {
                 OR: [
-                  { serial: { contains: opts.q, mode: 'insensitive' } },
-                  { student: { firstName: { contains: opts.q, mode: 'insensitive' } } },
-                  { student: { lastName: { contains: opts.q, mode: 'insensitive' } } },
-                  { student: { admissionNo: { contains: opts.q, mode: 'insensitive' } } },
+                  { serial: { contains: q, mode: 'insensitive' } },
+                  { student: { firstName: { contains: q, mode: 'insensitive' } } },
+                  { student: { lastName: { contains: q, mode: 'insensitive' } } },
+                  { student: { admissionNo: { contains: q, mode: 'insensitive' } } },
                 ],
               }
             : {}),
         },
         include: { student: { select: { firstName: true, lastName: true } } },
-        orderBy: { issuedAt: 'desc' },
+        orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
         take: Math.min(PAGE_SIZE, LIST_CEILING.ACTIVITY) + 1,
         ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
       });
@@ -56,6 +59,7 @@ export class PressRegisterService {
           studentId: r.studentId,
           studentName: `${r.student.firstName} ${r.student.lastName}`.trim(),
           issuedAt: r.issuedAt.toISOString(),
+          voidedAt: r.voidedAt ? r.voidedAt.toISOString() : null,
         };
       });
       return { items, nextCursor: rows.length > PAGE_SIZE ? page[page.length - 1]!.id : null };
@@ -63,7 +67,7 @@ export class PressRegisterService {
   }
 
   /** One issue, snapshot included — the reprint path. */
-  async one(schoolId: string, id: string): Promise<{ id: string; type: string; serial: string; issuedAt: string; snapshot: PressSnapshot }> {
+  async one(schoolId: string, id: string): Promise<{ id: string; type: string; serial: string; issuedAt: string; voidedAt: string | null; voidNote: string | null; snapshot: PressSnapshot }> {
     return withTenant(schoolId, async (tx) => {
       const row = await tx.pressIssue.findFirst({ where: { id } });
       if (!row) throw new ApiError('NOT_FOUND', 'That register entry was not found.', 404);
@@ -72,9 +76,30 @@ export class PressRegisterService {
         type: row.type,
         serial: row.serial,
         issuedAt: row.issuedAt.toISOString(),
+        voidedAt: row.voidedAt ? row.voidedAt.toISOString() : null,
+        voidNote: row.voidNote,
         snapshot: row.payload as unknown as PressSnapshot,
       };
     });
+  }
+
+  /**
+   * The one-way correction path: strike the entry through, never erase it.
+   * The database trigger (`press_issue_immutable`) enforces that this is the
+   * ONLY update the row will ever accept; the partial unique then frees the
+   * once-per-window slot so a corrected card can be issued afresh.
+   */
+  async void(schoolId: string, id: string, note: string, voidedById: string): Promise<{ voided: true }> {
+    await withTenant(schoolId, async (tx) => {
+      const row = await tx.pressIssue.findFirst({ where: { id }, select: { id: true, voidedAt: true } });
+      if (!row) throw new ApiError('NOT_FOUND', 'That register entry was not found.', 404);
+      if (row.voidedAt) throw new ApiError('ALREADY_VOIDED', 'This entry is already voided.', 409);
+      await tx.pressIssue.update({
+        where: { id },
+        data: { voidedAt: new Date(), voidedById, voidNote: note.trim() },
+      });
+    });
+    return { voided: true };
   }
 
   // ── The family's side ──────────────────────────────────────────────────────
@@ -89,8 +114,8 @@ export class PressRegisterService {
       const student = await tx.student.findFirst({ where: { userId }, select: { id: true } });
       if (!student) return [];
       const rows = await tx.pressIssue.findMany({
-        where: { studentId: student.id, type: 'REPORT_CARD' },
-        orderBy: { issuedAt: 'desc' },
+        where: { studentId: student.id, type: 'REPORT_CARD', voidedAt: null },
+        orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
         take: LIST_CEILING.ACTIVITY,
       });
       return rows.map((r) => {
@@ -111,7 +136,7 @@ export class PressRegisterService {
     return withTenant(schoolId, async (tx) => {
       const student = await tx.student.findFirst({ where: { userId }, select: { id: true } });
       const row = student
-        ? await tx.pressIssue.findFirst({ where: { id, studentId: student.id, type: 'REPORT_CARD' } })
+        ? await tx.pressIssue.findFirst({ where: { id, studentId: student.id, type: 'REPORT_CARD', voidedAt: null } })
         : null;
       if (!row) throw new ApiError('NOT_FOUND', 'That report card was not found.', 404);
       return {

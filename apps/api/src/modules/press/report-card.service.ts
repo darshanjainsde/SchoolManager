@@ -10,7 +10,7 @@ import type {
   ReportWindowRow,
 } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
-import { isP2002 } from '../../common/errors/prisma-errors';
+import { isP2002, p2002Target } from '../../common/errors/prisma-errors';
 import { gradeForPct, pctOf } from './grade-scale';
 import type { IssueReportCardsDto, SaveRemarkDto, SaveWindowDto } from './press.dto';
 
@@ -33,19 +33,32 @@ export function seriesYear(now: Date): number {
 
 /** "Roll 8" must sort before "roll 10", and lettered rolls must not crash the sort. */
 export function rollOrder(a: { rollNo: string | null; name: string }, b: { rollNo: string | null; name: string }): number {
-  const na = a.rollNo === null ? NaN : Number(a.rollNo);
-  const nb = b.rollNo === null ? NaN : Number(b.rollNo);
+  // '' would coerce to 0 and jump the queue; a blank roll is no roll.
+  const na = a.rollNo === null || a.rollNo.trim() === '' ? NaN : Number(a.rollNo);
+  const nb = b.rollNo === null || b.rollNo.trim() === '' ? NaN : Number(b.rollNo);
   if (!Number.isNaN(na) && !Number.isNaN(nb) && na !== nb) return na - nb;
   if (!Number.isNaN(na) && Number.isNaN(nb)) return -1;
   if (Number.isNaN(na) && !Number.isNaN(nb)) return 1;
   return a.name.localeCompare(b.name);
 }
 
-/** The whole end day: `endDate` is a DATE column, exams carry timestamps. */
-function dayAfter(d: Date): Date {
-  const next = new Date(d);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return next;
+/**
+ * Window boundaries in the school's clock, not the server's. A DATE column
+ * comes back as UTC midnight; the IST day it names starts 5h30 EARLIER as a
+ * UTC instant. Without this shift an exam at 2:00 AM IST on 1 Oct (stored
+ * 20:30 UTC 30 Sep) prints under the term that ended 30 Sep. Same reasoning
+ * as `seriesYear` below — the product's clock is Asia/Kolkata.
+ */
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/** UTC instant at which the IST calendar day of `d` (a DATE column) begins. */
+function istDayStartUtc(d: Date): Date {
+  return new Date(d.getTime() - IST_OFFSET_MS);
+}
+
+/** UTC instant at which the IST day AFTER `d` begins — the exclusive bound. */
+function istDayAfterUtc(d: Date): Date {
+  return new Date(d.getTime() + 24 * 60 * 60 * 1000 - IST_OFFSET_MS);
 }
 
 function isoDay(d: Date): string {
@@ -177,11 +190,22 @@ export class ReportCardService {
 
       const data = { name: dto.name.trim(), startDate: start, endDate: end };
       try {
-        const row = dto.id
-          ? await tx.reportWindow.update({ where: { id: dto.id }, data })
-          : await tx.reportWindow.create({
-              data: { ...data, schoolId, academicYearId: dto.academicYearId },
-            });
+        let row;
+        if (dto.id) {
+          // Prove the window is this tenant's FIRST: an update on somebody
+          // else's id would throw P2025 under RLS and surface as a 500 —
+          // every sibling path answers 404, so this one must too.
+          const existing = await tx.reportWindow.findFirst({ where: { id: dto.id }, select: { id: true } });
+          if (!existing) throw new ApiError('NOT_FOUND', 'That report window was not found.', 404);
+          row = await tx.reportWindow.update({
+            where: { id: dto.id },
+            data: { ...data, academicYearId: dto.academicYearId },
+          });
+        } else {
+          row = await tx.reportWindow.create({
+            data: { ...data, schoolId, academicYearId: dto.academicYearId },
+          });
+        }
         const issuedCount = await tx.pressIssue.count({ where: { windowId: row.id } });
         return {
           id: row.id,
@@ -285,6 +309,7 @@ export class ReportCardService {
         school: await this.schoolHeader(tx, schoolId),
         subjects: compiled.subjects,
         students: compiled.students,
+        unpublishedCount: compiled.unpublishedCount,
       };
     });
   }
@@ -309,23 +334,36 @@ export class ReportCardService {
         admissionNo: string; dob: Date | null; guardianName: string | null;
       }[];
     },
-  ): Promise<{ subjects: { subjectId: string; subjectName: string }[]; students: ReportCardStudent[] }> {
+  ): Promise<{ subjects: { subjectId: string; subjectName: string }[]; students: ReportCardStudent[]; unpublishedCount: number }> {
     const { windowId, classSectionId, startDate, endDate, students } = input;
     const studentIds = students.map((s) => s.id);
 
     const exams = await tx.exam.findMany({
       where: {
         classSectionId,
-        scheduledAt: { gte: startDate, lt: dayAfter(endDate) },
+        scheduledAt: { gte: istDayStartUtc(startDate), lt: istDayAfterUtc(endDate) },
       },
       select: { id: true, subjectId: true, maxMarks: true },
     });
     const examIds = exams.map((e) => e.id);
 
+    // Surfaced on the batch screen: dashes caused by UNPUBLISHED marks look
+    // identical to dashes caused by absence, and the office deserves to know
+    // which it is before printing.
+    const unpublishedCount = examIds.length
+      ? await tx.result.count({
+          where: { examId: { in: examIds }, studentId: { in: studentIds }, publishedAt: null },
+        })
+      : 0;
+
     const [results, subjectRows, attendanceRows, remarkRows, issuedRows] = await Promise.all([
       examIds.length
         ? tx.result.findMany({
-            where: { examId: { in: examIds }, studentId: { in: studentIds } },
+            // PUBLISHED only — the same invariant the portal enforces
+            // (portal.service filters publishedAt everywhere). A report card
+            // GOES to the family; draft marks a teacher has not published
+            // must not be frozen into a snapshot the portal then serves.
+            where: { examId: { in: examIds }, studentId: { in: studentIds }, publishedAt: { not: null } },
             select: { examId: true, studentId: true, marks: true },
           })
         : Promise.resolve([]),
@@ -341,7 +379,8 @@ export class ReportCardService {
             where: {
               classSectionId,
               studentId: { in: studentIds },
-              date: { gte: startDate, lt: dayAfter(endDate) },
+              // Attendance.date is itself a DATE — no clock to shift.
+              date: { gte: startDate, lte: endDate },
             },
             _count: { _all: true },
           })
@@ -354,7 +393,9 @@ export class ReportCardService {
         : Promise.resolve([]),
       studentIds.length
         ? tx.pressIssue.findMany({
-            where: { type: 'REPORT_CARD', windowId, studentId: { in: studentIds } },
+            // A voided card frees the slot — the batch treats that child as
+            // not yet issued, matching the partial unique in the migration.
+            where: { type: 'REPORT_CARD', windowId, studentId: { in: studentIds }, voidedAt: null },
             select: { studentId: true, serial: true, issuedAt: true },
           })
         : Promise.resolve([]),
@@ -412,7 +453,9 @@ export class ReportCardService {
             subjectId,
             subjectName,
             examCount: subjectExams.length,
-            marks: hasMarks ? marks : null,
+            // Float sums drift (36.7+42.1 = 78.80000000000001); one decimal
+            // place at COMPILE time so no surface can print the artifact.
+            marks: hasMarks ? Math.round(marks * 10) / 10 : null,
             maxMarks: hasMarks ? attemptedMax : totalMax,
             pct,
             grade: gradeForPct(pct),
@@ -420,7 +463,7 @@ export class ReportCardService {
         });
 
         const marked = lines.filter((l) => l.marks !== null);
-        const overallMarks = marked.reduce((a, l) => a + (l.marks ?? 0), 0);
+        const overallMarks = Math.round(marked.reduce((a, l) => a + (l.marks ?? 0), 0) * 10) / 10;
         const overallMax = marked.reduce((a, l) => a + l.maxMarks, 0);
         const overallPct = marked.length ? pctOf(overallMarks, overallMax) : null;
 
@@ -444,7 +487,7 @@ export class ReportCardService {
       })
       .sort((a, b) => rollOrder({ rollNo: a.rollNo, name: a.studentName }, { rollNo: b.rollNo, name: b.studentName }));
 
-    return { subjects, students: compiled };
+    return { subjects, students: compiled, unpublishedCount };
   }
 
   // ── Issue ──────────────────────────────────────────────────────────────────
@@ -461,10 +504,12 @@ export class ReportCardService {
   async issueBatch(schoolId: string, dto: IssueReportCardsDto, issuedById: string): Promise<IssueReportCardsResponse> {
     const batch = await this.compileBatch(schoolId, dto.windowId, dto.classSectionId);
 
-    const wanted = dto.studentIds?.length
-      ? batch.students.filter((s) => dto.studentIds!.includes(s.studentId))
+    // De-duplicated: a repeated id must not read as "somebody not in class".
+    const requested = dto.studentIds?.length ? [...new Set(dto.studentIds)] : null;
+    const wanted = requested
+      ? batch.students.filter((s) => requested.includes(s.studentId))
       : batch.students;
-    if (dto.studentIds?.length && wanted.length !== dto.studentIds.length) {
+    if (requested && wanted.length !== requested.length) {
       // An id that is not in this class/window compile is either another
       // class's child or another school's — same answer either way.
       throw new ApiError('NOT_FOUND', 'One of those students is not in this class.', 404);
@@ -530,8 +575,19 @@ export class ReportCardService {
         issued.push({ studentId: s.studentId, serial });
       } catch (e) {
         if (isP2002(e)) {
-          // A concurrent clerk got there first — the register already has the
-          // card, which is the outcome the office wanted.
+          // TWO uniques can throw here and they mean opposite things. The
+          // window unique = a concurrent clerk got there first, the card
+          // exists, skipping is the wanted outcome. The SERIAL unique = a
+          // hand-reset counter collided and NO card exists — saying
+          // "already issued" would be a false success.
+          if (p2002Target(e).includes('serial')) {
+            skipped.push({
+              studentId: s.studentId,
+              reason: 'Serial clash — the counter looks reset. No card was made; try again.',
+            });
+            this.logger.error({ schoolId, studentId: s.studentId }, 'press serial collision');
+            continue;
+          }
           skipped.push({ studentId: s.studentId, reason: 'Already issued by someone else just now.' });
           continue;
         }

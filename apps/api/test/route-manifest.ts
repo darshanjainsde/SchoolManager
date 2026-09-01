@@ -20,9 +20,10 @@
 export const AUTHZ_REVIEWED: string[] = [
   // ── The Press ───────────────────────────────────────────────────────────
   // press-authz.e2e-spec.ts: every office route refuses anonymous / STUDENT /
-  // TEACHER and admits SCHOOL_ADMIN + STAFF; both portal routes are the
-  // family's own JWT only; and the PRESS override (no tier grants it) gates
-  // the whole module — a PRO school without it 403s even as an admin.
+  // TEACHER and admits SCHOOL_ADMIN + STAFF; the portal routes are proven
+  // caller's-own-JWT (another family's card answers 404, asserted with two
+  // seeded students); and the PRESS override (no tier grants it) gates the
+  // whole module — a PRO school without it 403s even as an admin.
   "GET /manage/press/years",
   "GET /manage/press/classes",
   "GET /manage/press/students",
@@ -35,6 +36,7 @@ export const AUTHZ_REVIEWED: string[] = [
   "POST /manage/press/certificates/issue",
   "GET /manage/press/register",
   "GET /manage/press/register/:id",
+  "POST /manage/press/register/:id/void",
   "GET /me/report-cards",
   "GET /me/report-cards/:id",
   // ── Homecoming / the alumnus's own door ─────────────────────────────────

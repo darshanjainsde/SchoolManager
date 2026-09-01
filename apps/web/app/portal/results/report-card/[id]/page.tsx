@@ -68,11 +68,11 @@ export default function MyReportCardPage() {
         <>
           <div className="pr-preview">
             <div className="pr-zoom">
-              <ReportCardSheet snapshot={snap} />
+              <ReportCardSheet snapshot={snap} serial={card.data!.serial} />
             </div>
           </div>
           <PressPrintPortal>
-            <ReportCardSheet snapshot={snap} />
+            <ReportCardSheet snapshot={snap} serial={card.data!.serial} />
           </PressPrintPortal>
         </>
       )}

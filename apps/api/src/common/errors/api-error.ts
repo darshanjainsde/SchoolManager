@@ -153,6 +153,8 @@ export type ErrorCode =
   /** A serial the atomic allocator should make impossible collided anyway —
    *  a counter was reset by hand. Pair with 409; the retry gets a fresh one. */
   | 'SERIAL_TAKEN'
+  /** Voiding an entry that is already struck through — pair with 409. */
+  | 'ALREADY_VOIDED'
   /** The room still has saved seating plans; deleting it would take them too — pair with 409. */
   | 'ROOM_IN_USE'
   | 'VALIDATION'
