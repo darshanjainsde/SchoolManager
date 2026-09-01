@@ -38,6 +38,20 @@ export class PressController {
     return this.tenant.requireTenant().schoolId;
   }
 
+  // ── Reference reads (the Press's own — see ReportCardService.listClasses) ─
+
+  @Get('years') listYears() {
+    return this.reportCards.listYears(this.sid());
+  }
+
+  @Get('classes') listClasses() {
+    return this.reportCards.listClasses(this.sid());
+  }
+
+  @Get('students') searchStudents(@Query('q') q = '') {
+    return this.reportCards.searchStudents(this.sid(), q);
+  }
+
   // ── Report windows ────────────────────────────────────────────────────────
 
   @Get('windows') listWindows() {

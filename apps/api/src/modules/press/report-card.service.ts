@@ -56,6 +56,80 @@ function isoDay(d: Date): string {
 export class ReportCardService {
   private readonly logger = new Logger(ReportCardService.name);
 
+  // ── Reference reads ────────────────────────────────────────────────────────
+  // The Press carries its own class/year lists rather than borrowing
+  // `/manage/classes` (MANAGEMENT + ADMIN/TEACHER): the front-office STAFF who
+  // run this screen cannot call that route, and a PRESS-only school may not
+  // even have the feature it is gated on.
+
+  async listYears(schoolId: string): Promise<{ id: string; name: string; isCurrent: boolean; startDate: string }[]> {
+    return withTenant(schoolId, async (tx) => {
+      const rows = await tx.academicYear.findMany({
+        select: { id: true, name: true, isCurrent: true, startDate: true },
+        orderBy: { startDate: 'desc' },
+      });
+      // startDate feeds the first window's prefill — a new school should meet
+      // a form that is already right, not four empty boxes.
+      return rows.map((r) => ({ ...r, startDate: r.startDate.toISOString().slice(0, 10) }));
+    });
+  }
+
+  async listClasses(schoolId: string): Promise<{ id: string; label: string; studentCount: number }[]> {
+    return withTenant(schoolId, async (tx) => {
+      const [sections, counts] = await Promise.all([
+        tx.classSection.findMany({
+          include: { grade: { select: { name: true, order: true } } },
+        }),
+        tx.student.groupBy({
+          by: ['classSectionId'],
+          where: { isActive: true, classSectionId: { not: null } },
+          _count: { _all: true },
+        }),
+      ]);
+      const countBySection = new Map(counts.map((c) => [c.classSectionId, c._count._all]));
+      return sections
+        .sort((a, b) => a.grade.order - b.grade.order || a.grade.name.localeCompare(b.grade.name) || a.name.localeCompare(b.name))
+        .map((s) => ({
+          id: s.id,
+          label: `${s.grade.name}-${s.name}`,
+          studentCount: countBySection.get(s.id) ?? 0,
+        }));
+    });
+  }
+
+  /** Name / admission-no search for the certificate desk. Same reasoning as
+   *  `listClasses`: `/manage/students` is ADMIN/TEACHER, the Press desk is not. */
+  async searchStudents(
+    schoolId: string,
+    q: string,
+  ): Promise<{ id: string; name: string; admissionNo: string; classLabel: string | null; isActive: boolean }[]> {
+    const query = q.trim();
+    if (query.length < 2) return [];
+    return withTenant(schoolId, async (tx) => {
+      const rows = await tx.student.findMany({
+        where: {
+          OR: [
+            { firstName: { contains: query, mode: 'insensitive' } },
+            { lastName: { contains: query, mode: 'insensitive' } },
+            { admissionNo: { contains: query, mode: 'insensitive' } },
+          ],
+        },
+        include: { classSection: { include: { grade: { select: { name: true } } } } },
+        orderBy: [{ isActive: 'desc' }, { firstName: 'asc' }],
+        take: 20,
+      });
+      // Left students stay findable — a TC is BY DEFINITION for somebody
+      // leaving; hiding inactive rows would hide the certificate's audience.
+      return rows.map((s) => ({
+        id: s.id,
+        name: `${s.firstName} ${s.lastName}`.trim(),
+        admissionNo: s.admissionNo,
+        classLabel: s.classSection ? `${s.classSection.grade.name}-${s.classSection.name}` : null,
+        isActive: s.isActive,
+      }));
+    });
+  }
+
   // ── Windows ────────────────────────────────────────────────────────────────
 
   async listWindows(schoolId: string): Promise<ReportWindowRow[]> {

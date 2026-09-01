@@ -120,7 +120,7 @@ async function main() {
   // A demo school with half its wings switched off demonstrates the tier logic,
   // not the product.
   const FEATURES = ['MANAGEMENT', 'PUBLIC_SITE', 'ABOUT_CONTACT', 'ENQUIRY', 'EVENTS',
-    'GALLERY', 'SOCIAL', 'BLOG', 'HIRING', 'LIBRARY', 'ALUMNI'] as const;
+    'GALLERY', 'SOCIAL', 'BLOG', 'HIRING', 'LIBRARY', 'ALUMNI', 'PRESS'] as const;
   for (const featureKey of FEATURES) {
     await step(async (db) => {
       const found = await db.featureOverride.findFirst({ where: { schoolId, featureKey } });
@@ -592,6 +592,76 @@ async function main() {
     });
   }
   console.log('  ✓ 2 open posts');
+
+
+  // ── The Press ──────────────────────────────────────────────────────────────
+  // A reporting window over the marks seeded above, a few class-teacher
+  // remarks, and two certificates in the register — so the Press opens
+  // populated: the batch screen compiles real cards and the register is not
+  // an empty drawer. Report cards are deliberately NOT pre-issued; "Issue 38
+  // to the register" is the demo's money moment and it should be live.
+  const pressWindow = await step(async (db) => {
+    const found = await db.reportWindow.findFirst({ where: { schoolId, name: 'Term I' } });
+    return found ?? db.reportWindow.create({
+      data: {
+        schoolId, academicYearId: year.id, name: 'Term I',
+        startDate: new Date('2026-04-01'), endDate: new Date('2026-09-30'),
+      },
+    });
+  });
+  await step(async (db) => {
+    const remarks = [
+      'Consistent and curious — reads ahead of the class.',
+      'Speaks up more this term. Needs daily maths practice at home.',
+      'Excellent in games; written work is improving steadily.',
+      'A kind, steady presence in class. Handwriting needs attention.',
+    ];
+    for (let i = 0; i < remarks.length && i < roll.length; i++) {
+      await db.reportRemark.upsert({
+        where: { windowId_studentId: { windowId: pressWindow.id, studentId: roll[i]!.id } },
+        create: {
+          schoolId, windowId: pressWindow.id, studentId: roll[i]!.id,
+          text: remarks[i]!, authorId: marker!.id,
+        },
+        update: {},
+      });
+    }
+  });
+  await step(async (db) => {
+    const has = await db.pressIssue.findFirst({ where: { schoolId, type: 'BONAFIDE' } });
+    if (has) return;
+    const subject = await db.student.findFirst({
+      where: { id: roll[0]!.id },
+      include: { classSection: { include: { grade: { select: { name: true } } } } },
+    });
+    if (!subject) return;
+    const header = { name: NAME, logoUrl: null, addressLine: 'Demo Lane, Jaipur, Rajasthan', phone: null, email: null };
+    const who = {
+      id: subject.id, name: `${subject.firstName} ${subject.lastName}`, admissionNo: subject.admissionNo,
+      rollNo: subject.rollNo, dob: null, guardianName: subject.guardianName, gender: subject.gender,
+      classLabel: subject.classSection ? `${subject.classSection.grade.name}-${subject.classSection.name}` : null,
+      onRollSince: subject.createdAt.toISOString().slice(0, 10),
+    };
+    for (const [type, fields] of [
+      ['BONAFIDE', { conduct: 'good', classLabel: who.classLabel ?? '—', fromDate: who.onRollSince, purpose: 'bank account opening' }],
+      ['CHARACTER', { conduct: 'exemplary', classLabel: who.classLabel ?? '—', fromDate: who.onRollSince }],
+    ] as const) {
+      const series = `${type === 'BONAFIDE' ? 'BC' : 'CC'}/2026`;
+      const [{ press_next_number: seq }] = await db.$queryRaw<{ press_next_number: number }[]>`
+        SELECT press_next_number(${schoolId}::uuid, ${series}::text)`;
+      await db.pressIssue.create({
+        data: {
+          schoolId, type, serial: `${series}/${String(seq).padStart(4, '0')}`,
+          studentId: who.id, issuedById: marker!.id,
+          payload: {
+            kind: 'CERTIFICATE', type, school: header, student: who,
+            fields, duesMinor: 0, duesOverride: false,
+          },
+        },
+      });
+    }
+  });
+  console.log('  ✓ press: Term I window, 4 remarks, 2 certificates in the register');
 
   console.log('\n──────────────────────────────────────────────');
   console.log(`  ${NAME}`);

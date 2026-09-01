@@ -18,6 +18,25 @@
  * this becomes a list of good intentions.
  */
 export const AUTHZ_REVIEWED: string[] = [
+  // ── The Press ───────────────────────────────────────────────────────────
+  // press-authz.e2e-spec.ts: every office route refuses anonymous / STUDENT /
+  // TEACHER and admits SCHOOL_ADMIN + STAFF; both portal routes are the
+  // family's own JWT only; and the PRESS override (no tier grants it) gates
+  // the whole module — a PRO school without it 403s even as an admin.
+  "GET /manage/press/years",
+  "GET /manage/press/classes",
+  "GET /manage/press/students",
+  "GET /manage/press/windows",
+  "PUT /manage/press/windows",
+  "GET /manage/press/report-cards/:windowId/:classSectionId",
+  "PUT /manage/press/remarks",
+  "POST /manage/press/report-cards/issue",
+  "GET /manage/press/certificates/prepare/:studentId",
+  "POST /manage/press/certificates/issue",
+  "GET /manage/press/register",
+  "GET /manage/press/register/:id",
+  "GET /me/report-cards",
+  "GET /me/report-cards/:id",
   // ── Homecoming / the alumnus's own door ─────────────────────────────────
   // homecoming-portal-authz.e2e-spec.ts proves the lines BETWEEN the three
   // tiers, not merely that each works: public batch pages readable with no

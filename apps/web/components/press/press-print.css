@@ -1,0 +1,91 @@
+/* ============================================================================
+   The Press — the paper that leaves the office
+   ============================================================================
+   Same three iron rules as exam-hall/print.css, for the same reasons:
+
+   1. Literal ink, not theme tokens — a report card is paper in both themes.
+   2. Millimetres and points, never pixels — A4 is a physical fact.
+   3. Hairline borders, never box-shadow — Chrome's print-to-PDF flattens a
+      blurred shadow into a solid grey slab (this cost a booklet print run).
+
+   `#press-print` is hidden on screen. `body.press-printing` is set for the
+   length of the print only, so a stray Cmd+P still prints the page a person
+   is actually looking at. The on-screen preview wraps the SAME `.pr-page`
+   markup in `.pr-preview`, which scales it down — the preview can never show
+   something the printer would not.
+   ========================================================================== */
+
+#press-print {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body.press-printing > * {
+    display: none !important;
+  }
+  body.press-printing > #press-print {
+    display: block !important;
+  }
+
+  #press-print .pr-page {
+    break-after: page;
+    page-break-after: always;
+    border: none !important;
+  }
+  #press-print .pr-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  /* A grade band or crest colour that does not print is not a colour. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+/* ── the page ────────────────────────────────────────────────────────────── */
+
+.pr-page {
+  width: 210mm;
+  min-height: 297mm;
+  background: #ffffff;
+  color: #191627;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  padding: 14mm 14mm 12mm;
+  box-sizing: border-box;
+}
+
+/* ── on-screen preview ───────────────────────────────────────────────────────
+   Scales the A4 page to fit a console column. transform keeps the mm geometry
+   honest — the preview IS the sheet, smaller. */
+.pr-preview {
+  overflow: auto;
+  border: 1px solid var(--sk-line);
+  border-radius: var(--sk-r);
+  background: var(--sk-bg-2);
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+}
+.pr-preview .pr-zoom {
+  transform: scale(0.62);
+  transform-origin: top center;
+  /* The wrapper must reserve the SCALED height or the container scrolls a
+     phantom 38% of empty space below every sheet. */
+  height: calc(297mm * 0.62);
+  flex: none;
+}
+.pr-preview .pr-page {
+  border: 1px solid #d8d7e4;
+}
