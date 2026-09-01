@@ -64,6 +64,12 @@
   font-family: 'Helvetica Neue', Arial, sans-serif;
   padding: 14mm 14mm 12mm;
   box-sizing: border-box;
+  /* A column so a sheet's footer (signatures, the verification line) can
+     anchor to the BOTTOM of the physical page with margin-top:auto. The first
+     visual audit had every card ending 40% down and floating in white — a
+     printed school document fills its page. */
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── on-screen preview ───────────────────────────────────────────────────────

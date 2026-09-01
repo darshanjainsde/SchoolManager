@@ -80,7 +80,7 @@ function DuplicateStamp() {
   );
 }
 
-const cell: React.CSSProperties = { border: `0.25mm solid ${LINE}`, padding: '1.6mm 2.4mm', textAlign: 'left' };
+const cell: React.CSSProperties = { border: `0.25mm solid ${LINE}`, padding: '2.4mm 3mm', textAlign: 'left' };
 const cellNum: React.CSSProperties = { ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
 const headCell: React.CSSProperties = { ...cell, background: HEAD_BG, fontWeight: 700 };
 
@@ -105,7 +105,7 @@ export function ReportCardSheet({ snapshot, duplicate = false }: { snapshot: Rep
         </div>
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5pt' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10.5pt' }}>
         <thead>
           <tr>
             <th style={headCell}>Subject</th>
@@ -138,23 +138,25 @@ export function ReportCardSheet({ snapshot, duplicate = false }: { snapshot: Rep
         </tbody>
       </table>
 
-      <div style={{ display: 'flex', gap: '4mm', marginTop: '3mm', fontSize: '9.5pt' }}>
+      <div style={{ display: 'flex', gap: '4mm', marginTop: '3mm', fontSize: '9.5pt', alignItems: 'flex-start' }}>
         <div style={{ border: `0.25mm solid ${LINE}`, borderRadius: '1.5mm', padding: '2mm 3mm', flex: 'none' }}>
           <b>Attendance</b>{' '}
           {s.attendance.pct === null ? '—' : `${s.attendance.present} / ${s.attendance.total} days (${s.attendance.pct}%)`}
         </div>
-        <div style={{ border: `0.25mm solid ${LINE}`, borderRadius: '1.5mm', padding: '2mm 3mm', flex: 1, minHeight: '14mm' }}>
+        <div style={{ border: `0.25mm solid ${LINE}`, borderRadius: '1.5mm', padding: '2.5mm 3.5mm', flex: 1, minHeight: '24mm' }}>
           <b>Class teacher&rsquo;s remark</b>
           <div style={{ marginTop: '1mm' }}>{s.remark ?? ''}</div>
         </div>
       </div>
 
-      <div style={{ fontSize: '7.5pt', color: INK_SOFT, marginTop: '3mm' }}>
+      {/* marginTop auto: the legend + signature block sits at the FOOT of the
+          A4 page however short the table above runs. */}
+      <div style={{ fontSize: '7.5pt', color: INK_SOFT, marginTop: 'auto', paddingTop: '6mm' }}>
         Grades: A1 91–100 · A2 81–90 · B1 71–80 · B2 61–70 · C1 51–60 · C2 41–50 · D 33–40 · E below 33. A dash means no
         assessment was recorded.
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14mm', fontSize: '8.5pt', color: INK_SOFT }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12mm', fontSize: '8.5pt', color: INK_SOFT }}>
         <span style={{ borderTop: `0.25mm solid ${LINE}`, paddingTop: '1.5mm', minWidth: '34mm', textAlign: 'center' }}>
           Class Teacher{s.classTeacherName ? ` — ${s.classTeacherName}` : ''}
         </span>
@@ -218,7 +220,10 @@ export function CertificateSheet({
       {duplicate && <DuplicateStamp />}
       <Masthead school={s.school} line2="" />
 
-      <div style={{ border: `0.5mm double ${BRAND}`, borderRadius: '1.5mm', padding: '8mm 10mm', marginTop: '8mm' }}>
+      <div style={{
+        border: `0.5mm double ${BRAND}`, borderRadius: '1.5mm', padding: '10mm 12mm', marginTop: '10mm',
+        flex: 1, display: 'flex', flexDirection: 'column',
+      }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontWeight: 800, fontSize: '14pt', color: BRAND, letterSpacing: '0.14em' }}>{CERT_TITLE[s.type]}</div>
           <div style={{ fontSize: '8.5pt', color: INK_SOFT, marginTop: '1mm', fontVariantNumeric: 'tabular-nums' }}>
@@ -226,11 +231,11 @@ export function CertificateSheet({
           </div>
         </div>
 
-        <p style={{ fontSize: '11pt', lineHeight: 1.9, marginTop: '6mm', textAlign: 'justify' }}>{certBody(s)}</p>
+        <p style={{ fontSize: '11.5pt', lineHeight: 2.1, marginTop: '10mm', textAlign: 'justify' }}>{certBody(s)}</p>
 
-        {s.fields.note ? <p style={{ fontSize: '10pt', lineHeight: 1.7 }}>{s.fields.note}</p> : null}
+        {s.fields.note ? <p style={{ fontSize: '10.5pt', lineHeight: 1.8 }}>{s.fields.note}</p> : null}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '18mm', fontSize: '8.5pt', color: INK_SOFT }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '18mm', fontSize: '8.5pt', color: INK_SOFT, alignItems: 'flex-end' }}>
           <span>Place: {s.school.addressLine?.split(', ').slice(-2, -1)[0] ?? '____________'}</span>
           <span style={{ borderTop: `0.25mm solid ${LINE}`, paddingTop: '1.5mm', minWidth: '40mm', textAlign: 'center' }}>
             Principal / Headmaster
