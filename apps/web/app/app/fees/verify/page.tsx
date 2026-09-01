@@ -77,7 +77,7 @@ function Verify() {
 
   const verify = useMutation({
     mutationFn: (id: string) => api.post<{ receipt: { number: string } }>(`/manage/fees/payments/${id}/verify`, {}),
-    onSuccess: (r) => { invalidate(); toast.success(`Accepted — receipt ${r.receipt.number} sent to the parent`); },
+    onSuccess: (r) => { invalidate(); toast.success(`Accepted — receipt ${r.receipt.number} issued`); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -91,7 +91,7 @@ function Verify() {
   const reject = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       api.post(`/manage/fees/payments/${id}/reject`, { reason }),
-    onSuccess: () => { invalidate(); toast.success('Turned down — the parent has been told why'); },
+    onSuccess: () => { invalidate(); toast.success('Turned down — the reason is on their fees page'); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -283,7 +283,7 @@ function PaymentDetail({
         {p.status === 'SUBMITTED' && !rejecting && (
           <div className="flex flex-wrap gap-2">
             <button className="sk-btn" data-variant="primary" disabled={busy} onClick={onVerify}>
-              <Check size={14} /> Accept &amp; send receipt
+              <Check size={14} /> Accept &amp; issue receipt
             </button>
             <button className="sk-btn" disabled={busy} onClick={() => setRejecting(true)}>
               <X size={14} /> Turn down…
@@ -332,7 +332,8 @@ function PaymentDetail({
               {REJECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
             <p className="text-[10.5px]" style={{ color: 'var(--sk-ink-3)' }}>
-              They see this word for word, so it has to tell them what to do next.
+              They see this word for word on their fees page, so it has to tell them
+              what to do next. Nothing is sent to them — tell them when you next speak.
             </p>
             <div className="flex gap-2">
               <button className="sk-btn" onClick={() => setRejecting(false)}>Cancel</button>

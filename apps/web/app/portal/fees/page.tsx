@@ -69,8 +69,8 @@ export default function PortalFeesPage() {
               {rupees(pending.amountMinor)} · sent {fmtDate(pending.submittedAt)}
             </p>
             <p className="text-[11.5px]" style={{ color: 'var(--sk-ink-3)' }}>
-              The school usually checks this within one working day. You will get a message and your
-              receipt will appear here. There is nothing more you need to do.
+              The school usually checks this within one working day. Your receipt will
+              appear on this page once they do — check back, or ask the office.
             </p>
           </div>
         </div>
@@ -375,7 +375,8 @@ function PayByTransfer({
           {submit.isPending ? 'Sending…' : <><Check size={14} /> Send to school</>}
         </button>
         <p className="text-center text-[10.5px]" style={{ color: 'var(--sk-ink-3)' }}>
-          The school checks this and sends your receipt, usually within one working day.
+          The school usually checks this within one working day. Your receipt appears on
+          this page once they do.
         </p>
       </div>
     </div>
