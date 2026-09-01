@@ -9,7 +9,7 @@ import { BackToFees } from '@/components/fees/back-to-fees';
 import { useHost } from '@/components/use-host';
 import {
   FREQUENCY_LABEL, rupees, toMinor, toRupeeInput,
-  type FeeCategory, type FeeGrid, type FeeSettings, type FeeTerm, type LateFeeMode,
+  type Concession, type FeeCategory, type FeeGrid, type FeeSettings, type FeeTerm, type LateFeeMode,
 } from '@/lib/fees';
 
 interface Year { id: string; name: string; isCurrent: boolean }
@@ -28,7 +28,8 @@ const STEPS = [
   { id: 'categories', n: 'Step 1', t: 'Categories', d: 'What you charge for, and how you explain it' },
   { id: 'terms', n: 'Step 2', t: 'Terms & late fee', d: 'When each instalment is due, and what happens after' },
   { id: 'amounts', n: 'Step 3', t: 'Class amounts', d: 'One number per class, per category' },
-  { id: 'bills', n: 'Step 4', t: 'Generate bills', d: 'Preview the whole term, then commit' },
+  { id: 'exceptions', n: 'Step 4', t: 'Exceptions', d: 'Concessions and waivers, per student' },
+  { id: 'bills', n: 'Step 5', t: 'Generate bills', d: 'Preview the whole term, then commit' },
 ] as const;
 
 export default function FeeSetupPage() {
@@ -83,6 +84,7 @@ export default function FeeSetupPage() {
       {yearId && step === 'categories' && <CategoriesStep api={api} qc={qc} host={host} />}
       {yearId && step === 'terms' && <TermsStep api={api} qc={qc} host={host} yearId={yearId} />}
       {yearId && step === 'amounts' && <GridStep api={api} qc={qc} host={host} yearId={yearId} />}
+      {yearId && step === 'exceptions' && <ExceptionsStep api={api} qc={qc} host={host} />}
       {yearId && step === 'bills' && <BillsStep api={api} qc={qc} host={host} yearId={yearId} />}
     </div>
   );
@@ -787,5 +789,222 @@ function BillsStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; ye
         )}
       </div>
     </section>
+  );
+}
+
+
+// ── Step 4 · exceptions ──────────────────────────────────────────────────────
+
+interface StudentHit { id: string; firstName: string; lastName: string; admissionNo: string }
+
+/**
+ * Concessions: the sibling discount, the staff ward, the hardship waiver.
+ *
+ * The endpoints for this shipped with no screen, so a school could see the
+ * concessions the seed created on a bill but had no way to add one — which
+ * makes the whole step notional. Every concession renders on the parent's bill
+ * as its own named green line, so the reason field is read by a parent and is
+ * required for that reason.
+ */
+function ExceptionsStep({ api, qc, host }: { api: Api; qc: Qc; host: Host }) {
+  const [q, setQ] = useState('');
+  const [picked, setPicked] = useState<StudentHit | null>(null);
+
+  const list = useQuery({
+    queryKey: ['fee-concessions', host], enabled: !!host,
+    queryFn: () => api.get<Concession[]>('/manage/fees/concessions'),
+  });
+  const cats = useQuery({
+    queryKey: ['fee-categories', host], enabled: !!host,
+    queryFn: () => api.get<FeeCategory[]>('/manage/fees/categories'),
+  });
+  const hits = useQuery({
+    queryKey: ['student-search', host, q], enabled: !!host && q.trim().length >= 2,
+    queryFn: () => api.get<{ rows: { studentId: string; name: string; admissionNo: string }[] }>(
+      `/manage/fees/students?q=${encodeURIComponent(q.trim())}&take=8`,
+    ),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.del(`/manage/fees/concessions/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-concessions', host] }); toast.success('Removed'); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <>
+      <section className="sk-card">
+        <div className="sk-card-h">
+          <h3>Who pays something different?</h3>
+          <p>
+            A sibling discount, a staff ward, a hardship waiver. Each one shows on the
+            parent&rsquo;s bill as its own line with the reason you write here — so write it
+            the way you would say it to them.
+          </p>
+        </div>
+        <div className="sk-card-b">
+          <div className="flex flex-col gap-1.5">
+            <label className="sk-lab" htmlFor="conc-search">Find a student</label>
+            <input id="conc-search" className="sk-input" value={q}
+                   onChange={(e) => { setQ(e.target.value); setPicked(null); }}
+                   placeholder="Name or admission number" />
+          </div>
+
+          {q.trim().length >= 2 && !picked && (
+            hits.isLoading
+              ? <p className="sk-state">Searching…</p>
+              : (hits.data?.rows.length ?? 0) === 0
+                ? <p className="sk-state">Nobody matches “{q}”.</p>
+                : <div className="flex flex-col">
+                    {hits.data!.rows.map((r) => (
+                      <button key={r.studentId} className="sk-row text-left"
+                              onClick={() => setPicked({
+                                id: r.studentId,
+                                firstName: r.name.split(' ')[0] ?? r.name,
+                                lastName: r.name.split(' ').slice(1).join(' '),
+                                admissionNo: r.admissionNo,
+                              })}>
+                        <div className="min-w-0 flex-1">
+                          <div className="nm">{r.name}</div>
+                          <div className="meta">{r.admissionNo}</div>
+                        </div>
+                        <span className="sk-btn" style={{ padding: '4px 10px', fontSize: 11.5 }}>Choose</span>
+                      </button>
+                    ))}
+                  </div>
+          )}
+
+          {picked && (
+            <ConcessionForm
+              api={api} qc={qc} host={host} student={picked}
+              categories={cats.data ?? []}
+              onDone={() => { setPicked(null); setQ(''); }}
+            />
+          )}
+        </div>
+      </section>
+
+      <section className="sk-card">
+        <div className="sk-card-h">
+          <h3>Current exceptions</h3>
+          <p>{list.data?.length ?? 0} in place. Removing one affects bills generated from now on, not bills already issued.</p>
+        </div>
+        <div className="sk-card-b">
+          {list.isLoading && <p className="sk-state">Loading…</p>}
+          {list.isFetched && list.data?.length === 0 && (
+            <p className="sk-state">Nobody has a concession yet. Everyone pays their class&rsquo;s amount.</p>
+          )}
+          {list.data?.map((c) => (
+            <div key={c.id} className="sk-row">
+              <div className="min-w-0 flex-1">
+                <div className="nm">{c.student.firstName} {c.student.lastName}</div>
+                <div className="meta">
+                  {c.student.admissionNo} · {c.category ? c.category.name : 'whole bill'}
+                  {c.term ? ` · ${c.term.name} only` : ' · every term'}
+                </div>
+                <div className="mt-0.5 text-[11.5px]" style={{ color: 'var(--sk-good)' }}>{c.reason}</div>
+              </div>
+              <span className="sk-pill" data-tone="good">
+                {c.percentBps != null ? `${c.percentBps / 100}% off` : `−${rupees(c.amountMinor ?? 0)}`}
+              </span>
+              <button className="sk-btn" onClick={() => remove.mutate(c.id)}
+                      aria-label={`Remove the concession for ${c.student.firstName}`}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function ConcessionForm({
+  api, qc, host, student, categories, onDone,
+}: {
+  api: Api; qc: Qc; host: Host;
+  student: StudentHit; categories: FeeCategory[]; onDone: () => void;
+}) {
+  const [basis, setBasis] = useState<'PERCENT' | 'AMOUNT'>('PERCENT');
+  const [percent, setPercent] = useState('10');
+  const [amount, setAmount] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [reason, setReason] = useState('');
+
+  const save = useMutation({
+    mutationFn: () => api.post('/manage/fees/concessions', {
+      studentId: student.id,
+      categoryId: categoryId || undefined,
+      // Exactly one basis — the API and a DB check constraint both refuse both
+      // or neither, so the form must not send both.
+      percentBps: basis === 'PERCENT' ? Math.round(Number(percent) * 100) : undefined,
+      amountMinor: basis === 'AMOUNT' ? toMinor(amount) : undefined,
+      reason: reason.trim(),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fee-concessions', host] });
+      toast.success('Added — it applies to bills generated from now on');
+      onDone();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const valid = reason.trim().length >= 3
+    && (basis === 'PERCENT' ? Number(percent) > 0 && Number(percent) <= 100 : toMinor(amount) > 0);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-[11px] border p-3"
+         style={{ borderColor: 'var(--sk-brand-line, var(--sk-line-2))', background: 'var(--sk-bg-2)' }}>
+      <div className="flex items-center gap-2">
+        <span className="text-[13px] font-semibold">{student.firstName} {student.lastName}</span>
+        <span className="text-[11.5px]" style={{ color: 'var(--sk-ink-3)', fontFamily: 'var(--sk-mono)' }}>
+          {student.admissionNo}
+        </span>
+        <button className="sk-btn" style={{ marginLeft: 'auto', padding: '4px 10px', fontSize: 11.5 }}
+                onClick={onDone}>Change</button>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {(['PERCENT', 'AMOUNT'] as const).map((b) => (
+          <button key={b} onClick={() => setBasis(b)} aria-pressed={basis === b}
+                  className="rounded-full border px-3 py-1.5 text-[12px] font-semibold"
+                  style={{
+                    borderColor: basis === b ? 'var(--sk-brand)' : 'var(--sk-line-2)',
+                    background: basis === b ? 'var(--sk-brand-tint)' : 'var(--sk-card)',
+                    color: basis === b ? 'var(--sk-brand-2)' : 'var(--sk-ink-2)', cursor: 'pointer',
+                  }}>
+            {b === 'PERCENT' ? 'A percentage' : 'A fixed amount'}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label className="sk-lab" htmlFor="conc-value">{basis === 'PERCENT' ? 'Percent off' : 'Amount off (₹)'}</label>
+          <input id="conc-value" className="sk-input" inputMode="decimal"
+                 value={basis === 'PERCENT' ? percent : amount}
+                 onChange={(e) => (basis === 'PERCENT' ? setPercent : setAmount)(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="sk-lab" htmlFor="conc-cat">On which category</label>
+          <select id="conc-cat" className="sk-input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">The whole bill</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="sk-lab" htmlFor="conc-reason">What the parent will read</label>
+        <input id="conc-reason" className="sk-input" value={reason}
+               onChange={(e) => setReason(e.target.value)}
+               placeholder="Sibling concession — second child at the school" />
+      </div>
+
+      <button className="sk-btn self-start" data-variant="primary"
+              disabled={save.isPending || !valid} onClick={() => save.mutate()}>
+        {save.isPending ? 'Adding…' : 'Add this concession'}
+      </button>
+    </div>
   );
 }

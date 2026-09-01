@@ -41,7 +41,6 @@ const OFFICE_ROUTES: [method: 'get' | 'post' | 'put' | 'delete', path: string][]
   ['post', '/manage/fees/payment-setup/bank/qr'],
   ['put', '/manage/fees/payment-setup/provider'],
   ['get', '/manage/fees/payments'],
-  ['get', '/manage/fees/payments/pending-count'],
   ['post', '/manage/fees/payments/00000000-0000-0000-0000-000000000001/verify'],
   ['post', '/manage/fees/payments/00000000-0000-0000-0000-000000000001/reject'],
   ['post', '/manage/fees/payments/00000000-0000-0000-0000-000000000001/reverse'],

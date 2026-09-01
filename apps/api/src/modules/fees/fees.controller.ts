@@ -150,8 +150,6 @@ export class FeesController {
     return this.query.paymentsToVerify(this.sid(), status ?? 'SUBMITTED');
   }
 
-  @Get('payments/pending-count') pendingCount() { return this.query.pendingCount(this.sid()); }
-
   @Post('payments/:id/verify') @HttpCode(200)
   verify(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
     return this.payments.verify(this.sid(), u.sub, id);
