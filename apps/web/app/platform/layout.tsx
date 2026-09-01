@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { href: '/platform/onboard', label: 'Add School', emoji: '➕' },
   { href: '/platform/jobs', label: 'Jobs', emoji: '💼' },
   { href: '/platform/connect', label: 'Connect', emoji: '🔗' },
+  { href: '/platform/remaining', label: 'Remaining work', emoji: '🧭' },
 ];
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
