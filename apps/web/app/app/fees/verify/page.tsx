@@ -81,6 +81,13 @@ function Verify() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const reverse = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api.post(`/manage/fees/payments/${id}/reverse`, { reason }),
+    onSuccess: () => { invalidate(); toast.success('Reversed — the ledger carries an opposing entry'); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const reject = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       api.post(`/manage/fees/payments/${id}/reject`, { reason }),
@@ -170,9 +177,10 @@ function Verify() {
           {selected && (
             <PaymentDetail
               p={selected}
-              busy={verify.isPending || reject.isPending}
+              busy={verify.isPending || reject.isPending || reverse.isPending}
               onVerify={() => verify.mutate(selected.id)}
               onReject={(reason) => reject.mutate({ id: selected.id, reason })}
+              onReverse={(reason) => reverse.mutate({ id: selected.id, reason })}
             />
           )}
         </div>
@@ -181,12 +189,24 @@ function Verify() {
   );
 }
 
+const REVERSAL_REASONS = [
+  'The cheque bounced.',
+  'Recorded against the wrong student.',
+  'A duplicate of a payment already recorded.',
+  'The bank returned the transfer.',
+];
+
 function PaymentDetail({
-  p, busy, onVerify, onReject,
-}: { p: PaymentRow; busy: boolean; onVerify: () => void; onReject: (reason: string) => void }) {
+  p, busy, onVerify, onReject, onReverse,
+}: {
+  p: PaymentRow; busy: boolean;
+  onVerify: () => void; onReject: (reason: string) => void; onReverse: (reason: string) => void;
+}) {
   const [rejecting, setRejecting] = useState(false);
+  const [reversing, setReversing] = useState(false);
   const [reason, setReason] = useState(REJECTION_REASONS[0]);
-  useEffect(() => { setRejecting(false); }, [p.id]);
+  const [revReason, setRevReason] = useState(REVERSAL_REASONS[0]);
+  useEffect(() => { setRejecting(false); setReversing(false); }, [p.id]);
 
   const match = p.amountMatchesBill;
 
@@ -268,6 +288,40 @@ function PaymentDetail({
             <button className="sk-btn" disabled={busy} onClick={() => setRejecting(true)}>
               <X size={14} /> Turn down…
             </button>
+          </div>
+        )}
+
+        {p.status === 'VERIFIED' && !reversing && (
+          <div className="flex flex-col gap-1">
+            <button className="sk-btn self-start" disabled={busy} onClick={() => setReversing(true)}>
+              Reverse this payment…
+            </button>
+            <p className="text-[10.5px]" style={{ color: 'var(--sk-ink-3)' }}>
+              For a bounced cheque, a duplicate, or money matched to the wrong child.
+              The original entry stays and an opposing one is posted beside it.
+            </p>
+          </div>
+        )}
+
+        {p.status === 'VERIFIED' && reversing && (
+          <div className="flex flex-col gap-2 rounded-[11px] border p-3"
+               style={{ borderColor: 'var(--sk-bad)', background: 'var(--sk-bad-tint)' }}>
+            <label className="sk-lab" htmlFor="reverse-reason" style={{ color: 'var(--sk-bad)' }}>
+              Why is it being reversed?
+            </label>
+            <select id="reverse-reason" className="sk-input" value={revReason}
+                    onChange={(e) => setRevReason(e.target.value)}>
+              {REVERSAL_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <p className="text-[10.5px]" style={{ color: 'var(--sk-bad)' }}>
+              The student&rsquo;s balance goes back up by {rupees(p.amountMinor)} and the receipt
+              is marked reversed. Nothing is deleted.
+            </p>
+            <div className="flex gap-2">
+              <button className="sk-btn" onClick={() => setReversing(false)}>Cancel</button>
+              <button className="sk-btn" data-variant="primary" disabled={busy}
+                      onClick={() => onReverse(revReason)}>Reverse it</button>
+            </div>
           </div>
         )}
 

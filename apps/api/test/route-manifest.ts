@@ -96,7 +96,6 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /manage/fees/payment-setup",
   "GET /manage/fees/payments",
   "GET /manage/fees/settings",
-  "GET /manage/fees/payments/pending-count",
   "GET /manage/fees/students",
   "GET /manage/fees/students/:id",
   "GET /manage/fees/summary",

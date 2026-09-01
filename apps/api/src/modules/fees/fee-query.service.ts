@@ -124,13 +124,6 @@ export class FeeQueryService {
     });
   }
 
-  /** How many are waiting — the badge on the nav item. */
-  async pendingCount(schoolId: string) {
-    return withTenant(schoolId, async (tx) => ({
-      pending: await tx.feePayment.count({ where: { schoolId, status: 'SUBMITTED' } }),
-    }));
-  }
-
   /**
    * The office's collection summary. Both clocks the pitch called for:
    * what was collected, and — once a gateway exists — what has settled.

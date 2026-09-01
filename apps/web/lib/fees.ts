@@ -289,3 +289,14 @@ export const STATUS_TONE: Record<StudentFeeStatus, 'good' | 'warn' | 'bad' | 'ne
   PARTIAL: 'warn',
   UNPAID: 'bad',
 };
+
+export interface Concession {
+  id: string;
+  percentBps: number | null;
+  amountMinor: number | null;
+  reason: string;
+  createdAt: string;
+  student: { id: string; firstName: string; lastName: string; admissionNo: string };
+  category: { id: string; name: string } | null;
+  term: { id: string; name: string } | null;
+}

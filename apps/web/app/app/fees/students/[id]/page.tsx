@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { RecordPaymentDialog } from '@/components/fees/record-payment-dialog';
 import { METHOD_LABEL, fmtDate, rupees, type StudentFees } from '@/lib/fees';
 
 type Tab = 'bills' | 'payments' | 'ledger';
@@ -25,6 +26,7 @@ export default function StudentFeeDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const [tab, setTab] = useState<Tab>('bills');
+  const [recording, setRecording] = useState(false);
 
   const q = useQuery({
     queryKey: ['fee-student', host, id], enabled: !!host && !!id, retry: false,
@@ -68,6 +70,13 @@ export default function StudentFeeDetailPage() {
           </div>
         </div>
       </header>
+
+      <div className="flex flex-wrap gap-2">
+        <button className="sk-btn" data-variant="primary" onClick={() => setRecording(true)}>
+          Record a payment
+        </button>
+        <Link href="/app/fees/verify" className="sk-btn">Verify desk</Link>
+      </div>
 
       <div className="flex flex-wrap gap-1.5">
         {([['bills', `Bills · ${d.invoices.length}`], ['payments', `Payments · ${d.payments.length}`], ['ledger', 'Ledger']] as [Tab, string][])
@@ -219,6 +228,10 @@ export default function StudentFeeDetailPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {recording && (
+        <RecordPaymentDialog student={d.student} invoices={d.invoices} onClose={() => setRecording(false)} />
       )}
 
       {unpaid.length > 0 && tab === 'bills' && (
