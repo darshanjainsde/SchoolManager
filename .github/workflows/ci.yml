@@ -1,4 +1,4 @@
-name: ci
+name: CI · Sckools
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    name: Sckools — lint, typecheck, boundary, build, unit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
