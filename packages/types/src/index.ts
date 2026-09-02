@@ -1122,6 +1122,82 @@ export interface MyReportCard {
   issuedAt: string;
 }
 
+// ── The Morning Bell ─────────────────────────────────────────────────────────
+// The principal's first look of the day, composed LIVE from tables that
+// already exist — no stored digest, no cron (the compute-don't-store rule).
+// Every line links to the screen that fixes it: the Bell is a table of
+// contents for the morning, not a report.
+
+/** `GET /manage/bell` — one composed read, IST day. */
+export interface MorningBell {
+  /** "Tuesday, 2 September" — composed server-side in IST. */
+  dateLabel: string;
+  /** Who is not in today, from the staff-attendance register. */
+  staffAbsent: { name: string; kind: 'TEACHER' | 'STAFF'; status: 'ABSENT' | 'ON_LEAVE' }[];
+  /** Today's substitution gaps nobody has covered yet. */
+  uncovered: { className: string; periodLabel: string; teacherName: string }[];
+  /** Gaps in the next 30 days still without a substitute — the early warning
+   *  the old dashboard alert carried; the Bell must not lose it. */
+  upcomingUncovered: number;
+  /** Student absence so far today. `worst` is the class that needs a call. */
+  students: {
+    absent: number;
+    marked: number;
+    worst: { className: string; absent: number } | null;
+  };
+  /** Null when the school does not run the FEES feature — the card omits the row. */
+  fees: {
+    yesterdayMinor: number;
+    monthMinor: number;
+    awaitingReview: number;
+  } | null;
+  /** What the day holds. */
+  today: {
+    holiday: string | null;
+    events: { title: string; time: string }[];
+  };
+  /** Queues with somebody waiting in them. */
+  waiting: {
+    leave: number;
+    registerChanges: number;
+    enquiries: number;
+  };
+}
+
+// ── Sckools TV ───────────────────────────────────────────────────────────────
+// The reception-screen loop: any TV with a browser and one URL. A VIEW over
+// data the school already maintains — the TV is never a thing to feed.
+
+/** `GET /public/tv?key=…` — everything one rotation shows. */
+export interface TvScreen {
+  school: {
+    name: string;
+    logoUrl: string | null;
+    /** The school's own two colours — the TV wears the website's identity. */
+    ps1: string;
+    ps2: string;
+    /** Active festival name from the site's festive theme, for the frame. */
+    festival: string | null;
+  };
+  dateLabel: string;
+  holiday: string | null;
+  /** School-wide notices, newest first. */
+  announcements: { title: string; body: string; when: string }[];
+  eventsToday: { title: string; time: string; venue: string | null }[];
+  eventsUpcoming: { title: string; when: string; venue: string | null }[];
+  /** First names + class — the lobby celebrates them, the way schools do. */
+  birthdays: { name: string; className: string | null }[];
+  /** Gallery picks for the ambient panel. */
+  gallery: string[];
+}
+
+/** `GET /manage/tv` — the admin's switch. */
+export interface TvStatus {
+  enabled: boolean;
+  /** Full display URL when enabled, ready to open on the TV. */
+  url: string | null;
+}
+
 // ── Fees, the family's side ─────────────────────────────────────────────────
 //
 // `GET /me/fees` and `GET /me/fees/receipts/:paymentId` are rendered by BOTH

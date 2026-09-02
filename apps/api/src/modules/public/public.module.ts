@@ -6,10 +6,12 @@ import { PublicSiteController } from './public-site.controller';
 import { EnquiryService } from './enquiry.service';
 import { EnquiryController } from './enquiry.controller';
 import { EnquiryAdminController } from './enquiry-admin.controller';
+import { TvService } from './tv.service';
+import { TvAdminController, TvController } from './tv.controller';
 
 @Module({
   imports: [FeaturesModule, CommunityModule],
-  controllers: [PublicSiteController, EnquiryController, EnquiryAdminController],
-  providers: [PublicSiteService, EnquiryService],
+  controllers: [PublicSiteController, EnquiryController, EnquiryAdminController, TvController, TvAdminController],
+  providers: [PublicSiteService, EnquiryService, TvService],
 })
 export class PublicModule {}

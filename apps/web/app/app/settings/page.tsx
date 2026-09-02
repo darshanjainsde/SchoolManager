@@ -7,6 +7,7 @@ import type { ClassNoteVisibilityValue } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { EmailSettingsCard } from './email-card';
+import { TvCard } from './tv-card';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1028,6 +1029,8 @@ export default function SettingsPage() {
 
         {/* ── Email ─────────────────────────────────────────────────────── */}
         <EmailSettingsCard />
+
+        <TvCard />
 
         {/* ── Class notes visibility ────────────────────────────────────── */}
         <ClassNoteVisibilityCard
