@@ -1,7 +1,8 @@
 'use client';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { GraduationCap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import type { PublishedResult } from '@skoolos/types';
+import { FileBadge, GraduationCap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import type { MyReportCard, PublishedResult } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
@@ -97,6 +98,19 @@ export default function PortalResultsPage() {
     staleTime: 60_000,
   });
 
+  /**
+   * Issued report cards, when the school runs the Press. Most schools do not
+   * yet, and the route then answers 403 — so this stays quiet on any error
+   * rather than wedging the results page a family opened for marks.
+   */
+  const cards = useQuery({
+    queryKey: ['my-report-cards', host],
+    queryFn: () => api.get<MyReportCard[]>('/me/report-cards'),
+    enabled: !!host,
+    retry: false,
+    staleTime: 60_000,
+  });
+
   // The API returns newest-first; the chart wants oldest-first.
   const results = data ?? [];
   const trendPoints = [...results]
@@ -109,6 +123,28 @@ export default function PortalResultsPage() {
         <h1>Results</h1>
         <p>Your published test results, with how the class did overall.</p>
       </header>
+
+      {cards.data && cards.data.length > 0 && (
+        <div className="sk-card">
+          <div className="sk-card-b">
+            {cards.data.map((c) => (
+              <Link
+                key={c.id}
+                href={`/portal/results/report-card/${c.id}`}
+                className="sk-entity sk-press"
+              >
+                <span className="av" style={{ background: 'var(--sk-brand)' }}>
+                  <FileBadge size={18} aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="nm">{c.windowName} report card{c.academicYearName ? ` · ${c.academicYearName}` : ''}</div>
+                  <div className="meta">Issued by the school office · {c.serial}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isLoading && <p className="sk-state">Loading results…</p>}
       {error && <p className="sk-state err">{(error as Error).message}</p>}

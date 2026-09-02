@@ -490,6 +490,9 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
 .sk-btn[data-icon][data-tone='bad'] { color: var(--sk-bad); }
 .sk-btn[data-icon][data-tone='bad']:hover:not(:disabled) { border-color: var(--sk-bad); }
 .sk-btn:hover { border-color: var(--sk-brand); }
+/* Selected state lives HERE, off aria-pressed, never in a sibling inline
+   style — state in two places is how the look and the state disagree. */
+.sk-btn[aria-pressed='true'] { border-color: var(--sk-brand); background: var(--sk-brand-tint); color: var(--sk-brand-2); }
 .sk-btn[data-variant="primary"] { background: var(--sk-brand); color: #fff; border-color: transparent; }
 @media (prefers-color-scheme: dark) { .sk-btn[data-variant="primary"] { color: #211d45; } }
 .sk-btn[data-variant="primary"]:hover { filter: brightness(1.06); }

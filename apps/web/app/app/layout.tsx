@@ -3,7 +3,9 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, Armchair, BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ChevronsLeft, ChevronsRight, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Handshake, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, Wallet, X } from 'lucide-react';
+import { ArrowUpRight, Armchair, BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ChevronsLeft, ChevronsRight, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Handshake, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, Wallet, X,
+  Printer,
+} from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -36,6 +38,7 @@ const NAV_ITEMS: {
   { href: '/app/staff-attendance', label: 'Staff attendance', icon: ClipboardList, requiredFeature: 'MANAGEMENT' },
   { href: '/app/students', label: 'Students', icon: Users, requiredFeature: 'MANAGEMENT' },
   { href: '/app/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' },
+  { href: '/app/press', label: 'The Press', icon: Printer, requiredFeature: 'PRESS' },
   { href: '/app/timetable', label: 'Timetable', icon: CalendarDays, requiredFeature: 'MANAGEMENT' },
   { href: '/app/exam-hall', label: 'Exam Hall', icon: Armchair, requiredFeature: 'MANAGEMENT' },
   { href: '/app/availability', label: 'Availability', icon: Clock, requiredFeature: 'MANAGEMENT' },

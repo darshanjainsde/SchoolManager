@@ -143,6 +143,18 @@ export type ErrorCode =
   | 'LIBRARY_FINE_SETTLED'
   /** A room with that name already exists at this school — pair with 409. */
   | 'ROOM_NAME_TAKEN'
+  // ─── The Press (report cards + certificates) ──────────────────────────────
+  /** A TC asked for while the fee ledger shows a balance. Re-send with
+   *  `duesOverride: true` to issue anyway — the register records the override.
+   *  Pair with 409. */
+  | 'DUES_OUTSTANDING'
+  /** A report window with that name already exists for the year — 409. */
+  | 'WINDOW_EXISTS'
+  /** A serial the atomic allocator should make impossible collided anyway —
+   *  a counter was reset by hand. Pair with 409; the retry gets a fresh one. */
+  | 'SERIAL_TAKEN'
+  /** Voiding an entry that is already struck through — pair with 409. */
+  | 'ALREADY_VOIDED'
   /** The room still has saved seating plans; deleting it would take them too — pair with 409. */
   | 'ROOM_IN_USE'
   | 'VALIDATION'
