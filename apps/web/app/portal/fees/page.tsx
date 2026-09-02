@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Check, Copy, Upload } from 'lucide-react';
+import Link from 'next/link';
+import { Check, Copy, Receipt, Upload } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
@@ -201,12 +202,29 @@ export default function PortalFeesPage() {
               <div key={p.id} className="sk-row">
                 <div className="min-w-0 flex-1">
                   <div className="nm">{rupees(p.amountMinor)} · {METHOD_LABEL[p.method]}</div>
-                  <div className="meta">
-                    {fmtDate(p.paidOn)}
-                    {p.receiptNumber && ` · receipt ${p.receiptNumber}`}
-                  </div>
+                  <div className="meta">{fmtDate(p.paidOn)}</div>
+                  {/* The school's own words about this payment, verbatim. A
+                      clerk types it; React renders it as text. */}
+                  {p.ackNote && (
+                    <div className="mt-1 text-[11.5px] leading-snug" style={{ color: 'var(--sk-ink-2)' }}>
+                      “{p.ackNote}”
+                    </div>
+                  )}
                   {p.rejectionReason && (
                     <div className="mt-0.5 text-[11px]" style={{ color: 'var(--sk-bad)' }}>{p.rejectionReason}</div>
+                  )}
+                  {/* A receipt exists only once the school has confirmed the
+                      money, so the link appears exactly when the document does
+                      — never as a dead end onto a 404. */}
+                  {p.receiptNumber && (
+                    <Link
+                      href={`/portal/fees/receipt/${p.id}`}
+                      className="mt-1 inline-flex w-fit items-center gap-1 text-[11.5px] font-semibold"
+                      style={{ color: 'var(--sk-brand-2)' }}
+                    >
+                      <Receipt size={12} aria-hidden="true" />
+                      Receipt {p.receiptNumber}
+                    </Link>
                   )}
                 </div>
                 <span className="sk-pill" data-tone={

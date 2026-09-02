@@ -297,15 +297,58 @@ describe('fees — the money loop', () => {
     expect(row.student.admissionNo).toBe('ADM-2419');
   });
 
-  it('verifies: ledger, allocation and receipt land together', async () => {
+  it('verifies: ledger, allocation and receipt land together — and carries the school’s note', async () => {
     const res = await request(app.getHttpServer())
-      .post(`/manage/fees/payments/${paymentId}/verify`).set(admin()).expect(200);
+      .post(`/manage/fees/payments/${paymentId}/verify`).set(admin())
+      .send({ note: 'Received by NEFT on 28 Aug. Thank you.' })
+      .expect(200);
     expect(res.body.receipt.number).toMatch(/^RCP\/\d{4}\/00001$/);
 
     const mine = await request(app.getHttpServer()).get('/me/fees').set(as(studentToken)).expect(200);
     expect(mine.body.balanceMinor).toBe(0);
     expect(mine.body.invoices[0].isPaid).toBe(true);
     expect(mine.body.payments[0].receiptNumber).toBe(res.body.receipt.number);
+    // The acknowledgement reaches the family verbatim — that is its whole job.
+    expect(mine.body.payments[0].ackNote).toBe('Received by NEFT on 28 Aug. Thank you.');
+  });
+
+  it('gives the family a receipt document that accounts for every paisa', async () => {
+    const mine = await request(app.getHttpServer()).get('/me/fees').set(as(studentToken)).expect(200);
+    const paid = mine.body.payments[0];
+
+    const r = await request(app.getHttpServer())
+      .get(`/me/fees/receipts/${paid.id}`).set(as(studentToken)).expect(200);
+
+    expect(r.body.receiptNumber).toBe(paid.receiptNumber);
+    expect(r.body.student.admissionNo).toBe('ADM-2419');
+    expect(r.body.payment.ackNote).toBe('Received by NEFT on 28 Aug. Thank you.');
+    // Named by CATEGORY, not just by bill — the receipt has to say what the
+    // money actually cleared, the same transparency the bill breakdown gives.
+    expect(r.body.allocations.length).toBeGreaterThan(0);
+    expect(r.body.allocations[0].categoryName).toEqual(expect.any(String));
+    const allocated = r.body.allocations.reduce((a: number, x: { amountMinor: number }) => a + x.amountMinor, 0);
+    expect(allocated + r.body.unallocatedMinor).toBe(r.body.payment.amountMinor);
+  });
+
+  it('reprints the same receipt for the office, from the school-scoped route', async () => {
+    const mine = await request(app.getHttpServer()).get('/me/fees').set(as(studentToken)).expect(200);
+    const paid = mine.body.payments[0];
+    const r = await request(app.getHttpServer())
+      .get(`/manage/fees/receipts/${paid.id}`).set(admin()).expect(200);
+    expect(r.body.receiptNumber).toBe(paid.receiptNumber);
+  });
+
+  it('has no receipt to give for a payment nobody has accepted', async () => {
+    const claim = await request(app.getHttpServer())
+      .post('/me/fees/submit').set(as(studentToken))
+      .field('studentId', studentId)
+      .field('method', 'UPI').field('amountMinor', '100')
+      .field('paidOn', '2026-08-30').field('reference', 'NO-RECEIPT-YET')
+      .expect(201);
+    // A blank sheet headed "Receipt" is exactly what a family would screenshot
+    // as proof of something that never happened.
+    await request(app.getHttpServer())
+      .get(`/me/fees/receipts/${claim.body.id}`).set(as(studentToken)).expect(404);
   });
 
   it('will not verify the same payment twice', async () => {

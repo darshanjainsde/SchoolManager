@@ -48,6 +48,7 @@ const OFFICE_ROUTES: [method: 'get' | 'post' | 'put' | 'delete', path: string][]
   ['get', '/manage/fees/summary'],
   ['get', '/manage/fees/students/00000000-0000-0000-0000-000000000001'],
   ['get', '/manage/fees/students'],
+  ['get', '/manage/fees/receipts/00000000-0000-0000-0000-000000000001'],
 ];
 
 /** Every `/me/fees/*` route: the signed-in student/parent only. */
@@ -56,6 +57,7 @@ const PORTAL_ROUTES: [method: 'get' | 'post', path: string][] = [
   ['get', '/me/fees/how-to-pay'],
   ['get', '/me/fees/bank-instructions'],
   ['post', '/me/fees/submit'],
+  ['get', '/me/fees/receipts/00000000-0000-0000-0000-000000000001'],
 ];
 
 describe('fees authorization', () => {

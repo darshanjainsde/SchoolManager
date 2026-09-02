@@ -1121,3 +1121,125 @@ export interface MyReportCard {
   academicYearName: string;
   issuedAt: string;
 }
+
+// ── Fees, the family's side ─────────────────────────────────────────────────
+//
+// `GET /me/fees` and `GET /me/fees/receipts/:paymentId` are rendered by BOTH
+// the web portal and the mobile app. These types are the contract between
+// them: a field the API stops sending breaks one compile rather than two
+// screens that quietly disagree about what a family owes.
+//
+// Every amount is `…Minor` — paise, an integer. Rupee conversion happens once,
+// at the render edge of each app, never in transit.
+
+export const FEE_PAYMENT_STATUSES = ['SUBMITTED', 'VERIFIED', 'REJECTED', 'REVERSED'] as const;
+export type FeePaymentStatus = (typeof FEE_PAYMENT_STATUSES)[number];
+
+export const FEE_PAYMENT_METHODS = [
+  'UPI', 'NEFT_IMPS', 'CHEQUE', 'CASH', 'CARD', 'NETBANKING', 'OTHER',
+] as const;
+export type FeePaymentMethod = (typeof FEE_PAYMENT_METHODS)[number];
+
+/** One charge on a bill, as the family is shown it. */
+export interface StudentFeeInvoiceLine {
+  categoryName: string;
+  categoryDescription: string;
+  grossMinor: number;
+  concessionMinor: number;
+  netMinor: number;
+  concessionReason: string | null;
+  /** False for a state-reimbursed line (RTE) — it is billed but not chased. */
+  isCollectible: boolean;
+}
+
+export interface StudentFeeInvoice {
+  id: string;
+  number: string;
+  termName: string;
+  dueDate: string;
+  totalMinor: number;
+  paidMinor: number;
+  /** Owed on the bill itself, before any late fee. */
+  principalDueMinor: number;
+  lateFeeMinor: number;
+  /** What the family actually has to send today: principal + late fee. */
+  dueMinor: number;
+  isPaid: boolean;
+  isOverdue: boolean;
+  lines: StudentFeeInvoiceLine[];
+}
+
+export interface StudentFeePayment {
+  id: string;
+  status: FeePaymentStatus;
+  method: FeePaymentMethod;
+  amountMinor: number;
+  providerRef: string | null;
+  paidOn: string;
+  submittedAt: string;
+  verifiedAt: string | null;
+  /** Shown verbatim when a claim was refused. */
+  rejectionReason: string | null;
+  /** The school's acknowledgement, in its own words. Verbatim, as TEXT. */
+  ackNote: string | null;
+  /** Present exactly when a receipt has been issued, i.e. status VERIFIED. */
+  receiptNumber: string | null;
+}
+
+export interface StudentFeeLedgerEntry {
+  kind: 'DEBIT' | 'CREDIT';
+  amountMinor: number;
+  narration: string;
+  occurredAt: string;
+}
+
+/** `GET /me/fees` — mirrors FeeQueryService.studentFees. */
+export interface StudentFees {
+  student: { id: string; name: string; admissionNo: string; className: string | null };
+  /** Positive means owed. Negative is an advance sitting with the school. */
+  balanceMinor: number;
+  billedMinor: number;
+  paidMinor: number;
+  /** One line of plain English, or null when the school charges no late fee. */
+  lateFeeRule: string | null;
+  invoices: StudentFeeInvoice[];
+  payments: StudentFeePayment[];
+  ledger: StudentFeeLedgerEntry[];
+}
+
+/** One line of a receipt: what this money cleared, by fee category. */
+export interface FeeReceiptAllocation {
+  invoiceNumber: string;
+  termName: string;
+  categoryName: string;
+  amountMinor: number;
+}
+
+/**
+ * `GET /me/fees/receipts/:paymentId` and `GET /manage/fees/receipts/:paymentId`
+ * — the receipt as a document. Issued only against a VERIFIED payment; any
+ * other state is a 404 rather than a blank sheet headed "Receipt".
+ */
+export interface FeeReceiptDocument {
+  receiptNumber: string;
+  issuedAt: string;
+  school: {
+    name: string;
+    addressLines: string[];
+    phone: string | null;
+    email: string | null;
+  };
+  student: { name: string; admissionNo: string; className: string | null };
+  payment: {
+    id: string;
+    amountMinor: number;
+    method: FeePaymentMethod;
+    providerRef: string | null;
+    paidOn: string;
+    verifiedAt: string | null;
+    ackNote: string | null;
+  };
+  allocations: FeeReceiptAllocation[];
+  /** Received but not yet applied to a bill, so the page adds up. */
+  unallocatedMinor: number;
+}

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Receipt } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { RecordPaymentDialog } from '@/components/fees/record-payment-dialog';
@@ -172,10 +172,27 @@ export default function StudentFeeDetailPage() {
                     <div className="meta">
                       paid {fmtDate(p.paidOn)}
                       {p.providerRef && ` · ref ${p.providerRef}`}
-                      {p.receiptNumber && ` · receipt ${p.receiptNumber}`}
                     </div>
+                    {p.ackNote && (
+                      <div className="mt-1 text-[11.5px] leading-snug" style={{ color: 'var(--sk-ink-2)' }}>
+                        “{p.ackNote}”
+                      </div>
+                    )}
                     {p.rejectionReason && (
                       <div className="mt-0.5 text-[11px]" style={{ color: 'var(--sk-bad)' }}>{p.rejectionReason}</div>
+                    )}
+                    {/* The counter's reprint. A parent who lost their copy
+                        asks here, and the clerk should not have to sign in as
+                        them to produce one. */}
+                    {p.receiptNumber && (
+                      <Link
+                        href={`/app/fees/receipt/${p.id}`}
+                        className="mt-1 inline-flex w-fit items-center gap-1 text-[11.5px] font-semibold"
+                        style={{ color: 'var(--sk-brand-2)' }}
+                      >
+                        <Receipt size={12} aria-hidden="true" />
+                        Receipt {p.receiptNumber}
+                      </Link>
                     )}
                   </div>
                   <span className="sk-pill" data-tone={

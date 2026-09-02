@@ -19,7 +19,7 @@ import { FeeSetupService } from './fee-setup.service';
 import {
   RejectPaymentDto, ReversePaymentDto, SaveBankDetailDto, SaveCategoryDto,
   SaveConcessionDto, SaveGridDto, SaveProviderConfigDto, SaveSettingsDto, SaveTermsDto,
-  SubmitPaymentDto,
+  SubmitPaymentDto, VerifyPaymentDto,
 } from './fees.dto';
 
 /** 5 MB. A phone screenshot is well under this; a photo of a printed slip fits too. */
@@ -150,9 +150,27 @@ export class FeesController {
     return this.query.paymentsToVerify(this.sid(), status ?? 'SUBMITTED');
   }
 
+  /**
+   * Accept the money — and, optionally, say something about it.
+   *
+   * The note is the school's acknowledgement in its own words and reaches the
+   * family verbatim on the receipt. Optional: the receipt number and the
+   * "Confirmed" state already carry the substance, and forcing a sentence out
+   * of a clerk clearing forty transfers would only produce forty blank ones.
+   */
   @Post('payments/:id/verify') @HttpCode(200)
-  verify(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
-    return this.payments.verify(this.sid(), u.sub, id);
+  verify(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: VerifyPaymentDto,
+    @CurrentUser() u: SchoolJwtPayload,
+  ) {
+    return this.payments.verify(this.sid(), u.sub, id, dto.note);
+  }
+
+  /** The receipt document, for reprinting at the counter. */
+  @Get('receipts/:paymentId')
+  receipt(@Param('paymentId', ParseUUIDPipe) paymentId: string) {
+    return this.query.receipt(this.sid(), paymentId);
   }
 
   @Post('payments/:id/reject') @HttpCode(200)

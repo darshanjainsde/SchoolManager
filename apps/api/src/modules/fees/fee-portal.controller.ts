@@ -1,5 +1,6 @@
 import {
-  Body, Controller, Get, HttpCode, Post, Query, UploadedFile, UseGuards, UseInterceptors,
+  Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UploadedFile, UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
@@ -33,6 +34,16 @@ export class FeePortalController {
   @Get('bank-instructions')
   bankInstructions(@CurrentUser() u: SchoolJwtPayload, @Query('invoiceId') invoiceId?: string) {
     return this.portal.bankInstructions(u.sub, invoiceId);
+  }
+
+  /**
+   * The receipt document for one of this family's own payments. 404 for a
+   * payment that is not theirs, and for one no receipt has been issued
+   * against — see `FeeQueryService.receipt`.
+   */
+  @Get('receipts/:paymentId')
+  receipt(@CurrentUser() u: SchoolJwtPayload, @Param('paymentId', ParseUUIDPipe) paymentId: string) {
+    return this.portal.receipt(u.sub, paymentId);
   }
 
   /**

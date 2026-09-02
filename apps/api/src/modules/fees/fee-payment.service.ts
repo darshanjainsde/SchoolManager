@@ -115,7 +115,7 @@ export class FeePaymentService {
    *
    * The notification is deliberately NOT in here — see `verifyAndNotify`.
    */
-  async verify(schoolId: string, actorId: string, paymentId: string) {
+  async verify(schoolId: string, actorId: string, paymentId: string, note?: string) {
     return withTenant(schoolId, async (tx) => {
       const payment = await tx.feePayment.findFirst({
         where: { id: paymentId, schoolId },
@@ -132,7 +132,15 @@ export class FeePaymentService {
 
       const updated = await tx.feePayment.update({
         where: { id: paymentId },
-        data: { status: 'VERIFIED', verifiedBy: actorId, verifiedAt: new Date() },
+        data: {
+          status: 'VERIFIED',
+          verifiedBy: actorId,
+          verifiedAt: new Date(),
+          // Trimmed, and an empty note stays NULL rather than becoming "" —
+          // the portal decides whether to render the acknowledgement line by
+          // testing the field, and a blank string would draw an empty one.
+          ackNote: note?.trim() ? note.trim() : null,
+        },
       });
 
       // Charge any late fee BEFORE the payment credit, so the balance nets out
@@ -176,7 +184,7 @@ export class FeePaymentService {
 
       await this.audit(tx, schoolId, actorId, 'PAYMENT_VERIFIED', 'FeePayment', payment.id, {
         status: payment.status,
-      }, { status: 'VERIFIED', receipt: receipt.number });
+      }, { status: 'VERIFIED', receipt: receipt.number, ackNote: updated.ackNote });
 
       this.logger.log({ schoolId, paymentId, receipt: receipt.number }, 'fee payment verified');
       return { payment: updated, receipt };

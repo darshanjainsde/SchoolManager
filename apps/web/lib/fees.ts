@@ -44,9 +44,33 @@ export function fmtDay(iso: string | Date): string {
 // ── API shapes ───────────────────────────────────────────────────────────────
 
 export type FeeFrequency = 'PER_TERM' | 'ANNUAL' | 'ONE_TIME';
-export type FeePaymentStatus = 'SUBMITTED' | 'VERIFIED' | 'REJECTED' | 'REVERSED';
-export type FeePaymentMethod =
-  | 'UPI' | 'NEFT_IMPS' | 'CHEQUE' | 'CASH' | 'CARD' | 'NETBANKING' | 'OTHER';
+
+/**
+ * The family-facing shapes live in `@skoolos/types` because the mobile app
+ * renders the same two endpoints. Re-exported here so every existing
+ * `from '@/lib/fees'` import keeps working and there is still exactly one
+ * declaration of each.
+ */
+import type {
+  FeePaymentStatus,
+  FeePaymentMethod,
+  StudentFees,
+  StudentFeeInvoice,
+  StudentFeePayment,
+  FeeReceiptDocument,
+  FeeReceiptAllocation,
+} from '@skoolos/types';
+
+export type {
+  FeePaymentStatus,
+  FeePaymentMethod,
+  StudentFees,
+  StudentFeeInvoice,
+  StudentFeePayment,
+  FeeReceiptDocument,
+  FeeReceiptAllocation,
+};
+export { FEE_PAYMENT_STATUSES, FEE_PAYMENT_METHODS } from '@skoolos/types';
 
 export const METHOD_LABEL: Record<FeePaymentMethod, string> = {
   UPI: 'UPI',
@@ -149,6 +173,8 @@ export interface PaymentRow {
   submittedAt: string;
   verifiedAt: string | null;
   rejectionReason: string | null;
+  /** The school's acknowledgement, shown back on an accepted payment. */
+  ackNote: string | null;
   receiptNumber: string | null;
   proofUrl: string | null;
   student: { id: string; name: string; admissionNo: string; className: string | null };
@@ -192,33 +218,6 @@ export interface PaymentSetup {
     branch: string | null; upiId: string | null; upiQrUrl: string | null;
     instructions: string | null; isVisible: boolean;
   } | null;
-}
-
-export interface StudentFees {
-  student: { id: string; name: string; admissionNo: string; className: string | null };
-  balanceMinor: number;
-  billedMinor: number;
-  paidMinor: number;
-  /** One line of plain English, or null when the school charges no late fee. */
-  lateFeeRule: string | null;
-  invoices: {
-    id: string; number: string; termName: string; dueDate: string;
-    totalMinor: number; paidMinor: number;
-    /** Owed on the bill itself, before any late fee. */
-    principalDueMinor: number;
-    lateFeeMinor: number;
-    /** What the parent has to send today — principal plus late fee. */
-    dueMinor: number;
-    isPaid: boolean; isOverdue: boolean;
-    lines: PreviewLine[];
-  }[];
-  payments: {
-    id: string; status: FeePaymentStatus; method: FeePaymentMethod;
-    amountMinor: number; providerRef: string | null; paidOn: string;
-    submittedAt: string; verifiedAt: string | null;
-    rejectionReason: string | null; receiptNumber: string | null;
-  }[];
-  ledger: { kind: 'DEBIT' | 'CREDIT'; amountMinor: number; narration: string; occurredAt: string }[];
 }
 
 export interface HowToPay {

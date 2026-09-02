@@ -1,0 +1,279 @@
+/* ============================================================================
+   The fee receipt — the paper a family keeps
+   ============================================================================
+   Same three iron rules as press-print.css and exam-hall/print.css, and for
+   the same reasons:
+
+   1. Literal ink, not theme tokens. A receipt is paper in both themes; a
+      family that switches their phone to dark mode must not get a black one.
+   2. Millimetres and points, never pixels. A5 is a physical fact.
+   3. Hairline borders, never box-shadow — Chrome's print-to-PDF flattens a
+      blurred shadow into a solid grey slab.
+
+   A5, not A4: a fee receipt is a half sheet everywhere in India, it is what
+   fits a receipt book, and two print to a page. The sheet still fills its
+   page — `.rc-sheet` is a column so the footer anchors to the bottom.
+
+   `#fee-receipt-print` is hidden on screen; `body.fee-receipt-printing` is
+   worn only for the length of the print, so a stray Cmd+P still prints the
+   page the person is actually looking at. Lifted verbatim from the Press,
+   which measured why a nested container prints blank pages.
+   ========================================================================== */
+
+#fee-receipt-print {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A5;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body.fee-receipt-printing > * {
+    display: none !important;
+  }
+  body.fee-receipt-printing > #fee-receipt-print {
+    display: block !important;
+  }
+
+  #fee-receipt-print .rc-sheet {
+    break-after: page;
+    page-break-after: always;
+    border: none !important;
+  }
+  #fee-receipt-print .rc-sheet:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+/* ── the sheet ───────────────────────────────────────────────────────────── */
+
+.rc-sheet {
+  width: 148mm;
+  min-height: 210mm;
+  background: #ffffff;
+  color: #191627;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  padding: 12mm 12mm 10mm;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── letterhead ──────────────────────────────────────────────────────────── */
+
+.rc-head {
+  text-align: center;
+  border-bottom: 1.2pt solid #191627;
+  padding-bottom: 3mm;
+}
+.rc-school {
+  font-size: 15pt;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.rc-addr {
+  font-size: 7.5pt;
+  color: #5b5772;
+  margin-top: 1mm;
+  line-height: 1.45;
+}
+.rc-title {
+  margin-top: 3mm;
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ── the identifying strip: receipt no. + date ───────────────────────────── */
+
+.rc-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 6mm;
+  font-size: 8.5pt;
+  margin-top: 4mm;
+}
+.rc-meta b {
+  font-weight: 700;
+}
+
+/* ── who it is for ───────────────────────────────────────────────────────── */
+
+.rc-who {
+  margin-top: 4mm;
+  border: 0.6pt solid #c9c7d6;
+  border-radius: 1.5mm;
+  padding: 3mm 3.5mm;
+  font-size: 9pt;
+  line-height: 1.6;
+}
+.rc-who .rc-name {
+  font-size: 11pt;
+  font-weight: 700;
+}
+.rc-who .rc-sub {
+  color: #5b5772;
+  font-size: 8.5pt;
+}
+
+/* ── what the money cleared ──────────────────────────────────────────────── */
+
+.rc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4mm;
+  font-size: 8.5pt;
+}
+.rc-table th {
+  text-align: left;
+  font-size: 7.5pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5b5772;
+  font-weight: 700;
+  border-bottom: 0.6pt solid #191627;
+  padding: 0 0 1.5mm;
+}
+.rc-table td {
+  padding: 1.8mm 0;
+  border-bottom: 0.4pt solid #e4e2ec;
+  vertical-align: top;
+}
+.rc-table .rc-amt {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rc-table .rc-for {
+  color: #5b5772;
+  font-size: 7.5pt;
+}
+.rc-total td {
+  border-bottom: none;
+  border-top: 1.2pt solid #191627;
+  padding-top: 2.5mm;
+  font-size: 11pt;
+  font-weight: 700;
+}
+
+/* ── how it was paid ─────────────────────────────────────────────────────── */
+
+.rc-how {
+  margin-top: 4mm;
+  font-size: 8.5pt;
+  line-height: 1.7;
+}
+.rc-how .rc-k {
+  color: #5b5772;
+  display: inline-block;
+  min-width: 26mm;
+}
+
+/* ── the school's own words ──────────────────────────────────────────────── */
+
+.rc-note {
+  margin-top: 4mm;
+  border-left: 1.2pt solid #191627;
+  padding: 1mm 0 1mm 3mm;
+  font-size: 8.5pt;
+  line-height: 1.6;
+  /* User content. Long unbroken input must not run off the sheet. */
+  overflow-wrap: anywhere;
+}
+.rc-note .rc-k {
+  display: block;
+  font-size: 7pt;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5b5772;
+  margin-bottom: 0.8mm;
+}
+
+/* ── footer, anchored to the bottom of the sheet ─────────────────────────── */
+
+.rc-foot {
+  margin-top: auto;
+  padding-top: 6mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 6mm;
+}
+.rc-sign {
+  text-align: center;
+  font-size: 7.5pt;
+  color: #5b5772;
+  border-top: 0.6pt solid #191627;
+  padding-top: 1.2mm;
+  min-width: 42mm;
+}
+.rc-comp {
+  font-size: 6.5pt;
+  color: #5b5772;
+  line-height: 1.5;
+  max-width: 74mm;
+}
+
+/* ── on-screen preview ───────────────────────────────────────────────────────
+   The same markup, scaled. The preview IS the sheet, smaller — it can never
+   show something the printer would not. */
+
+.rc-preview {
+  /* One knob. Both the transform and the reserved box read it, so they cannot
+     drift apart — which is the whole bug below. */
+  --rc-scale: 0.92;
+  overflow: auto;
+  border: 1px solid var(--sk-line);
+  border-radius: var(--sk-r);
+  background: var(--sk-bg-2);
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+/* A transform does NOT change layout size: a sheet scaled to 62% still
+   occupies its full 148mm, so on a phone the container scrolled sideways and
+   showed a receipt sliced down the middle ("av Sharma", "VED TOWARDS") with
+   nothing to say it could be dragged. Measured in a 360px column, not guessed.
+   Fixed by reserving the SCALED box on both axes — which needs the origin at
+   top LEFT, since a centre origin would then push the sheet out of its own
+   reserved width. `.rc-preview`'s justify-content does the centring instead. */
+.rc-preview .rc-zoom {
+  /* The wrapper only RESERVES the scaled box; the transform goes on the sheet
+     inside it. Putting both on this element scales the reserved width a second
+     time, which happens to land in the right place and is impossible to reason
+     about the next time someone changes the number. */
+  width: calc(148mm * var(--rc-scale));
+  height: calc(210mm * var(--rc-scale));
+  flex: none;
+}
+.rc-preview .rc-zoom > .rc-sheet {
+  transform: scale(var(--rc-scale));
+  transform-origin: top left;
+}
+.rc-preview .rc-sheet {
+  border: 1px solid #d8d7e4;
+}
+
+/* 148mm ≈ 559px, so 0.56 lands at ~313px — inside a 360px phone even after
+   this container's padding. */
+@media (max-width: 640px) {
+  .rc-preview {
+    --rc-scale: 0.56;
+    padding: 8px;
+  }
+}
