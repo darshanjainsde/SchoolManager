@@ -24,6 +24,9 @@ export const AUTHZ_REVIEWED: string[] = [
   // caller's-own-JWT (another family's card answers 404, asserted with two
   // seeded students); and the PRESS override (no tier grants it) gates the
   // whole module — a PRO school without it 403s even as an admin.
+  // management-authz.e2e-spec.ts "the Morning Bell": admin reads it; teacher,
+  // staff, student and anonymous are each refused.
+  "GET /manage/bell",
   "GET /manage/press/years",
   "GET /manage/press/classes",
   "GET /manage/press/students",

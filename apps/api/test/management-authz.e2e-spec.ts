@@ -191,6 +191,31 @@ describe('management authorization', () => {
   // Found while adding the LIBRARIAN role: minting a console login for someone
   // whose whole job is at a desk outside the console is what made "which
   // routes does a non-admin token actually reach" worth answering.
+  describe('the Morning Bell — the principal reads it, nobody else', () => {
+    // It aggregates fee totals and every queue in one response; no narrower
+    // role can see all of that anywhere else, so none may see it here.
+    it('rings for the SCHOOL_ADMIN', async () => {
+      const res = await request(app.getHttpServer()).get('/manage/bell').set(as(adminToken));
+      expect([401, 403]).not.toContain(res.status);
+    });
+
+    it('a TEACHER cannot read it', async () => {
+      await request(app.getHttpServer()).get('/manage/bell').set(as(teacherToken)).expect(403);
+    });
+
+    it('a STAFF login cannot read it', async () => {
+      await request(app.getHttpServer()).get('/manage/bell').set(as(staffToken)).expect(403);
+    });
+
+    it('a STUDENT cannot read it', async () => {
+      await request(app.getHttpServer()).get('/manage/bell').set(as(studentToken)).expect(403);
+    });
+
+    it('anonymous cannot read it', async () => {
+      await request(app.getHttpServer()).get('/manage/bell').set({ 'X-Skoolos-Host': host }).expect(401);
+    });
+  });
+
   describe('staff records — every route is SCHOOL_ADMIN-only', () => {
     it('a STUDENT cannot list staff', async () => {
       await request(app.getHttpServer())
