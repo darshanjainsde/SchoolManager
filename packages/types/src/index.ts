@@ -1121,3 +1121,45 @@ export interface MyReportCard {
   academicYearName: string;
   issuedAt: string;
 }
+
+// ── The Morning Bell ─────────────────────────────────────────────────────────
+// The principal's first look of the day, composed LIVE from tables that
+// already exist — no stored digest, no cron (the compute-don't-store rule).
+// Every line links to the screen that fixes it: the Bell is a table of
+// contents for the morning, not a report.
+
+/** `GET /manage/bell` — one composed read, IST day. */
+export interface MorningBell {
+  /** "Tuesday, 2 September" — composed server-side in IST. */
+  dateLabel: string;
+  /** Who is not in today, from the staff-attendance register. */
+  staffAbsent: { name: string; kind: 'TEACHER' | 'STAFF'; status: 'ABSENT' | 'ON_LEAVE' }[];
+  /** Today's substitution gaps nobody has covered yet. */
+  uncovered: { className: string; periodLabel: string; teacherName: string }[];
+  /** Gaps in the next 30 days still without a substitute — the early warning
+   *  the old dashboard alert carried; the Bell must not lose it. */
+  upcomingUncovered: number;
+  /** Student absence so far today. `worst` is the class that needs a call. */
+  students: {
+    absent: number;
+    marked: number;
+    worst: { className: string; absent: number } | null;
+  };
+  /** Null when the school does not run the FEES feature — the card omits the row. */
+  fees: {
+    yesterdayMinor: number;
+    monthMinor: number;
+    awaitingReview: number;
+  } | null;
+  /** What the day holds. */
+  today: {
+    holiday: string | null;
+    events: { title: string; time: string }[];
+  };
+  /** Queues with somebody waiting in them. */
+  waiting: {
+    leave: number;
+    registerChanges: number;
+    enquiries: number;
+  };
+}

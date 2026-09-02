@@ -1,9 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { Globe, CalendarX } from 'lucide-react';
+import { Globe } from 'lucide-react';
+import type { MorningBell } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { BellCard } from './bell-card';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,14 +30,6 @@ interface Student {
   id: string;
 }
 
-interface LeaveApplication {
-  id: string;
-}
-
-interface CoverageGap {
-  id: string;
-  substituteTeacherId: string | null;
-}
 
 interface SetupStep {
   key: string;
@@ -96,24 +90,13 @@ export default function DashboardPage() {
     enabled: !!host,
     staleTime: 60_000,
   });
-  const pendingLeaveQuery = useQuery({
-    queryKey: ['dash-leave-pending'],
-    queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=PENDING'),
-    enabled: !!host,
-    staleTime: 60_000,
+  const bellQuery = useQuery({
+    queryKey: ['bell', host], enabled: !!host,
+    queryFn: () => api.get<MorningBell>('/manage/bell'),
+    // The Bell describes a morning; re-ring it if the tab stays open.
+    refetchInterval: 5 * 60_000,
   });
-  const leaveCoverageQuery = useQuery({
-    queryKey: ['dash-leave-coverage'],
-    queryFn: () => {
-      const from = new Date().toISOString().slice(0, 10);
-      const toDate = new Date(`${from}T00:00:00Z`);
-      toDate.setUTCDate(toDate.getUTCDate() + 30);
-      const to = toDate.toISOString().slice(0, 10);
-      return api.get<CoverageGap[]>(`/manage/leave/coverage?from=${from}&to=${to}`);
-    },
-    enabled: !!host,
-    staleTime: 60_000,
-  });
+
 
   const years = yearsQuery.data ?? [];
   const periods = periodsQuery.data ?? [];
@@ -180,10 +163,6 @@ export default function DashboardPage() {
     },
   ];
 
-  const pendingLeaveCount = pendingLeaveQuery.data?.length ?? 0;
-  const uncoveredGapCount = (leaveCoverageQuery.data ?? []).filter((g) => !g.substituteTeacherId).length;
-  const showLeaveAlert = pendingLeaveCount > 0 || uncoveredGapCount > 0;
-
   const doneCount = steps.filter((s) => s.done).length;
   const allDone = doneCount === steps.length;
   const anySetupLoading = [
@@ -210,27 +189,10 @@ export default function DashboardPage() {
         <p>Set up your school and manage it from here.</p>
       </header>
 
-      {/* Leave & coverage signal — only shown when something needs attention */}
-      {showLeaveAlert && (
-        <Link href="/app/leave" className="sk-remind sk-press" style={{ marginBottom: 18 }}>
-          <span className="ic">
-            <CalendarX className="h-4 w-4" />
-          </span>
-          <div style={{ flex: 1 }}>
-            <b>
-              {[
-                pendingLeaveCount > 0 &&
-                  `${pendingLeaveCount} leave ${pendingLeaveCount === 1 ? 'request' : 'requests'} awaiting review`,
-                uncoveredGapCount > 0 &&
-                  `${uncoveredGapCount} class ${uncoveredGapCount === 1 ? 'period needs' : 'periods need'} a substitute`,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </b>
-            <p>Go to Leave to review requests and cover the gaps.</p>
-          </div>
-        </Link>
-      )}
+      {/* The Morning Bell — the day's first look, subsuming the old leave
+          alert (its lines carry pending leave AND uncovered periods, so the
+          same fact never renders twice on this page). */}
+      {bellQuery.data && <BellCard bell={bellQuery.data} />}
 
       {/* At-a-glance KPIs — always shown */}
       <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
