@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -883,9 +884,10 @@ export default function StudentsPage() {
                             student.photoAssetId ? (photoUrlMap[student.photoAssetId] ?? null) : null
                           }
                         />
-                        <span>
+                        {/* The name is the door to the child's whole file. */}
+                        <Link href={`/app/students/${student.id}`} className="sk-seelink" style={{ color: 'var(--sk-ink)', fontWeight: 650 }}>
                           {student.firstName} {student.lastName}
-                        </span>
+                        </Link>
                       </div>
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }} className="sk-num">

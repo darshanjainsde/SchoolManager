@@ -1197,3 +1197,103 @@ export interface TvStatus {
   /** Full display URL when enabled, ready to open on the TV. */
   url: string | null;
 }
+
+// ── The Front Desk (dashboard) ───────────────────────────────────────────────
+// The command bar, the Student 360 report, and the pulse tiles. All three are
+// composed LIVE (compute-don't-store); the bar's hits carry their own one-tap
+// actions so finding is doing.
+
+/** `GET /manage/search?q=` — the command bar's hits. */
+export interface ConsoleSearch {
+  students: {
+    id: string;
+    name: string;
+    classLabel: string | null;
+    admissionNo: string;
+    rollNo: string | null;
+    isActive: boolean;
+    /** Live ledger balance in paise; 0 for schools without FEES. */
+    feesDueMinor: number;
+  }[];
+  teachers: { id: string; name: string }[];
+  staff: { id: string; name: string; role: string }[];
+  /** Register serials (TC/2026/0041 …) that contain the query. */
+  serials: { id: string; type: PressDocType; serial: string; studentId: string; studentName: string }[];
+}
+
+/** `GET /manage/students/:id/report` — everything about one child, composed. */
+export interface StudentReport {
+  student: {
+    id: string;
+    name: string;
+    classLabel: string | null;
+    rollNo: string | null;
+    admissionNo: string;
+    code: string | null;
+    dob: string | null;
+    gender: string | null;
+    guardianName: string | null;
+    guardianPhone: string | null;
+    isActive: boolean;
+    onRollSince: string;
+  };
+  /** Session-to-date. `last20`: newest last, only days with a mark. */
+  attendance: {
+    present: number;
+    total: number;
+    pct: number | null;
+    last20: { date: string; status: 'PRESENT' | 'ABSENT' | 'LATE' }[];
+  };
+  /**
+   * The latest report window's compile for THIS child — published marks only,
+   * the same computation the printed card uses. Null when no window exists or
+   * the child has no class.
+   */
+  academics: {
+    windowName: string;
+    academicYearName: string;
+    subjects: ReportSubjectLine[];
+    overall: ReportCardStudent['overall'];
+    remark: string | null;
+  } | null;
+  /** Null for schools without the FEES feature. */
+  fees: {
+    billedMinor: number;
+    paidMinor: number;
+    dueMinor: number;
+    /** Latest first, capped. */
+    ledger: { narration: string; occurredAt: string; kind: 'DEBIT' | 'CREDIT'; amountMinor: number }[];
+  } | null;
+  /** Every register entry for this child, newest first. */
+  documents: { id: string; type: PressDocType; serial: string; issuedAt: string; voided: boolean }[];
+  /** Open first, then recent returns. */
+  library: { title: string; issuedOn: string; dueOn: string; returnedOn: string | null }[];
+  /** For the printed sheet's masthead. */
+  school: PressSchoolHeader;
+}
+
+/** `GET /manage/pulse` — the dashboard's living tiles. */
+export interface DashboardPulse {
+  attendance: {
+    todayPct: number | null;
+    present: number;
+    marked: number;
+    /** Last 14 marked school days, oldest first. */
+    series: { date: string; pct: number }[];
+  };
+  /** Null for schools without FEES. */
+  fees: {
+    billedMinor: number;
+    collectedMinor: number;
+    outstandingMinor: number;
+    owingFamilies: number;
+  } | null;
+  enquiries: {
+    last7: number;
+    prev7: number;
+    uncontacted: number;
+    /** 7 daily counts, oldest first. */
+    series: { date: string; count: number }[];
+  };
+  roll: { students: number; teachers: number; classes: number };
+}

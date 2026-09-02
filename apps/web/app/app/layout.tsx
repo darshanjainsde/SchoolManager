@@ -163,6 +163,26 @@ function GroupedNav({
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  /**
+   * `/` focuses the command bar from anywhere in the console — the Front
+   * Desk's front door. Off the dashboard it navigates there first; the bar
+   * listens for the event and takes focus. Never while the person is already
+   * typing somewhere.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      e.preventDefault();
+      if (window.location.pathname !== '/app') router.push('/app');
+      // Next paint on the dashboard, the bar exists and takes focus.
+      setTimeout(() => window.dispatchEvent(new Event('sk-focus-command-bar')), 80);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [router]);
   const hydrated = useHydrated();
   const host = useHost();
   const status = useAuthStore((s) => s.status);

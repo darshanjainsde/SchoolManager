@@ -216,6 +216,34 @@ describe('management authorization', () => {
     });
   });
 
+  describe('the Front Desk — search, pulse and the Student 360 are the admin’s', () => {
+    // Search spans every register; pulse aggregates money; the 360 carries a
+    // child's whole file including the fee position. SCHOOL_ADMIN only.
+    const UUID360 = '00000000-0000-0000-0000-000000000001';
+    for (const [label, path] of [
+      ['search', '/manage/search?q=aar'],
+      ['pulse', '/manage/pulse'],
+      ['the Student 360', `/manage/students/${UUID360}/report`],
+    ] as const) {
+      it(`admin passes the guards for ${label}`, async () => {
+        const res = await request(app.getHttpServer()).get(path).set(as(adminToken));
+        expect([401, 403]).not.toContain(res.status);
+      });
+      it(`teacher is refused ${label}`, async () => {
+        await request(app.getHttpServer()).get(path).set(as(teacherToken)).expect(403);
+      });
+      it(`staff is refused ${label}`, async () => {
+        await request(app.getHttpServer()).get(path).set(as(staffToken)).expect(403);
+      });
+      it(`student is refused ${label}`, async () => {
+        await request(app.getHttpServer()).get(path).set(as(studentToken)).expect(403);
+      });
+      it(`anonymous is refused ${label}`, async () => {
+        await request(app.getHttpServer()).get(path).set({ 'X-Skoolos-Host': host }).expect(401);
+      });
+    }
+  });
+
   describe('staff records — every route is SCHOOL_ADMIN-only', () => {
     it('a STUDENT cannot list staff', async () => {
       await request(app.getHttpServer())

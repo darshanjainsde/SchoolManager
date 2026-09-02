@@ -21,5 +21,6 @@ import { ReportCardService } from './report-card.service';
   imports: [AuthModule, FeaturesModule, TenancyModule],
   controllers: [PressController, PressPortalController],
   providers: [ReportCardService, CertificateService, PressRegisterService],
+  exports: [ReportCardService],
 })
 export class PressModule {}

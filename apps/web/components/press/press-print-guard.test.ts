@@ -33,7 +33,7 @@ const CSS = code(readFileSync(join(process.cwd(), 'components/press/press-print.
 
 /** Every file that participates in press printing, found not hand-listed. */
 function pressSources(): { path: string; src: string }[] {
-  const roots = ['components/press', 'app/app/press', 'app/portal/results/report-card', 'app/app/exam-hall'];
+  const roots = ['components/press', 'app/app/press', 'app/portal/results/report-card', 'app/app/exam-hall', 'app/app/students'];
   const out: { path: string; src: string }[] = [];
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
