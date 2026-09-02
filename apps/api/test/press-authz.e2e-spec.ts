@@ -134,8 +134,13 @@ describe('press authorization', () => {
     await db.featureOverride.create({
       data: { schoolId: seeded.schoolId, featureKey: 'PRESS', enabled: true },
     });
-    const studentA = await db.student.findFirstOrThrow({
-      where: { schoolId: seeded.schoolId, userId: { not: null } },
+    // seedMinimalSchool mints a STUDENT *user* but no Student row — link one
+    // ourselves (found by running the suite: findFirstOrThrow found none).
+    const studentA = await db.student.create({
+      data: {
+        schoolId: seeded.schoolId, admissionNo: `A-${Date.now()}`,
+        firstName: 'Own', lastName: 'Child', userId: seeded.studentUserId,
+      },
       select: { id: true, userId: true },
     });
     const issue = await db.pressIssue.create({
