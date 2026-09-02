@@ -17,7 +17,17 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const APP_DIR = resolve(process.cwd(), 'app/app');
+/**
+ * Every surface whose host comes from `useHost()`. `app/app` alone was the
+ * original scope, which is why the counter-payment dialog — living under
+ * `components/` — was never read by this guard at all and shipped calling
+ * useApi() with no host header. The type now catches that specific omission;
+ * this catches the sibling defect, a query that fires before the host lands.
+ */
+const ROOTS = [
+  'app/app', 'app/portal', 'app/teacher', 'app/library', 'app/staff',
+  'app/account', 'components',
+].map((r) => resolve(process.cwd(), r));
 
 /** Every page.tsx and its sibling components under app/app. */
 function tsxFilesUnder(dir: string): string[] {
@@ -44,9 +54,8 @@ function tsxFilesUnder(dir: string): string[] {
  * inner brace and silently reads a fragment — which would let a genuinely
  * unguarded query pass.
  */
-function queryCallBodies(src: string): string[] {
+function callBodies(src: string, marker: string): string[] {
   const bodies: string[] = [];
-  const marker = 'useQuery({';
   let from = 0;
   for (;;) {
     const start = src.indexOf(marker, from);
@@ -71,13 +80,21 @@ function isTenantScoped(body: string): boolean {
   return /api\.(get|post|put|del|patch)/.test(body);
 }
 
-const files = tsxFilesUnder(APP_DIR);
+/**
+ * Only files whose host is ASYNC need the guard. A surface that passes the
+ * OWNER_HOST constant knows its host on the first render, so requiring it to
+ * wait would be nonsense — admin-access-card.tsx is correct as written.
+ */
+const queryCallBodies = (src: string) => callBodies(src, 'useQuery({');
+
+const files = ROOTS.flatMap((r) => tsxFilesUnder(r))
+  .filter((f) => /useHost\(\)/.test(readFileSync(f, 'utf8')));
 
 describe('admin console queries wait for the host', () => {
   it('finds the console pages at all — a silent empty sweep would pass forever', () => {
-    expect(files.length).toBeGreaterThan(10);
+    expect(files.length).toBeGreaterThan(30);
     const withQueries = files.filter((f) => queryCallBodies(readFileSync(f, 'utf8')).length > 0);
-    expect(withQueries.length).toBeGreaterThan(10);
+    expect(withQueries.length).toBeGreaterThan(25);
   });
 
   it('guards every tenant-scoped query with enabled: !!host', () => {
@@ -90,9 +107,24 @@ describe('admin console queries wait for the host', () => {
         // Some pages compose the flag (`enabled: !!host && somethingElse`).
         if (/enabled:[^,]*\bhost\b/.test(body)) continue;
         const key = body.match(/queryKey:\s*(\[[^\]]*\])/)?.[1] ?? body.slice(0, 60);
-        offenders.push(`${file.replace(APP_DIR, 'app/app')} → ${key}`);
+        offenders.push(`${file.replace(process.cwd(), '')} → ${key}`);
       }
     }
     expect(offenders, `these queries fire before useHost() resolves and will sign the user out:\n${offenders.join('\n')}`).toEqual([]);
+  });
+
+  it('hands every useApi() the host it resolved — a hostless client 401s and signs the user out', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = readFileSync(file, 'utf8');
+      for (const body of callBodies(src, 'useApi({')) {
+        if (/hostHeader/.test(body)) continue;
+        offenders.push(`${file.replace(process.cwd(), '')} → ${body.replace(/\s+/g, ' ')}`);
+      }
+    }
+    expect(
+      offenders,
+      `these build an ApiClient with no host header:\n${offenders.join('\n')}`,
+    ).toEqual([]);
   });
 });
