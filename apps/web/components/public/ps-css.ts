@@ -28,7 +28,7 @@ export const PS_CSS = `
   .ps-accentbg { background: var(--ps2); }
   .ps-brandgrad { background: linear-gradient(120deg, var(--ps1), color-mix(in srgb, var(--ps1) 55%, var(--ps2))); }
   .ps-logo-bg { background: linear-gradient(135deg, var(--ps1), var(--ps2)); }
-  .ps-cta-btn { background: var(--ps1); color: #fff; }
+  .ps-cta-btn { background: var(--ps1); color: var(--ps1-on, #fff); }
   .ps-icon-bg { background: linear-gradient(135deg, var(--ps2), var(--ps1)); }
   .ps-progress-bar { background: linear-gradient(90deg, var(--ps1), var(--ps2)); height: 100%; }
 
@@ -224,6 +224,128 @@ export const PS_CSS = `
   .ps-btn { border-radius: var(--ps-radius-sm); box-shadow: var(--ps-card-shadow); }
   .ps-shape-editorial .ps-btn { box-shadow: none; }
   .ps-shape-crisp .ps-btn { box-shadow: none; }
+
+  /* ── CALL TO ACTION ──────────────────────────────────────────────────────
+     The site had exactly one button of real weight — the "Enquire now" CTA —
+     and it was hand-rolled from six Tailwind utilities at its one call site.
+     Every later button was therefore rebuilt by eye and came out lighter,
+     which is how a page ends up with a cramped little pill sitting next to a
+     confident one.
+
+     So the recipe is a class. Size, weight, corner and lift live here; only
+     the FILL is chosen at the call site, from the two below.
+
+     Corner comes from --ps-radius-sm, not a fixed value, so a Crisp or
+     Editorial school gets its own square-edged CTA rather than a pill that
+     ignores the shape it picked. */
+  .ps-cta { display: inline-flex; align-items: center; gap: .5rem;
+    padding: .875rem 1.5rem; font-weight: 650; font-size: .95rem; line-height: 1.2;
+    border-radius: var(--ps-radius-sm); border: 1px solid transparent;
+    box-shadow: 0 18px 34px -20px rgba(28,45,36,.55);
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+  .ps-cta:hover { transform: translateY(-1px); box-shadow: 0 22px 40px -20px rgba(28,45,36,.6); }
+  .ps-cta:active { transform: translateY(0); }
+  /* NOT opacity: fading a saturated fill toward cream makes a muddy lavender
+     that white text cannot sit on — the label goes unreadable at exactly the
+     moment it says something ("Sending…"). A flat neutral with dark text
+     stays legible and still reads as unavailable. */
+  .ps-cta:disabled, .ps-cta[aria-disabled="true"] {
+    background: color-mix(in srgb, var(--ink) 12%, #fff);
+    color: color-mix(in srgb, var(--ink) 55%, transparent);
+    transform: none; box-shadow: none; cursor: not-allowed; }
+  .ps-shape-editorial .ps-cta, .ps-shape-crisp .ps-cta { box-shadow: none; }
+  .ps-shape-editorial .ps-cta:hover, .ps-shape-crisp .ps-cta:hover { box-shadow: none; }
+
+  /* The school's own colour. The page's primary action. */
+  .ps-cta-1 { background: var(--ps1); color: var(--ps1-on, #fff); }
+  .ps-cta-1:hover { background: color-mix(in srgb, var(--ps1) 88%, #000); }
+
+  /* The CONTRAST fill, for an action that must not compete with the primary
+     one on the same screen. Ink rather than --ps2: the accent is school-chosen
+     and may be a pale marigold that cannot carry white text, whereas ink is by
+     definition the colour this site already trusts to be readable. */
+  .ps-cta-ink { background: var(--ink); color: #fff; }
+  .ps-cta-ink:hover { background: color-mix(in srgb, var(--ink) 86%, #fff); }
+
+  /* ── CHOICE CARDS ────────────────────────────────────────────────────────
+     For picking a THING, as opposed to switching a view.
+
+     The gift list was first built as a segmented control, and it was the wrong
+     component: a track is for a handful of short, mutually exclusive labels in
+     one row. Four product names with prices wrapped it onto two lines and the
+     result read as a blob — a pill inside a pill, prices in a tint so light
+     they looked disabled.
+
+     A thing you are choosing to give wants its own surface, room for a price,
+     and a mark that says "this one". */
+  .ps-choices { display: grid; gap: .6rem;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .ps-choice { display: flex; align-items: flex-start; gap: .6rem; width: 100%;
+    text-align: left; padding: .8rem .9rem;
+    background: #fff; border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+    border-radius: var(--ps-radius-sm); cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
+  .ps-choice:hover { border-color: color-mix(in srgb, var(--ps1) 45%, transparent); }
+  .ps-choice[aria-pressed="true"] { border-color: var(--ps1);
+    background: color-mix(in srgb, var(--ps1) 6%, #fff);
+    box-shadow: 0 0 0 1px var(--ps1) inset; }
+  /* The mark. A ring that fills, rather than an icon per item — the items are
+     school-authored free text ("Library book fund", "Sports kit"), so any
+     icon set would be guesswork that breaks on the fifth entry. */
+  .ps-choice-mark { flex: none; width: 18px; height: 18px; margin-top: 1px;
+    border-radius: 999px; border: 2px solid color-mix(in srgb, var(--ink) 25%, transparent);
+    display: grid; place-items: center; transition: border-color .15s ease, background .15s ease; }
+  .ps-choice[aria-pressed="true"] .ps-choice-mark { border-color: var(--ps1); background: var(--ps1); }
+  .ps-choice-mark::after { content: ""; width: 7px; height: 7px; border-radius: 999px;
+    background: var(--ps1-on, #fff); transform: scale(0); transition: transform .15s ease; }
+  .ps-choice[aria-pressed="true"] .ps-choice-mark::after { transform: scale(1); }
+  /* display:block, or the name and the price render as one run-on string —
+     both are spans, and an inline span does not stack. */
+  .ps-choice-name { display: block; font-weight: 620; font-size: .9rem; line-height: 1.3; color: var(--ink); }
+  .ps-choice-meta { display: block; font-size: .8rem; margin-top: .15rem;
+    color: color-mix(in srgb, var(--ink) 62%, transparent); }
+  .ps-shape-editorial .ps-choice, .ps-shape-crisp .ps-choice { box-shadow: none; }
+  .ps-shape-editorial .ps-choice[aria-pressed="true"],
+  .ps-shape-crisp .ps-choice[aria-pressed="true"] { box-shadow: none; border-width: 2px; }
+
+  /* ── SEGMENTED CONTROL ───────────────────────────────────────────────────
+     Tabs as a single object on one track, rather than loose lozenges.
+
+     The loose version washed out: an inactive chip tinted 12% of the brand
+     hue, carrying text of that SAME hue, has almost no chroma separation — it
+     reads as a smudge rather than a control, and the jump to a solid fill on
+     selection is so large the row looks like two different components.
+
+     Here the track carries the tint, the items are transparent until chosen,
+     and the label wears ink at full strength so it is legible before it is
+     selected as well as after. */
+  .ps-seg { display: inline-flex; flex-wrap: wrap; gap: .25rem; padding: .3rem;
+    background: color-mix(in srgb, var(--ps1) 7%, #fff);
+    border: 1px solid color-mix(in srgb, var(--ps1) 14%, transparent);
+    border-radius: calc(var(--ps-radius-sm) + .3rem); }
+  .ps-seg-btn { padding: .55rem 1.05rem; font-size: .875rem; font-weight: 600;
+    color: color-mix(in srgb, var(--ink) 78%, transparent);
+    background: transparent; border: 0; border-radius: var(--ps-radius-sm);
+    transition: background .16s ease, color .16s ease; cursor: pointer; }
+  .ps-seg-btn:hover:not([aria-pressed="true"]):not(:disabled) {
+    background: color-mix(in srgb, var(--ps1) 12%, #fff); color: var(--ink); }
+  .ps-seg-btn[aria-pressed="true"] { background: var(--ps1); color: var(--ps1-on, #fff);
+    box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--ps1) 70%, transparent); }
+  .ps-shape-editorial .ps-seg-btn[aria-pressed="true"],
+  .ps-shape-crisp .ps-seg-btn[aria-pressed="true"] { box-shadow: none; }
+  /* Locked, not invisible. A tab an alumnus cannot open yet still has to be
+     readable — it is the thing telling them what signing in is FOR. Opacity
+     .45 made it a rumour of a tab. */
+  .ps-seg-btn:disabled { color: color-mix(in srgb, var(--ink) 42%, transparent);
+    cursor: not-allowed; }
+  /* Denser variant, for a per-field selector inside a form rather than a
+     page-level tab row. */
+  .ps-seg-sm { padding: .35rem .75rem; font-size: .75rem; }
+  /* NOTE: there is deliberately no ".ps-seg-wrap". An earlier version added
+     one that set display:flex, which made the track block-level — the batch
+     row then stretched the full width of the page with four chips huddled at
+     its left end. .ps-seg is inline-flex AND already wraps, so a track hugs
+     its contents at any length. */
 
   .ps-panel-glass { background: rgba(255,255,255,.10);
     border: 1px solid rgba(255,255,255,.15); box-shadow: none; }

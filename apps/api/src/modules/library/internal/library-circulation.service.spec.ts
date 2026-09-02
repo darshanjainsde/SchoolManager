@@ -278,7 +278,7 @@ describe('LibraryCirculationService', () => {
       txMock.libraryFine.deleteMany.mockResolvedValue({ count: 1 });
       txMock.libraryIssue.update.mockResolvedValue(issueRow());
       await svc.reopen(SCHOOL, ISSUE);
-      expect(txMock.libraryFine.deleteMany).toHaveBeenCalledWith({ where: { issueId: ISSUE, status: 'DUE' } });
+      expect(txMock.libraryFine.deleteMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, issueId: ISSUE, status: 'DUE' } });
       expect(txMock.libraryIssue.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { returnedOn: null, returnedById: null } }),
       );

@@ -3,6 +3,7 @@ import { withTenant } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import type { SubmitEnquiryDto } from './public.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 @Injectable()
 export class EnquiryService {
@@ -36,7 +37,7 @@ export class EnquiryService {
 
   async list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
-      tx.enquiry.findMany({
+      tx.enquiry.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId },
         orderBy: { createdAt: 'desc' },
       }),

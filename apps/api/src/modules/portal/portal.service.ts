@@ -21,6 +21,7 @@ import { RegistrationsService } from '../community';
 import { TimetableService } from '../management';
 import { HolidaysService } from '../management';
 import { DiaryService } from '../management';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -192,7 +193,7 @@ export class PortalService {
   private async myStudent(schoolId: string, userId: string) {
     return withTenant(schoolId, (tx) =>
       tx.student.findFirst({
-        where: { userId },
+        where: { schoolId, userId },
         include: { classSection: { select: { id: true, name: true } } },
       }),
     );
@@ -290,7 +291,7 @@ export class PortalService {
 
     const [rows, firstMark] = await withTenant(schoolId, (tx) =>
       Promise.all([
-        tx.attendance.findMany({
+        tx.attendance.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { schoolId, studentId: s.id, date: { gte: start, lt: end } },
           orderBy: { date: 'asc' },
           select: { date: true, status: true },
@@ -351,7 +352,7 @@ export class PortalService {
     const now = new Date();
 
     return withTenant(schoolId, async (tx) => {
-      const exams = await tx.exam.findMany({
+      const exams = await tx.exam.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, classSectionId, scheduledAt: { gte: now } },
         orderBy: [{ scheduledAt: 'asc' }],
       });
@@ -398,8 +399,8 @@ export class PortalService {
     if (!s) throw new NotFoundException('No student record for this login');
 
     return withTenant(schoolId, async (tx) => {
-      const mine = await tx.result.findMany({
-        where: { studentId: s.id, publishedAt: { not: null } },
+      const mine = await tx.result.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, studentId: s.id, publishedAt: { not: null } },
         select: { examId: true, marks: true },
       });
       if (mine.length === 0) return [];
@@ -408,14 +409,14 @@ export class PortalService {
 
       // `Exam` has no RLS — the schoolId filter is what keeps a foreign
       // school's exam out even if a Result row somehow pointed at one.
-      const exams = await tx.exam.findMany({
+      const exams = await tx.exam.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, id: { in: examIds } },
       });
       const examById = new Map(exams.map((e) => [e.id, e]));
 
       const averages = await tx.result.groupBy({
         by: ['examId'],
-        where: { examId: { in: examIds }, publishedAt: { not: null } },
+        where: { schoolId, examId: { in: examIds }, publishedAt: { not: null } },
         _avg: { marks: true },
       });
       const averageByExam = new Map(
@@ -476,6 +477,7 @@ export class PortalService {
 
     return withTenant(schoolId, async (tx) => {
       const rows = await tx.assignment.findMany({
+        take: LIST_CEILING.ACTIVITY,
         where: { schoolId, classSectionId },
         orderBy: [{ dueDate: 'asc' }],
       });
@@ -562,7 +564,7 @@ export class PortalService {
   ): Promise<Map<string, string>> {
     const ids = [...new Set(subjectIds)];
     if (ids.length === 0) return new Map();
-    const subjects = await tx.subject.findMany({
+    const subjects = await tx.subject.findMany({ take: LIST_CEILING.STRUCTURE,
       where: { schoolId, id: { in: ids } },
       select: { id: true, name: true },
     });

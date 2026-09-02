@@ -22,6 +22,7 @@
 
 import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
 import Redis from 'ioredis';
+import { describeLiveApi } from './requires-live-api';
 
 const BASE = 'http://localhost:3001';
 
@@ -86,7 +87,7 @@ async function getPublicSite(slug: string): Promise<PublicSiteBody> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Community / Connect-Events e2e', () => {
+describeLiveApi('Community / Connect-Events e2e', () => {
   // Shared across tests in this describe block.
   let beaconSchoolEventId: string;    // Test 1 — SCHOOL-scope event
   let beaconNetworkEventId: string;   // Test 2/3 — NETWORK-scope event (needs moderation)

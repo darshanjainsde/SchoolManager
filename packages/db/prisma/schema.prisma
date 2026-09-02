@@ -60,6 +60,14 @@ enum UserRole {
   /// apps/api/src/modules/management/staff.service.ts and
   /// apps/web/app/login/page.tsx.
   STAFF
+  /// A former student with an account.
+  ///
+  /// A genuine role rather than the LIBRARIAN mistake repeated: a librarian IS
+  /// the school's staff, so the JOB decides the door and the login stays one
+  /// kind. An alumnus is not staff, not a teacher and not a student, holds no
+  /// Staff row, and reaches a data set with no overlap with any of theirs.
+  /// That is a different door, not a different job.
+  ALUMNUS
   /// LEGACY — the first library line modelled the librarian as a login ROLE.
   /// The Library Wing replaced that with one staff login kind: the JOB
   /// (Staff.role = LIBRARIAN) decides the door via /auth/me's staffRole, and
@@ -98,6 +106,24 @@ enum MenuKind {
   CLASS
   PAGE
   CUSTOM
+}
+
+/// Who an event is published to.
+///
+/// Replaces the old binary SCHOOL/NETWORK split, where NETWORK meant "every
+/// school on the platform, forever" — which made every school's public site
+/// carry every other school's events (measured at 3.16 MB / 10,050 events at
+/// 200 schools, against a hard 4.5 MB response cap).
+enum EventAudienceKind {
+  /// Only this school's own public site.
+  SCHOOL_ONLY
+  /// Every school whose profile city matches `audienceCity`.
+  CITY
+  /// Exactly the schools listed in EventAudienceSchool.
+  SELECTED
+  /// Legacy: the old NETWORK behaviour. Not offered in the UI; existing rows
+  /// keep working and drain naturally as their events pass.
+  EVERYWHERE
 }
 
 enum EventScope {
@@ -272,6 +298,41 @@ model School {
   libraryHallMarks       LibraryHallMark[]
   results                Result[]
   assignmentsSeen        AssignmentSeen[]
+  rooms                  Room[]
+  seatingPlans           SeatingPlan[]
+  alumni                 Alumni[]
+  alumniBatches          AlumniBatch[]
+  alumniClaims           AlumniClaim[]
+  giftItems              GiftItem[]
+  giftPledges            GiftPledge[]
+  giftAttachments        GiftAttachment[]
+  giftEvents             GiftEvent[]
+  giftReceipts           GiftReceipt[]
+  giftDistributions      GiftDistribution[]
+  guestSessions          GuestSession[]
+  alumniAccessTokens     AlumniAccessToken[]
+  alumniLinkRequests     AlumniLinkRequest[]
+  feeCategories          FeeCategory[]
+  feeTerms               FeeTerm[]
+  feePlans               FeePlan[]
+  feePlanItems           FeePlanItem[]
+  feeAssignments         FeeAssignment[]
+  feeConcessions         FeeConcession[]
+  feeInvoices            FeeInvoice[]
+  feeInvoiceLines        FeeInvoiceLine[]
+  feePayments            FeePayment[]
+  feeAllocations         FeeAllocation[]
+  feeLedgerEntries       FeeLedgerEntry[]
+  feeReceipts            FeeReceipt[]
+  paymentConfigs         SchoolPaymentConfig[]
+  bankDetail             SchoolBankDetail?
+  feeAudits              FeeAudit[]
+  feeCounters            FeeCounter[]
+  feeSettings            FeeSettings?
+  pressIssues            PressIssue[]
+  pressCounters          PressCounter[]
+  reportWindows          ReportWindow[]
+  reportRemarks          ReportRemark[]
 }
 
 model Domain {
@@ -759,6 +820,9 @@ model AcademicYear {
   classSections    ClassSection[]
   timetableSlots   TimetableSlot[]
   leaveAllocations LeaveAllocation[]
+  feeTerms         FeeTerm[]
+  feePlans         FeePlan[]
+  reportWindows    ReportWindow[]
 
   @@unique([schoolId, name])
   @@index([schoolId])
@@ -771,6 +835,7 @@ model Grade {
   order         Int            @default(0)
   school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSections ClassSection[]
+  feePlanItems  FeePlanItem[]
 
   @@unique([schoolId, name])
   @@index([schoolId])
@@ -841,6 +906,7 @@ model Teacher {
   libraryIssues    LibraryIssue[]
 
   @@index([schoolId])
+  @@index([userId])
 }
 
 model TeacherSubject {
@@ -886,6 +952,13 @@ model Student {
   diaryAcks         DiaryAck[]
   attendanceNotices AttendanceNotice[]
   libraryIssues     LibraryIssue[]
+  feeAssignments    FeeAssignment[]
+  feeConcessions    FeeConcession[]
+  feeInvoices       FeeInvoice[]
+  feePayments       FeePayment[]
+  feeLedgerEntries  FeeLedgerEntry[]
+  pressIssues       PressIssue[]
+  reportRemarks     ReportRemark[]
 
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
@@ -1156,6 +1229,11 @@ model NotificationOutbox {
   sentAt         DateTime?
   /// Incremented on every failed send attempt; the drain excludes rows at
   /// or above its MAX_ATTEMPTS cap rather than retrying forever.
+  /// Stamped when a drain takes ownership of the row, so two concurrent drains
+  /// cannot both send it. Cleared on failure so the row is retried; a claim
+  /// older than CLAIM_TTL is treated as abandoned (the drain crashed mid-send)
+  /// and may be reclaimed.
+  claimedAt      DateTime?
   attempts       Int           @default(0)
   lastError      String?
   school         School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -1165,6 +1243,7 @@ model NotificationOutbox {
   @@index([schoolId, sentAt])
   @@index([schoolId, classSectionId])
   @@index([sentAt, createdAt])
+  @@index([sentAt, claimedAt, createdAt])
 }
 
 /// A teacher-posted assignment for one class section (T21, Portal Parity R3
@@ -1233,6 +1312,8 @@ model AssignmentSeen {
 
   @@unique([assignmentId, studentId], name: "one_seen_per_assignment_student")
   @@index([schoolId, studentId])
+  /// Serves the read-receipt count per assignment, scoped to one school.
+  @@index([schoolId, assignmentId])
 }
 
 // Messaging (Phase 4 Task 5 / item T17). A student asks one of the teachers who
@@ -1276,6 +1357,10 @@ model Message {
   thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
+  /// Serves the unread-per-thread aggregate behind every inbox. Without it
+  /// that count seq-scanned every message on the platform (2,432ms -> 1.77ms
+  /// on the 200-school bench, 2026-08-29).
+  @@index([schoolId, senderRole, readAt])
 }
 
 /// In-app notification inbox — the per-user, per-event rows behind the bell in
@@ -1324,30 +1409,126 @@ model Notification {
   @@index([schoolId, userId, createdAt])
 }
 
+// ── Exam Hall ────────────────────────────────────────────
+/// A physical room, described only as far as seating needs it: how many rows
+/// of desks, how many desks in a row, and how many students share one desk.
+///
+/// Deliberately NOT exam-only. The office records its rooms once and the same
+/// rows can feed anything later that needs a venue (timetable, events, PTM
+/// desks), which is why this is `Room` and not `ExamRoom`.
+///
+/// `removedDesks` holds the grid positions with no desk — a pillar, a broken
+/// desk, or a gap the school keeps as a walking lane. A string array of
+/// "row:col" (both 0-based) rather than a child table: it is read and written
+/// only as a whole, never queried across rooms, and one room's worth of
+/// exceptions is a handful of strings.
+model Room {
+  id           String        @id @default(uuid()) @db.Uuid
+  schoolId     String        @db.Uuid
+  name         String
+  /// Rows of desks, front (nearest the board) to back.
+  rows         Int           @default(6)
+  /// Desks across one row, left to right as you face the board.
+  cols         Int           @default(6)
+  /// 1 or 2. Two only where the desk is a bench.
+  seatsPerDesk Int           @default(1)
+  /// "row:col" positions, 0-based, that hold no desk.
+  removedDesks String[]      @default([])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  seatingPlans SeatingPlan[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+/// One generated seating chart for one room. `seats` is the whole plan as
+/// JSON, not a row per student.
+///
+/// A plan is written once by the generator and afterwards read whole — the
+/// office prints it, it never queries inside it. A `Seat` table would be the
+/// largest in this schema (a row per student per paper) to serve reads that
+/// always want every row anyway. When "where does this child sit?" becomes a
+/// real question from the parent portal, that is the moment to promote it.
+model SeatingPlan {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @db.Uuid
+  roomId          String   @db.Uuid
+  /// What the office calls this sitting — "Half-Yearly, Day 3, Morning".
+  title           String
+  /// Sections this plan seats, in the order the office ticked them.
+  classSectionIds String[] @default([])
+  /// Which rules were on, so a reprint months later is still explainable.
+  rules           Json
+  /// The generator is seeded, so the same inputs rebuild the same hall.
+  seed            Int
+  /// PlannedSeat[] — row, seat index, student, class, roll.
+  seats           Json
+  /// The room's shape AT SAVE TIME — rows, cols, seatsPerDesk, removedDesks.
+  ///
+  /// Without this, reopening a plan draws its seats into whatever shape the
+  /// room has TODAY. Narrow Hall A from nine desks to six after saving and the
+  /// chart silently loses every seat past S06 while the door list still names
+  /// them. The seats are already frozen here; the floor they sit on has to be
+  /// frozen with them. Null on rows written before this column existed —
+  /// `SeatingService.get` falls back to the live room for those.
+  roomShape       Json?
+  /// What the generator could and could not do, in the words the office read.
+  report          Json
+  createdById     String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  room            Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+  @@index([schoolId, roomId])
+}
+
 // ── Community ────────────────────────────────────────────
 model Event {
-  id               String              @id @default(uuid()) @db.Uuid
-  schoolId         String              @db.Uuid
+  id               String                @id @default(uuid()) @db.Uuid
+  schoolId         String                @db.Uuid
   title            String
   description      String?
-  coverAssetId     String?             @db.Uuid
+  coverAssetId     String?               @db.Uuid
   startAt          DateTime
   endAt            DateTime?
   venue            String?
   coverUrl         String?
   originSchoolName String?
-  scope            EventScope          @default(SCHOOL)
-  status           EventStatus         @default(DRAFT)
-  createdByUserId  String?             @db.Uuid
-  approvedByUserId String?             @db.Uuid
+  scope            EventScope            @default(SCHOOL)
+  /// Targeting. `scope` is retained so existing readers keep working; new code
+  /// reads audienceKind.
+  audienceKind     EventAudienceKind     @default(SCHOOL_ONLY)
+  /// Set only when audienceKind = CITY. Denormalised from the host school's
+  /// profile at publish time so the match is a flat string compare rather than
+  /// a join — a per-row join here is what made Result's RLS policy 1,425 ms.
+  audienceCity     String?
+  status           EventStatus           @default(DRAFT)
+  createdByUserId  String?               @db.Uuid
+  approvedByUserId String?               @db.Uuid
   approvedAt       DateTime?
-  createdAt        DateTime            @default(now())
-  school           School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt        DateTime              @default(now())
+  school           School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   ticketTypes      EventTicketType[]
   registrations    EventRegistration[]
+  audienceSchools  EventAudienceSchool[]
 
   @@index([schoolId])
   @@index([scope, status])
+  /// The public-site query's own shape: approved events for a given audience.
+  @@index([status, audienceKind, audienceCity])
+}
+
+/// One explicitly-invited school, when audienceKind = SELECTED.
+model EventAudienceSchool {
+  eventId  String @db.Uuid
+  schoolId String @db.Uuid
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, schoolId])
+  @@index([schoolId])
 }
 
 /// A thing you can register for. An event has one or many; a free event has a
@@ -1424,6 +1605,7 @@ model EventRegistration {
   @@unique([eventId, studentId])
   @@index([schoolId, eventId])
   @@index([eventId, status])
+  @@index([ticketTypeId, status])
   @@index([fromSchoolId])
   @@index([schoolId, ticketTypeId])
 }
@@ -2073,4 +2255,1320 @@ model LibraryHallMark {
 
   @@unique([visitId, studentId])
   @@index([schoolId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Homecoming — the alumni wing.
+//
+// The one fact the whole module turns on: a school does not have an alumni
+// database, it has a graduating class every March. `Alumni` is therefore
+// written FROM `Student` at year end (studentId set, zero typing) and only
+// secondarily from a self-registration that a human verifies against the old
+// register (studentId null).
+//
+// Alumni are adults and students are children, so nothing here ever exposes a
+// child to a donor or a guest speaker: `GiftPledge` addresses a GROUP and
+// stores the headcount, never a student; `GuestSession` addresses a class and
+// requires a named accompanying teacher before it can be scheduled.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum AlumniStatus {
+  /// Created by "graduate this batch". Real, but has never signed in.
+  SCHOOL_ADDED
+  /// A claim link has been sent.
+  INVITED
+  /// Self-registered from the public site. Visible to the office and NOBODY else.
+  PENDING
+  /// A human matched them against the register, or a claim link proved it.
+  VERIFIED
+  DECLINED
+  /// The alumnus's own choice, and instant.
+  HIDDEN
+}
+
+enum ClaimStatus {
+  PENDING
+  VERIFIED
+  DECLINED
+}
+
+enum GiftScope {
+  SCHOOL
+  GRADE
+  SECTION
+}
+
+enum GiftMode {
+  /// The donor pays; the school buys. Money runs on the school's merchant rail.
+  FUND
+  /// The donor sends the goods. No money moves here and NO rupee valuation is
+  /// ever stored — an in-kind gift is a register of things, counted in things.
+  SUPPLY
+}
+
+enum GiftStatus {
+  PROPOSED
+  ACCEPTED
+  DECLINED
+  /// School suggested a different gift; waiting on the donor.
+  COUNTERED
+  CANCELLED
+  /// SUPPLY only. Somebody — the donor or the office — has asked for the goods
+  /// to be collected. The address lives on the pledge.
+  PICKUP_REQUESTED
+  /// SUPPLY only. In transit, with a courier and a tracking reference if one
+  /// exists. A hand-carried consignment goes straight to RECEIVED instead.
+  PICKED_UP
+  /// It is HERE. Both tracks converge on this: for FUND the money has landed,
+  /// for SUPPLY the school has confirmed the goods arrived. GiftReceipt rows
+  /// record how much, and a short delivery stays here until it is topped up.
+  RECEIVED
+  /// FUND only. The school has bought the thing the money was given for.
+  PURCHASED
+  DISTRIBUTED
+  REPORTED
+}
+
+/// What a photograph or document attached to a pledge IS. The kind decides
+/// where it may be shown, so it is a column rather than a caption convention.
+enum GiftAttachmentKind {
+  /// The school's purchase invoice, for a gift that was funded.
+  BILL
+  /// The consignment as it arrived — a count the donor can see was honoured.
+  CONSIGNMENT
+  /// The handover itself. May contain children, which is why it is donor-and-
+  /// office only unless somebody deliberately publishes it.
+  DISTRIBUTION
+}
+
+enum GiftDedication {
+  NONE
+  IN_MEMORY_OF
+  IN_HONOUR_OF
+}
+
+enum GiftVisibility {
+  /// Name and gift on the school website. The AMOUNT is never public.
+  PUBLIC
+  ALUMNI
+  /// The office sees the name for its books; nobody else does.
+  ANONYMOUS
+}
+
+enum GuestSessionMode {
+  IN_PERSON
+  ONLINE
+}
+
+enum GuestSessionStatus {
+  REQUESTED
+  /// The school suggested another time. Both slots are held until the host answers.
+  COUNTERED
+  /// Terminal-happy: written into the timetable.
+  SCHEDULED
+  DECLINED
+  CANCELLED
+  DELIVERED
+}
+
+/// A former student. One row per person per school.
+model Alumni {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+
+  /// Set when the row came from "graduate this batch"; null for a recovered
+  /// pre-Sckools alumnus. NOT a foreign key with cascade delete — deleting a
+  /// student record must never silently erase the alumni record built from it.
+  studentId String? @db.Uuid
+  /// Set once they claim a login. Null is the normal state.
+  userId    String? @db.Uuid
+
+  admissionNo  String?
+  firstName    String
+  lastName     String
+  /// Carried from the Student record at graduation, and the reason a claim can
+  /// be checked by MACHINE rather than by a clerk walking to a shelf. An
+  /// alumnus reliably remembers their own birthday; they often do not remember
+  /// whether they were in 10-A or 10-B. Office-only, always — it appears in no
+  /// projection any audience can reach.
+  dob          DateTime?
+  /// Same purpose, same visibility. A parent's name is the second thing an
+  /// Indian alumnus can always supply and the school always holds.
+  guardianName String?
+  /// The leaving year. An Int, because every screen in this module groups by it.
+  batchYear    Int
+  lastClass    String?
+
+  email        String?
+  phone        String?
+  city         String?
+  country      String?
+  profession   String?
+  employer     String?
+  collegeName  String?
+  photoAssetId String? @db.Uuid
+
+  status             AlumniStatus @default(SCHOOL_ADDED)
+  /// A SECOND decision, separate from `status`. Being a real alumnus gets you
+  /// the directory; it does not get you a room full of fourteen-year-olds.
+  /// Revoking it cancels their future sessions — see AlumniService.setTrusted.
+  trustedForStudents Boolean      @default(false)
+  isBatchCaptain     Boolean      @default(false)
+  isMentor           Boolean      @default(false)
+  isDeceased         Boolean      @default(false)
+
+  /// { field: PUBLIC | ALUMNI | BATCH | OFFICE | HIDDEN }. Absent key = HIDDEN,
+  /// so a field added later is closed until somebody opens it.
+  privacy Json?
+
+  verifiedByUserId String?   @db.Uuid
+  verifiedAt       DateTime?
+  declineReason    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  school        School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  giftPledges   GiftPledge[]
+  guestSessions GuestSession[]
+  accessTokens  AlumniAccessToken[]
+  linkRequests  AlumniLinkRequest[]
+
+  /// One alumni row per student. Re-running "graduate this batch" is therefore
+  /// idempotent rather than duplicating a whole year group.
+  @@unique([schoolId, studentId])
+  @@index([schoolId, batchYear])
+  @@index([schoolId, status])
+  @@index([schoolId, trustedForStudents])
+}
+
+/// The denominator Roll Call needs. The SIS knows how many alumni it created;
+/// only the bound register knows how many were in the room in 1998.
+model AlumniBatch {
+  id               String   @id @default(uuid()) @db.Uuid
+  schoolId         String   @db.Uuid
+  batchYear        Int
+  /// From the old register, typed in once. 0 means "not counted yet".
+  registerStrength Int      @default(0)
+  note             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, batchYear])
+  @@index([schoolId])
+}
+
+/// A public self-registration awaiting a human. The JobApplication shape: an
+/// application row plus a review queue, deliberately NOT an Alumni row — an
+/// unverified stranger must not exist in the same table the directory reads.
+model AlumniClaim {
+  id                 String    @id @default(uuid()) @db.Uuid
+  schoolId           String    @db.Uuid
+  firstName          String
+  lastName           String
+  batchYear          Int
+  /// What the applicant typed. Compared against Alumni.dob to suggest a match —
+  /// never trusted on its own, and never shown to anybody but the office.
+  claimedDob         DateTime?
+  /// "10-B", "5th standard". Optional on purpose: twenty years on, the year is
+  /// remembered and the section usually is not, and a required field somebody
+  /// cannot answer is a form they abandon.
+  claimedClass       String?
+  claimedAdmissionNo String?
+  email              String?
+  phone              String?
+  /// Free text: a class teacher's name, two classmates, a link to a marksheet.
+  /// A LINK, never a file — there is no public upload endpoint in this product.
+  proof              String
+
+  status            ClaimStatus @default(PENDING)
+  /// Set when the office merges the claim into a row that already exists.
+  matchedAlumniId   String?     @db.Uuid
+  /// A vouch does NOT verify anyone. It moves them to the top of the queue with
+  /// a name attached to the recommendation.
+  vouchedByAlumniId String?     @db.Uuid
+
+  reviewedByUserId String?   @db.Uuid
+  reviewedAt       DateTime?
+  declineReason    String?
+  createdAt        DateTime  @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@index([schoolId, batchYear])
+}
+
+/// The school's own wish list. Written by the school, never by us and never by
+/// a donor — the worst outcome this module can produce is three hundred
+/// unwanted T-shirts nobody can refuse politely.
+model GiftItem {
+  id                  String   @id @default(uuid()) @db.Uuid
+  schoolId            String   @db.Uuid
+  name                String
+  /// "per child", "per classroom".
+  unit                String   @default("per child")
+  /// Minor units — paise. NEVER a float: rounding error in money is the bug you
+  /// find in reconciliation months later and never fully clean up.
+  indicativeCostMinor Int      @default(0)
+  currency            String   @default("INR")
+  /// Shoes and sweaters need a size tally; notebooks do not.
+  sizesTracked        Boolean  @default(false)
+  isActive            Boolean  @default(true)
+  order               Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  school  School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledges GiftPledge[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId, isActive])
+}
+
+/// One gift, from proposal to report. A gift is not a payment — it is a small
+/// supply chain, and every state carries a date.
+model GiftPledge {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+
+  /// Signed in: the alumnus. Signed out: a parent or a local donor, by name.
+  /// Exactly one of alumniId or donorName is expected; the service enforces it.
+  alumniId   String? @db.Uuid
+  donorName  String?
+  donorEmail String?
+
+  scopeKind      GiftScope
+  gradeId        String?   @db.Uuid
+  classSectionId String?   @db.Uuid
+
+  /// FROZEN at pledge time, exactly like EventRegistration.amountMinor. A pledge
+  /// for 38 sweaters must not silently become 41 because three children joined
+  /// in July — the donor agreed to a number and that number is the agreement.
+  headcountAtPledge Int
+
+  giftItemId    String? @db.Uuid
+  /// Off-catalogue. Arrives as a PROPOSED pledge the office can counter.
+  customRequest String?
+  /// Always equals headcountAtPledge on creation: a class of 38 with 20 sweaters
+  /// is a worse place than one with none. It is a column and not a computation
+  /// because the office may top a short pledge up.
+  quantity      Int
+
+  mode        GiftMode
+  /// FUND only. Null for SUPPLY — an in-kind gift never carries a valuation,
+  /// which keeps donated goods out of the fee ledger and out of the audit.
+  amountMinor Int?
+  currency    String   @default("INR")
+
+  /// What the donor typed as a per-unit price, for a gift they are FUNDING.
+  /// Null for SUPPLY, always — an in-kind gift carries no rupee valuation, and
+  /// that is the rule that keeps donated goods out of the fee ledger. A donor
+  /// entering 0 is telling us they are sending the goods themselves.
+  unitPriceMinor Int?
+
+  // ── Collection, for a gift the donor is sending ────────────────────────────
+  /// Where the goods are. Either side may fill this in: the donor when they
+  /// pledge, the office when they ring to arrange it.
+  pickupAddress     String?
+  pickupContact     String?
+  pickupPhone       String?
+  pickupNote        String?
+  pickupRequestedAt DateTime?
+  /// Courier and consignment reference. Both optional and independent of each
+  /// other: plenty of gifts arrive in somebody's car boot.
+  courier           String?
+  trackingRef       String?
+  pickedUpAt        DateTime?
+  /// FUND only — when the school bought the thing.
+  purchasedAt       DateTime?
+
+  /// The school's note back to the donor. Not decoration: for most donors this
+  /// is the only thing they ever receive in return, and a gift that disappears
+  /// into a school without a word is a gift nobody repeats.
+  thankYouNote     String?
+  thankYouAt       DateTime?
+  thankYouByUserId String?   @db.Uuid
+
+  dedicationKind GiftDedication @default(NONE)
+  dedicationText String?
+  visibility     GiftVisibility @default(ALUMNI)
+
+  status        GiftStatus @default(PROPOSED)
+  declineReason String?
+  counterNote   String?
+  /// SUPPLY only: when the donor said the goods would arrive.
+  dueAt         DateTime?
+
+  acceptedByUserId String?   @db.Uuid
+  acceptedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  school        School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alumni        Alumni?            @relation(fields: [alumniId], references: [id], onDelete: SetNull)
+  giftItem      GiftItem?          @relation(fields: [giftItemId], references: [id], onDelete: SetNull)
+  receipts      GiftReceipt[]
+  distributions GiftDistribution[]
+  attachments   GiftAttachment[]
+  events        GiftEvent[]
+
+  @@index([schoolId, status])
+  @@index([schoolId, createdAt])
+  @@index([alumniId])
+  @@index([giftItemId])
+  @@index([schoolId, classSectionId])
+}
+
+/// What actually arrived. Pledged and received are two different numbers and
+/// both get written down — 38 promised, 36 delivered is a real and common event.
+model GiftReceipt {
+  id               String   @id @default(uuid()) @db.Uuid
+  schoolId         String   @db.Uuid
+  pledgeId         String   @db.Uuid
+  receivedQty      Int
+  receivedAt       DateTime @default(now())
+  receivedByUserId String?  @db.Uuid
+  note             String?
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledge GiftPledge @relation(fields: [pledgeId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, pledgeId])
+  @@index([pledgeId])
+}
+
+/// The handing out. `absentQty` exists because the school already knows the 38
+/// children, so "two absent, collected Monday" is a fact and not an estimate.
+///
+/// A photograph or document hung on a pledge.
+///
+/// Stored the way MediaAsset is (a storage key plus a URL) rather than pointing
+/// at one: a distribution photograph is not site content, must never appear in
+/// the school's media library where it could be dropped onto a public page by
+/// accident, and is deleted with the pledge.
+model GiftAttachment {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  pledgeId String @db.Uuid
+
+  kind       GiftAttachmentKind
+  storageKey String
+  url        String
+  caption    String?
+  byUserId   String?            @db.Uuid
+  createdAt  DateTime           @default(now())
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledge GiftPledge @relation(fields: [pledgeId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, pledgeId])
+  @@index([pledgeId, kind])
+}
+
+///
+/// One line of a pledge's history.
+///
+/// The pledge carries its CURRENT status; this carries how it got there, and it
+/// is what the donor actually reads. A status field alone answers "where is it"
+/// and never "what happened" — and for somebody who handed over money months
+/// ago, the second question is the whole point.
+///
+/// Append-only. Nothing edits or deletes a row here; a correction is another
+/// row, because a history that can be rewritten is not a history.
+model GiftEvent {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  pledgeId String @db.Uuid
+
+  status GiftStatus
+  note   String?
+
+  /// Who moved it. At most ONE of these is set — the office through a staff
+  /// login, or the donor from their own portal. Neither set means the system
+  /// did it. Not a relation on either side: deleting a staff account must not
+  /// erase the record of what they did.
+  byUserId   String? @db.Uuid
+  byAlumniId String? @db.Uuid
+
+  at DateTime @default(now())
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledge GiftPledge @relation(fields: [pledgeId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, pledgeId])
+  @@index([pledgeId, at])
+}
+
+model GiftDistribution {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  pledgeId       String   @db.Uuid
+  classSectionId String?  @db.Uuid
+  distributedQty Int
+  absentQty      Int      @default(0)
+  distributedAt  DateTime @default(now())
+  byUserId       String?  @db.Uuid
+  note           String?
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  pledge GiftPledge @relation(fields: [pledgeId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, pledgeId])
+  @@index([pledgeId])
+}
+
+/// A lecture or skill session an alumnus gives to a class. The only feature in
+/// Homecoming that puts an adult in a room with children, which is why
+/// `accompanyingTeacherId` is checked before SCHEDULED and why only an alumnus
+/// with `trustedForStudents` can create one.
+model GuestSession {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  alumniId String @db.Uuid
+
+  title   String
+  summary String?
+  mode    GuestSessionMode @default(IN_PERSON)
+
+  classSectionId     String @db.Uuid
+  /// Frozen at request time, same reason as GiftPledge.headcountAtPledge.
+  headcountAtBooking Int
+
+  /// What the HOST asked for.
+  requestedDate     DateTime
+  requestedPeriodId String    @db.Uuid
+  /// What the SCHOOL suggested back. Both slots are held until the host answers.
+  counterDate       DateTime?
+  counterPeriodId   String?   @db.Uuid
+  counterNote       String?
+  /// One counter each, then it is a phone call. Software that lets two people
+  /// haggle indefinitely just moves the argument somewhere worse.
+  counterRound      Int       @default(0)
+  /// Set only on SCHEDULED, and it is whichever of the two above was accepted.
+  scheduledDate     DateTime?
+  scheduledPeriodId String?   @db.Uuid
+
+  /// REQUIRED before SCHEDULED. The safeguarding rule as a constraint rather
+  /// than a paragraph in a policy nobody reads.
+  accompanyingTeacherId String? @db.Uuid
+  /// Recorded AT DECISION TIME, never inferred later — six months on, "which
+  /// period did 9-A lose" is a syllabus question somebody will actually ask.
+  displacedSubjectId    String? @db.Uuid
+  displacedTeacherId    String? @db.Uuid
+  roomId                String? @db.Uuid
+  meetingUrl            String?
+
+  status          GuestSessionStatus @default(REQUESTED)
+  declineReason   String?
+  decidedByUserId String?            @db.Uuid
+  decidedAt       DateTime?
+  deliveredAt     DateTime?
+  attendedCount   Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alumni Alumni @relation(fields: [alumniId], references: [id], onDelete: Cascade)
+  /// NOTE: a PARTIAL unique index also guards this table —
+  /// GuestSession_live_slot_key on (schoolId, classSectionId, requestedDate,
+  /// requestedPeriodId) WHERE status IN ('REQUESTED','COUNTERED','SCHEDULED').
+  /// Prisma cannot express a partial unique index, so it lives in the migration
+  /// SQL only and does not appear here. It is what actually prevents two alumni
+  /// double-booking one period: the availability check and the insert are in one
+  /// transaction, but READ COMMITTED means both would still read FREE.
+
+  @@index([schoolId, status])
+  @@index([schoolId, requestedDate])
+  @@index([alumniId])
+  @@index([schoolId, classSectionId])
+}
+
+/// The alumnus's credential. There is no password.
+///
+/// An alumnus touches this product perhaps three times a year, and nobody
+/// remembers a password they use three times a year — every low-frequency
+/// product that shipped one ended up running a password-reset service instead.
+/// So the LINK is the credential: signed, single-use, expiring, tied to one
+/// Alumni row, and pasted into a batch WhatsApp group by the office.
+///
+/// Only the sha256 hash is stored, exactly as PasswordResetToken does it; the
+/// raw token lives in the link and nowhere else. `usedAt` makes it single-use,
+/// and a used CLAIM token is what mints the long-lived device session.
+///
+/// This is deliberately weak on its own, and that is safe: possessing a link
+/// buys the directory and nothing else. Every action that carries real risk is
+/// gated on a flag a human grants — `Alumni.status = VERIFIED` to appear at
+/// all, `trustedForStudents` to go anywhere near a child, and the office's
+/// accept/receive/distribute states for anything involving money or goods.
+model AlumniAccessToken {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  alumniId String @db.Uuid
+
+  /// sha256 of the raw token. Never the token itself.
+  tokenHash String          @unique
+  kind      AlumniTokenKind @default(CLAIM)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime        @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alumni Alumni @relation(fields: [alumniId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, alumniId])
+  @@index([expiresAt])
+}
+
+enum AlumniTokenKind {
+  /// Emailed or WhatsApped once, to prove "this is me" the first time.
+  CLAIM
+  /// The 90-day device session minted after a claim. Deliberately long: a
+  /// returning alumnus should never authenticate twice in a term.
+  SESSION
+}
+
+enum LinkRequestStatus {
+  PENDING
+  SENT
+  DISMISSED
+}
+
+/// "I am already registered — send me my link."
+///
+/// A row exists ONLY when the contact matched a verified alumnus. A non-match
+/// writes nothing at all, while the response to the caller is identical either
+/// way: telling somebody whether an address belongs to an alumnus of this
+/// school is an enumeration oracle, and it is also the only thing this endpoint
+/// could leak.
+///
+/// It is a queue rather than an email because email does not work yet
+/// (SMTP_PASS is missing on Preview) and SMS needs DLT registration. The office
+/// presses one button and gets a link to paste into the batch WhatsApp group,
+/// which is where these people actually are. The day mail works, the same
+/// request sends itself and never reaches a human.
+model AlumniLinkRequest {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @db.Uuid
+  alumniId String @db.Uuid
+
+  status       LinkRequestStatus @default(PENDING)
+  createdAt    DateTime          @default(now())
+  sentAt       DateTime?
+  sentByUserId String?           @db.Uuid
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alumni Alumni @relation(fields: [alumniId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@index([alumniId])
+}
+
+/// One hour of traffic for one route, promoted out of Redis.
+///
+/// Redis holds only the live minutes — it is a buffer, not a store, and its
+/// keys expire. History lives here so the ops dashboard can answer "was last
+/// Monday worse", which is the question that catches a limit before it is hit.
+///
+/// Hourly rather than per-minute on purpose: 25 routes x 24 hours is ~600 rows
+/// a day, where minutes would be 36,000. Trend does not need the resolution,
+/// and the live view already has it.
+model MetricRollup {
+  /// Truncated to the hour, UTC.
+  hour         DateTime
+  route        String
+  count        Int      @default(0)
+  errors       Int      @default(0)
+  txTimeouts   Int      @default(0)
+  poolTimeouts Int      @default(0)
+  /// Fixed-bucket histograms. Summable across instances and across minutes,
+  /// which is the property that lets an hour be built from sixty of them.
+  latency      Int[]
+  dbHold       Int[]
+
+  @@id([hour, route])
+  @@index([hour])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEES
+//
+// Money the school is owed, money that arrived, and the ledger that reconciles
+// the two. Built to collect through a bank transfer a human verifies TODAY,
+// and through a payment gateway LATER — without either side of that change
+// touching anything above `FeePayment`. This mirrors the decision `EventPayment`
+// already made one level down ("the same row, which is the entire reason to
+// build this table before there is a gateway to fill it").
+//
+// Two rules govern the whole block:
+//   1. `FeeLedgerEntry` is append-only and is the ONLY source of a balance.
+//      Nothing stores a running total; a balance is SUM(signed amounts).
+//   2. Anything a parent has already been shown is immutable. Corrections are
+//      new rows (credit notes, reversals), never UPDATEs.
+//
+// Amounts are `amountMinor` — paise, Int — matching EventPayment's vocabulary.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// How often a category is charged. Drives invoice generation: ONE_TIME is
+/// billed on the first invoice a student is ever issued, ANNUAL on the first
+/// of each session, PER_TERM on every one.
+enum FeeFrequency {
+  PER_TERM
+  ANNUAL
+  ONE_TIME
+}
+
+/// Where a fee payment has got to. Extends the vocabulary `PaymentStatus`
+/// already uses with the two states a human-verified rail needs: a parent has
+/// claimed a payment (SUBMITTED) and the office did not accept it (REJECTED).
+/// Kept as its own enum rather than extending PaymentStatus because event
+/// registrations must never acquire a SUBMITTED state they have no screen for.
+enum FeePaymentStatus {
+  /// Parent says they paid; nobody has checked yet.
+  SUBMITTED
+  /// Verified by the office, or auto-verified by a gateway webhook. Money is
+  /// in the ledger from this moment.
+  VERIFIED
+  /// Not accepted. `rejectionReason` is shown to the parent verbatim.
+  REJECTED
+  /// Reversed after verification (bounced cheque, wrong student, duplicate).
+  /// The ledger keeps the original credit and adds a matching debit.
+  REVERSED
+}
+
+/// How the money physically moved. Recorded from what the parent says, then
+/// confirmed by whoever verifies. Not the same axis as `FeePayment.provider`:
+/// provider is which SYSTEM handled it, method is which INSTRUMENT was used.
+enum FeePaymentMethod {
+  UPI
+  NEFT_IMPS
+  CHEQUE
+  CASH
+  CARD
+  NETBANKING
+  OTHER
+}
+
+/// Direction of a ledger row. A student's balance is
+/// SUM(DEBIT) - SUM(CREDIT); positive means they owe.
+enum FeeLedgerKind {
+  /// The school billed the student (an invoice line).
+  DEBIT
+  /// Money arrived, or an amount was waived.
+  CREDIT
+}
+
+/// What a category is for, in the school's own words — and, critically, in the
+/// words the PARENT reads on their bill. `description` is not documentation:
+/// it is rendered under every line item, which is the whole transparency
+/// mechanism. "Exam ₹800" starts an argument; "Exam ₹800 — question papers,
+/// answer sheets and result processing" ends one.
+model FeeCategory {
+  id            String       @id @default(uuid()) @db.Uuid
+  schoolId      String       @db.Uuid
+  name          String
+  /// Shown to parents beneath the amount. Required, deliberately.
+  description   String
+  frequency     FeeFrequency @default(PER_TERM)
+  /// Opt-in categories (transport, books) are billed only to students whose
+  /// `FeeAssignment.optIns` names them. Non-optional categories bill everyone
+  /// in the grade.
+  isOptional    Boolean      @default(false)
+  /// False for government-reimbursed heads (RTE). Such lines still appear on
+  /// the bill and in reports, but never make a student a defaulter and never
+  /// trigger a reminder.
+  isCollectible Boolean      @default(true)
+  order         Int          @default(0)
+  /// Soft delete. A category referenced by an issued invoice can never be
+  /// removed, because that invoice must keep rendering.
+  archivedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  school      School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  planItems   FeePlanItem[]
+  concessions FeeConcession[]
+  lines       FeeInvoiceLine[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+/// One instalment of a session. Due dates live here, so "when is Term 2 due"
+/// has exactly one answer for the whole school.
+model FeeTerm {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  academicYearId String   @db.Uuid
+  name           String
+  /// A DATE, not an instant — "due 10 September" is a calendar fact, and
+  /// lateness is decided against 23:59:59 in the school's timezone.
+  dueDate        DateTime @db.Date
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  planItems    FeePlanItem[]
+  invoices     FeeInvoice[]
+  concessions  FeeConcession[]
+
+  @@unique([schoolId, academicYearId, name])
+  @@index([schoolId, academicYearId])
+}
+
+/// A version of the whole fee structure for one session. Editing amounts after
+/// bills exist mints a NEW version; issued invoices keep pointing at the one
+/// they were built from, so last month's bill still reproduces exactly.
+model FeePlan {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  academicYearId String   @db.Uuid
+  version        Int      @default(1)
+  /// Only one version per year is open for editing; the rest are frozen the
+  /// moment they are used to issue a bill.
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  items        FeePlanItem[]
+  assignments  FeeAssignment[]
+  invoices     FeeInvoice[]
+
+  @@unique([schoolId, academicYearId, version])
+  @@index([schoolId, academicYearId])
+}
+
+/// One cell of the admin's grid: this grade pays this much for this category,
+/// in this term. `termId` null means "same in every term" — which is how the
+/// grid is filled in normally, with per-term rows written only where a school
+/// genuinely charges differently across the year.
+model FeePlanItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  schoolId    String  @db.Uuid
+  planId      String  @db.Uuid
+  gradeId     String  @db.Uuid
+  categoryId  String  @db.Uuid
+  /// Null = applies to every term of the session.
+  termId      String? @db.Uuid
+  amountMinor Int
+
+  school   School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  plan     FeePlan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  grade    Grade       @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  category FeeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  term     FeeTerm?    @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, gradeId, categoryId, termId])
+  @@index([schoolId, planId])
+  @@index([schoolId, gradeId])
+  @@index([schoolId, categoryId])
+  @@index([schoolId, termId])
+}
+
+/// Which plan version a student is billed from, and which optional categories
+/// they have opted into. Without this row a student is billed their grade's
+/// non-optional categories from the active plan — so assignment is only needed
+/// to record exceptions like a bus route.
+model FeeAssignment {
+  id               String   @id @default(uuid()) @db.Uuid
+  schoolId         String   @db.Uuid
+  studentId        String   @db.Uuid
+  planId           String   @db.Uuid
+  /// FeeCategory ids the student has opted into (transport, books).
+  optInCategoryIds String[] @default([])
+  /// Government-reimbursed seat. Collectible lines still generate; reminders
+  /// and defaulter lists skip them.
+  isRte            Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  plan    FeePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, planId])
+  @@index([schoolId, studentId])
+  @@index([schoolId, planId])
+}
+
+/// A discount for one student. Always rendered on the bill as its own named
+/// line — a parent who cannot see the concession does not know they got it.
+model FeeConcession {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @db.Uuid
+  studentId   String   @db.Uuid
+  /// Null = applies to the whole bill rather than one category.
+  categoryId  String?  @db.Uuid
+  /// Null = every term. Set to scope a one-off waiver to a single instalment.
+  termId      String?  @db.Uuid
+  /// Basis points (2000 = 20%), so a percentage never needs a float. Exactly
+  /// one of percentBps / amountMinor is set; the service enforces it.
+  percentBps  Int?
+  amountMinor Int?
+  /// Shown to the parent. "Sibling concession — second child at the school".
+  reason      String
+  createdBy   String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school   School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student  Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  category FeeCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  term     FeeTerm?     @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, studentId])
+  @@index([schoolId, categoryId])
+  @@index([schoolId, termId])
+}
+
+/// A bill. IMMUTABLE once issued — the parent has seen it. `number` is a
+/// gap-free per-school sequence allocated inside the issuing transaction.
+model FeeInvoice {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @db.Uuid
+  studentId       String    @db.Uuid
+  termId          String    @db.Uuid
+  planId          String    @db.Uuid
+  number          String
+  /// Copied from the term at issue time. If the school later moves the term's
+  /// due date, bills already sent keep the date printed on them.
+  dueDate         DateTime  @db.Date
+  /// Sum of line netMinor. Denormalised because it is read on every list
+  /// screen and can never change — the invoice is immutable.
+  totalMinor      Int
+  issuedAt        DateTime  @default(now())
+  /// Set when the school explicitly cancels a bill. Cancelling does not delete
+  /// it; the ledger gets a reversing entry.
+  cancelledAt     DateTime?
+  cancelledReason String?
+
+  school      School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  term        FeeTerm          @relation(fields: [termId], references: [id], onDelete: Restrict)
+  plan        FeePlan          @relation(fields: [planId], references: [id], onDelete: Restrict)
+  lines       FeeInvoiceLine[]
+  allocations FeeAllocation[]
+  payments    FeePayment[]
+
+  /// One bill per student per term. This is what makes "generate bills" safe
+  /// to run twice.
+  @@unique([studentId, termId])
+  @@unique([schoolId, number])
+  @@index([schoolId, termId])
+  @@index([schoolId, studentId])
+  @@index([schoolId, dueDate])
+}
+
+/// One line of a bill. Gross, concession and net are all stored so the parent
+/// sees what was charged AND what was waived, and so a report can total either
+/// without re-deriving a rule that may since have changed.
+model FeeInvoiceLine {
+  id                  String  @id @default(uuid()) @db.Uuid
+  schoolId            String  @db.Uuid
+  invoiceId           String  @db.Uuid
+  categoryId          String  @db.Uuid
+  /// Copied from the category at issue time — renaming a category must not
+  /// rewrite bills a parent already has.
+  categoryName        String
+  categoryDescription String
+  grossMinor          Int
+  concessionMinor     Int     @default(0)
+  netMinor            Int
+  /// Why the concession applied, shown as its own line. Null when there is none.
+  concessionReason    String?
+  isCollectible       Boolean @default(true)
+  order               Int     @default(0)
+
+  school      School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  invoice     FeeInvoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  category    FeeCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  allocations FeeAllocation[]
+
+  @@index([schoolId, invoiceId])
+  @@index([schoolId, categoryId])
+}
+
+/// Money that changed hands — whoever moved it.
+///
+/// Written today by a parent claiming a bank transfer (`provider = 'MANUAL'`,
+/// status SUBMITTED) and by a clerk recording cash; written by a gateway
+/// webhook later (`provider = 'PHONEPE'`, status VERIFIED on capture). The
+/// same row either way, which is why the ledger, receipts, reports and every
+/// parent-facing screen never learn which rail was used.
+model FeePayment {
+  id        String  @id @default(uuid()) @db.Uuid
+  schoolId  String  @db.Uuid
+  studentId String  @db.Uuid
+  /// Which bill this is against. Null is legal for an advance payment made
+  /// before a bill exists.
+  invoiceId String? @db.Uuid
+
+  /// Matches PaymentProvider.key — 'MANUAL' | 'PHONEPE' | 'RAZORPAY'. A string
+  /// rather than an enum so adding a provider is an adapter file, not a
+  /// migration.
+  provider    String           @default("MANUAL")
+  /// The UTR / UPI reference / gateway payment id. Unique per school, which is
+  /// what catches the same transfer being submitted twice.
+  providerRef String?
+  method      FeePaymentMethod
+  amountMinor Int
+  currency    String           @default("INR")
+  status      FeePaymentStatus @default(SUBMITTED)
+
+  /// A DATE — what the parent says is on their bank statement.
+  paidOn   DateTime @db.Date
+  /// S3 key of the screenshot or receipt image. Read through a presigned URL;
+  /// never public.
+  proofKey String?
+  note     String?
+
+  /// The parent (or the clerk, for cash at the counter) who claimed it.
+  submittedBy     String?   @db.Uuid
+  submittedAt     DateTime  @default(now())
+  /// The staff member who accepted or rejected it.
+  verifiedBy      String?   @db.Uuid
+  verifiedAt      DateTime?
+  /// Shown to the parent verbatim, so it must be actionable.
+  rejectionReason String?
+  reversedAt      DateTime?
+  reversedReason  String?
+
+  school      School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student     Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  invoice     FeeInvoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  allocations FeeAllocation[]
+  receipt     FeeReceipt?
+
+  /// NOTE: the duplicate-reference guard is a PARTIAL unique index
+  /// (`WHERE "providerRef" IS NOT NULL`) created in the migration, not an
+  /// `@@unique` here — Prisma cannot express a partial index, and declaring a
+  /// full one would both break cash payments (many null refs) and read as
+  /// permanent drift. Grep `FeePayment_schoolId_provider_providerRef_key`.
+  @@index([schoolId, status])
+  @@index([schoolId, studentId])
+  @@index([schoolId, invoiceId])
+  @@index([schoolId, submittedAt])
+}
+
+/// Which lines of which bill a payment actually paid. Written by the
+/// allocation waterfall when a payment is verified, so partial payments,
+/// advances and reversals all have somewhere honest to land.
+model FeeAllocation {
+  id            String @id @default(uuid()) @db.Uuid
+  schoolId      String @db.Uuid
+  paymentId     String @db.Uuid
+  invoiceId     String @db.Uuid
+  invoiceLineId String @db.Uuid
+  amountMinor   Int
+
+  school      School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payment     FeePayment     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoice     FeeInvoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceLine FeeInvoiceLine @relation(fields: [invoiceLineId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, paymentId])
+  @@index([schoolId, invoiceId])
+  @@index([schoolId, invoiceLineId])
+}
+
+/// THE TRUTH. Append-only: no row is ever updated or deleted, and a balance is
+/// SUM over this table and nowhere else. Every other fee table is a writer
+/// into it. A correction is a new opposing row, never an edit.
+model FeeLedgerEntry {
+  id          String        @id @default(uuid()) @db.Uuid
+  schoolId    String        @db.Uuid
+  studentId   String        @db.Uuid
+  kind        FeeLedgerKind
+  amountMinor Int
+  /// What caused it — 'INVOICE' | 'PAYMENT' | 'CONCESSION' | 'REVERSAL' |
+  /// 'CANCELLATION'. A string for the same reason `provider` is.
+  refType     String
+  refId       String        @db.Uuid
+  /// Rendered on the student's fee ledger screen.
+  narration   String
+  /// When the money moved, which is not always when the row was written.
+  occurredAt  DateTime      @default(now())
+  createdAt   DateTime      @default(now())
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, studentId, occurredAt])
+  @@index([schoolId, refType, refId])
+}
+
+/// Issued the moment a payment is verified. `number` comes from a per-school
+/// sequence inside that same transaction, so two clerks accepting at once
+/// cannot collide. Allocated on SAVE, never on print — reprints keep the number.
+model FeeReceipt {
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @db.Uuid
+  paymentId   String   @unique @db.Uuid
+  studentId   String   @db.Uuid
+  number      String
+  amountMinor Int
+  issuedAt    DateTime @default(now())
+
+  school  School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payment FeePayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, number])
+  @@index([schoolId, studentId])
+}
+
+/// Per-school, per-provider gateway configuration. One row per provider a
+/// school has touched. `config` holds the provider's own declared fields;
+/// `secrets` holds the encrypted half and is NEVER selected into a response —
+/// the API returns only which keys are present, never their values.
+model SchoolPaymentConfig {
+  id         String   @id @default(uuid()) @db.Uuid
+  schoolId   String   @db.Uuid
+  /// Matches PaymentProvider.key.
+  provider   String
+  enabled    Boolean  @default(false)
+  /// Non-secret declared fields (merchant id, account id).
+  config     Json     @default("{}")
+  /// Encrypted at rest. Write-only from the admin screen's point of view.
+  secrets    Json     @default("{}")
+  /// 'NOT_CONFIGURED' | 'PENDING' | 'ACTIVE' | 'SUSPENDED' — what the school
+  /// sees as a status pill, and what disables the parent's Pay Now button.
+  status     String   @default("NOT_CONFIGURED")
+  statusNote String?
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, provider])
+  @@index([schoolId])
+}
+
+/// The bank account parents transfer into. Deliberately NOT secret — it is a
+/// deposit account, printed on the bill and shown in the portal. `isVisible`
+/// is the switch that reveals the whole block to parents.
+model SchoolBankDetail {
+  id            String   @id @default(uuid()) @db.Uuid
+  schoolId      String   @unique @db.Uuid
+  accountName   String
+  accountNumber String
+  ifsc          String
+  bankName      String
+  branch        String?
+  upiId         String?
+  /// S3 key of the uploaded UPI QR image.
+  upiQrKey      String?
+  /// Free text shown under the details — "write your child's admission number
+  /// in the remark".
+  instructions  String?
+  isVisible     Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+/// Every financial mutation, hash-chained so tampering is detectable rather
+/// than merely discouraged. `prevHash` is the previous row's `hash` for this
+/// school; `hash` is sha256 over the row's own content plus prevHash.
+model FeeAudit {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  actorId   String?  @db.Uuid
+  action    String
+  refType   String
+  refId     String   @db.Uuid
+  before    Json?
+  after     Json?
+  prevHash  String?
+  hash      String
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+  @@index([schoolId, refType, refId])
+}
+
+/// Per-school, per-series counter behind receipt and invoice numbers. Bumped
+/// by the `fee_next_number(school, series)` SQL function inside the caller's
+/// transaction, so two clerks accepting at the same instant cannot collide and
+/// the series stays gap-free. A counter row rather than a Postgres SEQUENCE
+/// because a sequence is global, while these must restart per school.
+model FeeCounter {
+  schoolId String @db.Uuid
+  series   String
+  value    Int    @default(0)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@id([schoolId, series])
+}
+
+/// How a school charges for a late payment. NONE is a first-class choice, not
+/// an absence — a school that does not charge says so, rather than leaving an
+/// amount at zero and hoping the code reads it the same way.
+enum LateFeeMode {
+  NONE
+  /// Charged once, however late.
+  FLAT
+  /// Charged for each day past the due date (and past any grace days).
+  PER_DAY
+}
+
+/// One row per school, created on first read with these defaults — the same
+/// shape `LibrarySettings` uses, and for the same reason: the school should
+/// never meet an empty settings screen.
+///
+/// The late fee is deliberately NOT stored per bill. It is computed from this
+/// rule, the bill's due date and the day being asked about (see
+/// `late-fee.ts`), so the parent's screen, the office's desk and the ledger
+/// cannot disagree, and so no nightly job can charge the wrong amount by
+/// running late — or not running.
+model FeeSettings {
+  id       String @id @default(uuid()) @db.Uuid
+  schoolId String @unique @db.Uuid
+
+  lateFeeMode        LateFeeMode @default(NONE)
+  /// FLAT: the whole fee. PER_DAY: the daily rate. Paise.
+  lateFeeAmountMinor Int         @default(0)
+  /// Days after the due date before anything is charged.
+  lateFeeGraceDays   Int         @default(0)
+  /// Ceiling in paise. 0 means uncapped — mostly matters for PER_DAY, where an
+  /// uncapped daily charge on a forgotten bill becomes indefensible by March.
+  lateFeeCapMinor    Int         @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// The Press — printed documents with a register (report cards, certificates).
+// Design: "The Clear Runway" build plan (2 Sept 2026).
+//
+// Two structural decisions, both inherited from modules that already paid for
+// them:
+//
+//   1. `PressIssue.type` is TEXT, not an enum — the `FeePayment.provider` /
+//      `NotificationOutbox.kind` decision. Adding a document type (ID cards,
+//      HPC, consent forms) is a template file and a validator entry, never a
+//      migration. Values are validated at write time via `PRESS_DOC_TYPES`
+//      (`@skoolos/types`).
+//
+//   2. `payload` is an immutable SNAPSHOT of exactly what was printed — the
+//      `GiftEvent` philosophy. A reprint renders the snapshot, never a fresh
+//      compile, so the copy in the drawer and the copy on screen cannot
+//      disagree. The register row IS the feature: a TC register is a
+//      statutory record.
+// ════════════════════════════════════════════════════════════════════════════
+
+/// One row per issued document. `serial` comes from `press_next_number` (an
+/// atomic per-school upsert, same shape as `fee_next_number`) inside the same
+/// transaction as this row, so two clerks issuing at once cannot collide.
+model PressIssue {
+  id         String   @id @default(uuid()) @db.Uuid
+  schoolId   String   @db.Uuid
+  /// REPORT_CARD | TC | BONAFIDE | CHARACTER — see PRESS_DOC_TYPES.
+  type       String
+  /// e.g. "TC/2026/0041". Unique per school+type; allocated on ISSUE, never on
+  /// print — reprints keep the serial (the FeeReceipt rule).
+  serial     String
+  studentId  String   @db.Uuid
+  /// REPORT_CARD only: the window the card belongs to. Certificates carry
+  /// null. With the unique below (Postgres treats NULLs as distinct) this
+  /// makes issuing a card idempotent per window at the DATABASE level — a
+  /// double-click or a concurrent clerk gets "already issued", never a
+  /// second serial for the same child.
+  windowId   String?  @db.Uuid
+  /// Everything the sheet renders, resolved to display strings at issue time.
+  payload    Json
+  issuedById String   @db.Uuid // User.id
+  issuedAt   DateTime @default(now())
+  /// The one-way correction path: a voided entry stays in the register (a
+  /// struck-through page in a paper book) and frees the once-per-window slot
+  /// so a corrected card can be issued afresh. Enforced by the
+  /// `press_issue_immutable` trigger — the ONLY update the database accepts
+  /// is this transition, and deletes are refused.
+  voidedAt   DateTime?
+  voidedById String?  @db.Uuid
+  voidNote   String?
+
+  school  School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  window  ReportWindow? @relation(fields: [windowId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, type, serial])
+  // Once-per-window idempotency lives in the migration as a PARTIAL unique
+  // (WHERE "voidedAt" IS NULL) — Prisma cannot express partial uniques, so
+  // the index is deliberate schema drift, documented here. The plain index
+  // below keeps the lookup fast either way.
+  @@index([schoolId, type, windowId, studentId])
+  @@index([schoolId, studentId])
+  @@index([schoolId, type, issuedAt])
+}
+
+/// Per-school, per-series serial counter. Reached only through
+/// `press_next_number` — never read-then-write from application code
+/// (READ COMMITTED makes that a duplicate-serial race; the upsert takes a
+/// row lock).
+model PressCounter {
+  schoolId String @db.Uuid
+  series   String
+  value    Int    @default(0)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@id([schoolId, series])
+}
+
+/// A reporting period — "Term I", "Half-Yearly". The ONE configuration the
+/// report card needs: everything else (marks, attendance, grades) is computed
+/// from what teachers already entered, scoped by this window's date range.
+/// Grades are NOT stored per window; they are derived at compile time so the
+/// office screen, the printed card and the parent's copy cannot disagree
+/// (the late-fee rule, applied to marks).
+model ReportWindow {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  academicYearId String   @db.Uuid
+  name           String
+  startDate      DateTime @db.Date
+  endDate        DateTime @db.Date
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school       School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear   @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  remarks      ReportRemark[]
+  issues       PressIssue[]
+
+  @@unique([schoolId, academicYearId, name])
+  @@index([schoolId])
+}
+
+/// The class teacher's sentence on a child, per reporting window. Editable
+/// until the card is issued; the issued card carries its own copy in the
+/// snapshot, so later edits change the NEXT print, never the register.
+model ReportRemark {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  windowId  String   @db.Uuid
+  studentId String   @db.Uuid
+  text      String
+  authorId  String   @db.Uuid // User.id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school  School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  window  ReportWindow @relation(fields: [windowId], references: [id], onDelete: Cascade)
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([windowId, studentId])
+  @@index([schoolId, studentId])
 }

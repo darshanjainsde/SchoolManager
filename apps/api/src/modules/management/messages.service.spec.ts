@@ -1,10 +1,11 @@
+import type { NotificationOutboxService } from './notification-outbox.service';
 const txMock = {
   student: { findFirst: jest.fn() },
   teacher: { findFirst: jest.fn() },
   subject: { findFirst: jest.fn() },
   school: { findFirst: jest.fn() },
   messageThread: { findFirst: jest.fn(), findMany: jest.fn(), upsert: jest.fn(), update: jest.fn() },
-  message: { create: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
+  message: { create: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), groupBy: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   notificationOutbox: { create: jest.fn() },
   notification: { createMany: jest.fn() },
 };
@@ -60,7 +61,6 @@ function threadRow(over: Record<string, unknown> = {}) {
     teacher: { firstName: 'Asha', lastName: 'Rao' },
     subject: { name: 'Mathematics' },
     messages: [{ body: 'hi sir' }],
-    _count: { messages: 2 },
     ...over,
   };
 }
@@ -68,9 +68,11 @@ function threadRow(over: Record<string, unknown> = {}) {
 describe('MessagesService', () => {
   const tenant = { requireTenant: jest.fn() };
   const timetable = { listForClass: jest.fn() };
+  const outbox = { drainSoon: jest.fn() };
   const svc = new MessagesService(
     tenant as unknown as TenantContextService,
     timetable as unknown as TimetableService,
+    outbox as unknown as NotificationOutboxService,
   );
 
   beforeEach(() => {
@@ -228,10 +230,16 @@ describe('MessagesService', () => {
   describe('thread list mapping', () => {
     it('maps names, preview and unread count newest-first for the student side', async () => {
       txMock.messageThread.findMany.mockResolvedValue([threadRow()]);
+      // Unread is a scoped aggregate over Message, not a relation `_count` —
+      // the include version seq-scanned every school's messages.
+      txMock.message.groupBy.mockResolvedValue([{ threadId: THREAD, _count: { _all: 2 } }]);
       const [row] = await svc.studentThreads(STUDENT_USER);
       expect(row).toMatchObject({ teacherName: 'Asha Rao', studentName: 'Ravi Kumar', subjectName: 'Mathematics', lastMessagePreview: 'hi sir', unreadCount: 2 });
       expect(txMock.messageThread.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { studentId: STUDENT }, orderBy: { lastMessageAt: 'desc' } }),
+        expect.objectContaining({
+          where: { schoolId: SCHOOL, studentId: STUDENT },
+          orderBy: { lastMessageAt: 'desc' },
+        }),
       );
     });
   });

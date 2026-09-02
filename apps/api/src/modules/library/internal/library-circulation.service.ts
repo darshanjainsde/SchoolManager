@@ -14,6 +14,7 @@ import {
   type LibraryRules,
 } from './library-policy';
 import type { IssueDto } from './library.dto';
+import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 export interface BorrowerRef {
   kind: BorrowerKind;
@@ -171,7 +172,7 @@ export class LibraryCirculationService {
     return withTenant(schoolId, async (tx) => {
       const [students, teachers] = await Promise.all([
         tx.student.findMany({
-          where: {
+          where: { schoolId,
             isActive: true,
             OR: [
               { code: { equals: query, mode: 'insensitive' } },
@@ -191,7 +192,7 @@ export class LibraryCirculationService {
           },
         }),
         tx.teacher.findMany({
-          where: {
+          where: { schoolId,
             isActive: true,
             OR: [
               { firstName: { contains: query, mode: 'insensitive' } },
@@ -210,7 +211,7 @@ export class LibraryCirculationService {
       };
       const open = await tx.libraryIssue.groupBy({
         by: ['studentId', 'teacherId'],
-        where: {
+        where: { schoolId,
           returnedOn: null,
           OR: [{ studentId: { in: ids.studentIds } }, { teacherId: { in: ids.teacherIds } }],
         },
@@ -250,15 +251,15 @@ export class LibraryCirculationService {
       const rules = this.settings.rules(settings);
       const where = kind === 'STUDENT' ? { studentId: id } : { teacherId: id };
       const [holdings, borrower] = await Promise.all([
-        tx.libraryIssue.findMany({
-          where: { ...where, returnedOn: null },
+        tx.libraryIssue.findMany({ take: LIST_CEILING.ACTIVITY,
+          where: { schoolId, ...where, returnedOn: null },
           orderBy: { dueOn: 'asc' },
           include: ISSUE_INCLUDE,
         }),
         this.resolveBorrower(tx, kind, id),
       ]);
       const fixed = await tx.libraryFine.aggregate({
-        where: { ...where, status: 'DUE' },
+        where: { schoolId, ...where, status: 'DUE' },
         _sum: { amountRupees: true },
       });
       const cards = holdings.map((h) => toIssueCard(h, rules, todayISO));
@@ -339,7 +340,7 @@ export class LibraryCirculationService {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${schoolId}), hashtext(${borrowerId}))::text`;
 
       const borrowerWhere = kind === 'STUDENT' ? { studentId: borrowerId } : { teacherId: borrowerId };
-      const openCount = await tx.libraryIssue.count({ where: { ...borrowerWhere, returnedOn: null } });
+      const openCount = await tx.libraryIssue.count({ where: { schoolId, ...borrowerWhere, returnedOn: null } });
       const limit = loanLimitFor(rules, kind);
       if (openCount >= limit && !dto.override) {
         throw new ApiError(
@@ -353,7 +354,7 @@ export class LibraryCirculationService {
       let copy: { id: string; titleId: string } | null = null;
       if (dto.copyId) {
         const c = await tx.libraryBookCopy.findFirst({
-          where: { id: dto.copyId, lostAt: null },
+          where: { schoolId, id: dto.copyId, lostAt: null },
           select: { id: true, titleId: true, issues: { where: { returnedOn: null }, select: { id: true } } },
         });
         if (!c) throw new ApiError('NOT_FOUND', 'No such copy (or it is written off).', 404);
@@ -361,13 +362,13 @@ export class LibraryCirculationService {
         copy = { id: c.id, titleId: c.titleId };
       } else {
         const free = await tx.libraryBookCopy.findFirst({
-          where: { titleId: dto.titleId!, lostAt: null, issues: { none: { returnedOn: null } } },
+          where: { schoolId, titleId: dto.titleId!, lostAt: null, issues: { none: { returnedOn: null } } },
           orderBy: { accessionNo: 'asc' },
           select: { id: true, titleId: true },
         });
         if (!free) {
           const earliest = await tx.libraryIssue.findFirst({
-            where: { copy: { titleId: dto.titleId! }, returnedOn: null },
+            where: { schoolId, copy: { titleId: dto.titleId! }, returnedOn: null },
             orderBy: { dueOn: 'asc' },
             select: { dueOn: true },
           });
@@ -383,7 +384,7 @@ export class LibraryCirculationService {
       }
 
       const already = await tx.libraryIssue.findFirst({
-        where: { ...borrowerWhere, returnedOn: null, copy: { titleId: copy.titleId } },
+        where: { schoolId, ...borrowerWhere, returnedOn: null, copy: { titleId: copy.titleId } },
         select: { id: true },
       });
       if (already && !dto.override) {
@@ -476,7 +477,7 @@ export class LibraryCirculationService {
       // A racing issue of the same copy makes reopening ambiguous; the partial
       // unique index turns that into a 409 rather than two open loans.
       try {
-        await tx.libraryFine.deleteMany({ where: { issueId, status: 'DUE' } });
+        await tx.libraryFine.deleteMany({ where: { schoolId, issueId, status: 'DUE' } });
         const updated = await tx.libraryIssue.update({
           where: { id: issueId },
           data: { returnedOn: null, returnedById: null },
@@ -566,7 +567,7 @@ export class LibraryCirculationService {
       if (issue.fines.some((f) => f.status === 'PAID')) {
         throw new ApiError('LIBRARY_FINE_SETTLED', 'The replacement was already collected — reopen that fine first.', 409);
       }
-      await tx.libraryFine.deleteMany({ where: { issueId, reason: 'LOST', status: { not: 'PAID' } } });
+      await tx.libraryFine.deleteMany({ where: { schoolId, issueId, reason: 'LOST', status: { not: 'PAID' } } });
       await tx.libraryBookCopy.update({ where: { id: issue.copy.id }, data: { lostAt: null } });
       const updated = await tx.libraryIssue.update({
         where: { id: issueId },
@@ -588,18 +589,23 @@ export class LibraryCirculationService {
       const settings = await this.settings.ensure(tx, schoolId);
       const rules = this.settings.rules(settings);
       const [totalCopies, lostCopies, totalTitles, outNowCount, openRows, collected, fixedDue] = await Promise.all([
-        tx.libraryBookCopy.count(),
-        tx.libraryBookCopy.count({ where: { lostAt: { not: null } } }),
-        tx.libraryBookTitle.count(),
-        tx.libraryIssue.count({ where: { returnedOn: null } }),
+        // Scoped, like every other count in this list. Unscoped, RLS still
+        // returned the right number — by counting every copy on the platform
+        // and discarding the rest (50ms of the dashboard's 66ms at 200k
+        // copies). See common/lists/relation-counts.ts for the same trap in
+        // its `_count` disguise.
+        tx.libraryBookCopy.count({ where: { schoolId } }),
+        tx.libraryBookCopy.count({ where: { schoolId, lostAt: { not: null } } }),
+        tx.libraryBookTitle.count({ where: { schoolId } }),
+        tx.libraryIssue.count({ where: { schoolId, returnedOn: null } }),
         tx.libraryIssue.findMany({
-          where: { returnedOn: null },
+          where: { schoolId, returnedOn: null },
           orderBy: { dueOn: 'asc' },
           take: 200,
           include: ISSUE_INCLUDE,
         }),
-        tx.libraryFine.aggregate({ where: { status: 'PAID' }, _sum: { amountRupees: true } }),
-        tx.libraryFine.findMany({ where: { status: 'DUE' }, select: { amountRupees: true, teacherId: true } }),
+        tx.libraryFine.aggregate({ where: { schoolId, status: 'PAID' }, _sum: { amountRupees: true } }),
+        tx.libraryFine.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, status: 'DUE' }, select: { amountRupees: true, teacherId: true } }),
       ]);
       const openCards = openRows.map((r) => toIssueCard(r, rules, todayISO));
       const dueSoon = openCards.filter((c) => c.dueOn >= todayISO && c.dueOn <= dateOnlyISO(weekOut));

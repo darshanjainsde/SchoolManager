@@ -819,3 +819,305 @@ export interface NotifyLowAttendanceResult {
   /** Days a family must wait before the same nudge can be sent again. */
   cooldownDays: number;
 }
+
+// ── Exam Hall ───────────────────────────────────────────────────────────────
+// The seating screen's wire shapes. The engine that produces a plan lives in
+// the API (`seating-engine.ts`); these are only what crosses the network.
+
+/** The four rules the office can switch on. Anything more waits for a school to ask. */
+export interface SeatingRules {
+  /** Classmates never sit adjacent — left, right, front or back. */
+  noClassmates: boolean;
+  /** Columns alternate between the room's two grades, so a neighbour writes a different paper. */
+  alternateCols: boolean;
+  /** Consecutive roll numbers in one class are never adjacent. */
+  spreadRolls: boolean;
+  /** The last row stays empty so the teacher can stand behind everyone. */
+  backRowFree: boolean;
+}
+
+export const DEFAULT_SEATING_RULES: SeatingRules = {
+  noClassmates: true,
+  alternateCols: true,
+  spreadRolls: true,
+  backRowFree: true,
+};
+
+/** `GET /manage/rooms` — a room as the office described it. */
+export interface RoomRow {
+  id: string;
+  name: string;
+  rows: number;
+  cols: number;
+  /** 1 or 2. Two only where the desk is a bench. */
+  seatsPerDesk: number;
+  /** "row:col", 0-based, for grid positions that hold no desk. */
+  removedDesks: string[];
+  /** Seats a student can actually be put in, with the back row kept spare. */
+  capacity: number;
+  /** Seating plans made for this room — a room in use is not safe to delete. */
+  planCount: number;
+}
+
+/** One placed student. `seat` is the position across the whole row, 0-based. */
+export interface PlannedSeat {
+  row: number;
+  seat: number;
+  desk: number;
+  /** "R3·S07" — what the desk sticker, the door list and the chart all say. */
+  code: string;
+  studentId: string;
+  studentName: string;
+  classSectionId: string;
+  classLabel: string;
+  roll: number | null;
+}
+
+/** What the generator could and could not do, in the words the office reads. */
+export interface SeatingReport {
+  capacity: number;
+  seated: number;
+  unseated: number;
+  clashes: number;
+  bent: number;
+  notes: string[];
+}
+
+/** `POST /manage/seating/preview` and the body of a saved plan. */
+export interface SeatingPlanResult {
+  roomId: string;
+  roomName: string;
+  title: string;
+  classSectionIds: string[];
+  rules: SeatingRules;
+  seed: number;
+  seats: PlannedSeat[];
+  report: SeatingReport;
+}
+
+/** `GET /manage/seating` — the saved plans list, without the seats. */
+export interface SeatingPlanSummary {
+  id: string;
+  roomId: string;
+  roomName: string;
+  title: string;
+  classSectionIds: string[];
+  seated: number;
+  createdAt: string;
+}
+
+/** `GET /manage/seating/:id` — a saved plan, whole. */
+export interface SavedSeatingPlan extends SeatingPlanResult {
+  id: string;
+  createdAt: string;
+  room: { rows: number; cols: number; seatsPerDesk: number; removedDesks: string[] };
+}
+
+// ── The Press (report cards + certificates) ──────────────────────────────────
+// Printed documents with a register. `PressIssue.type` is a plain String
+// column (the NotificationOutbox.kind pattern); this union + guard is the
+// single source of truth for legal values, enforced at write time. The
+// snapshot interfaces below are EXACTLY what `PressIssue.payload` stores and
+// exactly what the sheets render — a reprint renders the snapshot, never a
+// fresh compile, so the drawer copy and the screen copy cannot disagree.
+
+/** The documents the Press can issue today. Adding one is a template + an entry here. */
+export const PRESS_DOC_TYPES = ['REPORT_CARD', 'TC', 'BONAFIDE', 'CHARACTER'] as const;
+export type PressDocType = (typeof PRESS_DOC_TYPES)[number];
+
+/** Certificate types — every Press document except the report card. */
+export type PressCertificateType = Exclude<PressDocType, 'REPORT_CARD'>;
+
+/** Runtime guard for `PressIssue.type` (mirrors `assertNotificationOutboxKind`). */
+export function assertPressDocType(type: string): asserts type is PressDocType {
+  if (!(PRESS_DOC_TYPES as readonly string[]).includes(type)) {
+    throw new Error(`Invalid Press document type: "${type}"`);
+  }
+}
+
+/**
+ * CBSE 8-point scale. Derived from a percentage at compile time and stored
+ * only inside issued snapshots — never as a column (the late-fee rule applied
+ * to marks: one computation, so no two screens can disagree).
+ */
+export type GradeBand = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | 'D' | 'E';
+
+/** `GET /manage/press/windows` — one reporting period ("Term I"). */
+export interface ReportWindowRow {
+  id: string;
+  academicYearId: string;
+  academicYearName: string;
+  name: string;
+  /** ISO dates (yyyy-mm-dd). */
+  startDate: string;
+  endDate: string;
+  /** Report cards already issued under this window, across all classes. */
+  issuedCount: number;
+}
+
+/** The school masthead every sheet prints. Resolved once at compile/issue time. */
+export interface PressSchoolHeader {
+  name: string;
+  logoUrl: string | null;
+  /** "12 MG Road, Jaipur, Rajasthan" — assembled from SchoolProfile, or null. */
+  addressLine: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+/**
+ * One subject line on a report card, aggregated over every exam of that
+ * subject inside the window. `marks: null` means the student has NO result
+ * rows for the subject — rendered as "—", never as a zero: an absence of data
+ * must not read as a failed paper.
+ */
+export interface ReportSubjectLine {
+  subjectId: string;
+  subjectName: string;
+  /** How many exams fed this line — the office sees "Maths (3 tests)". */
+  examCount: number;
+  marks: number | null;
+  maxMarks: number;
+  pct: number | null;
+  grade: GradeBand | null;
+}
+
+/** One student's compiled card — everything the sheet needs except the batch-level header. */
+export interface ReportCardStudent {
+  studentId: string;
+  studentName: string;
+  rollNo: string | null;
+  admissionNo: string;
+  subjects: ReportSubjectLine[];
+  /** Sums over subjects that HAVE marks; null grade when nothing was marked at all. */
+  overall: { marks: number; maxMarks: number; pct: number | null; grade: GradeBand | null };
+  /** Marked school days inside the window. `pct: null` when nothing was marked. */
+  attendance: { present: number; total: number; pct: number | null };
+  remark: string | null;
+  /** Set when a card for this window is already in the register. */
+  issued: { serial: string; issuedAt: string } | null;
+}
+
+/** `GET /manage/press/report-cards/:windowId/:classSectionId` — the whole batch. */
+export interface ReportCardBatch {
+  window: ReportWindowRow;
+  classSection: { id: string; label: string; classTeacherName: string | null };
+  school: PressSchoolHeader;
+  /** Column order — the union of subjects examined in this window for this class. */
+  subjects: { subjectId: string; subjectName: string }[];
+  students: ReportCardStudent[];
+  /** Result rows inside the window that are still UNPUBLISHED. The compile
+   *  ignores them (the portal's invariant), but a dash caused by an
+   *  unpublished mark looks identical to one caused by absence — the office
+   *  is told which it is before printing. */
+  unpublishedCount: number;
+}
+
+/** `PressIssue.payload` for a REPORT_CARD. */
+export interface ReportCardSnapshot {
+  kind: 'REPORT_CARD';
+  school: PressSchoolHeader;
+  windowName: string;
+  academicYearName: string;
+  classLabel: string;
+  classTeacherName: string | null;
+  student: {
+    name: string;
+    rollNo: string | null;
+    admissionNo: string;
+    dob: string | null;
+    guardianName: string | null;
+  };
+  subjects: ReportSubjectLine[];
+  overall: ReportCardStudent['overall'];
+  attendance: ReportCardStudent['attendance'];
+  remark: string | null;
+}
+
+/**
+ * Certificate wording the office can edit before issuing. Everything is
+ * optional at the wire level; the service fills sensible defaults and the
+ * snapshot stores what was actually printed.
+ */
+export interface CertificateFields {
+  /** TC + CHARACTER: "good" unless the office says otherwise. */
+  conduct?: string;
+  /** TC: reason for leaving, e.g. "Parent's transfer". */
+  reason?: string;
+  /** Attended from / to — ISO dates, editable because records predate the software. */
+  fromDate?: string;
+  toDate?: string;
+  /** The class named on the certificate ("Class VIII"), editable for left students. */
+  classLabel?: string;
+  /** BONAFIDE: what the certificate is for, e.g. "bank account opening". */
+  purpose?: string;
+  /** One free extra line, printed verbatim when present. */
+  note?: string;
+}
+
+/** `GET /manage/press/certificates/prepare/:studentId` — the form, prefilled. */
+export interface CertificatePrepare {
+  student: {
+    id: string;
+    name: string;
+    admissionNo: string;
+    rollNo: string | null;
+    classLabel: string | null;
+    dob: string | null;
+    guardianName: string | null;
+    gender: string | null;
+    /** When the record was created — the default "attended from", always editable. */
+    onRollSince: string;
+  };
+  /** Live fee-ledger balance in paise. Zero for schools that keep fees elsewhere. */
+  duesMinor: number;
+  /** Certificates already issued to this student — reprint instead of re-issue. */
+  existing: { id: string; type: PressDocType; serial: string; issuedAt: string }[];
+}
+
+/** `PressIssue.payload` for TC / BONAFIDE / CHARACTER. */
+export interface CertificateSnapshot {
+  kind: 'CERTIFICATE';
+  type: PressCertificateType;
+  school: PressSchoolHeader;
+  student: CertificatePrepare['student'];
+  fields: Required<Pick<CertificateFields, 'conduct' | 'classLabel'>> & CertificateFields;
+  /** The ledger balance at issue time, and whether a TC was issued over it. */
+  duesMinor: number;
+  duesOverride: boolean;
+}
+
+export type PressSnapshot = ReportCardSnapshot | CertificateSnapshot;
+
+/** `POST /manage/press/report-cards/issue` — what happened, per student. */
+export interface IssueReportCardsResponse {
+  issued: { studentId: string; serial: string }[];
+  /** e.g. a card already issued for this window — issuing is idempotent, never doubled. */
+  skipped: { studentId: string; reason: string }[];
+}
+
+/** One register row — `GET /manage/press/register`. */
+export interface PressIssueRow {
+  id: string;
+  type: PressDocType;
+  serial: string;
+  studentId: string;
+  studentName: string;
+  issuedAt: string;
+  /** Set when the entry was voided — struck through, never erased. */
+  voidedAt: string | null;
+}
+
+export interface PressRegisterPage {
+  items: PressIssueRow[];
+  nextCursor: string | null;
+}
+
+/** `GET /me/report-cards` — the family's own issued cards. */
+export interface MyReportCard {
+  id: string;
+  serial: string;
+  windowName: string;
+  academicYearName: string;
+  issuedAt: string;
+}

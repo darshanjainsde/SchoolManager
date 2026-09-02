@@ -25,6 +25,11 @@ export function homeForRole(role: string | undefined, staffRole?: string | null)
       return staffRole === 'LIBRARIAN' ? '/library' : '/staff';
     case 'SCHOOL_ADMIN':
       return '/app';
+    case 'ALUMNUS':
+      // Alumni sign in at the school's ordinary login like everybody else. The
+      // alumni routes accept that school JWT directly (AlumniSessionGuard), so
+      // they land signed in rather than being asked for credentials twice.
+      return '/alumni';
     default:
       // Unknown/missing role (e.g. OWNER, which is web-only via a different
       // audience and should never reach here) — no portal to send them to.

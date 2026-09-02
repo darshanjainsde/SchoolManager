@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
-import { isNearWhite, lighten, mix } from './site-utils';
+import { isNearWhite, labelOn, lighten, mix } from './site-utils';
 import { fontVars, FONT_STACK } from '@/lib/fonts';
 import { sectionShapeClass } from './section-shape';
 import { accentClass, backgroundTextureClass, motionGestureClass } from './site-style';
@@ -97,6 +97,13 @@ export function themeRootProps(data: PublicSiteData): { className: string; style
     style: {
       '--ps1': ps1,
       '--ps2': ps2,
+      // The label colour to put ON each brand fill, chosen by contrast rather
+      // than assumed to be white. A school with a light brand (Beacon's is a
+      // mint) had white text on it at 1.6:1 — unreadable, on every primary
+      // button the site has. Resolved HERE because the whole stylesheet reads
+      // these inline variables, and a class cannot beat an inline style.
+      '--ps1-on': labelOn(ps1),
+      '--ps2-on': labelOn(ps2),
       '--ink': ink,
       '--font-head': fontHead,
       '--motion': minimal ? 0.25 : motion,
@@ -120,6 +127,7 @@ export function navFlagsFor(data: PublicSiteData, opts: { hasAbout: boolean; has
     hasHof: opts.hasHof,
     hasGallery: data.school.features.includes('GALLERY'),
     hasEvents: data.school.features.includes('EVENTS'),
+    hasAlumni: data.school.features.includes('ALUMNI'),
     hasBlog: data.school.features.includes('BLOG'),
     hasContact: !!(data.profile?.phone || data.profile?.email || data.profile?.addressLine1),
     hasEnquiry: data.school.features.includes('ENQUIRY'),

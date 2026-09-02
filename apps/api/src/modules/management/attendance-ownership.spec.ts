@@ -1,6 +1,6 @@
 const txMock = {
   classSection: { findFirst: jest.fn(), findMany: jest.fn() },
-  student: { findMany: jest.fn() },
+  student: { findMany: jest.fn(), groupBy: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   attendance: { findMany: jest.fn(), deleteMany: jest.fn(), createMany: jest.fn() },
   teacher: { findFirst: jest.fn(), findMany: jest.fn() },
   substitution: { findMany: jest.fn(), findFirst: jest.fn() },

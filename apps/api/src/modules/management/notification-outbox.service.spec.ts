@@ -1,4 +1,5 @@
 const dbMock = {
+  $queryRaw: jest.fn(),
   notificationOutbox: { findMany: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
   student: { findMany: jest.fn() },
   user: { findMany: jest.fn() },
@@ -72,7 +73,7 @@ describe('NotificationOutboxService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    dbMock.notificationOutbox.findMany.mockResolvedValue([]);
+    dbMock.$queryRaw.mockResolvedValue([]);
     dbMock.notificationOutbox.update.mockResolvedValue({});
     dbMock.notificationOutbox.deleteMany.mockResolvedValue({ count: 0 });
     dbMock.student.findMany.mockResolvedValue([]);
@@ -80,18 +81,29 @@ describe('NotificationOutboxService', () => {
     push.send.mockResolvedValue(true);
   });
 
-  it('only fetches unsent rows with attempts under the cap, oldest first, up to the batch cap', async () => {
+  it('claims unsent rows under the attempt cap, oldest first, skipping rows another drain holds', async () => {
     await svc.drain();
 
-    expect(dbMock.notificationOutbox.findMany).toHaveBeenCalledWith({
-      where: { sentAt: null, attempts: { lt: 5 } },
-      orderBy: [{ createdAt: 'asc' }],
-      take: 200,
-    });
+    // The batch is claimed in one statement rather than merely selected: the
+    // cron now runs every minute, so two drains overlapping is routine, and a
+    // plain read would let both send the same row.
+    expect(dbMock.$queryRaw).toHaveBeenCalledTimes(1);
+    const [strings, ...values] = dbMock.$queryRaw.mock.calls[0];
+    const sql = (strings as string[]).join(' ? ');
+
+    expect(sql).toMatch(/UPDATE "NotificationOutbox"/);
+    expect(sql).toMatch(/SET "claimedAt" = now\(\)/);
+    expect(sql).toMatch(/FOR UPDATE SKIP LOCKED/);
+    expect(sql).toMatch(/"sentAt" IS NULL/);
+    expect(sql).toMatch(/ORDER BY "createdAt" ASC/);
+    // Bound parameters, never interpolated: attempt cap, stale-claim cutoff, batch cap.
+    expect(values[0]).toBe(5);
+    expect(values[1]).toBeInstanceOf(Date);
+    expect(values[2]).toBe(200);
   });
 
   it('resolves recipients for the row\'s own classSectionId, sends push to each, and marks sentAt on success', async () => {
-    dbMock.notificationOutbox.findMany.mockResolvedValue([examScheduledRow]);
+    dbMock.$queryRaw.mockResolvedValue([examScheduledRow]);
     dbMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
     dbMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
 
@@ -123,7 +135,7 @@ describe('NotificationOutboxService', () => {
   });
 
   it('maps a RESULT_PUBLISHED row onto the RESULTS_PUBLISHED push text, dropping the extra denormalised fields the template does not render', async () => {
-    dbMock.notificationOutbox.findMany.mockResolvedValue([resultPublishedRow]);
+    dbMock.$queryRaw.mockResolvedValue([resultPublishedRow]);
     dbMock.student.findMany.mockResolvedValue([{ userId: 'u-2' }]);
     dbMock.user.findMany.mockResolvedValue([{ id: 'u-2', email: 'other@x.com' }]);
 
@@ -144,7 +156,7 @@ describe('NotificationOutboxService', () => {
   });
 
   it('maps an ASSIGNMENT_POSTED row onto the EXISTING ANNOUNCEMENT push text — no new template', async () => {
-    dbMock.notificationOutbox.findMany.mockResolvedValue([assignmentPostedRow]);
+    dbMock.$queryRaw.mockResolvedValue([assignmentPostedRow]);
     dbMock.student.findMany.mockResolvedValue([{ userId: 'u-3' }]);
     dbMock.user.findMany.mockResolvedValue([{ id: 'u-3', email: 'family@x.com' }]);
 
@@ -166,7 +178,7 @@ describe('NotificationOutboxService', () => {
   });
 
   it('never reads Exam/Subject/ClassSection — the payload is denormalised, so the drain does not join', async () => {
-    dbMock.notificationOutbox.findMany.mockResolvedValue([examScheduledRow]);
+    dbMock.$queryRaw.mockResolvedValue([examScheduledRow]);
     dbMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
     dbMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
 
@@ -178,7 +190,7 @@ describe('NotificationOutboxService', () => {
   });
 
   it('marks a row sent even with zero recipients — nothing to retry', async () => {
-    dbMock.notificationOutbox.findMany.mockResolvedValue([examScheduledRow]);
+    dbMock.$queryRaw.mockResolvedValue([examScheduledRow]);
     dbMock.student.findMany.mockResolvedValue([]);
 
     const result = await svc.drain();
@@ -192,7 +204,7 @@ describe('NotificationOutboxService', () => {
   });
 
   it('on failure, increments attempts and records lastError, leaves sentAt unset, and continues the rest of the batch', async () => {
-    dbMock.notificationOutbox.findMany.mockResolvedValue([examScheduledRow, resultPublishedRow]);
+    dbMock.$queryRaw.mockResolvedValue([examScheduledRow, resultPublishedRow]);
     dbMock.student.findMany
       .mockResolvedValueOnce([{ userId: 'u-1' }]) // row-1's recipients blow up below
       .mockResolvedValueOnce([{ userId: 'u-2' }]); // row-2 succeeds
@@ -208,7 +220,7 @@ describe('NotificationOutboxService', () => {
     expect(result).toEqual({ processed: 2, sent: 1, failed: 1, purged: 0 });
     expect(dbMock.notificationOutbox.update).toHaveBeenCalledWith({
       where: { id: 'row-1' },
-      data: { attempts: { increment: 1 }, lastError: 'expo down' },
+      data: { attempts: { increment: 1 }, claimedAt: null, lastError: 'expo down' },
     });
     expect(dbMock.notificationOutbox.update).toHaveBeenCalledWith({
       where: { id: 'row-2' },
@@ -217,7 +229,7 @@ describe('NotificationOutboxService', () => {
   });
 
   it('an invalid/unknown kind is treated as a failure for that row, not a crash of the whole drain', async () => {
-    dbMock.notificationOutbox.findMany.mockResolvedValue([
+    dbMock.$queryRaw.mockResolvedValue([
       { ...examScheduledRow, kind: 'SOMETHING_ELSE' },
     ]);
 
@@ -226,12 +238,12 @@ describe('NotificationOutboxService', () => {
     expect(result).toEqual({ processed: 1, sent: 0, failed: 1, purged: 0 });
     expect(dbMock.notificationOutbox.update).toHaveBeenCalledWith({
       where: { id: 'row-1' },
-      data: { attempts: { increment: 1 }, lastError: expect.stringContaining('SOMETHING_ELSE') },
+      data: { attempts: { increment: 1 }, claimedAt: null, lastError: expect.stringContaining('SOMETHING_ELSE') },
     });
   });
 
   it('does not blow up the whole run when even the failure-bookkeeping update rejects', async () => {
-    dbMock.notificationOutbox.findMany.mockResolvedValue([examScheduledRow]);
+    dbMock.$queryRaw.mockResolvedValue([examScheduledRow]);
     dbMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
     dbMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
     push.send.mockRejectedValue(new Error('expo down'));
@@ -283,7 +295,7 @@ describe('NotificationOutboxService', () => {
      * turn a successful drain into a failed cron run.
      */
     it('does not fail the drain when the sweep itself rejects', async () => {
-      dbMock.notificationOutbox.findMany.mockResolvedValue([examScheduledRow]);
+      dbMock.$queryRaw.mockResolvedValue([examScheduledRow]);
       dbMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }]);
       dbMock.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'parent@x.com' }]);
       dbMock.notificationOutbox.deleteMany.mockRejectedValue(new Error('lock timeout'));

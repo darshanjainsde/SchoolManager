@@ -3,7 +3,9 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ChevronsLeft, ChevronsRight, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, X } from 'lucide-react';
+import { ArrowUpRight, Armchair, BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ChevronsLeft, ChevronsRight, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Handshake, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, Wallet, X,
+  Printer,
+} from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -35,7 +37,10 @@ const NAV_ITEMS: {
   { href: '/app/staff', label: 'Staff', icon: UserCog, requiredFeature: 'MANAGEMENT' },
   { href: '/app/staff-attendance', label: 'Staff attendance', icon: ClipboardList, requiredFeature: 'MANAGEMENT' },
   { href: '/app/students', label: 'Students', icon: Users, requiredFeature: 'MANAGEMENT' },
+  { href: '/app/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' },
+  { href: '/app/press', label: 'The Press', icon: Printer, requiredFeature: 'PRESS' },
   { href: '/app/timetable', label: 'Timetable', icon: CalendarDays, requiredFeature: 'MANAGEMENT' },
+  { href: '/app/exam-hall', label: 'Exam Hall', icon: Armchair, requiredFeature: 'MANAGEMENT' },
   { href: '/app/availability', label: 'Availability', icon: Clock, requiredFeature: 'MANAGEMENT' },
   { href: '/app/leave', label: 'Leave', icon: CalendarX, requiredFeature: 'MANAGEMENT' },
   { href: '/app/requests', label: 'Requests', icon: ClipboardCheck, requiredFeature: 'MANAGEMENT' },
@@ -47,6 +52,7 @@ const NAV_ITEMS: {
   { href: '/library', label: 'Library', icon: BookOpen, requiredFeature: 'LIBRARY', leavesConsole: true },
   { href: '/app/jobs', label: 'Jobs', icon: Briefcase, requiredFeature: 'HIRING' },
   { href: '/app/events', label: 'Events', icon: CalendarHeart, requiredFeature: 'EVENTS' },
+  { href: '/app/alumni', label: 'Alumni', icon: Handshake, requiredFeature: 'ALUMNI' },
   { href: '/app/announcements', label: 'Announcements', icon: Megaphone },
 ];
 

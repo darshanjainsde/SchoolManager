@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import Redis from 'ioredis';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import { loadEnv } from '@skoolos/config';
+import { REDIS_CLIENT, ensureConnected, sharedRedis, type SharedRedis } from '../../../common/redis/redis.client';
 
 export interface SchoolMetrics {
   id: string;
@@ -40,7 +40,6 @@ export function csvField(v: string | null | undefined): string {
 @Injectable()
 export class OwnerOverviewService {
   private readonly env = loadEnv();
-  private readonly redis = new Redis(this.env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 2 });
   // These metrics are cross-tenant full-table aggregations (groupBy over every
   // school's students/images/enquiries). They do not need to be real-time for
   // the owner console, so cache the whole payload briefly — this turns a
@@ -48,10 +47,12 @@ export class OwnerOverviewService {
   private static readonly CACHE_KEY = 'owner:overview';
   private static readonly TTL = 120; // seconds
 
+  constructor(@Optional() @Inject(REDIS_CLIENT) private readonly redis: SharedRedis = sharedRedis()) {}
+
   async overview(): Promise<OverviewResponse> {
     try {
-      if (this.redis.status === 'wait' || this.redis.status === 'end') await this.redis.connect();
-      const cached = await this.redis.get(OwnerOverviewService.CACHE_KEY);
+      if (!(await ensureConnected(this.redis))) throw new Error('redis unavailable');
+      const cached = await this.redis!.get(OwnerOverviewService.CACHE_KEY);
       if (cached) return JSON.parse(cached) as OverviewResponse;
     } catch {
       /* cache miss / Redis down → fall through to a live query */
@@ -60,7 +61,7 @@ export class OwnerOverviewService {
     const fresh = await this.computeOverview();
 
     try {
-      await this.redis.set(
+      await this.redis?.set(
         OwnerOverviewService.CACHE_KEY,
         JSON.stringify(fresh),
         'EX',

@@ -4,7 +4,8 @@ const txMock = {
   school: { findFirst: jest.fn() },
   subject: { findFirst: jest.fn() },
   notificationOutbox: { create: jest.fn() },
-  student: { findMany: jest.fn() },
+  student: { findMany: jest.fn(), groupBy: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+  assignmentSeen: { groupBy: jest.fn().mockResolvedValue([]) },
   notification: { createMany: jest.fn() },
 };
 
@@ -72,7 +73,7 @@ describe('AssignmentsService', () => {
 
       const result = await svc.create(SCHOOL, CALLER, 'SCHOOL_ADMIN', dto);
 
-      expect(txMock.classSection.findFirst).toHaveBeenCalledWith({ where: { id: CLASS_SECTION } });
+      expect(txMock.classSection.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: CLASS_SECTION } });
       expect(txMock.assignment.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           schoolId: SCHOOL,
@@ -266,6 +267,11 @@ describe('AssignmentsService', () => {
     });
 
     it('includes each row\'s seenCount from the same query, never a second round trip', async () => {
+      // The clock is pinned because this test asserts on `upcoming`, which is
+      // decided by comparing the fixture's dueDate against NOW. Without it the
+      // fixture silently expires: it passed every day until 2026-09-01 and
+      // began failing on the 2nd, in a module nobody had touched for weeks.
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-15T12:00:00.000Z'));
       txMock.classSection.findFirst.mockResolvedValue({ id: CLASS_SECTION });
       txMock.assignment.findMany.mockResolvedValue([
         {
@@ -278,16 +284,28 @@ describe('AssignmentsService', () => {
           createdByTeacherId: CALLER,
           createdAt: new Date('2026-07-01T00:00:00.000Z'),
           dueDate: new Date('2026-09-01T00:00:00.000Z'),
-          _count: { seen: 7 },
         },
+      ]);
+      txMock.assignmentSeen.groupBy.mockResolvedValue([
+        { assignmentId: 'a1', _count: { _all: 7 } },
       ]);
 
       const result = await svc.list(SCHOOL, CLASS_SECTION, CALLER, 'SCHOOL_ADMIN');
 
       expect(result.upcoming[0].seenCount).toBe(7);
+      // Read receipts must be counted with a schoolId predicate. Prisma's
+      // `include: { _count }` compiles to `WHERE 1=1` over the whole table, so
+      // asserting its ABSENCE is what keeps that regression from returning.
       expect(txMock.assignment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ include: { _count: { select: { seen: true } } } }),
+        expect.not.objectContaining({ include: expect.anything() }),
       );
+      expect(txMock.assignmentSeen.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ schoolId: SCHOOL }),
+        }),
+      );
+
+      jest.useRealTimers();
     });
 
     it('throws ApiError CLASS_NOT_FOUND for a foreign/invalid classSectionId', async () => {

@@ -111,6 +111,8 @@ export interface NavFlags {
   hasAdmissions: boolean;
   hasHof: boolean;
   hasGallery: boolean;
+  /** The alumni wing — public batch pages plus the alumnus's own door. */
+  hasAlumni: boolean;
   hasEvents: boolean;
   hasBlog: boolean;
   hasContact: boolean;

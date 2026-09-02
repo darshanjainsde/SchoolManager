@@ -28,6 +28,11 @@ export const SUBPAGES: Record<string, { eyebrow: string; title: string; blurb: s
     title: 'Events & community',
     blurb: 'Everything happening at our school and across the network — one shared calendar.',
   },
+  alumni: {
+    eyebrow: 'Alumni',
+    title: 'Alumni of {school}',
+    blurb: 'Find your year, find yourself, and tell us where you got to. No password — the school sends you a link.',
+  },
   contact: {
     eyebrow: 'Contact',
     title: 'Get in touch',

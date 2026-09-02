@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { eventDateParts } from './site-utils';
+import { eventDateParts, labelOn, contrastRatio } from './site-utils';
 
 /**
  * A DATE IS AN OBJECT, NOT A SUBSTRING.
@@ -34,5 +34,41 @@ describe('eventDateParts', () => {
     const parts = eventDateParts('2026-08-20T04:30:00Z', 'Not/AZone');
     expect(parts.day).toBe('20');
     expect(parts.time).toBe('4:30 am');
+  });
+});
+
+describe('a label colour is chosen, never assumed', () => {
+  /**
+   * A school picks its own brand colour and plenty of them are LIGHT. Beacon's
+   * is a mint (#3ee6b0); white text on it measures 1.6:1, which is not a near
+   * miss but unreadable — and it was every primary button on their site,
+   * because `.ps-cta-btn` hardcoded `color: #fff`.
+   */
+  it('puts dark ink on a light brand', () => {
+    expect(labelOn('#3ee6b0')).toBe('#0a1410');
+    expect(labelOn('#f5d90a')).toBe('#0a1410');
+  });
+
+  it('keeps white on a dark brand', () => {
+    expect(labelOn('#4f46e5')).toBe('#ffffff');
+    expect(labelOn('#134d3b')).toBe('#ffffff');
+  });
+
+  it('always clears AA for body text, whichever it picks', () => {
+    for (const brand of ['#3ee6b0', '#4f46e5', '#f5d90a', '#134d3b', '#7c6cff', '#e11d48']) {
+      expect(contrastRatio(brand, labelOn(brand))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('picks the better of the two rather than a compromise between them', () => {
+    for (const brand of ['#3ee6b0', '#4f46e5', '#808080']) {
+      const chosen = labelOn(brand);
+      const other = chosen === '#ffffff' ? '#0a1410' : '#ffffff';
+      expect(contrastRatio(brand, chosen)).toBeGreaterThanOrEqual(contrastRatio(brand, other));
+    }
+  });
+
+  it('does not throw on a malformed colour', () => {
+    expect(() => labelOn('not-a-colour')).not.toThrow();
   });
 });

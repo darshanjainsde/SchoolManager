@@ -9,6 +9,10 @@ const txMock = {
     count: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    // seatsTaken sums in the database now. The mock derives its answer from the
+    // SAME findMany fixture each test already sets, so "counts SEATS, not rows"
+    // still proves what it claims rather than trusting a hand-written total.
+    aggregate: jest.fn(),
   },
   student: { findMany: jest.fn() },
 };
@@ -47,6 +51,10 @@ beforeEach(() => {
   txMock.event.findFirst.mockResolvedValue({ id: EVENT, schoolId: SCHOOL, status: 'APPROVED' });
   txMock.eventTicketType.findFirst.mockResolvedValue(ticket());
   txMock.eventRegistration.findMany.mockResolvedValue([]);
+  txMock.eventRegistration.aggregate.mockImplementation(async () => {
+    const rows = (await txMock.eventRegistration.findMany()) as { quantity: number }[];
+    return { _sum: { quantity: rows.reduce((n, r) => n + r.quantity, 0) || null } };
+  });
   txMock.eventRegistration.count.mockResolvedValue(0);
   txMock.eventRegistration.create.mockImplementation((args: { data: unknown }) => args.data);
 });
@@ -128,8 +136,14 @@ describe('capacity and the waitlist', () => {
     // make a full event look fuller.
     txMock.eventTicketType.findFirst.mockResolvedValue(ticket({ capacity: 5 }));
     await svc.register(EVENT, { guestName: 'A', guestEmail: 'a@b.c' });
-    expect(txMock.eventRegistration.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ status: { in: ['HELD', 'CONFIRMED'] } }) }),
+    // The seat count is a database aggregate now, so the status filter has to
+    // be asserted where it actually lives. The property under test is unchanged:
+    // a declined or cancelled row must not hold a seat.
+    expect(txMock.eventRegistration.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: { in: ['HELD', 'CONFIRMED'] } }),
+        _sum: { quantity: true },
+      }),
     );
   });
 

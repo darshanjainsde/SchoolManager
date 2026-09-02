@@ -5,6 +5,7 @@ import { AuditService } from '../../common/audit/audit.service';
 import { ApiError } from '../../common/errors/api-error';
 import { requireClassAccess } from './internal/class-access';
 import type { CreateRegisterChangeDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -105,7 +106,7 @@ export class RegisterChangeService {
       // One open request per class+date. A second one would give the admin two
       // identical rows to review and two unlocks to reason about.
       const open = await tx.registerChangeRequest.findFirst({
-        where: { classSectionId: dto.classSectionId, date: new Date(dto.date), status: 'PENDING' },
+        where: { schoolId, classSectionId: dto.classSectionId, date: new Date(dto.date), status: 'PENDING' },
         select: { id: true },
       });
       if (open) {
@@ -134,10 +135,10 @@ export class RegisterChangeService {
 
   async mine(schoolId: string, userId: string): Promise<RegisterChangeRow[]> {
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { userId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId } });
       if (!teacher) return [];
-      const rows = await tx.registerChangeRequest.findMany({
-        where: { requestedByTeacherId: teacher.id },
+      const rows = await tx.registerChangeRequest.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, requestedByTeacherId: teacher.id },
         orderBy: { createdAt: 'desc' },
         include: RegisterChangeService.ROW_INCLUDE,
       });
@@ -149,24 +150,24 @@ export class RegisterChangeService {
    *  the other half of the teacher "Requests" badge (see `RequestsController`). */
   async pendingCount(schoolId: string, userId: string): Promise<number> {
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { userId } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId } });
       if (!teacher) return 0;
       return tx.registerChangeRequest.count({
-        where: { requestedByTeacherId: teacher.id, status: 'PENDING' },
+        where: { schoolId, requestedByTeacherId: teacher.id, status: 'PENDING' },
       });
     });
   }
 
   async pending(schoolId: string): Promise<RegisterChangeRow[]> {
     return withTenant(schoolId, async (tx) => {
-      const rows = await tx.registerChangeRequest.findMany({
-        where: { status: 'PENDING' },
+      const rows = await tx.registerChangeRequest.findMany({ take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, status: 'PENDING' },
         orderBy: { createdAt: 'asc' },
         include: RegisterChangeService.ROW_INCLUDE,
       });
       const teacherIds = [...new Set(rows.map((r) => r.requestedByTeacherId))];
       const teachers = teacherIds.length
-        ? await tx.teacher.findMany({
+        ? await tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
             where: { id: { in: teacherIds } },
             select: { id: true, firstName: true, lastName: true },
           })

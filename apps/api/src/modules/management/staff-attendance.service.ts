@@ -3,6 +3,7 @@ import { withTenant, type PersonAttendanceStatus } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import type { StaffRoleValue } from './management.dto';
 import type { SaveStaffAttendanceDto } from './management.dto';
+import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -115,12 +116,12 @@ export class StaffAttendanceService {
 
     return withTenant(schoolId, async (tx) => {
       const [teachers, staff, marks] = await Promise.all([
-        tx.teacher.findMany({
+        tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId },
           orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
           select: { id: true, firstName: true, lastName: true },
         }),
-        tx.staff.findMany({
+        tx.staff.findMany({ take: LIST_CEILING.STRUCTURE,
           where: { schoolId },
           orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
           select: { id: true, firstName: true, lastName: true, role: true },
@@ -128,7 +129,7 @@ export class StaffAttendanceService {
         // `StaffAttendance` has no RLS of its own (see the migration that
         // added it — Teacher is covered, Staff/StaffAttendance are not), so
         // the `schoolId` filter here is load-bearing, not defensive.
-        tx.staffAttendance.findMany({
+        tx.staffAttendance.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { schoolId, date: day },
           select: { teacherId: true, staffId: true, status: true },
         }),
@@ -182,8 +183,8 @@ export class StaffAttendanceService {
 
     return withTenant(schoolId, async (tx) => {
       const [teachers, staff] = await Promise.all([
-        tx.teacher.findMany({ where: { schoolId }, select: { id: true } }),
-        tx.staff.findMany({ where: { schoolId }, select: { id: true } }),
+        tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, select: { id: true } }),
+        tx.staff.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, select: { id: true } }),
       ]);
       const teacherIds = new Set(teachers.map((t) => t.id));
       const staffIds = new Set(staff.map((s) => s.id));
@@ -265,7 +266,7 @@ export class StaffAttendanceService {
         );
       }
 
-      const rows = await tx.staffAttendance.findMany({
+      const rows = await tx.staffAttendance.findMany({ take: LIST_CEILING.ACTIVITY,
         where: {
           schoolId,
           date: { gte: start, lt: end },
@@ -307,7 +308,7 @@ export class StaffAttendanceService {
         throw new ApiError('NOT_STAFF', 'Only staff can view their own attendance', 403);
       }
 
-      const rows = await tx.staffAttendance.findMany({
+      const rows = await tx.staffAttendance.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, staffId: staff.id, date: { gte: start, lt: end } },
         orderBy: { date: 'asc' },
         select: { date: true, status: true },

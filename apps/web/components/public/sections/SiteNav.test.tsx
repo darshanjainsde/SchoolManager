@@ -87,7 +87,7 @@ const ALL_ON: NavFlags = {
   hasAdmissions: true,
   hasHof: true,
   hasGallery: true,
-  hasEvents: true,
+  hasEvents: true, hasAlumni: true,
   hasBlog: true,
   hasContact: true,
   hasEnquiry: true,

@@ -52,6 +52,40 @@ export default async function globalSetup(): Promise<void> {
     throw e;
   }
 
+  // 2b) Seed the baseline schools.
+  //
+  // student / public / owner / community all open with
+  // `findUniqueOrThrow({ slug: 'beacon' })` — a fixture nothing in this setup
+  // created, so those four suites failed for everybody who had not happened to
+  // run `pnpm --filter @skoolos/db seed` against skoolos_test by hand. They
+  // then read as a broken product rather than a missing fixture, and stayed
+  // red long enough to be dismissed as "pre-existing".
+  //
+  // The seed is upsert-based, so running it on every start is idempotent and
+  // costs a second.
+  try {
+    const out = execSync('pnpm exec tsx prisma/seed.ts', {
+      cwd: require('node:path').join(repoRoot, 'packages/db'),
+      // The seed's own loadEnv() would otherwise read the repo's .env and
+      // redirect these writes at the developer's own database — the exact
+      // footgun that makes a "drill" run silently hit production data.
+      env: {
+        ...process.env,
+        DATABASE_URL: dbUrl,
+        DIRECT_URL: dbUrl,
+        DATABASE_URL_APP: dbUrl,
+        DATABASE_URL_PLATFORM: dbUrl,
+      },
+      encoding: 'utf8',
+    });
+    if (process.env.JEST_VERBOSE) console.log(out);
+  } catch (e) {
+    const err = e as { stdout?: string; stderr?: string; message: string };
+    // eslint-disable-next-line no-console
+    console.error('baseline seed failed:', err.stdout, err.stderr, err.message);
+    throw e;
+  }
+
   // 3) Wire env vars so tests use the test DB across all roles.
   process.env.DATABASE_URL = dbUrl;
   process.env.DIRECT_URL = dbUrl;

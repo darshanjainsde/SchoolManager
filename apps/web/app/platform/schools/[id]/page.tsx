@@ -57,6 +57,9 @@ const ALL_FEATURES = [
   'BLOG',
   'HIRING',
   'LIBRARY',
+  'ALUMNI',
+  'FEES',
+  'PRESS',
 ] as const;
 
 type FeatureKey = (typeof ALL_FEATURES)[number];
@@ -68,7 +71,7 @@ type FeatureKey = (typeof ALL_FEATURES)[number];
 const TIER_FEATURES: Record<SchoolDetail['tier'], ReadonlySet<FeatureKey>> = {
   BASIC: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL']),
   STANDARD: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'BLOG']),
-  PRO: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG', 'HIRING']),
+  PRO: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG', 'HIRING', 'FEES']),
 };
 
 const TIER_TONE: Record<SchoolDetail['tier'], 'neutral' | 'info' | 'success'> = {

@@ -143,6 +143,16 @@ export class ApiClient {
   async put<T = unknown>(path: string, body?: unknown): Promise<T> {
     return this.request<T>(path, { method: 'PUT', body: body === undefined ? undefined : JSON.stringify(body) });
   }
+  /**
+   * Multipart POST. Deliberately a separate method rather than a branch inside
+   * `post`: the body must NOT be JSON.stringify'd, and `request` already knows
+   * to leave Content-Type alone for FormData so the browser can set its own
+   * boundary. Passing a FormData to `post` would silently send the string
+   * "[object FormData]".
+   */
+  async postForm<T = unknown>(path: string, body: FormData): Promise<T> {
+    return this.request<T>(path, { method: 'POST', body });
+  }
   async del<T = unknown>(path: string): Promise<T> {
     return this.request<T>(path, { method: 'DELETE' });
   }

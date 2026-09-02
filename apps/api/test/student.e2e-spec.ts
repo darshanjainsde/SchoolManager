@@ -18,6 +18,7 @@
  */
 
 import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
+import { describeLiveApi } from './requires-live-api';
 
 const BASE = 'http://localhost:3001';
 
@@ -37,7 +38,7 @@ async function schoolToken(slug: string): Promise<string> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Student portal e2e', () => {
+describeLiveApi('Student portal e2e', () => {
   let beaconToken: string;
 
   // Fixture IDs — all captured in beforeAll, cleaned up in afterAll.

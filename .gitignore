@@ -43,3 +43,18 @@ apps/api/libquery_engine-*.node
 apps/api/generated/
 apps/api/.prisma/
 apps/api/apps/
+
+# The ncc bundle under apps/api/api.
+#
+# The .js entrypoints ARE tracked, deliberately: apps/api/vercel.json declares
+# functions."api/index.js", and Vercel validates that pattern against the
+# repository's checked-in files BEFORE the build command runs — so untracking
+# index.js fails every deploy at config validation, with an error that says
+# nothing about the cause. That is a logged mistake, not a guess.
+#
+# The 526 .d.ts and .map files beside it are not load-bearing for anything:
+# declarations are compile-time only and the deployed function is the bundle.
+# They were 11MB of churn in every diff.
+apps/api/api/**/*.d.ts
+apps/api/api/**/*.d.ts.map
+apps/api/api/**/*.map

@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
+import { AudiencePicker, type AudienceKind } from './AudiencePicker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Trash2, X, CalendarHeart } from 'lucide-react';
@@ -39,6 +40,8 @@ interface CreateEventBody {
   venue?: string;
   scope: EventScope;
   coverAssetId?: string;
+  audienceKind?: AudienceKind;
+  audienceSchoolIds?: string[];
 }
 
 interface MediaAsset {
@@ -112,6 +115,8 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
   const [endAt, setEndAt] = useState('');
   const [venue, setVenue] = useState('');
   const [scope, setScope] = useState<EventScope>('SCHOOL');
+  const [audienceKind, setAudienceKind] = useState<AudienceKind>('SCHOOL_ONLY');
+  const [audienceSchoolIds, setAudienceSchoolIds] = useState<string[]>([]);
   const [coverAssetId, setCoverAssetId] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -137,7 +142,9 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
       title: title.trim(),
       startAt: new Date(startAt).toISOString(),
       scope,
+      audienceKind,
     };
+    if (audienceKind === 'SELECTED') body.audienceSchoolIds = audienceSchoolIds;
     if (description.trim()) body.description = description.trim();
     if (endAt) body.endAt = new Date(endAt).toISOString();
     if (venue.trim()) body.venue = venue.trim();
@@ -226,25 +233,18 @@ function EventForm({ onSave, isSaving, onCancel }: EventFormProps) {
           </p>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="ev-scope">Scope</Label>
-          <select
-            id="ev-scope"
-            value={scope}
-            onChange={(e) => setScope(e.target.value as EventScope)}
-            className="w-full rounded-md px-3 py-2 text-sm shadow-sm focus:outline-none"
-            style={{ border: '1px solid var(--sk-line-2)', background: 'var(--sk-card)', color: 'var(--sk-ink)' }}
-          >
-            <option value="SCHOOL">School — visible to your school only</option>
-            <option value="NETWORK">Network — submitted to network owner for approval</option>
-          </select>
-          {scope === 'NETWORK' && (
-            <p className="text-xs" style={{ color: 'var(--sk-amber)' }}>
-              Network events are submitted to the network owner for approval and will show as
-              &ldquo;Pending&rdquo; until approved.
-            </p>
-          )}
-        </div>
+        <AudiencePicker
+          kind={audienceKind}
+          onKindChange={(k) => {
+            setAudienceKind(k);
+            // `scope` is retained for older readers; an event that leaves its own
+            // site is still a NETWORK event as far as they are concerned.
+            setScope(k === 'SCHOOL_ONLY' ? 'SCHOOL' : 'NETWORK');
+            if (k !== 'SELECTED') setAudienceSchoolIds([]);
+          }}
+          selectedIds={audienceSchoolIds}
+          onSelectedChange={setAudienceSchoolIds}
+        />
       </CardContent>
       <CardFooter className="gap-2">
         <Button onClick={handleSubmit} disabled={isSaving || !title.trim() || !startAt}>
