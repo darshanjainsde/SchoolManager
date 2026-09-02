@@ -33,7 +33,7 @@ const CSS = code(readFileSync(join(process.cwd(), 'components/press/press-print.
 
 /** Every file that participates in press printing, found not hand-listed. */
 function pressSources(): { path: string; src: string }[] {
-  const roots = ['components/press', 'app/app/press', 'app/portal/results/report-card'];
+  const roots = ['components/press', 'app/app/press', 'app/portal/results/report-card', 'app/app/exam-hall'];
   const out: { path: string; src: string }[] = [];
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
@@ -65,10 +65,16 @@ describe('press print discipline', () => {
     expect(SHEETS).not.toContain('var(--sk-');
   });
 
-  it('mounts #press-print only through the body portal', () => {
+  it('mounts print containers only through the body portal', () => {
+    // Applies to the Press AND the Exam Hall: an inline id="press-print" /
+    // id="eh-print" nested in the app tree prints blank pages (reproduced
+    // with the real print.css in headless Chrome before this rule existed).
+    // The container id on a raw DOM element is the bug; the same id passed
+    // as a prop to BodyPrintPortal is the sanctioned path.
+    const inlineContainer = /<(?:div|section|main)[^>]*id="(?:press-print|eh-print)"/;
     const offenders = pressSources()
       .filter((f) => !f.path.endsWith('press-print-portal.tsx') && !f.path.endsWith('.css'))
-      .filter((f) => f.src.includes('id="press-print"'))
+      .filter((f) => inlineContainer.test(f.src))
       .map((f) => f.path);
     expect(offenders).toEqual([]);
   });

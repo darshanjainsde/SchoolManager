@@ -1,5 +1,6 @@
 'use client';
 import type { PlannedSeat, SavedSeatingPlan, SeatingPlanResult } from '@skoolos/types';
+import { BodyPrintPortal } from '@/components/press/press-print-portal';
 
 /**
  * Everything the exam actually runs on.
@@ -324,12 +325,16 @@ export function PrintSheets({
   sheets: Sheet[];
 }) {
   const ordered = SHEETS.filter((s) => sheets.includes(s.key));
+  // Portaled to <body>: print.css hides every OTHER direct child of body
+  // during a print, and an inline container nested in the page tree is hidden
+  // with its ancestors — the job came out as blank pages. Reproduced with
+  // this very stylesheet in headless Chrome before fixing.
   return (
-    <div id="eh-print" className="eh-sheets" aria-hidden="true">
+    <BodyPrintPortal id="eh-print" className="eh-sheets">
       {ordered.map((s) => (
         <OneSheet key={s.key} sheet={s.key} plan={plan} room={room} school={school} />
       ))}
-    </div>
+    </BodyPrintPortal>
   );
 }
 
