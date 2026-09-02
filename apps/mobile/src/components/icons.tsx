@@ -25,7 +25,8 @@ export type IconName =
   | 'holidays'
   | 'notes'
   | 'home'
-  | 'person';
+  | 'person'
+  | 'fees';
 
 /** `body` is the filled silhouette; `lines` are the strokes drawn over it. */
 const PATHS: Record<IconName, { body: string; lines: string[] }> = {
@@ -93,6 +94,17 @@ const PATHS: Record<IconName, { body: string; lines: string[] }> = {
     lines: [
       'M12 4.8a3.4 3.4 0 1 1 0 6.8 3.4 3.4 0 0 1 0-6.8Z',
       'M5.6 19.8c.7-3.5 3.2-5.4 6.4-5.4s5.7 1.9 6.4 5.4',
+    ],
+  },
+  // A banknote, not a receipt: at 22px a receipt's torn edge turns to mush,
+  // while the note's circle-in-a-rectangle stays legible — and the family tab
+  // needs this to read as MONEY at a glance, not as paperwork.
+  fees: {
+    body: 'M3.2 7.4A1.2 1.2 0 0 1 4.4 6.2h15.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H4.4a1.2 1.2 0 0 1-1.2-1.2Z',
+    lines: [
+      'M3.2 7.4A1.2 1.2 0 0 1 4.4 6.2h15.2a1.2 1.2 0 0 1 1.2 1.2v9.2a1.2 1.2 0 0 1-1.2 1.2H4.4a1.2 1.2 0 0 1-1.2-1.2Z',
+      'M14.3 12a2.3 2.3 0 1 1-4.6 0 2.3 2.3 0 0 1 4.6 0',
+      'M6.1 9.9v4.2M17.9 9.9v4.2',
     ],
   },
 };

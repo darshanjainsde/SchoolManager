@@ -1,4 +1,4 @@
-name: library-ci
+name: CI · Library
 
 # CI for the library microservice only (apps/library-api + packages/library-db).
 # Deliberately its own workflow, not folded into `ci.yml`: that workflow gates
@@ -104,7 +104,7 @@ env:
 
 jobs:
   gate:
-    name: lint, typecheck, boundary, build, unit
+    name: Library — lint, typecheck, boundary, build, unit
     runs-on: ubuntu-latest
     steps:
       - name: Refuse target=staging (not wired up — see workflow header)

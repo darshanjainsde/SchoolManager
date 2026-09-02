@@ -3239,6 +3239,10 @@ model FeePayment {
   verifiedAt      DateTime?
   /// Shown to the parent verbatim, so it must be actionable.
   rejectionReason String?
+  /// The school's acknowledgement in its own words, shown to the parent
+  /// verbatim beside the receipt — "received by NEFT on 28 Aug", "short by
+  /// ₹500". Optional; verifying without one is the common case.
+  ackNote         String?
   reversedAt      DateTime?
   reversedReason  String?
 

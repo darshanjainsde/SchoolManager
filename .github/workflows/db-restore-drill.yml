@@ -26,7 +26,7 @@
 # BACKUP_PASSPHRASE, and on the monthly schedule so a silent rot in any of the
 # above surfaces within thirty days rather than during an incident.
 
-name: Restore drill
+name: Database · Restore drill
 
 on:
   workflow_dispatch: {}
@@ -49,6 +49,7 @@ permissions:
 
 jobs:
   restore:
+    name: restore newest backup into a throwaway Postgres, assert rows
     runs-on: ubuntu-latest
     timeout-minutes: 25
 

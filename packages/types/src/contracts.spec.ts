@@ -30,6 +30,12 @@ import {
   type AssignmentList,
   type StudentAssignment,
   type StudentAssignmentList,
+  FEE_PAYMENT_STATUSES,
+  FEE_PAYMENT_METHODS,
+  type FeePaymentStatus,
+  type StudentFees,
+  type StudentFeePayment,
+  type FeeReceiptDocument,
 } from './index';
 
 describe('shared portal contracts', () => {
@@ -234,5 +240,128 @@ describe('shared portal contracts', () => {
     expect(Object.keys(sa)).not.toContain('seenCount');
     const list: StudentAssignmentList = { upcoming: [sa], past: [] };
     expect(list.upcoming[0].subjectName).toBe('Mathematics');
+  });
+
+  // ── Fees, the family's side ───────────────────────────────────────────────
+
+  it('declares exactly the four payment states the API can return', () => {
+    expect([...FEE_PAYMENT_STATUSES].sort()).toEqual(
+      ['REJECTED', 'REVERSED', 'SUBMITTED', 'VERIFIED'],
+    );
+  });
+
+  it('declares every payment method the submit form offers', () => {
+    expect([...FEE_PAYMENT_METHODS].sort()).toEqual(
+      ['CARD', 'CASH', 'CHEQUE', 'NEFT_IMPS', 'NETBANKING', 'OTHER', 'UPI'],
+    );
+  });
+
+  it('FeePaymentStatus admits every declared state and nothing else', () => {
+    const verified: FeePaymentStatus = 'VERIFIED';
+    expect(FEE_PAYMENT_STATUSES).toContain(verified);
+    // @ts-expect-error PAID is not a state this module has — VERIFIED is.
+    const bogus: FeePaymentStatus = 'PAID';
+    expect(bogus).toBe('PAID');
+  });
+
+  it('a verified payment carries the receipt number AND the school\'s note; a rejected one carries neither', () => {
+    const verified: StudentFeePayment = {
+      id: 'p1',
+      status: 'VERIFIED',
+      method: 'NEFT_IMPS',
+      amountMinor: 1_240_000,
+      providerRef: 'N123456789',
+      paidOn: '2026-08-28',
+      submittedAt: '2026-08-28T06:00:00.000Z',
+      verifiedAt: '2026-08-29T04:30:00.000Z',
+      rejectionReason: null,
+      ackNote: 'Received by NEFT on 28 Aug. Thank you.',
+      receiptNumber: 'RCP/2026/00042',
+    };
+    expect(verified.receiptNumber).toBe('RCP/2026/00042');
+
+    const rejected: StudentFeePayment = {
+      ...verified,
+      status: 'REJECTED',
+      verifiedAt: null,
+      ackNote: null,
+      receiptNumber: null,
+      rejectionReason: 'The UTR does not match any credit on our statement.',
+    };
+    expect(rejected.receiptNumber).toBeNull();
+    expect(rejected.rejectionReason).not.toBeNull();
+  });
+
+  it('a bill breaks down to lines whose net is gross minus concession, and dueMinor includes the late fee', () => {
+    const fees: StudentFees = {
+      student: { id: 's1', name: 'Aarav Sharma', admissionNo: 'A-1024', className: 'VIII-B' },
+      balanceMinor: 105_000,
+      billedMinor: 1_345_000,
+      paidMinor: 1_240_000,
+      lateFeeRule: '₹50 per day after 7 days, up to ₹1,000',
+      invoices: [{
+        id: 'i1',
+        number: 'INV/2026/00311',
+        termName: 'Term 2',
+        dueDate: '2026-08-15',
+        totalMinor: 100_000,
+        paidMinor: 0,
+        principalDueMinor: 100_000,
+        lateFeeMinor: 5_000,
+        dueMinor: 105_000,
+        isPaid: false,
+        isOverdue: true,
+        lines: [{
+          categoryName: 'Tuition',
+          categoryDescription: 'Term tuition',
+          grossMinor: 120_000,
+          concessionMinor: 20_000,
+          netMinor: 100_000,
+          concessionReason: 'Sibling concession',
+          isCollectible: true,
+        }],
+      }],
+      payments: [],
+      ledger: [{ kind: 'DEBIT', amountMinor: 100_000, narration: 'Term 2 bill', occurredAt: '2026-08-01T00:00:00.000Z' }],
+    };
+    // A school charging no late fee sends null, not an empty string — the
+    // portal renders the rule line only when there is a rule.
+    const noRule: StudentFees = { ...fees, lateFeeRule: null };
+    expect(noRule.lateFeeRule).toBeNull();
+
+    const line = fees.invoices[0].lines[0];
+    expect(line.grossMinor - line.concessionMinor).toBe(line.netMinor);
+    const inv = fees.invoices[0];
+    expect(inv.principalDueMinor + inv.lateFeeMinor).toBe(inv.dueMinor);
+  });
+
+  it('a receipt accounts for every paisa received: allocations plus unallocated equal the amount', () => {
+    const r: FeeReceiptDocument = {
+      receiptNumber: 'RCP/2026/00042',
+      issuedAt: '2026-08-29T04:30:00.000Z',
+      school: {
+        name: 'Raffles Public School',
+        addressLines: ['12 MG Road', 'Indiranagar', 'Bengaluru Karnataka 560038'],
+        phone: '+91 80 4000 1234',
+        email: 'office@raffles.test',
+      },
+      student: { name: 'Aarav Sharma', admissionNo: 'A-1024', className: 'VIII-B' },
+      payment: {
+        id: 'p1',
+        amountMinor: 1_300_000,
+        method: 'NEFT_IMPS',
+        providerRef: 'N123456789',
+        paidOn: '2026-08-28',
+        verifiedAt: '2026-08-29T04:30:00.000Z',
+        ackNote: 'Received by NEFT on 28 Aug. Thank you.',
+      },
+      allocations: [
+        { invoiceNumber: 'INV/2026/00311', termName: 'Term 2', categoryName: 'Tuition', amountMinor: 1_000_000 },
+        { invoiceNumber: 'INV/2026/00311', termName: 'Term 2', categoryName: 'Transport', amountMinor: 240_000 },
+      ],
+      unallocatedMinor: 60_000,
+    };
+    const allocated = r.allocations.reduce((a, x) => a + x.amountMinor, 0);
+    expect(allocated + r.unallocatedMinor).toBe(r.payment.amountMinor);
   });
 });

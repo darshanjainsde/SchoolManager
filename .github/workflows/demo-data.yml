@@ -1,4 +1,4 @@
-name: demo-data
+name: Staging · Load demo data
 
 # Loads demo data into ONE school on staging, so the product can be tested
 # against something that looks like a real school rather than an empty page.
@@ -76,6 +76,7 @@ concurrency:
 
 jobs:
   seed:
+    name: seed one staging school (never production)
     runs-on: ubuntu-latest
     environment: staging
 

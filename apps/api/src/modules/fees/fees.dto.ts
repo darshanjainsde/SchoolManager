@@ -137,6 +137,18 @@ export class SubmitPaymentDto {
   @IsOptional() @IsString() @Length(0, 300) note?: string;
 }
 
+/**
+ * Accepting a payment, with an optional word to the family.
+ *
+ * The note is the school ACKNOWLEDGING the money in its own words — it rides
+ * on the receipt the parent sees. Optional because most acknowledgements need
+ * no commentary; the receipt number and "Confirmed" already say the important
+ * part. Bounded at 300 like every other parent-facing free-text field here.
+ */
+export class VerifyPaymentDto {
+  @IsOptional() @IsString() @Length(1, 300) note?: string;
+}
+
 export class RejectPaymentDto {
   @IsString() @Length(3, 300) reason!: string;
 }

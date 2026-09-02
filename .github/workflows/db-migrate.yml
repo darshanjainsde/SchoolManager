@@ -1,4 +1,4 @@
-name: db-migrate
+name: Database · Apply migrations
 
 # Applies the repo's Prisma migrations to a chosen database.
 #
@@ -67,6 +67,7 @@ concurrency:
 
 jobs:
   migrate:
+    name: prisma migrate deploy → chosen target
     runs-on: ubuntu-latest
     # GitHub Environments hold the secrets AND can require a human approval
     # before a production run — see the setup notes in docs/DATABASE.md.

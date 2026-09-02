@@ -24,7 +24,7 @@
 #   row-claiming, so this must never fire at the same minute as the API's
 #   own 02:00 UTC Vercel cron — simultaneous drains would double-send.
 
-name: Drain notification outbox
+name: Notifications · Drain outbox (every 10 min)
 
 on:
   schedule:
@@ -35,6 +35,7 @@ permissions: {}
 
 jobs:
   drain:
+    name: call the API drain endpoint
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:

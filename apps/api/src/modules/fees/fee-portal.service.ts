@@ -99,6 +99,17 @@ export class FeePortalService {
     return this.providers.get('MANUAL').start(ctx);
   }
 
+  /**
+   * One receipt, as a document the family can open and keep.
+   *
+   * The student id comes from the JWT and is passed DOWN into the query as a
+   * filter, so a receipt belonging to another child is a 404 at the database
+   * rather than a row we read and then declined to return.
+   */
+  async receipt(userId: string, paymentId: string) {
+    return this.query.receipt(this.sid(), paymentId, await this.myStudentId(userId));
+  }
+
   /** "I have paid" — writes a SUBMITTED claim and nothing else. */
   async submit(
     userId: string,

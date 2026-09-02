@@ -76,7 +76,13 @@ function Verify() {
   };
 
   const verify = useMutation({
-    mutationFn: (id: string) => api.post<{ receipt: { number: string } }>(`/manage/fees/payments/${id}/verify`, {}),
+    mutationFn: ({ id, note }: { id: string; note: string }) =>
+      api.post<{ receipt: { number: string } }>(
+        `/manage/fees/payments/${id}/verify`,
+        // Empty stays undefined rather than "" — the API stores NULL, and the
+        // parent's receipt draws the note line only when there is a note.
+        note.trim() ? { note: note.trim() } : {},
+      ),
     onSuccess: (r) => { invalidate(); toast.success(`Accepted — receipt ${r.receipt.number} issued`); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -178,7 +184,7 @@ function Verify() {
             <PaymentDetail
               p={selected}
               busy={verify.isPending || reject.isPending || reverse.isPending}
-              onVerify={() => verify.mutate(selected.id)}
+              onVerify={(note) => verify.mutate({ id: selected.id, note })}
               onReject={(reason) => reject.mutate({ id: selected.id, reason })}
               onReverse={(reason) => reverse.mutate({ id: selected.id, reason })}
             />
@@ -200,13 +206,17 @@ function PaymentDetail({
   p, busy, onVerify, onReject, onReverse,
 }: {
   p: PaymentRow; busy: boolean;
-  onVerify: () => void; onReject: (reason: string) => void; onReverse: (reason: string) => void;
+  onVerify: (note: string) => void; onReject: (reason: string) => void; onReverse: (reason: string) => void;
 }) {
+  const [ackNote, setAckNote] = useState('');
   const [rejecting, setRejecting] = useState(false);
   const [reversing, setReversing] = useState(false);
   const [reason, setReason] = useState(REJECTION_REASONS[0]);
   const [revReason, setRevReason] = useState(REVERSAL_REASONS[0]);
-  useEffect(() => { setRejecting(false); setReversing(false); }, [p.id]);
+  // Clearing the note with the panel matters more than it looks: without it,
+  // a note typed for one family rides along on the NEXT payment the clerk
+  // opens and is printed on a stranger's receipt.
+  useEffect(() => { setRejecting(false); setReversing(false); setAckNote(''); }, [p.id]);
 
   const match = p.amountMatchesBill;
 
@@ -276,18 +286,45 @@ function PaymentDetail({
           {p.note && (<><dt className="sk-lab">Note</dt><dd>{p.note}</dd></>)}
           {p.receiptNumber && (<><dt className="sk-lab">Receipt</dt>
             <dd style={{ fontFamily: 'var(--sk-mono)' }}>{p.receiptNumber}</dd></>)}
+          {p.ackNote && (<><dt className="sk-lab">Note sent</dt><dd>{p.ackNote}</dd></>)}
           {p.rejectionReason && (<><dt className="sk-lab">Reason</dt>
             <dd style={{ color: 'var(--sk-bad)' }}>{p.rejectionReason}</dd></>)}
         </dl>
 
         {p.status === 'SUBMITTED' && !rejecting && (
-          <div className="flex flex-wrap gap-2">
-            <button className="sk-btn" data-variant="primary" disabled={busy} onClick={onVerify}>
-              <Check size={14} /> Accept &amp; issue receipt
-            </button>
-            <button className="sk-btn" disabled={busy} onClick={() => setRejecting(true)}>
-              <X size={14} /> Turn down…
-            </button>
+          <div className="flex flex-col gap-2">
+            {/* Optional on purpose. A clerk clearing forty transfers accepts
+                each in one click; the note is there for the one that needs a
+                word — "short by ₹500", "this clears the fine too". Wrapped in
+                a flex COLUMN because .sk-input declares no display or width,
+                so a bare label + input sit side by side (layout-guard.test). */}
+            <div className="flex flex-col gap-1">
+              <label className="sk-lab" htmlFor="ack-note">
+                Note to the parent <span style={{ opacity: 0.7 }}>(optional)</span>
+              </label>
+              <textarea
+                id="ack-note"
+                className="sk-input"
+                rows={2}
+                maxLength={300}
+                value={ackNote}
+                onChange={(e) => setAckNote(e.target.value)}
+                placeholder="Received by NEFT on 28 Aug. Thank you."
+              />
+              <p className="text-[10.5px]" style={{ color: 'var(--sk-ink-3)' }}>
+                Printed on their receipt word for word. Leave it blank and the
+                receipt simply confirms the amount.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className="sk-btn" data-variant="primary" disabled={busy}
+                      onClick={() => onVerify(ackNote)}>
+                <Check size={14} /> Accept &amp; issue receipt
+              </button>
+              <button className="sk-btn" disabled={busy} onClick={() => setRejecting(true)}>
+                <X size={14} /> Turn down…
+              </button>
+            </div>
           </div>
         )}
 

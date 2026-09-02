@@ -21,6 +21,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
+const THEME = readFileSync(resolve(process.cwd(), 'app/sk-theme.css'), 'utf8');
+
 const ROOTS = [resolve(process.cwd(), 'app/app/fees'), resolve(process.cwd(), 'app/portal/fees')];
 
 function tsxUnder(dir: string): string[] {
@@ -68,5 +70,32 @@ describe('fee screens keep block-level content in block-level elements', () => {
       });
     }
     expect(bad).toEqual([]);
+  });
+
+  // A CSS custom property that does not exist is not a compile error, not a
+  // lint error, and not a render error — the declaration is simply dropped and
+  // the element inherits. `color: var(--sk-acc)` looked right in the source and
+  // shipped receipt links in body ink. sk-theme.css has --sk-brand-2; it has
+  // never had --sk-acc.
+  it('only uses --sk-* custom properties that sk-theme.css actually defines', () => {
+    const defined = new Set(
+      [...THEME.matchAll(/(--sk-[a-z0-9-]+)\s*:/g)].map((m) => m[1]),
+    );
+    // Proves the extractor works — an empty set would make the assertion below
+    // pass vacuously no matter how many bogus names the screens used.
+    expect(defined.size).toBeGreaterThan(20);
+    expect(defined.has('--sk-brand-2')).toBe(true);
+
+    // Only a BARE var() is a bug. `var(--sk-amber-line, var(--sk-line))` names
+    // a token that does not exist on purpose — the fallback is the value, and
+    // setup/page.tsx uses that form deliberately in two places. A var() with no
+    // fallback is the one that silently drops the whole declaration.
+    const bad: string[] = [];
+    for (const [name, src] of FILES) {
+      for (const m of src.matchAll(/var\(\s*(--sk-[a-z0-9-]+)\s*\)/g)) {
+        if (!defined.has(m[1])) bad.push(`${name}: var(${m[1]}) is not defined in sk-theme.css and has no fallback`);
+      }
+    }
+    expect([...new Set(bad)]).toEqual([]);
   });
 });

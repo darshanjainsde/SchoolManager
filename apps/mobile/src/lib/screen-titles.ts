@@ -19,6 +19,7 @@ const TITLES: Record<string, string> = {
   assignments: 'Assignments',
   class: 'Class',
   diary: 'Diary',
+  fees: 'Fees',
   holidays: 'Holidays',
   messages: 'Messages',
   notes: 'Notes',

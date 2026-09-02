@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
 import { METHOD_LABEL, toMinor, type FeePaymentMethod, type StudentFees } from '@/lib/fees';
 
 /**
@@ -29,7 +30,14 @@ export function RecordPaymentDialog({
   invoices: StudentFees['invoices'];
   onClose: () => void;
 }) {
-  const api = useApi({ audience: 'school' });
+  // The host is NOT optional here. Without it the client sends no
+  // X-Skoolos-Host, the API cannot resolve which school is asking, and
+  // SchoolJwtGuard answers 401 "Tenant context required" — which the client
+  // treats as an expired session, tries to refresh (equally hostless, equally
+  // 401), and finally calls clear(). The clerk is signed out mid-payment.
+  // That is exactly what this dialog did on every save.
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
   const qc = useQueryClient();
   const ref = useRef<HTMLDivElement>(null);
 

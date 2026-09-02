@@ -515,6 +515,12 @@ export default function Home() {
               { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
               { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices', tone: 'amber' },
               { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays', tone: 'green' },
+              // "Go to" rather than "Needs you today", and deliberately without
+              // a badge: a due-amount badge would mean fetching /me/fees on every
+              // home load for every family — including the schools that have not
+              // bought Fees, where it is a 403 on each open. The balance is the
+              // first thing on the screen itself.
+              { label: 'Fees', icon: 'fees', route: '/(family)/(tabs)/home/fees' },
             ]}
           />
 

@@ -32,7 +32,7 @@
 # Restore path: docs/RUNBOOK.md "Restore drill" —
 #   gpg -d skoolos-<stamp>.dump.gz.gpg | gunzip | pg_restore -d <db> --no-owner
 
-name: Nightly database backup
+name: Database · Nightly encrypted backup
 
 on:
   schedule:
@@ -43,6 +43,7 @@ permissions: {}
 
 jobs:
   dump:
+    name: pg_dump → gpg (AES256) → artifact
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:

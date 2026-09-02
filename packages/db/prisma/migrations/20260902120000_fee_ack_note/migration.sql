@@ -1,0 +1,17 @@
+-- The school's acknowledgement, in its own words.
+--
+-- Verifying a payment already stamps verifiedAt and issues a numbered receipt,
+-- so the parent has always been able to see THAT the money landed. What they
+-- could not see is anything the school wanted to SAY about it — "received by
+-- NEFT on 28 Aug", "short by ₹500, please send the balance", "this clears the
+-- fine as well". A clerk had nowhere to put that, so it went out over WhatsApp
+-- from a personal phone, or nowhere at all.
+--
+-- Sits beside rejectionReason rather than on FeeReceipt: both are the school
+-- speaking to the family about ONE claim, and keeping them on the same row
+-- means the portal reads a single object to decide what to show. Nullable —
+-- a note is optional and most acknowledgements will not carry one.
+--
+-- Shown to the parent VERBATIM on web and in the app, so it is user content:
+-- never interpolated into HTML, always rendered as text.
+ALTER TABLE "FeePayment" ADD COLUMN "ackNote" TEXT;

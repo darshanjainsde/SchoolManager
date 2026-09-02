@@ -92,6 +92,8 @@ export class FeeQueryService {
           submittedAt: p.submittedAt,
           verifiedAt: p.verifiedAt,
           rejectionReason: p.rejectionReason,
+          /** What the school told the family when it accepted this. */
+          ackNote: p.ackNote,
           receiptNumber: p.receipt?.number ?? null,
           proofUrl: p.proofKey ? await this.storage.presignedGet(p.proofKey, 900) : null,
           student: {
@@ -278,6 +280,8 @@ export class FeeQueryService {
           submittedAt: p.submittedAt,
           verifiedAt: p.verifiedAt,
           rejectionReason: p.rejectionReason,
+          /** The school's acknowledgement, shown verbatim beside the receipt. */
+          ackNote: p.ackNote,
           receiptNumber: p.receipt?.number ?? null,
         })),
         ledger: ledger.map((l) => ({
@@ -482,6 +486,112 @@ export class FeeQueryService {
         rows: filtered.slice(0, take),
         returned: Math.min(filtered.length, take),
         truncated: filtered.length > take,
+      };
+    });
+  }
+
+  /**
+   * ONE RECEIPT, AS A DOCUMENT.
+   *
+   * Until now a verified payment surfaced to the family as a receipt NUMBER
+   * inside a line of text — nothing they could open, save or show to anyone.
+   * This is the document behind that number, and web and app render the same
+   * payload so the two cannot drift into disagreeing about what was paid.
+   *
+   * `studentId` is passed by the parent path and omitted by the office path.
+   * When present it is an additional WHERE clause rather than a check on the
+   * result, so another family's receipt is a 404 and never a row we fetched
+   * and then decided not to return.
+   *
+   * Allocations are read per invoice LINE, which is what lets the receipt say
+   * the money cleared Tuition and Transport specifically rather than just
+   * naming a bill — the same transparency the bill breakdown gives.
+   */
+  async receipt(schoolId: string, paymentId: string, studentId?: string) {
+    return withTenant(schoolId, async (tx) => {
+      const payment = await tx.feePayment.findFirst({
+        where: { id: paymentId, schoolId, ...(studentId ? { studentId } : {}) },
+        include: {
+          receipt: true,
+          student: {
+            select: {
+              firstName: true, lastName: true, admissionNo: true,
+              classSection: { select: { name: true, grade: { select: { name: true } } } },
+            },
+          },
+          allocations: {
+            include: {
+              invoice: { select: { number: true, term: { select: { name: true } } } },
+              invoiceLine: { select: { categoryName: true } },
+            },
+          },
+        },
+      });
+      if (!payment) throw new ApiError('NOT_FOUND', 'Receipt not found', 404);
+      // A receipt exists only once the school has accepted the money. Asking
+      // for one on a pending or refused claim is a 404, not an empty document:
+      // a blank sheet headed "Receipt" is exactly what a family would screenshot
+      // as proof of something that never happened.
+      if (payment.status !== 'VERIFIED' || !payment.receipt) {
+        throw new ApiError('NOT_FOUND', 'No receipt has been issued for this payment.', 404);
+      }
+
+      const [school, profile] = await Promise.all([
+        tx.school.findFirstOrThrow({ where: { id: schoolId }, select: { name: true } }),
+        tx.schoolProfile.findUnique({
+          where: { schoolId },
+          select: {
+            phone: true, email: true, addressLine1: true, addressLine2: true,
+            city: true, region: true, postalCode: true,
+          },
+        }),
+      ]);
+
+      const allocatedMinor = payment.allocations.reduce((a, x) => a + x.amountMinor, 0);
+
+      return {
+        receiptNumber: payment.receipt.number,
+        issuedAt: payment.receipt.issuedAt,
+        school: {
+          name: school.name,
+          addressLines: [
+            profile?.addressLine1,
+            profile?.addressLine2,
+            [profile?.city, profile?.region, profile?.postalCode].filter(Boolean).join(' '),
+          ].map((l) => (l ?? '').trim()).filter((l) => l.length > 0),
+          phone: profile?.phone ?? null,
+          email: profile?.email ?? null,
+        },
+        student: {
+          name: `${payment.student.firstName} ${payment.student.lastName}`.trim(),
+          admissionNo: payment.student.admissionNo,
+          className: payment.student.classSection
+            ? `${payment.student.classSection.grade.name}-${payment.student.classSection.name}`
+            : null,
+        },
+        payment: {
+          id: payment.id,
+          amountMinor: payment.amountMinor,
+          method: payment.method,
+          providerRef: payment.providerRef,
+          paidOn: payment.paidOn,
+          verifiedAt: payment.verifiedAt,
+          /** The school's own words. Rendered verbatim as TEXT, never as HTML. */
+          ackNote: payment.ackNote,
+        },
+        /** What the money actually cleared, by fee category. */
+        allocations: payment.allocations.map((a) => ({
+          invoiceNumber: a.invoice.number,
+          termName: a.invoice.term.name,
+          categoryName: a.invoiceLine.categoryName,
+          amountMinor: a.amountMinor,
+        })),
+        /**
+         * Paid but not yet applied to any bill — an advance, or the remainder
+         * of an overpayment. Shown on the receipt rather than quietly dropped,
+         * so the amounts on the page add up to the amount received.
+         */
+        unallocatedMinor: payment.amountMinor - allocatedMinor,
       };
     });
   }

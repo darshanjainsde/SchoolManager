@@ -22,7 +22,7 @@ once the launch-gate branch lands; each needs an account-side switch:
 | # | Gate | Where | What to do |
 |---|------|-------|------------|
 | 2 | Real email | ESP + DNS | Create a Resend (or SES) account → add sending domain `mail.sckools.com` → set the DKIM/SPF/Return-Path DNS records it gives you → copy the SMTP credentials into Vercel (`skoolos-api` env): `SMTP_HOST`, `SMTP_PORT=465`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM="Sckools <no-reply@mail.sckools.com>"`. MailService is transport-agnostic — env only, no deploy needed beyond the env change. Send a test invite to yourself and check Gmail's "show original" for `dkim=pass spf=pass`. |
-| 3 | Backups | Supabase + GitHub | Supabase dashboard → Database → enable **PITR**. GitHub repo → Settings → Secrets → add `DB_BACKUP_URL` (the SESSION pooler string, port 5432 — the transaction pooler breaks pg_dump) **and `BACKUP_PASSPHRASE`** (long random string — keep a copy in your password manager; the repo is public, so every dump is gpg-encrypted with it before upload and is unreadable without it). Optionally add the `BACKUP_S3_*` secrets for a true offsite copy. Then run the **Restore drill** below once. |
+| 3 | Backups | Supabase + GitHub | Supabase dashboard → Database → enable **PITR**. GitHub repo → Settings → Secrets → add `DB_BACKUP_URL` (the SESSION pooler string, port 5432 — the transaction pooler breaks pg_dump) **and `BACKUP_PASSPHRASE`** (long random string — keep a copy in your password manager; the repo is public, so every dump is gpg-encrypted with it before upload and is unreadable without it). Optionally add the `BACKUP_S3_*` secrets for a true offsite copy. Then run the **Database · Restore drill** workflow (the drill below) once. |
 | 4 | Alerts | Sentry + UptimeRobot | Create a Sentry project (Node) → copy the DSN into Vercel env `SENTRY_DSN` on BOTH `skoolos-api` and `skoolos-web`. Create two UptimeRobot monitors: `https://api.sckools.com/ready` and the school's homepage, alerting your phone/email at 2-minute intervals. |
 | 5 | Rate limits | — | Nothing to do — ships with the code (`REDIS_URL` already set). Verify below. |
 | 6 | Fast outbox | GitHub | Repo → Settings → Secrets → add `CRON_SECRET` (same value as the Vercel env). The `outbox-drain` workflow then runs every 10 minutes. Verify: Actions tab shows green runs; `SELECT count(*) FROM "NotificationOutbox" WHERE "sentAt" IS NULL` stays near zero. |
@@ -72,7 +72,7 @@ Half a day of work when the school's data arrives clean. Order matters.
 - **Verify**: user logs in; audit log shows the successful login.
 
 ### "Parents didn't get the push / got it a day late"
-- **Check**: GitHub → Actions → `Drain notification outbox` — green in the
+- **Check**: GitHub → Actions → `Notifications · Drain outbox (every 10 min)` — green in the
   last 10 min? Watch for the "This scheduled workflow is disabled" banner
   (GitHub pauses schedules after ~60 days of repo inactivity — re-enable
   with one click). `NotificationOutbox` unsent count. Expo push receipts in logs.
