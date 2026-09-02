@@ -329,6 +329,10 @@ model School {
   feeAudits              FeeAudit[]
   feeCounters            FeeCounter[]
   feeSettings            FeeSettings?
+  /// The reception-TV display token. Null = TV off. The /tv page is public
+  /// but useless without this key in its URL — one revocable string, not an
+  /// account, because a lobby screen cannot type a password.
+  tvKey                  String?
   pressIssues            PressIssue[]
   pressCounters          PressCounter[]
   reportWindows          ReportWindow[]

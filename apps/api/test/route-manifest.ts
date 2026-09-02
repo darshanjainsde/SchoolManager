@@ -27,6 +27,14 @@ export const AUTHZ_REVIEWED: string[] = [
   // management-authz.e2e-spec.ts "the Morning Bell": admin reads it; teacher,
   // staff, student and anonymous are each refused.
   "GET /manage/bell",
+  // tv.e2e-spec.ts: the public screen is gated ONLY by the display key (off,
+  // wrong-key and not-live all answer the same 404); the switch is
+  // SCHOOL_ADMIN-only, proven against anonymous/student/teacher/staff; a
+  // rotate invalidates the old key and disable kills every link.
+  "GET /public/tv",
+  "GET /manage/tv",
+  "GET /manage/tv/rotate",
+  "GET /manage/tv/disable",
   "GET /manage/press/years",
   "GET /manage/press/classes",
   "GET /manage/press/students",

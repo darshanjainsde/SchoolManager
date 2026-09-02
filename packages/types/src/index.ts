@@ -1163,3 +1163,37 @@ export interface MorningBell {
     enquiries: number;
   };
 }
+
+// ── Sckools TV ───────────────────────────────────────────────────────────────
+// The reception-screen loop: any TV with a browser and one URL. A VIEW over
+// data the school already maintains — the TV is never a thing to feed.
+
+/** `GET /public/tv?key=…` — everything one rotation shows. */
+export interface TvScreen {
+  school: {
+    name: string;
+    logoUrl: string | null;
+    /** The school's own two colours — the TV wears the website's identity. */
+    ps1: string;
+    ps2: string;
+    /** Active festival name from the site's festive theme, for the frame. */
+    festival: string | null;
+  };
+  dateLabel: string;
+  holiday: string | null;
+  /** School-wide notices, newest first. */
+  announcements: { title: string; body: string; when: string }[];
+  eventsToday: { title: string; time: string; venue: string | null }[];
+  eventsUpcoming: { title: string; when: string; venue: string | null }[];
+  /** First names + class — the lobby celebrates them, the way schools do. */
+  birthdays: { name: string; className: string | null }[];
+  /** Gallery picks for the ambient panel. */
+  gallery: string[];
+}
+
+/** `GET /manage/tv` — the admin's switch. */
+export interface TvStatus {
+  enabled: boolean;
+  /** Full display URL when enabled, ready to open on the TV. */
+  url: string | null;
+}
