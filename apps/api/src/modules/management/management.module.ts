@@ -33,6 +33,12 @@ import { CronSecretGuard } from '../../common/auth/cron-secret.guard';
 import { LoginInviteService } from './internal/login-invite.service';
 import { LeaveService } from './leave.service';
 import { BellService } from './bell.service';
+import { ConsoleSearchService } from './console-search.service';
+import { PulseService } from './pulse.service';
+import { StudentReportService } from './student-report.service';
+import { FrontDeskController } from './front-desk.controller';
+import { PressModule } from '../press';
+import { FeesModule } from '../fees';
 import { BellController } from './bell.controller';
 import { LeaveController, SubstitutionController } from './leave.controller';
 import { LeavePolicyService } from './leave-policy.service';
@@ -62,8 +68,8 @@ import { SeatingService } from './seating.service';
 import { SeatingController } from './seating.controller';
 
 @Module({
-  imports: [AuthModule, FeaturesModule, TenancyModule],
-  providers: [EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService],
+  imports: [AuthModule, FeaturesModule, TenancyModule, PressModule, FeesModule],
+  providers: [EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService],
   controllers: [
     CatalogController,
     RoomsController,
@@ -93,7 +99,7 @@ import { SeatingController } from './seating.controller';
     RequestsController,
     PhotoController,
     DiaryController,
-   BellController],
+   BellController, FrontDeskController],
   exports: [CatalogService, TeachersService, StaffService, ClassesService, StudentsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, LeaveService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, DiaryService, AttendanceBarService],
 })
 export class ManagementModule {}

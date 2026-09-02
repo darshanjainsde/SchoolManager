@@ -490,6 +490,54 @@ export class ReportCardService {
     return { subjects, students: compiled, unpublishedCount };
   }
 
+  /**
+   * One child's compile for the LATEST report window — the Student 360's
+   * academics panel. Same `compileStudents` core as the batch and the issued
+   * snapshot, so the profile, the batch screen and the printed card can never
+   * disagree. Null when the school has no window yet or the child no class.
+   */
+  async compileForStudent(schoolId: string, studentId: string): Promise<{
+    windowName: string;
+    academicYearName: string;
+    subjects: import('@skoolos/types').ReportSubjectLine[];
+    overall: ReportCardStudent['overall'];
+    remark: string | null;
+  } | null> {
+    return withTenant(schoolId, async (tx) => {
+      const student = await tx.student.findFirst({
+        where: { id: studentId },
+        select: {
+          id: true, firstName: true, lastName: true, rollNo: true,
+          admissionNo: true, dob: true, guardianName: true, classSectionId: true,
+        },
+      });
+      if (!student || !student.classSectionId) return null;
+      const window = await tx.reportWindow.findFirst({
+        orderBy: { startDate: 'desc' },
+        include: { academicYear: { select: { name: true } } },
+      });
+      if (!window) return null;
+
+      const compiled = await this.compileStudents(tx, {
+        schoolId,
+        windowId: window.id,
+        classSectionId: student.classSectionId,
+        startDate: window.startDate,
+        endDate: window.endDate,
+        students: [student],
+      });
+      const row = compiled.students[0];
+      if (!row) return null;
+      return {
+        windowName: window.name,
+        academicYearName: window.academicYear.name,
+        subjects: row.subjects,
+        overall: row.overall,
+        remark: row.remark,
+      };
+    });
+  }
+
   // ── Issue ──────────────────────────────────────────────────────────────────
 
   /**

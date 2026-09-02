@@ -430,8 +430,10 @@ describe('StudentsService.resendInvite', () => {
 describe('StudentsController.list', () => {
   const students = { list: jest.fn().mockResolvedValue([]) };
   const tenant = { requireTenant: () => ({ schoolId: SCHOOL }) };
+  const studentReport = { report: jest.fn() };
   const controller = new StudentsController(
     students as unknown as StudentsService,
+    studentReport as unknown as import('./student-report.service').StudentReportService,
     tenant as unknown as TenantContextService,
   );
 
