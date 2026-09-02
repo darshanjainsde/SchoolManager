@@ -3,9 +3,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, Armchair, BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX, ChevronsLeft, ChevronsRight, ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Handshake, Inbox, LayoutDashboard, LogOut, Megaphone, Menu, Newspaper, School, Settings, UserCog, Users, Wallet, X,
-  Printer,
+import {
+  ArrowUpRight, ChevronDown, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Menu, X,
 } from 'lucide-react';
+import { NAV_MODEL, groupOf, leafActive, navLeaves, visibleModel, type NavEntry, type NavLeaf } from './nav-model';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -18,43 +19,6 @@ import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
 
-// `requiredFeature` hides the item for schools whose tier lacks it. Items with
-// no requiredFeature are always shown.
-const NAV_ITEMS: {
-  href: string;
-  label: string;
-  icon: typeof LayoutDashboard;
-  requiredFeature?: string;
-  /** Marks the one tab that leaves /app — see the Library entry below. */
-  leavesConsole?: boolean;
-}[] = [
-  { href: '/app', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/app/website', label: 'Website', icon: Globe },
-  { href: '/app/blog', label: 'Blog', icon: Newspaper, requiredFeature: 'BLOG' },
-  { href: '/app/enquiries', label: 'Enquiries', icon: Inbox, requiredFeature: 'ENQUIRY' },
-  { href: '/app/classes', label: 'Classes', icon: School, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/teachers', label: 'Teachers', icon: GraduationCap, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/staff', label: 'Staff', icon: UserCog, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/staff-attendance', label: 'Staff attendance', icon: ClipboardList, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/students', label: 'Students', icon: Users, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' },
-  { href: '/app/press', label: 'The Press', icon: Printer, requiredFeature: 'PRESS' },
-  { href: '/app/timetable', label: 'Timetable', icon: CalendarDays, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/exam-hall', label: 'Exam Hall', icon: Armchair, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/availability', label: 'Availability', icon: Clock, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/leave', label: 'Leave', icon: CalendarX, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/requests', label: 'Requests', icon: ClipboardCheck, requiredFeature: 'MANAGEMENT' },
-  { href: '/app/settings', label: 'Settings', icon: Settings, requiredFeature: 'MANAGEMENT' },
-  // Points OUT of the /app segment on purpose — the counter is its own portal
-  // (see lib/role-routes.ts). An admin needs to reach it to set the library up
-  // and to stand in when the librarian is away; a librarian never comes
-  // through here, she lands on it directly.
-  { href: '/library', label: 'Library', icon: BookOpen, requiredFeature: 'LIBRARY', leavesConsole: true },
-  { href: '/app/jobs', label: 'Jobs', icon: Briefcase, requiredFeature: 'HIRING' },
-  { href: '/app/events', label: 'Events', icon: CalendarHeart, requiredFeature: 'EVENTS' },
-  { href: '/app/alumni', label: 'Alumni', icon: Handshake, requiredFeature: 'ALUMNI' },
-  { href: '/app/announcements', label: 'Announcements', icon: Megaphone },
-];
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
 function trapFocus(e: React.KeyboardEvent<HTMLDivElement>, container: HTMLDivElement | null) {
@@ -80,6 +44,7 @@ function AdminNavLink({
   icon: Icon,
   pathname,
   collapsed,
+  nested,
   onNavigate,
   leavesConsole,
 }: {
@@ -91,9 +56,11 @@ function AdminNavLink({
   leavesConsole?: boolean;
   /** Icon-only rail: hide the label, centre the icon, name it via a tooltip. */
   collapsed?: boolean;
+  /** A group child — indents under its header. */
+  nested?: boolean;
   onNavigate?: () => void;
 }) {
-  const active = href === '/app' ? pathname === '/app' : pathname === href || pathname.startsWith(href + '/');
+  const active = leafActive(href, pathname);
   return (
     <Link
       href={href}
@@ -102,7 +69,7 @@ function AdminNavLink({
       aria-label={collapsed ? label : undefined}
       className={cn(
         'flex items-center rounded-lg transition-colors',
-        collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
+        collapsed ? 'justify-center px-0 py-2.5' : nested ? 'gap-3 py-2 pl-9 pr-3' : 'gap-3 px-3 py-2.5',
         active ? 'bg-emerald-400/15 font-semibold text-emerald-300' : 'hover:bg-white/5',
       )}
     >
@@ -115,6 +82,81 @@ function AdminNavLink({
         <ArrowUpRight aria-hidden="true" className="ml-auto h-3.5 w-3.5 opacity-60" />
       ) : null}
     </Link>
+  );
+}
+
+/**
+ * One collapsible section. The header is a real button (aria-expanded); when
+ * the group is shut but holds the active page, an emerald dot says so — the
+ * page never feels lost behind a closed heading.
+ */
+function NavGroup({
+  entry, pathname, open, onToggle, onNavigate,
+}: {
+  entry: Extract<NavEntry, { kind: 'group' }>;
+  pathname: string;
+  open: boolean;
+  onToggle: () => void;
+  onNavigate?: () => void;
+}) {
+  const holdsActive = entry.items.some((i) => leafActive(i.href, pathname));
+  const Icon = entry.icon;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className={cn(
+          'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-white/5',
+          holdsActive && !open ? 'text-emerald-300' : 'text-slate-300',
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className={cn('flex-1 text-[11px] font-semibold uppercase tracking-wider', holdsActive && !open ? 'text-emerald-300' : 'text-slate-400')}>
+          {entry.label}
+        </span>
+        {holdsActive && !open && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
+        <ChevronDown aria-hidden="true" className={cn('h-3.5 w-3.5 text-slate-500 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="flex flex-col gap-0.5">
+          {entry.items.map((item) => (
+            <AdminNavLink key={item.href} {...item} pathname={pathname} nested onNavigate={onNavigate} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The whole menu, grouped — the drawer and the expanded sidebar share it. */
+function GroupedNav({
+  model, pathname, openGroup, setOpenGroup, onNavigate,
+}: {
+  model: NavEntry[];
+  pathname: string;
+  openGroup: string | null;
+  setOpenGroup: (k: string | null) => void;
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
+      {model.map((e) =>
+        e.kind === 'item' ? (
+          <AdminNavLink key={e.item.href} {...e.item} pathname={pathname} onNavigate={onNavigate} />
+        ) : (
+          <NavGroup
+            key={e.key}
+            entry={e}
+            pathname={pathname}
+            open={openGroup === e.key}
+            onToggle={() => setOpenGroup(openGroup === e.key ? null : e.key)}
+            onNavigate={onNavigate}
+          />
+        ),
+      )}
+    </>
   );
 }
 
@@ -164,9 +206,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   });
   const features = me?.features;
   // Until features load, show every item (avoids hiding things on a slow fetch).
-  const navItems = features
-    ? NAV_ITEMS.filter((i) => !i.requiredFeature || features.includes(i.requiredFeature))
-    : NAV_ITEMS;
+  const model = visibleModel(features ?? null);
+  const leaves = navLeaves(model);
+
+  /**
+   * The accordion follows the route: the group that owns the current page is
+   * open, everything else stays shut, so the menu can never grow long again.
+   * Initialised from pathname (identical on server and client — no hydration
+   * risk), re-synced on navigation; a hand-opened group closes on the next
+   * route change into a different group.
+   */
+  const [openGroup, setOpenGroup] = useState<string | null>(() => groupOf(pathname));
+  useEffect(() => {
+    const g = groupOf(pathname);
+    if (g) setOpenGroup(g);
+  }, [pathname]);
 
   useEffect(() => {
     // `unknown` means the probe has not answered yet — don't bounce to /login
@@ -326,9 +380,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </div>
 
             <nav className="mt-2 flex flex-1 flex-col gap-1 overflow-y-auto px-3 text-sm">
-              {navItems.map((item) => (
-                <AdminNavLink key={item.href} {...item} pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
-              ))}
+              <GroupedNav
+                model={model}
+                pathname={pathname}
+                openGroup={openGroup}
+                setOpenGroup={setOpenGroup}
+                onNavigate={() => setDrawerOpen(false)}
+              />
             </nav>
 
             <div className="border-t border-white/10 p-4">
@@ -396,9 +454,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Nav — scrolls on its own; a long menu never scrolls the page. */}
         <nav className={cn('mt-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto text-sm', collapsed ? 'px-2' : 'px-3')}>
-          {navItems.map((item) => (
-            <AdminNavLink key={item.href} {...item} pathname={pathname} collapsed={collapsed} />
-          ))}
+          {collapsed ? (
+            // The icon rail stays FLAT — a closed heading has no meaning at
+            // 16px wide, and every icon already names itself via its tooltip.
+            leaves.map((item) => (
+              <AdminNavLink key={item.href} {...item} pathname={pathname} collapsed />
+            ))
+          ) : (
+            <GroupedNav model={model} pathname={pathname} openGroup={openGroup} setOpenGroup={setOpenGroup} />
+          )}
         </nav>
 
         {/* Logout */}
