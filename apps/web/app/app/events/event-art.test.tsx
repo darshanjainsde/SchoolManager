@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { EVENT_ART_KEYS } from '@skoolos/types';
 import { ART_KEYS, EVENT_ART, EventArt, guessArt } from './event-art';
 import { EventCard, artOf, type SchoolEvent } from './event-card';
@@ -92,5 +94,69 @@ describe('the event card', () => {
   it('offers the Promo Kit from the row — promoting is why the list exists', () => {
     render(<EventCard event={EVENT} />);
     expect(screen.getByRole('link', { name: 'Promo Kit' })).toHaveAttribute('href', '/app/events/e1/promo');
+  });
+});
+
+/**
+ * THE TILE-SIZE GUARD.
+ *
+ * A portrait photograph shipped a card twice the height of its neighbours and
+ * broke the whole row's alignment. The cause: the image was left in flow with
+ * `height: 100%`, which resolves against a height `aspect-ratio` has not
+ * decided yet, so the picture sized the tile instead of the other way round.
+ *
+ * Layout is not computed in jsdom, so this reads the stylesheet — the same
+ * approach `sk-theme.test.ts` uses. What matters is that the picture is taken
+ * OUT OF FLOW; then it cannot have an opinion about the tile.
+ */
+describe('a picture can never resize its tile', () => {
+  const css = readFileSync(resolve(process.cwd(), 'app/sk-theme.css'), 'utf8');
+
+  /**
+   * ONE rule's body, not "somewhere nearby".
+   *
+   * The first version of this sliced from `.sk-ev-cover` to `.sk-ev-when` and
+   * asked whether `position: absolute` appeared anywhere inside. It does — the
+   * crop-preview rules a few lines below use it — so the guard passed while the
+   * bug it exists for was reinstated. A guard that reads its neighbours is not
+   * a guard.
+   */
+  function ruleBody(selector: string): string {
+    const at = css.indexOf(selector);
+    expect(at, `${selector} is not in the stylesheet`).toBeGreaterThan(-1);
+    const open = css.indexOf('{', at);
+    return css.slice(open, css.indexOf('}', open));
+  }
+  const block = ruleBody('.sk-ev-cover {');
+
+  it('fixes the cover window to 16:9 and clips it', () => {
+    expect(block).toMatch(/aspect-ratio:\s*16\s*\/\s*9/);
+    expect(block).toMatch(/overflow:\s*hidden/);
+  });
+
+  it('takes both the drawing and the photo out of flow', () => {
+    const rule = ruleBody('.sk-ev-cover > svg,');
+    expect(rule, 'the cover children must be positioned absolutely').toMatch(/position:\s*absolute/);
+    expect(rule).toMatch(/inset:\s*0/);
+    expect(rule, 'a photo that is not cover-fitted is stretched').toMatch(/object-fit:\s*cover/);
+  });
+
+  it('honours the focal choice in CSS as well as on the sheets', () => {
+    expect(ruleBody('.sk-ev-cover > img[data-focus="top"]')).toMatch(/object-position:\s*50% 0%/);
+    expect(ruleBody('.sk-ev-cover > img[data-focus="bottom"]')).toMatch(/object-position:\s*50% 100%/);
+  });
+});
+
+describe('the card carries the focal choice', () => {
+  it('marks a photo with the band the school picked', () => {
+    const { container } = render(
+      <EventCard event={{ ...EVENT, coverUrl: 'https://cdn.example/tall.jpg', coverFocus: 'top' }} />,
+    );
+    expect(container.querySelector('img')).toHaveAttribute('data-focus', 'top');
+  });
+
+  it('defaults to the middle, which is what a browser does anyway', () => {
+    const { container } = render(<EventCard event={{ ...EVENT, coverUrl: 'https://cdn.example/tall.jpg' }} />);
+    expect(container.querySelector('img')).toHaveAttribute('data-focus', 'middle');
   });
 });

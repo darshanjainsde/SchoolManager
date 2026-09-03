@@ -15,10 +15,28 @@
  * Colours are fixed rather than tokenised: this is ink on white paper, where
  * the console's dark scheme has no meaning.
  */
-import { EventArtGroup, type ArtKey } from '../event-art';
+import { EVENT_ART, EventArtGroup, type ArtKey } from '../event-art';
 
 export type PieceKey = 'poster' | 'handbill' | 'invite' | 'slips';
 export type PaperSize = 'A4' | 'A3';
+
+/** How much of the sheet the cover takes, and whether there is one at all. */
+export type CoverStyle = 'full' | 'band' | 'none';
+export type BorderStyle = 'none' | 'hairline' | 'double' | 'corners' | 'festive';
+
+export const COVER_STYLES: { key: CoverStyle; name: string; note: string }[] = [
+  { key: 'full', name: 'Full', note: 'Half the sheet is picture. Loudest across a corridor.' },
+  { key: 'band', name: 'Band', note: 'A strip of picture, more room for words.' },
+  { key: 'none', name: 'Words only', note: 'No picture at all — cheapest to photocopy, and best in black and white.' },
+];
+
+export const BORDER_STYLES: { key: BorderStyle; name: string }[] = [
+  { key: 'none', name: 'None' },
+  { key: 'hairline', name: 'Hairline' },
+  { key: 'double', name: 'Double rule' },
+  { key: 'corners', name: 'Corners' },
+  { key: 'festive', name: 'Festive' },
+];
 
 /** Real paper, in millimetres. */
 export const PAPER: Record<PaperSize, { w: number; h: number }> = {
@@ -57,6 +75,19 @@ export interface SheetData {
   art: ArtKey;
   /** The event's own description, if it has one. Fills the poster's middle. */
   blurb?: string | null;
+  /**
+   * The school's own photograph, as a data: URL.
+   *
+   * A data URL and not the http one on purpose: a sheet is exported by
+   * serialising it and rasterising it in an isolated context, where an
+   * external reference does not load — the photo would be on screen and
+   * missing from the download. The Kit inlines it before it gets here.
+   */
+  photo?: string | null;
+  /** Which band of a tall photo to keep — the same choice the card honours. */
+  focus?: 'top' | 'middle' | 'bottom' | null;
+  cover: CoverStyle;
+  border: BorderStyle;
   /** A data: URL for the QR image, or null while it is still being made. */
   qr: string | null;
 }
@@ -97,6 +128,76 @@ export function wrapTitle(title: string, maxWidthMm: number, fontSizeMm: number,
   return lines;
 }
 
+/**
+ * The picture at the top of a piece — the school's photograph if it has one,
+ * the drawn archetype otherwise. `slice` crops rather than squashing, which is
+ * what a banner wants: a photo letterboxed into a strip looks like a mistake.
+ */
+function Cover({ d, w, h, id }: { d: SheetData; w: number; h: number; id: string }) {
+  if (h <= 0) return null;
+  if (d.photo) {
+    // The SVG spelling of object-position: which band survives the crop.
+    const align =
+      d.focus === 'top' ? 'xMidYMin' : d.focus === 'bottom' ? 'xMidYMax' : 'xMidYMid';
+    return (
+      <>
+        <clipPath id={id}>
+          <rect width={w} height={h} />
+        </clipPath>
+        <image href={d.photo} x={0} y={0} width={w} height={h} preserveAspectRatio={`${align} slice`} clipPath={`url(#${id})`} />
+      </>
+    );
+  }
+  return <EventArtGroup kind={d.art} width={w} height={h} />;
+}
+
+/**
+ * A frame. Drawn INSIDE the page rather than at its edge, because domestic
+ * printers cannot print to the paper's edge — a border on the trim line comes
+ * out clipped on one side and not the other.
+ */
+function Border({ w, h, style, accent }: { w: number; h: number; style: BorderStyle; accent: string }) {
+  if (style === 'none') return null;
+  const m = Math.min(w, h) * 0.035;
+  const common = { fill: 'none', stroke: accent } as const;
+  if (style === 'hairline') {
+    return <rect x={m} y={m} width={w - m * 2} height={h - m * 2} {...common} strokeWidth={w * 0.0035} />;
+  }
+  if (style === 'double') {
+    const g = w * 0.008;
+    return (
+      <>
+        <rect x={m} y={m} width={w - m * 2} height={h - m * 2} {...common} strokeWidth={w * 0.006} />
+        <rect x={m + g} y={m + g} width={w - (m + g) * 2} height={h - (m + g) * 2} {...common} strokeWidth={w * 0.002} />
+      </>
+    );
+  }
+  if (style === 'corners') {
+    const L = Math.min(w, h) * 0.09;
+    const sw = w * 0.005;
+    const corner = (cx: number, cy: number, dx: number, dy: number, k: string) => (
+      <path key={k} d={`M${cx + dx * L} ${cy} H${cx} V${cy + dy * L}`} {...common} strokeWidth={sw} />
+    );
+    return (
+      <>
+        {corner(m, m, 1, 1, 'tl')}
+        {corner(w - m, m, -1, 1, 'tr')}
+        {corner(m, h - m, 1, -1, 'bl')}
+        {corner(w - m, h - m, -1, -1, 'br')}
+      </>
+    );
+  }
+  // Festive: a repeating tick band, the paper equivalent of a string of flags.
+  const step = w * 0.028;
+  const ticks: React.ReactNode[] = [];
+  const t = w * 0.009;
+  for (let x = m; x <= w - m; x += step) {
+    ticks.push(<rect key={`t${x}`} x={x} y={m} width={t} height={t * 2} fill={accent} />);
+    ticks.push(<rect key={`b${x}`} x={x} y={h - m - t * 2} width={t} height={t * 2} fill={accent} />);
+  }
+  return <>{ticks}</>;
+}
+
 function Cut({ x1, y1, x2, y2 }: { x1: number; y1: number; x2: number; y2: number }) {
   return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#c9c4dd" strokeWidth="0.2" strokeDasharray="2 2" />;
 }
@@ -108,17 +209,21 @@ function Qr({ src, x, y, size }: { src: string | null; x: number; y: number; siz
 
 // ── Poster ────────────────────────────────────────────────────────────────
 
+const COVER_SHARE: Record<CoverStyle, number> = { full: 0.5, band: 0.28, none: 0 };
+
 function Poster({ d, size }: { d: SheetData; size: PaperSize }) {
   const { w, h } = PAPER[size];
   const pad = w * 0.055;
-  const artH = h * 0.5;
-  const titleSize = w * 0.095;
+  const artH = h * COVER_SHARE[d.cover];
+  // With no picture the words are the poster, so they get to be bigger.
+  const titleSize = w * (d.cover === 'none' ? 0.115 : 0.095);
   const lines = wrapTitle(d.title, w - pad * 2, titleSize);
-  let y = artH + pad * 1.5;
+  let y = artH + pad * (d.cover === 'none' ? 2.4 : 1.5);
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label={`Poster for ${d.title}`}>
       <rect width={w} height={h} fill="#ffffff" />
-      <EventArtGroup kind={d.art} width={w} height={artH} />
+      <Cover d={d} w={w} h={artH} id="poster-cover" />
+      <Border w={w} h={h} style={d.border} accent={EVENT_ART[d.art].bg} />
       <text x={pad} y={y} fontFamily={SANS} fontSize={w * 0.021} fontWeight="800" letterSpacing={w * 0.004} fill={INK_3}>
         {d.schoolName.toUpperCase()}
       </text>
@@ -170,15 +275,16 @@ function Poster({ d, size }: { d: SheetData; size: PaperSize }) {
 
 function Bill({ d, x, y, w, h }: { d: SheetData; x: number; y: number; w: number; h: number }) {
   const pad = w * 0.075;
-  const artH = h * 0.36;
+  const artH = h * (d.cover === 'none' ? 0 : d.cover === 'band' ? 0.2 : 0.36);
   const titleSize = w * 0.098;
   const lines = wrapTitle(d.title, w - pad * 2, titleSize, 2);
   let ty = artH + pad * 1.3;
   return (
     <g transform={`translate(${x} ${y})`}>
       <svg x="0" y="0" width={w} height={artH} viewBox={`0 0 ${w} ${artH}`}>
-        <EventArtGroup kind={d.art} width={w} height={artH} />
+        <Cover d={d} w={w} h={artH} id={`bill-cover-${x}-${y}`} />
       </svg>
+      <Border w={w} h={h} style={d.border} accent={EVENT_ART[d.art].bg} />
       {lines.map((ln, i) => {
         ty += i === 0 ? titleSize : titleSize * 0.95;
         return (
@@ -227,7 +333,7 @@ function Handbills({ d }: { d: SheetData }) {
 
 function Invite({ d, x, y }: { d: SheetData; x: number; y: number }) {
   const { w, h } = CR80;
-  const artW = w * 0.34;
+  const artW = d.cover === 'none' ? 0 : w * (d.cover === 'band' ? 0.2 : 0.34);
   const pad = w * 0.055;
   const tx = artW + pad;
   const titleSize = w * 0.105;
@@ -236,9 +342,12 @@ function Invite({ d, x, y }: { d: SheetData; x: number; y: number }) {
   return (
     <g transform={`translate(${x} ${y})`}>
       <rect width={w} height={h} fill="#ffffff" />
-      <svg x="0" y="0" width={artW} height={h} viewBox={`0 0 ${artW} ${h}`}>
-        <EventArtGroup kind={d.art} width={artW} height={h} />
-      </svg>
+      {artW > 0 ? (
+        <svg x="0" y="0" width={artW} height={h} viewBox={`0 0 ${artW} ${h}`}>
+          <Cover d={d} w={artW} h={h} id={`inv-cover-${x}-${y}`} />
+        </svg>
+      ) : null}
+      <Border w={w} h={h} style={d.border} accent={EVENT_ART[d.art].bg} />
       <text x={tx} y={h * 0.22} fontFamily={SANS} fontSize={w * 0.038} fontWeight="800" letterSpacing={w * 0.006} fill={INK_3}>
         YOU ARE INVITED
       </text>

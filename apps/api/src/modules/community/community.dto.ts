@@ -1,5 +1,5 @@
 import { ArrayMaxSize, IsArray, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
-import { EVENT_ART_KEYS, type EventArtKey } from '@skoolos/types';
+import { EVENT_ART_KEYS, EVENT_COVER_FOCUS, type EventArtKey, type EventCoverFocus } from '@skoolos/types';
 
 /** How many schools one event may be hand-addressed to. */
 export const MAX_SELECTED_SCHOOLS = 50;
@@ -18,6 +18,8 @@ export class CreateEventDto {
    * and an unknown value would render nothing.
    */
   @IsOptional() @IsIn(EVENT_ART_KEYS) coverArt?: EventArtKey;
+  /** Which band of a tall cover photo the tile keeps. */
+  @IsOptional() @IsIn(EVENT_COVER_FOCUS) coverFocus?: EventCoverFocus;
   @IsDateString() startAt!: string;
   @IsOptional() @IsDateString() endAt?: string;
   @IsOptional() @IsString() @Length(0, 200) venue?: string;
@@ -52,6 +54,8 @@ export class UpdateEventDto {
    * and an unknown value would render nothing.
    */
   @IsOptional() @IsIn(EVENT_ART_KEYS) coverArt?: EventArtKey;
+  /** Which band of a tall cover photo the tile keeps. */
+  @IsOptional() @IsIn(EVENT_COVER_FOCUS) coverFocus?: EventCoverFocus;
   @IsOptional() @IsDateString() startAt?: string;
   @IsOptional() @IsDateString() endAt?: string;
   @IsOptional() @IsString() @Length(0, 200) venue?: string;

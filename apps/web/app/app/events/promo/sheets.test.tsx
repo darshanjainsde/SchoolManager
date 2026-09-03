@@ -11,6 +11,8 @@ const DATA: SheetData = {
   blurb: 'An evening of music, dance and drama by every class.',
   art: 'annual',
   qr: null,
+  cover: 'full',
+  border: 'none',
 };
 
 /**
@@ -109,5 +111,64 @@ describe('what fits on a sheet', () => {
       expect(p.sizeLabel).toBeTruthy();
       expect(p.sizes.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('cover treatment and borders', () => {
+  it('drops the picture entirely on "words only"', () => {
+    const { container } = render(<Sheet piece="poster" size="A3" data={{ ...DATA, cover: 'none' }} />);
+    // The drawn art's ground rect is the full art width; with no cover the only
+    // full-width rect left is the white page itself.
+    const grounds = [...container.querySelectorAll('rect')].filter((r) => r.getAttribute('width') === String(PAPER.A3.w));
+    expect(grounds).toHaveLength(1);
+  });
+
+  it('gives a band less of the sheet than a full cover', () => {
+    const heightOfCover = (cover: 'full' | 'band') => {
+      const { container } = render(<Sheet piece="poster" size="A3" data={{ ...DATA, cover }} />);
+      const rects = [...container.querySelectorAll('rect')].filter((r) => r.getAttribute('width') === String(PAPER.A3.w));
+      // [0] is the page, [1] is the art's ground.
+      return Number(rects[1]?.getAttribute('height') ?? 0);
+    };
+    expect(heightOfCover('band')).toBeLessThan(heightOfCover('full'));
+    expect(heightOfCover('band')).toBeGreaterThan(0);
+  });
+
+  it('draws nothing at all for the "none" border', () => {
+    const plain = render(<Sheet piece="poster" size="A3" data={{ ...DATA, border: 'none' }} />);
+    const framed = render(<Sheet piece="poster" size="A3" data={{ ...DATA, border: 'double' }} />);
+    expect(framed.container.querySelectorAll('rect').length).toBeGreaterThan(plain.container.querySelectorAll('rect').length);
+  });
+
+  /**
+   * The border is inset from the trim. A domestic printer cannot reach the
+   * paper's edge, so a frame drawn ON the edge prints clipped down one side
+   * and not the other — which reads as a broken template, not a margin.
+   */
+  it('insets the border from the paper edge', () => {
+    const { container } = render(<Sheet piece="poster" size="A3" data={{ ...DATA, border: 'hairline' }} />);
+    const frame = [...container.querySelectorAll('rect')].find((r) => r.getAttribute('fill') === 'none');
+    expect(frame).toBeTruthy();
+    expect(Number(frame!.getAttribute('x'))).toBeGreaterThan(0);
+    expect(Number(frame!.getAttribute('width'))).toBeLessThan(PAPER.A3.w);
+  });
+
+  it('uses the photograph when one is inlined, and the artwork when it is not', () => {
+    const withPhoto = render(<Sheet piece="poster" size="A3" data={{ ...DATA, photo: 'data:image/png;base64,AAA' }} />);
+    expect(withPhoto.container.querySelector('image')).toBeTruthy();
+    const withArt = render(<Sheet piece="poster" size="A3" data={{ ...DATA, photo: null }} />);
+    expect(withArt.container.querySelector('image')).toBeNull();
+  });
+
+  /** A tall photo is cropped; which band survives is the school's choice. */
+  it.each([
+    ['top', 'xMidYMin slice'],
+    ['middle', 'xMidYMid slice'],
+    ['bottom', 'xMidYMax slice'],
+  ] as const)('keeps the %s of a tall photo', (focus, expected) => {
+    const { container } = render(
+      <Sheet piece="poster" size="A3" data={{ ...DATA, photo: 'data:image/png;base64,AAA', focus }} />,
+    );
+    expect(container.querySelector('image')).toHaveAttribute('preserveAspectRatio', expected);
   });
 });

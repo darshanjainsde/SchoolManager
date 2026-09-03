@@ -88,7 +88,7 @@ export default function EventsPage() {
 
   return (
     <div className="skosx">
-      <header className="sk-pagehead">
+      <header className="sk-pagehead flex items-start justify-between gap-3">
         <div>
           <h1>Events</h1>
           <p>Everything happening at the school — and everything you need to put it on a wall.</p>

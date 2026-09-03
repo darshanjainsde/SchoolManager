@@ -96,6 +96,8 @@ export class RegistrationsService {
           // fetch of a row the desk has already loaded.
           description: event.description,
           coverArt: event.coverArt,
+          coverFocus: event.coverFocus,
+          coverUrl: event.coverUrl,
           startAt: event.startAt.toISOString(),
           endAt: event.endAt?.toISOString() ?? null,
           venue: event.venue,

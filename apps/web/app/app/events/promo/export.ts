@@ -127,3 +127,34 @@ export async function makeQr(url: string): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * A remote image as a data: URL.
+ *
+ * The sheets are exported by serialising the SVG and rasterising it in an
+ * isolated context, where an EXTERNAL `<image href>` does not load — the
+ * school's photograph would be there on screen and missing from the file, a
+ * failure nobody would notice until the poster came off the printer with a
+ * white rectangle in it. So the photo is inlined before it ever reaches a
+ * sheet.
+ *
+ * Returns null rather than throwing when the fetch is refused (a bucket with
+ * no CORS header will), so the caller can fall back to the drawn artwork and
+ * say why instead of producing a broken sheet.
+ */
+export async function inlineImage(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!blob.type.startsWith('image/')) return null;
+    return await new Promise<string | null>((resolve) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : null);
+      fr.onerror = () => resolve(null);
+      fr.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}

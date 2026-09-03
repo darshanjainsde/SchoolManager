@@ -1533,6 +1533,9 @@ model Event {
   /// Null means "derive it from the title", which is what every existing row
   /// does; no event is ever without a cover.
   coverArt         String?
+  /// Which band of a tall cover photo the 16:9 tile keeps — see
+  /// EVENT_COVER_FOCUS. Null means the middle, which is what a browser does.
+  coverFocus       String?
   startAt          DateTime
   endAt            DateTime?
   venue            String?

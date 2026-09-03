@@ -1,7 +1,10 @@
 'use client';
 import { useMemo, useState } from 'react';
+import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
 import { AudiencePicker, type AudienceKind } from './AudiencePicker';
-import { ART_KEYS, EVENT_ART, EventArt, guessArt, type ArtKey } from './event-art';
+import { guessArt, type ArtKey } from './event-art';
+import { CoverPicker, type CoverChoice } from './cover-picker';
 import { EventCard, type EventScope, type SchoolEvent } from './event-card';
 
 export interface CreateEventBody {
@@ -12,6 +15,8 @@ export interface CreateEventBody {
   venue?: string;
   scope: EventScope;
   coverArt?: ArtKey;
+  coverFocus?: 'top' | 'middle' | 'bottom';
+  coverAssetId?: string;
   audienceKind?: AudienceKind;
   audienceSchoolIds?: string[];
 }
@@ -46,9 +51,16 @@ export function EventComposer({
   const [audienceSchoolIds, setAudienceSchoolIds] = useState<string[]>([]);
   /** Null = follow the title. Set only once somebody overrules the guess. */
   const [chosenArt, setChosenArt] = useState<ArtKey | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [assetId, setAssetId] = useState<string | null>(null);
+  const [focus, setFocus] = useState<'top' | 'middle' | 'bottom'>('middle');
+
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
 
   const guessed = useMemo(() => guessArt(title), [title]);
   const art = chosenArt ?? guessed;
+  const cover: CoverChoice = { art, photoUrl, assetId, focus };
   const scope: EventScope = audienceKind === 'SCHOOL_ONLY' ? 'SCHOOL' : 'NETWORK';
 
   const preview: SchoolEvent = {
@@ -61,6 +73,8 @@ export function EventComposer({
     scope,
     status: scope === 'NETWORK' ? 'PENDING' : 'APPROVED',
     coverArt: art,
+    coverUrl: photoUrl,
+    coverFocus: focus,
     createdAt: new Date().toISOString(),
   };
 
@@ -72,6 +86,10 @@ export function EventComposer({
       coverArt: art,
       audienceKind,
     };
+    if (assetId) {
+      body.coverAssetId = assetId;
+      body.coverFocus = focus;
+    }
     if (description.trim()) body.description = description.trim();
     if (endAt) body.endAt = new Date(endAt).toISOString();
     if (venue.trim()) body.venue = venue.trim();
@@ -126,26 +144,17 @@ export function EventComposer({
 
           <div style={{ display: 'grid', gap: 6 }}>
             <span className="sk-lab">Cover</span>
-            <div className="sk-ev-artrow">
-              {ART_KEYS.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  className="sk-ev-artpick"
-                  aria-pressed={art === k}
-                  aria-label={EVENT_ART[k].name}
-                  title={EVENT_ART[k].name}
-                  onClick={() => setChosenArt(k)}
-                >
-                  <EventArt kind={k} />
-                </button>
-              ))}
-            </div>
-            <span className="sk-muted" style={{ fontSize: 11 }}>
-              {chosenArt
-                ? `${EVENT_ART[art].name}, chosen by hand.`
-                : `${EVENT_ART[art].name} — picked from the title. Choose another if it is wrong.`}
-            </span>
+            <CoverPicker
+              api={api}
+              value={cover}
+              guessed={chosenArt === null}
+              onChange={(next) => {
+                setChosenArt(next.art);
+                setPhotoUrl(next.photoUrl);
+                setAssetId(next.assetId);
+                setFocus(next.focus);
+              }}
+            />
           </div>
 
           <AudiencePicker

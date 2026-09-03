@@ -1570,3 +1570,13 @@ export const EVENT_ART_KEYS = [
 ] as const;
 
 export type EventArtKey = (typeof EVENT_ART_KEYS)[number];
+
+/**
+ * Which band of a photograph the 16:9 cover keeps.
+ *
+ * Needed because the crop is not cosmetic: a portrait photo of a child cropped
+ * at the centre routinely cuts the head off, and showing somebody that without
+ * giving them a way to change it is worse than not showing it.
+ */
+export const EVENT_COVER_FOCUS = ['top', 'middle', 'bottom'] as const;
+export type EventCoverFocus = (typeof EVENT_COVER_FOCUS)[number];

@@ -2383,8 +2383,33 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
 }
 .sk-ev-card:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 @media (prefers-reduced-motion: reduce) { .sk-ev-card { transition: none; } .sk-ev-card:hover { transform: none; } }
-.sk-ev-cover { aspect-ratio: 16 / 9; position: relative; background: var(--sk-bg-2); }
-.sk-ev-cover > svg { display: block; width: 100%; height: 100%; }
+/* The cover is a FIXED 16:9 window, and everything inside it is taken out of
+   flow to keep it that way. A photo left in flow with height:100% resolves
+   against a height the aspect-ratio has not decided yet, so a PORTRAIT photo
+   grew its own card to twice the height of its neighbours and the row stopped
+   lining up — which is exactly what shipped. Absolute positioning means the
+   picture can never have an opinion about the tile's size. */
+.sk-ev-cover { aspect-ratio: 16 / 9; position: relative; overflow: hidden; background: var(--sk-bg-2); }
+.sk-ev-cover > svg,
+.sk-ev-cover > img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+.sk-ev-cover > img[data-focus="top"] { object-position: 50% 0%; }
+.sk-ev-cover > img[data-focus="bottom"] { object-position: 50% 100%; }
+
+/* Choosing a photo: show what the tile will actually keep.
+   A 16:9 window over the whole picture, everything outside it dimmed — so the
+   crop is a decision somebody makes rather than a surprise they discover on
+   the events page. */
+.sk-ev-croppreview { position: relative; border-radius: var(--sk-r-sm); overflow: hidden; background: var(--sk-bg-2); display: block; }
+.sk-ev-croppreview > img { display: block; width: 100%; height: auto; }
+.sk-ev-cropmask { position: absolute; inset: 0; pointer-events: none; }
+.sk-ev-cropmask::before,
+.sk-ev-cropmask::after { content: ""; position: absolute; left: 0; right: 0; background: rgba(20, 16, 50, 0.62); }
+.sk-ev-cropwin { position: absolute; left: 0; right: 0; outline: 2px solid #fff; outline-offset: -2px; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+.sk-ev-cropwin::after {
+  content: "shown on the card"; position: absolute; left: 6px; bottom: 6px;
+  background: rgba(255,255,255,.92); color: #211d45; border-radius: 6px;
+  padding: 2px 7px; font-size: 10px; font-weight: 750; letter-spacing: .02em;
+}
 /* The date sits ON the art so the card leads with WHEN, which is the only
    thing anyone scans an events list for. */
 .sk-ev-when {

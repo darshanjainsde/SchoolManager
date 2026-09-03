@@ -17,6 +17,8 @@ export interface SchoolEvent {
   coverArt?: string | null;
   coverAssetId?: string | null;
   coverUrl?: string | null;
+  /** Which band of a tall photo the 16:9 tile keeps. */
+  coverFocus?: 'top' | 'middle' | 'bottom' | null;
   originSchoolName?: string | null;
   createdAt: string;
 }
@@ -85,7 +87,7 @@ export function EventCard({
           /* A tenant-uploaded URL on an arbitrary host: next/image would need
              every school's domain in remotePatterns, which is not knowable. */
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={event.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" decoding="async" />
+          <img src={event.coverUrl} alt="" data-focus={event.coverFocus ?? 'middle'} loading="lazy" decoding="async" />
         ) : (
           <EventArt kind={artOf(event)} />
         )}

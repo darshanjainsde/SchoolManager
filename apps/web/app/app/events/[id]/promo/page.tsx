@@ -8,8 +8,11 @@ import { ArrowLeft } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { EVENT_ART, ART_KEYS, EventArt, guessArt, type ArtKey } from '../../event-art';
-import { PIECES, Sheet, piecePaper, type PaperSize, type PieceKey, type SheetData } from '../../promo/sheets';
-import { downloadPdf, downloadPng, fileStem, makeQr } from '../../promo/export';
+import {
+  BORDER_STYLES, COVER_STYLES, PIECES, Sheet, piecePaper,
+  type BorderStyle, type CoverStyle, type PaperSize, type PieceKey, type SheetData,
+} from '../../promo/sheets';
+import { downloadPdf, downloadPng, fileStem, inlineImage, makeQr } from '../../promo/export';
 
 /**
  * The desk payload. The Promo Kit reads the SAME endpoint the "who's coming"
@@ -25,6 +28,8 @@ interface EventDesk {
     endAt?: string | null;
     venue?: string | null;
     coverArt?: string | null;
+    coverFocus?: 'top' | 'middle' | 'bottom' | null;
+    coverUrl?: string | null;
   };
   counts: { seats: number };
 }
@@ -59,6 +64,12 @@ export default function PromoKitPage() {
   const [size, setSize] = useState<PaperSize>('A3');
   const [colour, setColour] = useState(true);
   const [artOverride, setArtOverride] = useState<ArtKey | null>(null);
+  const [coverStyle, setCoverStyle] = useState<CoverStyle>('full');
+  const [border, setBorder] = useState<BorderStyle>('none');
+  /** Null = use the drawn artwork even though the event has a photo. */
+  const [usePhoto, setUsePhoto] = useState(true);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoFailed, setPhotoFailed] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [busy, setBusy] = useState<'pdf' | 'png' | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -82,6 +93,24 @@ export default function PromoKitPage() {
     };
   }, [publicUrl]);
 
+  // The photograph has to be INLINED before it reaches a sheet: an export
+  // serialises the SVG and rasterises it in an isolated context, where an
+  // external href does not load — the picture would be on screen and missing
+  // from the downloaded file.
+  const photoSrc = desk.data?.event.coverUrl ?? null;
+  useEffect(() => {
+    if (!photoSrc) return;
+    let alive = true;
+    void inlineImage(photoSrc).then((d) => {
+      if (!alive) return;
+      setPhoto(d);
+      setPhotoFailed(d === null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [photoSrc]);
+
   const art: ArtKey = artOverride ?? (event?.coverArt as ArtKey | undefined) ?? guessArt(event?.title ?? '');
 
   const data: SheetData | null = event
@@ -90,6 +119,10 @@ export default function PromoKitPage() {
         when: whenLabel(event.startAt),
         venue: event.venue ?? '',
         blurb: event.description ?? null,
+        photo: usePhoto ? photo : null,
+        focus: event.coverFocus ?? 'middle',
+        cover: coverStyle,
+        border,
         schoolName: host ? host.split('.')[0].replace(/^\w/, (c) => c.toUpperCase()) : 'Our school',
         url: publicUrl,
         art,
@@ -124,7 +157,7 @@ export default function PromoKitPage() {
 
   return (
     <div className="skosx">
-      <header className="sk-pagehead">
+      <header className="sk-pagehead flex items-start justify-between gap-3">
         <div>
           <h1>Promo Kit</h1>
           <p>
@@ -201,6 +234,37 @@ export default function PromoKitPage() {
           <div className="sk-card">
             <div className="sk-card-h"><h3>Cover</h3></div>
             <div className="sk-card-b">
+              <div>
+                <p className="sk-lab" style={{ marginBottom: 5 }}>How much picture</p>
+                <div className="sk-seg">
+                  {COVER_STYLES.map((c) => (
+                    <button key={c.key} type="button" aria-pressed={coverStyle === c.key} onClick={() => setCoverStyle(c.key)}>
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="sk-muted" style={{ fontSize: 11.5, marginTop: 5 }}>
+                  {COVER_STYLES.find((c) => c.key === coverStyle)?.note}
+                </p>
+              </div>
+
+              {photoSrc ? (
+                <div>
+                  <p className="sk-lab" style={{ marginBottom: 5 }}>Which picture</p>
+                  <div className="sk-seg">
+                    <button type="button" aria-pressed={usePhoto} onClick={() => setUsePhoto(true)}>Your photo</button>
+                    <button type="button" aria-pressed={!usePhoto} onClick={() => setUsePhoto(false)}>Artwork</button>
+                  </div>
+                  {photoFailed ? (
+                    <p className="sk-muted" style={{ fontSize: 11.5, marginTop: 5, color: 'var(--sk-amber-ink)' }}>
+                      Your photo could not be read for printing, so these sheets use the artwork. The
+                      picture still shows on the website.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {usePhoto && !!photoSrc && !photoFailed ? null : (
               <div className="sk-ev-artrow">
                 {ART_KEYS.map((k) => (
                   <button
@@ -216,9 +280,35 @@ export default function PromoKitPage() {
                   </button>
                 ))}
               </div>
+              )}
               <p className="sk-muted" style={{ fontSize: 11.5 }}>
-                Every piece uses the same artwork, so the poster on the gate and the slip in a pocket
+                Every piece uses the same cover, so the poster on the gate and the slip in a pocket
                 are recognisably the same event.
+              </p>
+            </div>
+          </div>
+
+          <div className="sk-card">
+            <div className="sk-card-h"><h3>Border</h3></div>
+            <div className="sk-card-b">
+              <div className="sk-ev-artrow" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 84px), 1fr))' }}>
+                {BORDER_STYLES.map((b) => (
+                  <button
+                    key={b.key}
+                    type="button"
+                    className="sk-btn"
+                    data-size="sm"
+                    aria-pressed={border === b.key}
+                    style={border === b.key ? { borderColor: 'var(--sk-brand)', background: 'var(--sk-brand-tint)', color: 'var(--sk-brand-2)' } : undefined}
+                    onClick={() => setBorder(b.key)}
+                  >
+                    {b.name}
+                  </button>
+                ))}
+              </div>
+              <p className="sk-muted" style={{ fontSize: 11.5 }}>
+                Drawn inside the page, not at its edge — a domestic printer cannot reach the paper&rsquo;s
+                edge, and a border on the trim line comes out clipped down one side.
               </p>
             </div>
           </div>
