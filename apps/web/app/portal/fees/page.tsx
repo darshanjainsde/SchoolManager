@@ -252,7 +252,7 @@ function PayByTransfer({
       form.append('paidOn', paidOn);
       if (reference.trim()) form.append('reference', reference.trim());
       if (file) form.append('file', file);
-      return api.post('/me/fees/submit', form);
+      return api.postForm('/me/fees/submit', form);
     },
     onSuccess: () => { toast.success('Sent to the school. They usually check within one working day.'); onDone(); },
     onError: (e: Error) => toast.error(e.message),

@@ -67,7 +67,7 @@ export function RecordPaymentDialog({
       form.append('paidOn', paidOn);
       if (reference.trim()) form.append('reference', reference.trim());
       if (note.trim()) form.append('note', note.trim());
-      return api.post('/manage/fees/payments/record', form);
+      return api.postForm('/manage/fees/payments/record', form);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fee-student'] });
