@@ -9,8 +9,9 @@ import type { ReportCardBatch, ReportCardSnapshot, ReportCardStudent, IssueRepor
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
-import { fmtMarks, getPressTemplate, printPressSheets, setPressTemplate, type PressTemplate } from '@/lib/press';
+import { fmtMarks, getPressTemplate, PRESS_TEMPLATES, printPressSheets, setPressTemplate, type PressTemplate } from '@/lib/press';
 import { OrderDrawer } from '@/components/press/order-drawer';
+import { PrintRoom } from '@/components/press/print-room';
 import { ReportCardSheet } from '@/components/press/press-sheets';
 import { PressPrintPortal } from '@/components/press/press-print-portal';
 import '@/components/press/press-print.css';
@@ -64,6 +65,66 @@ function RemarkCell({ initial, onSave }: { initial: string | null; onSave: (text
   );
 }
 
+const CO_SCHOLASTIC_LABELS = ['Work education', 'Art education', 'Health & PE', 'Discipline'] as const;
+
+/**
+ * The card's optional blocks, one row per child — saved on blur through the
+ * SAME remarks endpoint (text + extras live on one register row). Everything
+ * here prints ONLY when filled; an empty grid changes nothing on paper.
+ */
+function ExtrasRow({ student, onSave }: {
+  student: ReportCardStudent;
+  onSave: (extras: NonNullable<ReportCardStudent['extras']>) => void;
+}) {
+  const seed = student.extras;
+  const [house, setHouse] = useState(seed?.house ?? '');
+  const [heightCm, setHeightCm] = useState(seed?.heightCm ? String(seed.heightCm) : '');
+  const [weightKg, setWeightKg] = useState(seed?.weightKg ? String(seed.weightKg) : '');
+  const [promotion, setPromotion] = useState(seed?.promotion ?? '');
+  const [co, setCo] = useState<Record<string, string>>(
+    Object.fromEntries((seed?.coScholastic ?? []).map((c) => [c.label, c.grade])),
+  );
+
+  const save = () => {
+    const coScholastic = CO_SCHOLASTIC_LABELS
+      .filter((l) => co[l] === 'A' || co[l] === 'B' || co[l] === 'C')
+      .map((l) => ({ label: l, grade: co[l] as 'A' | 'B' | 'C' }));
+    onSave({
+      ...(house.trim() ? { house: house.trim() } : {}),
+      ...(heightCm && Number(heightCm) ? { heightCm: Math.round(Number(heightCm)) } : {}),
+      ...(weightKg && Number(weightKg) ? { weightKg: Math.round(Number(weightKg)) } : {}),
+      ...(promotion.trim() ? { promotion: promotion.trim() } : {}),
+      ...(coScholastic.length ? { coScholastic } : {}),
+    });
+  };
+
+  const cellIn: React.CSSProperties = { width: '100%', minWidth: 64, fontSize: 12 };
+  return (
+    <tr style={{ borderTop: '1px solid var(--sk-line)' }} onBlur={(e) => {
+      // Save when focus leaves the ROW, not per keystroke.
+      if (!e.currentTarget.contains(e.relatedTarget as Node)) save();
+    }}>
+      <td style={{ padding: '6px 8px 6px 16px', whiteSpace: 'nowrap' }}>
+        <b style={{ fontWeight: 650 }}>{student.studentName}</b>
+        <span className="sk-muted" style={{ fontSize: 11 }}> · Roll {student.rollNo ?? '—'}</span>
+      </td>
+      <td style={{ padding: 6 }}><input className="sk-input" style={cellIn} maxLength={40} placeholder="House" value={house} onChange={(e) => setHouse(e.target.value)} aria-label={`House for ${student.studentName}`} /></td>
+      <td style={{ padding: 6 }}><input className="sk-input" style={cellIn} inputMode="numeric" placeholder="cm" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} aria-label={`Height for ${student.studentName}`} /></td>
+      <td style={{ padding: 6 }}><input className="sk-input" style={cellIn} inputMode="numeric" placeholder="kg" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} aria-label={`Weight for ${student.studentName}`} /></td>
+      {CO_SCHOLASTIC_LABELS.map((l) => (
+        <td key={l} style={{ padding: 6 }}>
+          <select className="sk-input" style={{ ...cellIn, minWidth: 52 }} value={co[l] ?? ''}
+            onChange={(e) => setCo((m) => ({ ...m, [l]: e.target.value }))}
+            aria-label={`${l} for ${student.studentName}`}>
+            <option value="">—</option><option>A</option><option>B</option><option>C</option>
+          </select>
+        </td>
+      ))}
+      <td style={{ padding: '6px 16px 6px 6px' }}><input className="sk-input" style={{ ...cellIn, minWidth: 150 }} maxLength={120} placeholder="Promoted to Class VIII" value={promotion} onChange={(e) => setPromotion(e.target.value)} aria-label={`Promotion line for ${student.studentName}`} /></td>
+    </tr>
+  );
+}
+
 export default function PressBatchPage() {
   const { windowId, classId } = useParams<{ windowId: string; classId: string }>();
   const host = useHost();
@@ -80,6 +141,13 @@ export default function PressBatchPage() {
       api.put<{ saved: true }>('/manage/press/remarks', { windowId, ...body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['press-batch', host, windowId, classId] }),
     onError: (e) => toast.error(e instanceof ApiError ? e.message : 'The remark did not save.'),
+  });
+
+  const saveExtras = useMutation({
+    mutationFn: (body: { studentId: string; text: string; extras: object }) =>
+      api.put<{ saved: true }>('/manage/press/remarks', { windowId, ...body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['press-batch', host, windowId, classId] }),
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'The extras did not save.'),
   });
 
   const issue = useMutation({
@@ -100,7 +168,10 @@ export default function PressBatchPage() {
   const [ordering, setOrdering] = useState(false);
   // The template is a per-browser preference (presentation only — both render
   // the same snapshot). Read after mount: the server can't know this browser.
-  const [template, setTemplate] = useState<PressTemplate>('BOARD');
+  const [template, setTemplate] = useState<PressTemplate>('DETAILED');
+  /** false = marks & remarks (the checking pass) · true = the card's extras grid. */
+  const [extrasMode, setExtrasMode] = useState(false);
+  const [roomOpen, setRoomOpen] = useState(false);
   useEffect(() => { setTemplate(getPressTemplate()); }, []);
   const pickTemplate = (t: PressTemplate) => { setTemplate(t); setPressTemplate(t); };
   const snapshots = useMemo(() => (b ? students.map((s) => toSnapshot(b, s)) : []), [b, students]);
@@ -123,14 +194,20 @@ export default function PressBatchPage() {
         {b && students.length > 0 && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ display: 'inline-flex', border: '1px solid var(--sk-line)', borderRadius: 9, overflow: 'hidden' }}>
-              {(['BOARD', 'CLASSIC'] as const).map((t) => (
-                <button key={t} className="sk-btn" aria-pressed={template === t}
+              {PRESS_TEMPLATES.map((t) => (
+                <button key={t.id} className="sk-btn" aria-pressed={template === t.id}
                   style={{ border: 'none', borderRadius: 0, padding: '6px 11px', fontSize: 12 }}
-                  onClick={() => pickTemplate(t)}>
-                  {t === 'BOARD' ? 'Board pattern' : 'Classic'}
+                  onClick={() => pickTemplate(t.id)}>
+                  {t.label}
                 </button>
               ))}
             </span>
+            <button className="sk-btn" aria-pressed={extrasMode} onClick={() => setExtrasMode((v) => !v)}>
+              {extrasMode ? 'Back to marks' : 'Card extras'}
+            </button>
+            <button className="sk-btn" onClick={() => setRoomOpen(true)}>
+              View batch
+            </button>
             <button className="sk-btn" onClick={printPressSheets}>
               <Printer size={15} aria-hidden="true" /> Print proofs
             </button>
@@ -185,7 +262,39 @@ export default function PressBatchPage() {
             </div></div>
           )}
 
+          {extrasMode && (
+            <div className="sk-card">
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: 'var(--sk-ink-3)', fontSize: 11.5 }}>
+                      <th style={{ padding: '10px 8px 8px 16px' }}>Student</th>
+                      <th style={{ padding: '10px 8px 8px' }}>House</th>
+                      <th style={{ padding: '10px 8px 8px' }}>Height</th>
+                      <th style={{ padding: '10px 8px 8px' }}>Weight</th>
+                      {CO_SCHOLASTIC_LABELS.map((l) => <th key={l} style={{ padding: '10px 8px 8px', whiteSpace: 'nowrap' }}>{l}</th>)}
+                      <th style={{ padding: '10px 16px 8px 8px' }}>Promotion line</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((st) => (
+                      <ExtrasRow key={st.studentId} student={st}
+                        onSave={(extras) => saveExtras.mutate({ studentId: st.studentId, text: st.remark ?? '', extras })} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {extrasMode && (
+            <p className="sk-state" style={{ margin: 0 }}>
+              These blocks print on the <b>Detailed</b> card only when filled — co-scholastic is the 3-point scale
+              (A outstanding · B very good · C fair). Rows save when you leave them.
+            </p>
+          )}
+
           {/* The checking table — wide data scrolls INSIDE this card. */}
+          {!extrasMode && (
           <div className="sk-card">
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
@@ -241,6 +350,7 @@ export default function PressBatchPage() {
               </table>
             </div>
           </div>
+          )}
 
           {unissued === 0 ? (
             <p className="sk-state">
@@ -265,12 +375,24 @@ export default function PressBatchPage() {
           )}
 
           {/* The full batch, hidden on screen — this is what actually prints.
-              Portaled to <body>: the print CSS hides every OTHER body child. */}
-          <PressPrintPortal>
-            {snapshots.map((snap, i) => (
-              <ReportCardSheet key={students[i]!.studentId} snapshot={snap} stamp="PROOF" template={template} />
-            ))}
-          </PressPrintPortal>
+              Portaled to <body>: the print CSS hides every OTHER body child.
+              Unmounted while the Print Room is open — the room mounts its own
+              print source, and two #press-print containers would both print. */}
+          {!roomOpen && (
+            <PressPrintPortal>
+              {snapshots.map((snap, i) => (
+                <ReportCardSheet key={students[i]!.studentId} snapshot={snap} stamp="PROOF" template={template} />
+              ))}
+            </PressPrintPortal>
+          )}
+
+          {roomOpen && b && (
+            <PrintRoom
+              title={`${b.classSection.label} · ${b.window.name} · proofs`}
+              onClose={() => setRoomOpen(false)}
+              sheets={snapshots.map((snap) => ({ kind: 'REPORT_CARD' as const, snapshot: snap, stamp: 'PROOF' as const }))}
+            />
+          )}
 
           {ordering && b && (
             <OrderDrawer

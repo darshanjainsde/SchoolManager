@@ -101,6 +101,189 @@ const headCell: React.CSSProperties = { ...cell, background: HEAD_BG, fontWeight
 
 // ── The report card ──────────────────────────────────────────────────────────
 
+/** A per-exam cell: the mark, or the letter that tells the truth. */
+function ExamCell({ v }: { v: number | 'AB' | 'EX' | null }) {
+  if (v === null) return <td style={{ ...cellNum, color: INK_SOFT }}>—</td>;
+  if (v === 'AB') return <td style={{ ...cellNum, color: '#a02818', fontWeight: 700 }}>AB</td>;
+  if (v === 'EX') return <td style={{ ...cellNum, color: BRAND, fontWeight: 700 }}>EX</td>;
+  return <td style={cellNum}>{trimMarks(v)}</td>;
+}
+
+/**
+ * The Detailed template — the full board-style card: one column per exam
+ * (straight from the window's exams), AB/EX printed as themselves, and the
+ * optional blocks (co-scholastic, house, height/weight, promotion, parent's
+ * remark) that print ONLY when the office recorded them. It fills its page.
+ *
+ * Exam columns come from the union of exam titles across subjects, in first-
+ * appearance order. A subject without an exam of that title prints a dot —
+ * different from "—" (a row that exists but holds no data yet).
+ */
+function DetailedCardSheet({ s, serial, stamp }: {
+  s: ReportCardSnapshot; serial?: string; stamp?: 'PROOF' | 'DUPLICATE' | 'CANCELLED';
+}) {
+  const titles: string[] = [];
+  for (const line of s.subjects) {
+    for (const pe of line.perExam ?? []) {
+      if (!titles.includes(pe.title)) titles.push(pe.title);
+    }
+  }
+  // More columns than a page can hold → the BOARD totals view is the honest
+  // fallback rather than 6pt type nobody can read.
+  if (titles.length === 0 || titles.length > 6) {
+    return <ReportCardSheet snapshot={s} serial={serial} stamp={stamp} template="BOARD" />;
+  }
+  const ex = s.extras;
+  const hasAbEx = s.subjects.some((l) => (l.perExam ?? []).some((p) => p.value === 'AB' || p.value === 'EX'));
+  return (
+    <div className="pr-page" style={{ position: 'relative' }}>
+      {stamp && <Stamp text={stamp} />}
+      <Masthead school={s.school} line2="" />
+      <div style={{ textAlign: 'center', margin: '3mm 0 2mm' }}>
+        <span style={{
+          fontWeight: 800, fontSize: '11pt', letterSpacing: '0.18em', color: INK,
+          border: `0.35mm solid ${INK}`, padding: '1mm 6mm', display: 'inline-block',
+        }}>
+          PROGRESS REPORT · {s.windowName.toUpperCase()} · {s.academicYearName}
+        </span>
+      </div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5pt', margin: '2mm 0' }}>
+        <tbody>
+          <tr>
+            <td style={{ ...cell, width: '42%' }}><b>Name:</b> {s.student.name}</td>
+            <td style={cell}><b>Class:</b> {s.classLabel}</td>
+            <td style={cell}><b>Roll:</b> {s.student.rollNo ?? '—'}</td>
+            {ex?.house ? <td style={cell}><b>House:</b> {ex.house}</td> : null}
+          </tr>
+          <tr>
+            <td style={cell}><b>Admission no.:</b> {s.student.admissionNo}</td>
+            <td style={cell} colSpan={ex?.house ? 2 : 1}><b>Date of birth:</b> {s.student.dob ? dateLabel(s.student.dob) : '—'}</td>
+            <td style={cell}><b>Class teacher:</b> {s.classTeacherName ?? '—'}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style={{ fontWeight: 700, fontSize: '9pt', letterSpacing: '0.1em', margin: '1.5mm 0 1mm', color: BRAND }}>
+        PART A · SCHOLASTIC AREAS
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5pt' }}>
+        <thead>
+          <tr>
+            <th style={headCell}>Subject</th>
+            {titles.map((t) => {
+              const max = s.subjects
+                .flatMap((l) => l.perExam ?? [])
+                .find((p) => p.title === t)?.maxMarks;
+              return <th key={t} style={{ ...headCell, textAlign: 'right' }}>{t}{max ? ` (${max})` : ''}</th>;
+            })}
+            <th style={{ ...headCell, textAlign: 'right' }}>Total</th>
+            <th style={{ ...headCell, textAlign: 'center' }}>Grade</th>
+          </tr>
+        </thead>
+        <tbody>
+          {s.subjects.map((line) => {
+            const byTitle = new Map((line.perExam ?? []).map((p) => [p.title, p.value]));
+            const allEx = (line.perExam ?? []).length > 0 && (line.perExam ?? []).every((p) => p.value === 'EX');
+            return (
+              <tr key={line.subjectId}>
+                <td style={cell}>{line.subjectName}</td>
+                {titles.map((t) => (
+                  byTitle.has(t)
+                    ? <ExamCell key={t} v={byTitle.get(t)!} />
+                    : <td key={t} style={{ ...cellNum, color: INK_SOFT }}>·</td>
+                ))}
+                <td style={cellNum}>
+                  {allEx ? <b style={{ color: BRAND }}>EX</b> : line.marks === null ? '—' : `${trimMarks(line.marks)}/${line.maxMarks}`}
+                </td>
+                <td style={{ ...cell, textAlign: 'center', fontWeight: 700 }}>{gradeLabel(line.grade)}</td>
+              </tr>
+            );
+          })}
+          <tr>
+            <td style={headCell}>Total</td>
+            <td style={{ ...headCell, textAlign: 'right' }} colSpan={titles.length}>
+              {s.overall.pct === null ? '—' : `${trimMarks(s.overall.marks)} / ${s.overall.maxMarks}`}
+            </td>
+            <td style={{ ...headCell, textAlign: 'right' }}>{s.overall.pct ?? '—'}%</td>
+            <td style={{ ...headCell, textAlign: 'center' }}>{gradeLabel(s.overall.grade)}</td>
+          </tr>
+        </tbody>
+      </table>
+      {hasAbEx && (
+        <div style={{ fontSize: '7.5pt', color: INK_SOFT, marginTop: '1mm' }}>
+          AB — absent, counted 0 in the total. EX — exempted; the percentage is measured over the exams the child could sit.
+        </div>
+      )}
+
+      {ex?.coScholastic && ex.coScholastic.length > 0 && (
+        <>
+          <div style={{ fontWeight: 700, fontSize: '9pt', letterSpacing: '0.1em', margin: '3mm 0 1mm', color: BRAND }}>
+            PART B · CO-SCHOLASTIC <span style={{ color: INK_SOFT, fontWeight: 500 }}>(A outstanding · B very good · C fair)</span>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5pt' }}>
+            <tbody>
+              <tr>
+                {ex.coScholastic.map((c) => (
+                  <td key={c.label} style={cell}>{c.label} <b>{c.grade}</b></td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5pt', marginTop: '3mm' }}>
+        <tbody>
+          <tr>
+            <td style={cell}>
+              <b>Attendance</b>{' '}
+              {s.attendance.pct === null ? '—' : `${s.attendance.present} / ${s.attendance.total} days (${s.attendance.pct}%)`}
+            </td>
+            {ex?.heightCm ? <td style={cell}><b>Height</b> {ex.heightCm} cm</td> : null}
+            {ex?.weightKg ? <td style={cell}><b>Weight</b> {ex.weightKg} kg</td> : null}
+          </tr>
+        </tbody>
+      </table>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt', marginTop: '3mm' }}>
+        <tbody>
+          <tr>
+            <td style={{ ...headCell, width: '30%' }}>RESULT</td>
+            <td style={cell}>
+              {s.overall.pct === null
+                ? 'Assessment pending — see the subject table'
+                : `${s.overall.pct}% · Grade ${gradeLabel(s.overall.grade)}`}
+              {ex?.promotion ? ` · ${ex.promotion}` : ''}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style={{ border: `0.25mm solid ${LINE}`, borderRadius: '1.5mm', padding: '2.5mm 3.5mm', marginTop: '3mm', minHeight: '16mm', fontSize: '9.5pt' }}>
+        <b>Class teacher&rsquo;s remark</b>
+        <div style={{ marginTop: '1mm' }}>{s.remark ?? ''}</div>
+      </div>
+      <div style={{ border: `0.25mm solid ${LINE}`, borderRadius: '1.5mm', padding: '2.5mm 3.5mm', marginTop: '2.5mm', minHeight: '12mm', fontSize: '9.5pt', color: INK_SOFT }}>
+        <b style={{ color: INK }}>Parent&rsquo;s remark</b>
+      </div>
+
+      <div style={{ fontSize: '7.5pt', color: INK_SOFT, marginTop: 'auto', paddingTop: '5mm' }}>
+        Grades: A1 91–100 · A2 81–90 · B1 71–80 · B2 61–70 · C1 51–60 · C2 41–50 · D 33–40 · E below 33. A dash means no
+        assessment was recorded.
+        {serial ? <> · Register serial <b>{serial}</b></> : null}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '9mm', fontSize: '8.5pt', color: INK_SOFT }}>
+        <span style={{ borderTop: `0.25mm solid ${LINE}`, paddingTop: '1.5mm', minWidth: '34mm', textAlign: 'center' }}>
+          Class Teacher{s.classTeacherName ? ` — ${s.classTeacherName}` : ''}
+        </span>
+        <span style={{ borderTop: `0.25mm solid ${LINE}`, paddingTop: '1.5mm', minWidth: '34mm', textAlign: 'center' }}>Principal</span>
+        <span style={{ borderTop: `0.25mm solid ${LINE}`, paddingTop: '1.5mm', minWidth: '34mm', textAlign: 'center' }}>Parent</span>
+      </div>
+    </div>
+  );
+}
+
 export function ReportCardSheet({
   snapshot, serial, stamp, template = 'CLASSIC',
 }: {
@@ -108,13 +291,16 @@ export function ReportCardSheet({
   /** The register serial — official prints carry it; proofs have none. */
   serial?: string;
   stamp?: 'PROOF' | 'DUPLICATE' | 'CANCELLED';
-  /** Presentation only — BOTH templates render the SAME snapshot, so the
-   *  register never cares which one a print run wore. BOARD is the familiar
-   *  scholastic-form look (bordered identity grid, section titles, result
-   *  box); CLASSIC is the clean minimal sheet. */
-  template?: 'CLASSIC' | 'BOARD';
+  /** Presentation only — every template renders the SAME snapshot, so the
+   *  register never cares which one a print run wore. DETAILED prints the
+   *  per-exam columns + the optional blocks; BOARD is the familiar
+   *  scholastic-form look; CLASSIC is the clean minimal sheet. */
+  template?: 'CLASSIC' | 'BOARD' | 'DETAILED';
 }) {
   const s = snapshot;
+  if (template === 'DETAILED') {
+    return <DetailedCardSheet s={s} serial={serial} stamp={stamp} />;
+  }
   const board = template === 'BOARD';
   return (
     <div className="pr-page" style={{ position: 'relative' }}>
@@ -311,6 +497,11 @@ function StatutoryTCSheet({ s, serial, issuedAt, stamp }: {
 }) {
   const f = s.fields;
   const st = s.student;
+  // The school's statutory face, frozen into the snapshot at issue:
+  //   CBSE  — the Annexure-I heading + footer (default).
+  //   CISCE — adds the Council's Index No. / year-of-passing lines.
+  //   STATE — "Transfer / School Leaving Certificate" naming.
+  const variant = s.variant ?? 'CBSE';
   const promoted = [f.qualifiedForPromotion, f.promotedToClass
     ? `to ${f.promotedToClass}${classInWords(f.promotedToClass) ? ` (${classInWords(f.promotedToClass)})` : ''}` : null]
     .filter(Boolean).join(', ');
@@ -330,8 +521,8 @@ function StatutoryTCSheet({ s, serial, issuedAt, stamp }: {
       </div>
 
       <div style={{ textAlign: 'center', margin: '2mm 0 3mm' }}>
-        <span style={{ fontWeight: 800, fontSize: '12.5pt', letterSpacing: '0.22em', color: BRAND, borderBottom: `0.5mm double ${BRAND}`, paddingBottom: '1mm' }}>
-          TRANSFER CERTIFICATE
+        <span style={{ fontWeight: 800, fontSize: '12.5pt', letterSpacing: variant === 'STATE' ? '0.1em' : '0.22em', color: BRAND, borderBottom: `0.5mm double ${BRAND}`, paddingBottom: '1mm' }}>
+          {variant === 'STATE' ? 'TRANSFER / SCHOOL LEAVING CERTIFICATE' : 'TRANSFER CERTIFICATE'}
         </span>
       </div>
 
@@ -363,6 +554,12 @@ function StatutoryTCSheet({ s, serial, issuedAt, stamp }: {
         <TCField no="21" label="Reasons for leaving the school" value={f.reason} />
         <TCField no="22" label="Any other remarks" value={remarks} />
         {st.penId ? <TCField no="—" label="PEN / APAAR id" value={st.penId} /> : null}
+        {variant === 'CISCE' ? (
+          <>
+            <TCField no="—" label="Index No. allotted by the Council" value={f.indexNo} />
+            <TCField no="—" label="Year of last Council examination, if taken" value={f.yearOfPassing} />
+          </>
+        ) : null}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '10mm', fontSize: '8.5pt', color: INK_SOFT, gap: '4mm' }}>
@@ -371,8 +568,12 @@ function StatutoryTCSheet({ s, serial, issuedAt, stamp }: {
         <span style={{ borderTop: `0.25mm solid ${LINE}`, paddingTop: '1.5mm', flex: 1, textAlign: 'center' }}>Principal · SEAL</span>
       </div>
       <div style={{ fontSize: '7pt', color: INK_SOFT, marginTop: '3mm' }}>
-        Form as per CBSE Examination Bye-laws, Annexure-I. This certificate carries a serial number recorded in the
-        school&rsquo;s register and can be verified against it.
+        {variant === 'CBSE'
+          ? 'Form as per CBSE Examination Bye-laws, Annexure-I (cbse.gov.in).'
+          : variant === 'CISCE'
+            ? 'Form as per the CISCE pattern — Annexure-I field set plus the Council\u2019s Index No.'
+            : 'Form as per the school\u2019s affiliating Board\u2019s Leaving Certificate pattern.'}{' '}
+        This certificate carries a serial number recorded in the school&rsquo;s register and can be verified against it.
       </div>
     </div>
   );

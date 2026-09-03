@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowUpRight, BookMarked, FileUp, Package, ScrollText, Search } from 'lucide-react';
+import { ArrowUpRight, BookMarked, FileUp, GraduationCap, Package, ScrollText, Search } from 'lucide-react';
 import type { PressOverview, PressIssueRow, ReportWindowRow } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -177,6 +177,14 @@ export default function PressHomePage() {
       {/* ── zone 2 · the drawers — the daily desks, on top for ease ─────────────────────────────────────────── */}
       <ZoneLabel>The drawers</ZoneLabel>
       <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <Link href="/app/press/results" className="sk-entity sk-press">
+          <span className="av" style={{ background: 'var(--sk-brand-2)' }}><GraduationCap size={20} aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="nm">Generate report cards</div>
+            <div className="meta">the Result Room — who&rsquo;s in, who&rsquo;s missing, nudge &amp; generate</div>
+          </div>
+          <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
+        </Link>
         <Link href="/app/press/certificates" className="sk-entity sk-press">
           <span className="av" style={{ background: 'var(--sk-amber)' }}><ScrollText size={20} aria-hidden="true" /></span>
           <div className="min-w-0 flex-1">

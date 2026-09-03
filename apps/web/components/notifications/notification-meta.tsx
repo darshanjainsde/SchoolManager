@@ -28,6 +28,7 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   DIARY: NotebookPen,
   ATTENDANCE: TrendingDown,
   LIBRARY: Library,
+  RESULTS_DUE: GraduationCap,
 };
 
 /** Fallback for a kind the client doesn't know yet (server added one later). */
@@ -53,6 +54,7 @@ export function routeForNotification(
       case 'MESSAGE':
         return '/teacher/inbox';
       case 'RESULT':
+      case 'RESULTS_DUE':
         return '/teacher/results';
       case 'EXAM':
         return '/teacher/tests';
