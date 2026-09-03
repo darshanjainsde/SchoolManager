@@ -66,6 +66,8 @@ describe('bulk certificates — one class, one run', () => {
     }));
     expect(await screen.findByText('BC/2026/0101')).toBeInTheDocument();
     expect(screen.getByText('fees outstanding')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Print all 1/ })).toBeInTheDocument();
+    // View-then-print: the run's button opens the Print Room, it never fires
+    // a dialog on sheets nobody has seen (portal-race.test.tsx).
+    expect(screen.getByRole('button', { name: /View & print all 1/ })).toBeInTheDocument();
   });
 });

@@ -27,15 +27,38 @@ export function pressDateLabel(iso: string): string {
  * prints the console the person is looking at.
  */
 export function printPressSheets(): void {
-  document.body.classList.add('press-printing');
-  const done = () => {
-    document.body.classList.remove('press-printing');
-    window.removeEventListener('afterprint', done);
+  // NEVER open the dialog on an empty container.
+  //
+  // `BodyPrintPortal` gates on `useHydrated`, which is per-INSTANCE: a portal
+  // that first mounts in the same commit as the print call renders `null` on
+  // that commit and only appears one render later. A caller printing straight
+  // after mounting one (the certificate desk: issue → fetch snapshot → print)
+  // therefore printed a blank page — reproduced in `portal-race.test.tsx`.
+  //
+  // So the print waits for the sheets to actually exist, a frame at a time,
+  // and gives up rather than printing nothing.
+  const fire = (attempt: number): void => {
+    const el = document.getElementById('press-print');
+    if (!el || el.childElementCount === 0) {
+      if (attempt < 30) {
+        window.requestAnimationFrame(() => fire(attempt + 1));
+        return;
+      }
+      // eslint-disable-next-line no-console -- a blank print run is worth saying out loud
+      console.warn('[press] nothing to print — the sheet container never mounted');
+      return;
+    }
+    document.body.classList.add('press-printing');
+    const done = () => {
+      document.body.classList.remove('press-printing');
+      window.removeEventListener('afterprint', done);
+    };
+    window.addEventListener('afterprint', done);
+    window.print();
+    // Safari never fires afterprint from a cancelled dialog.
+    window.setTimeout(done, 60_000);
   };
-  window.addEventListener('afterprint', done);
-  window.print();
-  // Safari never fires afterprint from a cancelled dialog.
-  window.setTimeout(done, 60_000);
+  fire(0);
 }
 
 // ── Press Orders ─────────────────────────────────────────────────────────────
