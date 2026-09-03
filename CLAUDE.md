@@ -38,8 +38,17 @@ silence.
    defect on this service. Re-hitting one is a logged repeat, not a discovery.
 2. **Read the mistake ledger.** `node ~/.claude/projects/-Users-darshanjain-Documents-SchoolManager-SchoolManager/mistakes/log.mjs list`
    — anything marked ⚠️ (2+) is a pattern that has already bitten twice.
-3. **Check the branch.** Local checkouts drift behind `main`, and `main` is what
-   production runs. `git log --oneline HEAD..origin/main | head`.
+3. **Check the branch — and fetch first.** `git fetch origin` , then
+   `git log --oneline HEAD..origin/<target> | head` where `<target>` is the
+   branch you will actually push to: `origin/staging` for staging work,
+   `origin/main` for production. **Never diff against a LOCAL branch ref.** A
+   local `staging` (or `main`) can be months behind its remote if no worktree
+   has pulled it — this cost a full rebase on 3 Sept 2026, when a worktree cut
+   from a local `staging` at `fac7576` turned out to be hundreds of commits
+   behind `origin/staging`, on the far side of the grouped-sidebar rewrite that
+   moved `NAV_ITEMS` into `app/app/nav-model.ts`. Comparing against `main`
+   would not have caught it either: staging was ahead of main, which reads as
+   "I am current".
 4. **Touching any user-facing UI? Read
    `.claude/skills/sckools-ui-taste/SKILL.md` FIRST** — before the first class
    is written, not at review. Every rule in it was paid for by a screenshot
