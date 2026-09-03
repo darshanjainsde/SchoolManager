@@ -44,6 +44,14 @@ on:
         required: false
         type: boolean
         default: false
+      rebuild:
+        description: >-
+          DELETE the school and build it again from nothing. Use when a demo
+          school has been seeded by two different passes and cannot be
+          reconciled in place. Destroys everything under that school.
+        required: false
+        type: boolean
+        default: false
       password:
         description: >-
           The password every demo login gets. Staging's demo accounts have a
@@ -131,6 +139,9 @@ jobs:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           DEMO_SCHOOL_SLUG: ${{ github.event.inputs.school || 'raffles' }}
           DEMO_DRY_RUN: 'false'
+          # Opt-in only: deletes the school and builds it again. A push-run
+          # passes no inputs, so it is always 'false' there.
+          DEMO_REBUILD: ${{ github.event.inputs.rebuild || 'false' }}
           # Spelled out rather than left to the script's fallback. Both seeds
           # read a password from the environment and quietly fall back to a
           # built-in default, so that default was the only thing staging ever
