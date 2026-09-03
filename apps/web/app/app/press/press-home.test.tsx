@@ -31,8 +31,8 @@ beforeEach(() => {
   (useHost as ReturnType<typeof vi.fn>).mockReturnValue('raffles.test');
 });
 
-describe('The Press home — the counter and the scoreboard', () => {
-  it('shows pending classes first with real counts, finished ones only under "All"', async () => {
+describe('Reports & Documents — the paper desk', () => {
+  it('three desks, each wearing a live fact from the overview', async () => {
     const api = mockApi({
       get: vi.fn().mockImplementation((path: string) =>
         path.startsWith('/manage/press/overview') ? Promise.resolve(OVERVIEW) : Promise.resolve([])),
@@ -41,34 +41,17 @@ describe('The Press home — the counter and the scoreboard', () => {
 
     renderWithProviders(<PressHomePage />);
 
-    // The term bar counts only what the roster can hold.
-    await waitFor(() => expect(screen.getByText('42 of 71')).toBeInTheDocument());
-
-    // Pending view: the two unfinished classes, not the done one.
-    expect(screen.getByText('VII-B')).toBeInTheDocument();
-    expect(screen.getByText('15 / 22')).toBeInTheDocument();
-    expect(screen.getByText('Compile →')).toBeInTheDocument(); // X-A, nothing issued
-    expect(screen.queryByText('III-A')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /All 3 classes/ }));
-    expect(screen.getByText('III-A')).toBeInTheDocument();
-    expect(screen.getByText('27 / 27 ✓')).toBeInTheDocument();
-    expect(screen.getByText('Reprint · order')).toBeInTheDocument();
-  });
-
-  it('the drawers carry live facts — the waiting quote glows with its amount', async () => {
-    const api = mockApi({
-      get: vi.fn().mockImplementation((path: string) =>
-        path.startsWith('/manage/press/overview') ? Promise.resolve(OVERVIEW) : Promise.resolve([])),
-    });
-    (useApi as ReturnType<typeof vi.fn>).mockReturnValue(api);
-
-    renderWithProviders(<PressHomePage />);
-
-    await waitFor(() => expect(screen.getByText('1 quote waiting')).toBeInTheDocument());
-    expect(screen.getByText(/₹1,800 quoted — confirm to print/)).toBeInTheDocument();
+    // The Result Room tile counts only what the roster can hold (42 of 71).
+    await waitFor(() => expect(screen.getByText('42 of 71 cards issued this term')).toBeInTheDocument());
     expect(screen.getByText(/last TC\/2026\/0041 · 9 this year/)).toBeInTheDocument();
     expect(screen.getByText(/684 documents/)).toBeInTheDocument();
+    // Printing moved out — the page points at the Print Store, with the
+    // waiting quote surfaced.
+    expect(screen.getByRole('link', { name: 'Print Store' })).toHaveAttribute('href', '/app/press/orders');
+    expect(screen.getByText(/1 quote waiting for you/)).toBeInTheDocument();
+    // The old scoreboard is gone — one screen owns readiness, and it is not this one.
+    expect(screen.queryByText(/Needs work/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Compile/)).not.toBeInTheDocument();
   });
 
   it('the counter finds a child and offers the certificate path with the admission no. carried along', async () => {

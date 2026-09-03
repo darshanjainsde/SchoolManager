@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUpRight, FileUp, Package } from 'lucide-react';
+import { ArrowUpRight, FileUp, Package } from 'lucide-react';
 import type { PrintOrderRow } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -35,11 +35,8 @@ export default function PressOrdersPage() {
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
       <header className="sk-pagehead" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <Link href="/app/press" className="sk-seelink" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <ArrowLeft size={13} aria-hidden="true" /> The Press
-          </Link>
-          <h1>Print orders</h1>
-          <p>Sckools prints and delivers — you confirm the price first.</p>
+          <h1>Print Store</h1>
+          <p>Sckools prints and delivers — bulk report cards, exam papers, anything on paper. You confirm the price first.</p>
         </div>
         <button className="sk-btn" data-variant="primary" onClick={() => setUploadOpen(true)}>
           <FileUp size={15} aria-hidden="true" /> Send a PDF to print
@@ -52,9 +49,9 @@ export default function PressOrdersPage() {
       {orders.data && rows.length === 0 && (
         <div className="sk-card"><div className="sk-card-b">
           <p className="sk-state">
-            Nothing ordered yet. Send any PDF from here — exam papers, circulars, admission forms — or open a
-            class&rsquo;s issued report-card batch and choose <b>Print via Sckools</b> there. We quote a price and a
-            delivery date; printing starts when you confirm.
+            Nothing ordered yet. Send any PDF from here — exam papers, circulars, admission forms — or open an issued
+            batch in the Result Room and choose <b>Print via Sckools</b>. We quote a price and a delivery date;
+            printing starts when you confirm.
           </p>
         </div></div>
       )}

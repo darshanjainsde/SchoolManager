@@ -195,6 +195,7 @@ export default function ResultRoomPage() {
   const qc = useQueryClient();
   const [windowId, setWindowId] = useState<string | null>(null);
   const [dayDraft, setDayDraft] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{ academicYearId: string; name: string; startDate: string; endDate: string } | null>(null);
 
   const board = useQuery({
     queryKey: ['result-room', host, windowId], enabled: !!host,
@@ -204,6 +205,23 @@ export default function ResultRoomPage() {
   const windows = useQuery({
     queryKey: ['press-windows', host], enabled: !!host,
     queryFn: () => api.get<import('@skoolos/types').ReportWindowRow[]>('/manage/press/windows'),
+  });
+  const years = useQuery({
+    queryKey: ['press-years', host], enabled: !!host && !!draft,
+    queryFn: () => api.get<{ id: string; name: string; isCurrent: boolean; startDate: string }[]>('/manage/press/years'),
+  });
+
+  const createWindow = useMutation({
+    mutationFn: (body: NonNullable<typeof draft>) =>
+      api.put<import('@skoolos/types').ReportWindowRow>('/manage/press/windows', body),
+    onSuccess: (w) => {
+      setDraft(null);
+      setWindowId(w.id);
+      qc.invalidateQueries({ queryKey: ['result-room', host] });
+      qc.invalidateQueries({ queryKey: ['press-windows', host] });
+      toast.success(`${w.name} is ready — the room now reads it.`);
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not save the window.'),
   });
 
   const saveDay = useMutation({
@@ -242,9 +260,55 @@ export default function ResultRoomPage() {
       {board.isLoading && <p className="sk-state">Reading every register…</p>}
       {board.isError && <p className="sk-state err">The room could not load. Refresh to try again.</p>}
 
-      {b && !w && (
+      {b && !w && !draft && (
         <div className="sk-card"><div className="sk-card-b">
-          <p className="sk-state">No report window yet — create one on <Link href="/app/press" style={{ color: 'var(--sk-brand-2)' }}>the Press home</Link> and the room fills itself.</p>
+          <p className="sk-state">
+            A window is the stretch of the year one report card covers — &ldquo;Term I&rdquo;, &ldquo;Half-Yearly&rdquo;.
+            Create the first one and the room fills itself from the marks teachers have already entered.
+          </p>
+          <button className="sk-btn" data-variant="primary" style={{ alignSelf: 'flex-start' }}
+            onClick={() => setDraft({ academicYearId: '', name: 'Term I', startDate: '', endDate: new Date().toISOString().slice(0, 10) })}>
+            New window
+          </button>
+        </div></div>
+      )}
+
+      {draft && (
+        <div className="sk-card"><div className="sk-card-b">
+          <form
+            onSubmit={(e) => { e.preventDefault(); createWindow.mutate(draft); }}
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}
+          >
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600 }}>
+              Name
+              <input className="sk-input" required maxLength={40} value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Term I" />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600 }}>
+              Academic year
+              <select className="sk-input" required value={draft.academicYearId}
+                onChange={(e) => setDraft({ ...draft, academicYearId: e.target.value })}>
+                <option value="">Pick…</option>
+                {(years.data ?? []).map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600 }}>
+              From
+              <input type="date" className="sk-input" required value={draft.startDate}
+                onChange={(e) => setDraft({ ...draft, startDate: e.target.value })} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600 }}>
+              To
+              <input type="date" className="sk-input" required value={draft.endDate}
+                onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="submit" className="sk-btn" data-variant="primary" disabled={createWindow.isPending}>
+                {createWindow.isPending ? 'Saving…' : 'Save window'}
+              </button>
+              <button type="button" className="sk-btn" onClick={() => setDraft(null)}>Cancel</button>
+            </div>
+          </form>
         </div></div>
       )}
 
@@ -258,6 +322,10 @@ export default function ResultRoomPage() {
                   <option key={row.id} value={row.id}>{row.name} · {row.academicYearName}</option>
                 ))}
               </select>
+              <button className="sk-btn" style={{ padding: '6px 12px', fontSize: 12 }}
+                onClick={() => setDraft({ academicYearId: '', name: '', startDate: '', endDate: new Date().toISOString().slice(0, 10) })}>
+                ＋ New window
+              </button>
 
               {/* ── result day — the promise teachers see ── */}
               {dayDraft === null ? (
