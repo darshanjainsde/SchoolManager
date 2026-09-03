@@ -19,10 +19,11 @@ import { PRESS_TYPE_LABEL, pressDateLabel } from '@/lib/press';
  * itself (an order to Sckools). The page is those three things in that order:
  *
  *   Zone 1 · the counter — one search, straight to the child or the serial.
- *   Zone 2 · the scoreboard — this term's cards as a progress list, pending
+ *   Zone 2 · the drawers — certificates, register, orders, PDF-to-print, each
+ *            with a LIVE fact (nothing static — house rule). On top because
+ *            they are the daily desks (Darshan, 3 Sept).
+ *   Zone 3 · the scoreboard — this term's cards as a progress list, pending
  *            first, so October's "are Term I cards done?" has an answer.
- *   Zone 3 · the drawers — certificates, register, orders, each with a LIVE
- *            fact (nothing static — house rule).
  *
  * One read (`GET /manage/press/overview`) feeds zones 2 and 3; the counter
  * reuses the Press's own student search plus the register's serial search.
@@ -173,7 +174,60 @@ export default function PressHomePage() {
         </div>
       </div>
 
-      {/* ── zone 2 · the scoreboard ──────────────────────────────────────── */}
+      {/* ── zone 2 · the drawers — the daily desks, on top for ease ─────────────────────────────────────────── */}
+      <ZoneLabel>The drawers</ZoneLabel>
+      <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <Link href="/app/press/certificates" className="sk-entity sk-press">
+          <span className="av" style={{ background: 'var(--sk-amber)' }}><ScrollText size={20} aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="nm">Certificates</div>
+            <div className="meta">
+              {o?.certificates.lastSerial
+                ? `last ${o.certificates.lastSerial} · ${o.certificates.thisYear} this year`
+                : 'TC (Annexure-I), bonafide, character'}
+            </div>
+          </div>
+          <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
+        </Link>
+        <Link href="/app/press/register" className="sk-entity sk-press">
+          <span className="av" style={{ background: 'var(--sk-ink-2)' }}><BookMarked size={20} aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="nm">The register</div>
+            <div className="meta">{o ? `${o.register.total} documents · reprint any` : 'every document ever issued'}</div>
+          </div>
+          <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
+        </Link>
+        <Link href="/app/press/orders" className="sk-entity sk-press">
+          <span className="av" style={{ background: 'var(--sk-good)' }}><Package size={20} aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="nm">
+              Print orders
+              {(o?.orders.awaitingConfirm ?? 0) > 0 && (
+                <span className="sk-pill" data-tone="warn" style={{ marginLeft: 8 }}>
+                  {o!.orders.awaitingConfirm} quote{o!.orders.awaitingConfirm === 1 ? '' : 's'} waiting
+                </span>
+              )}
+            </div>
+            <div className="meta">
+              {(o?.orders.awaitingConfirm ?? 0) > 0
+                ? `${rupees(o!.orders.quotedTotalMinor)} quoted — confirm to print`
+                : o && o.orders.open > 0
+                  ? `${o.orders.open} order${o.orders.open === 1 ? '' : 's'} in motion`
+                  : 'Sckools prints & delivers · quote first'}
+            </div>
+          </div>
+          <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
+        </Link>
+        <Link href="/app/press/orders" className="sk-entity sk-press">
+          <span className="av" style={{ background: 'var(--sk-brand)' }}><FileUp size={20} aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="nm">Send a PDF to print</div>
+            <div className="meta">exam papers, circulars — kept confidential</div>
+          </div>
+          <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
+        </Link>
+      </div>
+      {/* ── zone 3 · the scoreboard ──────────────────────────────────────── */}
       <ZoneLabel>This term&rsquo;s report cards</ZoneLabel>
 
       {overview.isLoading && <p className="sk-state">Opening the Press…</p>}
@@ -309,59 +363,6 @@ export default function PressHomePage() {
         </div></div>
       )}
 
-      {/* ── zone 3 · the drawers ─────────────────────────────────────────── */}
-      <ZoneLabel>The drawers</ZoneLabel>
-      <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-        <Link href="/app/press/certificates" className="sk-entity sk-press">
-          <span className="av" style={{ background: 'var(--sk-amber)' }}><ScrollText size={20} aria-hidden="true" /></span>
-          <div className="min-w-0 flex-1">
-            <div className="nm">Certificates</div>
-            <div className="meta">
-              {o?.certificates.lastSerial
-                ? `last ${o.certificates.lastSerial} · ${o.certificates.thisYear} this year`
-                : 'TC (Annexure-I), bonafide, character'}
-            </div>
-          </div>
-          <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
-        </Link>
-        <Link href="/app/press/register" className="sk-entity sk-press">
-          <span className="av" style={{ background: 'var(--sk-ink-2)' }}><BookMarked size={20} aria-hidden="true" /></span>
-          <div className="min-w-0 flex-1">
-            <div className="nm">The register</div>
-            <div className="meta">{o ? `${o.register.total} documents · reprint any` : 'every document ever issued'}</div>
-          </div>
-          <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
-        </Link>
-        <Link href="/app/press/orders" className="sk-entity sk-press">
-          <span className="av" style={{ background: 'var(--sk-good)' }}><Package size={20} aria-hidden="true" /></span>
-          <div className="min-w-0 flex-1">
-            <div className="nm">
-              Print orders
-              {(o?.orders.awaitingConfirm ?? 0) > 0 && (
-                <span className="sk-pill" data-tone="warn" style={{ marginLeft: 8 }}>
-                  {o!.orders.awaitingConfirm} quote{o!.orders.awaitingConfirm === 1 ? '' : 's'} waiting
-                </span>
-              )}
-            </div>
-            <div className="meta">
-              {(o?.orders.awaitingConfirm ?? 0) > 0
-                ? `${rupees(o!.orders.quotedTotalMinor)} quoted — confirm to print`
-                : o && o.orders.open > 0
-                  ? `${o.orders.open} order${o.orders.open === 1 ? '' : 's'} in motion`
-                  : 'Sckools prints & delivers · quote first'}
-            </div>
-          </div>
-          <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
-        </Link>
-        <Link href="/app/press/orders" className="sk-entity sk-press">
-          <span className="av" style={{ background: 'var(--sk-brand)' }}><FileUp size={20} aria-hidden="true" /></span>
-          <div className="min-w-0 flex-1">
-            <div className="nm">Send a PDF to print</div>
-            <div className="meta">exam papers, circulars — kept confidential</div>
-          </div>
-          <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
-        </Link>
-      </div>
     </div>
   );
 }
