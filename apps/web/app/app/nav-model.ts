@@ -1,7 +1,7 @@
 import {
   Armchair, BookOpen, Briefcase, CalendarDays, CalendarHeart, CalendarX,
   ClipboardCheck, ClipboardList, Clock, Globe, GraduationCap, Handshake, Inbox,
-  LayoutDashboard, Megaphone, Newspaper, NotebookPen, Printer, School, Settings,
+  LayoutDashboard, Megaphone, Newspaper, NotebookPen, Printer, School, Settings, Store,
   UserCog, Users, Wallet,
 } from 'lucide-react';
 
@@ -86,11 +86,15 @@ export const NAV_MODEL: NavEntry[] = [
     kind: 'group', key: 'exams', label: 'Exams', icon: NotebookPen,
     items: [
       { href: '/app/exam-hall', label: 'Exam Hall', icon: Armchair, requiredFeature: 'MANAGEMENT' },
-      { href: '/app/press', label: 'The Press', icon: Printer, requiredFeature: 'PRESS' },
+      { href: '/app/press', label: 'Reports & Documents', icon: Printer, requiredFeature: 'PRESS' },
     ],
   },
 
   { kind: 'item', item: { href: '/app/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' } },
+  // The shop, not the exams: track print orders, place new ones. Lives under
+  // /app/press/orders route-wise (deep links keep working) but stands alone
+  // in the nav — leafActive's longest-href rule keeps the two tabs distinct.
+  { kind: 'item', item: { href: '/app/press/orders', label: 'Print Store', icon: Store, requiredFeature: 'PRESS' } },
   // Points OUT of /app on purpose — the counter is its own portal
   // (lib/role-routes.ts). An admin reaches it to set up and to stand in.
   { kind: 'item', item: { href: '/library', label: 'Library', icon: BookOpen, requiredFeature: 'LIBRARY', leavesConsole: true } },
@@ -104,9 +108,19 @@ export function navLeaves(model: NavEntry[] = NAV_MODEL): NavLeaf[] {
   return model.flatMap((e) => (e.kind === 'item' ? [e.item] : e.items));
 }
 
-/** True when this leaf's route owns the current path. */
-export function leafActive(href: string, pathname: string): boolean {
-  return href === '/app' ? pathname === '/app' : pathname === href || pathname.startsWith(href + '/');
+/** True when this leaf's route owns the current path. When one leaf's route
+ *  nests inside another's (Print Store under Reports & Documents), the
+ *  LONGEST matching href wins — a path never lights two tabs. */
+export function leafActive(href: string, pathname: string, model: NavEntry[] = NAV_MODEL): boolean {
+  if (href === '/app') return pathname === '/app';
+  const owns = pathname === href || pathname.startsWith(href + '/');
+  if (!owns) return false;
+  return !navLeaves(model).some(
+    (l) =>
+      l.href !== href &&
+      l.href.startsWith(href + '/') &&
+      (pathname === l.href || pathname.startsWith(l.href + '/')),
+  );
 }
 
 /** The group that owns the current path, if any — the accordion auto-opens it. */

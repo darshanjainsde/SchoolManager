@@ -15,7 +15,7 @@ const EVERY_ROUTE = [
   '/app/students', '/app/teachers', '/app/staff', '/app/classes', '/app/jobs',
   '/app/staff-attendance', '/app/leave', '/app/requests',
   '/app/timetable', '/app/availability',
-  '/app/exam-hall', '/app/press',
+  '/app/exam-hall', '/app/press', '/app/press/orders',
   '/app/fees', '/library', '/app/announcements', '/app/alumni', '/app/settings',
 ].sort();
 
@@ -61,6 +61,17 @@ describe('the grouped sidebar model', () => {
     expect(groupOf('/app/staff-attendance')).toBe('attendance');
     expect(groupOf('/app/fees/verify')).toBeNull(); // Fees is an anchor, not a group child
     expect(groupOf('/app')).toBeNull();
+  });
+
+  it('leafActive: nested leaves — the longest href wins, a path never lights two tabs', () => {
+    // Print Store lives under Reports & Documents' route space.
+    expect(leafActive('/app/press/orders', '/app/press/orders')).toBe(true);
+    expect(leafActive('/app/press/orders', '/app/press/orders/abc')).toBe(true);
+    expect(leafActive('/app/press', '/app/press/orders')).toBe(false);
+    expect(leafActive('/app/press', '/app/press/orders/abc')).toBe(false);
+    // …while the parent still owns everything else beneath it.
+    expect(leafActive('/app/press', '/app/press/results')).toBe(true);
+    expect(leafActive('/app/press', '/app/press')).toBe(true);
   });
 
   it('leafActive: the dashboard matches itself only; others own their subtrees', () => {
