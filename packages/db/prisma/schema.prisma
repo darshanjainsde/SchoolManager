@@ -600,6 +600,11 @@ model SchoolProfile {
   country             String?
   geoLat              Float?
   geoLng              Float?
+  /// Printed on statutory documents (TC head): "CBSE, New Delhi" and the
+  /// Board affiliation number. Blank until the school fills them in the
+  /// website studio's contact tab.
+  board               String?
+  affiliationNo       String?
   mapEmbedUrl         String?
   school              School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
@@ -928,43 +933,59 @@ model TeacherSubject {
 }
 
 model Student {
-  id                String             @id @default(uuid()) @db.Uuid
-  schoolId          String             @db.Uuid
-  admissionNo       String
+  id                  String             @id @default(uuid()) @db.Uuid
+  schoolId            String             @db.Uuid
+  admissionNo         String
   /// The human-friendly student code, e.g. RAF-00042 ({School.codePrefix} +
   /// zero-padded per-school counter). Allocated when the login is created
   /// (Phase 5·1); doubles as the login identifier and the add-a-child key.
-  code              String?
-  firstName         String
-  lastName          String
-  email             String?
-  classSectionId    String?            @db.Uuid
-  rollNo            String?
-  dob               DateTime?
-  gender            String?
-  guardianName      String?
-  guardianPhone     String?
-  photoAssetId      String?            @db.Uuid
-  userId            String?            @unique @db.Uuid
-  isActive          Boolean            @default(true)
-  createdAt         DateTime           @default(now())
-  school            School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSection      ClassSection?      @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
-  attendance        Attendance[]
-  results           Result[]
-  assignmentsSeen   AssignmentSeen[]
-  messageThreads    MessageThread[]
-  diaryReceipts     DiaryRecipient[]
-  diaryAcks         DiaryAck[]
-  attendanceNotices AttendanceNotice[]
-  libraryIssues     LibraryIssue[]
-  feeAssignments    FeeAssignment[]
-  feeConcessions    FeeConcession[]
-  feeInvoices       FeeInvoice[]
-  feePayments       FeePayment[]
-  feeLedgerEntries  FeeLedgerEntry[]
-  pressIssues       PressIssue[]
-  reportRemarks     ReportRemark[]
+  code                String?
+  firstName           String
+  lastName            String
+  email               String?
+  classSectionId      String?            @db.Uuid
+  rollNo              String?
+  dob                 DateTime?
+  gender              String?
+  guardianName        String?
+  guardianPhone       String?
+  // ── The admission-register facts a statutory Transfer Certificate prints
+  //    (CBSE Examination Bye-laws, Annexure-I). All optional: collected on
+  //    the student form, or asked ONCE by the certificate drawer and saved
+  //    back here. TEXT throughout — category follows the PressIssue.type
+  //    decision and is validated by assertStudentCategory at write time.
+  fatherName          String?
+  motherName          String?
+  nationality         String?
+  /// GENERAL | SC | ST | OBC | EWS — see STUDENT_CATEGORIES.
+  category            String?
+  /// Annexure-I field 5: date of FIRST admission, with the class joined.
+  firstAdmissionDate  DateTime?          @db.Date
+  firstAdmissionClass String?
+  previousSchool      String?
+  /// PEN / APAAR id — the Government Window will want this anyway.
+  penId               String?
+  photoAssetId        String?            @db.Uuid
+  userId              String?            @unique @db.Uuid
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  school              School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection        ClassSection?      @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
+  attendance          Attendance[]
+  results             Result[]
+  assignmentsSeen     AssignmentSeen[]
+  messageThreads      MessageThread[]
+  diaryReceipts       DiaryRecipient[]
+  diaryAcks           DiaryAck[]
+  attendanceNotices   AttendanceNotice[]
+  libraryIssues       LibraryIssue[]
+  feeAssignments      FeeAssignment[]
+  feeConcessions      FeeConcession[]
+  feeInvoices         FeeInvoice[]
+  feePayments         FeePayment[]
+  feeLedgerEntries    FeeLedgerEntry[]
+  pressIssues         PressIssue[]
+  reportRemarks       ReportRemark[]
 
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])

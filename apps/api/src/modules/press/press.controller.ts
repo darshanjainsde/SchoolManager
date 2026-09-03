@@ -9,10 +9,11 @@ import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { CertificateService } from './certificate.service';
+import { PressOverviewService } from './press-overview.service';
 import { PressRegisterService } from './press-register.service';
 import { ReportCardService } from './report-card.service';
 import {
-  IssueCertificateDto, IssueReportCardsDto, SaveRemarkDto, SaveWindowDto, VoidIssueDto,
+  BulkCertificatesDto, IssueCertificateDto, IssueReportCardsDto, SaveRemarkDto, SaveWindowDto, VoidIssueDto,
 } from './press.dto';
 
 /**
@@ -31,11 +32,18 @@ export class PressController {
     private readonly reportCards: ReportCardService,
     private readonly certificates: CertificateService,
     private readonly register: PressRegisterService,
+    private readonly overviewSvc: PressOverviewService,
     private readonly tenant: TenantContextService,
   ) {}
 
   private sid(): string {
     return this.tenant.requireTenant().schoolId;
+  }
+
+  /** The home's one read: scoreboard, register facts, live order facts. */
+  @Get('overview')
+  overview(@Query('windowId') windowId?: string) {
+    return this.overviewSvc.overview(this.sid(), windowId || undefined);
   }
 
   // ── Reference reads (the Press's own — see ReportCardService.listClasses) ─
@@ -91,6 +99,12 @@ export class PressController {
   @Post('certificates/issue') @HttpCode(201)
   issueCertificate(@CurrentUser() u: SchoolJwtPayload, @Body() dto: IssueCertificateDto) {
     return this.certificates.issue(this.sid(), dto, u.sub);
+  }
+
+  /** One class, one type, one run — see CertificateService.bulkIssue. */
+  @Post('certificates/bulk') @HttpCode(200)
+  bulkCertificates(@CurrentUser() u: SchoolJwtPayload, @Body() dto: BulkCertificatesDto) {
+    return this.certificates.bulkIssue(this.sid(), dto, u.sub);
   }
 
   // ── The register ──────────────────────────────────────────────────────────

@@ -88,44 +88,66 @@ describe('ReportCardSheet', () => {
   });
 });
 
+const certStudent = {
+  id: 's1', name: 'Meera Rathore', admissionNo: 'ADM-0412', rollNo: '14',
+  classLabel: 'VIII-B', dob: '2013-02-11', guardianName: 'Vikram Rathore', gender: 'F',
+  onRollSince: '2019-04-04',
+  fatherName: null, motherName: 'Anita Rathore', nationality: 'Indian', category: 'General',
+  firstAdmissionDate: '2019-04-04', firstAdmissionClass: 'Class I',
+  previousSchool: null, penId: null,
+};
+
 const tcSnapshot: CertificateSnapshot = {
   kind: 'CERTIFICATE',
   type: 'TC',
   school,
-  student: {
-    id: 's1', name: 'Meera Rathore', admissionNo: 'ADM-0412', rollNo: '14',
-    classLabel: 'VIII-B', dob: '2013-02-11', guardianName: 'Vikram Rathore', gender: 'F',
-    onRollSince: '2019-04-04',
+  student: certStudent,
+  fields: {
+    conduct: 'good', classLabel: 'VIII', fromDate: '2019-04-04', toDate: '2026-03-31',
+    reason: "Parent's transfer", workingDays: '96', presentDays: '88',
   },
-  fields: { conduct: 'good', classLabel: 'VIII-B', fromDate: '2019-04-04', toDate: '2026-03-31', reason: "Parent's transfer" },
   duesMinor: 0,
   duesOverride: false,
 };
 
-describe('CertificateSheet', () => {
-  it('assembles the TC sentence: relation, span, conduct, reason, dues-cleared line', () => {
-    render(<CertificateSheet snapshot={tcSnapshot} serial="TC/2026/0041" issuedAt="2026-09-02T05:00:00Z" />);
+describe('CertificateSheet — the TC is the Annexure-I form, field for field', () => {
+  it('prints the statutory numbered form: DOB in words, class in words, register facts, the blanks left blank', () => {
+    const { container } = render(<CertificateSheet snapshot={tcSnapshot} serial="TC/2026/0041" issuedAt="2026-09-02T05:00:00Z" />);
+    const text = container.textContent!;
 
     expect(screen.getByText('TRANSFER CERTIFICATE')).toBeInTheDocument();
-    expect(screen.getByText('TC/2026/0041')).toBeInTheDocument();
-    const body = screen.getByText(/This is to certify/).textContent!;
-    expect(body).toContain('Meera Rathore');
-    expect(body).toContain('daughter of Vikram Rathore');
-    expect(body).toContain('Her conduct');
-    expect(body).toContain("Parent's transfer");
-    expect(body).toContain('All dues to the school stand cleared');
+    expect(text).toContain('Sl. No.');
+    expect(text).toContain('TC/2026/0041');
+    // Field 2 falls back to the guardian when no father's name is on file.
+    expect(text).toContain('Vikram Rathore');
+    expect(text).toContain('Anita Rathore'); // mother's name rides along when known
+    // Field 6: figures AND words — the Annexure demands both.
+    expect(text).toContain('Eleventh February Two Thousand Thirteen');
+    // Field 7: class in figures and words.
+    expect(text).toContain('VIII (Eighth)');
+    // Fields 14–15 from the attendance prefill.
+    expect(text).toContain('Total No. of working days');
+    expect(text).toContain('96');
+    expect(text).toContain('88');
+    // Zero balance prints the ledger's answer for field 12.
+    expect(text).toContain('Dues cleared as per the fee ledger');
+    // An unanswered statutory question still prints its LINE (blank, for the pen).
+    expect(text).toContain('Whether NCC Cadet / Boy Scout / Girl Guide');
+    // The signature row is the Annexure's, not a letter's.
+    expect(text).toContain('Checked by (full name and designation)');
+    expect(text).toContain('Principal · SEAL');
   });
 
   it('says so plainly when a TC was issued over dues — the paper does not pretend', () => {
-    render(
+    const { container } = render(
       <CertificateSheet
         snapshot={{ ...tcSnapshot, duesMinor: 250000, duesOverride: true }}
         serial="TC/2026/0042" issuedAt="2026-09-02T05:00:00Z"
       />,
     );
-    const body = screen.getByText(/This is to certify/).textContent!;
-    expect(body).toContain('Issued with dues outstanding');
-    expect(body).not.toContain('stand cleared');
+    const text = container.textContent!;
+    expect(text).toContain('Issued with dues outstanding');
+    expect(text).not.toContain('Dues cleared as per the fee ledger');
   });
 
   it('stamps a register reprint as DUPLICATE and a voided one as CANCELLED', () => {
@@ -139,11 +161,14 @@ describe('CertificateSheet', () => {
     expect(screen.getByText('CANCELLED')).toBeInTheDocument();
   });
 
-  it('uses neutral wording when gender is not recorded', () => {
+  it('uses neutral wording when gender is not recorded (letter certificates)', () => {
     render(
       <CertificateSheet
-        snapshot={{ ...tcSnapshot, student: { ...tcSnapshot.student, gender: null } }}
-        serial="TC/2026/0043" issuedAt="2026-09-02T05:00:00Z"
+        snapshot={{
+          ...tcSnapshot, type: 'CHARACTER',
+          student: { ...tcSnapshot.student, gender: null },
+        }}
+        serial="CC/2026/0043" issuedAt="2026-09-02T05:00:00Z"
       />,
     );
     const body = screen.getByText(/This is to certify/).textContent!;

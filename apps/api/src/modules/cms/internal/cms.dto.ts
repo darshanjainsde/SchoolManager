@@ -37,6 +37,9 @@ export class UpdateProfileDto {
   @IsOptional() @IsString() @Length(0, 20) postalCode?: string;
   @IsOptional() @IsString() @Length(0, 100) country?: string;
   @IsOptional() @IsString() @Length(0, 500) mapEmbedUrl?: string;
+  /** Statutory head for TCs: "CBSE, New Delhi" + affiliation number. */
+  @IsOptional() @IsString() @Length(0, 80) board?: string;
+  @IsOptional() @IsString() @Length(0, 40) affiliationNo?: string;
   @IsOptional() @IsString() logoAssetId?: string;
   @IsOptional() @IsString() faviconAssetId?: string;
   @IsOptional()

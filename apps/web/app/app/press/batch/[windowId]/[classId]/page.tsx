@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +9,7 @@ import type { ReportCardBatch, ReportCardSnapshot, ReportCardStudent, IssueRepor
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
-import { fmtMarks, printPressSheets } from '@/lib/press';
+import { fmtMarks, getPressTemplate, printPressSheets, setPressTemplate, type PressTemplate } from '@/lib/press';
 import { OrderDrawer } from '@/components/press/order-drawer';
 import { ReportCardSheet } from '@/components/press/press-sheets';
 import { PressPrintPortal } from '@/components/press/press-print-portal';
@@ -98,6 +98,11 @@ export default function PressBatchPage() {
   const unissued = students.filter((s) => !s.issued).length;
   const issuedCount = students.length - unissued;
   const [ordering, setOrdering] = useState(false);
+  // The template is a per-browser preference (presentation only — both render
+  // the same snapshot). Read after mount: the server can't know this browser.
+  const [template, setTemplate] = useState<PressTemplate>('BOARD');
+  useEffect(() => { setTemplate(getPressTemplate()); }, []);
+  const pickTemplate = (t: PressTemplate) => { setTemplate(t); setPressTemplate(t); };
   const snapshots = useMemo(() => (b ? students.map((s) => toSnapshot(b, s)) : []), [b, students]);
 
   return (
@@ -116,7 +121,16 @@ export default function PressBatchPage() {
           </p>
         </div>
         {b && students.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ display: 'inline-flex', border: '1px solid var(--sk-line)', borderRadius: 9, overflow: 'hidden' }}>
+              {(['BOARD', 'CLASSIC'] as const).map((t) => (
+                <button key={t} className="sk-btn" aria-pressed={template === t}
+                  style={{ border: 'none', borderRadius: 0, padding: '6px 11px', fontSize: 12 }}
+                  onClick={() => pickTemplate(t)}>
+                  {t === 'BOARD' ? 'Board pattern' : 'Classic'}
+                </button>
+              ))}
+            </span>
             <button className="sk-btn" onClick={printPressSheets}>
               <Printer size={15} aria-hidden="true" /> Print proofs
             </button>
@@ -245,7 +259,7 @@ export default function PressBatchPage() {
           {snapshots[0] && (
             <div className="pr-preview">
               <div className="pr-zoom">
-                <ReportCardSheet snapshot={snapshots[0]} stamp="PROOF" />
+                <ReportCardSheet snapshot={snapshots[0]} stamp="PROOF" template={template} />
               </div>
             </div>
           )}
@@ -254,7 +268,7 @@ export default function PressBatchPage() {
               Portaled to <body>: the print CSS hides every OTHER body child. */}
           <PressPrintPortal>
             {snapshots.map((snap, i) => (
-              <ReportCardSheet key={students[i]!.studentId} snapshot={snap} stamp="PROOF" />
+              <ReportCardSheet key={students[i]!.studentId} snapshot={snap} stamp="PROOF" template={template} />
             ))}
           </PressPrintPortal>
 

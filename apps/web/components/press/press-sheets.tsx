@@ -1,4 +1,5 @@
 'use client';
+import { classInWords, dateInWords } from '@/lib/press';
 import type {
   CertificateSnapshot,
   GradeBand,
@@ -62,6 +63,12 @@ function Masthead({ school, line2 }: { school: ReportCardSnapshot['school']; lin
         <div style={{ fontSize: '8pt', color: INK_SOFT }}>
           {[school.addressLine, school.phone, school.email].filter(Boolean).join(' · ')}
         </div>
+        {(school.board || school.affiliationNo) && (
+          <div style={{ fontSize: '8pt', color: INK_SOFT }}>
+            {[school.board, school.affiliationNo ? `Affiliation No. ${school.affiliationNo}` : null]
+              .filter(Boolean).join(' · ')}
+          </div>
+        )}
         <div style={{ fontSize: '9pt', color: INK, fontWeight: 600, marginTop: '1mm' }}>{line2}</div>
       </div>
     </div>
@@ -95,19 +102,51 @@ const headCell: React.CSSProperties = { ...cell, background: HEAD_BG, fontWeight
 // ── The report card ──────────────────────────────────────────────────────────
 
 export function ReportCardSheet({
-  snapshot, serial, stamp,
+  snapshot, serial, stamp, template = 'CLASSIC',
 }: {
   snapshot: ReportCardSnapshot;
   /** The register serial — official prints carry it; proofs have none. */
   serial?: string;
   stamp?: 'PROOF' | 'DUPLICATE' | 'CANCELLED';
+  /** Presentation only — BOTH templates render the SAME snapshot, so the
+   *  register never cares which one a print run wore. BOARD is the familiar
+   *  scholastic-form look (bordered identity grid, section titles, result
+   *  box); CLASSIC is the clean minimal sheet. */
+  template?: 'CLASSIC' | 'BOARD';
 }) {
   const s = snapshot;
+  const board = template === 'BOARD';
   return (
     <div className="pr-page" style={{ position: 'relative' }}>
       {stamp && <Stamp text={stamp} />}
-      <Masthead school={s.school} line2={`Progress Report · ${s.windowName} · ${s.academicYearName}`} />
+      <Masthead school={s.school} line2={board ? '' : `Progress Report · ${s.windowName} · ${s.academicYearName}`} />
+      {board && (
+        <div style={{ textAlign: 'center', margin: '3mm 0 1mm' }}>
+          <span style={{
+            fontWeight: 800, fontSize: '11pt', letterSpacing: '0.18em', color: INK,
+            border: `0.35mm solid ${INK}`, padding: '1mm 6mm', display: 'inline-block',
+          }}>
+            PROGRESS REPORT · {s.windowName.toUpperCase()} · {s.academicYearName}
+          </span>
+        </div>
+      )}
 
+      {board ? (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5pt', margin: '3mm 0' }}>
+          <tbody>
+            <tr>
+              <td style={{ ...cell, width: '50%' }}><b>Name of student:</b> {s.student.name}</td>
+              <td style={cell}><b>Class &amp; section:</b> {s.classLabel}</td>
+              <td style={cell}><b>Roll no.:</b> {s.student.rollNo ?? '—'}</td>
+            </tr>
+            <tr>
+              <td style={cell}><b>Admission no.:</b> {s.student.admissionNo}</td>
+              <td style={cell}><b>Date of birth:</b> {s.student.dob ? dateLabel(s.student.dob) : '—'}</td>
+              <td style={cell}><b>Class teacher:</b> {s.classTeacherName ?? '—'}</td>
+            </tr>
+          </tbody>
+        </table>
+      ) : (
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '4mm', margin: '4mm 0 3mm', fontSize: '9.5pt' }}>
         <div>
           <b style={{ fontSize: '11pt' }}>{s.student.name}</b>
@@ -119,6 +158,12 @@ export function ReportCardSheet({
           {s.student.dob ? `DOB ${dateLabel(s.student.dob)}` : ''}
         </div>
       </div>
+      )}
+      {board && (
+        <div style={{ fontWeight: 700, fontSize: '9pt', letterSpacing: '0.1em', margin: '1mm 0', color: BRAND }}>
+          PART A · SCHOLASTIC AREAS
+        </div>
+      )}
 
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10.5pt' }}>
         <thead>
@@ -163,6 +208,21 @@ export function ReportCardSheet({
           <div style={{ marginTop: '1mm' }}>{s.remark ?? ''}</div>
         </div>
       </div>
+
+      {board && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10pt', marginTop: '3mm' }}>
+          <tbody>
+            <tr>
+              <td style={{ ...headCell, width: '34%' }}>RESULT</td>
+              <td style={cell}>
+                {s.overall.pct === null
+                  ? 'Assessment pending — see subject table'
+                  : `${trimMarks(s.overall.marks)} / ${s.overall.maxMarks} · ${s.overall.pct}% · Grade ${gradeLabel(s.overall.grade)}`}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
 
       {/* marginTop auto: the legend + signature block sits at the FOOT of the
           A4 page however short the table above runs. */}
@@ -228,6 +288,96 @@ function certBody(s: CertificateSnapshot): string {
   );
 }
 
+/** One numbered Annexure line: label, dotted rule, the answer (or the blank). */
+function TCField({ no, label, value }: { no: string; label: string; value: string | null | undefined }) {
+  return (
+    <div style={{ display: 'flex', gap: '2.5mm', alignItems: 'baseline', padding: '1.6mm 0', borderBottom: `0.2mm dotted ${LINE}`, fontSize: '9.5pt' }}>
+      <span style={{ color: INK_SOFT, width: '6mm', flex: 'none', fontVariantNumeric: 'tabular-nums' }}>{no}.</span>
+      <span style={{ color: INK_SOFT, flex: 'none' }}>{label}</span>
+      <span style={{ fontWeight: 650, flex: 1, textAlign: 'right', minHeight: '4mm' }}>{value?.trim() || '\u00A0'}</span>
+    </div>
+  );
+}
+
+/**
+ * The statutory Transfer Certificate — the CBSE Examination Bye-laws
+ * Annexure-I form, field for field (cbse.gov.in/Byelawsenglish.pdf). An
+ * unanswered field prints as a BLANK LINE for the office pen: a statutory
+ * form filled by hand beats software that invents an answer. Old snapshots
+ * (issued before the statutory fields existed) render the same way — blanks.
+ */
+function StatutoryTCSheet({ s, serial, issuedAt, stamp }: {
+  s: CertificateSnapshot; serial: string; issuedAt: string; stamp?: 'DUPLICATE' | 'CANCELLED';
+}) {
+  const f = s.fields;
+  const st = s.student;
+  const promoted = [f.qualifiedForPromotion, f.promotedToClass
+    ? `to ${f.promotedToClass}${classInWords(f.promotedToClass) ? ` (${classInWords(f.promotedToClass)})` : ''}` : null]
+    .filter(Boolean).join(', ');
+  const remarks = [
+    f.note,
+    s.duesMinor > 0 && s.duesOverride ? 'Issued with dues outstanding, by order of the school.' : null,
+  ].filter(Boolean).join(' ');
+  return (
+    <div className="pr-page" style={{ position: 'relative' }}>
+      {stamp && <Stamp text={stamp} />}
+      <Masthead school={s.school} line2="" />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8.5pt', color: INK_SOFT, margin: '3mm 0 1mm', fontVariantNumeric: 'tabular-nums' }}>
+        <span>Book No. {serial.split('/')[1] ?? '—'}</span>
+        <span>Sl. No. <b style={{ color: INK }}>{serial}</b></span>
+        <span>Admission No. <b style={{ color: INK }}>{st.admissionNo}</b></span>
+      </div>
+
+      <div style={{ textAlign: 'center', margin: '2mm 0 3mm' }}>
+        <span style={{ fontWeight: 800, fontSize: '12.5pt', letterSpacing: '0.22em', color: BRAND, borderBottom: `0.5mm double ${BRAND}`, paddingBottom: '1mm' }}>
+          TRANSFER CERTIFICATE
+        </span>
+      </div>
+
+      <div>
+        <TCField no="1" label="Name of pupil" value={st.name} />
+        <TCField no="2" label="Father's / Guardian's name" value={st.fatherName ?? st.guardianName} />
+        {st.motherName ? <TCField no="2a" label="Mother's name" value={st.motherName} /> : null}
+        <TCField no="3" label="Nationality" value={st.nationality} />
+        <TCField no="4" label="Whether the candidate belongs to Schedule Caste or Schedule Tribe" value={st.category} />
+        <TCField no="5" label="Date of first admission in the school with class"
+          value={st.firstAdmissionDate ? `${dateLabel(st.firstAdmissionDate)}${st.firstAdmissionClass ? ` · ${st.firstAdmissionClass}` : ''}` : st.firstAdmissionClass} />
+        <TCField no="6" label="Date of birth (in Christian Era) according to Admission Register (in figures and words)"
+          value={st.dob ? `${dateLabel(st.dob)} — ${dateInWords(st.dob)}` : null} />
+        <TCField no="7" label="Class in which the pupil last studied (in figures and words)"
+          value={`${f.classLabel}${classInWords(f.classLabel) ? ` (${classInWords(f.classLabel)})` : ''}`} />
+        <TCField no="8" label="School/Board Annual examination last taken with result" value={f.examLastTaken} />
+        <TCField no="9" label="Whether failed, if so once/twice in the same class" value={f.failedBefore} />
+        <TCField no="10" label="Subjects studied" value={f.subjects} />
+        <TCField no="11" label="Whether qualified for promotion to the higher class — if so, to which class" value={promoted} />
+        <TCField no="12" label="Month up to which the school dues paid" value={f.feesPaidUpto ?? (s.duesMinor <= 0 ? 'Dues cleared as per the fee ledger' : null)} />
+        <TCField no="13" label="Any fee concession availed of — nature of such concession" value={f.feeConcession} />
+        <TCField no="14" label="Total No. of working days" value={f.workingDays} />
+        <TCField no="15" label="Total No. of working days present" value={f.presentDays} />
+        <TCField no="16" label="Whether NCC Cadet / Boy Scout / Girl Guide" value={f.nccScout} />
+        <TCField no="17" label="Games played or extra-curricular activities (achievement level)" value={f.games} />
+        <TCField no="18" label="General conduct" value={f.conduct} />
+        <TCField no="19" label="Date of application for certificate" value={f.dateOfApplication ? dateLabel(f.dateOfApplication) : null} />
+        <TCField no="20" label="Date of issue of certificate" value={dateLabel(issuedAt)} />
+        <TCField no="21" label="Reasons for leaving the school" value={f.reason} />
+        <TCField no="22" label="Any other remarks" value={remarks} />
+        {st.penId ? <TCField no="—" label="PEN / APAAR id" value={st.penId} /> : null}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '10mm', fontSize: '8.5pt', color: INK_SOFT, gap: '4mm' }}>
+        <span style={{ borderTop: `0.25mm solid ${LINE}`, paddingTop: '1.5mm', flex: 1, textAlign: 'center' }}>Signature of class teacher</span>
+        <span style={{ borderTop: `0.25mm solid ${LINE}`, paddingTop: '1.5mm', flex: 1, textAlign: 'center' }}>Checked by (full name and designation)</span>
+        <span style={{ borderTop: `0.25mm solid ${LINE}`, paddingTop: '1.5mm', flex: 1, textAlign: 'center' }}>Principal · SEAL</span>
+      </div>
+      <div style={{ fontSize: '7pt', color: INK_SOFT, marginTop: '3mm' }}>
+        Form as per CBSE Examination Bye-laws, Annexure-I. This certificate carries a serial number recorded in the
+        school&rsquo;s register and can be verified against it.
+      </div>
+    </div>
+  );
+}
+
 export function CertificateSheet({
   snapshot, serial, issuedAt, stamp,
 }: {
@@ -235,6 +385,9 @@ export function CertificateSheet({
   stamp?: 'DUPLICATE' | 'CANCELLED';
 }) {
   const s = snapshot;
+  if (s.type === 'TC') {
+    return <StatutoryTCSheet s={s} serial={serial} issuedAt={issuedAt} stamp={stamp} />;
+  }
   return (
     <div className="pr-page" style={{ position: 'relative' }}>
       {stamp && <Stamp text={stamp} />}

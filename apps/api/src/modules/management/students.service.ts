@@ -100,7 +100,7 @@ export class StudentsService {
     if (dto.classSectionId !== undefined) {
       await this.validateClassSection(schoolId, dto.classSectionId);
     }
-    const { dob, ...rest } = dto;
+    const { dob, firstAdmissionDate, ...rest } = dto;
     try {
       return await withTenant(schoolId, async (tx) => {
         // A CODE IS PART OF BEING A STUDENT, not part of being invited.
@@ -122,6 +122,7 @@ export class StudentsService {
             schoolId,
             code,
             dob: dob ? new Date(dob) : undefined,
+            firstAdmissionDate: firstAdmissionDate ? new Date(firstAdmissionDate) : undefined,
           },
         });
       });
@@ -144,7 +145,7 @@ export class StudentsService {
     if (dto.classSectionId !== undefined) {
       await this.validateClassSection(schoolId, dto.classSectionId);
     }
-    const { dob, ...rest } = dto;
+    const { dob, firstAdmissionDate, ...rest } = dto;
     try {
       return await withTenant(schoolId, (tx) =>
         tx.student.update({
@@ -152,6 +153,7 @@ export class StudentsService {
           data: {
             ...rest,
             ...(dob !== undefined ? { dob: new Date(dob) } : {}),
+            ...(firstAdmissionDate !== undefined ? { firstAdmissionDate: new Date(firstAdmissionDate) } : {}),
           },
         }),
       );

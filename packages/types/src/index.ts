@@ -963,6 +963,10 @@ export interface PressSchoolHeader {
   addressLine: string | null;
   phone: string | null;
   email: string | null;
+  /** "CBSE, New Delhi" + affiliation number — the statutory head. Blank until
+   *  the school fills them in the website studio's contact tab. */
+  board?: string | null;
+  affiliationNo?: string | null;
 }
 
 /**
@@ -1053,6 +1057,31 @@ export interface CertificateFields {
   purpose?: string;
   /** One free extra line, printed verbatim when present. */
   note?: string;
+
+  // ── TC only: the Annexure-I statutory answers (all free text, all
+  //    optional — a blank prints as a blank line to fill by hand). ──
+  /** 8 · School/Board Annual examination last taken with result. */
+  examLastTaken?: string;
+  /** 9 · Whether failed, if so once/twice in the same class. */
+  failedBefore?: string;
+  /** 10 · Subjects studied — one comma-joined line. */
+  subjects?: string;
+  /** 11 · Whether qualified for promotion — and to which class. */
+  qualifiedForPromotion?: string;
+  promotedToClass?: string;
+  /** 12 · Month up to which school dues are paid. */
+  feesPaidUpto?: string;
+  /** 13 · Any fee concession availed of. */
+  feeConcession?: string;
+  /** 14–15 · Working days / present. Prefilled from attendance, editable. */
+  workingDays?: string;
+  presentDays?: string;
+  /** 16 · NCC Cadet / Boy Scout / Girl Guide. */
+  nccScout?: string;
+  /** 17 · Games / extra-curricular, with achievement level. */
+  games?: string;
+  /** 19 · Date of application for the certificate (ISO). */
+  dateOfApplication?: string;
 }
 
 /** `GET /manage/press/certificates/prepare/:studentId` — the form, prefilled. */
@@ -1068,7 +1097,9 @@ export interface CertificatePrepare {
     gender: string | null;
     /** When the record was created — the default "attended from", always editable. */
     onRollSince: string;
-  };
+  } & StudentRecordFacts;
+  /** Attendance this academic year — prefills Annexure fields 14–15. */
+  attendance: { workingDays: number; presentDays: number } | null;
   /** Live fee-ledger balance in paise. Zero for schools that keep fees elsewhere. */
   duesMinor: number;
   /** Certificates already issued to this student — reprint instead of re-issue. */
@@ -1376,3 +1407,50 @@ export interface OperatorOrderRow extends PrintOrderRow {
 export type OperatorOrderArtifact =
   | { kind: 'REPORT_CARDS'; sheets: { serial: string; snapshot: ReportCardSnapshot }[] }
   | { kind: 'UPLOAD'; filename: string; url: string; expiresInSeconds: number };
+
+// ── Statutory documents (CBSE Examination Bye-laws, Annexure-I) ─────────────
+
+export const STUDENT_CATEGORIES = ['GENERAL', 'SC', 'ST', 'OBC', 'EWS'] as const;
+export type StudentCategory = (typeof STUDENT_CATEGORIES)[number];
+
+export function assertStudentCategory(c: string): asserts c is StudentCategory {
+  if (!(STUDENT_CATEGORIES as readonly string[]).includes(c)) {
+    throw new Error(`Invalid student category: "${c}"`);
+  }
+}
+
+/** The admission-register facts the statutory TC prints — on the student
+ *  file, prefilled into the drawer, saved back when supplied there. */
+export interface StudentRecordFacts {
+  fatherName: string | null;
+  motherName: string | null;
+  nationality: string | null;
+  category: string | null;
+  firstAdmissionDate: string | null;
+  firstAdmissionClass: string | null;
+  previousSchool: string | null;
+  penId: string | null;
+}
+
+/** `GET /manage/press/overview` — the Press home in one read. */
+export interface PressOverview {
+  windows: Omit<ReportWindowRow, 'issuedCount'>[];
+  /** The window the scoreboard is showing (chosen or latest); null = none yet. */
+  windowId: string | null;
+  /** Per class: roster strength vs cards issued in that window. */
+  classes: { id: string; label: string; students: number; issued: number }[];
+  register: { total: number; lastSerial: string | null };
+  certificates: { lastSerial: string | null; thisYear: number };
+  orders: {
+    /** Quotes waiting on the SCHOOL's confirm — the pulsing fact. */
+    awaitingConfirm: number;
+    quotedTotalMinor: number;
+    open: number;
+  };
+}
+
+/** `POST /manage/press/certificates/bulk` — one class, one type, one run. */
+export interface BulkCertificateResult {
+  issued: { studentId: string; name: string; serial: string; issuedAt: string; snapshot: CertificateSnapshot }[];
+  skipped: { studentId: string; name: string; reason: string }[];
+}
