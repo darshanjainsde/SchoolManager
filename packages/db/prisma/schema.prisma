@@ -156,10 +156,20 @@ enum PaymentStatus {
   REFUNDED
 }
 
+/// The admissions pipeline, in the order a family moves through it.
+///
+/// CLOSED is retained and never written by new code: it is what the original
+/// three-state model called a finished lead, and existing rows still carry it.
+/// The desk reads it as LOST. Dropping it would rewrite history that a school
+/// may well be asked about.
 enum EnquiryStatus {
   NEW
   CONTACTED
+  VISITED
+  APPLIED
+  ENROLLED
   CLOSED
+  LOST
 }
 
 enum AttendanceStatus {
@@ -1700,10 +1710,47 @@ model Enquiry {
   gradeInterest String?
   message       String?
   status        EnquiryStatus @default(NEW)
+  /// The day somebody promised to ring this family back. A DATE, not a
+  /// timestamp: an admissions desk works in days, and a time would imply a
+  /// precision nobody keeps. Null means no next step has been agreed — which
+  /// the desk surfaces, because that is how a family gets quietly forgotten.
+  followUpAt    DateTime?     @db.Date
+  /// Which staff member is chasing this, so two people do not ring the same
+  /// parent. Not a relation: staff can be removed and the history should
+  /// survive them.
+  ownerUserId   String?       @db.Uuid
+  /// Why a LOST lead was lost. Free text — the reasons a school actually
+  /// records ("chose another school", "moved city") do not fit an enum, and a
+  /// wrong enum teaches people to pick the nearest lie.
+  lostReason    String?
   createdAt     DateTime      @default(now())
   school        School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  notes         EnquiryNote[]
 
   @@index([schoolId])
+  /// The desk's own query: open leads ordered by when they are due.
+  @@index([schoolId, status, followUpAt])
+}
+
+/// One line of an enquiry's history: a note somebody typed, or a stage change.
+///
+/// Append-only by convention — nothing in the app updates or deletes a row.
+/// "Contacted" is a claim, and this is what makes it checkable.
+model EnquiryNote {
+  id         String   @id @default(uuid()) @db.Uuid
+  schoolId   String   @db.Uuid
+  enquiryId  String   @db.Uuid
+  /// NOTE (a person wrote it) | STAGE (the pipeline moved) | SYSTEM (we did it)
+  kind       String   @default("NOTE")
+  body       String
+  authorUserId String? @db.Uuid
+  /// Denormalised at write time so a note still says who wrote it after that
+  /// member of staff has left.
+  authorName String?
+  createdAt  DateTime @default(now())
+  enquiry    Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, enquiryId, createdAt])
 }
 
 model Announcement {

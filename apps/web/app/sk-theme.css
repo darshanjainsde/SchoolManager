@@ -2486,3 +2486,74 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
 }
 .sk-ev-sheet[data-mono="true"] > svg { filter: grayscale(1); }
 .sk-ev-outrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* ── THE ADMISSIONS DESK ───────────────────────────────────────────────────
+   Enquiries was a stack of full-width rows on the shadcn kit, with the whole
+   right-hand side of the console empty. It is a master/detail desk now: the
+   list answers "who", the panel answers everything else, and neither repeats
+   the other. */
+
+.sk-enq-desk { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1000px) { .sk-enq-desk { grid-template-columns: minmax(0, 370px) minmax(0, 1fr); } }
+
+/* Stage chips scroll horizontally on a phone rather than wrapping into a
+   four-line block that pushes the list off the screen. */
+.sk-enq-filters { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; }
+.sk-enq-chip {
+  flex: none; cursor: pointer; border: 1.5px solid var(--sk-line); background: var(--sk-card);
+  border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--sk-ink-2);
+}
+.sk-enq-chip:hover { border-color: var(--sk-brand); }
+.sk-enq-chip[aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); color: var(--sk-brand-2); }
+
+.sk-enq-list { display: flex; flex-direction: column; max-height: 60vh; overflow-y: auto; }
+@media (min-width: 1000px) { .sk-enq-list { max-height: 560px; } }
+.sk-enq-row {
+  display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%; cursor: pointer;
+  background: none; border: 0; border-top: 1px solid var(--sk-line); padding: 11px 4px;
+}
+.sk-enq-row:first-child { border-top: 0; }
+.sk-enq-row:hover { background: var(--sk-bg-2); }
+.sk-enq-row[aria-current="true"] { background: var(--sk-brand-tint); }
+.sk-enq-row:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: -2px; }
+.sk-enq-row .av {
+  width: 34px; height: 34px; border-radius: 11px; flex: none; display: grid; place-items: center;
+  font-weight: 750; font-size: 12px; color: #fff;
+}
+.sk-enq-row .txt { min-width: 0; flex: 1; }
+/* A row is a BUTTON, so its label pair must be spans — and spans do not stack
+   unless told to. Three separate rows in this console shipped reading
+   "Vikram JoshiClass V · 5 Aug" before this was written down. */
+.sk-enq-row .nm,
+.sk-enq-row .meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-enq-row .nm { font-weight: 650; font-size: 13.5px; }
+.sk-enq-row .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-enq-row .side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.sk-enq-due { font-size: 10.5px; font-weight: 750; }
+.sk-enq-due[data-tone="bad"] { color: var(--sk-bad); }
+.sk-enq-due[data-tone="warn"] { color: var(--sk-amber-ink); }
+.sk-enq-due[data-tone="muted"] { color: var(--sk-ink-3); }
+
+/* The pipeline, as a row of steps you can click straight to. */
+.sk-enq-stages { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+.sk-enq-stage {
+  flex: 1 0 auto; cursor: pointer; border: 1.5px solid var(--sk-line); background: var(--sk-card);
+  border-radius: 9px; padding: 7px 9px; font-size: 11.5px; font-weight: 700;
+  color: var(--sk-ink-3); white-space: nowrap;
+}
+.sk-enq-stage:hover { border-color: var(--sk-brand); }
+.sk-enq-stage[data-state="done"] { border-color: var(--sk-good); color: var(--sk-good); background: var(--sk-good-tint); }
+.sk-enq-stage[data-state="now"] { border-color: var(--sk-brand); color: var(--sk-brand-2); background: var(--sk-brand-tint); }
+.sk-enq-stage[data-state="lost"] { border-color: var(--sk-bad); color: var(--sk-bad); background: var(--sk-bad-tint); }
+
+.sk-enq-contact { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); }
+.sk-enq-fields { display: grid; gap: 11px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 165px), 1fr)); }
+
+/* The history. A timeline, so a note and a stage change read as one story. */
+.sk-enq-tl { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--sk-line); }
+.sk-enq-tl:first-child { border-top: 0; }
+.sk-enq-tl .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sk-brand); margin-top: 6px; flex: none; }
+.sk-enq-tl[data-kind="STAGE"] .dot { background: var(--sk-good); }
+.sk-enq-tl[data-kind="SYSTEM"] .dot { background: var(--sk-line-2); }
+.sk-enq-tl .body { font-size: 13px; }
+.sk-enq-tl .who { font-size: 11px; color: var(--sk-ink-3); }
