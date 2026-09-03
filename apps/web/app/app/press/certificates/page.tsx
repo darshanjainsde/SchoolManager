@@ -136,19 +136,20 @@ export default function CertificateDeskPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   /**
-   * Print AFTER the portal committed — a timer raced React and could open the
-   * dialog on an empty container, printing blank pages for a serial already
-   * burned into the register. The effect runs after the DOM holds the sheet.
-   * The first print is the original; the sheets in the container then flip to
-   * DUPLICATE so "Print again" says what it is.
+   * A freshly issued certificate OPENS THE PRINT ROOM — it never fires the
+   * dialog by itself. Two reasons, one of them a bug we paid for: a document
+   * should be seen before it is printed (the Print Room rule), and printing
+   * in the same commit that first mounts the portal printed BLANK PAGES,
+   * because the portal defers one render (portal-race.test.tsx). Print now
+   * lives one deliberate click away, inside the room, where the sheets are
+   * already on screen.
    */
   useEffect(() => {
-    if (!printed || printed.duplicate) return;
+    if (!printed) return;
     const key = printed.sheets.map((s) => s.serial).join('|');
     if (printedKeyRef.current === key) return;
     printedKeyRef.current = key;
-    printPressSheets();
-    setPrinted({ ...printed, duplicate: true });
+    setRoomOpen(true);
   }, [printed]);
 
   const hits = useQuery({
@@ -376,19 +377,13 @@ export default function CertificateDeskPage() {
                 {bulk.isPending ? 'Issuing the class…' : `Issue for the whole class`}
               </button>
               {bulkResult && bulkResult.issued.length > 0 && (
-                <>
-                  <button className="sk-btn"
-                    onClick={() => setPrinted({ sheets: bulkResult.issued.map((i) => ({ snapshot: i.snapshot, serial: i.serial, issuedAt: i.issuedAt })), duplicate: false })}>
-                    <Printer size={15} aria-hidden="true" /> Print all {bulkResult.issued.length}
-                  </button>
-                  <button className="sk-btn"
-                    onClick={() => {
-                      setPrinted({ sheets: bulkResult.issued.map((i) => ({ snapshot: i.snapshot, serial: i.serial, issuedAt: i.issuedAt })), duplicate: true });
-                      setRoomOpen(true);
-                    }}>
-                    View all
-                  </button>
-                </>
+                <button className="sk-btn"
+                  onClick={() => setPrinted({
+                    sheets: bulkResult.issued.map((i) => ({ snapshot: i.snapshot, serial: i.serial, issuedAt: i.issuedAt })),
+                    duplicate: false,
+                  })}>
+                  <Printer size={15} aria-hidden="true" /> View &amp; print all {bulkResult.issued.length}
+                </button>
               )}
             </div>
 
@@ -633,14 +628,9 @@ export default function CertificateDeskPage() {
                 {issue.isPending ? 'Entering register…' : `Issue ${PRESS_TYPE_LABEL[certType].toLowerCase()} & print`}
               </button>
               {printed && (
-                <>
-                  <button className="sk-btn" onClick={() => setRoomOpen(true)}>
-                    View
-                  </button>
-                  <button className="sk-btn" onClick={printPressSheets}>
-                    <Printer size={15} aria-hidden="true" /> Print again
-                  </button>
-                </>
+                <button className="sk-btn" onClick={() => setRoomOpen(true)}>
+                  <Printer size={15} aria-hidden="true" /> View &amp; print
+                </button>
               )}
             </div>
           </div>
@@ -677,14 +667,18 @@ export default function CertificateDeskPage() {
           title={printed.sheets.length === 1
             ? printed.sheets[0]!.serial
             : `${printed.sheets.length} certificates`}
-          onClose={() => setRoomOpen(false)}
+          onClose={() => { setRoomOpen(false); setPrinted({ ...printed, duplicate: true }); }}
           sheets={printed.sheets.map((sh) => ({
             kind: 'CERTIFICATE' as const, snapshot: sh.snapshot, serial: sh.serial,
-            issuedAt: sh.issuedAt, stamp: 'DUPLICATE' as const,
+            issuedAt: sh.issuedAt,
+            // The original goes out unstamped; every later look is a duplicate.
+            ...(printed.duplicate ? { stamp: 'DUPLICATE' as const } : {}),
           }))}
         />
       )}
 
+      {/* The room mounts its own print source; this one only exists so a
+          browser Cmd+P outside the room still prints the last document. */}
       {printed && !roomOpen && (
         <PressPrintPortal>
           {printed.sheets.map((sh) => (
