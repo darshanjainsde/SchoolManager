@@ -227,14 +227,32 @@ async function main() {
   }
   const teaching = periods.filter((p) => p.label !== 'Break');
 
-  const GRADES = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+  // THE CANONICAL SHAPE. One structure, named one way — the school's own site
+  // says "Nursery to Class X", so that is what exists: pre-primary with a
+  // single section, I–X with two. Anything else in this school is a leftover
+  // from another seeding pass or a hand-made class, and `normalise()` below
+  // removes it. Staging drifted into TWO whole structures at once — Roman
+  // I–X × A/B *and* "Class 1…Class 12" × A — which made every class list
+  // unreadable, so the shape is now enforced rather than merely created.
+  const CANON: readonly (readonly [string, readonly string[]])[] = [
+    ['Nursery', ['A']], ['LKG', ['A']], ['UKG', ['A']],
+    ['I', ['A', 'B']], ['II', ['A', 'B']], ['III', ['A', 'B']], ['IV', ['A', 'B']], ['V', ['A', 'B']],
+    ['VI', ['A', 'B']], ['VII', ['A', 'B']], ['VIII', ['A', 'B']], ['IX', ['A', 'B']], ['X', ['A', 'B']],
+  ];
+  const GRADES = CANON.map(([g]) => g);
   const sections: { id: string; label: string; gradeName: string }[] = [];
-  for (const [gi, gname] of GRADES.entries()) {
+  for (const [gi, [gname, secNames]] of CANON.entries()) {
     const grade = await step(async (db) => {
       const found = await db.grade.findFirst({ where: { schoolId, name: gname } });
-      return found ?? db.grade.create({ data: { schoolId, name: gname, order: gi + 1 } });
+      if (found) {
+        // Order is what every class list sorts by; a grade created by hand
+        // (or by an older pass) can carry the wrong one.
+        if (found.order !== gi) await db.grade.update({ where: { id: found.id }, data: { order: gi } });
+        return { ...found, order: gi };
+      }
+      return db.grade.create({ data: { schoolId, name: gname, order: gi } });
     });
-    for (const sname of ['A', 'B']) {
+    for (const sname of secNames) {
       const sec = await step(async (db) => {
         const found = await db.classSection.findFirst({
           where: { schoolId, gradeId: grade.id, name: sname, academicYearId: year.id },
@@ -247,6 +265,79 @@ async function main() {
     }
   }
   console.log(`  ✓ ${GRADES.length} grades, ${sections.length} sections, ${subjects.length} subjects, ${periods.length} periods`);
+
+  // ── Normalise: one structure, one number series ────────────────────────────
+  //
+  // Everything above CREATES; this REMOVES what does not belong, so a school
+  // that has been seeded twice (or edited by hand mid-test) converges on the
+  // canonical shape instead of accumulating a second one beside it.
+  //
+  // Two rules, and the second is the careful one:
+  //   · a section outside CANON is deleted, with its students;
+  //   · EXCEPT a student who holds register documents — a TC, a report card —
+  //     who is MOVED into the matching canonical section instead. Their paper
+  //     history is statutory and the register refuses to delete it (the
+  //     press_issue_immutable trigger), so the child moves and keeps it.
+  await step(async (db) => {
+    const canonIds = new Set(sections.map((s) => s.id));
+    // EXPLICIT schoolId on every clause below. This seed runs with the
+    // PLATFORM connection (it sets DATABASE_URL_PLATFORM at the top), which
+    // holds BYPASSRLS — so tenant scoping is NOT implied here the way it is
+    // in the app. Caught locally: an unscoped sweep renumbered another
+    // school's students. On staging that would have been every school.
+    const all = await db.classSection.findMany({
+      where: { schoolId },
+      include: { grade: { select: { id: true, name: true } } },
+    });
+    const strays = all.filter((s) => !canonIds.has(s.id));
+    if (strays.length === 0) return;
+
+    // "Class 7" and "7-A" both mean VII here; anything unmappable lands in the
+    // highest canonical grade rather than being invented into existence.
+    const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+    const target = (gradeName: string, secName: string): string => {
+      const n = Number(gradeName.replace(/[^0-9]/g, ''));
+      const roman = Number.isFinite(n) && n >= 1 && n <= 10 ? ROMAN[n - 1]! : 'X';
+      const want = `${roman}-${secName}`;
+      return (sections.find((s) => s.label === want) ?? sections.find((s) => s.gradeName === roman)!).id;
+    };
+
+    let moved = 0;
+    let removed = 0;
+    for (const stray of strays) {
+      const kids = await db.student.findMany({
+        where: { schoolId, classSectionId: stray.id }, select: { id: true },
+      });
+      for (const kid of kids) {
+        const hasPaper = await db.pressIssue.findFirst({
+          where: { schoolId, studentId: kid.id }, select: { id: true },
+        });
+        if (hasPaper) {
+          await db.student.update({
+            where: { id: kid.id },
+            data: { classSectionId: target(stray.grade.name, stray.name) },
+          });
+          moved += 1;
+        } else {
+          await db.student.delete({ where: { id: kid.id } });
+          removed += 1;
+        }
+      }
+      await db.classSection.delete({ where: { id: stray.id } });
+    }
+
+    // A grade with no sections left is a naming leftover ("Class 11"), not a
+    // grade the school teaches.
+    let gradesGone = 0;
+    for (const g of new Map(strays.map((s) => [s.grade.id, s.grade])).values()) {
+      const left = await db.classSection.count({ where: { schoolId, gradeId: g.id } });
+      if (left === 0) {
+        await db.grade.delete({ where: { id: g.id } });
+        gradesGone += 1;
+      }
+    }
+    console.log(`  ✓ normalised: ${strays.length} stray sections and ${gradesGone} grades removed, ${removed} students dropped, ${moved} moved (they hold register documents)`);
+  });
 
   // ── Teachers, staff and their logins ───────────────────────────────────────
   const passwordHash = await hash(PW);
@@ -303,37 +394,116 @@ async function main() {
   // ── The roll ───────────────────────────────────────────────────────────────
   // createMany per section: 480 individual inserts inside interactive
   // transactions would blow the five-second ceiling several times over.
-  let admission = 20260001;
+  // ONE identifier standard. `admissionNo` and `code` are the same string —
+  // `RPS-00001` — because a school says one number out loud and two systems
+  // holding two of them is how "which number is his?" starts. The prefix is
+  // the school's own `codePrefix` (the login code already uses it), so a
+  // second school seeded here never collides with this one.
+  const PREFIX = await step(async (db) => {
+    const s0 = await db.school.findFirst({ where: { id: schoolId }, select: { codePrefix: true, name: true } });
+    // From the NAME, always — "Raffles Primary School" is RPS. An existing
+    // codePrefix is not trusted: staging carried `RAF` from an early
+    // allocation while every visible number said RPS, which is exactly the
+    // two-identifiers-for-one-child problem this pass exists to end.
+    const derived = s0!.name.split(/\s+/).map((w) => w[0]).join('')
+      .replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 3) || 'SCH';
+    if (s0?.codePrefix !== derived) {
+      await db.school.update({ where: { id: schoolId }, data: { codePrefix: derived } });
+    }
+    return derived;
+  });
+  const num = (n: number) => `${PREFIX}-${String(n).padStart(5, '0')}`;
+
+  // A section's size is derived from its OWN label, not from the shared random
+  // stream: `between()` advances a global seed, so its value for "VII-B"
+  // depended on how many draws happened earlier in the run — and a re-run
+  // that took one extra draw asked for a bigger class and topped it up.
+  // Measured: 545 students became 577 on the second pass, and would have kept
+  // climbing. Same label, same size, every run, forever.
+  const sizeFor = (label: string, pre: boolean): number => {
+    let h = 0;
+    for (const ch of label) h = (h * 31 + ch.charCodeAt(0)) & 0x7fffffff;
+    return pre ? 18 + (h % 5) : 22 + (h % 6);
+  };
+
   const roll: { id: string; sectionId: string }[] = [];
   for (const sec of sections) {
-    const size = between(22, 27);
-    const rows = Array.from({ length: size }, (_, i) => {
-      const female = i % 2 === 1;
-      const firstName = pick(female ? FIRST_F : FIRST_M);
-      const lastName = pick(LAST);
-      return {
-        schoolId,
-        admissionNo: `R/${admission++}`,
-        firstName, lastName,
-        classSectionId: sec.id,
-        rollNo: String(i + 1),
-        gender: female ? 'F' : 'M',
-        dob: d(`${2026 - 5 - GRADES.indexOf(sec.gradeName)}-0${between(1, 9)}-1${between(0, 9)}`),
-        guardianName: `${pick(FIRST_M)} ${lastName}`,
-        guardianPhone: `+9199${between(10000000, 99999999)}`,
-        isActive: true,
-      };
-    });
+    const pre = sec.gradeName === 'Nursery' || sec.gradeName === 'LKG' || sec.gradeName === 'UKG';
+    const size = sizeFor(sec.label, pre);
     await step(async (db) => {
       const already = await db.student.count({ where: { schoolId, classSectionId: sec.id } });
-      if (already > 0) return;
+      if (already >= size) return;
+      // Top up to the section's size rather than skipping a part-filled
+      // section: after normalising, a section can hold moved children.
+      const rows = Array.from({ length: size - already }, (_, i) => {
+        const female = (already + i) % 2 === 1;
+        const firstName = pick(female ? FIRST_F : FIRST_M);
+        const lastName = pick(LAST);
+        return {
+          schoolId,
+          // Placeholder — the renumber pass below gives every child on the
+          // roll its final, gap-free number in one ordered sweep.
+          admissionNo: `PENDING-${sec.id.slice(0, 8)}-${already + i}`,
+          firstName, lastName,
+          classSectionId: sec.id,
+          rollNo: String(already + i + 1),
+          gender: female ? 'F' : 'M',
+          dob: d(`${2026 - 5 - GRADES.indexOf(sec.gradeName)}-0${between(1, 9)}-1${between(0, 9)}`),
+          guardianName: `${pick(FIRST_M)} ${lastName}`,
+          guardianPhone: `+9199${between(10000000, 99999999)}`,
+          isActive: true,
+        };
+      });
       await db.student.createMany({ data: rows, skipDuplicates: true });
     });
     const made = await step((db) =>
       db.student.findMany({ where: { schoolId, classSectionId: sec.id }, select: { id: true } }));
     for (const s of made) roll.push({ id: s.id, sectionId: sec.id });
   }
-  console.log(`  ✓ ${roll.length} students on the roll`);
+
+  // ── The renumber sweep ─────────────────────────────────────────────────────
+  // Every child on the roll gets `RPS-#####` in ONE order — grade, then
+  // section, then roll — so the numbers read down a class list and a child's
+  // number never changes between runs unless the roll itself changes.
+  //
+  // Two passes, because `(schoolId, admissionNo)` and `(schoolId, code)` are
+  // unique: assigning in place would collide the moment a number in use is
+  // handed to a different child. Everyone parks on a temporary value first.
+  await step(async (db) => {
+    const order = new Map(sections.map((s, i) => [s.id, i]));
+    const kids = await db.student.findMany({
+      // schoolId is load-bearing here, not decoration — see the note above.
+      where: { schoolId, classSectionId: { not: null } },
+      select: { id: true, classSectionId: true, rollNo: true, admissionNo: true, code: true, firstName: true, lastName: true },
+    });
+    kids.sort((a, b) =>
+      (order.get(a.classSectionId!) ?? 999) - (order.get(b.classSectionId!) ?? 999)
+      || (Number(a.rollNo ?? 0) - Number(b.rollNo ?? 0))
+      || `${a.firstName}${a.lastName}`.localeCompare(`${b.firstName}${b.lastName}`));
+
+    const wanted = kids.map((k, i) => ({ ...k, want: num(i + 1), roll: String(i + 1) }));
+    const changing = wanted.filter((k) => k.admissionNo !== k.want || k.code !== k.want);
+    if (changing.length === 0) {
+      console.log(`  ✓ ${kids.length} students on the roll — numbering already ${num(1)}…${num(kids.length)}`);
+      return;
+    }
+    for (const k of changing) {
+      await db.student.update({
+        where: { id: k.id },
+        data: { admissionNo: `TMP-${k.id}`, code: `TMP-${k.id}` },
+      });
+    }
+    let rollInSection = new Map<string, number>();
+    for (const k of wanted) {
+      const n = (rollInSection.get(k.classSectionId!) ?? 0) + 1;
+      rollInSection.set(k.classSectionId!, n);
+      await db.student.update({
+        where: { id: k.id },
+        data: { admissionNo: k.want, code: k.want, rollNo: String(n) },
+      });
+    }
+    console.log(`  ✓ ${kids.length} students on the roll — renumbered ${changing.length} to ${num(1)}…${num(kids.length)}`);
+  });
 
   // ── Timetable ──────────────────────────────────────────────────────────────
   await step(async (db) => {

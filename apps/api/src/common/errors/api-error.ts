@@ -166,6 +166,10 @@ export type ErrorCode =
   /** The Result Room's gate: a class with missing or unpublished marks cannot
    *  generate without a written override reason (which is audited). 409. */
   | 'RESULTS_NOT_READY'
+  /** The object store refused the write — bucket gone, endpoint wrong, project
+   *  paused. Nothing the caller did; nothing the caller can retry into success
+   *  until an operator fixes the config. Pair with 503. */
+  | 'STORAGE_UNAVAILABLE'
   /** The room still has saved seating plans; deleting it would take them too — pair with 409. */
   | 'ROOM_IN_USE'
   | 'VALIDATION'

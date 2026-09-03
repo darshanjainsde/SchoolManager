@@ -67,7 +67,16 @@ export function OrderDrawer({ target, onClose }: { target: OrderTarget; onClose:
       toast.success('Sent to Sckools — the quote lands on this order.');
       router.push(`/app/press/orders/${order.id}`);
     },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'The order did not send.'),
+    onError: (e) => {
+      // A storage outage is nobody's fault at this desk — say what happened
+      // and that nothing was ordered, rather than a shrug.
+      const code = e instanceof ApiError ? (e.body as { code?: string } | null)?.code : undefined;
+      if (code === 'STORAGE_UNAVAILABLE') {
+        toast.error(e.message, { duration: 8000 });
+        return;
+      }
+      toast.error(e instanceof ApiError ? e.message : 'The order did not send.');
+    },
   });
 
   const fileProblem =
