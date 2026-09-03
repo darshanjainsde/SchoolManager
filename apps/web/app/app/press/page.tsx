@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowUpRight, BookMarked, CalendarRange, Printer, ScrollText } from 'lucide-react';
+import { ArrowUpRight, BookMarked, CalendarRange, Package, Printer, ScrollText } from 'lucide-react';
 import type { ReportWindowRow } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -210,6 +210,16 @@ export default function PressHomePage() {
               <div className="min-w-0 flex-1">
                 <div className="nm">The register</div>
                 <div className="meta">Every document ever issued · reprints</div>
+              </div>
+              <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
+            </Link>
+            <Link href="/app/press/orders" className="sk-entity sk-press">
+              <span className="av" style={{ background: 'var(--sk-good)' }}>
+                <Package size={20} aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="nm">Print orders</div>
+                <div className="meta">Sckools prints &amp; delivers · quote first</div>
               </div>
               <ArrowUpRight size={16} className="shrink-0" style={{ color: 'var(--sk-ink-3)' }} aria-hidden="true" />
             </Link>

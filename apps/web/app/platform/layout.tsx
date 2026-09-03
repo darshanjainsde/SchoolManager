@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { href: '/platform/schools', label: 'Schools', emoji: '🏫' },
   { href: '/platform/blog', label: 'Blog Queue', emoji: '📝' },
   { href: '/platform/onboard', label: 'Add School', emoji: '➕' },
+  { href: '/platform/orders', label: 'Print Orders', emoji: '🖨️' },
   { href: '/platform/jobs', label: 'Jobs', emoji: '💼' },
   { href: '/platform/connect', label: 'Connect', emoji: '🔗' },
   { href: '/platform/remaining', label: 'Remaining work', emoji: '🧭' },
