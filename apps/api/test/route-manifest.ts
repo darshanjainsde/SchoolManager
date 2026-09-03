@@ -40,6 +40,8 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /manage/tv",
   "GET /manage/tv/rotate",
   "GET /manage/tv/disable",
+  "GET /manage/press/overview",
+  "POST /manage/press/certificates/bulk",
   "GET /manage/press/years",
   "GET /manage/press/classes",
   "GET /manage/press/students",

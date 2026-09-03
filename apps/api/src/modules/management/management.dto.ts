@@ -18,6 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { STUDENT_CATEGORIES } from '@skoolos/types';
 import {
   ASSIGNMENT_ATTACHMENT_KINDS,
   AssignmentAttachmentKind,
@@ -377,6 +378,16 @@ export class CreateStudentDto {
   @IsOptional()
   @IsUUID()
   photoAssetId?: string;
+
+  // ── Admission-register facts (statutory TC, Annexure-I). All optional. ──
+  @IsOptional() @IsString() @Length(0, 120) fatherName?: string;
+  @IsOptional() @IsString() @Length(0, 120) motherName?: string;
+  @IsOptional() @IsString() @Length(0, 60) nationality?: string;
+  @IsOptional() @IsIn(STUDENT_CATEGORIES) category?: string;
+  @IsOptional() @IsDateString() firstAdmissionDate?: string;
+  @IsOptional() @IsString() @Length(0, 40) firstAdmissionClass?: string;
+  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
+  @IsOptional() @IsString() @Length(0, 40) penId?: string;
 }
 
 export class UpdateStudentDto {
@@ -426,6 +437,16 @@ export class UpdateStudentDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  // ── Admission-register facts (statutory TC, Annexure-I). All optional. ──
+  @IsOptional() @IsString() @Length(0, 120) fatherName?: string;
+  @IsOptional() @IsString() @Length(0, 120) motherName?: string;
+  @IsOptional() @IsString() @Length(0, 60) nationality?: string;
+  @IsOptional() @IsIn(STUDENT_CATEGORIES) category?: string;
+  @IsOptional() @IsDateString() firstAdmissionDate?: string;
+  @IsOptional() @IsString() @Length(0, 40) firstAdmissionClass?: string;
+  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
+  @IsOptional() @IsString() @Length(0, 40) penId?: string;
 }
 
 // ── Login invites (students + teachers) ──────────────────────────────────────

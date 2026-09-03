@@ -10,6 +10,7 @@ import { OwnerHostGuard } from '../../common/auth/owner-host.guard';
 import { PressController } from './press.controller';
 import { PressOrdersController } from './press-orders.controller';
 import { PressOrdersService } from './press-orders.service';
+import { PressOverviewService } from './press-overview.service';
 import { PressPortalController } from './press-portal.controller';
 import { PressRegisterService } from './press-register.service';
 import { ReportCardService } from './report-card.service';
@@ -26,7 +27,7 @@ import { ReportCardService } from './report-card.service';
 @Module({
   imports: [JwtModule.register({}), AuthModule, FeaturesModule, TenancyModule],
   controllers: [PressController, PressOrdersController, OperatorOrdersController, PressPortalController],
-  providers: [ReportCardService, CertificateService, PressRegisterService, PressOrdersService, OperatorOrdersService, OwnerHostGuard],
+  providers: [ReportCardService, CertificateService, PressRegisterService, PressOrdersService, PressOverviewService, OperatorOrdersService, OwnerHostGuard],
   exports: [ReportCardService],
 })
 export class PressModule {}

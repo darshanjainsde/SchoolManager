@@ -655,7 +655,7 @@ export class ReportCardService {
       tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
       tx.schoolProfile.findFirst({
         where: { schoolId },
-        select: { logoAssetId: true, addressLine1: true, city: true, region: true, phone: true, email: true },
+        select: { logoAssetId: true, addressLine1: true, city: true, region: true, phone: true, email: true, board: true, affiliationNo: true },
       }),
     ]);
     let logoUrl: string | null = null;
@@ -674,6 +674,8 @@ export class ReportCardService {
       addressLine,
       phone: profile?.phone ?? null,
       email: profile?.email ?? null,
+      board: profile?.board ?? null,
+      affiliationNo: profile?.affiliationNo ?? null,
     };
   }
 }
