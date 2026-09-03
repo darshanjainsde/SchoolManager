@@ -2557,3 +2557,57 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
 .sk-enq-tl[data-kind="SYSTEM"] .dot { background: var(--sk-line-2); }
 .sk-enq-tl .body { font-size: 13px; }
 .sk-enq-tl .who { font-size: 11px; color: var(--sk-ink-3); }
+
+/* ── DATA TABLES ───────────────────────────────────────────────────────────
+   Every table in this console was hand-rolled from two inline style objects
+   (`thStyle` / `tdStyle`) copied file to file, which is why no two of them
+   line up and none of them has a sticky header. This is that recipe, once.
+
+   The rule that matters: a row is ONE LINE. The students table stacked a
+   status pill above a full-size button inside a cell, which made every row
+   ~160px tall — eight hundred children became a page you scroll for a minute
+   to reach the letter S. Actions belong beside the fact they act on, at icon
+   size. */
+
+.sk-tblwrap {
+  overflow: auto;
+  /* A long roster scrolls INSIDE its card against a header that stays put.
+     Paging the whole window loses the column names after four rows. */
+  max-height: min(70vh, 720px);
+  border-radius: var(--sk-r);
+}
+.sk-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sk-tbl th {
+  text-align: left; padding: 10px 14px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--sk-ink-3);
+  white-space: nowrap; background: var(--sk-card);
+  position: sticky; top: 0; z-index: 1;
+  /* A sticky header needs its own rule: a border-bottom on a sticky element
+     scrolls away with the cell in some engines, a box-shadow does not. */
+  box-shadow: inset 0 -1px 0 var(--sk-line);
+}
+.sk-tbl td {
+  padding: 9px 14px; border-top: 1px solid var(--sk-line); vertical-align: middle;
+  /* One line by default. A cell that genuinely holds prose opts out. */
+  white-space: nowrap;
+}
+.sk-tbl td[data-wrap="true"] { white-space: normal; }
+.sk-tbl tbody tr:hover td { background: var(--sk-bg-2); }
+.sk-tbl .num { font-family: var(--sk-mono); font-size: 12px; color: var(--sk-ink-3); }
+/* Actions sit hard right, so the eye finds them in the same place on every
+   row however wide the table is. */
+.sk-tbl th.acts, .sk-tbl td.acts { text-align: right; width: 1%; }
+.sk-tbl td.acts > span { display: inline-flex; gap: 6px; justify-content: flex-end; align-items: center; }
+/* A cell that pairs a status with the action that changes it. */
+.sk-tbl .pairs { display: inline-flex; align-items: center; gap: 7px; }
+/* Secondary columns fold away rather than forcing a horizontal scrollbar on a
+   phone. Nothing here is the only place its fact appears — the child's page
+   carries all of it. */
+@media (max-width: 900px) { .sk-tbl [data-priority="2"] { display: none; } }
+
+/* A slim row of controls above a table: search, a filter, a count. It was a
+   whole card holding one select, which read as a section of the page rather
+   than as a control on the table below it. */
+.sk-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.sk-toolbar .grow { flex: 1 1 240px; min-width: 0; }
+.sk-toolbar .count { font-size: 12px; color: var(--sk-ink-3); margin-left: auto; white-space: nowrap; }

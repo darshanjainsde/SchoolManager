@@ -515,23 +515,6 @@ function apiErrorMessage(err: Error): string {
   return err.message;
 }
 
-const thStyle: CSSProperties = {
-  textAlign: 'left',
-  padding: '11px 14px',
-  fontSize: 10.5,
-  fontWeight: 700,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: 'var(--sk-ink-3)',
-  whiteSpace: 'nowrap',
-};
-
-const tdStyle: CSSProperties = {
-  padding: '11px 14px',
-  fontSize: 13,
-  borderTop: '1px solid var(--sk-line)',
-};
-
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function StudentsPage() {
@@ -543,6 +526,7 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState('');
+  const [search, setSearch] = useState('');
   // Id of the student added in this session, so their row can be seen landing
   // in the register rather than just being there on the next render.
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
@@ -704,7 +688,25 @@ export default function StudentsPage() {
     }
   }
 
-  const students = studentsQuery.data ?? [];
+  const allStudents = studentsQuery.data ?? [];
+  /**
+   * Search is over what is already loaded, not a second request.
+   *
+   * The list arrives whole under a ceiling, so filtering it here is instant
+   * and cannot disagree with the counts above it. Name, admission number and
+   * guardian, because those are the three things somebody at the office
+   * counter is holding when they need to find a child — an admission slip, a
+   * parent on the phone, or a name.
+   */
+  const students = allStudents.filter((st) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      `${st.firstName} ${st.lastName}`.toLowerCase().includes(q) ||
+      st.admissionNo.toLowerCase().includes(q) ||
+      (st.guardianName ?? '').toLowerCase().includes(q)
+    );
+  });
   const unassignedCount = students.filter((s) => !s.classSectionId).length;
   const loginCount = students.filter((s) => s.userId).length;
 
@@ -764,15 +766,23 @@ export default function StudentsPage() {
           <div className="sk-kpi">
             <span className="lab">Students shown</span>
             <span className="n sk-num">{students.length}</span>
-            {classFilter && <span className="hint">Filtered by class</span>}
+            <span className="hint">
+              {search.trim() ? 'filtered by search' : classFilter ? 'filtered by class' : 'on the roll'}
+            </span>
           </div>
           <div className="sk-kpi" data-tone={unassignedCount > 0 ? 'warn' : undefined}>
             <span className="lab">Without a class</span>
             <span className="n sk-num">{unassignedCount}</span>
+            <span className="hint">
+              {unassignedCount > 0 ? 'need placing in a section' : 'everybody is placed'}
+            </span>
           </div>
           <div className="sk-kpi" data-tone="good">
             <span className="lab">Portal logins</span>
             <span className="n sk-num">{loginCount}</span>
+            <span className="hint">
+              {students.length ? `of ${students.length} shown` : 'families who can sign in'}
+            </span>
           </div>
         </div>
       )}
@@ -813,18 +823,25 @@ export default function StudentsPage() {
         </div>
       )}
 
-      {/* Class filter */}
-      <div className="sk-card" style={{ marginBottom: 18, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <label htmlFor="class-filter" className="sk-lab" style={{ flex: 'none' }}>
-          Filter by class
-        </label>
+      {/* The controls that act on the table below, as a strip rather than a
+          card: a whole panel holding one select read as a section of the page
+          instead of as a filter on the list. */}
+      <div className="sk-toolbar">
+        <input
+          className="sk-input grow"
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search a name, an admission number or a guardian…"
+          aria-label="Search students"
+        />
         <select
           id="class-filter"
+          className="sk-input"
+          style={{ maxWidth: 240, width: 'auto' }}
           value={classFilter}
           onChange={(e) => setClassFilter(e.target.value)}
-          style={{ ...fieldStyle, maxWidth: 260 }}
-          onFocus={ringFocus}
-          onBlur={ringBlur}
+          aria-label="Filter by class"
         >
           <option value="">All classes</option>
           {(classesQuery.data ?? []).map((c) => (
@@ -833,6 +850,11 @@ export default function StudentsPage() {
             </option>
           ))}
         </select>
+        {search.trim() ? (
+          <span className="count">
+            {students.length} of {allStudents.length}
+          </span>
+        ) : null}
       </div>
 
       {/* Loading / error */}
@@ -841,24 +863,32 @@ export default function StudentsPage() {
 
       {/* Empty state */}
       {!studentsQuery.isLoading && students.length === 0 && (
-        <p className="sk-state">No students found. Add one above.</p>
+        <p className="sk-state">
+          {allStudents.length === 0
+            ? 'No students yet. Add the first one above.'
+            : search.trim()
+              ? `Nobody matches “${search.trim()}”.`
+              : 'No students in that class.'}
+        </p>
       )}
 
       {/* Students table */}
       {students.length > 0 && (
         <div className="sk-card" style={{ overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="sk-tblwrap">
+            <table className="sk-tbl">
               <thead>
                 <tr>
-                  <th style={thStyle}>Roll no.</th>
-                  <th style={thStyle}>Name</th>
-                  <th style={thStyle}>Admission no.</th>
-                  <th style={thStyle}>Class</th>
-                  <th style={thStyle}>Guardian</th>
-                  <th style={thStyle}>Contact</th>
-                  <th style={thStyle}>Portal login</th>
-                  <th style={thStyle} />
+                  <th>Roll</th>
+                  <th>Name</th>
+                  <th>Admission no.</th>
+                  <th>Class</th>
+                  {/* Guardian and contact fold away on a phone: neither is the
+                      only place it appears — the child's own page has both. */}
+                  <th data-priority="2">Guardian</th>
+                  <th data-priority="2">Contact</th>
+                  <th>Portal login</th>
+                  <th className="acts"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -873,10 +903,8 @@ export default function StudentsPage() {
                   <tr key={student.id} className={student.id === justAddedId ? 'sk-pinin sk-in' : undefined}>
                     {/* Roll and admission numbers are read down the column, so
                         they take the register's monospace face. */}
-                    <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }} className="sk-num">
-                      {student.rollNo ?? '—'}
-                    </td>
-                    <td style={{ ...tdStyle, fontWeight: 650 }}>
+                    <td className="num">{student.rollNo ?? '—'}</td>
+                    <td style={{ fontWeight: 650 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <StudentAvatar
                           student={student}
@@ -890,10 +918,8 @@ export default function StudentsPage() {
                         </Link>
                       </div>
                     </td>
-                    <td style={{ ...tdStyle, color: 'var(--sk-ink-3)' }} className="sk-num">
-                      {student.admissionNo}
-                    </td>
-                    <td style={tdStyle}>
+                    <td className="num">{student.admissionNo}</td>
+                    <td>
                       {classBadgeLabel(student) ? (
                         <span className="sk-pill" data-tone="info">
                           {classBadgeLabel(student)}
@@ -902,37 +928,49 @@ export default function StudentsPage() {
                         <span className="sk-muted">—</span>
                       )}
                     </td>
-                    <td style={tdStyle}>{student.guardianName ?? <span className="sk-muted">—</span>}</td>
-                    <td style={tdStyle}>{student.guardianPhone ?? <span className="sk-muted">—</span>}</td>
-                    <td style={tdStyle}>
-                      {student.userId ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span className="sk-pill" data-tone="good" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <CheckCircle2 className="h-3 w-3" />
-                            Has login
-                          </span>
-                          <button
-                            className="sk-btn sk-press"
-                            disabled={resendInviteMutation.isPending}
-                            onClick={() => resendInviteMutation.mutate(student.id)}
-                          >
-                            <Send className="h-3.5 w-3.5" />
-                            Resend invite
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          className="sk-btn sk-press"
-                          disabled={createLoginMutation.isPending}
-                          onClick={() => handleCreateLogin(student)}
-                        >
-                          <KeyRound className="h-3.5 w-3.5" />
-                          Create login
-                        </button>
-                      )}
+                    <td data-priority="2">{student.guardianName ?? <span className="sk-muted">—</span>}</td>
+                    <td data-priority="2" className="num">{student.guardianPhone ?? '—'}</td>
+                    <td>
+                      {/* The state, and the one thing you do about it, on ONE
+                          line. A full-width button under a pill is what made
+                          every row two lines tall. */}
+                      <span className="pairs">
+                        {student.userId ? (
+                          <>
+                            <span className="sk-pill" data-tone="good" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <CheckCircle2 className="h-3 w-3" />
+                              Has login
+                            </span>
+                            <button
+                              className="sk-btn sk-press"
+                              data-icon
+                              aria-label={`Resend the portal invite to ${student.firstName} ${student.lastName}`}
+                              title="Resend invite"
+                              disabled={resendInviteMutation.isPending}
+                              onClick={() => resendInviteMutation.mutate(student.id)}
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="sk-pill" data-tone="neutral">No login</span>
+                            <button
+                              className="sk-btn sk-press"
+                              data-icon
+                              aria-label={`Create a portal login for ${student.firstName} ${student.lastName}`}
+                              title="Create login"
+                              disabled={createLoginMutation.isPending}
+                              onClick={() => handleCreateLogin(student)}
+                            >
+                              <KeyRound className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </td>
-                    <td style={tdStyle}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <td className="acts">
+                      <span>
                         <button
                           className="sk-btn sk-press"
                           data-icon
@@ -956,7 +994,7 @@ export default function StudentsPage() {
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                      </div>
+                      </span>
                     </td>
                   </tr>
                 ))}
