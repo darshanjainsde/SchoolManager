@@ -3,6 +3,35 @@
 Standing instructions. These are not suggestions — each one exists because
 skipping it already cost real time or shipped a real defect.
 
+## The environments (read this before touching data or deploys)
+
+| | Branch | What it is |
+|---|---|---|
+| **Production** | `main` | Real schools. Migrations are a MANUAL `db-migrate` dispatch (`environment=production`); Darshan runs it. Never seed, never demo-data — the workflow has no production option by design. |
+| **Staging** | `staging` | The integration branch and the only environment that gets seeded. Push to `staging` auto-applies migrations AND re-runs `demo-data` when the seed files change. |
+
+**Staging facts** (credentials live in the GitHub `staging` Environment and in
+Vercel's Preview env — never in this repo, never in chat):
+
+- Postgres: Supabase project ref `pnczxkyteaocpdoufwyz` (`db.<ref>.supabase.co`).
+- Object storage: Supabase Storage on the SAME project. **As of 3 Sept 2026 the
+  API's `S3_ENDPOINT` still pointed at an older ref (`uehgshnytylrjdclxxig`)
+  that no longer exists — it answers `410 Project removed`, so every upload
+  (fee proofs, logos, print-order PDFs) 500s.** Fix is env-only: point
+  `S3_ENDPOINT` / keys / `S3_BUCKET` at the live project.
+- Hosts: `raffles.test.sckools.com` (demo school), `api.test.sckools.com`,
+  `owner.test.sckools.com`.
+- **The demo school is `raffles`, and every one of its logins has the password
+  `password`** — deliberately, for testing ease. `admin@raffles.test`,
+  `teacher1@raffles.test`, … all the same. The demo-data workflow's default
+  input sets it, so a push-triggered run keeps it that way.
+- Student identifiers there follow ONE standard: `admissionNo` == `code` ==
+  `RPS-00001`, allocated in grade → section → roll order by the seed.
+
+**Never paste a credential into a chat, a file, or a commit.** If one arrives
+that way, say so and treat it as compromised — the fix is rotation, not
+silence.
+
 ## Before touching anything
 
 1. **Read `docs/superpowers/LIBRARY-TRAPS.md`.** 16 checks, each paid for by a

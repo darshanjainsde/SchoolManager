@@ -4,6 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'node:crypto';
 import { loadEnv } from '@skoolos/config';
+import { ApiError } from '../errors/api-error';
 
 export interface UploadResult {
   key: string;
@@ -69,7 +70,17 @@ export class StorageService {
         httpStatus: e?.$metadata?.httpStatusCode,
         name: e?.name,
       });
-      throw err;
+      // A dead store is an OPERATOR problem, and the person holding the file
+      // deserves to be told that rather than "Something went wrong" — which
+      // reads as "your file is bad" and sends them round the loop again.
+      // (Staging, 3 Sept 2026: the Supabase project behind S3_ENDPOINT was
+      // deleted; every upload 500'd with a generic toast for days.)
+      throw new ApiError(
+        'STORAGE_UNAVAILABLE',
+        'The file store is unreachable right now, so the upload could not be saved. Nothing was recorded — please try again in a few minutes, and tell Sckools if it keeps failing.',
+        503,
+        'file',
+      );
     }
     return { key, url: this.publicUrl(key) };
   }
