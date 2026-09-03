@@ -294,61 +294,69 @@ async function main() {
   //     who is MOVED into the matching canonical section instead. Their paper
   //     history is statutory and the register refuses to delete it (the
   //     press_issue_immutable trigger), so the child moves and keeps it.
-  await step(async (db) => {
-    const canonIds = new Set(sections.map((s) => s.id));
-    // EXPLICIT schoolId on every clause below. This seed runs with the
-    // PLATFORM connection (it sets DATABASE_URL_PLATFORM at the top), which
-    // holds BYPASSRLS — so tenant scoping is NOT implied here the way it is
-    // in the app. Caught locally: an unscoped sweep renumbered another
-    // school's students. On staging that would have been every school.
+  // Each stray section is its own transaction. `step()` opens an INTERACTIVE
+  // transaction and Prisma closes those after five seconds: moving 300
+  // children inside one died on staging with "Transaction not found" after
+  // passing locally, where there were nine. Long work is chunked here for the
+  // same reason the roll is written with createMany.
+  const strayPlan = await step(async (db) => {
+    const canonIds = new Set(sections.map((sx) => sx.id));
+    // EXPLICIT schoolId on every clause here and below. This seed runs with
+    // the PLATFORM connection (it sets DATABASE_URL_PLATFORM at the top),
+    // which holds BYPASSRLS — tenant scoping is NOT implied the way it is in
+    // the app. Caught locally: an unscoped sweep renumbered ANOTHER school's
+    // students; on staging that would have been every school.
     const all = await db.classSection.findMany({
       where: { schoolId },
       include: { grade: { select: { id: true, name: true } } },
     });
-    const strays = all.filter((s) => !canonIds.has(s.id));
-    if (strays.length === 0) return;
+    return all.filter((sx) => !canonIds.has(sx.id));
+  });
 
-    // "Class 7" and "7-A" both mean VII here; anything unmappable lands in the
-    // highest canonical grade rather than being invented into existence.
+  if (strayPlan.length > 0) {
+    // "Class 7" and "7-A" both mean VII here; anything unmappable lands in
+    // the highest canonical grade rather than being invented into existence.
     const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
     const target = (gradeName: string, secName: string): string => {
       const n = Number(gradeName.replace(/[^0-9]/g, ''));
       const roman = Number.isFinite(n) && n >= 1 && n <= 10 ? ROMAN[n - 1]! : 'X';
       const want = `${roman}-${secName}`;
-      return (sections.find((s) => s.label === want) ?? sections.find((s) => s.gradeName === roman)!).id;
+      return (sections.find((sx) => sx.label === want) ?? sections.find((sx) => sx.gradeName === roman)!).id;
     };
 
-    // Children MOVE; they are never deleted. Two append-only guards make the
+    // Children MOVE; they are never deleted. Two append-only guards make
     // deletion impossible anyway — the Press register refuses to lose a TC,
     // and FeeLedgerEntry refuses to let a child's money history vanish with
-    // their row (staging proved it: the first version died on exactly that).
-    // Moving is also the honest act: these are real rows with attendance,
-    // marks and invoices behind them.
+    // their row (staging proved that one). Moving is also the honest act:
+    // these are real rows with attendance, marks and invoices behind them.
     let moved = 0;
-    for (const stray of strays) {
-      const kids = await db.student.findMany({
-        where: { schoolId, classSectionId: stray.id }, select: { id: true },
-      });
+    for (const stray of strayPlan) {
       const to = target(stray.grade.name, stray.name);
-      for (const kid of kids) {
-        await db.student.update({ where: { id: kid.id }, data: { classSectionId: to } });
-        moved += 1;
-      }
-      await db.classSection.delete({ where: { id: stray.id } });
+      moved += await step(async (db) => {
+        const done = await db.student.updateMany({
+          where: { schoolId, classSectionId: stray.id },
+          data: { classSectionId: to },
+        });
+        await db.classSection.delete({ where: { id: stray.id } });
+        return done.count;
+      });
     }
 
     // A grade with no sections left is a naming leftover ("Class 11"), not a
     // grade the school teaches.
-    let gradesGone = 0;
-    for (const g of new Map(strays.map((s) => [s.grade.id, s.grade])).values()) {
-      const left = await db.classSection.count({ where: { schoolId, gradeId: g.id } });
-      if (left === 0) {
-        await db.grade.delete({ where: { id: g.id } });
-        gradesGone += 1;
+    const gradesGone = await step(async (db) => {
+      let n = 0;
+      for (const g of new Map(strayPlan.map((sx) => [sx.grade.id, sx.grade])).values()) {
+        const left = await db.classSection.count({ where: { schoolId, gradeId: g.id } });
+        if (left === 0) {
+          await db.grade.delete({ where: { id: g.id } });
+          n += 1;
+        }
       }
-    }
-    console.log(`  ✓ normalised: ${strays.length} stray sections and ${gradesGone} grades removed, ${moved} students moved into the canonical shape`);
-  });
+      return n;
+    });
+    console.log(`  ✓ normalised: ${strayPlan.length} stray sections and ${gradesGone} grades removed, ${moved} students moved into the canonical shape`);
+  }
 
   // ── Teachers, staff and their logins ───────────────────────────────────────
   const passwordHash = await hash(PW);
@@ -480,8 +488,8 @@ async function main() {
   // Two passes, because `(schoolId, admissionNo)` and `(schoolId, code)` are
   // unique: assigning in place would collide the moment a number in use is
   // handed to a different child. Everyone parks on a temporary value first.
-  await step(async (db) => {
-    const order = new Map(sections.map((s, i) => [s.id, i]));
+  const plan = await step(async (db) => {
+    const order = new Map(sections.map((sx, i) => [sx.id, i]));
     const kids = await db.student.findMany({
       // schoolId is load-bearing here, not decoration — see the note above.
       where: { schoolId, classSectionId: { not: null } },
@@ -496,25 +504,49 @@ async function main() {
     const changing = wanted.filter((k) => k.admissionNo !== k.want || k.code !== k.want);
     if (changing.length === 0) {
       console.log(`  ✓ ${kids.length} students on the roll — numbering already ${num(1)}…${num(kids.length)}`);
-      return;
+      return null;
     }
-    for (const k of changing) {
-      await db.student.update({
-        where: { id: k.id },
-        data: { admissionNo: `TMP-${k.id}`, code: `TMP-${k.id}` },
+    return { kids: kids.length, changing, wanted };
+  });
+
+  if (plan && plan.changing.length > 0) {
+    // Two passes, in CHUNKS. `(schoolId, admissionNo)` and `(schoolId, code)`
+    // are unique, so assigning in place would collide the moment a number in
+    // use is handed to another child — everyone parks on a temporary value
+    // first. And each chunk is its own transaction because Prisma closes an
+    // interactive one after five seconds; 1,100 updates in a single `step()`
+    // is how the staging run died.
+    const CHUNK = 40;
+    for (let i = 0; i < plan.changing.length; i += CHUNK) {
+      const slice = plan.changing.slice(i, i + CHUNK);
+      await step(async (db) => {
+        for (const k of slice) {
+          await db.student.update({
+            where: { id: k.id },
+            data: { admissionNo: `TMP-${k.id}`, code: `TMP-${k.id}` },
+          });
+        }
       });
     }
-    let rollInSection = new Map<string, number>();
-    for (const k of wanted) {
+    const rollInSection = new Map<string, number>();
+    const finals = plan.wanted.map((k) => {
       const n = (rollInSection.get(k.classSectionId!) ?? 0) + 1;
       rollInSection.set(k.classSectionId!, n);
-      await db.student.update({
-        where: { id: k.id },
-        data: { admissionNo: k.want, code: k.want, rollNo: String(n) },
+      return { ...k, roll: String(n) };
+    });
+    for (let i = 0; i < finals.length; i += CHUNK) {
+      const slice = finals.slice(i, i + CHUNK);
+      await step(async (db) => {
+        for (const k of slice) {
+          await db.student.update({
+            where: { id: k.id },
+            data: { admissionNo: k.want, code: k.want, rollNo: k.roll },
+          });
+        }
       });
     }
-    console.log(`  ✓ ${kids.length} students on the roll — renumbered ${changing.length} to ${num(1)}…${num(kids.length)}`);
-  });
+    console.log(`  ✓ ${plan.kids} students on the roll — renumbered ${plan.changing.length} to ${num(1)}…${num(plan.kids)}`);
+  }
 
   // ── Timetable ──────────────────────────────────────────────────────────────
   await step(async (db) => {
