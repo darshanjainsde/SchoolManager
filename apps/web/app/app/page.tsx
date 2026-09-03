@@ -207,8 +207,17 @@ export default function DashboardPage() {
         <p>Ask for anything, act in one tap — the desk is yours.</p>
       </header>
 
-      {/* The command bar — the Front Desk's front door. */}
-      <div style={{ marginBottom: 18 }}>
+      {/* The command bar — the Front Desk's front door.
+          position:relative + z-index on THIS wrapper is load-bearing: it is a
+          direct child of the layout's `.sk-anim`, whose entrance animation
+          (fill-mode: both) leaves every sibling a PERSISTENT stacking
+          context — so without it, the bell/dock row (a later sibling) paints
+          OVER the bar's dropdown no matter how high the dropdown's own
+          z-index goes. Proven in headless Chrome with the real sk-rise rule:
+          later-sibling card covers a z-40 menu; wrapper z-60 wins. Same root
+          as the twice-logged trapped-modal bug, in z-order form. 60 stays
+          below the drawers' 80, so a drawer still covers everything. */}
+      <div style={{ marginBottom: 18, position: 'relative', zIndex: 60 }}>
         <CommandBar actions={barActions} />
       </div>
 
