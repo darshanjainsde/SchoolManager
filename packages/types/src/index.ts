@@ -1451,6 +1451,6 @@ export interface PressOverview {
 
 /** `POST /manage/press/certificates/bulk` — one class, one type, one run. */
 export interface BulkCertificateResult {
-  issued: { studentId: string; name: string; serial: string; snapshot: CertificateSnapshot }[];
+  issued: { studentId: string; name: string; serial: string; issuedAt: string; snapshot: CertificateSnapshot }[];
   skipped: { studentId: string; name: string; reason: string }[];
 }

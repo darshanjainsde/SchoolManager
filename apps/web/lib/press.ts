@@ -81,3 +81,80 @@ export function specLabel(spec: PrintSpec): string {
     FINISH_LABEL[spec.finish] ?? null,
   ].filter(Boolean).join(' · ');
 }
+
+// ── Statutory wording helpers (Annexure-I prints dates and classes in words) ─
+
+const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+  'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+const ORDINAL: Record<number, string> = {
+  1: 'First', 2: 'Second', 3: 'Third', 5: 'Fifth', 8: 'Eighth', 9: 'Ninth', 12: 'Twelfth',
+};
+
+function below100(n: number): string {
+  if (n < 20) return ONES[n]!;
+  return `${TENS[Math.floor(n / 10)]}${n % 10 ? ` ${ONES[n % 10]}` : ''}`;
+}
+
+function ordinalWord(n: number): string {
+  if (ORDINAL[n]) return ORDINAL[n]!;
+  const base = below100(n);
+  if (base.endsWith('y')) return `${base.slice(0, -1)}ieth`;
+  if (n > 20 && n % 10 !== 0) {
+    const tens = TENS[Math.floor(n / 10)]!;
+    return `${tens} ${ordinalWord(n % 10)}`;
+  }
+  return `${base}th`;
+}
+
+function yearInWords(y: number): string {
+  const thousands = Math.floor(y / 1000);
+  const rest = y % 1000;
+  const hundreds = Math.floor(rest / 100);
+  const tail = rest % 100;
+  return [
+    `${ONES[thousands]} Thousand`,
+    hundreds ? `${ONES[hundreds]} Hundred` : '',
+    tail ? below100(tail) : '',
+  ].filter(Boolean).join(' ');
+}
+
+/** "2014-03-12" → "Twelfth March Two Thousand Fourteen" — Annexure field 6. */
+export function dateInWords(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const day = Number(new Intl.DateTimeFormat('en-IN', { day: 'numeric', timeZone: 'Asia/Kolkata' }).format(d));
+  const month = new Intl.DateTimeFormat('en-IN', { month: 'long', timeZone: 'Asia/Kolkata' }).format(d);
+  const year = Number(new Intl.DateTimeFormat('en-IN', { year: 'numeric', timeZone: 'Asia/Kolkata' }).format(d));
+  return `${ordinalWord(day)} ${month} ${yearInWords(year)}`;
+}
+
+const ROMAN: Record<string, number> = {
+  I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10, XI: 11, XII: 12,
+};
+
+/** "VII" / "Class 7" / "7" → "Seventh". Unparseable labels return ''. */
+export function classInWords(label: string | null | undefined): string {
+  if (!label) return '';
+  const cleaned = label.replace(/^class\s+/i, '').trim();
+  const n = ROMAN[cleaned.toUpperCase()] ?? (/^\d{1,2}$/.test(cleaned) ? Number(cleaned) : NaN);
+  if (Number.isNaN(n) || n < 1 || n > 20) return '';
+  return ordinalWord(n);
+}
+
+/** The office's chosen report-card template — a per-browser convenience.
+ *  Presentation only: both templates render the same snapshot. */
+export type PressTemplate = 'CLASSIC' | 'BOARD';
+const TEMPLATE_KEY = 'sk-press-template';
+
+export function getPressTemplate(): PressTemplate {
+  try {
+    return localStorage.getItem(TEMPLATE_KEY) === 'CLASSIC' ? 'CLASSIC' : 'BOARD';
+  } catch {
+    return 'BOARD';
+  }
+}
+
+export function setPressTemplate(t: PressTemplate): void {
+  try { localStorage.setItem(TEMPLATE_KEY, t); } catch { /* a picker that cannot remember still picks */ }
+}

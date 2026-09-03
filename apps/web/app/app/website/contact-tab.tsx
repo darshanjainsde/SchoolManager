@@ -28,6 +28,10 @@ export default function ContactTab({ form }: { form: SiteForm }) {
     setCountry,
     mapEmbedUrl,
     setMapEmbedUrl,
+    board,
+    setBoard,
+    affiliationNo,
+    setAffiliationNo,
     socialLinks,
     addSocialLink,
     removeSocialLink,
@@ -79,6 +83,29 @@ export default function ContactTab({ form }: { form: SiteForm }) {
               placeholder="42 Garden Avenue"
             />
           </div>
+          {/* The statutory head: what the Press prints on TCs and report
+              cards. Lives with the address because it IS school identity. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="board">Board (prints on certificates)</Label>
+              <Input
+                id="board"
+                value={board}
+                onChange={(e) => setBoard(e.target.value)}
+                placeholder="CBSE, New Delhi"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="affno">Affiliation number</Label>
+              <Input
+                id="affno"
+                value={affiliationNo}
+                onChange={(e) => setAffiliationNo(e.target.value)}
+                placeholder="1730456"
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="addr2">Address line 2</Label>
             <Input

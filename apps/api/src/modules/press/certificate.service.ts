@@ -236,7 +236,7 @@ export class CertificateService {
         if ('skippedFor' in one) {
           result.skipped.push({ studentId: child.id, name, reason: one.skippedFor });
         } else {
-          result.issued.push({ studentId: child.id, name, serial: one.serial, snapshot: one.snapshot });
+          result.issued.push({ studentId: child.id, name, serial: one.serial, issuedAt: one.issuedAt, snapshot: one.snapshot });
         }
       } catch (e) {
         if (e instanceof ApiError) {

@@ -8,7 +8,7 @@ import type { PressDocType, PressIssueRow, PressRegisterPage, PressSnapshot } fr
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
-import { PRESS_TYPE_LABEL, pressDateLabel, printPressSheets } from '@/lib/press';
+import { PRESS_TYPE_LABEL, pressDateLabel, printPressSheets, getPressTemplate } from '@/lib/press';
 import { CertificateSheet, ReportCardSheet } from '@/components/press/press-sheets';
 import { PressPrintPortal } from '@/components/press/press-print-portal';
 import '@/components/press/press-print.css';
@@ -39,6 +39,13 @@ export default function PressRegisterPage() {
   /** The entry whose void-note row is open, and the note being typed. */
   const [voiding, setVoiding] = useState<{ id: string; note: string } | null>(null);
   const printedIdRef = useRef<string | null>(null);
+
+  // The command bar and the Press counter link here as /register?q=SERIAL —
+  // seed the filter from the URL once, after mount (no Suspense dance).
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('q');
+    if (fromUrl) setQ(fromUrl);
+  }, []);
 
   // Print AFTER the reprint content committed — a timer raced React and could
   // open the dialog on an empty portal (blank pages).
@@ -242,6 +249,7 @@ export default function PressRegisterPage() {
               snapshot={reprint.snapshot}
               serial={reprint.serial}
               stamp={reprint.voidedAt ? 'CANCELLED' : 'DUPLICATE'}
+              template={getPressTemplate()}
             />
           ) : (
             <CertificateSheet
