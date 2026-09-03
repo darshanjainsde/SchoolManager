@@ -23,6 +23,9 @@ const UUID = '00000000-0000-0000-0000-000000000001';
 /** Every `/manage/press/*` route: office only (SCHOOL_ADMIN + STAFF). */
 const OFFICE_ROUTES: [method: 'get' | 'post' | 'put', path: string][] = [
   ['get', '/manage/press/overview'],
+  ['get', '/manage/press/results'],
+  ['post', '/manage/press/results/nudge'],
+  ['post', '/manage/press/results/generate'],
   ['post', '/manage/press/certificates/bulk'],
   ['get', '/manage/press/years'],
   ['get', '/manage/press/classes'],

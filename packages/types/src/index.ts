@@ -408,6 +408,8 @@ export interface ExamList {
 export interface SavedResult {
   studentId: string;
   marks: number;
+  /** PRESENT | AB | EX — see RESULT_STATUSES. */
+  status: string;
   publishedAt: string | null;
 }
 
@@ -613,6 +615,11 @@ export const NOTIFICATION_KINDS = [
   // ONE teacher about THEIR class and links to their own library list — and
   // because a school that mutes announcements must not mute this.
   'LIBRARY',
+  // The Result Room asking a subject teacher for pending marks — addressed to
+  // ONE teacher about THEIR class, links to their own results screen, and
+  // carries the result day. Same reasoning as LIBRARY: never muteable with
+  // announcements.
+  'RESULTS_DUE',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -953,6 +960,8 @@ export interface ReportWindowRow {
   endDate: string;
   /** Report cards already issued under this window, across all classes. */
   issuedCount: number;
+  /** Result day — when scores are due and cards go out. Null = not set. */
+  resultDay: string | null;
 }
 
 /** The school masthead every sheet prints. Resolved once at compile/issue time. */
@@ -984,6 +993,11 @@ export interface ReportSubjectLine {
   maxMarks: number;
   pct: number | null;
   grade: GradeBand | null;
+  /** Per-exam breakdown for the Detailed template. AB = absent (counted 0);
+   *  EX = exempted (its max leaves the percentage); null = no row yet. */
+  perExam?: { examId: string; title: string; maxMarks: number; value: number | 'AB' | 'EX' | null }[];
+  /** The max this child could actually sit (total minus EX) — the pro-rata base. */
+  countedMax?: number;
 }
 
 /** One student's compiled card — everything the sheet needs except the batch-level header. */
@@ -999,7 +1013,9 @@ export interface ReportCardStudent {
   attendance: { present: number; total: number; pct: number | null };
   remark: string | null;
   /** Set when a card for this window is already in the register. */
-  issued: { serial: string; issuedAt: string } | null;
+  issued: { serial: string; issuedAt: string } | null;  /** The card's optional blocks — see CardExtras. Absent = never recorded. */
+  extras?: CardExtras;
+
 }
 
 /** `GET /manage/press/report-cards/:windowId/:classSectionId` — the whole batch. */
@@ -1035,7 +1051,8 @@ export interface ReportCardSnapshot {
   subjects: ReportSubjectLine[];
   overall: ReportCardStudent['overall'];
   attendance: ReportCardStudent['attendance'];
-  remark: string | null;
+  remark: string | null;  extras?: CardExtras;
+
 }
 
 /**
@@ -1082,6 +1099,9 @@ export interface CertificateFields {
   games?: string;
   /** 19 · Date of application for the certificate (ISO). */
   dateOfApplication?: string;
+  /** CISCE variant only: the Council's Index Number + year of passing. */
+  indexNo?: string;
+  yearOfPassing?: string;
 }
 
 /** `GET /manage/press/certificates/prepare/:studentId` — the form, prefilled. */
@@ -1116,6 +1136,8 @@ export interface CertificateSnapshot {
   /** The ledger balance at issue time, and whether a TC was issued over it. */
   duesMinor: number;
   duesOverride: boolean;
+  /** Which statutory face this snapshot was issued under — frozen with it. */
+  variant?: CertVariant;
 }
 
 export type PressSnapshot = ReportCardSnapshot | CertificateSnapshot;
@@ -1453,4 +1475,79 @@ export interface PressOverview {
 export interface BulkCertificateResult {
   issued: { studentId: string; name: string; serial: string; issuedAt: string; snapshot: CertificateSnapshot }[];
   skipped: { studentId: string; name: string; reason: string }[];
+}
+
+// ── The Result Room ─────────────────────────────────────────────────────────
+
+export const RESULT_STATUSES = ['PRESENT', 'AB', 'EX'] as const;
+export type ResultStatus = (typeof RESULT_STATUSES)[number];
+
+export function assertResultStatus(v: string): asserts v is ResultStatus {
+  if (!(RESULT_STATUSES as readonly string[]).includes(v)) {
+    throw new Error(`Invalid result status: "${v}"`);
+  }
+}
+
+export const CERT_VARIANTS = ['CBSE', 'CISCE', 'STATE'] as const;
+export type CertVariant = (typeof CERT_VARIANTS)[number];
+
+export function assertCertVariant(v: string): asserts v is CertVariant {
+  if (!(CERT_VARIANTS as readonly string[]).includes(v)) {
+    throw new Error(`Invalid certificate variant: "${v}"`);
+  }
+}
+
+/** The card's optional blocks — print only when recorded, never invented. */
+export interface CardExtras {
+  house?: string;
+  heightCm?: number;
+  weightKg?: number;
+  /** e.g. "Promoted to Class VIII". Free text, final term only. */
+  promotion?: string;
+  /** 3-point co-scholastic grades: A outstanding · B very good · C fair. */
+  coScholastic?: { label: string; grade: 'A' | 'B' | 'C' }[];
+}
+
+/** One subject's readiness inside one class, for one window. */
+export interface ResultRoomSubject {
+  subjectId: string;
+  subjectName: string;
+  /** The exam creator — who the nudge goes to. Null when unresolvable. */
+  teacherUserId: string | null;
+  teacherName: string | null;
+  exams: number;
+  /** roster × exams — every mark that should exist. */
+  expected: number;
+  entered: number;
+  published: number;
+  abCount: number;
+  exCount: number;
+  /** Names still unmarked for at least one exam (capped). */
+  missingStudents: string[];
+  state: 'MISSING' | 'ENTERED' | 'PUBLISHED';
+  lastNudge: { at: string; kind: 'ENTER' | 'PUBLISH' } | null;
+}
+
+export interface ResultRoomClass {
+  id: string;
+  label: string;
+  students: number;
+  issued: number;
+  /** Every subject published for every child — the generation gate. */
+  ready: boolean;
+  /** No exams scheduled in this window at all. */
+  noExams: boolean;
+  subjects: ResultRoomSubject[];
+}
+
+/** `GET /manage/press/results?windowId=` — the whole cockpit in one read. */
+export interface ResultRoomBoard {
+  window: Omit<ReportWindowRow, 'issuedCount'> | null;
+  classes: ResultRoomClass[];
+  /** Every AB in the window — the absentee register (capped). */
+  absentees: { studentId: string; studentName: string; classLabel: string; subjectName: string; examTitle: string }[];
+}
+
+export interface NudgeResultsResponse {
+  notified: { teacherUserId: string; teacherName: string | null }[];
 }

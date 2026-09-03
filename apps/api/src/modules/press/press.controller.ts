@@ -10,10 +10,12 @@ import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { CertificateService } from './certificate.service';
 import { PressOverviewService } from './press-overview.service';
+import { ResultRoomService } from './result-room.service';
 import { PressRegisterService } from './press-register.service';
 import { ReportCardService } from './report-card.service';
 import {
-  BulkCertificatesDto, IssueCertificateDto, IssueReportCardsDto, SaveRemarkDto, SaveWindowDto, VoidIssueDto,
+  BulkCertificatesDto, GenerateClassDto, IssueCertificateDto, IssueReportCardsDto,
+  NudgeResultsDto, SaveRemarkDto, SaveWindowDto, VoidIssueDto,
 } from './press.dto';
 
 /**
@@ -33,6 +35,7 @@ export class PressController {
     private readonly certificates: CertificateService,
     private readonly register: PressRegisterService,
     private readonly overviewSvc: PressOverviewService,
+    private readonly resultRoom: ResultRoomService,
     private readonly tenant: TenantContextService,
   ) {}
 
@@ -58,6 +61,25 @@ export class PressController {
 
   @Get('students') searchStudents(@Query('q') q = '') {
     return this.reportCards.searchStudents(this.sid(), q);
+  }
+
+  // ── The Result Room ───────────────────────────────────────────────────────
+
+  @Get('results')
+  resultBoard(@Query('windowId') windowId?: string) {
+    return this.resultRoom.board(this.sid(), windowId || undefined);
+  }
+
+  /** One tap → the subject teacher's bell. Logged against double-nagging. */
+  @Post('results/nudge') @HttpCode(200)
+  nudgeResults(@CurrentUser() u: SchoolJwtPayload, @Body() dto: NudgeResultsDto) {
+    return this.resultRoom.nudge(this.sid(), dto, u.sub);
+  }
+
+  /** The gate: ready classes generate; unready needs a written, audited reason. */
+  @Post('results/generate') @HttpCode(200)
+  generateClass(@CurrentUser() u: SchoolJwtPayload, @Body() dto: GenerateClassDto) {
+    return this.resultRoom.generate(this.sid(), dto, u.sub);
   }
 
   // ── Report windows ────────────────────────────────────────────────────────

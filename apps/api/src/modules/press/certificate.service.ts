@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
 import {
   assertPressDocType,
+  type CertVariant,
   type BulkCertificateResult,
   type CertificatePrepare,
   type CertificateSnapshot,
@@ -304,6 +305,11 @@ export class CertificateService {
       });
     }
 
+    const profile = await tx.schoolProfile.findFirst({
+      where: { schoolId }, select: { certVariant: true },
+    });
+    const variant = (profile?.certVariant as CertVariant | null) ?? 'CBSE';
+
     const onRollSince = isoDay(student.createdAt);
     const classLabel = student.classSection
       ? `${student.classSection.grade.name}-${student.classSection.name}`
@@ -334,9 +340,12 @@ export class CertificateService {
         ...(dto.nccScout ? { nccScout: dto.nccScout.trim() } : {}),
         ...(dto.games ? { games: dto.games.trim() } : {}),
         ...(dto.dateOfApplication ? { dateOfApplication: dto.dateOfApplication } : {}),
+        ...(dto.indexNo ? { indexNo: dto.indexNo.trim() } : {}),
+        ...(dto.yearOfPassing ? { yearOfPassing: dto.yearOfPassing.trim() } : {}),
       },
       duesMinor,
       duesOverride: Boolean(dto.duesOverride && duesMinor > 0),
+      variant,
     };
 
     const [{ press_next_number: seq }] = await tx.$queryRaw<{ press_next_number: number }[]>`

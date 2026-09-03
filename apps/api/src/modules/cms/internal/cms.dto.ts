@@ -1,3 +1,4 @@
+import { CERT_VARIANTS } from '@skoolos/types';
 import {
   ArrayMaxSize,
   IsArray,
@@ -40,6 +41,8 @@ export class UpdateProfileDto {
   /** Statutory head for TCs: "CBSE, New Delhi" + affiliation number. */
   @IsOptional() @IsString() @Length(0, 80) board?: string;
   @IsOptional() @IsString() @Length(0, 40) affiliationNo?: string;
+  /** Which statutory certificate face to print — CBSE | CISCE | STATE. */
+  @IsOptional() @IsIn(CERT_VARIANTS) certVariant?: string;
   @IsOptional() @IsString() logoAssetId?: string;
   @IsOptional() @IsString() faviconAssetId?: string;
   @IsOptional()
