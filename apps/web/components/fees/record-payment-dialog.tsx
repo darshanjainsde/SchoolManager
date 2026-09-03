@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
+import { Z } from '@/lib/z-layers';
 import { METHOD_LABEL, toMinor, type FeePaymentMethod, type StudentFees } from '@/lib/fees';
 
 /**
@@ -29,7 +31,11 @@ export function RecordPaymentDialog({
   invoices: StudentFees['invoices'];
   onClose: () => void;
 }) {
-  const api = useApi({ audience: 'school' });
+  // hostHeader is NOT optional in practice. Without it the request carries no
+  // X-Skoolos-Host, the API cannot attribute it to a school, and the answer is
+  // "Tenant context required" — which the client reads as a dead session and
+  // signs the person OUT mid-payment. Reported from staging exactly that way.
+  const api = useApi({ audience: 'school', hostHeader: useHost() });
   const qc = useQueryClient();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -77,8 +83,8 @@ export function RecordPaymentDialog({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="skosx fixed inset-0 z-50 grid place-items-center p-4"
-         style={{ background: 'rgba(20,18,36,0.45)' }}>
+    <div className="skosx fixed inset-0 grid place-items-center p-4"
+         style={{ background: 'rgba(20,18,36,0.45)', zIndex: Z.OVERLAY }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label="Record a payment"
            className="sk-card w-full max-w-md" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="sk-card-h">

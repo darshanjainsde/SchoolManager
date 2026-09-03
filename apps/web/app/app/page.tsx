@@ -4,6 +4,7 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { DashboardPulse, MorningBell } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
+import { Z } from '@/lib/z-layers';
 import { useHost } from '@/components/use-host';
 import { BellCard } from './bell-card';
 import { CommandBar, type BarAction } from './command-bar';
@@ -217,7 +218,7 @@ export default function DashboardPage() {
           later-sibling card covers a z-40 menu; wrapper z-60 wins. Same root
           as the twice-logged trapped-modal bug, in z-order form. 60 stays
           below the drawers' 80, so a drawer still covers everything. */}
-      <div style={{ marginBottom: 18, position: 'relative', zIndex: 60 }}>
+      <div style={{ marginBottom: 18, position: 'relative', zIndex: Z.PAGE_CHROME }}>
         <CommandBar actions={barActions} />
       </div>
 

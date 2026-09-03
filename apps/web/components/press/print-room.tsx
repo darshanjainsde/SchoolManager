@@ -7,6 +7,7 @@ import {
   getPressTemplate, PRESS_TEMPLATES, printPressSheets, setPressTemplate, type PressTemplate,
 } from '@/lib/press';
 import { CertificateSheet, ReportCardSheet } from './press-sheets';
+import { Z } from '@/lib/z-layers';
 import { PressPrintPortal } from './press-print-portal';
 import './press-print.css';
 
@@ -63,7 +64,7 @@ export function PrintRoom({ sheets, startIndex = 0, title, onClose }: {
     );
 
   return createPortal(
-    <div className="skosx" style={{ position: 'fixed', inset: 0, zIndex: 90, display: 'flex', flexDirection: 'column', background: 'rgba(15,14,30,0.82)' }}>
+    <div className="skosx" style={{ position: 'fixed', inset: 0, zIndex: Z.VIEWER, display: 'flex', flexDirection: 'column', background: 'rgba(15,14,30,0.82)' }}>
       {/* ── the controls bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', flexWrap: 'wrap', color: '#EDECF6' }}>
         <b style={{ fontSize: 13.5 }}>{title}</b>

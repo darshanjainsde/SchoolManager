@@ -9,6 +9,7 @@ import type { PrintOrderDetail } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
+import { Z } from '@/lib/z-layers';
 
 /**
  * "Print via Sckools" — the order form, one drawer for both kinds:
@@ -93,7 +94,7 @@ export function OrderDrawer({ target, onClose }: { target: OrderTarget; onClose:
     (target.kind === 'REPORT_CARDS' || (title.trim().length >= 2 && !!file && !fileProblem));
 
   return createPortal(
-    <div className="skosx" style={{ position: 'fixed', inset: 0, zIndex: 80 }}>
+    <div className="skosx" style={{ position: 'fixed', inset: 0, zIndex: Z.OVERLAY }}>
       <button aria-label="Close" onClick={onClose}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: 'rgba(15,14,30,0.45)', border: 'none', cursor: 'default' }} />
       <div role="dialog" aria-modal="true" aria-label="Print via Sckools"
