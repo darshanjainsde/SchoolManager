@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, BookMarked, Printer } from 'lucide-react';
+import { ArrowLeft, BookMarked, Package, Printer } from 'lucide-react';
 import type { ReportCardBatch, ReportCardSnapshot, ReportCardStudent, IssueReportCardsResponse } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
 import { fmtMarks, printPressSheets } from '@/lib/press';
+import { OrderDrawer } from '@/components/press/order-drawer';
 import { ReportCardSheet } from '@/components/press/press-sheets';
 import { PressPrintPortal } from '@/components/press/press-print-portal';
 import '@/components/press/press-print.css';
@@ -95,6 +96,8 @@ export default function PressBatchPage() {
   const b = batch.data;
   const students = b?.students ?? [];
   const unissued = students.filter((s) => !s.issued).length;
+  const issuedCount = students.length - unissued;
+  const [ordering, setOrdering] = useState(false);
   const snapshots = useMemo(() => (b ? students.map((s) => toSnapshot(b, s)) : []), [b, students]);
 
   return (
@@ -117,6 +120,11 @@ export default function PressBatchPage() {
             <button className="sk-btn" onClick={printPressSheets}>
               <Printer size={15} aria-hidden="true" /> Print proofs
             </button>
+            {issuedCount > 0 && (
+              <button className="sk-btn" onClick={() => setOrdering(true)}>
+                <Package size={15} aria-hidden="true" /> Print via Sckools
+              </button>
+            )}
             <button
               className="sk-btn" data-variant="primary"
               disabled={issue.isPending || unissued === 0}
@@ -249,6 +257,16 @@ export default function PressBatchPage() {
               <ReportCardSheet key={students[i]!.studentId} snapshot={snap} stamp="PROOF" />
             ))}
           </PressPrintPortal>
+
+          {ordering && b && (
+            <OrderDrawer
+              target={{
+                kind: 'REPORT_CARDS', windowId, classSectionId: classId,
+                issuedCount, batchLabel: `${b.classSection.label} · ${b.window.name}`,
+              }}
+              onClose={() => setOrdering(false)}
+            />
+          )}
         </>
       )}
     </div>

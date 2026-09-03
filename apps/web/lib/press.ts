@@ -37,3 +37,47 @@ export function printPressSheets(): void {
   // Safari never fires afterprint from a cancelled dialog.
   window.setTimeout(done, 60_000);
 }
+
+// ── Press Orders ─────────────────────────────────────────────────────────────
+
+import type { PrintOrderStatus, PrintSpec } from '@skoolos/types';
+
+/** What both desks read on the pill — never the raw status. */
+export const ORDER_STATUS_LABEL: Record<PrintOrderStatus, string> = {
+  REQUESTED: 'Requested',
+  QUOTED: 'Quote ready',
+  CONFIRMED: 'Confirmed',
+  PRINTING: 'Printing',
+  DISPATCHED: 'Dispatched',
+  DELIVERED: 'Delivered',
+  DECLINED: 'Declined',
+  CANCELLED: 'Cancelled',
+};
+
+/** sk-pill tone per status: the school's next-action states glow. */
+export const ORDER_STATUS_TONE: Record<PrintOrderStatus, 'good' | 'warn' | 'bad' | 'info' | 'neutral'> = {
+  REQUESTED: 'info',
+  QUOTED: 'warn', // the school has a decision waiting
+  CONFIRMED: 'info',
+  PRINTING: 'info',
+  DISPATCHED: 'info',
+  DELIVERED: 'good',
+  DECLINED: 'bad',
+  CANCELLED: 'neutral',
+};
+
+const SIDES_LABEL = { SINGLE: 'one side', DOUBLE: 'both sides' } as const;
+const FINISH_LABEL = {
+  NONE: null, STAPLE: 'stapled', SPIRAL: 'spiral-bound', SADDLE: 'saddle-stitched', LAMINATE: 'laminated',
+} as const;
+
+/** "A4 · Colour · both sides · 130 gsm · stapled" — one line, plain words. */
+export function specLabel(spec: PrintSpec): string {
+  return [
+    spec.size,
+    spec.colour === 'BW' ? 'B&W' : 'Colour',
+    SIDES_LABEL[spec.sides] ?? spec.sides,
+    `${spec.gsm} gsm`,
+    FINISH_LABEL[spec.finish] ?? null,
+  ].filter(Boolean).join(' · ');
+}

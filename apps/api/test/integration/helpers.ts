@@ -51,6 +51,20 @@ export function signSchoolToken(claims: {
   });
 }
 
+/**
+ * Mints a platform-audience token the way owner-auth.service does, so
+ * PlatformJwtGuard accepts it — for asserting the operator desk's wall
+ * without walking the TOTP login.
+ */
+export function signPlatformToken(sub = randomUUID()): string {
+  const env = loadEnv();
+  const payload = { sub, aud: 'platform' as const, role: 'PLATFORM_OWNER' as const, jti: randomUUID() };
+  return jwt.sign(payload, {
+    secret: env.JWT_PLATFORM_ACCESS_SECRET,
+    expiresIn: env.JWT_ACCESS_TTL,
+  });
+}
+
 export interface MinimalSchool {
   schoolId: string;
   host: string;

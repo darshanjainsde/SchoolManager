@@ -1,9 +1,15 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../auth';
 import { FeaturesModule } from '../features';
 import { TenancyModule } from '../tenancy';
 import { CertificateService } from './certificate.service';
+import { OperatorOrdersController } from './operator-orders.controller';
+import { OperatorOrdersService } from './operator-orders.service';
+import { OwnerHostGuard } from '../../common/auth/owner-host.guard';
 import { PressController } from './press.controller';
+import { PressOrdersController } from './press-orders.controller';
+import { PressOrdersService } from './press-orders.service';
 import { PressPortalController } from './press-portal.controller';
 import { PressRegisterService } from './press-register.service';
 import { ReportCardService } from './report-card.service';
@@ -18,9 +24,9 @@ import { ReportCardService } from './report-card.service';
  * the point of `type` being TEXT.
  */
 @Module({
-  imports: [AuthModule, FeaturesModule, TenancyModule],
-  controllers: [PressController, PressPortalController],
-  providers: [ReportCardService, CertificateService, PressRegisterService],
+  imports: [JwtModule.register({}), AuthModule, FeaturesModule, TenancyModule],
+  controllers: [PressController, PressOrdersController, OperatorOrdersController, PressPortalController],
+  providers: [ReportCardService, CertificateService, PressRegisterService, PressOrdersService, OperatorOrdersService, OwnerHostGuard],
   exports: [ReportCardService],
 })
 export class PressModule {}

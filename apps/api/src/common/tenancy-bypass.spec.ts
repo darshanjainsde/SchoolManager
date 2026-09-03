@@ -55,6 +55,8 @@ const ALLOWED: Record<string, string> = {
   'modules/owner/internal/owner-domains.service.ts': 'operator console',
   'modules/owner/internal/owner-events.service.ts': 'operator console',
   'modules/owner/internal/impersonation.service.ts': 'operator console',
+  'modules/press/operator-orders.service.ts':
+    'the print-order desk at sckools.com/sv/orders — cross-tenant BY PURPOSE (every school\'s orders on one queue), behind OwnerHostGuard + platform JWT; writes touch one order by id and its events only',
   'common/metrics/metrics.service.ts':
     'writes MetricRollup — platform-wide request counts and latency histograms. The table has no schoolId and holds no tenant row content, only route names and numbers',
   'modules/owner/internal/ops.service.ts':
