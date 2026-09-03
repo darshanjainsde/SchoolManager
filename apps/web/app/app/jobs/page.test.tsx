@@ -1,108 +1,142 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderWithProviders, type ApiStub } from '@/test/render';
+import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
 import JobsPage from './page';
 
-const post = vi.fn();
-vi.mock('@/lib/use-api', () => ({
-  useApi: () => ({ get: vi.fn().mockResolvedValue([]), post: (...a: unknown[]) => post(...a), patch: vi.fn() }),
-}));
-vi.mock('@/components/use-host', () => ({ useHost: () => 'raffles.test.sckools.com' }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
+vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
 
-/**
- * A BLANK FORM ASKS THE WRONG THING OF A SCHOOL OFFICE.
- *
- * They can write a job description. What they cannot easily do is invent four
- * screening questions inside a budget they have never met, where every question
- * has to become a filter or it is one somebody reads sixty times and acts on
- * none of. So the form opens on roles, and each role arrives with its questions
- * already set up.
- */
-function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <JobsPage />
-    </QueryClientProvider>,
-  );
+function job(over: Record<string, unknown> = {}) {
+  return {
+    id: 'j1', title: 'PGT Mathematics', summary: 'Senior maths, classes 8–10.', description: '',
+    posts: 1, subject: 'Mathematics', status: 'APPROVED', rejectedReason: null, questions: [],
+    applicationCount: 0, newApplicationCount: 0,
+    ...over,
+  };
+}
+
+function api(jobs: unknown[]): ApiStub {
+  return {
+    get: vi.fn((path: string) => (path === '/manage/jobs' ? Promise.resolve(jobs) : Promise.resolve([]))),
+    post: vi.fn().mockResolvedValue({}), put: vi.fn(), patch: vi.fn(), del: vi.fn(),
+  } as unknown as ApiStub;
 }
 
 beforeEach(() => {
-  post.mockReset();
-  post.mockResolvedValue({});
+  vi.mocked(useHost).mockReturnValue('raffles.sckools.com');
 });
 
-describe('posting a vacancy', () => {
-  it('opens on roles rather than an empty form', async () => {
-    renderPage();
-    expect(await screen.findByRole('button', { name: /Subject teacher/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Start blank/ })).toBeInTheDocument();
-    // The form itself has not appeared yet.
-    expect(screen.queryByLabelText('Full description')).not.toBeInTheDocument();
+/**
+ * THE FACT THE PAGE COULD NOT SHOW.
+ *
+ * Every vacancy carried an identical "Applications" button and no number, so
+ * the only way to find out whether anybody had applied was to open each posting
+ * in turn. A posting nobody has opened is the one that costs the school a
+ * candidate, so the unread count is the number the page leads with.
+ */
+describe('which vacancy has people waiting', () => {
+  it('shows the total, and marks the ones nobody has opened', async () => {
+    vi.mocked(useApi).mockReturnValue(
+      api([
+        job({ id: 'j1', title: 'PGT Mathematics', applicationCount: 7, newApplicationCount: 3 }),
+        job({ id: 'j2', title: 'Librarian', applicationCount: 2, newApplicationCount: 0 }),
+      ]) as never,
+    );
+    renderWithProviders(<JobsPage />);
+
+    expect(await screen.findByText('PGT Mathematics')).toBeInTheDocument();
+    expect(screen.getByText('3 new')).toBeInTheDocument();
+    // A vacancy with nothing unread must not wear the badge — a badge on every
+    // row is a badge that means nothing.
+    expect(screen.queryByText('0 new')).not.toBeInTheDocument();
   });
 
-  it('says how many questions a role brings before you commit to it', async () => {
-    renderPage();
-    const card = await screen.findByRole('button', { name: /Subject teacher/ });
-    expect(card.textContent).toMatch(/4 questions ready/);
+  it('totals the unread across every vacancy at the top of the page', async () => {
+    vi.mocked(useApi).mockReturnValue(
+      api([
+        job({ id: 'j1', title: 'PGT Mathematics', newApplicationCount: 3 }),
+        job({ id: 'j2', title: 'Librarian', newApplicationCount: 4 }),
+      ]) as never,
+    );
+    renderWithProviders(<JobsPage />);
+
+    // Wait for the DATA, not for the tile: the tile exists on the first frame
+    // reading 0, and `findByRole` resolves the moment it first matches — which
+    // would assert against the loading state and pass or fail by timing.
+    await screen.findByText('Librarian');
+    expect(screen.getByRole('button', { name: /New applications/ })).toHaveTextContent('7');
   });
 
-  it('fills the form and its questions from the role chosen', async () => {
-    const user = userEvent.setup({ delay: null });
-    renderPage();
-    await user.click(await screen.findByRole('button', { name: /Primary class teacher/ }));
+  it('says so plainly when there is nothing waiting', async () => {
+    vi.mocked(useApi).mockReturnValue(api([job({ newApplicationCount: 0 })]) as never);
+    renderWithProviders(<JobsPage />);
 
-    expect(screen.getByLabelText('Job title')).toHaveValue('Primary Class Teacher');
-    expect(screen.getByLabelText('Question 1')).toHaveValue('Years of teaching experience');
-    expect(screen.getByText('4 of 4 used')).toBeInTheDocument();
+    expect(await screen.findByText('all caught up')).toBeInTheDocument();
+  });
+});
+
+describe('finding the vacancies that need you', () => {
+  it('filters by status', async () => {
+    vi.mocked(useApi).mockReturnValue(
+      api([
+        job({ id: 'j1', title: 'PGT Mathematics', status: 'APPROVED' }),
+        job({ id: 'j2', title: 'Librarian', status: 'DRAFT' }),
+      ]) as never,
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<JobsPage />);
+
+    await screen.findByText('PGT Mathematics');
+    await user.click(screen.getByRole('button', { name: /^Draft 1$/ }));
+
+    expect(screen.getByText('Librarian')).toBeInTheDocument();
+    expect(screen.queryByText('PGT Mathematics')).not.toBeInTheDocument();
   });
 
-  it('refuses a fifth question in the form, not on save', async () => {
-    const user = userEvent.setup({ delay: null });
-    renderPage();
-    await user.click(await screen.findByRole('button', { name: /Primary class teacher/ }));
-    expect(screen.getByRole('button', { name: /Four is the maximum/ })).toBeDisabled();
+  /** Only a draft or a rejected posting can be sent; a live one cannot. */
+  it('offers Send for review only where it is possible', async () => {
+    vi.mocked(useApi).mockReturnValue(
+      api([job({ id: 'j1', title: 'Live one', status: 'APPROVED' })]) as never,
+    );
+    const { unmount } = renderWithProviders(<JobsPage />);
+    await screen.findByText('Live one');
+    expect(screen.queryByRole('button', { name: 'Send for review' })).not.toBeInTheDocument();
+    unmount();
+
+    vi.mocked(useApi).mockReturnValue(
+      api([job({ id: 'j2', title: 'Draft one', status: 'DRAFT' })]) as never,
+    );
+    renderWithProviders(<JobsPage />);
+    await screen.findByText('Draft one');
+    expect(screen.getByRole('button', { name: 'Send for review' })).toBeInTheDocument();
   });
 
-  it('starts blank truly blank, with room for all four', async () => {
-    const user = userEvent.setup({ delay: null });
-    renderPage();
-    await user.click(await screen.findByRole('button', { name: /Start blank/ }));
-    expect(screen.getByLabelText('Job title')).toHaveValue('');
-    expect(screen.getByText('0 of 4 used')).toBeInTheDocument();
+  /** A rejected posting must say why, or the school cannot act on it. */
+  it('shows the reason a posting was sent back', async () => {
+    vi.mocked(useApi).mockReturnValue(
+      api([job({ status: 'REJECTED', rejectedReason: 'Salary range is missing' })]) as never,
+    );
+    renderWithProviders(<JobsPage />);
+
+    expect(await screen.findByText(/Salary range is missing/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send for review' })).toBeInTheDocument();
   });
+});
 
-  it('warns that free text cannot be filtered, where the choice is made', async () => {
-    const user = userEvent.setup({ delay: null });
-    renderPage();
-    await user.click(await screen.findByRole('button', { name: /Start blank/ }));
-    await user.click(screen.getByRole('button', { name: 'Add a question' }));
-    await user.selectOptions(screen.getByLabelText('Answer type for question 1'), 'TEXT');
-    expect(screen.getByText(/cannot be filtered/i)).toBeInTheDocument();
-  });
+describe('the page is on the console’s own design system', () => {
+  it('uses none of the old kit’s off-palette colours', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(process.cwd(), 'app/app/jobs/page.tsx'), 'utf8');
 
-  it('sends the edited template, not the template', async () => {
-    const user = userEvent.setup({ delay: null });
-    renderPage();
-    await user.click(await screen.findByRole('button', { name: /Early years teacher/ }));
-    const title = screen.getByLabelText('Job title');
-    await user.clear(title);
-    await user.type(title, 'Nursery Teacher (Mornings)');
-    await user.click(screen.getByRole('button', { name: /Save as draft/ }));
-
-    await waitFor(() => expect(post).toHaveBeenCalled());
-    const [, body] = post.mock.calls[0];
-    expect(body.title).toBe('Nursery Teacher (Mornings)');
-    expect(body.questions.length).toBeGreaterThan(0);
-  });
-
-  it('lets you back out to a different role without reloading', async () => {
-    const user = userEvent.setup({ delay: null });
-    renderPage();
-    await user.click(await screen.findByRole('button', { name: /Sports coach/ }));
-    await user.click(screen.getByRole('button', { name: 'Change role' }));
-    expect(screen.getByRole('button', { name: /Office \/ admin/ })).toBeInTheDocument();
+    // `text-slate-400` on the cream ground is ~2.4:1 — below AA, and named in
+    // the repo's own UI rules as something that gets sent back.
+    expect(src).not.toMatch(/text-slate-\d/);
+    expect(src).not.toMatch(/border-slate-\d/);
+    expect(src).not.toMatch(/(text|bg|border)-teal-\d/);
+    expect(src).not.toMatch(/@\/components\/ui\//);
   });
 });
