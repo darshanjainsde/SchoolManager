@@ -53,6 +53,27 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /manage/press/register",
   "GET /manage/press/register/:id",
   "POST /manage/press/register/:id/void",
+  // Press Orders — press-authz.e2e-spec.ts. The school's order counter runs
+  // the same office wall as the rest of the Press (and the same PRESS gate,
+  // asserted separately so a new controller cannot mean a forgotten gate);
+  // the operator desk routes are owner-host + platform-JWT, proven four ways
+  // each (anonymous, school token on owner host, platform token on school
+  // host, operator through); the lifecycle test proves another school's
+  // admin reads 404 on a foreign order.
+  "GET /manage/press/orders",
+  "GET /manage/press/orders/:id",
+  "POST /manage/press/orders/report-cards",
+  "POST /manage/press/orders/upload",
+  "POST /manage/press/orders/:id/confirm",
+  "POST /manage/press/orders/:id/cancel",
+  "GET /owner/print-orders",
+  "GET /owner/print-orders/:id",
+  "GET /owner/print-orders/:id/artifact",
+  "POST /owner/print-orders/:id/quote",
+  "POST /owner/print-orders/:id/decline",
+  "POST /owner/print-orders/:id/printing",
+  "POST /owner/print-orders/:id/dispatch",
+  "POST /owner/print-orders/:id/delivered",
   "GET /me/report-cards",
   "GET /me/report-cards/:id",
   // ── Homecoming / the alumnus's own door ─────────────────────────────────

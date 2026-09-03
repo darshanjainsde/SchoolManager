@@ -334,6 +334,8 @@ model School {
   /// account, because a lobby screen cannot type a password.
   tvKey                  String?
   pressIssues            PressIssue[]
+  printOrders            PrintOrder[]
+  printOrderEvents       PrintOrderEvent[]
   pressCounters          PressCounter[]
   reportWindows          ReportWindow[]
   reportRemarks          ReportRemark[]
@@ -3476,31 +3478,31 @@ model FeeSettings {
 /// atomic per-school upsert, same shape as `fee_next_number`) inside the same
 /// transaction as this row, so two clerks issuing at once cannot collide.
 model PressIssue {
-  id         String   @id @default(uuid()) @db.Uuid
-  schoolId   String   @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
+  schoolId   String    @db.Uuid
   /// REPORT_CARD | TC | BONAFIDE | CHARACTER — see PRESS_DOC_TYPES.
   type       String
   /// e.g. "TC/2026/0041". Unique per school+type; allocated on ISSUE, never on
   /// print — reprints keep the serial (the FeeReceipt rule).
   serial     String
-  studentId  String   @db.Uuid
+  studentId  String    @db.Uuid
   /// REPORT_CARD only: the window the card belongs to. Certificates carry
   /// null. With the unique below (Postgres treats NULLs as distinct) this
   /// makes issuing a card idempotent per window at the DATABASE level — a
   /// double-click or a concurrent clerk gets "already issued", never a
   /// second serial for the same child.
-  windowId   String?  @db.Uuid
+  windowId   String?   @db.Uuid
   /// Everything the sheet renders, resolved to display strings at issue time.
   payload    Json
-  issuedById String   @db.Uuid // User.id
-  issuedAt   DateTime @default(now())
+  issuedById String    @db.Uuid // User.id
+  issuedAt   DateTime  @default(now())
   /// The one-way correction path: a voided entry stays in the register (a
   /// struck-through page in a paper book) and frees the once-per-window slot
   /// so a corrected card can be issued afresh. Enforced by the
   /// `press_issue_immutable` trigger — the ONLY update the database accepts
   /// is this transition, and deletes are refused.
   voidedAt   DateTime?
-  voidedById String?  @db.Uuid
+  voidedById String?   @db.Uuid
   voidNote   String?
 
   school  School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -3575,4 +3577,82 @@ model ReportRemark {
 
   @@unique([windowId, studentId])
   @@index([schoolId, studentId])
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Press Orders — print fulfilment. The school hands the Press's paper to
+// Sckools to print in bulk: request → quote (price + promised date) →
+// confirm → printing → dispatched → delivered.
+//
+// Decisions, each inherited:
+//   1. `status`/`kind`/event `action` are TEXT (the PressIssue.type decision).
+//   2. Every transition writes a PrintOrderEvent — HISTORY, NOT STATUS (the
+//      GiftEvent decision): the school's timeline and the operator's SLA view
+//      render the same log, so a step that forgot to log did not happen.
+//   3. The quote (priceMinor + promisedBy) freezes on confirmation — the
+//      transition map in the service refuses a re-quote after CONFIRMED.
+//   4. We print SNAPSHOTS: a report-card order references issued register
+//      rows (immutable by trigger); an upload IS its own snapshot, stored
+//      privately and purged after delivery (P2 cron).
+// ════════════════════════════════════════════════════════════════════════════
+
+model PrintOrder {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @db.Uuid
+  /// REPORT_CARDS | UPLOAD — see PRINT_ORDER_KINDS (@skoolos/types).
+  kind      String
+  title     String
+  /// Copies of the whole set.
+  quantity  Int
+  /// Paper/finish spec the school chose: { size, colour, sides, gsm, finish }.
+  spec      Json
+  /// What we print. REPORT_CARDS: { windowId, classSectionId, issuedCount,
+  /// serialFrom, serialTo } — resolved+counted at request time; the sheets
+  /// themselves come from the register's immutable snapshots at print time.
+  /// UPLOAD: { fileKey, filename, bytes, contentType } in PRIVATE storage.
+  source    Json
+  /// Denormalised at request time: { schoolName, address, contactName, phone }.
+  deliverTo Json
+  neededBy  DateTime? @db.Date
+  note      String?
+
+  /// REQUESTED | QUOTED | CONFIRMED | DECLINED | CANCELLED | PRINTING |
+  /// DISPATCHED | DELIVERED — see PRINT_ORDER_STATUSES.
+  status String @default("REQUESTED")
+
+  /// The promise. Set by quote, FROZEN by confirmation.
+  quotePriceMinor Int?
+  promisedBy      DateTime? @db.Date
+  quoteNote       String?
+  quotedAt        DateTime?
+  confirmedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  events PrintOrderEvent[]
+
+  @@index([schoolId, createdAt])
+  @@index([status, promisedBy])
+}
+
+model PrintOrderEvent {
+  id       String   @id @default(uuid()) @db.Uuid
+  schoolId String   @db.Uuid
+  orderId  String   @db.Uuid
+  at       DateTime @default(now())
+  /// SCHOOL | SCKOOLS — who moved it.
+  actor    String
+  /// REQUESTED | QUOTED | CONFIRMED | DECLINED | CANCELLED | PRINTING |
+  /// DISPATCHED | DELIVERED — mirrors the status it produced.
+  action   String
+  note     String?
+  /// Transition payload worth keeping: the quote, the courier + ref, …
+  data     Json?
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  order  PrintOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, orderId, at])
 }

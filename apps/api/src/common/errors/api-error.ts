@@ -155,6 +155,14 @@ export type ErrorCode =
   | 'SERIAL_TAKEN'
   /** Voiding an entry that is already struck through — pair with 409. */
   | 'ALREADY_VOIDED'
+  // ─── Press Orders (print fulfilment) ──────────────────────────────────────
+  /** The order is not in a state that allows this move (the transition map
+   *  said no): confirming an unquoted order, quoting a confirmed one,
+   *  dispatching before printing. Pair with 409. */
+  | 'ORDER_TRANSITION_ILLEGAL'
+  /** A report-card print order needs at least one ISSUED card in the batch —
+   *  we print the register's frozen snapshots, never a live preview. 409. */
+  | 'ISSUED_BATCH_REQUIRED'
   /** The room still has saved seating plans; deleting it would take them too — pair with 409. */
   | 'ROOM_IN_USE'
   | 'VALIDATION'

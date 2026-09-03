@@ -1297,3 +1297,82 @@ export interface DashboardPulse {
   };
   roll: { students: number; teachers: number; classes: number };
 }
+
+// ── Press Orders (print fulfilment) ──────────────────────────────────────────
+// Request → quote (price + promised date) → confirm → printing → dispatched →
+// delivered. TEXT unions validated at write time; every transition is an
+// event row and the timeline IS the event log.
+
+export const PRINT_ORDER_KINDS = ['REPORT_CARDS', 'UPLOAD'] as const;
+export type PrintOrderKind = (typeof PRINT_ORDER_KINDS)[number];
+
+export const PRINT_ORDER_STATUSES = [
+  'REQUESTED', 'QUOTED', 'CONFIRMED', 'DECLINED', 'CANCELLED',
+  'PRINTING', 'DISPATCHED', 'DELIVERED',
+] as const;
+export type PrintOrderStatus = (typeof PRINT_ORDER_STATUSES)[number];
+
+export function assertPrintOrderStatus(s: string): asserts s is PrintOrderStatus {
+  if (!(PRINT_ORDER_STATUSES as readonly string[]).includes(s)) {
+    throw new Error(`Invalid PrintOrder status: "${s}"`);
+  }
+}
+
+/** Paper + finish, chosen by the school, priced by us. */
+export interface PrintSpec {
+  size: 'A4' | 'A5' | 'A3' | 'CR80';
+  colour: 'COLOUR' | 'BW';
+  sides: 'SINGLE' | 'DOUBLE';
+  gsm: number;
+  finish: 'NONE' | 'STAPLE' | 'SPIRAL' | 'SADDLE' | 'LAMINATE';
+}
+
+export interface PrintOrderRow {
+  id: string;
+  kind: PrintOrderKind;
+  title: string;
+  quantity: number;
+  spec: PrintSpec;
+  status: PrintOrderStatus;
+  neededBy: string | null;
+  quote: { priceMinor: number; promisedBy: string; note: string | null; quotedAt: string } | null;
+  createdAt: string;
+}
+
+export interface PrintOrderEventRow {
+  at: string;
+  actor: 'SCHOOL' | 'SCKOOLS';
+  action: PrintOrderStatus;
+  note: string | null;
+  data: Record<string, unknown> | null;
+}
+
+/** `GET /manage/press/orders/:id` — the school's view, timeline included. */
+export interface PrintOrderDetail extends PrintOrderRow {
+  note: string | null;
+  deliverTo: { schoolName: string; address: string; contactName: string; phone: string };
+  source:
+    | { kind: 'REPORT_CARDS'; windowName: string; classLabel: string; issuedCount: number; serialFrom: string; serialTo: string }
+    | { kind: 'UPLOAD'; filename: string; bytes: number };
+  events: PrintOrderEventRow[];
+}
+
+/** One row on the operator desk — every order across every school. */
+export interface OperatorOrderRow extends PrintOrderRow {
+  schoolName: string;
+  schoolSlug: string;
+  city: string | null;
+  deliverTo: PrintOrderDetail['deliverTo'];
+  source: PrintOrderDetail['source'];
+  orderNote: string | null;
+  /** Confidential uploads carry the lock. */
+  confidential: boolean;
+  daysLate: number | null;
+}
+
+/** `GET /owner/print-orders/:id/artifact` — what the operator prints.
+ *  REPORT_CARDS: the register's frozen snapshots (never recompiled).
+ *  UPLOAD: a short-lived private link to the school's PDF. */
+export type OperatorOrderArtifact =
+  | { kind: 'REPORT_CARDS'; sheets: { serial: string; snapshot: ReportCardSnapshot }[] }
+  | { kind: 'UPLOAD'; filename: string; url: string; expiresInSeconds: number };
