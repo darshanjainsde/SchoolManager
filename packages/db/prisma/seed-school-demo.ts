@@ -47,6 +47,8 @@ const NAME = process.env.DEMO_SCHOOL_NAME ?? 'Raffles International School';
 const HOST = process.env.DEMO_HOSTNAME ?? `${SLUG}.test.sckools.com`;
 const PW = process.env.DEMO_PASSWORD ?? 'Passw0rd!';
 const DRY_RUN = process.env.DEMO_DRY_RUN === 'true';
+/** Delete the demo school and build it fresh. Opt-in; see the guard below. */
+const REBUILD = process.env.DEMO_REBUILD === 'true';
 
 /** Deterministic, so re-running produces the same school rather than a
  *  different one — and so a screenshot from yesterday still matches. */
@@ -84,13 +86,27 @@ async function main() {
 
   let school = await platform.school.findUnique({ where: { slug: SLUG }, select: { id: true, name: true } });
 
+  // REBUILD: drop the demo school entirely and build it again from nothing.
+  // Opt-in (`DEMO_REBUILD=true`), never a default and never on a push — this
+  // deletes a school. It exists because a demo school that has been seeded by
+  // two different passes cannot always be reconciled in place: rows carry
+  // append-only history (fee ledger, press register) that legitimately cannot
+  // be unpicked, and the only clean answer is a school that never had it.
+  // The School cascade is the one delete those guards allow (see
+  // 20260903120000 and 20260904140000).
+  if (REBUILD && school && !DRY_RUN) {
+    await platform.school.delete({ where: { id: school.id } });
+    console.log(`  ✓ REBUILD: deleted the previous "${school.name}" and everything under it`);
+    school = null;
+  }
+
   if (DRY_RUN) {
     const where = await platform.$queryRawUnsafe<{ db: string; usr: string }[]>(
       'select current_database() as db, current_user as usr',
     );
     console.log(`  connected to: ${where[0]?.db} as ${where[0]?.usr}`);
     console.log('  DRY RUN — nothing will be written. This run would:');
-    console.log(`    · ${school ? 'update' : 'CREATE'} the school "${NAME}" (${SLUG}) at ${HOST}`);
+    console.log(`    · ${REBUILD ? 'DELETE AND REBUILD' : school ? 'update' : 'CREATE'} the school "${NAME}" (${SLUG}) at ${HOST}`);
     console.log('    · turn on every feature, build 10 grades × 2 sections, ~480 students');
     console.log('    · seed timetable, attendance, exams, marks, library, events, notices and more');
     return;
@@ -302,26 +318,21 @@ async function main() {
       return (sections.find((s) => s.label === want) ?? sections.find((s) => s.gradeName === roman)!).id;
     };
 
+    // Children MOVE; they are never deleted. Two append-only guards make the
+    // deletion impossible anyway — the Press register refuses to lose a TC,
+    // and FeeLedgerEntry refuses to let a child's money history vanish with
+    // their row (staging proved it: the first version died on exactly that).
+    // Moving is also the honest act: these are real rows with attendance,
+    // marks and invoices behind them.
     let moved = 0;
-    let removed = 0;
     for (const stray of strays) {
       const kids = await db.student.findMany({
         where: { schoolId, classSectionId: stray.id }, select: { id: true },
       });
+      const to = target(stray.grade.name, stray.name);
       for (const kid of kids) {
-        const hasPaper = await db.pressIssue.findFirst({
-          where: { schoolId, studentId: kid.id }, select: { id: true },
-        });
-        if (hasPaper) {
-          await db.student.update({
-            where: { id: kid.id },
-            data: { classSectionId: target(stray.grade.name, stray.name) },
-          });
-          moved += 1;
-        } else {
-          await db.student.delete({ where: { id: kid.id } });
-          removed += 1;
-        }
+        await db.student.update({ where: { id: kid.id }, data: { classSectionId: to } });
+        moved += 1;
       }
       await db.classSection.delete({ where: { id: stray.id } });
     }
@@ -336,7 +347,7 @@ async function main() {
         gradesGone += 1;
       }
     }
-    console.log(`  ✓ normalised: ${strays.length} stray sections and ${gradesGone} grades removed, ${removed} students dropped, ${moved} moved (they hold register documents)`);
+    console.log(`  ✓ normalised: ${strays.length} stray sections and ${gradesGone} grades removed, ${moved} students moved into the canonical shape`);
   });
 
   // ── Teachers, staff and their logins ───────────────────────────────────────
