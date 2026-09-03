@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowUpRight, ChevronDown, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Menu, X,
+  ChevronDown, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Menu, X,
 } from 'lucide-react';
 import { NAV_MODEL, groupOf, leafActive, navLeaves, visibleModel, type NavEntry, type NavLeaf } from './nav-model';
 import { cn } from '@/lib/cn';
@@ -46,14 +46,11 @@ function AdminNavLink({
   collapsed,
   nested,
   onNavigate,
-  leavesConsole,
 }: {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
   pathname: string;
-  /** Renders the "opens another portal" cue — only the Library tab sets it. */
-  leavesConsole?: boolean;
   /** Icon-only rail: hide the label, centre the icon, name it via a tooltip. */
   collapsed?: boolean;
   /** A group child — indents under its header. */
@@ -65,7 +62,7 @@ function AdminNavLink({
     <Link
       href={href}
       onClick={onNavigate}
-      title={leavesConsole ? `${label} — opens its own portal` : collapsed ? label : undefined}
+      title={collapsed ? label : undefined}
       aria-label={collapsed ? label : undefined}
       className={cn(
         'flex items-center rounded-lg transition-colors',
@@ -75,12 +72,6 @@ function AdminNavLink({
     >
       <Icon className={cn('shrink-0', collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
       {!collapsed && label}
-      {/* The Library is the only tab that swaps the whole shell rather than
-          changing the page inside it. Saying so BEFORE the click is what stops
-          it reading as "the console vanished". */}
-      {leavesConsole && !collapsed ? (
-        <ArrowUpRight aria-hidden="true" className="ml-auto h-3.5 w-3.5 opacity-60" />
-      ) : null}
     </Link>
   );
 }

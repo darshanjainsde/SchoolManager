@@ -2304,3 +2304,57 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
 .sk-eh-saved .open:hover { border-color: var(--sk-brand); }
 .sk-eh-saved .open .nm { font-family: var(--sk-serif); font-size: 14px; font-weight: 650; }
 .sk-eh-saved .open .meta { font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); }
+
+/* ── THE LIBRARY AS A CONSOLE TAB ─────────────────────────────────────────
+   The library used to be its own portal with its own chrome; it is now a tab
+   inside the admin console (and, for the librarian, inside her own portal).
+   These four rules exist because the same hand-rolled utilities were being
+   written at four to six call sites each, which is how the counter ended up
+   looking like a different product from Exam Hall next door.
+
+   Every value resolves through an EXISTING token, so both schemes and both
+   theme toggles follow with no new declarations. */
+
+/* The section strip sits INSIDE a page, under the pagehead — not under a
+   topbar like /portal and /teacher. Plain `.sk-tabs` centres itself at 68rem,
+   which floats the strip away from the left-aligned pagehead above it on any
+   wide screen (visible on the Alumni page today). It also has no rule of its
+   own, because in the portals the topbar supplies one. */
+.sk-tabs.sk-lib-tabs {
+  max-width: none; margin: 0 0 20px; padding: 0;
+  border-bottom: 1px solid var(--sk-line);
+}
+
+/* A row action — "Return", "Remind", "Waive". Full `.sk-btn` is too chunky
+   inside a list row, and the six places that needed one had each hand-rolled
+   a rounded-full brand-tint pill instead, so an ACTION was wearing the same
+   shape as a STATUS pill. Same button family, one size down. */
+.sk-btn[data-size="sm"] { padding: 5px 11px; font-size: 12px; border-radius: 9px; gap: 5px; }
+
+/* The counter's scan field. A librarian types accession numbers into it all
+   day, so the value is mono while the placeholder stays prose — and the whole
+   box, not just the input, takes the focus ring, because the magnifier sits
+   inside the border. */
+.sk-scan { display: flex; align-items: center; gap: 9px; border: 1.5px solid var(--sk-line-2);
+  background: var(--sk-card); border-radius: 11px; padding: 8px 11px; }
+.sk-scan:focus-within { border-color: var(--sk-brand); }
+.sk-scan > svg { flex: none; color: var(--sk-ink-3); }
+.sk-scan > input { border: 0; background: none; color: var(--sk-ink); font: inherit; font-size: 13px;
+  width: 100%; outline: none; font-family: var(--sk-mono); }
+.sk-scan > input::placeholder { font-family: inherit; color: var(--sk-ink-3); }
+
+/* A settings toggle. State is driven from aria-checked alone, so the look and
+   the accessible state cannot disagree — the previous version set the fill with
+   a template class next to the aria attribute and could. */
+.sk-switch { width: 42px; height: 24px; border-radius: 999px; border: 1px solid var(--sk-line-2);
+  background: var(--sk-bg-2); position: relative; cursor: pointer; flex: none; padding: 0;
+  transition: background 0.14s var(--sk-ease), border-color 0.14s var(--sk-ease); }
+.sk-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--sk-card); box-shadow: var(--sk-shadow-sm);
+  transition: transform 0.16s var(--sk-ease); }
+.sk-switch[aria-checked="true"] { background: var(--sk-good); border-color: transparent; }
+.sk-switch[aria-checked="true"]::after { transform: translateX(18px); }
+.sk-switch:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .sk-switch, .sk-switch::after { transition: none; }
+}

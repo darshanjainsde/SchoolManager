@@ -83,11 +83,27 @@ describe('authenticated screens send the tenant host', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('the library counter passes both audience and host', () => {
-    // The specific regression. Named separately so a failure points straight at
-    // it rather than at a list.
-    const src = readFileSync(join(appDir, 'library/page.tsx'), 'utf8');
-    expect(src).toMatch(/useApi\(\{[^}]*hostHeader/);
-    expect(src).toMatch(/useApi\(\{[^}]*audience/);
+  it('every library section passes both audience and host', () => {
+    // The specific regression, which was on the library counter. It used to be
+    // checked by reading `library/page.tsx`, because that is where the call
+    // was. The library is a tab of the console now: the six sections live in
+    // `app/app/library/*-tab.tsx` and BOTH shells — the console at
+    // /app/library and the librarian's portal at /library — render those same
+    // components, so that one file no longer calls useApi at all and reading
+    // it would have made this assertion vacuous.
+    //
+    // Checking all six instead of one is deliberate: the sections are the only
+    // things here that talk to the API, and a new one is exactly the case that
+    // would slip through.
+    const sectionDir = join(appDir, 'app/library');
+    const sections = readdirSync(sectionDir).filter((f) => f.endsWith('-tab.tsx'));
+    expect(sections.length).toBe(6);
+
+    for (const file of sections) {
+      const src = readFileSync(join(sectionDir, file), 'utf8');
+      expect(src, `${file} does not call useApi at all`).toMatch(/useApi\(\{/);
+      expect(src, `${file} calls useApi without hostHeader`).toMatch(/useApi\(\{[^}]*hostHeader/);
+      expect(src, `${file} calls useApi without audience`).toMatch(/useApi\(\{[^}]*audience/);
+    }
   });
 });

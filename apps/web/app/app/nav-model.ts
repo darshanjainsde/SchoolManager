@@ -32,8 +32,6 @@ export interface NavLeaf {
   icon: typeof LayoutDashboard;
   /** Hidden for schools whose tier lacks the feature. Absent = always shown. */
   requiredFeature?: string;
-  /** Marks the one tab that leaves /app — the Library's own portal. */
-  leavesConsole?: boolean;
 }
 
 export type NavEntry =
@@ -95,9 +93,7 @@ export const NAV_MODEL: NavEntry[] = [
   // /app/press/orders route-wise (deep links keep working) but stands alone
   // in the nav — leafActive's longest-href rule keeps the two tabs distinct.
   { kind: 'item', item: { href: '/app/press/orders', label: 'Print Store', icon: Store, requiredFeature: 'PRESS' } },
-  // Points OUT of /app on purpose — the counter is its own portal
-  // (lib/role-routes.ts). An admin reaches it to set up and to stand in.
-  { kind: 'item', item: { href: '/library', label: 'Library', icon: BookOpen, requiredFeature: 'LIBRARY', leavesConsole: true } },
+  { kind: 'item', item: { href: '/app/library', label: 'Library', icon: BookOpen, requiredFeature: 'LIBRARY' } },
   { kind: 'item', item: { href: '/app/announcements', label: 'Announcements', icon: Megaphone } },
   { kind: 'item', item: { href: '/app/alumni', label: 'Alumni', icon: Handshake, requiredFeature: 'ALUMNI' } },
   { kind: 'item', item: { href: '/app/settings', label: 'Settings', icon: Settings, requiredFeature: 'MANAGEMENT' } },
