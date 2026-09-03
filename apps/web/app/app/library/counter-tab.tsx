@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
@@ -16,6 +16,7 @@ import {
   fmtDay,
   rupees,
   todayIso,
+  useDebounced,
   type DashboardPayload,
   type IssueCard,
   type MemberCardView,
@@ -23,15 +24,6 @@ import {
   type ReturnResult,
   type TitleView,
 } from './ui';
-
-function useDebounced(value: string, ms = 250): string {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
 
 type Mode = 'out' | 'back';
 

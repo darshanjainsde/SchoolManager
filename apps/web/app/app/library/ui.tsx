@@ -12,7 +12,7 @@
  * same tokens. The component API is unchanged from that version on purpose:
  * a repaint changes pixels, not call sites and not copy.
  */
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ApiError } from '@/lib/api';
 
 // ── API payload shapes (mirror apps/api modules/library) ──
@@ -139,6 +139,20 @@ export interface ReturnResult {
 }
 
 // ── Helpers ───────────────────────────────────────────────
+
+/**
+ * Holds a typeahead value back until typing pauses. Lived in three section
+ * files as three identical copies before this; a search box is the one control
+ * every section here has.
+ */
+export function useDebounced(value: string, ms = 250): string {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
 
 export function rupees(n: number): string {
   return `₹${n.toLocaleString('en-IN')}`;

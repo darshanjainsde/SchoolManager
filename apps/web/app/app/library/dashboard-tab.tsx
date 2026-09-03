@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { sectionHref } from './nav-items';
+import { DeskSearch } from './desk-search';
+import { ReturnAction } from './return-action';
 import {
   Card,
   CardBody,
@@ -47,6 +49,8 @@ export default function DashboardTab({ base }: { base: string }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <DeskSearch />
+
       <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <StatCard
           label="Copies"
@@ -106,6 +110,8 @@ export default function DashboardTab({ base }: { base: string }) {
                 >
                   <DuePill dueOn={i.dueOn} today={today} />
                   {i.accruedFineRupees > 0 ? <Pill tone="bad">{rupees(i.accruedFineRupees)} so far</Pill> : null}
+                  {/* The reader is usually standing here holding the book. */}
+                  <ReturnAction issueId={i.id} />
                 </ListRow>
               ))
             ) : (
