@@ -1,4 +1,5 @@
 import { ArrayMaxSize, IsArray, IsDateString, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min } from 'class-validator';
+import { EVENT_ART_KEYS, type EventArtKey } from '@skoolos/types';
 
 /** How many schools one event may be hand-addressed to. */
 export const MAX_SELECTED_SCHOOLS = 50;
@@ -7,6 +8,16 @@ export class CreateEventDto {
   @IsString() @Length(1, 160) title!: string;
   @IsOptional() @IsString() @Length(0, 4000) description?: string;
   @IsOptional() @IsUUID() coverAssetId?: string;
+  /**
+   * Which archetype the cover art draws. Absent means "work it out from the
+   * title" — every event gets a cover whether or not anyone chooses one, which
+   * is the point: uploading a banner is optional and, in a school with no
+   * photographer, never happens.
+   *
+   * A short enum rather than free text: this keys a drawing, not a filename,
+   * and an unknown value would render nothing.
+   */
+  @IsOptional() @IsIn(EVENT_ART_KEYS) coverArt?: EventArtKey;
   @IsDateString() startAt!: string;
   @IsOptional() @IsDateString() endAt?: string;
   @IsOptional() @IsString() @Length(0, 200) venue?: string;
@@ -31,6 +42,16 @@ export class UpdateEventDto {
   @IsOptional() @IsString() @Length(1, 160) title?: string;
   @IsOptional() @IsString() @Length(0, 4000) description?: string;
   @IsOptional() @IsUUID() coverAssetId?: string;
+  /**
+   * Which archetype the cover art draws. Absent means "work it out from the
+   * title" — every event gets a cover whether or not anyone chooses one, which
+   * is the point: uploading a banner is optional and, in a school with no
+   * photographer, never happens.
+   *
+   * A short enum rather than free text: this keys a drawing, not a filename,
+   * and an unknown value would render nothing.
+   */
+  @IsOptional() @IsIn(EVENT_ART_KEYS) coverArt?: EventArtKey;
   @IsOptional() @IsDateString() startAt?: string;
   @IsOptional() @IsDateString() endAt?: string;
   @IsOptional() @IsString() @Length(0, 200) venue?: string;

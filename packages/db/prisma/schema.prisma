@@ -1529,6 +1529,10 @@ model Event {
   title            String
   description      String?
   coverAssetId     String?               @db.Uuid
+  /// Which archetype the cover art draws — see EVENT_ART_KEYS (@skoolos/types).
+  /// Null means "derive it from the title", which is what every existing row
+  /// does; no event is ever without a cover.
+  coverArt         String?
   startAt          DateTime
   endAt            DateTime?
   venue            String?

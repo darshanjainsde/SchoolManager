@@ -1551,3 +1551,22 @@ export interface ResultRoomBoard {
 export interface NudgeResultsResponse {
   notified: { teacherUserId: string; teacherName: string | null }[];
 }
+
+// ── Event cover art ──────────────────────────────────────────────────────────
+
+/**
+ * Which archetype an event's cover art draws.
+ *
+ * Shared between the API (which validates it) and the web app (which draws
+ * it), so the two cannot drift into disagreeing about what is a legal value —
+ * an unknown key renders nothing at all, which on a poster is a blank page.
+ *
+ * Stored rather than always derived because an admin who picks "Sports day"
+ * for an event called "Founder's Trophy" expects that to stick. When it is
+ * absent the app works it out from the title, so no event is ever coverless.
+ */
+export const EVENT_ART_KEYS = [
+  'sports', 'science', 'annual', 'art', 'music', 'grad', 'parents', 'festival',
+] as const;
+
+export type EventArtKey = (typeof EVENT_ART_KEYS)[number];

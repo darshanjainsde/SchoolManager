@@ -2358,3 +2358,106 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
 @media (prefers-reduced-motion: reduce) {
   .sk-switch, .sk-switch::after { transition: none; }
 }
+
+/* ── EVENTS: CARDS, COMPOSER AND THE PROMO KIT ────────────────────────────
+   Events was one of the last console pages still built on the shadcn kit
+   (`components/ui/*`), which is why its buttons and cards read as a different
+   product from Exam Hall next door. These rules replace that kit for this
+   page; every value resolves through an existing token, so both schemes and
+   both theme toggles follow with no new declarations.
+
+   Everything here is fluid by construction — `auto-fill` grids and
+   `minmax()` rather than breakpoint-by-breakpoint widths — because the same
+   screens are used on an office desktop, the head's iPad and a phone at the
+   school gate. */
+
+/* The card grid. One column on a phone, as many as fit after that; no
+   breakpoint names the device, so a 360px phone and a 1440px desktop are the
+   same rule. */
+.sk-ev-grid { display: grid; gap: 15px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 262px), 1fr)); }
+
+.sk-ev-card {
+  background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r);
+  box-shadow: var(--sk-shadow); overflow: hidden; display: flex; flex-direction: column;
+  transition: transform 0.14s var(--sk-ease), border-color 0.14s var(--sk-ease);
+}
+.sk-ev-card:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
+@media (prefers-reduced-motion: reduce) { .sk-ev-card { transition: none; } .sk-ev-card:hover { transform: none; } }
+.sk-ev-cover { aspect-ratio: 16 / 9; position: relative; background: var(--sk-bg-2); }
+.sk-ev-cover > svg { display: block; width: 100%; height: 100%; }
+/* The date sits ON the art so the card leads with WHEN, which is the only
+   thing anyone scans an events list for. */
+.sk-ev-when {
+  position: absolute; left: 11px; bottom: 11px; background: var(--sk-card); border-radius: 10px;
+  padding: 5px 9px 6px; text-align: center; box-shadow: var(--sk-shadow-sm); min-width: 46px;
+}
+.sk-ev-when .d { font-family: var(--sk-serif); font-size: 19px; font-weight: 650; line-height: 1; display: block; }
+.sk-ev-when .m { font-size: 9.5px; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sk-ink-3); margin-top: 2px; display: block; }
+.sk-ev-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0; }
+.sk-ev-title { font-family: var(--sk-serif); font-size: 16.5px; font-weight: 650; letter-spacing: -0.005em; line-height: 1.2; }
+.sk-ev-meta { font-size: 12px; color: var(--sk-ink-3); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sk-ev-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-ev-blurb { font-size: 12px; color: var(--sk-ink-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sk-ev-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+/* Actions wrap rather than squash: at 360px three buttons cannot share a row,
+   and a Delete pushed off the screen edge is the bug that produces. */
+.sk-ev-acts { display: flex; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--sk-line); padding: 10px 14px; }
+/* A finished event keeps its page and its attendance list, but stops
+   competing with next week's fair for attention. */
+.sk-ev-card[data-past="true"] .sk-ev-cover > svg { filter: grayscale(0.85); }
+
+/* The composer: fields beside a live preview of the card being made. Single
+   column until there is genuinely room for two — 940px, not a device name. */
+.sk-ev-compose { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 940px) { .sk-ev-compose { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); } }
+.sk-ev-two { display: grid; gap: 11px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
+.sk-ev-artrow { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 62px), 1fr)); gap: 7px; }
+.sk-ev-artpick {
+  border: 1.5px solid var(--sk-line); border-radius: 9px; overflow: hidden; cursor: pointer;
+  background: none; padding: 0; aspect-ratio: 16 / 10; display: block; width: 100%;
+}
+.sk-ev-artpick > svg { display: block; width: 100%; height: 100%; }
+.sk-ev-artpick[aria-pressed="true"] { border-color: var(--sk-brand); box-shadow: 0 0 0 2px var(--sk-brand-tint); }
+.sk-ev-artpick:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+
+/* The Promo Kit: the piece list beside the sheet. Below 960px the list
+   becomes a horizontal strip so the sheet — the thing being judged — keeps
+   the full width of a phone. */
+.sk-ev-kit { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 960px) { .sk-ev-kit { grid-template-columns: 272px minmax(0, 1fr); } }
+.sk-ev-pieces { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+@media (min-width: 960px) { .sk-ev-pieces { flex-direction: column; overflow: visible; padding-bottom: 0; } }
+.sk-ev-piece {
+  display: flex; gap: 10px; align-items: flex-start; text-align: left; cursor: pointer;
+  border: 1.5px solid var(--sk-line); background: var(--sk-card); border-radius: 12px;
+  padding: 10px 11px; flex: none; min-width: 168px;
+}
+@media (min-width: 960px) { .sk-ev-piece { min-width: 0; } }
+.sk-ev-piece:hover { border-color: var(--sk-brand); }
+.sk-ev-piece[aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); }
+.sk-ev-piece > span:last-child { min-width: 0; }
+.sk-ev-piece .nm, .sk-ev-piece .sz { display: block; }
+.sk-ev-piece .nm { font-size: 12.5px; font-weight: 700; }
+.sk-ev-piece[aria-pressed="true"] .nm { color: var(--sk-brand-2); }
+.sk-ev-piece .sz { font-size: 11px; color: var(--sk-ink-3); margin-top: 1px; }
+/* The paper figure: a proportional rectangle, so the list shows shape as well
+   as saying a size name nobody pictures. */
+.sk-ev-piece .fig { width: 26px; flex: none; display: grid; place-items: center; }
+.sk-ev-piece .fig i { display: block; border: 1.6px solid var(--sk-ink-3); border-radius: 2px; }
+.sk-ev-piece[aria-pressed="true"] .fig i { border-color: var(--sk-brand-2); }
+
+.sk-ev-sheetwrap {
+  background: var(--sk-bg-2); border: 1px solid var(--sk-line); border-radius: var(--sk-r);
+  padding: clamp(12px, 3vw, 24px); display: grid; place-items: center;
+}
+/* The sheet is an SVG, so it fits any width by construction — the same node is
+   the preview, the print artwork and the downloaded file. `max-width` caps it
+   on a desktop; `width:100%` lets a phone have all of it. */
+.sk-ev-sheet { width: 100%; max-width: 460px; }
+.sk-ev-sheet[data-wide="true"] { max-width: 560px; }
+.sk-ev-sheet > svg {
+  display: block; width: 100%; height: auto;
+  background: #fff; box-shadow: 0 2px 6px rgba(33, 29, 69, 0.14), 0 26px 50px -30px rgba(33, 29, 69, 0.5);
+}
+.sk-ev-sheet[data-mono="true"] > svg { filter: grayscale(1); }
+.sk-ev-outrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

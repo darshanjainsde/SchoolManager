@@ -91,6 +91,11 @@ export class RegistrationsService {
         event: {
           id: event.id,
           title: event.title,
+          // description and coverArt are here for the Promo Kit, which draws
+          // its poster from this same payload rather than asking for a second
+          // fetch of a row the desk has already loaded.
+          description: event.description,
+          coverArt: event.coverArt,
           startAt: event.startAt.toISOString(),
           endAt: event.endAt?.toISOString() ?? null,
           venue: event.venue,
