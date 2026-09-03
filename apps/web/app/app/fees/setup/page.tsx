@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowDown, Check, Plus, Trash2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
+import { Z } from '@/lib/z-layers';
 import { BackToFees } from '@/components/fees/back-to-fees';
 import { useHost } from '@/components/use-host';
 import {
@@ -213,7 +214,8 @@ function CategoryDialog({
     Same trap, same fix as ConnectSection.tsx.
   */
   return createPortal(
-    <div className="skosx fixed inset-0 z-50 grid place-items-center p-4" style={{ background: 'rgba(20,18,36,0.45)' }}>
+    <div className="skosx fixed inset-0 grid place-items-center p-4"
+      style={{ background: 'rgba(20,18,36,0.45)', zIndex: Z.OVERLAY }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label="Fee category"
            className="sk-card w-full max-w-md"
            style={{ maxHeight: '90vh', overflowY: 'auto' }}>

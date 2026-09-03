@@ -12,6 +12,7 @@ import { useHydrated } from '@/lib/use-hydrated';
 import { ApiError } from '@/lib/api';
 import { rupees, type StudentFees } from '@/lib/fees';
 import { RecordPaymentDialog } from '@/components/fees/record-payment-dialog';
+import { Z } from '@/lib/z-layers';
 
 /**
  * The dock — the office's most-repeated actions as one-tap drawers, no
@@ -43,7 +44,7 @@ function readTaps(): Record<string, number> {
 /** Shared overlay: scrim + right-hand drawer, portaled with the theme tokens. */
 function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return createPortal(
-    <div className="skosx" style={{ position: 'fixed', inset: 0, zIndex: 80 }}>
+    <div className="skosx" style={{ position: 'fixed', inset: 0, zIndex: Z.OVERLAY }}>
       <button aria-label="Close" onClick={onClose}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: 'rgba(15,14,30,0.45)', border: 'none', cursor: 'default' }} />
       <div role="dialog" aria-modal="true" aria-label={title}
