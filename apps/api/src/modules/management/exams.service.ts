@@ -66,7 +66,7 @@ type ExamRow = {
 };
 
 /** Raw `Result` row shape as Prisma returns it — `publishedAt` still `Date | null`. */
-type ResultRow = { studentId: string; marks: number; publishedAt: Date | null };
+type ResultRow = { studentId: string; marks: number; status: string; publishedAt: Date | null };
 
 @Injectable()
 export class ExamsService {
@@ -167,10 +167,31 @@ export class ExamsService {
     };
   }
 
+  /**
+   * The windows with a result day set — the teacher portal's countdown banner.
+   * Deliberately tiny and role-open (TEACHER + SCHOOL_ADMIN via the exams
+   * controller): a due date is motivation, not Press data, so it carries no
+   * PRESS feature gate.
+   */
+  async resultDays(schoolId: string): Promise<{ id: string; name: string; resultDay: string }[]> {
+    return withTenant(schoolId, async (tx) => {
+      const rows = await tx.reportWindow.findMany({
+        where: { resultDay: { not: null } },
+        orderBy: { resultDay: 'asc' },
+        select: { id: true, name: true, resultDay: true },
+        take: 10,
+      });
+      return rows
+        .filter((w) => w.resultDay !== null)
+        .map((w) => ({ id: w.id, name: w.name, resultDay: w.resultDay!.toISOString().slice(0, 10) }));
+    });
+  }
+
   private static toSavedResult(r: ResultRow): SavedResult {
     return {
       studentId: r.studentId,
       marks: r.marks,
+      status: r.status,
       publishedAt: r.publishedAt ? r.publishedAt.toISOString() : null,
     };
   }
@@ -411,7 +432,7 @@ export class ExamsService {
 
       const rows = await tx.result.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, examId },
-        select: { studentId: true, marks: true, publishedAt: true },
+        select: { studentId: true, marks: true, status: true, publishedAt: true },
         orderBy: [{ studentId: 'asc' }],
       });
       return rows.map(ExamsService.toSavedResult);
@@ -470,25 +491,37 @@ export class ExamsService {
             400,
           );
         }
-        if (mark.marks < 0 || mark.marks > exam.maxMarks) {
-          throw new ApiError(
-            'VALIDATION',
-            `marks must be between 0 and ${exam.maxMarks}`,
-            400,
-            'marks',
-          );
+        const status = mark.status ?? 'PRESENT';
+        // AB (absent) and EX (exempted) carry no marks — the STATUS is the
+        // fact, and 0 is stored purely so the column stays honest arithmetic.
+        // PRESENT must bring a real number in range; the whole batch rejects
+        // up front, never a partial write.
+        if (status === 'PRESENT') {
+          if (typeof mark.marks !== 'number' || Number.isNaN(mark.marks)) {
+            throw new ApiError('VALIDATION', 'marks are required unless the child is AB/EX', 400, 'marks');
+          }
+          if (mark.marks < 0 || mark.marks > exam.maxMarks) {
+            throw new ApiError(
+              'VALIDATION',
+              `marks must be between 0 and ${exam.maxMarks}`,
+              400,
+              'marks',
+            );
+          }
         }
       }
 
       for (const mark of dto.marks) {
+        const status = mark.status ?? 'PRESENT';
+        const marks = status === 'PRESENT' ? (mark.marks as number) : 0;
         await tx.result.upsert({
           where: { one_result_per_exam_student: { examId, studentId: mark.studentId } },
           // `schoolId` is the tenant's own id, never anything derived from
           // caller input — `Result` carries it directly since
           // 20260825090000_result_tenancy_and_fk_indexes, and its RLS policy
           // now compares that column rather than walking to Exam.
-          create: { schoolId, examId, studentId: mark.studentId, marks: mark.marks },
-          update: { marks: mark.marks },
+          create: { schoolId, examId, studentId: mark.studentId, marks, status },
+          update: { marks, status },
         });
       }
 

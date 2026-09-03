@@ -41,6 +41,14 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /manage/tv/rotate",
   "GET /manage/tv/disable",
   "GET /manage/press/overview",
+  // The Result Room — press-authz OFFICE_ROUTES (admin+staff in, teacher/
+  // student/anon refused); the gate's 409 + override is unit-proven.
+  "GET /manage/press/results",
+  "POST /manage/press/results/nudge",
+  "POST /manage/press/results/generate",
+  // Teacher-visible result-day banner — management-authz asserts TEACHER and
+  // SCHOOL_ADMIN pass, STUDENT and anonymous are refused.
+  "GET /manage/exams/result-days",
   "POST /manage/press/certificates/bulk",
   "GET /manage/press/years",
   "GET /manage/press/classes",

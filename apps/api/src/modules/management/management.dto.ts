@@ -18,7 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { STUDENT_CATEGORIES } from '@skoolos/types';
+import { RESULT_STATUSES, STUDENT_CATEGORIES } from '@skoolos/types';
 import {
   ASSIGNMENT_ATTACHMENT_KINDS,
   AssignmentAttachmentKind,
@@ -628,8 +628,15 @@ export class ExamResultMarkDto {
   @IsUUID()
   studentId!: string;
 
+  /** Required when PRESENT (the default); ignored for AB/EX (stored as 0). */
+  @IsOptional()
   @IsNumber()
-  marks!: number;
+  marks?: number;
+
+  /** PRESENT | AB (absent) | EX (exempted). Three truths, never one dash. */
+  @IsOptional()
+  @IsIn(RESULT_STATUSES)
+  status?: string;
 }
 
 export class SaveExamResultsDto {

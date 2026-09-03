@@ -1,6 +1,6 @@
 const txMock = {
   reportWindow: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-  reportRemark: { findMany: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn() },
+  reportRemark: { findMany: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn(), findFirst: jest.fn() },
   academicYear: { findFirst: jest.fn() },
   classSection: { findFirst: jest.fn() },
   student: { findMany: jest.fn(), findFirst: jest.fn() },
@@ -136,6 +136,72 @@ describe('ReportCardService', () => {
     const line = batch.students[0]!.subjects[0]!;
 
     expect(line).toMatchObject({ marks: 15, maxMarks: 20, pct: 75, grade: 'B1' });
+  });
+
+  it('AB counts zero toward the total but is never a silent zero — the perExam line says AB', async () => {
+    txMock.student.findMany.mockResolvedValue([student('s1', 'Aarav', '1')]);
+    txMock.exam.findMany.mockResolvedValue([
+      { id: 'e1', subjectId: 'sci', title: 'PT-1', maxMarks: 20 },
+      { id: 'e2', subjectId: 'sci', title: 'Half-Yearly', maxMarks: 80 },
+    ]);
+    txMock.subject.findMany.mockResolvedValue([{ id: 'sci', name: 'Science' }]);
+    txMock.result.findMany.mockResolvedValue([
+      { examId: 'e1', studentId: 's1', marks: 0, status: 'AB' },
+      { examId: 'e2', studentId: 's1', marks: 65, status: 'PRESENT' },
+    ]);
+
+    const batch = await svc.compileBatch(SCHOOL, WINDOW, SECTION);
+    const line = batch.students[0]!.subjects[0]!;
+
+    // 65 out of the FULL 100 — an absence is a zero in the arithmetic…
+    expect(line).toMatchObject({ marks: 65, maxMarks: 100, pct: 65, countedMax: 100 });
+    // …but the paper says AB, never 0.
+    expect(line.perExam).toEqual([
+      { examId: 'e1', title: 'PT-1', maxMarks: 20, value: 'AB' },
+      { examId: 'e2', title: 'Half-Yearly', maxMarks: 80, value: 65 },
+    ]);
+  });
+
+  it('EX leaves the max entirely — an exemption never drags the percentage down', async () => {
+    txMock.student.findMany.mockResolvedValue([student('s1', 'Aarav', '1')]);
+    txMock.exam.findMany.mockResolvedValue([
+      { id: 'e1', subjectId: 'sst', title: 'PT-1', maxMarks: 20 },
+      { id: 'e2', subjectId: 'sst', title: 'Half-Yearly', maxMarks: 80 },
+    ]);
+    txMock.subject.findMany.mockResolvedValue([{ id: 'sst', name: 'Social Science' }]);
+    txMock.result.findMany.mockResolvedValue([
+      { examId: 'e1', studentId: 's1', marks: 15, status: 'PRESENT' },
+      { examId: 'e2', studentId: 's1', marks: 0, status: 'EX' },
+    ]);
+
+    const batch = await svc.compileBatch(SCHOOL, WINDOW, SECTION);
+    const line = batch.students[0]!.subjects[0]!;
+
+    // 15/20 sat → 75%, not 15/100 → 15%.
+    expect(line).toMatchObject({ marks: 15, maxMarks: 20, pct: 75, countedMax: 20, grade: 'B1' });
+    expect(line.perExam![1]).toMatchObject({ value: 'EX' });
+  });
+
+  it('a fully exempted subject prints as EX, not as a failing blank', async () => {
+    txMock.student.findMany.mockResolvedValue([student('s1', 'Aarav', '1')]);
+    txMock.exam.findMany.mockResolvedValue([
+      { id: 'e1', subjectId: 'skt', title: 'PT-1', maxMarks: 50 },
+    ]);
+    txMock.subject.findMany.mockResolvedValue([{ id: 'skt', name: 'Sanskrit' }]);
+    txMock.result.findMany.mockResolvedValue([
+      { examId: 'e1', studentId: 's1', marks: 0, status: 'EX' },
+    ]);
+
+    const batch = await svc.compileBatch(SCHOOL, WINDOW, SECTION);
+    const line = batch.students[0]!.subjects[0]!;
+
+    expect(line.marks).toBeNull();
+    expect(line.pct).toBeNull();
+    expect(line.grade).toBeNull();
+    expect(line.countedMax).toBe(0);
+    expect(line.perExam).toEqual([{ examId: 'e1', title: 'PT-1', maxMarks: 50, value: 'EX' }]);
+    // …and the overall ignores it rather than averaging in a phantom zero.
+    expect(batch.students[0]!.overall.pct).toBeNull();
   });
 
   it('counts LATE as present and yields null attendance when nothing was marked', async () => {

@@ -144,14 +144,20 @@ export function classInWords(label: string | null | undefined): string {
 
 /** The office's chosen report-card template — a per-browser convenience.
  *  Presentation only: both templates render the same snapshot. */
-export type PressTemplate = 'CLASSIC' | 'BOARD';
+export type PressTemplate = 'CLASSIC' | 'BOARD' | 'DETAILED';
+export const PRESS_TEMPLATES: { id: PressTemplate; label: string }[] = [
+  { id: 'DETAILED', label: 'Detailed' },
+  { id: 'BOARD', label: 'Board pattern' },
+  { id: 'CLASSIC', label: 'Classic' },
+];
 const TEMPLATE_KEY = 'sk-press-template';
 
 export function getPressTemplate(): PressTemplate {
   try {
-    return localStorage.getItem(TEMPLATE_KEY) === 'CLASSIC' ? 'CLASSIC' : 'BOARD';
+    const v = localStorage.getItem(TEMPLATE_KEY);
+    return v === 'CLASSIC' || v === 'BOARD' ? v : 'DETAILED';
   } catch {
-    return 'BOARD';
+    return 'DETAILED';
   }
 }
 

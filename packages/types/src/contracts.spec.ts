@@ -147,7 +147,7 @@ describe('shared portal contracts', () => {
   });
 
   it('a SavedResult is unpublished until publishedAt is set', () => {
-    const unpublished: SavedResult = { studentId: 's1', marks: 40, publishedAt: null };
+    const unpublished: SavedResult = { studentId: 's1', marks: 40, status: 'PRESENT', publishedAt: null };
     const published: SavedResult = { ...unpublished, publishedAt: '2026-08-02T10:00:00.000Z' };
     expect(unpublished.publishedAt).toBeNull();
     expect(published.publishedAt).not.toBeNull();

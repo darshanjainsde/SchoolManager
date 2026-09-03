@@ -163,6 +163,9 @@ export type ErrorCode =
   /** A report-card print order needs at least one ISSUED card in the batch —
    *  we print the register's frozen snapshots, never a live preview. 409. */
   | 'ISSUED_BATCH_REQUIRED'
+  /** The Result Room's gate: a class with missing or unpublished marks cannot
+   *  generate without a written override reason (which is audited). 409. */
+  | 'RESULTS_NOT_READY'
   /** The room still has saved seating plans; deleting it would take them too — pair with 409. */
   | 'ROOM_IN_USE'
   | 'VALIDATION'

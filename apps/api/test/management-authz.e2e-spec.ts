@@ -216,6 +216,25 @@ describe('management authorization', () => {
     });
   });
 
+  describe('result-days — the teacher portal countdown banner', () => {
+    // A due date is motivation, not Press data: TEACHER and SCHOOL_ADMIN read
+    // it; a STUDENT token and anonymous are refused like every exams route.
+    it('teacher passes the guards', async () => {
+      const res = await request(app.getHttpServer()).get('/manage/exams/result-days').set(as(teacherToken));
+      expect([401, 403]).not.toContain(res.status);
+    });
+    it('admin passes the guards', async () => {
+      const res = await request(app.getHttpServer()).get('/manage/exams/result-days').set(as(adminToken));
+      expect([401, 403]).not.toContain(res.status);
+    });
+    it('student is refused', async () => {
+      await request(app.getHttpServer()).get('/manage/exams/result-days').set(as(studentToken)).expect(403);
+    });
+    it('anonymous is refused', async () => {
+      await request(app.getHttpServer()).get('/manage/exams/result-days').set({ 'X-Skoolos-Host': host }).expect(401);
+    });
+  });
+
   describe('the Front Desk — search, pulse and the Student 360 are the admin’s', () => {
     // Search spans every register; pulse aggregates money; the 360 carries a
     // child's whole file including the fee position. SCHOOL_ADMIN only.

@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { CommonAuthModule } from '../../common/auth/auth.module';
 import { MailModule } from '../../common/mail/mail.module';
 import { StorageModule } from '../../common/storage/storage.module';
+import { AuditModule } from '../../common/audit/audit.module';
 import { PressModule } from './press.module';
 import { ReportCardService } from './report-card.service';
 import { CertificateService } from './certificate.service';
@@ -24,7 +25,8 @@ describe('PressModule DI', () => {
     const moduleRef = await Test.createTestingModule({
       // StorageModule is @Global() too — the order services upload and
       // presign through it.
-      imports: [CommonAuthModule, MailModule, StorageModule, PressModule],
+      // AuditModule is @Global() too — the Result Room's override log rides it.
+      imports: [CommonAuthModule, MailModule, StorageModule, AuditModule, PressModule],
     }).compile();
 
     expect(moduleRef.get(ReportCardService)).toBeInstanceOf(ReportCardService);

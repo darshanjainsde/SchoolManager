@@ -3,16 +3,18 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Layers, Printer, ScrollText, Search } from 'lucide-react';
+import { ArrowLeft, BookMarked, ExternalLink, Layers, Printer, ScrollText, Search, Shield } from 'lucide-react';
 import type {
   BulkCertificateResult, CertificatePrepare, CertificateSnapshot, PressCertificateType,
 } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
+import { useAuthStore } from '@/lib/auth-store';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
 import { PRESS_TYPE_LABEL, pressDateLabel, printPressSheets } from '@/lib/press';
 import { CertificateSheet } from '@/components/press/press-sheets';
 import { PressPrintPortal } from '@/components/press/press-print-portal';
+import { PrintRoom } from '@/components/press/print-room';
 import '@/components/press/press-print.css';
 
 /**
@@ -45,7 +47,7 @@ const EMPTY_FORM = {
   // Annexure answers
   examLastTaken: '', failedBefore: '', subjects: '', qualifiedForPromotion: '', promotedToClass: '',
   feesPaidUpto: '', feeConcession: '', workingDays: '', presentDays: '', nccScout: '', games: '',
-  dateOfApplication: '',
+  dateOfApplication: '', indexNo: '', yearOfPassing: '',
   // file facts (saved back)
   fatherName: '', motherName: '', nationality: '', category: '', firstAdmissionDate: '',
   firstAdmissionClass: '', previousSchool: '', penId: '',
@@ -62,6 +64,46 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * The school's statutory face — CBSE (default) · CISCE · STATE. Saved on the
+ * school profile (the same row the website studio edits), so it is set once
+ * and every future certificate snapshot freezes it. Admin-only: the profile
+ * route is SCHOOL_ADMIN, so STAFF just see the current face.
+ */
+function VariantPicker() {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const qc = useQueryClient();
+  const role = useAuthStore((st) => st.role);
+
+  const content = useQuery({
+    queryKey: ['site-content', host], enabled: !!host && role === 'SCHOOL_ADMIN',
+    queryFn: () => api.get<{ profile: { certVariant?: string | null } | null }>('/site/content'),
+  });
+  const save = useMutation({
+    mutationFn: (certVariant: string) => api.put('/site/profile', { certVariant }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['site-content', host] });
+      toast.success('Certificate face saved — every certificate from now prints it.');
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Could not save.'),
+  });
+
+  if (role !== 'SCHOOL_ADMIN') return null;
+  const current = content.data?.profile?.certVariant ?? 'CBSE';
+  return (
+    <label style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600 }}>
+      Certificate face
+      <select className="sk-input" style={{ width: 'auto', fontSize: 12, padding: '4px 8px' }} value={current}
+        disabled={save.isPending} onChange={(e) => save.mutate(e.target.value)}>
+        <option value="CBSE">CBSE · Annexure-I</option>
+        <option value="CISCE">CISCE · + Index No.</option>
+        <option value="STATE">State · Leaving Certificate</option>
+      </select>
+    </label>
+  );
+}
+
 export default function CertificateDeskPage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
@@ -73,10 +115,15 @@ export default function CertificateDeskPage() {
   // The Press counter links here as /certificates?q=ADM-NO — seed the search
   // once, after mount.
   useEffect(() => {
-    const fromUrl = new URLSearchParams(window.location.search).get('q');
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('q');
     if (fromUrl) setQ(fromUrl);
+    const t = params.get('type');
+    if (t === 'TC' || t === 'BONAFIDE' || t === 'CHARACTER') setCertType(t);
+    if (params.get('mode') === 'bulk') setBulkOpen(true);
   }, []);
   const [certType, setCertType] = useState<PressCertificateType>('TC');
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [duesOverride, setDuesOverride] = useState(false);
   /** The just-issued certificate(s), rendered into the print container. */
@@ -85,6 +132,8 @@ export default function CertificateDeskPage() {
     duplicate: boolean;
   } | null>(null);
   const printedKeyRef = useRef<string | null>(null);
+  const [roomOpen, setRoomOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   /**
    * Print AFTER the portal committed — a timer raced React and could open the
@@ -149,7 +198,7 @@ export default function CertificateDeskPage() {
             ...opt('examLastTaken'), ...opt('failedBefore'), ...opt('subjects'),
             ...opt('qualifiedForPromotion'), ...opt('promotedToClass'), ...opt('feesPaidUpto'),
             ...opt('feeConcession'), ...opt('workingDays'), ...opt('presentDays'),
-            ...opt('nccScout'), ...opt('games'),
+            ...opt('nccScout'), ...opt('games'), ...opt('indexNo'), ...opt('yearOfPassing'),
             ...(form.dateOfApplication ? { dateOfApplication: form.dateOfApplication } : {}),
           }
         : {}),
@@ -188,7 +237,6 @@ export default function CertificateDeskPage() {
   const isTC = certType === 'TC';
 
   // ── bulk mode ─────────────────────────────────────────────────────────────
-  const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkType, setBulkType] = useState<PressCertificateType>('BONAFIDE');
   const [bulkClass, setBulkClass] = useState('');
   const [bulkCommon, setBulkCommon] = useState({ reason: '', purpose: '', conduct: '' });
@@ -235,6 +283,43 @@ export default function CertificateDeskPage() {
           <Layers size={15} aria-hidden="true" /> Whole class at once
         </button>
       </header>
+
+      {/* ── the desk's tiles — pick the document, the flow follows ───────── */}
+      {!studentId && (
+        <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
+          {([
+            { t: 'TC' as const, hint: 'statutory Annexure form · dues-gated', bg: 'var(--sk-bad)' },
+            { t: 'BONAFIDE' as const, hint: 'purpose-first · 20 seconds', bg: 'var(--sk-good)' },
+            { t: 'CHARACTER' as const, hint: 'conduct + span · letterhead', bg: 'var(--sk-brand)' },
+          ]).map(({ t, hint, bg }) => (
+            <button key={t} className="sk-entity sk-press" aria-pressed={certType === t && !bulkOpen}
+              style={{ textAlign: 'left', cursor: 'pointer', borderColor: certType === t && !bulkOpen ? 'var(--sk-brand)' : undefined }}
+              onClick={() => { setCertType(t); setBulkOpen(false); searchRef.current?.focus(); }}>
+              <span className="av" style={{ background: bg }}><ScrollText size={18} aria-hidden="true" /></span>
+              <div className="min-w-0 flex-1">
+                <div className="nm">{PRESS_TYPE_LABEL[t]}</div>
+                <div className="meta">{hint}</div>
+              </div>
+            </button>
+          ))}
+          <button className="sk-entity sk-press" aria-pressed={bulkOpen}
+            style={{ textAlign: 'left', cursor: 'pointer', borderColor: bulkOpen ? 'var(--sk-brand)' : undefined }}
+            onClick={() => setBulkOpen((v) => !v)}>
+            <span className="av" style={{ background: 'var(--sk-amber)' }}><Layers size={18} aria-hidden="true" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="nm">Whole-class runs</div>
+              <div className="meta">TCs for XII · scholarship bonafides</div>
+            </div>
+          </button>
+          <Link href="/app/press/register" className="sk-entity sk-press">
+            <span className="av" style={{ background: 'var(--sk-ink-2)' }}><BookMarked size={18} aria-hidden="true" /></span>
+            <div className="min-w-0 flex-1">
+              <div className="nm">Issued documents</div>
+              <div className="meta">view · reprint · void — the register</div>
+            </div>
+          </Link>
+        </div>
+      )}
 
       {/* ── bulk mode ────────────────────────────────────────────────────── */}
       {bulkOpen && (
@@ -291,10 +376,19 @@ export default function CertificateDeskPage() {
                 {bulk.isPending ? 'Issuing the class…' : `Issue for the whole class`}
               </button>
               {bulkResult && bulkResult.issued.length > 0 && (
-                <button className="sk-btn"
-                  onClick={() => setPrinted({ sheets: bulkResult.issued.map((i) => ({ snapshot: i.snapshot, serial: i.serial, issuedAt: i.issuedAt })), duplicate: false })}>
-                  <Printer size={15} aria-hidden="true" /> Print all {bulkResult.issued.length}
-                </button>
+                <>
+                  <button className="sk-btn"
+                    onClick={() => setPrinted({ sheets: bulkResult.issued.map((i) => ({ snapshot: i.snapshot, serial: i.serial, issuedAt: i.issuedAt })), duplicate: false })}>
+                    <Printer size={15} aria-hidden="true" /> Print all {bulkResult.issued.length}
+                  </button>
+                  <button className="sk-btn"
+                    onClick={() => {
+                      setPrinted({ sheets: bulkResult.issued.map((i) => ({ snapshot: i.snapshot, serial: i.serial, issuedAt: i.issuedAt })), duplicate: true });
+                      setRoomOpen(true);
+                    }}>
+                    View all
+                  </button>
+                </>
               )}
             </div>
 
@@ -324,6 +418,7 @@ export default function CertificateDeskPage() {
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Search size={15} style={{ color: 'var(--sk-ink-3)', flex: 'none' }} aria-hidden="true" />
             <input
+              ref={searchRef}
               className="sk-input" style={{ flex: 1 }}
               placeholder="Search by name or admission number…"
               value={q}
@@ -511,6 +606,14 @@ export default function CertificateDeskPage() {
                   <input type="date" className="sk-input" value={form.dateOfApplication}
                     onChange={(e) => setForm({ ...form, dateOfApplication: e.target.value })} />
                 </label>
+                <label style={field}>Index No. (CISCE face only)
+                  <input className="sk-input" maxLength={40} value={form.indexNo}
+                    onChange={(e) => setForm({ ...form, indexNo: e.target.value })} />
+                </label>
+                <label style={field}>Year of Council exam (CISCE)
+                  <input className="sk-input" maxLength={10} value={form.yearOfPassing}
+                    onChange={(e) => setForm({ ...form, yearOfPassing: e.target.value })} />
+                </label>
               </div>
             )}
 
@@ -530,16 +633,59 @@ export default function CertificateDeskPage() {
                 {issue.isPending ? 'Entering register…' : `Issue ${PRESS_TYPE_LABEL[certType].toLowerCase()} & print`}
               </button>
               {printed && (
-                <button className="sk-btn" onClick={printPressSheets}>
-                  <Printer size={15} aria-hidden="true" /> Print again
-                </button>
+                <>
+                  <button className="sk-btn" onClick={() => setRoomOpen(true)}>
+                    View
+                  </button>
+                  <button className="sk-btn" onClick={printPressSheets}>
+                    <Printer size={15} aria-hidden="true" /> Print again
+                  </button>
+                </>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {printed && (
+      {/* ── formats & references — shown so the office can verify the standard ── */}
+      <div className="sk-card"><div className="sk-card-b">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Shield size={14} aria-hidden="true" style={{ color: 'var(--sk-good)' }} />
+          <b style={{ fontSize: 12.5 }}>Formats &amp; official references</b>
+          <VariantPicker />
+        </div>
+        <p className="sk-muted" style={{ fontSize: 12, margin: 0 }}>
+          The TC prints the CBSE Examination Bye-laws <b>Annexure-I</b> form field for field; the CISCE face adds the
+          Council&rsquo;s Index No.; the State face uses Leaving-Certificate naming. Bonafide and character are
+          school-letterhead documents. Verify us against the sources:
+        </p>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+          <a href="https://www.cbse.gov.in/Byelawsenglish.pdf" target="_blank" rel="noreferrer" style={{ color: 'var(--sk-brand-2)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            CBSE Examination Bye-laws — Annexure-I (cbse.gov.in) <ExternalLink size={11} aria-hidden="true" />
+          </a>
+          <a href="https://cbseacademic.nic.in/web_material/publication/archive/byelawsenglish.pdf" target="_blank" rel="noreferrer" style={{ color: 'var(--sk-brand-2)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            same document · cbseacademic.nic.in <ExternalLink size={11} aria-hidden="true" />
+          </a>
+          <a href="https://parakh.ncert.gov.in/hpc" target="_blank" rel="noreferrer" style={{ color: 'var(--sk-brand-2)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            PARAKH (NCERT) — Holistic Progress Card <ExternalLink size={11} aria-hidden="true" />
+          </a>
+        </div>
+      </div></div>
+
+      {printed && roomOpen && (
+        <PrintRoom
+          title={printed.sheets.length === 1
+            ? printed.sheets[0]!.serial
+            : `${printed.sheets.length} certificates`}
+          onClose={() => setRoomOpen(false)}
+          sheets={printed.sheets.map((sh) => ({
+            kind: 'CERTIFICATE' as const, snapshot: sh.snapshot, serial: sh.serial,
+            issuedAt: sh.issuedAt, stamp: 'DUPLICATE' as const,
+          }))}
+        />
+      )}
+
+      {printed && !roomOpen && (
         <PressPrintPortal>
           {printed.sheets.map((sh) => (
             <CertificateSheet

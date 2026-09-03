@@ -14,7 +14,7 @@ function mockApi(overrides: Partial<ApiStub> = {}): ApiStub {
 }
 
 const OVERVIEW: PressOverview = {
-  windows: [{ id: 'w1', name: 'Term I', academicYearId: 'y1', academicYearName: '2026-27', startDate: '2026-06-01', endDate: '2026-09-30' }],
+  windows: [{ id: 'w1', name: 'Term I', academicYearId: 'y1', academicYearName: '2026-27', startDate: '2026-06-01', endDate: '2026-09-30', resultDay: null }],
   windowId: 'w1',
   classes: [
     { id: 'c1', label: 'III-A', students: 27, issued: 27 },

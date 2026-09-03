@@ -80,6 +80,16 @@ export default function TeacherResultsPage() {
   const [entries, setEntries] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(false);
 
+  // The Result Room's clock: the admin sets a result day per window; it
+  // renders here so the deadline lives where the marks are typed.
+  const resultDays = useQuery({
+    queryKey: ['t-result-days', host], enabled: !!host,
+    queryFn: () => api.get<{ id: string; name: string; resultDay: string }[]>('/manage/exams/result-days'),
+    staleTime: 60_000,
+  });
+  const nextDue = (Array.isArray(resultDays.data) ? resultDays.data : [])
+    .filter((w) => Date.parse(w.resultDay) >= Date.now() - 86_400_000)[0];
+
   const classes = useQuery({
     queryKey: ['t-results-classes'],
     enabled: !!host,
@@ -126,7 +136,11 @@ export default function TeacherResultsPage() {
     if (seededExamRef.current === examId) return;
     seededExamRef.current = examId;
     setEntries(
-      Object.fromEntries(saved.data.map((r) => [r.studentId, String(r.marks)])),
+      Object.fromEntries(saved.data.map((r) => [
+        r.studentId,
+        // AB/EX are the fact; the stored 0 is just honest arithmetic.
+        r.status === 'AB' || r.status === 'EX' ? r.status : String(r.marks),
+      ])),
     );
   }, [examId, saved.data]);
 
@@ -143,9 +157,17 @@ export default function TeacherResultsPage() {
   const parsed = useMemo(
     () =>
       students
-        .map((s) => ({ studentId: s.id, raw: entries[s.id] ?? '' }))
-        .filter((e) => e.raw.trim() !== '')
-        .map((e) => ({ studentId: e.studentId, marks: Number(e.raw) })),
+        .map((s) => ({ studentId: s.id, raw: (entries[s.id] ?? '').trim() }))
+        .filter((e) => e.raw !== '')
+        .map((e) => {
+          const upper = e.raw.toUpperCase();
+          // AB (absent) and EX (exempted) are entries, not blanks — typed or
+          // tapped, they save as status and print as themselves.
+          if (upper === 'AB' || upper === 'EX') {
+            return { studentId: e.studentId, status: upper as 'AB' | 'EX' };
+          }
+          return { studentId: e.studentId, marks: Number(e.raw), status: 'PRESENT' as const };
+        }),
     [students, entries],
   );
 
@@ -153,7 +175,10 @@ export default function TeacherResultsPage() {
     () =>
       !!exam &&
       parsed.length > 0 &&
-      parsed.every((m) => Number.isFinite(m.marks) && m.marks >= 0 && m.marks <= exam.maxMarks),
+      parsed.every(
+        (m) => m.status !== 'PRESENT'
+          || (Number.isFinite(m.marks) && (m.marks as number) >= 0 && (m.marks as number) <= exam.maxMarks),
+      ),
     [parsed, exam],
   );
 
@@ -163,9 +188,9 @@ export default function TeacherResultsPage() {
   const sheetComplete = students.length > 0 && parsed.length === students.length && valid;
 
   const average = useMemo(() => {
-    const usable = parsed.filter((m) => Number.isFinite(m.marks));
+    const usable = parsed.filter((m) => m.status === 'PRESENT' && Number.isFinite(m.marks));
     if (usable.length === 0) return null;
-    return usable.reduce((sum, m) => sum + m.marks, 0) / usable.length;
+    return usable.reduce((sum, m) => sum + (m.marks as number), 0) / usable.length;
   }, [parsed]);
 
   const save = useMutation({
@@ -215,6 +240,14 @@ export default function TeacherResultsPage() {
           Enter marks for a test, then publish when you&apos;re ready for students and parents to
           see them.
         </p>
+        {nextDue && (
+          <p style={{ marginTop: 6 }}>
+            <span className="sk-pill" data-tone="warn">
+              {nextDue.name} scores due {new Date(nextDue.resultDay).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+              {(() => { const d = Math.ceil((Date.parse(nextDue.resultDay) - Date.now()) / 86_400_000); return d > 0 ? ` · ${d} day${d === 1 ? '' : 's'} left` : d === 0 ? ' · today' : ''; })()}
+            </span>
+          </p>
+        )}
       </header>
 
       <div className="sk-card" style={{ marginBottom: 16 }}>
@@ -327,9 +360,11 @@ export default function TeacherResultsPage() {
                     something to read past on every line. */}
                 {students.map((s, i) => {
                   const raw = entries[s.id] ?? '';
+                  const upper = raw.trim().toUpperCase();
+                  const special = upper === 'AB' || upper === 'EX';
                   const num = Number(raw);
                   const bad =
-                    raw.trim() !== '' &&
+                    raw.trim() !== '' && !special &&
                     (!Number.isFinite(num) || num < 0 || num > exam.maxMarks);
                   const filled = raw.trim() !== '' && !bad;
                   return (
@@ -357,12 +392,32 @@ export default function TeacherResultsPage() {
                           they stopped — the page holds their place for them.
                           `data-filled` (not a class) so the invalid state can
                           still override the border underneath it. */}
+                      {/* AB = absent (prints "AB", counts 0). EX = exempted
+                          (leaves the child's max entirely). One tap on, one
+                          tap off — or just type "ab"/"ex" into the box. */}
+                      {(['AB', 'EX'] as const).map((code) => (
+                        <button
+                          key={code}
+                          type="button"
+                          className="sk-btn"
+                          aria-pressed={upper === code}
+                          title={code === 'AB' ? 'Absent for this test' : 'Exempted from this test'}
+                          style={{
+                            padding: '4px 8px', fontSize: 10.5, fontWeight: 800, letterSpacing: '0.04em',
+                            ...(upper === code
+                              ? { background: code === 'AB' ? 'var(--sk-bad-tint)' : 'var(--sk-brand-tint)', color: code === 'AB' ? 'var(--sk-bad)' : 'var(--sk-brand-2)', borderColor: 'currentColor' }
+                              : { color: 'var(--sk-ink-3)' }),
+                          }}
+                          onClick={() =>
+                            setEntries((m) => ({ ...m, [s.id]: upper === code ? '' : code }))
+                          }
+                        >
+                          {code}
+                        </button>
+                      ))}
                       <Input
-                        type="number"
+                        type="text"
                         inputMode="decimal"
-                        min={0}
-                        max={exam.maxMarks}
-                        step="any"
                         aria-invalid={bad}
                         aria-label={`Marks for ${s.firstName} ${s.lastName}`}
                         data-filled={filled ? 'true' : 'false'}

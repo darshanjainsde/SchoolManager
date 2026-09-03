@@ -29,6 +29,7 @@ export class PressOverviewService {
         academicYearName: w.academicYear.name,
         startDate: w.startDate.toISOString().slice(0, 10),
         endDate: w.endDate.toISOString().slice(0, 10),
+        resultDay: w.resultDay ? w.resultDay.toISOString().slice(0, 10) : null,
       }));
       const chosen = windowId
         ? windows.find((w) => w.id === windowId) ?? windows[0] ?? null

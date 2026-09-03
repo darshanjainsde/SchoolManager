@@ -393,7 +393,7 @@ describe('ExamsService', () => {
       expect(txMock.result.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { schoolId: SCHOOL, examId: EXAM_ID },
-          select: { studentId: true, marks: true, publishedAt: true },
+          select: { studentId: true, marks: true, status: true, publishedAt: true },
         }),
       );
     });
@@ -488,8 +488,8 @@ describe('ExamsService', () => {
       expect(txMock.result.upsert).toHaveBeenCalledTimes(2);
       expect(txMock.result.upsert).toHaveBeenCalledWith({
         where: { one_result_per_exam_student: { examId: EXAM_ID, studentId: 's-1' } },
-        create: { schoolId: SCHOOL, examId: EXAM_ID, studentId: 's-1', marks: 80 },
-        update: { marks: 80 },
+        create: { schoolId: SCHOOL, examId: EXAM_ID, studentId: 's-1', marks: 80, status: 'PRESENT' },
+        update: { marks: 80, status: 'PRESENT' },
       });
     });
 

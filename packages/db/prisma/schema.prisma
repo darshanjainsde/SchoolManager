@@ -335,6 +335,7 @@ model School {
   tvKey                  String?
   pressIssues            PressIssue[]
   printOrders            PrintOrder[]
+  resultNudges           ResultNudge[]
   printOrderEvents       PrintOrderEvent[]
   pressCounters          PressCounter[]
   reportWindows          ReportWindow[]
@@ -605,6 +606,10 @@ model SchoolProfile {
   /// website studio's contact tab.
   board               String?
   affiliationNo       String?
+  /// Which statutory certificate face the school prints: CBSE (Annexure-I,
+  /// default) | CISCE (adds Index No. + year of passing) | STATE (Leaving
+  /// Certificate naming). See CERT_VARIANTS.
+  certVariant         String?
   mapEmbedUrl         String?
   school              School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
@@ -1212,6 +1217,11 @@ model Result {
   examId      String    @db.Uuid
   studentId   String    @db.Uuid
   marks       Float
+  /// PRESENT | AB | EX — see RESULT_STATUSES (@skoolos/types). AB (absent)
+  /// stores marks 0 but PRINTS "AB"; EX (exempted) stores 0 and leaves the
+  /// exam's max out of that child's percentage. Three different truths that
+  /// must never collapse into one dash.
+  status      String    @default("PRESENT")
   publishedAt DateTime?
   school      School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
@@ -3561,14 +3571,18 @@ model PressCounter {
 /// office screen, the printed card and the parent's copy cannot disagree
 /// (the late-fee rule, applied to marks).
 model ReportWindow {
-  id             String   @id @default(uuid()) @db.Uuid
-  schoolId       String   @db.Uuid
-  academicYearId String   @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  schoolId       String    @db.Uuid
+  academicYearId String    @db.Uuid
   name           String
-  startDate      DateTime @db.Date
-  endDate        DateTime @db.Date
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  startDate      DateTime  @db.Date
+  endDate        DateTime  @db.Date
+  /// Result day: the date scores are due and cards go out. Shown on the
+  /// teacher portal next to unfinished classes; the Result Room counts
+  /// down to it. Optional — a window without one simply shows no clock.
+  resultDay      DateTime? @db.Date
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   school       School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   academicYear AcademicYear   @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
@@ -3588,6 +3602,10 @@ model ReportRemark {
   windowId  String   @db.Uuid
   studentId String   @db.Uuid
   text      String
+  /// The card's optional blocks, per child per window: co-scholastic grades,
+  /// house, height/weight, a promotion line. One Json bucket (validated at
+  /// write) — these print ONLY when recorded, never invented.
+  extras    Json?
   authorId  String   @db.Uuid // User.id
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3616,6 +3634,27 @@ model ReportRemark {
 //      rows (immutable by trigger); an upload IS its own snapshot, stored
 //      privately and purged after delivery (P2 cron).
 // ════════════════════════════════════════════════════════════════════════════
+
+/// The Result Room's nudge log: one row per reminder an admin sent a teacher
+/// about pending marks. Exists so the room can show "nudged yesterday" and an
+/// admin never nags twice by accident. Append-only in practice.
+model ResultNudge {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  windowId       String   @db.Uuid
+  classSectionId String   @db.Uuid
+  subjectId      String   @db.Uuid
+  /// The User.id the notification went to (the exam's creator).
+  teacherUserId  String   @db.Uuid
+  /// ENTER (marks missing) | PUBLISH (entered, not published).
+  kind           String
+  sentById       String   @db.Uuid
+  sentAt         DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, windowId, classSectionId, subjectId])
+}
 
 model PrintOrder {
   id        String    @id @default(uuid()) @db.Uuid
