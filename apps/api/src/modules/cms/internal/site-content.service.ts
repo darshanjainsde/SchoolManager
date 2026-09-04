@@ -3,6 +3,7 @@ import { Prisma, withTenant } from '@skoolos/db';
 import type { UpdateProfileDto, UpdateHomepageDto, StatItemDto, SocialLinkDto } from './cms.dto';
 import { sanitizeCustomCssMap, sanitizeHtmlBlock } from './custom-code';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
+import { assertTenantOwned } from '../../../common/tenancy/assert-tenant-owned';
 
 /** SchoolProfile's Json columns. Prisma types Json input as InputJsonValue, so
  *  none of them can ride along in the scalar spread (see updateProfile). */
@@ -71,13 +72,23 @@ export class SiteContentService {
       const value = jsonValues[key];
       if (value !== undefined) jsonPart[key] = value as Prisma.InputJsonValue;
     }
-    await withTenant(schoolId, (tx) =>
-      tx.schoolProfile.upsert({
+    await withTenant(schoolId, async (tx) => {
+      // logoAssetId arrives from the request and is later dereferenced on the
+      // PLATFORM client when the mail identity builds a letterhead
+      // (mail-identity.service.ts) — outside RLS, so another school's asset
+      // id would resolve and its URL would appear on this school's email.
+      // The email-settings path already checks this; the CMS profile was the
+      // way around it. Postgres will not do it for us: a foreign key is
+      // satisfied by a row the caller cannot see.
+      await assertTenantOwned([
+        { field: 'logoAssetId', id: scalars.logoAssetId as string | null | undefined, model: tx.mediaAsset },
+      ]);
+      return tx.schoolProfile.upsert({
         where: { schoolId },
         update: { ...scalars, ...jsonPart },
         create: { schoolId, ...scalars, ...jsonPart },
-      }),
-    );
+      });
+    });
     return this.getContent(schoolId);
   }
 
