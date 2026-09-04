@@ -250,16 +250,34 @@
 .sk-rail-done { font-size: 11px; color: var(--sk-ink-3); flex: none; }
 
 /* ---- KPI tiles ---- */
-.sk-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 11px; }
+/* `repeat(2, 1fr)` at EVERY width below 900px was the bug behind the Fees
+   page being cut off on a phone. 1fr is a MAXIMUM share, not a floor: a grid
+   item defaults to min-width:auto, so its track cannot shrink below the item's
+   min-content width. A real figure — Rs 2,25,77,600 at 27px/800 — is ~190px of
+   unbreakable text, so two tracks plus the gap demanded ~391px against the
+   ~342px a 390px phone actually has, and the whole page scrolled sideways.
+
+   auto-fit with `min(100%, 200px)` collapses to one column when two will not
+   fit, instead of forcing the page wider than the screen. The min() matters:
+   a bare minmax(min(100%, 200px), 1fr) still overflows a container narrower than 200px. */
+.sk-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 11px; }
 @media (min-width: 900px) { .sk-kpis { grid-template-columns: repeat(4, 1fr); } }
 .sk-kpi {
   background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r);
   padding: 14px 15px; box-shadow: var(--sk-shadow); display: flex; flex-direction: column; gap: 3px;
   min-height: 92px; transition: transform 0.14s ease, border-color 0.14s ease;
+  /* Without this the tile's widest line sets its track's floor, and one long
+     currency value pushes the whole grid past the viewport. */
+  min-width: 0;
 }
 a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 .sk-kpi .lab { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--sk-ink-3); }
-.sk-kpi .n { font-size: 27px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; margin-top: 2px; }
+/* Scales down on a phone rather than dictating the layout's width, and breaks
+   as an absolute last resort instead of overflowing its tile. */
+.sk-kpi .n {
+  font-size: clamp(20px, 5.2vw, 27px); font-weight: 800; letter-spacing: -0.03em;
+  line-height: 1.05; margin-top: 2px; min-width: 0; overflow-wrap: anywhere;
+}
 .sk-kpi .n .u { font-size: 15px; font-weight: 700; color: var(--sk-ink-3); }
 .sk-kpi .hint { font-size: 11px; color: var(--sk-ink-3); margin-top: auto; }
 .sk-kpi[data-tone="good"] .n { color: var(--sk-good); }
@@ -307,9 +325,15 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 /* ---- coverage gap rows (leave page): fixed shared columns so every row lines up ---- */
 .sk-covrow {
   display: grid;
-  grid-template-columns: minmax(170px, 1fr) minmax(200px, 240px) max-content minmax(150px, 1fr);
+  grid-template-columns: minmax(min(100%, 170px), 1fr) minmax(min(100%, 200px), 240px) max-content minmax(min(100%, 150px), 1fr);
   gap: 8px 14px;
   align-items: center;
+}
+/* Those four tracks need ~550px before gaps. On a phone they stack instead —
+   the columns exist to line rows up with each other, which stops mattering
+   once there is only room for one column anyway. */
+@media (max-width: 720px) {
+  .sk-covrow { grid-template-columns: 1fr; gap: 4px; }
 }
 .sk-covrow .cov-status { display: flex; align-items: center; gap: 8px; justify-self: end; }
 @media (max-width: 760px) {
@@ -458,7 +482,7 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 .sk-pagehead p { color: var(--sk-ink-3); font-size: 13.5px; margin-top: 4px; }
 
 /* ---- class / entity cards ---- */
-.sk-cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 13px; }
+.sk-cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 13px; }
 .sk-entity {
   display: flex; align-items: center; gap: 12px; background: var(--sk-card); border: 1px solid var(--sk-line);
   border-radius: var(--sk-r); padding: 15px; box-shadow: var(--sk-shadow); text-decoration: none; color: inherit;
@@ -1299,7 +1323,7 @@ input[type="range"].sk-bar:focus-visible { outline: 2px solid var(--sk-brand); o
    tap, so it is the one that moves. */
 .sk-rgrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 46px), 1fr));
   gap: 5px;
 }
 .sk-rcell {
@@ -1818,7 +1842,7 @@ html[data-theme='light'] .sk-notif-row[data-unread="true"][data-kind="DIARY"] .s
    The column count is set inline from the number of teaching days, because the
    days come from the timetable data now: a five-day school gets five columns,
    a six-day school six, and neither is written down anywhere in CSS. */
-.sk-availwrap { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: 16px; align-items: start; }
+.sk-availwrap { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(min(100%, 240px), 1fr); gap: 16px; align-items: start; }
 @media (max-width: 900px) { .sk-availwrap { grid-template-columns: 1fr; } }
 
 .sk-availgrid { display: grid; gap: 4px; min-width: 0; }
@@ -2271,7 +2295,7 @@ button.sk-availcell:hover { filter: brightness(0.97); }
 .sk-eh-tick .swatch[data-tone="c4"] { background: var(--sk-cls-4); }
 
 /* ---- room list ---- */
-.sk-eh-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.sk-eh-rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 10px; }
 .sk-eh-room {
   border: 1.5px solid var(--sk-line); border-radius: var(--sk-r-sm); background: var(--sk-card);
   padding: 11px 13px; cursor: pointer; text-align: left; font: inherit; color: inherit;

@@ -275,7 +275,7 @@ function OfficeTab({
         </div>
       </section>
 
-      <div className="sk-cardgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 14 }}>
+      <div className="sk-cardgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%, 240px),1fr))', gap: 14 }}>
         <QueueCard
           title="Verification"
           body={
@@ -1199,7 +1199,7 @@ function GiftsTab({ onChanged }: { onChanged: () => void }) {
                       </div>
 
                       {!!p.attachments?.length && (
-                        <div style={{ display: 'grid', gap: 10, marginTop: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+                        <div style={{ display: 'grid', gap: 10, marginTop: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 120px), 1fr))' }}>
                           {p.attachments.map((a) => (
                             <div key={a.id}>
                               {a.url.toLowerCase().endsWith('.pdf') ? (

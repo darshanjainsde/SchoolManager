@@ -89,7 +89,7 @@ export default function FinesTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+      <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
         <StatCard label="Collected this term" value={rupees(d.collectedRupees)} tone="good" />
         <StatCard
           label="Still due"

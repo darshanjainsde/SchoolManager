@@ -417,7 +417,7 @@ export function EmailSettingsCard() {
                 details and an app password. Nothing switches over until a test email actually arrives.
               </p>
 
-              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))' }}>
+              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%, 190px),1fr))' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                   <label className="sk-lab" htmlFor="sm-from">Send as</label>
                   <input id="sm-from" style={field} value={fromAddress} placeholder="office@yourschool.in"

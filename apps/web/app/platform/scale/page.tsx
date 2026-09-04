@@ -250,7 +250,7 @@ export default function PlatformScalePage() {
         {overview.data && overview.data.totals.schools > 0 && (
           <>
             {/* Growth bars */}
-            <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 20 }}>
+            <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', marginBottom: 20 }}>
               <GrowthBar label="Schools" current={overview.data.totals.schools} ladder={[5, 25, 100, 500]} />
               <GrowthBar label="Students" current={overview.data.totals.students} ladder={[100, 1000, 10000, 50000]} />
               <GrowthBar label="Images" current={overview.data.totals.images} ladder={[100, 1000, 10000, 100000]} />

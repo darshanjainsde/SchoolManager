@@ -94,7 +94,7 @@ export default function StudentReportPage() {
           </div>
 
           {/* ── tiles ────────────────────────────────────────────────────── */}
-          <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+          <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))' }}>
             <div className="sk-kpi">
               <div className="lab">Attendance · this session</div>
               <div className="n" style={{ color: r.attendance.pct !== null && r.attendance.pct < 75 ? 'var(--sk-bad)' : 'var(--sk-good)' }}>
@@ -139,7 +139,7 @@ export default function StudentReportPage() {
           </div>
 
           {/* ── panels ───────────────────────────────────────────────────── */}
-          <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+          <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))' }}>
             <div className="sk-card"><div className="sk-card-b">
               <b style={{ fontSize: 13 }}>Marks{r.academics ? ` · ${r.academics.windowName}` : ''}</b>
               {r.academics && r.academics.subjects.length > 0 ? (

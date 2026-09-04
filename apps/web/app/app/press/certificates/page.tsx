@@ -54,7 +54,7 @@ const EMPTY_FORM = {
 };
 
 const field: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600 };
-const grid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 };
+const grid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 10 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -287,7 +287,7 @@ export default function CertificateDeskPage() {
 
       {/* ── the desk's tiles — pick the document, the flow follows ───────── */}
       {!studentId && (
-        <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
+        <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))' }}>
           {([
             { t: 'TC' as const, hint: 'statutory Annexure form · dues-gated', bg: 'var(--sk-bad)' },
             { t: 'BONAFIDE' as const, hint: 'purpose-first · 20 seconds', bg: 'var(--sk-good)' },
