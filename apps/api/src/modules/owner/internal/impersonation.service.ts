@@ -17,7 +17,7 @@ export class ImpersonationService {
   private readonly logger = new Logger(ImpersonationService.name);
   private readonly env = loadEnv();
 
-  async mint(schoolId: string): Promise<{ url: string; expiresInSeconds: number }> {
+  async mint(schoolId: string, mintedByUserId?: string): Promise<{ url: string; expiresInSeconds: number }> {
     const db = getPlatformPrisma();
     const school = await db.school.findUnique({
       where: { id: schoolId },
@@ -37,7 +37,13 @@ export class ImpersonationService {
 
     const token = randomBytes(24).toString('base64url');
     await db.impersonationToken.create({
-      data: { userId: admin.id, schoolId, tokenHash: sha256(token), expiresAt: new Date(Date.now() + TOKEN_TTL_MS) },
+      data: {
+        userId: admin.id, schoolId, tokenHash: sha256(token),
+        expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
+        // So the audit trail can say WHO acted inside the school, not just
+        // that somebody did.
+        mintedByUserId: mintedByUserId ?? null,
+      },
     });
 
     const host = school.domains[0]?.hostname ?? `${school.slug}.${this.env.PLATFORM_HOST}`;

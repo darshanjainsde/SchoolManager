@@ -15,6 +15,9 @@ export interface SchoolJwtPayload {
   jti: string;
   /** Present (true) only on owner-impersonation sessions. */
   imp?: boolean;
+  /** The platform user behind an impersonation session, for the audit trail.
+   *  Absent on sessions minted before attribution existed. */
+  impBy?: string;
   iat?: number;
   exp?: number;
 }

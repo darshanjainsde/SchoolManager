@@ -1815,6 +1815,10 @@ model ImpersonationToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+  /// The platform user who minted this link. Deliberately not a relation: the
+  /// owner is a platform user (schoolId null) and this table is tenant-scoped,
+  /// so an FK would cross the tenant boundary. Attribution, not a reference.
+  mintedByUserId String? @db.Uuid
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])

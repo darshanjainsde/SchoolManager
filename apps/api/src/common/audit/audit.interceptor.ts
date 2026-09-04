@@ -33,12 +33,19 @@ export class AuditInterceptor implements NestInterceptor {
           const entity = parts[0] ?? 'unknown';
           const entityId = parts[1] && /^[\w-]+$/.test(parts[1]) ? parts[1] : undefined;
           // Fire-and-forget — never `await` inside an interceptor.
+          // An impersonated session's `sub` is the school ADMIN, so without
+          // this every action a platform operator takes inside a school reads
+          // as that admin's own work. `imp` existed but was consumed only by
+          // the browser, to draw a banner.
+          const impersonated = (user as { imp?: boolean } | undefined)?.imp === true;
+          const impersonatedBy = (user as { impBy?: string } | undefined)?.impBy;
           this.audit.record({
             schoolId: tenant?.kind === 'tenant' ? tenant.schoolId : null,
             actorUserId: user?.sub ?? null,
             action: `${method} ${urlPath}`,
             entity,
             entityId,
+            meta: impersonated ? { impersonated: true, impersonatedBy: impersonatedBy ?? null } : undefined,
           });
         },
       }),

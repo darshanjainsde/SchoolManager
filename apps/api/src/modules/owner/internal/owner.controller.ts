@@ -113,8 +113,14 @@ export class OwnerController {
   }
 
   @Post('schools/:id/impersonate')
-  impersonate(@Param('id', ParseUUIDPipe) id: string) {
-    return this.impersonation.mint(id);
+  impersonate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() operator: PlatformJwtPayload,
+  ) {
+    // Stamp the operator on the token. The exchange mints a school JWT whose
+    // `sub` is the school ADMIN, so without this every action the operator
+    // then takes inside the school is audited as that admin's own work.
+    return this.impersonation.mint(id, operator?.sub);
   }
 
   // ── Custom domains ──────────────────────────────────────

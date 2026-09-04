@@ -188,6 +188,9 @@ export class AuthService {
       role: row.user.role,
       jti: randomUUID(),
       imp: true,
+      // Who is actually behind this session. Without it the audit trail
+      // records every action as the school admin's own.
+      impBy: row.mintedByUserId ?? undefined,
     };
     const accessToken = this.jwt.sign(payload, {
       secret: this.env.JWT_SCHOOL_ACCESS_SECRET,

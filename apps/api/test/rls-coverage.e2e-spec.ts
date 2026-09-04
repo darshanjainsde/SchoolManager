@@ -107,7 +107,7 @@ describe('RLS coverage across every tenant table', () => {
     const p = getPlatformPrisma();
     // A policy that scopes indirectly (an EXISTS against a parent) is correct
     // but must be allow-listed WITH a test proving cross-tenant invisibility,
-    // never silently — LIBRARY-TRAPS #5. Today there are none.
+    // never silently — LIBRARY-TRAPS #5. As of 4 Sept 2026 there is exactly one: EventAudienceSchool, whose tenant_iso is `schoolId = current_tenant OR EXISTS (... e.schoolId = current_tenant)` — an invitee sees only the row naming itself, a host sees its own event's list, and WITH CHECK stays host-only. The policy is correct; the claim that none existed was not. Note the qual check below CANNOT catch this shape, because the string it looks for is present.
     const odd = await p.$queryRawUnsafe<{ tablename: string; qual: string }[]>(`
       SELECT tablename, qual FROM pg_policies
        WHERE policyname = 'tenant_iso'

@@ -96,7 +96,6 @@ export const config = {
   matcher: [
     '/app/:path*',
     '/platform/:path*',
-    '/me/:path*',
     '/teacher/:path*',
     '/portal/:path*',
     // The counter holds borrowing history — which child has which book, and who
@@ -107,6 +106,14 @@ export const config = {
     // future sibling is forgotten the same way.
     '/library/:path*',
     '/staff/:path*',
+    // The alumni portal holds a session too — and the ONE whose credential
+    // JavaScript can read: `sk_alumni_session` lives in localStorage and is
+    // sent as a bearer token to /alumni/me/*, which returns the directory
+    // including opened emails and phone numbers. It was missed here because it
+    // has no layout of its own and no useSessionProbe, which is exactly what
+    // console-segments.test.ts looks for — so the guard could not see it
+    // either. That test now detects a session by the CREDENTIAL as well.
+    '/alumni/:path*',
     '/login',
     '/owner',
     '/account/:path*',
