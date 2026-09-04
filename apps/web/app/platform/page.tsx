@@ -1,6 +1,7 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { ExternalLink, Zap, Download, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -143,8 +144,10 @@ export default function PlatformDashboardPage() {
           <h1 className="sk-own-h1">Dashboard</h1>
           <p className="sk-own-sub">Every school, every lead — live.</p>
         </div>
-        <Link href="/platform/onboard">
-          <Button>➕ Add School</Button>
+        {/* The class goes on the link itself — a span inside it would take the
+            styling while the focus ring stayed on an invisible wrapper. */}
+        <Link href="/platform/onboard" className="sk-own-btn" data-kind="primary">
+          <Plus size={14} aria-hidden="true" /> Add a school
         </Link>
       </div>
 
@@ -203,34 +206,30 @@ export default function PlatformDashboardPage() {
 
                 <div className="flex flex-wrap gap-2">
                   {s.primaryDomain && (
-                    <a href={schoolHref(s.primaryDomain)} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-600">
-                      Visit site ↗
+                    <a href={schoolHref(s.primaryDomain)} target="_blank" rel="noreferrer" className="sk-own-btn">
+                      <ExternalLink size={13} aria-hidden="true" /> Visit site
                     </a>
                   )}
-                  <button
-                    onClick={() => impersonate(s)}
-                    disabled={impersonating === s.id}
-                    className="rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-px disabled:opacity-60"
-                  >
-                    {impersonating === s.id ? 'Minting…' : '⚡ Login as admin'}
+                  <button type="button" className="sk-own-btn" data-kind="primary"
+                    onClick={() => impersonate(s)} disabled={impersonating === s.id}>
+                    <Zap size={13} aria-hidden="true" />
+                    {impersonating === s.id ? 'Minting…' : 'Login as admin'}
                   </button>
-                  <button onClick={() => downloadCsv(s)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-600">
-                    ⬇ Enquiries CSV
+                  <button type="button" className="sk-own-btn" onClick={() => downloadCsv(s)}>
+                    <Download size={13} aria-hidden="true" /> Enquiries CSV
                   </button>
-                  <Link href={`/platform/schools/${s.id}`} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-600">
-                    Manage
-                  </Link>
+                  <Link href={`/platform/schools/${s.id}`} className="sk-own-btn">Manage</Link>
                 </div>
               </div>
             ))}
           </div>
-          <p className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs text-violet-900">
-            ⚡ <b>Login as admin</b> opens the school&rsquo;s admin portal in a new tab via a single-use link (valid 15 minutes, audit-logged, no password shown). The session can&rsquo;t be refreshed past expiry.
+          <p className="sk-notice" style={{ marginTop: 12 }}>
+            <b>Login as admin</b> opens the school&rsquo;s admin portal in a new tab via a single-use link (valid 15 minutes, audit-logged, no password shown). The session can&rsquo;t be refreshed past expiry.
           </p>
 
           {/* Marketing leads */}
-          <h2 className="mb-3 mt-8 text-lg font-bold text-slate-900">
-            Marketing leads <span className="text-xs font-semibold text-amber-600">· from sckools.com callback forms</span>
+          <h2 className="sk-eyebrow" style={{ margin: '30px 0 10px' }}>
+            Marketing leads · from sckools.com callback forms
           </h2>
           <div className="sk-tblwrap">
             <table className="w-full min-w-[640px] text-sm">

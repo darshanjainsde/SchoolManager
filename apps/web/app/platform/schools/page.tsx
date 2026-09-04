@@ -54,7 +54,7 @@ export default function SchoolsListPage() {
         <div>
           <h1>Schools</h1>
           <p>
-            Every school on Sckools — {rows.length} {rows.length === 1 ? 'school' : 'schools'}.
+            Every school on Sckools{!isLoading && !error && <> — {rows.length} {rows.length === 1 ? 'school' : 'schools'}</>}.
             Content, features and domains are managed per school.
           </p>
         </div>
