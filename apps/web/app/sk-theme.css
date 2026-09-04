@@ -31,6 +31,14 @@
    because they never vary by theme.
    ========================================================================== */
 .skosx {
+  /* A word that cannot fit its line breaks instead of escaping the box.
+     `break-word` only acts when the word would otherwise overflow — normal
+     text is untouched, and it is inert wherever `white-space: nowrap` is set
+     (so every ellipsis in this file still behaves). Without it one long
+     address — a.very.long.name@a-long-school-domain.edu.in in a narrow card —
+     widens its container and, on a phone, the page. */
+  overflow-wrap: break-word;
+
   --sk-paper: #fbf9f4;
   --sk-ink: #211d45;
   --sk-ink-2: #4b4768;

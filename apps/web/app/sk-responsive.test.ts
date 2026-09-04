@@ -106,3 +106,36 @@ describe('deliberately wide blocks stay inside a scroller', () => {
     expect(code(css)).toContain(inner);
   });
 });
+
+describe('a long unbreakable word cannot widen the page', () => {
+  it('the theme root allows over-long words to break', () => {
+    // One address like a.very.long.name@a-long-school-domain.edu.in in a narrow
+    // card would otherwise set its container's min-content width, and on a
+    // phone that becomes the page's width. `break-word` acts only when the word
+    // would overflow, so ordinary text and every ellipsis here are unaffected.
+    const root = code(css).match(/\.skosx\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(root).toMatch(/overflow-wrap:\s*break-word/);
+  });
+});
+
+describe('things this audit checked and found already correct', () => {
+  // Recorded so the next person does not re-derive them, and so a regression
+  // in any of them fails here rather than on someone's phone.
+  it('the app sidebar is hidden on a phone rather than squeezing the page', () => {
+    expect(code(css)).toMatch(/@media[^{]*max-width[\s\S]{0,400}?\.sk-side\s*\{[^}]*display:\s*none/);
+  });
+
+  it('every .sk-tbl in the app sits in a scrollable wrapper', () => {
+    const wrap = code(css).match(/\.sk-tblwrap\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(wrap).toMatch(/overflow:\s*auto/);
+  });
+
+  it('.sk-pfrow wraps instead of forcing its two fixed columns', () => {
+    const r = code(css).match(/\.sk-pfrow\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(r).toMatch(/flex-wrap:\s*wrap/);
+  });
+
+  it('no rule uses 100vw, which overflows by the scrollbar width', () => {
+    expect(code(css)).not.toMatch(/\b100vw\b/);
+  });
+});
