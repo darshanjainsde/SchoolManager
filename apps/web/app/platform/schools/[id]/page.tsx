@@ -137,13 +137,13 @@ export default function SchoolDetailPage() {
   // ── Loading / error states ───────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="p-8 text-sm text-slate-500">Loading school…</div>
+      <div className="sk-own-state">Loading school…</div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="p-8 text-sm text-rose-600">
+      <div className="sk-own-state">
         {error ? (error as Error).message : 'School not found.'}
       </div>
     );
@@ -154,11 +154,11 @@ export default function SchoolDetailPage() {
   const featureSet = new Set(school.features);
 
   return (
-    <div className="p-8 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       {/* Header ─────────────────────────────────────────────────────────── */}
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-slate-900">{school.name}</h1>
-        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+        <h1 className="sk-own-h1">{school.name}</h1>
+        <div className="flex flex-wrap items-center gap-2 sk-muted">
           <code className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">{school.slug}</code>
           <Badge tone={TIER_TONE[school.tier]}>{school.tier}</Badge>
           <Badge
@@ -239,7 +239,7 @@ export default function SchoolDetailPage() {
             </Select>
           </div>
           {tierMutation.isPending && (
-            <span className="text-xs text-slate-500">Saving…</span>
+            <span className="sk-muted">Saving…</span>
           )}
         </CardContent>
       </Card>

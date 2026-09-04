@@ -2,10 +2,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Check, X } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { OWNER_HOST } from '@/lib/hosts';
 
 interface OwnerJob {
   id: string;
@@ -24,8 +23,15 @@ interface OwnerJob {
  * is how one of them stops being read. The owner moderates VACANCIES and never
  * sees an application; there is no endpoint here that returns a candidate.
  */
+/** The queue's own colour: ours to act on, published, or turned away. */
+const TONE: Record<string, string> = { PENDING: 'warn', APPROVED: 'good', REJECTED: 'neutral' };
+
 export default function OwnerJobsPage() {
-  const api = useApi({ hostHeader: 'owner.sckools.com', audience: 'platform' });
+  // OWNER_HOST, never a literal: lib/hosts.ts is the only place the
+  // deployment's domain is named. Hardcoding the production host meant this
+  // page sent owner.sckools.com on staging, where the owner-host guard
+  // answers 403 — the queue never loaded a single vacancy there.
+  const api = useApi({ hostHeader: OWNER_HOST, audience: 'platform' });
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('PENDING');
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -46,70 +52,69 @@ export default function OwnerJobsPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Jobs</h1>
-        <p className="text-sm text-slate-500">
-          Vacancies waiting to go on the Sckools jobs board. Approving one publishes it on sckools.com/jobs.
-        </p>
-      </div>
+    <>
+      <header className="sk-own-head">
+        <div>
+          <h1>Jobs</h1>
+          <p>
+            Vacancies waiting to go on the Sckools jobs board. Approving one publishes it
+            on sckools.com/jobs.
+          </p>
+        </div>
+      </header>
 
-      <div className="flex gap-2">
+      <div className="sk-own-tabs" role="tablist" aria-label="Vacancy queue">
         {['PENDING', 'APPROVED', 'REJECTED'].map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStatus(s)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-              status === s ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'
-            }`}
-          >
+          <button key={s} type="button" role="tab" className="sk-own-tab"
+            aria-selected={status === s} onClick={() => setStatus(s)}>
             {s.charAt(0) + s.slice(1).toLowerCase()}
           </button>
         ))}
       </div>
 
-      <div className="space-y-3">
-        {(jobs ?? []).map((job) => (
-          <Card key={job.id}>
-            <CardHeader>
-              <CardTitle>{job.title}</CardTitle>
-              <p className="text-sm text-slate-500">
-                {job.school.name}
-                {job.posts > 1 ? ` · ${job.posts} positions` : ''}
+      {(jobs ?? []).map((job) => (
+        <article key={job.id} className="sk-own-order" data-tone={TONE[status] ?? 'neutral'}>
+          <div className="sk-own-order-top">
+            <div style={{ minWidth: 0 }}>
+              <h2 className="sk-own-order-title">
+                {job.title}
+                {job.posts > 1 && <span className="sk-pill" data-tone="info">{job.posts} positions</span>}
+              </h2>
+              <p className="sk-own-order-meta">{job.school.name}</p>
+              <p className="sk-own-order-spec" style={{ whiteSpace: 'pre-line', marginTop: 8 }}>
+                {job.description}
               </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="whitespace-pre-line text-sm text-slate-700">{job.description}</p>
-              {status === 'PENDING' && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" onClick={() => moderate.mutate({ id: job.id, decision: 'APPROVE' })}>
-                    Approve
-                  </Button>
-                  <Input
-                    aria-label={`Reason for rejecting ${job.title}`}
-                    placeholder="Reason (required to reject)"
-                    value={reasons[job.id] ?? ''}
-                    onChange={(e) => setReasons((r) => ({ ...r, [job.id]: e.target.value }))}
-                    className="max-w-xs"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={!reasons[job.id]?.trim()}
-                    onClick={() =>
-                      moderate.mutate({ id: job.id, decision: 'REJECT', reason: reasons[job.id] })
-                    }
-                  >
-                    Reject
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        {(jobs ?? []).length === 0 && <p className="text-sm text-slate-500">Nothing here.</p>}
-      </div>
-    </div>
+            </div>
+          </div>
+
+          {status === 'PENDING' && (
+            <div className="sk-own-acts">
+              <button type="button" className="sk-own-btn" data-kind="good"
+                onClick={() => moderate.mutate({ id: job.id, decision: 'APPROVE' })}>
+                <Check size={14} aria-hidden="true" /> Approve — publishes it
+              </button>
+              <label className="sk-own-field grow">
+                <span>Reason — required to reject, and the school reads it</span>
+                <input value={reasons[job.id] ?? ''}
+                  aria-label={`Reason for rejecting ${job.title}`}
+                  onChange={(e) => setReasons((r) => ({ ...r, [job.id]: e.target.value }))} />
+              </label>
+              <button type="button" className="sk-own-btn" data-kind="danger"
+                disabled={!reasons[job.id]?.trim()}
+                onClick={() => moderate.mutate({ id: job.id, decision: 'REJECT', reason: reasons[job.id] })}>
+                <X size={14} aria-hidden="true" /> Reject
+              </button>
+            </div>
+          )}
+        </article>
+      ))}
+
+      {(jobs ?? []).length === 0 && (
+        <p className="sk-own-state">
+          <b>Nothing in this pile.</b>
+          A school posting a vacancy puts it under <b style={{ display: 'inline' }}>Pending</b> for you to read.
+        </p>
+      )}
+    </>
   );
 }

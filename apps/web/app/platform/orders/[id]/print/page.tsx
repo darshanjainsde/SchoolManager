@@ -40,16 +40,16 @@ export default function OperatorPrintRunPage() {
         <Link href="/platform/orders" className="text-xs font-semibold text-slate-500 hover:underline">
           ← Print orders
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900">{o ? o.title : 'Print run'}</h1>
+        <h1 className="sk-own-h1">{o ? o.title : 'Print run'}</h1>
         {o && (
-          <p className="text-sm text-slate-500">
+          <p className="sk-muted">
             {o.schoolName} · {specLabel(o.spec)} · print <b className="text-slate-800">{o.quantity}</b>{' '}
             {o.quantity === 1 ? 'copy' : 'copies'} of the set
           </p>
         )}
       </div>
 
-      {(order.isLoading || artifact.isLoading) && <p className="text-sm text-slate-500">Unfreezing the register…</p>}
+      {(order.isLoading || artifact.isLoading) && <p className="sk-muted">Unfreezing the register…</p>}
       {artifact.isError && (
         <p className="text-sm text-rose-600">
           The sheets are locked until the school confirms the order — check its status on the desk.
@@ -63,7 +63,7 @@ export default function OperatorPrintRunPage() {
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
               Print {sheets.length} {sheets.length === 1 ? 'sheet' : 'sheets'}
             </button>
-            <span className="text-xs text-slate-500">
+            <span className="sk-muted">
               Frozen register snapshots — exactly what the school issued, serials included.
             </span>
           </div>

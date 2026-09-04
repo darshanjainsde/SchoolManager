@@ -130,11 +130,11 @@ export default function ConnectPage() {
   const canCreate = !!form.schoolId && !!form.title.trim() && !!form.startAt;
 
   return (
-    <div className="p-8 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       {/* Header */}
       <header>
-        <h1 className="text-2xl font-bold text-slate-900">Connect</h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <h1 className="sk-own-h1">Connect</h1>
+        <p className="sk-own-sub">
           Review and moderate cross-school network events.
         </p>
       </header>
@@ -149,13 +149,13 @@ export default function ConnectPage() {
         </CardHeader>
         <CardContent>
           {loadingPending && (
-            <div className="text-sm text-slate-500">Loading…</div>
+            <div className="sk-muted">Loading…</div>
           )}
           {pendingError && (
             <div className="text-sm text-rose-600">{(pendingError as Error).message}</div>
           )}
           {!loadingPending && !pendingError && pending.length === 0 && (
-            <div className="text-sm text-slate-500">No events awaiting review.</div>
+            <div className="sk-muted">No events awaiting review.</div>
           )}
           {!loadingPending && pending.length > 0 && (
             <Table>

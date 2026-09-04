@@ -9,12 +9,13 @@ import { useSessionProbe } from '@/lib/use-session-probe';
 import { OWNER_HOST } from '@/lib/hosts';
 import {
   LayoutDashboard, TrendingUp, School, FileText, PlusCircle,
-  Printer, Briefcase, Link2, Compass, LogOut, Menu, X,
+  Printer, Briefcase, Link2, Compass, Activity, LogOut, Menu, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import '../sk-theme.css';
 import { cn } from '@/lib/cn';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 /**
  * Owner-portal shell. Two responsibilities:
@@ -37,6 +38,7 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/platform/orders', label: 'Print Orders', icon: Printer },
   { href: '/platform/jobs', label: 'Jobs', icon: Briefcase },
   { href: '/platform/connect', label: 'Connect', icon: Link2 },
+  { href: '/platform/ops', label: 'Runtime health', icon: Activity },
   { href: '/platform/remaining', label: 'Remaining work', icon: Compass },
 ];
 
@@ -157,9 +159,10 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    // The console is a light-only UI — pin the colour scheme so native controls
-    // (inputs, selects, scrollbars) don't render with the OS's dark UA colours.
-    <div className="sk-own flex min-h-screen flex-col sm:flex-row [color-scheme:light]">
+    // No colour-scheme pin: now that the console wears sk-theme it follows the
+    // same light/dark/auto choice as the school console, and native controls
+    // follow with it.
+    <div className="sk-own flex min-h-screen flex-col sm:flex-row">
       {/* Mobile top bar — hidden at sm and above, where the sidebar takes over. */}
       <div className="flex items-center justify-between bg-slate-900 px-4 py-2.5 sm:hidden">
         <div className="flex items-center gap-2">
@@ -223,6 +226,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
             </nav>
 
             <div className="border-t border-white/10 p-4">
+              <div className="skosx mb-3"><ThemeToggle /></div>
               <button
                 onClick={handleLogout}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-white/5"
@@ -271,6 +275,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
 
         {/* Logout */}
         <div className="mt-auto border-t border-white/10 p-4">
+          <div className="skosx mb-3"><ThemeToggle /></div>
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-white/5"

@@ -2644,6 +2644,7 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
   flex-wrap: wrap;
   margin-bottom: 18px;
 }
+.sk-own-h1,
 .sk-own-head h1 {
   font-family: var(--sk-serif);
   font-size: clamp(22px, 3vw, 28px);
@@ -2653,6 +2654,9 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
   margin: 0;
   text-wrap: balance;
 }
+/* Standalone variants, so a page that is not built as a .sk-own-head block can
+   still get the console's heading without restructuring its JSX. */
+.sk-own-sub,
 .sk-own-head p {
   margin: 4px 0 0;
   font-size: 13px;

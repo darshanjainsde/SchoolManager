@@ -78,7 +78,7 @@ export default function OnboardPage() {
               password below with the admin — they must change it on first login.
             </p>
             <div>
-              <div className="text-xs text-slate-500 mb-1 font-medium">Temporary admin password</div>
+              <div className="sk-muted mb-1 font-medium">Temporary admin password</div>
               <div className="flex items-center gap-2">
                 <code className="flex-1 block rounded bg-slate-100 px-3 py-2 font-mono text-sm break-all">
                   {successInfo.tempPassword}
@@ -126,8 +126,8 @@ export default function OnboardPage() {
     <div className="mx-auto flex max-w-xl flex-col gap-6">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Add a new school</h1>
-          <p className="text-sm text-slate-500">Step {w.step} of {STEPS.length}: {STEPS[w.step - 1]}</p>
+          <h1 className="sk-own-h1">Add a new school</h1>
+          <p className="sk-muted">Step {w.step} of {STEPS.length}: {STEPS[w.step - 1]}</p>
         </div>
         <Button variant="ghost" onClick={() => w.reset()}>Start over</Button>
       </header>
@@ -319,7 +319,7 @@ function TierStep() {
   const w = useWizardStore();
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-slate-500">Pick what this school gets. You can change this later.</p>
+      <p className="sk-muted">Pick what this school gets. You can change this later.</p>
       {TIERS.map((t) => {
         const selected = w.tier === t.key;
         return (
@@ -348,7 +348,7 @@ function TierStep() {
                   <Badge tone="info">Popular</Badge>
                 )}
               </div>
-              <p className="mt-1 text-xs text-slate-500">{t.description}</p>
+              <p className="mt-1 sk-muted">{t.description}</p>
             </div>
           </button>
         );
@@ -366,7 +366,7 @@ function ConfirmStep() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-slate-500">
+      <p className="sk-muted">
         Review the details below. On create, the school record is provisioned and a temporary
         admin password is generated for you to share.
       </p>

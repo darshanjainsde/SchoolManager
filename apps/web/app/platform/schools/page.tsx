@@ -1,10 +1,7 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Plus } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { OWNER_HOST } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
@@ -23,10 +20,12 @@ interface SchoolRow {
   features: string[];
 }
 
-const TIER_TONE: Record<SchoolRow['tier'], 'neutral' | 'info' | 'success'> = {
+/* Only tones .sk-pill defines — 'success' is not one of them and would have
+   rendered as bare text. */
+const TIER_TONE: Record<SchoolRow['tier'], 'neutral' | 'info' | 'good'> = {
   BASIC: 'neutral',
   STANDARD: 'info',
-  PRO: 'success',
+  PRO: 'good',
 };
 
 const TIER_LABEL: Record<SchoolRow['tier'], string> = {
@@ -50,72 +49,66 @@ export default function SchoolsListPage() {
   const rows = data ?? [];
 
   return (
-    <div className="p-8 flex flex-col gap-6">
-      {/* Header */}
-      <header className="flex items-center justify-between">
+    <>
+      <header className="sk-own-head">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Schools</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage content, features and domains per school.
+          <h1>Schools</h1>
+          <p>
+            Every school on Sckools — {rows.length} {rows.length === 1 ? 'school' : 'schools'}.
+            Content, features and domains are managed per school.
           </p>
         </div>
-        <Link href="/platform/onboard">
-          <Button>Add School</Button>
+        <Link href="/platform/onboard" className="sk-own-btn" data-kind="primary">
+          <Plus size={14} aria-hidden="true" /> Add a school
         </Link>
       </header>
 
-      {/* Schools table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All schools</CardTitle>
-          <CardDescription>{rows.length} school{rows.length !== 1 ? 's' : ''}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading && (
-            <div className="text-sm text-slate-500">Loading…</div>
-          )}
-          {error && (
-            <div className="text-sm text-rose-600">{(error as Error).message}</div>
-          )}
-          {!isLoading && !error && rows.length === 0 && (
-            <div className="text-sm text-slate-500">No schools yet — try adding one.</div>
-          )}
-          {!isLoading && rows.length > 0 && (
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>School</Th>
-                  <Th>Domain</Th>
-                  <Th>Tier</Th>
-                  <Th>Features</Th>
-                  <Th>Status</Th>
-                  <Th className="text-right">Actions</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {rows.map((s) => (
-                  <Tr key={s.id}>
-                    <Td className="font-medium text-slate-900">{s.name}</Td>
-                    <Td className="text-slate-500">{s.primaryDomain ?? '—'}</Td>
-                    <Td>
-                      <Badge tone={TIER_TONE[s.tier]}>{TIER_LABEL[s.tier]}</Badge>
-                    </Td>
-                    <Td className="text-xs text-slate-500">
-                      {s.features.length > 0 ? s.features.join(' · ') : '—'}
-                    </Td>
-                    <Td className="text-slate-700">{s.status}</Td>
-                    <Td className="text-right">
-                      <Link href={`/platform/schools/${s.id}`}>
-                        <Button size="sm" variant="outline">Manage</Button>
-                      </Link>
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      {isLoading && <p className="sk-own-state">Loading the schools…</p>}
+      {error && (
+        <p className="sk-own-state" data-tone="err">
+          <b>The list could not load.</b>
+          {(error as Error).message}
+        </p>
+      )}
+      {!isLoading && !error && rows.length === 0 && (
+        <p className="sk-own-state">
+          <b>No schools yet.</b>
+          The first one you add appears here with its domain and plan.
+        </p>
+      )}
+
+      {!isLoading && rows.length > 0 && (
+        <div className="sk-tblwrap">
+          <table className="sk-tbl">
+            <thead>
+              <tr>
+                <th>School</th>
+                <th>Domain</th>
+                <th>Plan</th>
+                <th data-priority="2">Features</th>
+                <th>Status</th>
+                <th className="acts">&nbsp;</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr key={s.id}>
+                  <td><b>{s.name}</b></td>
+                  <td className="sk-muted">{s.primaryDomain ?? '—'}</td>
+                  <td><span className="sk-pill" data-tone={TIER_TONE[s.tier]}>{TIER_LABEL[s.tier]}</span></td>
+                  <td data-priority="2" className="sk-muted">
+                    {s.features.length > 0 ? s.features.join(' · ') : '—'}
+                  </td>
+                  <td className="sk-muted">{s.status}</td>
+                  <td className="acts">
+                    <Link href={`/platform/schools/${s.id}`} className="sk-own-btn">Manage</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }

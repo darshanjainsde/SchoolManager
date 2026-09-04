@@ -137,39 +137,39 @@ export default function PlatformDashboardPage() {
   }
 
   return (
-    <div className="p-8">
+    <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-          <p className="mt-1 text-sm text-slate-500">Every school, every lead — live.</p>
+          <h1 className="sk-own-h1">Dashboard</h1>
+          <p className="sk-own-sub">Every school, every lead — live.</p>
         </div>
         <Link href="/platform/onboard">
           <Button>➕ Add School</Button>
         </Link>
       </div>
 
-      {overview.isLoading && <div className="text-sm text-slate-500">Loading…</div>}
+      {overview.isLoading && <div className="sk-muted">Loading…</div>}
       {overview.error && <div className="text-sm text-rose-600">{(overview.error as Error).message}</div>}
 
       {overview.data && (
         <>
           {/* KPI row */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="sk-own-panel">
               <div className="text-3xl font-bold">{overview.data.totals.live}</div>
-              <div className="text-sm text-slate-500">live schools <span className="text-teal-600 font-semibold">of {overview.data.totals.schools} total</span></div>
+              <div className="sk-muted">live schools <span className="text-teal-600 font-semibold">of {overview.data.totals.schools} total</span></div>
             </div>
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="sk-own-panel">
               <div className="text-3xl font-bold tabular-nums">{formatBytes(overview.data.totals.storageBytes)}</div>
-              <div className="text-sm text-slate-500">storage used across all schools</div>
+              <div className="sk-muted">storage used across all schools</div>
             </div>
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="sk-own-panel">
               <div className="text-3xl font-bold tabular-nums">{overview.data.totals.enquiriesThisMonth}</div>
-              <div className="text-sm text-slate-500">enquiries this month</div>
+              <div className="sk-muted">enquiries this month</div>
             </div>
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="sk-own-panel">
               <div className={`text-3xl font-bold tabular-nums ${overview.data.totals.newLeads > 0 ? 'text-amber-600' : ''}`}>{overview.data.totals.newLeads}</div>
-              <div className="text-sm text-slate-500">new marketing leads{overview.data.totals.newLeads > 0 && <span className="font-semibold text-amber-600"> · needs action</span>}</div>
+              <div className="sk-muted">new marketing leads{overview.data.totals.newLeads > 0 && <span className="font-semibold text-amber-600"> · needs action</span>}</div>
             </div>
           </div>
 
@@ -177,7 +177,7 @@ export default function PlatformDashboardPage() {
           <h2 className="mb-3 mt-8 text-lg font-bold text-slate-900">Schools</h2>
           <div className="grid gap-4 lg:grid-cols-2">
             {overview.data.schools.map((s) => (
-              <div key={s.id} className="rounded-2xl bg-white p-5 shadow-sm transition hover:shadow-md">
+              <div key={s.id} className="sk-own-panel">
                 <div className="flex items-center gap-3">
                   <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-violet-500 font-bold text-white">
                     {s.name.charAt(0)}
@@ -232,7 +232,7 @@ export default function PlatformDashboardPage() {
           <h2 className="mb-3 mt-8 text-lg font-bold text-slate-900">
             Marketing leads <span className="text-xs font-semibold text-amber-600">· from sckools.com callback forms</span>
           </h2>
-          <div className="overflow-x-auto rounded-2xl bg-white shadow-sm">
+          <div className="sk-tblwrap">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -347,11 +347,11 @@ function MarketingSettings({ initial, onSaved }: { initial: MarketingConfigRow; 
   });
 
   return (
-    <div className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
+    <div className="mt-8 sk-own-panel">
       <h2 className="text-lg font-bold text-slate-900">
         Marketing site settings <span className="text-xs font-semibold text-slate-500">· pricing &amp; contact shown on sckools.com, live within a minute</span>
       </h2>
-      <p className="mt-1 text-sm text-slate-500">
+      <p className="sk-own-sub">
         Prices are <b>per year</b>. Schools in India are billed the ₹ INR figure, everyone else the $ USD figure —
         other countries see the USD price converted live on sckools.com/pricing.
       </p>
