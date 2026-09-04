@@ -83,7 +83,7 @@ export default function SchoolsListPage() {
             <thead>
               <tr>
                 <th>School</th>
-                <th>Domain</th>
+                <th data-priority="2">Domain</th>
                 <th>Plan</th>
                 <th data-priority="2">Features</th>
                 <th>Status</th>
@@ -94,7 +94,7 @@ export default function SchoolsListPage() {
               {rows.map((s) => (
                 <tr key={s.id}>
                   <td><b>{s.name}</b></td>
-                  <td className="sk-muted">{s.primaryDomain ?? '—'}</td>
+                  <td data-priority="2" className="sk-muted">{s.primaryDomain ?? '—'}</td>
                   <td><span className="sk-pill" data-tone={TIER_TONE[s.tier]}>{TIER_LABEL[s.tier]}</span></td>
                   <td data-priority="2" className="sk-muted">
                     {s.features.length > 0 ? s.features.join(' · ') : '—'}

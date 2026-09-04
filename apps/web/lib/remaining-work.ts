@@ -117,16 +117,6 @@ export const REMAINING_WORK: WorkItem[] = [
     status: 'READY',
     blockedOn: null,
   },
-  {
-    id: 'platform-ops-unlinked',
-    module: 'Platform',
-    title: 'The ops dashboard reads as a wall of numbers',
-    why:
-      'It is in the nav now, and the palette complaint is gone — the whole console wears sk-theme with a light/dark toggle, so .skosx is correct rather than a defect. What is left is the page itself: runtime health is presented as a list of readings with nothing saying which of them is bad.',
-    needs: 'Thresholds on the page, so a number that matters looks different from one that does not.',
-    status: 'READY',
-    blockedOn: null,
-  },
 ];
 
 export const STATUS_LABEL: Record<WorkStatus, string> = {
