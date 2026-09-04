@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import type { StaffRole } from '@prisma/client';
+import type { StaffRole } from '@skoolos/db';
 
 export const STAFF_ROLES = 'staffRoles';
 

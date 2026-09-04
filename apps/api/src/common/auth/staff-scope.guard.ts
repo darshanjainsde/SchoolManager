@@ -6,7 +6,7 @@ import { ApiError } from '../errors/api-error';
 import type { SchoolJwtPayload } from './jwt-payload';
 import { TenantContextService } from '../../modules/tenancy';
 import { STAFF_ROLES } from './staff-role.decorator';
-import type { StaffRole } from '@prisma/client';
+import type { StaffRole } from '@skoolos/db';
 
 /**
  * Narrows a STAFF login to particular kinds of staff.
