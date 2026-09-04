@@ -31,6 +31,15 @@ describe('management authorization', () => {
     adminToken = signSchoolToken({ sub: seeded.adminUserId, schoolId, role: 'SCHOOL_ADMIN' });
     staffToken = signSchoolToken({ sub: seeded.staffUserId, schoolId, role: 'STAFF' });
 
+    // PRESS is in no tier (packages/db/src/features.ts) — it only ever arrives
+    // by override. Without this the press routes 403 from RequireFeatureGuard
+    // and the role assertions below would pass no matter what @Roles said.
+    // Watched: with this absent, removing @Roles('SCHOOL_ADMIN') from
+    // certificates/issue left the test green.
+    await getPlatformPrisma().featureOverride.create({
+      data: { schoolId, featureKey: 'PRESS', enabled: true },
+    });
+
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
     await app.init();
@@ -386,6 +395,99 @@ describe('management authorization', () => {
         .get('/manage/grades')
         .set(as(adminToken))
         .expect(200);
+    });
+  });
+
+  describe('the fee desk — STAFF runs it, SCHOOL_ADMIN owns the money', () => {
+    // A seeded OFFICE login reached all of these before the fix. `STAFF` is
+    // not one job: the enum covers OFFICE, SUPPORT, DRIVER, HELPER, SECURITY
+    // and LIBRARIAN.
+    it('a STAFF login cannot change the payment gateway credentials', async () => {
+      await request(app.getHttpServer())
+        .put('/manage/fees/payment-setup/provider')
+        .set(as(staffToken))
+        .send({})
+        .expect(403);
+    });
+
+    it('a STAFF login cannot change the bank account fees are paid into', async () => {
+      await request(app.getHttpServer())
+        .put('/manage/fees/payment-setup/bank')
+        .set(as(staffToken))
+        .send({})
+        .expect(403);
+    });
+
+    it('a STAFF login cannot reverse a completed payment', async () => {
+      await request(app.getHttpServer())
+        .post(`/manage/fees/payments/${GHOST}/reverse`)
+        .set(as(staffToken))
+        .send({})
+        .expect(403);
+    });
+
+    it('a STAFF login cannot grant a concession', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/fees/concessions')
+        .set(as(staffToken))
+        .send({})
+        .expect(403);
+    });
+
+    it('a STAFF login cannot generate the term billing', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/fees/billing/generate')
+        .set(as(staffToken))
+        .send({ termId: GHOST })
+        .expect(403);
+    });
+
+    // The other half of the fix: the daily desk work must still work.
+    it('a STAFF login can still read the payments list', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/fees/payments')
+        .set(as(staffToken));
+      expect(res.status).not.toBe(403);
+    });
+
+    it('a STAFF login can still record a payment', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/manage/fees/payments/record')
+        .set(as(staffToken))
+        .send({});
+      expect(res.status).not.toBe(403);
+    });
+
+    it('a STUDENT cannot touch the fee desk at all', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/fees/payments')
+        .set(as(studentToken))
+        .expect(403);
+    });
+  });
+
+  describe('the press — a certificate is a legal document', () => {
+    it('a STAFF login cannot issue a certificate', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/press/certificates/issue')
+        .set(as(staffToken))
+        .send({})
+        .expect(403);
+    });
+
+    it('a STAFF login cannot void a register entry', async () => {
+      await request(app.getHttpServer())
+        .post(`/manage/press/register/${GHOST}/void`)
+        .set(as(staffToken))
+        .send({})
+        .expect(403);
+    });
+
+    it('a STAFF login can still read the register', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/press/register')
+        .set(as(staffToken));
+      expect(res.status).not.toBe(403);
     });
   });
 

@@ -25,6 +25,12 @@ import {
  * a term's cards is front-office work, and gating it tighter than the fee desk
  * would only route it through the principal's password.
  */
+/**
+ * A transfer certificate is a legal document and voiding the register unmakes
+ * one. Those three routes are SCHOOL_ADMIN even though the desk itself is open
+ * to STAFF — see the note on FeesController for why the STAFF role is too
+ * coarse to carry that authority.
+ */
 @Controller('manage/press')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
 @RequireFeature('PRESS')
@@ -118,12 +124,14 @@ export class PressController {
     return this.certificates.prepare(this.sid(), studentId);
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Post('certificates/issue') @HttpCode(201)
   issueCertificate(@CurrentUser() u: SchoolJwtPayload, @Body() dto: IssueCertificateDto) {
     return this.certificates.issue(this.sid(), dto, u.sub);
   }
 
   /** One class, one type, one run — see CertificateService.bulkIssue. */
+  @Roles('SCHOOL_ADMIN')
   @Post('certificates/bulk') @HttpCode(200)
   bulkCertificates(@CurrentUser() u: SchoolJwtPayload, @Body() dto: BulkCertificatesDto) {
     return this.certificates.bulkIssue(this.sid(), dto, u.sub);
@@ -146,6 +154,7 @@ export class PressController {
   }
 
   /** Strike an entry through — the only correction the register accepts. */
+  @Roles('SCHOOL_ADMIN')
   @Post('register/:id/void') @HttpCode(200)
   voidIssue(
     @CurrentUser() u: SchoolJwtPayload,

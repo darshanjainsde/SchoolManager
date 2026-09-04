@@ -33,6 +33,24 @@ export const MAX_PROOF_BYTES = 5 * 1024 * 1024;
  * into a central account-manager portal later is a routing and role change
  * rather than a rewrite of the service beneath it.
  */
+/**
+ * STAFF vs SCHOOL_ADMIN on this desk.
+ *
+ * The class grants SCHOOL_ADMIN and STAFF, and `STAFF` is not one job — the
+ * enum covers OFFICE, SUPPORT, DRIVER, HELPER, SECURITY and LIBRARIAN. An
+ * audit on 4 Sept 2026 signed in as a seeded OFFICE login and reached the
+ * payment-gateway credentials, the bank account fees are routed to, and
+ * payment reversal; the same token was correctly refused (403) on
+ * /manage/students, which is how we know those were real authorization
+ * passes and not a broken probe.
+ *
+ * Recording, verifying and rejecting a payment is the fee desk's daily job and
+ * stays open to STAFF. What moves money, changes the fee structure, grants a
+ * concession or reverses a completed payment is SCHOOL_ADMIN, marked
+ * per-handler below. LibraryController narrows the same role pair with
+ * LibrarianGuard; the same could be done here off Staff.role if an accounts
+ * role is ever added.
+ */
 @Controller('manage/fees')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
 @RequireFeature('FEES')
@@ -56,12 +74,15 @@ export class FeesController {
   @Get('categories') listCategories() { return this.setup.listCategories(this.sid()); }
 
   /** Seeds the starter set on first open. Idempotent. */
+  @Roles('SCHOOL_ADMIN')
   @Post('categories/seed') @HttpCode(200) seedCategories() { return this.setup.seedCategories(this.sid()); }
 
+  @Roles('SCHOOL_ADMIN')
   @Put('categories') saveCategory(@Body() dto: SaveCategoryDto) {
     return this.setup.saveCategory(this.sid(), dto);
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Delete('categories/:id') archiveCategory(@Param('id', ParseUUIDPipe) id: string) {
     return this.setup.archiveCategory(this.sid(), id);
   }
@@ -72,6 +93,7 @@ export class FeesController {
     return this.setup.listTerms(this.sid(), yearId);
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Put('terms') saveTerms(@Body() dto: SaveTermsDto) { return this.setup.saveTerms(this.sid(), dto); }
 
   /**
@@ -81,6 +103,7 @@ export class FeesController {
    */
   @Get('settings') getSettings() { return this.setup.getSettings(this.sid()); }
 
+  @Roles('SCHOOL_ADMIN')
   @Put('settings') saveSettings(@Body() dto: SaveSettingsDto) {
     return this.setup.saveSettings(this.sid(), dto);
   }
@@ -91,6 +114,7 @@ export class FeesController {
     return this.setup.getGrid(this.sid(), yearId);
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Put('grid') saveGrid(@Body() dto: SaveGridDto) { return this.setup.saveGrid(this.sid(), dto); }
 
   // ── Step 4 · exceptions ───────────────────────────────────────────────────
@@ -99,10 +123,12 @@ export class FeesController {
     return this.setup.listConcessions(this.sid(), studentId);
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Post('concessions') saveConcession(@Body() dto: SaveConcessionDto, @CurrentUser() u: SchoolJwtPayload) {
     return this.setup.saveConcession(this.sid(), u.sub, dto);
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Delete('concessions/:id') deleteConcession(@Param('id', ParseUUIDPipe) id: string) {
     return this.setup.deleteConcession(this.sid(), id);
   }
@@ -114,6 +140,7 @@ export class FeesController {
     return this.billing.preview(this.sid(), termId);
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Post('billing/generate') @HttpCode(200) generate(@Body('termId', ParseUUIDPipe) termId: string) {
     return this.billing.generate(this.sid(), termId);
   }
@@ -122,10 +149,12 @@ export class FeesController {
 
   @Get('payment-setup') paymentSetup() { return this.config.getSetup(this.sid()); }
 
+  @Roles('SCHOOL_ADMIN')
   @Put('payment-setup/bank') saveBank(@Body() dto: SaveBankDetailDto) {
     return this.config.saveBankDetail(this.sid(), dto);
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Post('payment-setup/bank/qr')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
   saveQr(@UploadedFile() file?: { originalname: string; buffer: Buffer; mimetype: string }) {
@@ -138,6 +167,7 @@ export class FeesController {
     });
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Put('payment-setup/provider') saveProvider(@Body() dto: SaveProviderConfigDto) {
     return this.config.saveProviderConfig(this.sid(), dto);
   }
@@ -160,6 +190,7 @@ export class FeesController {
     return this.payments.reject(this.sid(), u.sub, id, dto);
   }
 
+  @Roles('SCHOOL_ADMIN')
   @Post('payments/:id/reverse') @HttpCode(200)
   reverse(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReversePaymentDto, @CurrentUser() u: SchoolJwtPayload) {
     return this.payments.reverse(this.sid(), u.sub, id, dto.reason);
