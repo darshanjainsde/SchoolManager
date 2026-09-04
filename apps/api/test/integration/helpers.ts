@@ -75,6 +75,8 @@ export interface MinimalSchool {
   adminUserId: string;
   /** A non-teaching Staff login — role STAFF, with a linked `Staff` row (see `Staff.userId`). */
   staffUserId: string;
+  /** A STAFF login whose Staff row is DRIVER — for "which kind of staff" tests. */
+  driverUserId: string;
 }
 
 /**
@@ -97,7 +99,7 @@ export async function seedMinimalSchool(): Promise<MinimalSchool> {
   // for a genuine login — never actually exercised by this suite.
   const passwordHash = await argon2.hash('not-used-in-this-suite', { type: argon2.argon2id });
 
-  const [student, teacher, teacher2, admin, staffUser] = await Promise.all([
+  const [student, teacher, teacher2, admin, staffUser, driverUser] = await Promise.all([
     db.user.create({
       data: { schoolId: school.id, email: `student@${slug}.test`, role: 'STUDENT', passwordHash },
     }),
@@ -112,6 +114,9 @@ export async function seedMinimalSchool(): Promise<MinimalSchool> {
     }),
     db.user.create({
       data: { schoolId: school.id, email: `staff@${slug}.test`, role: 'STAFF', passwordHash },
+    }),
+    db.user.create({
+      data: { schoolId: school.id, email: `driver@${slug}.test`, role: 'STAFF', passwordHash },
     }),
   ]);
 
@@ -128,6 +133,19 @@ export async function seedMinimalSchool(): Promise<MinimalSchool> {
     },
   });
 
+  // A second STAFF login that is NOT the office. `@Roles('STAFF')` cannot tell
+  // these two apart — that is the whole point of StaffScopeGuard, and without
+  // a non-office staff row in the fixture there is no way to prove it works.
+  await db.staff.create({
+    data: {
+      schoolId: school.id,
+      firstName: 'Dev',
+      lastName: 'Driver',
+      role: 'DRIVER',
+      userId: driverUser.id,
+    },
+  });
+
   const env = loadEnv();
   return {
     schoolId: school.id,
@@ -137,5 +155,6 @@ export async function seedMinimalSchool(): Promise<MinimalSchool> {
     teacherUserId2: teacher2.id,
     adminUserId: admin.id,
     staffUserId: staffUser.id,
+    driverUserId: driverUser.id,
   };
 }

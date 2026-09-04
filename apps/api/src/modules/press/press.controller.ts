@@ -3,6 +3,8 @@ import {
 } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
+import { StaffScopeGuard } from '../../common/auth/staff-scope.guard';
+import { StaffRoles } from '../../common/auth/staff-role.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
@@ -32,9 +34,13 @@ import {
  * coarse to carry that authority.
  */
 @Controller('manage/press')
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard, StaffScopeGuard)
 @RequireFeature('PRESS')
 @Roles('SCHOOL_ADMIN', 'STAFF')
+/** The press desk is the office's, for the same reason as the fee desk: a
+ * transfer certificate is a legal document and voiding the register unmakes
+ * one. STAFF alone admitted every staff kind. */
+@StaffRoles('OFFICE')
 export class PressController {
   constructor(
     private readonly reportCards: ReportCardService,
@@ -124,14 +130,12 @@ export class PressController {
     return this.certificates.prepare(this.sid(), studentId);
   }
 
-  @Roles('SCHOOL_ADMIN')
   @Post('certificates/issue') @HttpCode(201)
   issueCertificate(@CurrentUser() u: SchoolJwtPayload, @Body() dto: IssueCertificateDto) {
     return this.certificates.issue(this.sid(), dto, u.sub);
   }
 
   /** One class, one type, one run — see CertificateService.bulkIssue. */
-  @Roles('SCHOOL_ADMIN')
   @Post('certificates/bulk') @HttpCode(200)
   bulkCertificates(@CurrentUser() u: SchoolJwtPayload, @Body() dto: BulkCertificatesDto) {
     return this.certificates.bulkIssue(this.sid(), dto, u.sub);
@@ -154,7 +158,6 @@ export class PressController {
   }
 
   /** Strike an entry through — the only correction the register accepts. */
-  @Roles('SCHOOL_ADMIN')
   @Post('register/:id/void') @HttpCode(200)
   voidIssue(
     @CurrentUser() u: SchoolJwtPayload,

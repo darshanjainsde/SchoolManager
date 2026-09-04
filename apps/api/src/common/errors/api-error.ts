@@ -131,6 +131,7 @@ export type ErrorCode =
   | 'ALREADY_AT_SCHOOL'
   /** Caller's STAFF login has no Staff row with role LIBRARIAN — pair with 403. */
   | 'NOT_LIBRARIAN'
+  | 'STAFF_ROLE_NOT_PERMITTED'
   /** Borrower is at their loan limit; re-send with `override: true` to issue anyway — pair with 409. */
   | 'LIBRARY_LIMIT'
   /** Borrower already holds an open copy of this title; `override: true` issues anyway — pair with 409. */

@@ -10,6 +10,7 @@ import { SchoolResolveService } from './school-resolve.service';
 import { TenantContextService } from '../../tenancy';
 import { FeatureResolverService } from '../../features';
 import { Public } from '../../../common/auth/public.decorator';
+import { shapeTokenResponse } from '../../../common/auth/refresh-body';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
@@ -53,15 +54,19 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
-  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+  async login(
+    @Req() req: Request,
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const ctx = this.tenantCtx.requireTenant();
     const tokens = await this.auth.login(ctx.schoolId, dto.identifier ?? dto.email ?? '', dto.password);
     // Per-school cookie name: signing into a second school must not overwrite
     // (or be overwritten by) the first — they share the parent domain.
     setRefreshCookie(res, schoolRefreshCookie(ctx.schoolSlug), tokens.refreshToken, this.env);
-    // refreshToken stays in the body for now: clients released before the
-    // cookie existed still read it from here. Drop it once they are gone.
-    return tokens;
+    // Browsers get the cookie only; native clients still need the body copy.
+    // See refresh-body.ts — apps/mobile has no cookie jar doing this for it.
+    return shapeTokenResponse(tokens, req);
   }
 
   @Public()
@@ -87,7 +92,7 @@ export class AuthController {
     // name. A session that arrived on the legacy shared cookie (or a body
     // token) leaves with a per-school cookie — that is the migration path.
     setRefreshCookie(res, schoolRefreshCookie(ctx.schoolSlug), tokens.refreshToken, this.env);
-    return tokens;
+    return shapeTokenResponse(tokens, req);
   }
 
   @Public()

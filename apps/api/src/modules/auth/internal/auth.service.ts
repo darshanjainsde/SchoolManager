@@ -197,11 +197,25 @@ export class AuthService {
     return { accessToken, expiresIn: this.env.JWT_ACCESS_TTL, impersonated: true };
   }
 
+  /**
+   * Revokes the whole token FAMILY, not just the row the browser presented.
+   *
+   * If a refresh token had already been stolen and rotated, killing only the
+   * victim's current row leaves the attacker's descendant live — and that is
+   * precisely the case where logging out is the thing the victim is counting
+   * on. Reuse detection would eventually catch it, but only if the victim
+   * refreshes again, which they will not: they just logged out.
+   */
   async logout(schoolId: string, rawToken: string): Promise<void> {
     const hash = sha256(rawToken);
     await withTenant(schoolId, async (tx) => {
+      const row = await tx.refreshToken.findFirst({
+        where: { schoolId, tokenHash: hash },
+        select: { familyId: true },
+      });
+      if (!row) return;
       await tx.refreshToken.updateMany({
-        where: { schoolId, tokenHash: hash, revokedAt: null },
+        where: { schoolId, familyId: row.familyId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
     }).catch(() => undefined);

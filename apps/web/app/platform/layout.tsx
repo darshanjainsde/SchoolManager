@@ -153,7 +153,15 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   if (status !== 'authed') return null;
 
   function handleLogout() {
-    // Client-side only logout — no server endpoint exists yet
+    // Tell the server first. Clearing the store alone left the refresh cookie
+    // in the browser and its row unrevoked, so the session survived "sign out"
+    // for up to 30 days — a replayed POST /owner/auth/refresh still minted a
+    // full platform token, over every school.
+    //
+    // The navigation does not wait on the request and does not depend on it
+    // succeeding: a failed logout must still get the operator off the screen,
+    // which matters most on the shared machine this protects.
+    void probeApi.post('/owner/auth/logout', {}).catch(() => undefined);
     clear();
     router.replace('/platform/login');
   }

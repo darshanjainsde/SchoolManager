@@ -1,3 +1,4 @@
+import { Throttle } from '@nestjs/throttler';
 import {
   Body,
   Controller,
@@ -100,6 +101,8 @@ export class PublicAlumniController {
    * anybody exist to another human being.
    */
   @Public()
+  // Inherited the global 100/min; creates a record from an unauthenticated caller.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('claims')
   submitClaim(@Body() dto: CreateClaimDto) {
     return this.alumni.submitClaim(this.sid(), dto);
@@ -113,6 +116,8 @@ export class PublicAlumniController {
    * cannot be used to ask whether an address belongs to an alumnus here.
    */
   @Public()
+  // Inherited the global 100/min; sends mail to an address the caller names.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('link-request')
   requestLink(@Body() dto: RequestLinkDto) {
     return this.alumni.requestLink(this.sid(), dto);
@@ -126,6 +131,8 @@ export class PublicAlumniController {
    * concept and the guard downstream is unchanged.
    */
   @Public()
+  // Inherited the global 100/min; a password login, same limit /auth/login uses.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   async login(@Body() dto: AlumniLoginDto) {
     const r = await this.auth.loginWithPassword(this.sid(), dto.email, dto.password);
@@ -140,6 +147,8 @@ export class PublicAlumniController {
    * logs and in the Referer header of every outbound link on the page.
    */
   @Public()
+  // Inherited the global 100/min; redeems a claim token.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('claim')
   async claim(@Body() dto: RedeemClaimDto) {
     const r = await this.auth.redeemClaim(this.sid(), dto.token);

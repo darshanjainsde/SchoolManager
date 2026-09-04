@@ -14,6 +14,7 @@ describe('management authorization', () => {
   let teacher2Token: string;
   let adminToken: string;
   let staffToken: string;
+  let driverToken: string;
   let teacherUserId: string;
   let teacherUserId2: string;
   let studentUserId: string;
@@ -30,6 +31,7 @@ describe('management authorization', () => {
     teacher2Token = signSchoolToken({ sub: seeded.teacherUserId2, schoolId, role: 'TEACHER' });
     adminToken = signSchoolToken({ sub: seeded.adminUserId, schoolId, role: 'SCHOOL_ADMIN' });
     staffToken = signSchoolToken({ sub: seeded.staffUserId, schoolId, role: 'STAFF' });
+    driverToken = signSchoolToken({ sub: seeded.driverUserId, schoolId, role: 'STAFF' });
 
     // PRESS is in no tier (packages/db/src/features.ts) — it only ever arrives
     // by override. Without this the press routes 403 from RequireFeatureGuard
@@ -398,96 +400,88 @@ describe('management authorization', () => {
     });
   });
 
-  describe('the fee desk — STAFF runs it, SCHOOL_ADMIN owns the money', () => {
-    // A seeded OFFICE login reached all of these before the fix. `STAFF` is
-    // not one job: the enum covers OFFICE, SUPPORT, DRIVER, HELPER, SECURITY
-    // and LIBRARIAN.
-    it('a STAFF login cannot change the payment gateway credentials', async () => {
+  describe('the fee desk and the press — the OFFICE, not every staff kind', () => {
+    // The intent was already written down: fees-authz.e2e-spec.ts opens with
+    // "Every /manage/fees/* route: office only." The implementation could not
+    // say that — @Roles('SCHOOL_ADMIN','STAFF') admits DRIVER, HELPER and
+    // SECURITY alongside the bursar. An audit signed in as office staff and
+    // reached the gateway credentials, which was intended; the hole is that
+    // the school's driver could have done the same.
+    it('a DRIVER cannot change the payment gateway credentials', async () => {
       await request(app.getHttpServer())
         .put('/manage/fees/payment-setup/provider')
-        .set(as(staffToken))
+        .set(as(driverToken))
         .send({})
         .expect(403);
     });
 
-    it('a STAFF login cannot change the bank account fees are paid into', async () => {
+    it('a DRIVER cannot change the bank account fees are paid into', async () => {
       await request(app.getHttpServer())
         .put('/manage/fees/payment-setup/bank')
-        .set(as(staffToken))
+        .set(as(driverToken))
         .send({})
         .expect(403);
     });
 
-    it('a STAFF login cannot reverse a completed payment', async () => {
+    it('a DRIVER cannot reverse a payment', async () => {
       await request(app.getHttpServer())
         .post(`/manage/fees/payments/${GHOST}/reverse`)
-        .set(as(staffToken))
+        .set(as(driverToken))
         .send({})
         .expect(403);
     });
 
-    it('a STAFF login cannot grant a concession', async () => {
+    it('a DRIVER cannot even read the payments list', async () => {
       await request(app.getHttpServer())
-        .post('/manage/fees/concessions')
-        .set(as(staffToken))
+        .get('/manage/fees/payments')
+        .set(as(driverToken))
+        .expect(403);
+    });
+
+    it('a DRIVER cannot issue a certificate', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/press/certificates/issue')
+        .set(as(driverToken))
         .send({})
         .expect(403);
     });
 
-    it('a STAFF login cannot generate the term billing', async () => {
-      await request(app.getHttpServer())
-        .post('/manage/fees/billing/generate')
-        .set(as(staffToken))
-        .send({ termId: GHOST })
-        .expect(403);
-    });
-
-    // The other half of the fix: the daily desk work must still work.
-    it('a STAFF login can still read the payments list', async () => {
+    // The other half, and the reason this is a narrowing rather than a ban:
+    // the office still runs both desks.
+    it('the OFFICE can still reach the fee desk', async () => {
       const res = await request(app.getHttpServer())
         .get('/manage/fees/payments')
         .set(as(staffToken));
       expect(res.status).not.toBe(403);
     });
 
-    it('a STAFF login can still record a payment', async () => {
+    it('the OFFICE can still change the payment setup', async () => {
       const res = await request(app.getHttpServer())
-        .post('/manage/fees/payments/record')
+        .put('/manage/fees/payment-setup/provider')
         .set(as(staffToken))
         .send({});
       expect(res.status).not.toBe(403);
     });
 
-    it('a STUDENT cannot touch the fee desk at all', async () => {
-      await request(app.getHttpServer())
-        .get('/manage/fees/payments')
-        .set(as(studentToken))
-        .expect(403);
-    });
-  });
-
-  describe('the press — a certificate is a legal document', () => {
-    it('a STAFF login cannot issue a certificate', async () => {
-      await request(app.getHttpServer())
-        .post('/manage/press/certificates/issue')
-        .set(as(staffToken))
-        .send({})
-        .expect(403);
-    });
-
-    it('a STAFF login cannot void a register entry', async () => {
-      await request(app.getHttpServer())
-        .post(`/manage/press/register/${GHOST}/void`)
-        .set(as(staffToken))
-        .send({})
-        .expect(403);
-    });
-
-    it('a STAFF login can still read the register', async () => {
+    it('the OFFICE can still reach the press', async () => {
       const res = await request(app.getHttpServer())
         .get('/manage/press/register')
         .set(as(staffToken));
       expect(res.status).not.toBe(403);
+    });
+
+    it('an admin is unaffected by the staff narrowing', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/fees/payments')
+        .set(as(adminToken));
+      expect(res.status).not.toBe(403);
+    });
+
+    it('a STUDENT still cannot touch the fee desk', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/fees/payments')
+        .set(as(studentToken))
+        .expect(403);
     });
   });
 

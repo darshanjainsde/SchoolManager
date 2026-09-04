@@ -57,12 +57,24 @@ export class OwnerAuthService {
       throw new ServiceUnavailableException('Owner gate is not enabled');
     }
     if (!gatePasswordMatches(password, this.env.OWNER_GATE_PASSWORD)) {
+      await this.recordGateFailure();
       throw new UnauthorizedException('Invalid credentials');
     }
     const db = getPlatformPrisma();
     const owner = await db.user.findFirst({ where: { schoolId: null, role: 'OWNER', isActive: true } });
     if (!owner) throw new UnauthorizedException('Invalid credentials');
-    await db.user.update({ where: { id: owner.id }, data: { lastLoginAt: new Date() } });
+    // The gate shares the OWNER account's lockout counter with login(). It had
+    // none of its own: a single shared 8-character password with no
+    // failed-attempt limit, behind a per-IP throttle that fails open when
+    // Redis is unreachable. Checked AFTER the password compare so a locked
+    // account cannot be used to probe whether the password was right.
+    if (owner.lockedUntil && owner.lockedUntil > new Date()) {
+      throw new UnauthorizedException('Too many attempts. Try again later.');
+    }
+    await db.user.update({
+      where: { id: owner.id },
+      data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
+    });
     this.logger.log(`Owner console unlocked via gate password (user ${owner.id})`);
     return this.issue(owner.id);
   }
@@ -82,8 +94,49 @@ export class OwnerAuthService {
       throw new UnauthorizedException('Refresh token invalid');
     }
     if (row.expiresAt < new Date()) throw new UnauthorizedException('Refresh token expired');
+    // The school path re-checks this and the owner path did not: deactivating
+    // the owner account left every outstanding 30-day refresh token working.
+    const user = await db.user.findUnique({ where: { id: payload.sub } });
+    if (!user || !user.isActive || user.schoolId !== null) {
+      await db.refreshToken.updateMany({
+        where: { familyId: row.familyId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      throw new UnauthorizedException('Refresh token invalid');
+    }
     await db.refreshToken.update({ where: { id: row.id }, data: { revokedAt: new Date() } });
     return this.issue(payload.sub, row.familyId);
+  }
+
+  /**
+   * End the session server-side.
+   *
+   * There was no owner logout at all: the console cleared a client store and
+   * navigated, while the cookie stayed in the browser and its row stayed
+   * unrevoked, so POST /owner/auth/refresh kept minting platform tokens for up
+   * to 30 days after "sign out".
+   *
+   * Revokes the whole FAMILY, not just the presented token. If a refresh token
+   * had already been stolen and rotated, revoking only the row the victim
+   * holds leaves the attacker's descendant live — which is the one case where
+   * logging out matters most.
+   */
+  async logout(rawToken: string | undefined): Promise<void> {
+    if (!rawToken) return;
+    const db = getPlatformPrisma();
+    const row = await db.refreshToken.findUnique({ where: { tokenHash: sha256(rawToken) } });
+    if (!row) return;
+    await db.refreshToken.updateMany({
+      where: { familyId: row.familyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  /** Shared with login()'s counter, so gate and email attempts add up. */
+  private async recordGateFailure(): Promise<void> {
+    const db = getPlatformPrisma();
+    const owner = await db.user.findFirst({ where: { schoolId: null, role: 'OWNER', isActive: true } });
+    if (owner) await this.recordFailedAttempt(owner);
   }
 
   private async issue(userId: string, familyId: string = randomUUID()): Promise<IssuedTokens> {
