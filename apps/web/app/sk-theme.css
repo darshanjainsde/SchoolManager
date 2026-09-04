@@ -2304,3 +2304,617 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
 .sk-eh-saved .open:hover { border-color: var(--sk-brand); }
 .sk-eh-saved .open .nm { font-family: var(--sk-serif); font-size: 14px; font-weight: 650; }
 .sk-eh-saved .open .meta { font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); }
+
+/* ── THE LIBRARY AS A CONSOLE TAB ─────────────────────────────────────────
+   The library used to be its own portal with its own chrome; it is now a tab
+   inside the admin console (and, for the librarian, inside her own portal).
+   These four rules exist because the same hand-rolled utilities were being
+   written at four to six call sites each, which is how the counter ended up
+   looking like a different product from Exam Hall next door.
+
+   Every value resolves through an EXISTING token, so both schemes and both
+   theme toggles follow with no new declarations. */
+
+/* The section strip sits INSIDE a page, under the pagehead — not under a
+   topbar like /portal and /teacher. Plain `.sk-tabs` centres itself at 68rem,
+   which floats the strip away from the left-aligned pagehead above it on any
+   wide screen (visible on the Alumni page today). It also has no rule of its
+   own, because in the portals the topbar supplies one. */
+.sk-tabs.sk-lib-tabs {
+  max-width: none; margin: 0 0 20px; padding: 0;
+  border-bottom: 1px solid var(--sk-line);
+}
+
+/* A row action — "Return", "Remind", "Waive". Full `.sk-btn` is too chunky
+   inside a list row, and the six places that needed one had each hand-rolled
+   a rounded-full brand-tint pill instead, so an ACTION was wearing the same
+   shape as a STATUS pill. Same button family, one size down. */
+.sk-btn[data-size="sm"] { padding: 5px 11px; font-size: 12px; border-radius: 9px; gap: 5px; }
+
+/* The counter's scan field. A librarian types accession numbers into it all
+   day, so the value is mono while the placeholder stays prose — and the whole
+   box, not just the input, takes the focus ring, because the magnifier sits
+   inside the border. */
+.sk-scan { display: flex; align-items: center; gap: 9px; border: 1.5px solid var(--sk-line-2);
+  background: var(--sk-card); border-radius: 11px; padding: 8px 11px; }
+.sk-scan:focus-within { border-color: var(--sk-brand); }
+.sk-scan > svg { flex: none; color: var(--sk-ink-3); }
+.sk-scan > input { border: 0; background: none; color: var(--sk-ink); font: inherit; font-size: 13px;
+  width: 100%; outline: none; font-family: var(--sk-mono); }
+.sk-scan > input::placeholder { font-family: inherit; color: var(--sk-ink-3); }
+
+/* A settings toggle. State is driven from aria-checked alone, so the look and
+   the accessible state cannot disagree — the previous version set the fill with
+   a template class next to the aria attribute and could. */
+.sk-switch { width: 42px; height: 24px; border-radius: 999px; border: 1px solid var(--sk-line-2);
+  background: var(--sk-bg-2); position: relative; cursor: pointer; flex: none; padding: 0;
+  transition: background 0.14s var(--sk-ease), border-color 0.14s var(--sk-ease); }
+.sk-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--sk-card); box-shadow: var(--sk-shadow-sm);
+  transition: transform 0.16s var(--sk-ease); }
+.sk-switch[aria-checked="true"] { background: var(--sk-good); border-color: transparent; }
+.sk-switch[aria-checked="true"]::after { transform: translateX(18px); }
+.sk-switch:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .sk-switch, .sk-switch::after { transition: none; }
+}
+
+/* ── EVENTS: CARDS, COMPOSER AND THE PROMO KIT ────────────────────────────
+   Events was one of the last console pages still built on the shadcn kit
+   (`components/ui/*`), which is why its buttons and cards read as a different
+   product from Exam Hall next door. These rules replace that kit for this
+   page; every value resolves through an existing token, so both schemes and
+   both theme toggles follow with no new declarations.
+
+   Everything here is fluid by construction — `auto-fill` grids and
+   `minmax()` rather than breakpoint-by-breakpoint widths — because the same
+   screens are used on an office desktop, the head's iPad and a phone at the
+   school gate. */
+
+/* The card grid. One column on a phone, as many as fit after that; no
+   breakpoint names the device, so a 360px phone and a 1440px desktop are the
+   same rule. */
+.sk-ev-grid { display: grid; gap: 15px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 262px), 1fr)); }
+
+.sk-ev-card {
+  background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r);
+  box-shadow: var(--sk-shadow); overflow: hidden; display: flex; flex-direction: column;
+  transition: transform 0.14s var(--sk-ease), border-color 0.14s var(--sk-ease);
+}
+.sk-ev-card:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
+@media (prefers-reduced-motion: reduce) { .sk-ev-card { transition: none; } .sk-ev-card:hover { transform: none; } }
+/* The cover is a FIXED 16:9 window, and everything inside it is taken out of
+   flow to keep it that way. A photo left in flow with height:100% resolves
+   against a height the aspect-ratio has not decided yet, so a PORTRAIT photo
+   grew its own card to twice the height of its neighbours and the row stopped
+   lining up — which is exactly what shipped. Absolute positioning means the
+   picture can never have an opinion about the tile's size. */
+.sk-ev-cover { aspect-ratio: 16 / 9; position: relative; overflow: hidden; background: var(--sk-bg-2); }
+.sk-ev-cover > svg,
+.sk-ev-cover > img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+.sk-ev-cover > img[data-focus="top"] { object-position: 50% 0%; }
+.sk-ev-cover > img[data-focus="bottom"] { object-position: 50% 100%; }
+
+/* Choosing a photo: show what the tile will actually keep.
+   A 16:9 window over the whole picture, everything outside it dimmed — so the
+   crop is a decision somebody makes rather than a surprise they discover on
+   the events page. */
+.sk-ev-croppreview { position: relative; border-radius: var(--sk-r-sm); overflow: hidden; background: var(--sk-bg-2); display: block; }
+.sk-ev-croppreview > img { display: block; width: 100%; height: auto; }
+.sk-ev-cropmask { position: absolute; inset: 0; pointer-events: none; }
+.sk-ev-cropmask::before,
+.sk-ev-cropmask::after { content: ""; position: absolute; left: 0; right: 0; background: rgba(20, 16, 50, 0.62); }
+.sk-ev-cropwin { position: absolute; left: 0; right: 0; outline: 2px solid #fff; outline-offset: -2px; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+.sk-ev-cropwin::after {
+  content: "shown on the card"; position: absolute; left: 6px; bottom: 6px;
+  background: rgba(255,255,255,.92); color: #211d45; border-radius: 6px;
+  padding: 2px 7px; font-size: 10px; font-weight: 750; letter-spacing: .02em;
+}
+/* The date sits ON the art so the card leads with WHEN, which is the only
+   thing anyone scans an events list for. */
+.sk-ev-when {
+  position: absolute; left: 11px; bottom: 11px; background: var(--sk-card); border-radius: 10px;
+  padding: 5px 9px 6px; text-align: center; box-shadow: var(--sk-shadow-sm); min-width: 46px;
+}
+.sk-ev-when .d { font-family: var(--sk-serif); font-size: 19px; font-weight: 650; line-height: 1; display: block; }
+.sk-ev-when .m { font-size: 9.5px; font-weight: 750; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sk-ink-3); margin-top: 2px; display: block; }
+.sk-ev-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0; }
+.sk-ev-title { font-family: var(--sk-serif); font-size: 16.5px; font-weight: 650; letter-spacing: -0.005em; line-height: 1.2; }
+.sk-ev-meta { font-size: 12px; color: var(--sk-ink-3); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sk-ev-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-ev-blurb { font-size: 12px; color: var(--sk-ink-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sk-ev-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+/* Actions wrap rather than squash: at 360px three buttons cannot share a row,
+   and a Delete pushed off the screen edge is the bug that produces. */
+.sk-ev-acts { display: flex; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--sk-line); padding: 10px 14px; }
+/* A finished event keeps its page and its attendance list, but stops
+   competing with next week's fair for attention. */
+.sk-ev-card[data-past="true"] .sk-ev-cover > svg { filter: grayscale(0.85); }
+
+/* The composer: fields beside a live preview of the card being made. Single
+   column until there is genuinely room for two — 940px, not a device name. */
+.sk-ev-compose { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 940px) { .sk-ev-compose { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); } }
+.sk-ev-two { display: grid; gap: 11px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }
+.sk-ev-artrow { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 62px), 1fr)); gap: 7px; }
+.sk-ev-artpick {
+  border: 1.5px solid var(--sk-line); border-radius: 9px; overflow: hidden; cursor: pointer;
+  background: none; padding: 0; aspect-ratio: 16 / 10; display: block; width: 100%;
+}
+.sk-ev-artpick > svg { display: block; width: 100%; height: 100%; }
+.sk-ev-artpick[aria-pressed="true"] { border-color: var(--sk-brand); box-shadow: 0 0 0 2px var(--sk-brand-tint); }
+.sk-ev-artpick:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+
+/* The Promo Kit: the piece list beside the sheet. Below 960px the list
+   becomes a horizontal strip so the sheet — the thing being judged — keeps
+   the full width of a phone. */
+.sk-ev-kit { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 960px) { .sk-ev-kit { grid-template-columns: 272px minmax(0, 1fr); } }
+.sk-ev-pieces { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+@media (min-width: 960px) { .sk-ev-pieces { flex-direction: column; overflow: visible; padding-bottom: 0; } }
+.sk-ev-piece {
+  display: flex; gap: 10px; align-items: flex-start; text-align: left; cursor: pointer;
+  border: 1.5px solid var(--sk-line); background: var(--sk-card); border-radius: 12px;
+  padding: 10px 11px; flex: none; min-width: 168px;
+}
+@media (min-width: 960px) { .sk-ev-piece { min-width: 0; } }
+.sk-ev-piece:hover { border-color: var(--sk-brand); }
+.sk-ev-piece[aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); }
+.sk-ev-piece > span:last-child { min-width: 0; }
+.sk-ev-piece .nm, .sk-ev-piece .sz { display: block; }
+.sk-ev-piece .nm { font-size: 12.5px; font-weight: 700; }
+.sk-ev-piece[aria-pressed="true"] .nm { color: var(--sk-brand-2); }
+.sk-ev-piece .sz { font-size: 11px; color: var(--sk-ink-3); margin-top: 1px; }
+/* The paper figure: a proportional rectangle, so the list shows shape as well
+   as saying a size name nobody pictures. */
+.sk-ev-piece .fig { width: 26px; flex: none; display: grid; place-items: center; }
+.sk-ev-piece .fig i { display: block; border: 1.6px solid var(--sk-ink-3); border-radius: 2px; }
+.sk-ev-piece[aria-pressed="true"] .fig i { border-color: var(--sk-brand-2); }
+
+.sk-ev-sheetwrap {
+  background: var(--sk-bg-2); border: 1px solid var(--sk-line); border-radius: var(--sk-r);
+  padding: clamp(12px, 3vw, 24px); display: grid; place-items: center;
+}
+/* The sheet is an SVG, so it fits any width by construction — the same node is
+   the preview, the print artwork and the downloaded file. `max-width` caps it
+   on a desktop; `width:100%` lets a phone have all of it. */
+.sk-ev-sheet { width: 100%; max-width: 460px; }
+.sk-ev-sheet[data-wide="true"] { max-width: 560px; }
+.sk-ev-sheet > svg {
+  display: block; width: 100%; height: auto;
+  background: #fff; box-shadow: 0 2px 6px rgba(33, 29, 69, 0.14), 0 26px 50px -30px rgba(33, 29, 69, 0.5);
+}
+.sk-ev-sheet[data-mono="true"] > svg { filter: grayscale(1); }
+.sk-ev-outrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* ── THE ADMISSIONS DESK ───────────────────────────────────────────────────
+   Enquiries was a stack of full-width rows on the shadcn kit, with the whole
+   right-hand side of the console empty. It is a master/detail desk now: the
+   list answers "who", the panel answers everything else, and neither repeats
+   the other. */
+
+.sk-enq-desk { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 1000px) { .sk-enq-desk { grid-template-columns: minmax(0, 370px) minmax(0, 1fr); } }
+
+/* Stage chips scroll horizontally on a phone rather than wrapping into a
+   four-line block that pushes the list off the screen. */
+.sk-enq-filters { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; }
+.sk-enq-chip {
+  flex: none; cursor: pointer; border: 1.5px solid var(--sk-line); background: var(--sk-card);
+  border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--sk-ink-2);
+}
+.sk-enq-chip:hover { border-color: var(--sk-brand); }
+.sk-enq-chip[aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); color: var(--sk-brand-2); }
+
+.sk-enq-list { display: flex; flex-direction: column; max-height: 60vh; overflow-y: auto; }
+@media (min-width: 1000px) { .sk-enq-list { max-height: 560px; } }
+.sk-enq-row {
+  display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%; cursor: pointer;
+  background: none; border: 0; border-top: 1px solid var(--sk-line); padding: 11px 4px;
+}
+.sk-enq-row:first-child { border-top: 0; }
+.sk-enq-row:hover { background: var(--sk-bg-2); }
+.sk-enq-row[aria-current="true"] { background: var(--sk-brand-tint); }
+.sk-enq-row:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: -2px; }
+.sk-enq-row .av {
+  width: 34px; height: 34px; border-radius: 11px; flex: none; display: grid; place-items: center;
+  font-weight: 750; font-size: 12px; color: #fff;
+}
+.sk-enq-row .txt { min-width: 0; flex: 1; }
+/* A row is a BUTTON, so its label pair must be spans — and spans do not stack
+   unless told to. Three separate rows in this console shipped reading
+   "Vikram JoshiClass V · 5 Aug" before this was written down. */
+.sk-enq-row .nm,
+.sk-enq-row .meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-enq-row .nm { font-weight: 650; font-size: 13.5px; }
+.sk-enq-row .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-enq-row .side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.sk-enq-due { font-size: 10.5px; font-weight: 750; }
+.sk-enq-due[data-tone="bad"] { color: var(--sk-bad); }
+.sk-enq-due[data-tone="warn"] { color: var(--sk-amber-ink); }
+.sk-enq-due[data-tone="muted"] { color: var(--sk-ink-3); }
+
+/* The pipeline, as a row of steps you can click straight to. */
+.sk-enq-stages { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+.sk-enq-stage {
+  flex: 1 0 auto; cursor: pointer; border: 1.5px solid var(--sk-line); background: var(--sk-card);
+  border-radius: 9px; padding: 7px 9px; font-size: 11.5px; font-weight: 700;
+  color: var(--sk-ink-3); white-space: nowrap;
+}
+.sk-enq-stage:hover { border-color: var(--sk-brand); }
+.sk-enq-stage[data-state="done"] { border-color: var(--sk-good); color: var(--sk-good); background: var(--sk-good-tint); }
+.sk-enq-stage[data-state="now"] { border-color: var(--sk-brand); color: var(--sk-brand-2); background: var(--sk-brand-tint); }
+.sk-enq-stage[data-state="lost"] { border-color: var(--sk-bad); color: var(--sk-bad); background: var(--sk-bad-tint); }
+
+.sk-enq-contact { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); }
+.sk-enq-fields { display: grid; gap: 11px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 165px), 1fr)); }
+
+/* The history. A timeline, so a note and a stage change read as one story. */
+.sk-enq-tl { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--sk-line); }
+.sk-enq-tl:first-child { border-top: 0; }
+.sk-enq-tl .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sk-brand); margin-top: 6px; flex: none; }
+.sk-enq-tl[data-kind="STAGE"] .dot { background: var(--sk-good); }
+.sk-enq-tl[data-kind="SYSTEM"] .dot { background: var(--sk-line-2); }
+.sk-enq-tl .body { font-size: 13px; }
+.sk-enq-tl .who { font-size: 11px; color: var(--sk-ink-3); }
+
+/* ── DATA TABLES ───────────────────────────────────────────────────────────
+   Every table in this console was hand-rolled from two inline style objects
+   (`thStyle` / `tdStyle`) copied file to file, which is why no two of them
+   line up and none of them has a sticky header. This is that recipe, once.
+
+   The rule that matters: a row is ONE LINE. The students table stacked a
+   status pill above a full-size button inside a cell, which made every row
+   ~160px tall — eight hundred children became a page you scroll for a minute
+   to reach the letter S. Actions belong beside the fact they act on, at icon
+   size. */
+
+.sk-tblwrap {
+  overflow: auto;
+  /* A long roster scrolls INSIDE its card against a header that stays put.
+     Paging the whole window loses the column names after four rows. */
+  max-height: min(70vh, 720px);
+  border-radius: var(--sk-r);
+}
+.sk-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sk-tbl th {
+  text-align: left; padding: 10px 14px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--sk-ink-3);
+  white-space: nowrap; background: var(--sk-card);
+  position: sticky; top: 0; z-index: 1;
+  /* A sticky header needs its own rule: a border-bottom on a sticky element
+     scrolls away with the cell in some engines, a box-shadow does not. */
+  box-shadow: inset 0 -1px 0 var(--sk-line);
+}
+.sk-tbl td {
+  padding: 9px 14px; border-top: 1px solid var(--sk-line); vertical-align: middle;
+  /* One line by default. A cell that genuinely holds prose opts out. */
+  white-space: nowrap;
+}
+.sk-tbl td[data-wrap="true"] { white-space: normal; }
+/* A cell whose contents have no natural ceiling — a joined list, a long URL —
+   must not be allowed to widen the table past its container. Every td is
+   `nowrap` and .sk-tblwrap is `overflow: auto`, so one long cell silently
+   scrolls the ACTIONS column out of reach: the Schools list rendered eleven
+   feature keys on one unbreakable line and pushed Status and Manage off the
+   right edge, which reads as "this page is a static report" rather than "this
+   table scrolls sideways". The action column is the only one that does
+   anything, so it is the last thing that may be pushed away.
+
+   max-width:0 + width:100% is the standard pair for this: width:100% makes
+   this the column that absorbs the leftover space, max-width:0 stops its
+   content from voting on the table's width. Opt-in, so no existing table
+   changes behaviour. */
+.sk-tbl td[data-truncate="true"] {
+  max-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sk-tbl tbody tr:hover td { background: var(--sk-bg-2); }
+.sk-tbl .num { font-family: var(--sk-mono); font-size: 12px; color: var(--sk-ink-3); }
+/* Actions sit hard right, so the eye finds them in the same place on every
+   row however wide the table is. */
+.sk-tbl th.acts, .sk-tbl td.acts { text-align: right; width: 1%; }
+.sk-tbl td.acts > span { display: inline-flex; gap: 6px; justify-content: flex-end; align-items: center; }
+/* A cell that pairs a status with the action that changes it. */
+.sk-tbl .pairs { display: inline-flex; align-items: center; gap: 7px; }
+/* Secondary columns fold away rather than forcing a horizontal scrollbar on a
+   phone. Nothing here is the only place its fact appears — the child's page
+   carries all of it. */
+@media (max-width: 900px) { .sk-tbl [data-priority="2"] { display: none; } }
+
+/* A slim row of controls above a table: search, a filter, a count. It was a
+   whole card holding one select, which read as a section of the page rather
+   than as a control on the table below it. */
+.sk-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.sk-toolbar .grow { flex: 1 1 240px; min-width: 0; }
+.sk-toolbar .count { font-size: 12px; color: var(--sk-ink-3); margin-left: auto; white-space: nowrap; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE OWNER CONSOLE  (/platform)
+   ═══════════════════════════════════════════════════════════════════════════
+   Sckools' own operations desk: every school's orders, schools, jobs and
+   growth on one set of screens. It is a different job from the school console
+   — nobody browses it, an operator works a queue in it — so it gets its own
+   family rather than borrowing `.sk-card` and drifting.
+
+   Two rules this family exists to hold:
+
+   1. Twelve pages were built out of raw utility classes, each one guessing the
+      spacing and the button weight afresh. They did not agree, and it showed.
+   2. Seven buttons used `disabled:opacity-40`. Fading a dark fill toward the
+      page makes a muddy grey the label falls into, at exactly the moment the
+      label is saying something ("Sending…"). Disabled here gets its own flat
+      fill and a readable label, per the house rule.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* No private palette: the owner console wears the same Sckools indigo as
+   everything else. What tells you which console you are in is the OWNER badge
+   and the rail, not a second brand colour — an accent invented here would drift
+   from --sk-brand the first time the brand moved. */
+
+/* ── Page head ──────────────────────────────────────────────────────────── */
+.sk-own-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.sk-own-h1,
+.sk-own-head h1 {
+  font-family: var(--sk-serif);
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--sk-ink);
+  margin: 0;
+  text-wrap: balance;
+}
+/* Standalone variants, so a page that is not built as a .sk-own-head block can
+   still get the console's heading without restructuring its JSX. */
+.sk-own-sub,
+.sk-own-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--sk-ink-3);
+  max-width: 68ch;
+}
+
+/* ── Filter rail with counts ────────────────────────────────────────────── */
+.sk-own-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--sk-line);
+}
+.sk-own-tabs::-webkit-scrollbar { display: none; }
+.sk-own-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 9px 12px 11px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sk-ink-3);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.sk-own-tab:hover { color: var(--sk-ink); }
+/* State lives in one place — driven off aria-selected, never a second inline
+   style that can disagree with it. */
+.sk-own-tab[aria-selected='true'] {
+  color: var(--sk-brand);
+  border-bottom-color: var(--sk-brand);
+}
+.sk-own-tab .n {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--sk-line);
+  color: var(--sk-ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.sk-own-tab[aria-selected='true'] .n { background: var(--sk-brand-tint); color: var(--sk-brand); }
+/* The pile that earns money carries its number in the brand, so the eye lands
+   on it first among six otherwise identical tabs. */
+.sk-own-tab .n[data-tone='due'] { background: var(--sk-brand-tint); color: var(--sk-brand-2); }
+
+/* ── The queue card ─────────────────────────────────────────────────────── */
+.sk-own-order {
+  position: relative;
+  background: var(--sk-paper);
+  border: 1px solid var(--sk-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.sk-own-order + .sk-own-order { margin-top: 12px; }
+/* A stripe down the edge, so the pile is readable without reading it. */
+.sk-own-order::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--sk-line);
+}
+.sk-own-order[data-tone='info']::before { background: var(--sk-brand); }
+.sk-own-order[data-tone='warn']::before { background: var(--sk-amber); }
+.sk-own-order[data-tone='good']::before { background: var(--sk-good); }
+.sk-own-order[data-tone='bad']::before { background: var(--sk-bad); }
+.sk-own-order[data-tone='neutral']::before { background: var(--sk-line); }
+
+.sk-own-order-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 14px 16px 14px 19px;
+}
+.sk-own-order-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sk-ink);
+}
+.sk-own-order-spec { margin: 5px 0 0; font-size: 13px; color: var(--sk-ink); }
+.sk-own-order-meta { margin: 3px 0 0; font-size: 12px; color: var(--sk-ink-3); }
+.sk-own-order-note {
+  margin: 7px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--sk-line);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--sk-ink-3);
+}
+
+/* The parcel label. It is literally an address that gets copied onto a
+   package, so it is set like one — monospaced and boxed, not as prose. */
+.sk-own-addr {
+  align-self: start;
+  min-width: 190px;
+  max-width: 260px;
+  padding: 9px 11px;
+  border: 1px dashed var(--sk-line);
+  border-radius: 8px;
+  background: var(--sk-bg-2);
+  font-family: var(--sk-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--sk-ink-3);
+}
+.sk-own-addr b { display: block; color: var(--sk-ink); font-weight: 700; }
+.sk-own-addr .none { font-style: italic; color: var(--sk-bad); }
+
+/* ── The action bar ─────────────────────────────────────────────────────── */
+.sk-own-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 16px 13px 19px;
+  border-top: 1px solid var(--sk-line);
+  background: var(--sk-bg-2);
+}
+.sk-own-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sk-own-field > span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--sk-ink-3);
+}
+.sk-own-field input {
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--sk-line);
+  border-radius: 7px;
+  background: var(--sk-paper);
+  color: var(--sk-ink);
+  font: inherit;
+  font-size: 13px;
+}
+.sk-own-field input:focus-visible {
+  outline: 2px solid var(--sk-brand);
+  outline-offset: 1px;
+  border-color: var(--sk-brand);
+}
+.sk-own-field.grow { flex: 1 1 190px; }
+
+.sk-own-btn {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  background: var(--sk-paper);
+  border-color: var(--sk-line);
+  color: var(--sk-ink);
+}
+.sk-own-btn:hover:not(:disabled) { border-color: var(--sk-ink-3); }
+.sk-own-btn[data-kind='primary'] { background: var(--sk-brand); color: #fff; border-color: var(--sk-brand); }
+.sk-own-btn[data-kind='good'] { background: var(--sk-good); color: #fff; border-color: var(--sk-good); }
+.sk-own-btn[data-kind='danger'] { background: var(--sk-bad); color: #fff; border-color: var(--sk-bad); }
+.sk-own-btn[data-kind='quiet'] { background: none; border-color: transparent; color: var(--sk-ink-3); }
+/* Disabled is a flat neutral with dark ink — never a faded fill, which turns
+   the label to mud right when it is reporting progress. */
+.sk-own-btn:disabled {
+  cursor: not-allowed;
+  background: var(--sk-line);
+  border-color: var(--sk-line);
+  color: var(--sk-ink-3);
+}
+
+.sk-own-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--sk-bad);
+  cursor: pointer;
+}
+.sk-own-link:hover { text-decoration: underline; }
+
+/* ── Cards, grids and states shared by the other owner pages ────────────── */
+.sk-own-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+.sk-own-panel {
+  background: var(--sk-paper);
+  border: 1px solid var(--sk-line);
+  border-radius: 12px;
+  padding: 15px 16px;
+}
+.sk-own-panel > h2 {
+  margin: 0 0 3px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sk-ink);
+}
+.sk-own-panel > h2 + p { margin: 0 0 12px; font-size: 12px; color: var(--sk-ink-3); }
+
+/* Empty, loading and error are designs, not fallbacks — each says what would
+   be here, or what to do next. */
+.sk-own-state {
+  padding: 30px 18px;
+  border: 1px dashed var(--sk-line);
+  border-radius: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--sk-ink-3);
+}
+.sk-own-state b { display: block; color: var(--sk-ink); font-size: 14px; margin-bottom: 3px; }
+.sk-own-state[data-tone='err'] { border-style: solid; border-color: var(--sk-bad); color: var(--sk-bad); }
+
+/* ── Narrow ─────────────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  /* The address stops being a column and becomes a block under the order —
+     at this width a 190px sidecar squeezes the title to nothing. */
+  .sk-own-order-top { grid-template-columns: minmax(0, 1fr); }
+  .sk-own-addr { max-width: none; }
+  .sk-own-acts > .sk-own-btn { flex: 1 1 auto; justify-content: center; }
+}

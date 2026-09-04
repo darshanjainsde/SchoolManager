@@ -18,6 +18,7 @@ import { Roles } from '../../../common/auth/roles.decorator';
 import { TenantContextService } from '../../tenancy';
 import { MediaService } from './media.service';
 import { ListMediaDto } from './cms.dto';
+import { assertUploadKind, IMAGE_KINDS } from '../../../common/storage/upload-kind';
 
 const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT', 'EVENT'];
 
@@ -44,8 +45,13 @@ export class MediaController {
   upload(@UploadedFile() file: Express.Multer.File, @Query('kind') kind: string) {
     if (!file) throw new BadRequestException('file required');
     if (!KINDS.includes(kind)) throw new BadRequestException('invalid kind');
-    if (!/^image\//.test(file.mimetype)) throw new BadRequestException('only images allowed');
-    return this.media.upload(this.sid(), kind as any, file);
+    // Sniffed from the bytes, not taken from the multipart header: the old
+    // check accepted anything the client CALLED an image, and `image/svg+xml`
+    // is a script container once served from the storage origin.
+    const sniffed = assertUploadKind(file.buffer, IMAGE_KINDS, 'image');
+    // Hand the service the type derived from the bytes, so the stored object's
+    // Content-Type is never a string the caller chose.
+    return this.media.upload(this.sid(), kind as any, { ...file, mimetype: sniffed.mime });
   }
 
   @Get()

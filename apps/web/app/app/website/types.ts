@@ -12,6 +12,9 @@ export interface SiteProfile {
   postalCode?: string | null;
   country?: string | null;
   mapEmbedUrl?: string | null;
+  /** Statutory head for the Press: "CBSE, New Delhi" + affiliation number. */
+  board?: string | null;
+  affiliationNo?: string | null;
   logoAssetId?: string | null;
   faviconAssetId?: string | null;
   headingFont?: string | null;

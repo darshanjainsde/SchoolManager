@@ -134,21 +134,37 @@ export class ApiClient {
   async get<T = unknown>(path: string): Promise<T> {
     return this.request<T>(path, { method: 'GET' });
   }
-  async post<T = unknown>(path: string, body?: unknown): Promise<T> {
+  /**
+   * JSON bodies only — and the `B extends FormData ? never : B` is load-bearing.
+   *
+   * `JSON.stringify(new FormData())` is not an error and not "[object
+   * FormData]": FormData has no enumerable own properties, so it serialises to
+   * the two characters `{}`. The request then leaves with
+   * Content-Type: application/json and Content-Length: 2, every field silently
+   * gone, and the server answers with a validation error naming whichever
+   * property it happened to check first. Three fee screens shipped that way —
+   * the counter payment, the parent's "I have paid", and the UPI QR upload —
+   * and the reported symptom was "studentId must be a UUID", which sends the
+   * diagnosis to the id rather than to the encoding.
+   *
+   * Passing a FormData now makes the parameter type `never`, so it is a
+   * compile error pointing at the call site. Use `postForm` instead.
+   */
+  async post<T = unknown, B = unknown>(path: string, body?: B extends FormData ? never : B): Promise<T> {
     return this.request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
   }
-  async patch<T = unknown>(path: string, body?: unknown): Promise<T> {
+  async patch<T = unknown, B = unknown>(path: string, body?: B extends FormData ? never : B): Promise<T> {
     return this.request<T>(path, { method: 'PATCH', body: body === undefined ? undefined : JSON.stringify(body) });
   }
-  async put<T = unknown>(path: string, body?: unknown): Promise<T> {
+  async put<T = unknown, B = unknown>(path: string, body?: B extends FormData ? never : B): Promise<T> {
     return this.request<T>(path, { method: 'PUT', body: body === undefined ? undefined : JSON.stringify(body) });
   }
   /**
    * Multipart POST. Deliberately a separate method rather than a branch inside
    * `post`: the body must NOT be JSON.stringify'd, and `request` already knows
    * to leave Content-Type alone for FormData so the browser can set its own
-   * boundary. Passing a FormData to `post` would silently send the string
-   * "[object FormData]".
+   * boundary. Passing a FormData to `post` sends the two characters `{}` —
+   * see the note on `post`, which now rejects it at compile time.
    */
   async postForm<T = unknown>(path: string, body: FormData): Promise<T> {
     return this.request<T>(path, { method: 'POST', body });

@@ -1,6 +1,7 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { ExternalLink, Zap, Download, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -137,39 +138,41 @@ export default function PlatformDashboardPage() {
   }
 
   return (
-    <div className="p-8">
+    <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-          <p className="mt-1 text-sm text-slate-500">Every school, every lead — live.</p>
+          <h1 className="sk-own-h1">Dashboard</h1>
+          <p className="sk-own-sub">Every school, every lead — live.</p>
         </div>
-        <Link href="/platform/onboard">
-          <Button>➕ Add School</Button>
+        {/* The class goes on the link itself — a span inside it would take the
+            styling while the focus ring stayed on an invisible wrapper. */}
+        <Link href="/platform/onboard" className="sk-own-btn" data-kind="primary">
+          <Plus size={14} aria-hidden="true" /> Add a school
         </Link>
       </div>
 
-      {overview.isLoading && <div className="text-sm text-slate-500">Loading…</div>}
+      {overview.isLoading && <div className="sk-muted">Loading…</div>}
       {overview.error && <div className="text-sm text-rose-600">{(overview.error as Error).message}</div>}
 
       {overview.data && (
         <>
           {/* KPI row */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="sk-own-panel">
               <div className="text-3xl font-bold">{overview.data.totals.live}</div>
-              <div className="text-sm text-slate-500">live schools <span className="text-teal-600 font-semibold">of {overview.data.totals.schools} total</span></div>
+              <div className="sk-muted">live schools <span className="text-teal-600 font-semibold">of {overview.data.totals.schools} total</span></div>
             </div>
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="sk-own-panel">
               <div className="text-3xl font-bold tabular-nums">{formatBytes(overview.data.totals.storageBytes)}</div>
-              <div className="text-sm text-slate-500">storage used across all schools</div>
+              <div className="sk-muted">storage used across all schools</div>
             </div>
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="sk-own-panel">
               <div className="text-3xl font-bold tabular-nums">{overview.data.totals.enquiriesThisMonth}</div>
-              <div className="text-sm text-slate-500">enquiries this month</div>
+              <div className="sk-muted">enquiries this month</div>
             </div>
-            <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="sk-own-panel">
               <div className={`text-3xl font-bold tabular-nums ${overview.data.totals.newLeads > 0 ? 'text-amber-600' : ''}`}>{overview.data.totals.newLeads}</div>
-              <div className="text-sm text-slate-500">new marketing leads{overview.data.totals.newLeads > 0 && <span className="font-semibold text-amber-600"> · needs action</span>}</div>
+              <div className="sk-muted">new marketing leads{overview.data.totals.newLeads > 0 && <span className="font-semibold text-amber-600"> · needs action</span>}</div>
             </div>
           </div>
 
@@ -177,7 +180,7 @@ export default function PlatformDashboardPage() {
           <h2 className="mb-3 mt-8 text-lg font-bold text-slate-900">Schools</h2>
           <div className="grid gap-4 lg:grid-cols-2">
             {overview.data.schools.map((s) => (
-              <div key={s.id} className="rounded-2xl bg-white p-5 shadow-sm transition hover:shadow-md">
+              <div key={s.id} className="sk-own-panel">
                 <div className="flex items-center gap-3">
                   <div className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-teal-500 to-violet-500 font-bold text-white">
                     {s.name.charAt(0)}
@@ -203,36 +206,32 @@ export default function PlatformDashboardPage() {
 
                 <div className="flex flex-wrap gap-2">
                   {s.primaryDomain && (
-                    <a href={schoolHref(s.primaryDomain)} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-600">
-                      Visit site ↗
+                    <a href={schoolHref(s.primaryDomain)} target="_blank" rel="noreferrer" className="sk-own-btn">
+                      <ExternalLink size={13} aria-hidden="true" /> Visit site
                     </a>
                   )}
-                  <button
-                    onClick={() => impersonate(s)}
-                    disabled={impersonating === s.id}
-                    className="rounded-lg bg-gradient-to-r from-violet-600 to-violet-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-px disabled:opacity-60"
-                  >
-                    {impersonating === s.id ? 'Minting…' : '⚡ Login as admin'}
+                  <button type="button" className="sk-own-btn" data-kind="primary"
+                    onClick={() => impersonate(s)} disabled={impersonating === s.id}>
+                    <Zap size={13} aria-hidden="true" />
+                    {impersonating === s.id ? 'Minting…' : 'Login as admin'}
                   </button>
-                  <button onClick={() => downloadCsv(s)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-600">
-                    ⬇ Enquiries CSV
+                  <button type="button" className="sk-own-btn" onClick={() => downloadCsv(s)}>
+                    <Download size={13} aria-hidden="true" /> Enquiries CSV
                   </button>
-                  <Link href={`/platform/schools/${s.id}`} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-600">
-                    Manage
-                  </Link>
+                  <Link href={`/platform/schools/${s.id}`} className="sk-own-btn">Manage</Link>
                 </div>
               </div>
             ))}
           </div>
-          <p className="mt-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs text-violet-900">
-            ⚡ <b>Login as admin</b> opens the school&rsquo;s admin portal in a new tab via a single-use link (valid 15 minutes, audit-logged, no password shown). The session can&rsquo;t be refreshed past expiry.
+          <p className="sk-notice" style={{ marginTop: 12 }}>
+            <b>Login as admin</b> opens the school&rsquo;s admin portal in a new tab via a single-use link (valid 15 minutes, audit-logged, no password shown). The session can&rsquo;t be refreshed past expiry.
           </p>
 
           {/* Marketing leads */}
-          <h2 className="mb-3 mt-8 text-lg font-bold text-slate-900">
-            Marketing leads <span className="text-xs font-semibold text-amber-600">· from sckools.com callback forms</span>
+          <h2 className="sk-eyebrow" style={{ margin: '30px 0 10px' }}>
+            Marketing leads · from sckools.com callback forms
           </h2>
-          <div className="overflow-x-auto rounded-2xl bg-white shadow-sm">
+          <div className="sk-tblwrap">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -347,11 +346,11 @@ function MarketingSettings({ initial, onSaved }: { initial: MarketingConfigRow; 
   });
 
   return (
-    <div className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
+    <div className="mt-8 sk-own-panel">
       <h2 className="text-lg font-bold text-slate-900">
         Marketing site settings <span className="text-xs font-semibold text-slate-500">· pricing &amp; contact shown on sckools.com, live within a minute</span>
       </h2>
-      <p className="mt-1 text-sm text-slate-500">
+      <p className="sk-own-sub">
         Prices are <b>per year</b>. Schools in India are billed the ₹ INR figure, everyone else the $ USD figure —
         other countries see the USD price converted live on sckools.com/pricing.
       </p>

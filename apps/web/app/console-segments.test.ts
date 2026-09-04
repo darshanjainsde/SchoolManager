@@ -30,13 +30,66 @@ const webRoot = resolve(process.cwd());
 const appDir = resolve(webRoot, 'app');
 const middlewareSrc = readFileSync(resolve(webRoot, 'middleware.ts'), 'utf8');
 
-/** Top-level segments whose layout establishes a session. */
+/** Every file under a directory, for scanning. */
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = resolve(dir, e.name);
+    if (e.isDirectory()) return filesUnder(full);
+    return /\.(tsx?|jsx?)$/.test(e.name) && !/\.test\./.test(e.name) ? [full] : [];
+  });
+}
+
+/**
+ * Anything that means "this page holds a credential a script could read".
+ *
+ * `useSessionProbe` is deliberately NOT here — it marks the cookie-backed
+ * consoles, which the layout check below already finds. These are the
+ * JS-readable ones.
+ */
+const CREDENTIAL_MARKERS = [
+  'sk_alumni_session',
+  "Authorization', 'Bearer",
+  'Authorization: `Bearer',
+];
+
+/** Comments are prose, not behaviour. /preview/page.tsx documents that it has
+ *  no useSessionProbe, which matched a naive scan and made the guard flag a
+ *  segment holding no session at all. */
+function code(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
+/**
+ * Segments that hold a JS-readable session but cannot be detected by scanning
+ * their own files.
+ *
+ * /alumni's page.tsx holds nothing: it renders PublicSite, which renders
+ * AlumniSection, which keeps `sk_alumni_session` in localStorage and sends it
+ * as a bearer token to /alumni/me/*. Following imports to find that was tried
+ * and reverted — PublicSite is the shared hub for every public view, so the
+ * scan then flagged /academics, /connect and the rest, none of which mount the
+ * alumni session. A named case with its reason beats an inference that is
+ * wrong more often than it is right.
+ *
+ * NOTE, and it is the bigger point: localStorage is scoped to the ORIGIN, not
+ * the path. The alumni session is therefore readable from any page on the
+ * school's host, so listing /alumni here hardens where it is USED, not
+ * everywhere it can be READ. Covering the whole tenant site, or moving that
+ * session off localStorage, is the real fix.
+ */
+const KNOWN_SESSION_SEGMENTS = ['alumni'];
+
+/** Top-level segments that establish a session, by cookie or by bearer token. */
 function sessionSegments(): string[] {
   return readdirSync(appDir, { withFileTypes: true })
     .filter((e) => e.isDirectory() && !e.name.startsWith('_') && !e.name.startsWith('('))
     .filter((e) => {
       const layout = resolve(appDir, e.name, 'layout.tsx');
-      return existsSync(layout) && readFileSync(layout, 'utf8').includes('useSessionProbe');
+      if (existsSync(layout) && readFileSync(layout, 'utf8').includes('useSessionProbe')) return true;
+      if (KNOWN_SESSION_SEGMENTS.includes(e.name)) return true;
+      return filesUnder(resolve(appDir, e.name)).some((f) =>
+        CREDENTIAL_MARKERS.some((m) => code(readFileSync(f, 'utf8')).includes(m)),
+      );
     })
     .map((e) => e.name);
 }

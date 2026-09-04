@@ -83,7 +83,7 @@ export function DomainsCard({ schoolId }: { schoolId: string }) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="text-base font-bold text-slate-900">Domains</h3>
-        <p className="mt-1 text-sm text-slate-500">Loading…</p>
+        <p className="sk-own-sub">Loading…</p>
       </div>
     );
   }
@@ -92,7 +92,7 @@ export function DomainsCard({ schoolId }: { schoolId: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5">
       <h3 className="text-base font-bold text-slate-900">Domains</h3>
-      <p className="mt-1 text-sm text-slate-500">
+      <p className="sk-own-sub">
         The school is always reachable at{' '}
         <span className="font-mono text-xs text-slate-700">{d.platformHost}</span>. Add its own domain below.
       </p>

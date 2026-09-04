@@ -24,11 +24,37 @@ export class JobsService {
 
   // ── The school's own vacancies ───────────────────────────────────────────
 
+  /**
+   * The school's own list of vacancies.
+   *
+   * Carries an application count, and separately a count of the ones NOBODY
+   * HAS LOOKED AT. Without that a head of school cannot tell which posting has
+   * people waiting from the list — they had to open each vacancy in turn to
+   * find out, which is the whole reason applications went unanswered.
+   *
+   * Counted with one groupBy rather than a per-row `_count`, so the query does
+   * not grow a subquery per vacancy.
+   */
   async list() {
     const { schoolId } = this.tenant.requireTenant();
-    return withTenant(schoolId, (tx) =>
-      tx.jobPost.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId }, orderBy: { createdAt: 'desc' }, include: { questions: true } }),
-    );
+    return withTenant(schoolId, async (tx) => {
+      const posts = await tx.jobPost.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId }, orderBy: { createdAt: 'desc' }, include: { questions: true } });
+      if (posts.length === 0) return [];
+
+      const ids = posts.map((p) => p.id);
+      const [total, unread] = await Promise.all([
+        tx.jobApplication.groupBy({ by: ['jobPostId'], where: { schoolId, jobPostId: { in: ids } }, _count: { _all: true } }),
+        tx.jobApplication.groupBy({ by: ['jobPostId'], where: { schoolId, jobPostId: { in: ids }, status: 'NEW' }, _count: { _all: true } }),
+      ]);
+      const allBy = new Map(total.map((r) => [r.jobPostId, r._count._all]));
+      const newBy = new Map(unread.map((r) => [r.jobPostId, r._count._all]));
+
+      return posts.map((p) => ({
+        ...p,
+        applicationCount: allBy.get(p.id) ?? 0,
+        newApplicationCount: newBy.get(p.id) ?? 0,
+      }));
+    });
   }
 
   async create(dto: CreateJobDto) {

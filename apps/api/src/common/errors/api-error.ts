@@ -131,6 +131,8 @@ export type ErrorCode =
   | 'ALREADY_AT_SCHOOL'
   /** Caller's STAFF login has no Staff row with role LIBRARIAN — pair with 403. */
   | 'NOT_LIBRARIAN'
+  | 'STAFF_ROLE_NOT_PERMITTED'
+  | 'UNSUPPORTED_FILE_TYPE'
   /** Borrower is at their loan limit; re-send with `override: true` to issue anyway — pair with 409. */
   | 'LIBRARY_LIMIT'
   /** Borrower already holds an open copy of this title; `override: true` issues anyway — pair with 409. */
@@ -155,6 +157,24 @@ export type ErrorCode =
   | 'SERIAL_TAKEN'
   /** Voiding an entry that is already struck through — pair with 409. */
   | 'ALREADY_VOIDED'
+  // ─── Press Orders (print fulfilment) ──────────────────────────────────────
+  /** The order is not in a state that allows this move (the transition map
+   *  said no): confirming an unquoted order, quoting a confirmed one,
+   *  dispatching before printing. Pair with 409. */
+  | 'ORDER_TRANSITION_ILLEGAL'
+  /** Asked for the file of an order that prints from the register rather than
+   *  from an uploaded document. There is nothing to open. Pair with 409. */
+  | 'ORDER_HAS_NO_FILE'
+  /** A report-card print order needs at least one ISSUED card in the batch —
+   *  we print the register's frozen snapshots, never a live preview. 409. */
+  | 'ISSUED_BATCH_REQUIRED'
+  /** The Result Room's gate: a class with missing or unpublished marks cannot
+   *  generate without a written override reason (which is audited). 409. */
+  | 'RESULTS_NOT_READY'
+  /** The object store refused the write — bucket gone, endpoint wrong, project
+   *  paused. Nothing the caller did; nothing the caller can retry into success
+   *  until an operator fixes the config. Pair with 503. */
+  | 'STORAGE_UNAVAILABLE'
   /** The room still has saved seating plans; deleting it would take them too — pair with 409. */
   | 'ROOM_IN_USE'
   | 'VALIDATION'

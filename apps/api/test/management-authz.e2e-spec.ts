@@ -14,6 +14,7 @@ describe('management authorization', () => {
   let teacher2Token: string;
   let adminToken: string;
   let staffToken: string;
+  let driverToken: string;
   let teacherUserId: string;
   let teacherUserId2: string;
   let studentUserId: string;
@@ -30,6 +31,16 @@ describe('management authorization', () => {
     teacher2Token = signSchoolToken({ sub: seeded.teacherUserId2, schoolId, role: 'TEACHER' });
     adminToken = signSchoolToken({ sub: seeded.adminUserId, schoolId, role: 'SCHOOL_ADMIN' });
     staffToken = signSchoolToken({ sub: seeded.staffUserId, schoolId, role: 'STAFF' });
+    driverToken = signSchoolToken({ sub: seeded.driverUserId, schoolId, role: 'STAFF' });
+
+    // PRESS is in no tier (packages/db/src/features.ts) — it only ever arrives
+    // by override. Without this the press routes 403 from RequireFeatureGuard
+    // and the role assertions below would pass no matter what @Roles said.
+    // Watched: with this absent, removing @Roles('SCHOOL_ADMIN') from
+    // certificates/issue left the test green.
+    await getPlatformPrisma().featureOverride.create({
+      data: { schoolId, featureKey: 'PRESS', enabled: true },
+    });
 
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
@@ -191,6 +202,289 @@ describe('management authorization', () => {
   // Found while adding the LIBRARIAN role: minting a console login for someone
   // whose whole job is at a desk outside the console is what made "which
   // routes does a non-admin token actually reach" worth answering.
+  describe('the Morning Bell — the principal reads it, nobody else', () => {
+    // It aggregates fee totals and every queue in one response; no narrower
+    // role can see all of that anywhere else, so none may see it here.
+    it('rings for the SCHOOL_ADMIN', async () => {
+      const res = await request(app.getHttpServer()).get('/manage/bell').set(as(adminToken));
+      expect([401, 403]).not.toContain(res.status);
+    });
+
+    it('a TEACHER cannot read it', async () => {
+      await request(app.getHttpServer()).get('/manage/bell').set(as(teacherToken)).expect(403);
+    });
+
+    it('a STAFF login cannot read it', async () => {
+      await request(app.getHttpServer()).get('/manage/bell').set(as(staffToken)).expect(403);
+    });
+
+    it('a STUDENT cannot read it', async () => {
+      await request(app.getHttpServer()).get('/manage/bell').set(as(studentToken)).expect(403);
+    });
+
+    it('anonymous cannot read it', async () => {
+      await request(app.getHttpServer()).get('/manage/bell').set({ 'X-Skoolos-Host': host }).expect(401);
+    });
+  });
+
+  describe('result-days — the teacher portal countdown banner', () => {
+    // A due date is motivation, not Press data: TEACHER and SCHOOL_ADMIN read
+    // it; a STUDENT token and anonymous are refused like every exams route.
+    it('teacher passes the guards', async () => {
+      const res = await request(app.getHttpServer()).get('/manage/exams/result-days').set(as(teacherToken));
+      expect([401, 403]).not.toContain(res.status);
+    });
+    it('admin passes the guards', async () => {
+      const res = await request(app.getHttpServer()).get('/manage/exams/result-days').set(as(adminToken));
+      expect([401, 403]).not.toContain(res.status);
+    });
+    it('student is refused', async () => {
+      await request(app.getHttpServer()).get('/manage/exams/result-days').set(as(studentToken)).expect(403);
+    });
+    it('anonymous is refused', async () => {
+      await request(app.getHttpServer()).get('/manage/exams/result-days').set({ 'X-Skoolos-Host': host }).expect(401);
+    });
+  });
+
+  describe('the Front Desk — search, pulse and the Student 360 are the admin’s', () => {
+    // Search spans every register; pulse aggregates money; the 360 carries a
+    // child's whole file including the fee position. SCHOOL_ADMIN only.
+    const UUID360 = '00000000-0000-0000-0000-000000000001';
+    for (const [label, path] of [
+      ['search', '/manage/search?q=aar'],
+      ['pulse', '/manage/pulse'],
+      ['the Student 360', `/manage/students/${UUID360}/report`],
+    ] as const) {
+      it(`admin passes the guards for ${label}`, async () => {
+        const res = await request(app.getHttpServer()).get(path).set(as(adminToken));
+        expect([401, 403]).not.toContain(res.status);
+      });
+      it(`teacher is refused ${label}`, async () => {
+        await request(app.getHttpServer()).get(path).set(as(teacherToken)).expect(403);
+      });
+      it(`staff is refused ${label}`, async () => {
+        await request(app.getHttpServer()).get(path).set(as(staffToken)).expect(403);
+      });
+      it(`student is refused ${label}`, async () => {
+        await request(app.getHttpServer()).get(path).set(as(studentToken)).expect(403);
+      });
+      it(`anonymous is refused ${label}`, async () => {
+        await request(app.getHttpServer()).get(path).set({ 'X-Skoolos-Host': host }).expect(401);
+      });
+    }
+  });
+
+  // The same hole 0e283ad closed on StaffController, found again on two more
+  // controllers by an audit on 4 Sept 2026 and proved against live staging: a
+  // STUDENT token got 404/400 rather than 403 on every one of these, meaning it
+  // had passed authorization and reached the service. RequireFeatureGuard asks
+  // whether the SCHOOL bought MANAGEMENT and never who is asking.
+  const GHOST = '00000000-0000-4000-8000-000000000000';
+
+  describe('teacher records — SCHOOL_ADMIN, except the teacher’s own profile', () => {
+    it('a STUDENT cannot list teachers — the rows carry staff email and phone', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/teachers')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('a STUDENT cannot create a teacher', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/teachers')
+        .set(as(studentToken))
+        .send({ firstName: 'Not', lastName: 'Allowed' })
+        .expect(403);
+    });
+
+    // 403 must come from the guard, BEFORE the handler looks the row up. A 404
+    // here would mean authorization ran second — which is exactly what the
+    // audit measured before this fix.
+    it('a STUDENT cannot delete a teacher', async () => {
+      await request(app.getHttpServer())
+        .delete(`/manage/teachers/${GHOST}`)
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('a TEACHER cannot delete a teacher', async () => {
+      await request(app.getHttpServer())
+        .delete(`/manage/teachers/${GHOST}`)
+        .set(as(teacherToken))
+        .expect(403);
+    });
+
+    // Asserted as "not 403" rather than 200 on purpose: seedMinimalSchool
+    // creates a User with role TEACHER but no Teacher profile row, so the
+    // handler correctly answers 404. What this guards is that promoting
+    // RolesGuard to the class did not lock teachers out of their own profile —
+    // that failure would show as 403, from the guard, before the lookup.
+    it('a TEACHER is not locked out of their own profile', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/teachers/me')
+        .set(as(teacherToken));
+      expect(res.status).not.toBe(403);
+    });
+
+    it('a STUDENT cannot read a teacher profile', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/teachers/me')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('an admin can still list teachers', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/teachers')
+        .set(as(adminToken))
+        .expect(200);
+    });
+  });
+
+  describe('academic catalogue — SCHOOL_ADMIN, except the subject list', () => {
+    for (const path of ['years', 'grades', 'subjects', 'periods']) {
+      it(`a STUDENT cannot create a ${path.slice(0, -1)}`, async () => {
+        await request(app.getHttpServer())
+          .post(`/manage/${path}`)
+          .set(as(studentToken))
+          .send({ name: 'Injected' })
+          .expect(403);
+      });
+    }
+
+    for (const path of ['grades', 'subjects', 'periods']) {
+      it(`a STUDENT cannot delete a ${path.slice(0, -1)}`, async () => {
+        await request(app.getHttpServer())
+          .delete(`/manage/${path}/${GHOST}`)
+          .set(as(studentToken))
+          .expect(403);
+      });
+
+      it(`a STUDENT cannot edit a ${path.slice(0, -1)}`, async () => {
+        await request(app.getHttpServer())
+          .put(`/manage/${path}/${GHOST}`)
+          .set(as(studentToken))
+          .send({ name: 'Injected' })
+          .expect(403);
+      });
+    }
+
+    it('a STUDENT cannot read the staff free/busy grid', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/availability')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    // The one deliberate widening. The teacher portal's assignment and test
+    // forms read this; breaking it breaks those pages.
+    it('a TEACHER can still read the subject list', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/subjects')
+        .set(as(teacherToken))
+        .expect(200);
+    });
+
+    it('a STUDENT still cannot read the subject list', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/subjects')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('an admin can still read and write the catalogue', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/grades')
+        .set(as(adminToken))
+        .expect(200);
+    });
+  });
+
+  describe('the fee desk and the press — the OFFICE, not every staff kind', () => {
+    // The intent was already written down: fees-authz.e2e-spec.ts opens with
+    // "Every /manage/fees/* route: office only." The implementation could not
+    // say that — @Roles('SCHOOL_ADMIN','STAFF') admits DRIVER, HELPER and
+    // SECURITY alongside the bursar. An audit signed in as office staff and
+    // reached the gateway credentials, which was intended; the hole is that
+    // the school's driver could have done the same.
+    it('a DRIVER cannot change the payment gateway credentials', async () => {
+      await request(app.getHttpServer())
+        .put('/manage/fees/payment-setup/provider')
+        .set(as(driverToken))
+        .send({})
+        .expect(403);
+    });
+
+    it('a DRIVER cannot change the bank account fees are paid into', async () => {
+      await request(app.getHttpServer())
+        .put('/manage/fees/payment-setup/bank')
+        .set(as(driverToken))
+        .send({})
+        .expect(403);
+    });
+
+    it('a DRIVER cannot reverse a payment', async () => {
+      await request(app.getHttpServer())
+        .post(`/manage/fees/payments/${GHOST}/reverse`)
+        .set(as(driverToken))
+        .send({})
+        .expect(403);
+    });
+
+    it('a DRIVER cannot even read the payments list', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/fees/payments')
+        .set(as(driverToken))
+        .expect(403);
+    });
+
+    it('a DRIVER cannot issue a certificate', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/press/certificates/issue')
+        .set(as(driverToken))
+        .send({})
+        .expect(403);
+    });
+
+    // The other half, and the reason this is a narrowing rather than a ban:
+    // the office still runs both desks.
+    it('the OFFICE can still reach the fee desk', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/fees/payments')
+        .set(as(staffToken));
+      expect(res.status).not.toBe(403);
+    });
+
+    it('the OFFICE can still change the payment setup', async () => {
+      const res = await request(app.getHttpServer())
+        .put('/manage/fees/payment-setup/provider')
+        .set(as(staffToken))
+        .send({});
+      expect(res.status).not.toBe(403);
+    });
+
+    it('the OFFICE can still reach the press', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/press/register')
+        .set(as(staffToken));
+      expect(res.status).not.toBe(403);
+    });
+
+    it('an admin is unaffected by the staff narrowing', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/fees/payments')
+        .set(as(adminToken));
+      expect(res.status).not.toBe(403);
+    });
+
+    it('a STUDENT still cannot touch the fee desk', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/fees/payments')
+        .set(as(studentToken))
+        .expect(403);
+    });
+  });
+
   describe('staff records — every route is SCHOOL_ADMIN-only', () => {
     it('a STUDENT cannot list staff', async () => {
       await request(app.getHttpServer())

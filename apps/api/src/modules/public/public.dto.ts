@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { IsDateString, IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, ValidateIf } from 'class-validator';
 import type { PublicEvent } from '../community';
 
 export class SubmitEnquiryDto {
@@ -25,8 +25,33 @@ export class SubmitEnquiryDto {
 }
 
 export class SetEnquiryStatusDto {
-  @IsIn(['NEW', 'CONTACTED', 'CLOSED'])
-  status!: 'NEW' | 'CONTACTED' | 'CLOSED';
+  /**
+   * The admissions pipeline. CLOSED is accepted but never sent by the desk —
+   * it is the old three-state model's word for a finished lead and existing
+   * rows still carry it.
+   */
+  @IsOptional()
+  @IsIn(['NEW', 'CONTACTED', 'VISITED', 'APPLIED', 'ENROLLED', 'LOST', 'CLOSED'])
+  status?: 'NEW' | 'CONTACTED' | 'VISITED' | 'APPLIED' | 'ENROLLED' | 'LOST' | 'CLOSED';
+
+  /**
+   * The day to ring them back, or null to clear it. A DATE — a desk works in
+   * days. `IsOptional` alone would reject an explicit null, which is how you
+   * clear it.
+   */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsDateString()
+  followUpAt?: string | null;
+
+  /** Who is chasing it, or null for nobody. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID()
+  ownerUserId?: string | null;
+
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @Length(0, 200)
+  lostReason?: string | null;
+}
+
+export class AddEnquiryNoteDto {
+  @IsString() @Length(1, 2000) body!: string;
 }
 
 export interface PublicSiteData {

@@ -6,6 +6,10 @@ const txMock = {
     findFirst: jest.fn(),
     update: jest.fn(),
     create: jest.fn(),
+    delete: jest.fn(),
+  },
+  pressIssue: {
+    findFirst: jest.fn(),
   },
   user: {
     create: jest.fn(),
@@ -430,8 +434,10 @@ describe('StudentsService.resendInvite', () => {
 describe('StudentsController.list', () => {
   const students = { list: jest.fn().mockResolvedValue([]) };
   const tenant = { requireTenant: () => ({ schoolId: SCHOOL }) };
+  const studentReport = { report: jest.fn() };
   const controller = new StudentsController(
     students as unknown as StudentsService,
+    studentReport as unknown as import('./student-report.service').StudentReportService,
     tenant as unknown as TenantContextService,
   );
 
@@ -468,5 +474,37 @@ describe('StudentsController.list', () => {
       classSectionId: undefined,
       projection: 'full',
     });
+  });
+});
+
+describe('StudentsService.remove — the register outlives the student row', () => {
+  const passwords = { hash: jest.fn() };
+  const invites = { invite: jest.fn() };
+  const svc = new StudentsService(
+    passwords as unknown as PasswordService,
+    invites as unknown as LoginInviteService,
+  );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
+  });
+
+  it('refuses to delete a child with issued documents — serials are a permanent record', async () => {
+    txMock.pressIssue.findFirst.mockResolvedValue({ id: 'issue-1' });
+
+    await expect(svc.remove(SCHOOL, 'stu-1')).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining('Press register'),
+    });
+    expect(txMock.student.delete).not.toHaveBeenCalled();
+  });
+
+  it('deletes a child with no register history', async () => {
+    txMock.pressIssue.findFirst.mockResolvedValue(null);
+    txMock.student.delete.mockResolvedValue({});
+
+    await svc.remove(SCHOOL, 'stu-1');
+    expect(txMock.student.delete).toHaveBeenCalledWith({ where: { id: 'stu-1' } });
   });
 });

@@ -4,6 +4,7 @@ import type { AvatarUploadResponse } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { StorageService } from '../../common/storage/storage.service';
 import { TenantContextService } from '../tenancy';
+import { assertUploadKind, IMAGE_KINDS } from '../../common/storage/upload-kind';
 
 /**
  * Avatars are photos, not documents — 2MB is generous for a face and keeps the
@@ -44,9 +45,11 @@ export class PhotoService {
     if (!file || !file.buffer) {
       throw new ApiError('FILE_REQUIRED', 'Attach an image as "file"', 400);
     }
-    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-      throw new ApiError('UNSUPPORTED_TYPE', 'Profile photos must be images', 415);
-    }
+    // Byte-sniffed. A student could post a scripted SVG here and get back a
+    // stable public URL — the storage origin has no CSP and no nosniff.
+    const kind = assertUploadKind(file.buffer, IMAGE_KINDS, 'photo', {
+      code: 'UNSUPPORTED_TYPE', status: 415, message: 'Profile photos must be images',
+    });
     if (file.buffer.length > MAX_AVATAR_BYTES) {
       throw new ApiError('FILE_TOO_LARGE', 'Keep photos under 2MB', 413);
     }
@@ -73,7 +76,7 @@ export class PhotoService {
         `schools/${schoolId}/avatar`,
         file.originalname,
         file.buffer,
-        file.mimetype,
+        kind.mime,
       );
       const asset = await tx.mediaAsset.create({
         data: { schoolId, kind: 'AVATAR', storageKey: key, url, byteSize: file.buffer.length },

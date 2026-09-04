@@ -117,16 +117,6 @@ export const REMAINING_WORK: WorkItem[] = [
     status: 'READY',
     blockedOn: null,
   },
-  {
-    id: 'platform-ops-unlinked',
-    module: 'Platform',
-    title: 'The ops dashboard is not in the console nav',
-    why:
-      '/platform/ops renders runtime health and nothing links to it, so it is only reachable by typing the URL. It also styles itself with .skosx, which carries a dark theme into a console pinned to light.',
-    needs: 'A nav entry, and the page moved onto the console\'s own light palette.',
-    status: 'READY',
-    blockedOn: null,
-  },
 ];
 
 export const STATUS_LABEL: Record<WorkStatus, string> = {

@@ -408,6 +408,8 @@ export interface ExamList {
 export interface SavedResult {
   studentId: string;
   marks: number;
+  /** PRESENT | AB | EX — see RESULT_STATUSES. */
+  status: string;
   publishedAt: string | null;
 }
 
@@ -613,6 +615,11 @@ export const NOTIFICATION_KINDS = [
   // ONE teacher about THEIR class and links to their own library list — and
   // because a school that mutes announcements must not mute this.
   'LIBRARY',
+  // The Result Room asking a subject teacher for pending marks — addressed to
+  // ONE teacher about THEIR class, links to their own results screen, and
+  // carries the result day. Same reasoning as LIBRARY: never muteable with
+  // announcements.
+  'RESULTS_DUE',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -953,6 +960,8 @@ export interface ReportWindowRow {
   endDate: string;
   /** Report cards already issued under this window, across all classes. */
   issuedCount: number;
+  /** Result day — when scores are due and cards go out. Null = not set. */
+  resultDay: string | null;
 }
 
 /** The school masthead every sheet prints. Resolved once at compile/issue time. */
@@ -963,6 +972,10 @@ export interface PressSchoolHeader {
   addressLine: string | null;
   phone: string | null;
   email: string | null;
+  /** "CBSE, New Delhi" + affiliation number — the statutory head. Blank until
+   *  the school fills them in the website studio's contact tab. */
+  board?: string | null;
+  affiliationNo?: string | null;
 }
 
 /**
@@ -980,6 +993,11 @@ export interface ReportSubjectLine {
   maxMarks: number;
   pct: number | null;
   grade: GradeBand | null;
+  /** Per-exam breakdown for the Detailed template. AB = absent (counted 0);
+   *  EX = exempted (its max leaves the percentage); null = no row yet. */
+  perExam?: { examId: string; title: string; maxMarks: number; value: number | 'AB' | 'EX' | null }[];
+  /** The max this child could actually sit (total minus EX) — the pro-rata base. */
+  countedMax?: number;
 }
 
 /** One student's compiled card — everything the sheet needs except the batch-level header. */
@@ -995,7 +1013,9 @@ export interface ReportCardStudent {
   attendance: { present: number; total: number; pct: number | null };
   remark: string | null;
   /** Set when a card for this window is already in the register. */
-  issued: { serial: string; issuedAt: string } | null;
+  issued: { serial: string; issuedAt: string } | null;  /** The card's optional blocks — see CardExtras. Absent = never recorded. */
+  extras?: CardExtras;
+
 }
 
 /** `GET /manage/press/report-cards/:windowId/:classSectionId` — the whole batch. */
@@ -1031,7 +1051,8 @@ export interface ReportCardSnapshot {
   subjects: ReportSubjectLine[];
   overall: ReportCardStudent['overall'];
   attendance: ReportCardStudent['attendance'];
-  remark: string | null;
+  remark: string | null;  extras?: CardExtras;
+
 }
 
 /**
@@ -1053,6 +1074,34 @@ export interface CertificateFields {
   purpose?: string;
   /** One free extra line, printed verbatim when present. */
   note?: string;
+
+  // ── TC only: the Annexure-I statutory answers (all free text, all
+  //    optional — a blank prints as a blank line to fill by hand). ──
+  /** 8 · School/Board Annual examination last taken with result. */
+  examLastTaken?: string;
+  /** 9 · Whether failed, if so once/twice in the same class. */
+  failedBefore?: string;
+  /** 10 · Subjects studied — one comma-joined line. */
+  subjects?: string;
+  /** 11 · Whether qualified for promotion — and to which class. */
+  qualifiedForPromotion?: string;
+  promotedToClass?: string;
+  /** 12 · Month up to which school dues are paid. */
+  feesPaidUpto?: string;
+  /** 13 · Any fee concession availed of. */
+  feeConcession?: string;
+  /** 14–15 · Working days / present. Prefilled from attendance, editable. */
+  workingDays?: string;
+  presentDays?: string;
+  /** 16 · NCC Cadet / Boy Scout / Girl Guide. */
+  nccScout?: string;
+  /** 17 · Games / extra-curricular, with achievement level. */
+  games?: string;
+  /** 19 · Date of application for the certificate (ISO). */
+  dateOfApplication?: string;
+  /** CISCE variant only: the Council's Index Number + year of passing. */
+  indexNo?: string;
+  yearOfPassing?: string;
 }
 
 /** `GET /manage/press/certificates/prepare/:studentId` — the form, prefilled. */
@@ -1068,7 +1117,9 @@ export interface CertificatePrepare {
     gender: string | null;
     /** When the record was created — the default "attended from", always editable. */
     onRollSince: string;
-  };
+  } & StudentRecordFacts;
+  /** Attendance this academic year — prefills Annexure fields 14–15. */
+  attendance: { workingDays: number; presentDays: number } | null;
   /** Live fee-ledger balance in paise. Zero for schools that keep fees elsewhere. */
   duesMinor: number;
   /** Certificates already issued to this student — reprint instead of re-issue. */
@@ -1085,6 +1136,8 @@ export interface CertificateSnapshot {
   /** The ledger balance at issue time, and whether a TC was issued over it. */
   duesMinor: number;
   duesOverride: boolean;
+  /** Which statutory face this snapshot was issued under — frozen with it. */
+  variant?: CertVariant;
 }
 
 export type PressSnapshot = ReportCardSnapshot | CertificateSnapshot;
@@ -1121,3 +1174,419 @@ export interface MyReportCard {
   academicYearName: string;
   issuedAt: string;
 }
+
+// ── The Morning Bell ─────────────────────────────────────────────────────────
+// The principal's first look of the day, composed LIVE from tables that
+// already exist — no stored digest, no cron (the compute-don't-store rule).
+// Every line links to the screen that fixes it: the Bell is a table of
+// contents for the morning, not a report.
+
+/** `GET /manage/bell` — one composed read, IST day. */
+export interface MorningBell {
+  /** "Tuesday, 2 September" — composed server-side in IST. */
+  dateLabel: string;
+  /** Who is not in today, from the staff-attendance register. */
+  staffAbsent: { name: string; kind: 'TEACHER' | 'STAFF'; status: 'ABSENT' | 'ON_LEAVE' }[];
+  /** Today's substitution gaps nobody has covered yet. */
+  uncovered: { className: string; periodLabel: string; teacherName: string }[];
+  /** Gaps in the next 30 days still without a substitute — the early warning
+   *  the old dashboard alert carried; the Bell must not lose it. */
+  upcomingUncovered: number;
+  /** Student absence so far today. `worst` is the class that needs a call. */
+  students: {
+    absent: number;
+    marked: number;
+    worst: { className: string; absent: number } | null;
+  };
+  /** Null when the school does not run the FEES feature — the card omits the row. */
+  fees: {
+    yesterdayMinor: number;
+    monthMinor: number;
+    awaitingReview: number;
+  } | null;
+  /** What the day holds. */
+  today: {
+    holiday: string | null;
+    events: { title: string; time: string }[];
+  };
+  /** Queues with somebody waiting in them. */
+  waiting: {
+    leave: number;
+    registerChanges: number;
+    enquiries: number;
+  };
+}
+
+// ── Sckools TV ───────────────────────────────────────────────────────────────
+// The reception-screen loop: any TV with a browser and one URL. A VIEW over
+// data the school already maintains — the TV is never a thing to feed.
+
+/** `GET /public/tv?key=…` — everything one rotation shows. */
+export interface TvScreen {
+  school: {
+    name: string;
+    logoUrl: string | null;
+    /** The school's own two colours — the TV wears the website's identity. */
+    ps1: string;
+    ps2: string;
+    /** Active festival name from the site's festive theme, for the frame. */
+    festival: string | null;
+  };
+  dateLabel: string;
+  holiday: string | null;
+  /** School-wide notices, newest first. */
+  announcements: { title: string; body: string; when: string }[];
+  eventsToday: { title: string; time: string; venue: string | null }[];
+  eventsUpcoming: { title: string; when: string; venue: string | null }[];
+  /** First names + class — the lobby celebrates them, the way schools do. */
+  birthdays: { name: string; className: string | null }[];
+  /** Gallery picks for the ambient panel. */
+  gallery: string[];
+}
+
+/** `GET /manage/tv` — the admin's switch. */
+export interface TvStatus {
+  enabled: boolean;
+  /** Full display URL when enabled, ready to open on the TV. */
+  url: string | null;
+}
+
+// ── The Front Desk (dashboard) ───────────────────────────────────────────────
+// The command bar, the Student 360 report, and the pulse tiles. All three are
+// composed LIVE (compute-don't-store); the bar's hits carry their own one-tap
+// actions so finding is doing.
+
+/** `GET /manage/search?q=` — the command bar's hits. */
+export interface ConsoleSearch {
+  students: {
+    id: string;
+    name: string;
+    classLabel: string | null;
+    admissionNo: string;
+    rollNo: string | null;
+    isActive: boolean;
+    /** Live ledger balance in paise; 0 for schools without FEES. */
+    feesDueMinor: number;
+  }[];
+  teachers: { id: string; name: string }[];
+  staff: { id: string; name: string; role: string }[];
+  /** Register serials (TC/2026/0041 …) that contain the query. */
+  serials: { id: string; type: PressDocType; serial: string; studentId: string; studentName: string }[];
+}
+
+/** `GET /manage/students/:id/report` — everything about one child, composed. */
+export interface StudentReport {
+  student: {
+    id: string;
+    name: string;
+    classLabel: string | null;
+    rollNo: string | null;
+    admissionNo: string;
+    code: string | null;
+    dob: string | null;
+    gender: string | null;
+    guardianName: string | null;
+    guardianPhone: string | null;
+    isActive: boolean;
+    onRollSince: string;
+  };
+  /** Session-to-date. `last20`: newest last, only days with a mark. */
+  attendance: {
+    present: number;
+    total: number;
+    pct: number | null;
+    last20: { date: string; status: 'PRESENT' | 'ABSENT' | 'LATE' }[];
+  };
+  /**
+   * The latest report window's compile for THIS child — published marks only,
+   * the same computation the printed card uses. Null when no window exists or
+   * the child has no class.
+   */
+  academics: {
+    windowName: string;
+    academicYearName: string;
+    subjects: ReportSubjectLine[];
+    overall: ReportCardStudent['overall'];
+    remark: string | null;
+  } | null;
+  /** Null for schools without the FEES feature. */
+  fees: {
+    billedMinor: number;
+    paidMinor: number;
+    dueMinor: number;
+    /** Latest first, capped. */
+    ledger: { narration: string; occurredAt: string; kind: 'DEBIT' | 'CREDIT'; amountMinor: number }[];
+  } | null;
+  /** Every register entry for this child, newest first. */
+  documents: { id: string; type: PressDocType; serial: string; issuedAt: string; voided: boolean }[];
+  /** Open first, then recent returns. */
+  library: { title: string; issuedOn: string; dueOn: string; returnedOn: string | null }[];
+  /** For the printed sheet's masthead. */
+  school: PressSchoolHeader;
+}
+
+/** `GET /manage/pulse` — the dashboard's living tiles. */
+export interface DashboardPulse {
+  attendance: {
+    todayPct: number | null;
+    present: number;
+    marked: number;
+    /** Last 14 marked school days, oldest first. */
+    series: { date: string; pct: number }[];
+  };
+  /** Null for schools without FEES. */
+  fees: {
+    billedMinor: number;
+    collectedMinor: number;
+    outstandingMinor: number;
+    owingFamilies: number;
+  } | null;
+  enquiries: {
+    last7: number;
+    prev7: number;
+    uncontacted: number;
+    /** 7 daily counts, oldest first. */
+    series: { date: string; count: number }[];
+  };
+  roll: { students: number; teachers: number; classes: number };
+}
+
+// ── Press Orders (print fulfilment) ──────────────────────────────────────────
+// Request → quote (price + promised date) → confirm → printing → dispatched →
+// delivered. TEXT unions validated at write time; every transition is an
+// event row and the timeline IS the event log.
+
+export const PRINT_ORDER_KINDS = ['REPORT_CARDS', 'UPLOAD'] as const;
+export type PrintOrderKind = (typeof PRINT_ORDER_KINDS)[number];
+
+export const PRINT_ORDER_STATUSES = [
+  'REQUESTED', 'QUOTED', 'CONFIRMED', 'DECLINED', 'CANCELLED',
+  'PRINTING', 'DISPATCHED', 'DELIVERED',
+] as const;
+export type PrintOrderStatus = (typeof PRINT_ORDER_STATUSES)[number];
+
+export function assertPrintOrderStatus(s: string): asserts s is PrintOrderStatus {
+  if (!(PRINT_ORDER_STATUSES as readonly string[]).includes(s)) {
+    throw new Error(`Invalid PrintOrder status: "${s}"`);
+  }
+}
+
+/** Paper + finish, chosen by the school, priced by us. */
+export interface PrintSpec {
+  size: 'A4' | 'A5' | 'A3' | 'CR80';
+  colour: 'COLOUR' | 'BW';
+  sides: 'SINGLE' | 'DOUBLE';
+  gsm: number;
+  finish: 'NONE' | 'STAPLE' | 'SPIRAL' | 'SADDLE' | 'LAMINATE';
+}
+
+export interface PrintOrderRow {
+  id: string;
+  kind: PrintOrderKind;
+  title: string;
+  quantity: number;
+  spec: PrintSpec;
+  status: PrintOrderStatus;
+  neededBy: string | null;
+  quote: { priceMinor: number; promisedBy: string; note: string | null; quotedAt: string } | null;
+  createdAt: string;
+}
+
+export interface PrintOrderEventRow {
+  at: string;
+  actor: 'SCHOOL' | 'SCKOOLS';
+  action: PrintOrderStatus;
+  note: string | null;
+  data: Record<string, unknown> | null;
+}
+
+/** `GET /manage/press/orders/:id` — the school's view, timeline included. */
+export interface PrintOrderDetail extends PrintOrderRow {
+  note: string | null;
+  deliverTo: { schoolName: string; address: string; contactName: string; phone: string };
+  source:
+    | { kind: 'REPORT_CARDS'; windowName: string; classLabel: string; issuedCount: number; serialFrom: string; serialTo: string }
+    | { kind: 'UPLOAD'; filename: string; bytes: number };
+  events: PrintOrderEventRow[];
+}
+
+/** One row on the operator desk — every order across every school. */
+export interface OperatorOrderRow extends PrintOrderRow {
+  schoolName: string;
+  schoolSlug: string;
+  city: string | null;
+  deliverTo: PrintOrderDetail['deliverTo'];
+  source: PrintOrderDetail['source'];
+  orderNote: string | null;
+  /** Confidential uploads carry the lock. */
+  confidential: boolean;
+  daysLate: number | null;
+}
+
+/** `GET /owner/print-orders/counts` — the desk's filter tabs.
+ *  Counted with a groupBy, not by measuring a fetched page, so the numbers
+ *  stay honest past the list ceiling. */
+export interface OperatorOrderCounts {
+  byStatus: Record<string, number>;
+  /** Open orders already past the date we promised. */
+  late: number;
+  total: number;
+}
+
+/** `GET /owner/print-orders/:id/artifact` — what the operator prints.
+ *  REPORT_CARDS: the register's frozen snapshots (never recompiled).
+ *  UPLOAD: a short-lived private link to the school's PDF. */
+export type OperatorOrderArtifact =
+  | { kind: 'REPORT_CARDS'; sheets: { serial: string; snapshot: ReportCardSnapshot }[] }
+  | { kind: 'UPLOAD'; filename: string; url: string; expiresInSeconds: number };
+
+// ── Statutory documents (CBSE Examination Bye-laws, Annexure-I) ─────────────
+
+export const STUDENT_CATEGORIES = ['GENERAL', 'SC', 'ST', 'OBC', 'EWS'] as const;
+export type StudentCategory = (typeof STUDENT_CATEGORIES)[number];
+
+export function assertStudentCategory(c: string): asserts c is StudentCategory {
+  if (!(STUDENT_CATEGORIES as readonly string[]).includes(c)) {
+    throw new Error(`Invalid student category: "${c}"`);
+  }
+}
+
+/** The admission-register facts the statutory TC prints — on the student
+ *  file, prefilled into the drawer, saved back when supplied there. */
+export interface StudentRecordFacts {
+  fatherName: string | null;
+  motherName: string | null;
+  nationality: string | null;
+  category: string | null;
+  firstAdmissionDate: string | null;
+  firstAdmissionClass: string | null;
+  previousSchool: string | null;
+  penId: string | null;
+}
+
+/** `GET /manage/press/overview` — the Press home in one read. */
+export interface PressOverview {
+  windows: Omit<ReportWindowRow, 'issuedCount'>[];
+  /** The window the scoreboard is showing (chosen or latest); null = none yet. */
+  windowId: string | null;
+  /** Per class: roster strength vs cards issued in that window. */
+  classes: { id: string; label: string; students: number; issued: number }[];
+  register: { total: number; lastSerial: string | null };
+  certificates: { lastSerial: string | null; thisYear: number };
+  orders: {
+    /** Quotes waiting on the SCHOOL's confirm — the pulsing fact. */
+    awaitingConfirm: number;
+    quotedTotalMinor: number;
+    open: number;
+  };
+}
+
+/** `POST /manage/press/certificates/bulk` — one class, one type, one run. */
+export interface BulkCertificateResult {
+  issued: { studentId: string; name: string; serial: string; issuedAt: string; snapshot: CertificateSnapshot }[];
+  skipped: { studentId: string; name: string; reason: string }[];
+}
+
+// ── The Result Room ─────────────────────────────────────────────────────────
+
+export const RESULT_STATUSES = ['PRESENT', 'AB', 'EX'] as const;
+export type ResultStatus = (typeof RESULT_STATUSES)[number];
+
+export function assertResultStatus(v: string): asserts v is ResultStatus {
+  if (!(RESULT_STATUSES as readonly string[]).includes(v)) {
+    throw new Error(`Invalid result status: "${v}"`);
+  }
+}
+
+export const CERT_VARIANTS = ['CBSE', 'CISCE', 'STATE'] as const;
+export type CertVariant = (typeof CERT_VARIANTS)[number];
+
+export function assertCertVariant(v: string): asserts v is CertVariant {
+  if (!(CERT_VARIANTS as readonly string[]).includes(v)) {
+    throw new Error(`Invalid certificate variant: "${v}"`);
+  }
+}
+
+/** The card's optional blocks — print only when recorded, never invented. */
+export interface CardExtras {
+  house?: string;
+  heightCm?: number;
+  weightKg?: number;
+  /** e.g. "Promoted to Class VIII". Free text, final term only. */
+  promotion?: string;
+  /** 3-point co-scholastic grades: A outstanding · B very good · C fair. */
+  coScholastic?: { label: string; grade: 'A' | 'B' | 'C' }[];
+}
+
+/** One subject's readiness inside one class, for one window. */
+export interface ResultRoomSubject {
+  subjectId: string;
+  subjectName: string;
+  /** The exam creator — who the nudge goes to. Null when unresolvable. */
+  teacherUserId: string | null;
+  teacherName: string | null;
+  exams: number;
+  /** roster × exams — every mark that should exist. */
+  expected: number;
+  entered: number;
+  published: number;
+  abCount: number;
+  exCount: number;
+  /** Names still unmarked for at least one exam (capped). */
+  missingStudents: string[];
+  state: 'MISSING' | 'ENTERED' | 'PUBLISHED';
+  lastNudge: { at: string; kind: 'ENTER' | 'PUBLISH' } | null;
+}
+
+export interface ResultRoomClass {
+  id: string;
+  label: string;
+  students: number;
+  issued: number;
+  /** Every subject published for every child — the generation gate. */
+  ready: boolean;
+  /** No exams scheduled in this window at all. */
+  noExams: boolean;
+  subjects: ResultRoomSubject[];
+}
+
+/** `GET /manage/press/results?windowId=` — the whole cockpit in one read. */
+export interface ResultRoomBoard {
+  window: Omit<ReportWindowRow, 'issuedCount'> | null;
+  classes: ResultRoomClass[];
+  /** Every AB in the window — the absentee register (capped). */
+  absentees: { studentId: string; studentName: string; classLabel: string; subjectName: string; examTitle: string }[];
+}
+
+export interface NudgeResultsResponse {
+  notified: { teacherUserId: string; teacherName: string | null }[];
+}
+
+// ── Event cover art ──────────────────────────────────────────────────────────
+
+/**
+ * Which archetype an event's cover art draws.
+ *
+ * Shared between the API (which validates it) and the web app (which draws
+ * it), so the two cannot drift into disagreeing about what is a legal value —
+ * an unknown key renders nothing at all, which on a poster is a blank page.
+ *
+ * Stored rather than always derived because an admin who picks "Sports day"
+ * for an event called "Founder's Trophy" expects that to stick. When it is
+ * absent the app works it out from the title, so no event is ever coverless.
+ */
+export const EVENT_ART_KEYS = [
+  'sports', 'science', 'annual', 'art', 'music', 'grad', 'parents', 'festival',
+] as const;
+
+export type EventArtKey = (typeof EVENT_ART_KEYS)[number];
+
+/**
+ * Which band of a photograph the 16:9 cover keeps.
+ *
+ * Needed because the crop is not cosmetic: a portrait photo of a child cropped
+ * at the centre routinely cuts the head off, and showing somebody that without
+ * giving them a way to change it is worse than not showing it.
+ */
+export const EVENT_COVER_FOCUS = ['top', 'middle', 'bottom'] as const;
+export type EventCoverFocus = (typeof EVENT_COVER_FOCUS)[number];

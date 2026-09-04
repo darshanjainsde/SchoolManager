@@ -3,7 +3,8 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { disconnectAll, getPlatformPrisma } from '@skoolos/db';
 import { AppModule } from '../src/app.module';
-import { signSchoolToken, seedMinimalSchool } from './integration/helpers';
+import { signPlatformToken, signSchoolToken, seedMinimalSchool } from './integration/helpers';
+import { loadEnv } from '@skoolos/config';
 
 /**
  * Who may call each Press route.
@@ -21,6 +22,11 @@ const UUID = '00000000-0000-0000-0000-000000000001';
 
 /** Every `/manage/press/*` route: office only (SCHOOL_ADMIN + STAFF). */
 const OFFICE_ROUTES: [method: 'get' | 'post' | 'put', path: string][] = [
+  ['get', '/manage/press/overview'],
+  ['get', '/manage/press/results'],
+  ['post', '/manage/press/results/nudge'],
+  ['post', '/manage/press/results/generate'],
+  ['post', '/manage/press/certificates/bulk'],
   ['get', '/manage/press/years'],
   ['get', '/manage/press/classes'],
   ['get', '/manage/press/students'],
@@ -34,6 +40,25 @@ const OFFICE_ROUTES: [method: 'get' | 'post' | 'put', path: string][] = [
   ['get', '/manage/press/register'],
   ['get', `/manage/press/register/${UUID}`],
   ['post', `/manage/press/register/${UUID}/void`],
+  // Press Orders — the school's order counter, same front-office wall.
+  ['get', '/manage/press/orders'],
+  ['get', `/manage/press/orders/${UUID}`],
+  ['post', '/manage/press/orders/report-cards'],
+  ['post', '/manage/press/orders/upload'],
+  ['post', `/manage/press/orders/${UUID}/confirm`],
+  ['post', `/manage/press/orders/${UUID}/cancel`],
+];
+
+/** Every `/owner/print-orders*` route: owner host + platform JWT, nothing less. */
+const OPERATOR_ROUTES: [method: 'get' | 'post', path: string][] = [
+  ['get', '/owner/print-orders'],
+  ['get', `/owner/print-orders/${UUID}`],
+  ['get', `/owner/print-orders/${UUID}/artifact`],
+  ['post', `/owner/print-orders/${UUID}/quote`],
+  ['post', `/owner/print-orders/${UUID}/decline`],
+  ['post', `/owner/print-orders/${UUID}/printing`],
+  ['post', `/owner/print-orders/${UUID}/dispatch`],
+  ['post', `/owner/print-orders/${UUID}/delivered`],
 ];
 
 /** Every `/me/report-cards*` route: the signed-in student/parent only. */
@@ -134,8 +159,13 @@ describe('press authorization', () => {
     await db.featureOverride.create({
       data: { schoolId: seeded.schoolId, featureKey: 'PRESS', enabled: true },
     });
-    const studentA = await db.student.findFirstOrThrow({
-      where: { schoolId: seeded.schoolId, userId: { not: null } },
+    // seedMinimalSchool mints a STUDENT *user* but no Student row — link one
+    // ourselves (found by running the suite: findFirstOrThrow found none).
+    const studentA = await db.student.create({
+      data: {
+        schoolId: seeded.schoolId, admissionNo: `A-${Date.now()}`,
+        firstName: 'Own', lastName: 'Child', userId: seeded.studentUserId,
+      },
       select: { id: true, userId: true },
     });
     const issue = await db.pressIssue.create({
@@ -181,5 +211,151 @@ describe('press authorization', () => {
       .get('/manage/press/windows')
       .set({ Authorization: `Bearer ${token}`, 'X-Skoolos-Host': other.host })
       .expect(403);
+    // The order counter sits behind the same key — a separate controller
+    // must not mean a separate (forgotten) gate.
+    await request(app.getHttpServer())
+      .get('/manage/press/orders')
+      .set({ Authorization: `Bearer ${token}`, 'X-Skoolos-Host': other.host })
+      .expect(403);
+  });
+
+  describe.each(OPERATOR_ROUTES)('%s %s (operator desk)', (method, path) => {
+    const ownerHost = loadEnv().PLATFORM_OWNER_HOST;
+
+    it('rejects an anonymous caller on the owner host', async () => {
+      await call(method, path).set({ 'X-Skoolos-Host': ownerHost }).expect(401);
+    });
+
+    it("rejects a school ADMIN's token — a tenant credential opens nothing on the platform side", async () => {
+      await call(method, path).set({
+        Authorization: `Bearer ${adminToken}`, 'X-Skoolos-Host': ownerHost,
+      }).expect(401);
+    });
+
+    it('rejects a platform token on a SCHOOL host — the desk exists only behind the owner door', async () => {
+      await call(method, path).set({
+        Authorization: `Bearer ${signPlatformToken()}`, 'X-Skoolos-Host': host,
+      }).expect(403);
+    });
+
+    it('lets the operator through the guards', async () => {
+      const res = await call(method, path).set({
+        Authorization: `Bearer ${signPlatformToken()}`, 'X-Skoolos-Host': ownerHost,
+      });
+      expect([401, 403]).not.toContain(res.status);
+    });
+  });
+
+  it('walks one order through its whole life: request → quote → confirm → printing → artifact → delivered', async () => {
+    const db = getPlatformPrisma();
+    const seeded = await seedMinimalSchool();
+    await db.featureOverride.create({
+      data: { schoolId: seeded.schoolId, featureKey: 'PRESS', enabled: true },
+    });
+    const year = await db.academicYear.create({
+      data: { schoolId: seeded.schoolId, name: '2026-27', startDate: new Date('2026-04-01'), endDate: new Date('2027-03-31') },
+    });
+    const grade = await db.grade.create({ data: { schoolId: seeded.schoolId, name: 'VII', order: 7 } });
+    const section = await db.classSection.create({
+      data: { schoolId: seeded.schoolId, gradeId: grade.id, name: 'B', academicYearId: year.id },
+    });
+    const window = await db.reportWindow.create({
+      data: {
+        schoolId: seeded.schoolId, academicYearId: year.id, name: 'Term I',
+        startDate: new Date('2026-06-01'), endDate: new Date('2026-09-30'),
+      },
+    });
+    const student = await db.student.create({
+      data: {
+        schoolId: seeded.schoolId, admissionNo: `F-${Date.now()}`,
+        firstName: 'Flow', lastName: 'Child', classSectionId: section.id,
+      },
+    });
+
+    const adminTok = signSchoolToken({ sub: seeded.adminUserId, schoolId: seeded.schoolId, role: 'SCHOOL_ADMIN' });
+    const asSchool = { Authorization: `Bearer ${adminTok}`, 'X-Skoolos-Host': seeded.host };
+    const asOperator = { Authorization: `Bearer ${signPlatformToken()}`, 'X-Skoolos-Host': loadEnv().PLATFORM_OWNER_HOST };
+    const spec = { size: 'A4', colour: 'COLOUR', sides: 'DOUBLE', gsm: 130, finish: 'STAPLE' };
+    const orderReq = { windowId: window.id, classSectionId: section.id, quantity: 40, ...spec };
+
+    // Nothing issued yet — the counter refuses, because there is nothing frozen to print.
+    await request(app.getHttpServer())
+      .post('/manage/press/orders/report-cards').set(asSchool).send(orderReq)
+      .expect(409)
+      .expect((r) => expect(r.body.code).toBe('ISSUED_BATCH_REQUIRED'));
+
+    const snapshot = { kind: 'REPORT_CARD', windowName: 'Term I', classLabel: 'VII-B' };
+    await db.pressIssue.create({
+      data: {
+        schoolId: seeded.schoolId, type: 'REPORT_CARD', serial: 'RC/2026/9101',
+        studentId: student.id, windowId: window.id, payload: snapshot,
+        issuedById: seeded.adminUserId,
+      },
+    });
+
+    const created = await request(app.getHttpServer())
+      .post('/manage/press/orders/report-cards').set(asSchool).send(orderReq)
+      .expect(201);
+    const orderId = created.body.id as string;
+    expect(created.body.status).toBe('REQUESTED');
+    expect(created.body.source).toMatchObject({ issuedCount: 1, serialFrom: 'RC/2026/9101' });
+
+    // Another school's office cannot even see this order exists.
+    await request(app.getHttpServer())
+      .get(`/manage/press/orders/${orderId}`)
+      .set({ Authorization: `Bearer ${adminToken}`, 'X-Skoolos-Host': host })
+      .expect(404);
+
+    // Confirming before a quote exists is refused — there is no price to accept.
+    await request(app.getHttpServer())
+      .post(`/manage/press/orders/${orderId}/confirm`).set(asSchool)
+      .expect(409)
+      .expect((r) => expect(r.body.code).toBe('ORDER_TRANSITION_ILLEGAL'));
+
+    // The artifact stays shut until the school commits.
+    await request(app.getHttpServer())
+      .get(`/owner/print-orders/${orderId}/artifact`).set(asOperator).expect(409);
+
+    // The operator quotes: price + the logged promise.
+    await request(app.getHttpServer())
+      .post(`/owner/print-orders/${orderId}/quote`).set(asOperator)
+      .send({ priceMinor: 240000, promisedBy: '2026-09-12', note: 'incl. delivery' })
+      .expect(200);
+
+    // The school reads the quote on its own timeline and confirms — freezing it.
+    const afterQuote = await request(app.getHttpServer())
+      .get(`/manage/press/orders/${orderId}`).set(asSchool).expect(200);
+    expect(afterQuote.body.quote).toMatchObject({ priceMinor: 240000 });
+    await request(app.getHttpServer())
+      .post(`/manage/press/orders/${orderId}/confirm`).set(asSchool).expect(200);
+
+    // Frozen means frozen: a re-quote after confirmation is refused.
+    await request(app.getHttpServer())
+      .post(`/owner/print-orders/${orderId}/quote`).set(asOperator)
+      .send({ priceMinor: 999900, promisedBy: '2026-09-20' })
+      .expect(409);
+
+    await request(app.getHttpServer())
+      .post(`/owner/print-orders/${orderId}/printing`).set(asOperator).expect(200);
+
+    // What the operator prints is the register's frozen snapshot, verbatim.
+    const artifact = await request(app.getHttpServer())
+      .get(`/owner/print-orders/${orderId}/artifact`).set(asOperator).expect(200);
+    expect(artifact.body).toEqual({
+      kind: 'REPORT_CARDS',
+      sheets: [{ serial: 'RC/2026/9101', snapshot }],
+    });
+
+    await request(app.getHttpServer())
+      .post(`/owner/print-orders/${orderId}/delivered`).set(asOperator).expect(200);
+
+    // The timeline holds the whole story, in order, with the promise logged.
+    const done = await request(app.getHttpServer())
+      .get(`/manage/press/orders/${orderId}`).set(asSchool).expect(200);
+    expect(done.body.status).toBe('DELIVERED');
+    expect(done.body.events.map((e: { action: string }) => e.action)).toEqual(
+      ['REQUESTED', 'QUOTED', 'CONFIRMED', 'PRINTING', 'DELIVERED'],
+    );
+    expect(done.body.events[1]).toMatchObject({ actor: 'SCKOOLS', data: { priceMinor: 240000 } });
   });
 });

@@ -18,6 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { RESULT_STATUSES, STUDENT_CATEGORIES } from '@skoolos/types';
 import {
   ASSIGNMENT_ATTACHMENT_KINDS,
   AssignmentAttachmentKind,
@@ -377,6 +378,16 @@ export class CreateStudentDto {
   @IsOptional()
   @IsUUID()
   photoAssetId?: string;
+
+  // ── Admission-register facts (statutory TC, Annexure-I). All optional. ──
+  @IsOptional() @IsString() @Length(0, 120) fatherName?: string;
+  @IsOptional() @IsString() @Length(0, 120) motherName?: string;
+  @IsOptional() @IsString() @Length(0, 60) nationality?: string;
+  @IsOptional() @IsIn(STUDENT_CATEGORIES) category?: string;
+  @IsOptional() @IsDateString() firstAdmissionDate?: string;
+  @IsOptional() @IsString() @Length(0, 40) firstAdmissionClass?: string;
+  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
+  @IsOptional() @IsString() @Length(0, 40) penId?: string;
 }
 
 export class UpdateStudentDto {
@@ -426,6 +437,16 @@ export class UpdateStudentDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  // ── Admission-register facts (statutory TC, Annexure-I). All optional. ──
+  @IsOptional() @IsString() @Length(0, 120) fatherName?: string;
+  @IsOptional() @IsString() @Length(0, 120) motherName?: string;
+  @IsOptional() @IsString() @Length(0, 60) nationality?: string;
+  @IsOptional() @IsIn(STUDENT_CATEGORIES) category?: string;
+  @IsOptional() @IsDateString() firstAdmissionDate?: string;
+  @IsOptional() @IsString() @Length(0, 40) firstAdmissionClass?: string;
+  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
+  @IsOptional() @IsString() @Length(0, 40) penId?: string;
 }
 
 // ── Login invites (students + teachers) ──────────────────────────────────────
@@ -607,8 +628,15 @@ export class ExamResultMarkDto {
   @IsUUID()
   studentId!: string;
 
+  /** Required when PRESENT (the default); ignored for AB/EX (stored as 0). */
+  @IsOptional()
   @IsNumber()
-  marks!: number;
+  marks?: number;
+
+  /** PRESENT | AB (absent) | EX (exempted). Three truths, never one dash. */
+  @IsOptional()
+  @IsIn(RESULT_STATUSES)
+  status?: string;
 }
 
 export class SaveExamResultsDto {

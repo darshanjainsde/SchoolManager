@@ -1,9 +1,8 @@
 'use client';
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useApi } from '@/lib/use-api';
@@ -13,23 +12,29 @@ import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
 import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { LibraryShell } from '@/app/app/library/shell';
 import '../sk-theme.css';
 
 /**
- * The tab rail is the approved "book spine" look: each tab a spine with its
- * own cloth colour, the active one pulled out of the shelf. Data drives
- * nothing here, so the array is plain module data (same reasoning as
- * teacher/nav-items.ts — and layout files must not export it).
+ * THE LIBRARIAN'S DOOR.
+ *
+ * The library itself is a tab of the admin console now (`/app/library`) — the
+ * sidebar stays put and it behaves like Exam Hall next door. This portal
+ * exists for the one person who cannot go through that door: a
+ * STAFF/LIBRARIAN. `app/app/layout.tsx` is SCHOOL_ADMIN-only and would bounce
+ * her, and a sidebar of Students/Staff/Settings would be no use to her if it
+ * did not — `lib/role-routes.ts` sends her straight here on login.
+ *
+ * So she keeps this shell — her own topbar and her own sign-out — and renders
+ * the IDENTICAL sections through `LibraryShell`. The book-spine rail this file
+ * used to draw is gone; the console's section strip replaced it, which is what
+ * makes the two views the same screens in different frames.
+ *
+ * An admin who lands here (an old bookmark, a typed URL) is sent to
+ * `/app/library` instead of being shown a second, near-identical portal. That
+ * also retires the lone "Back to admin" link this file grew when the library
+ * was a portal an admin could fall into and not climb out of.
  */
-const NAV: { href: string; label: string; glyph: string; spine: string }[] = [
-  { href: '/library', label: 'Dashboard', glyph: '📊', spine: 'var(--sk-brand)' },
-  { href: '/library/hall', label: 'Hall', glyph: '🏛️', spine: 'var(--sk-good)' },
-  { href: '/library/counter', label: 'Counter', glyph: '🔁', spine: 'var(--sk-amber)' },
-  { href: '/library/books', label: 'New books', glyph: '📚', spine: 'var(--sk-brand-2)' },
-  { href: '/library/fines', label: 'Fines', glyph: '₹', spine: 'var(--sk-bad)' },
-  { href: '/library/settings', label: 'Settings', glyph: '⚙️', spine: 'var(--sk-line-2)' },
-];
-
 export default function LibraryLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -49,15 +54,22 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) router.replace('/login');
-    // Librarian-or-admin only. Any other session that lands here (an office
-    // staff bookmark, a student typing the URL) goes to ITS portal, never
-    // stays — the same rule every portal layout enforces for itself.
-    if (me.data) {
-      const allowed =
-        me.data.role === 'SCHOOL_ADMIN' || (me.data.role === 'STAFF' && me.data.staffRole === 'LIBRARIAN');
-      if (!allowed) router.replace(homeForRole(me.data.role, me.data.staffRole));
+    if (!me.data) return;
+    // An admin belongs in the console's Library tab, which carries the sidebar.
+    // Sending them there rather than rendering this portal is what stops the
+    // console vanishing when they click Library.
+    if (me.data.role === 'SCHOOL_ADMIN') {
+      const section = pathname.startsWith('/library/') ? pathname.slice('/library'.length) : '';
+      router.replace(`/app/library${section}`);
+      return;
     }
-  }, [hydrated, status, audience, me.data, router]);
+    // Librarian only. Any other session that reaches here (an office bookmark,
+    // a student typing the URL) goes to ITS portal — the same rule every
+    // portal layout enforces for itself.
+    if (!(me.data.role === 'STAFF' && me.data.staffRole === 'LIBRARIAN')) {
+      router.replace(homeForRole(me.data.role, me.data.staffRole));
+    }
+  }, [hydrated, status, audience, me.data, pathname, router]);
 
   if (!hydrated) return null;
 
@@ -79,15 +91,6 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
 
   if (status !== 'authed' || audience !== 'school') return null;
 
-  // SCHOOL_ADMIN is the only role that reaches this portal from another one
-  // (see `homeForRole`: a librarian lands here directly and has nowhere else
-  // to be). Everything below keyed off this is about giving that visitor their
-  // bearings — it grants no access, which `LibrarianGuard` decides server-side.
-  const isVisitingAdmin = me.data?.role === 'SCHOOL_ADMIN';
-
-  const isActive = (href: string) =>
-    href === '/library' ? pathname === '/library' : pathname === href || pathname.startsWith(href + '/');
-
   async function handleLogout() {
     const rt = useAuthStore.getState().refreshToken;
     await api.post('/auth/logout', rt ? { refreshToken: rt } : {}).catch(() => undefined);
@@ -97,8 +100,7 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
 
   return (
     // h-dvh + overflow-hidden makes the shell a fixed viewport (same mechanics
-    // as the admin console): the spine rail and the main area each scroll on
-    // their OWN, so the rail stays put while the librarian scrolls a long list.
+    // as the admin console): the topbar stays put and the sections scroll.
     <div className="skosx sk-shell flex h-dvh flex-col overflow-hidden">
       <header className="sk-topbar shrink-0">
         {/* The shared topbar centres at 68rem for the phone-first portals; the
@@ -107,28 +109,9 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
           <SckoolsLogo variant="symbol" size={30} />
           <div className="sk-who">
             <div className="n">The library</div>
-            {/* An admin arrives here from a sidebar tab that, uniquely, leaves
-                the /app segment — so say plainly whose desk they are standing
-                at. The librarian, who lives here, just sees her school. */}
-            <div className="s">
-              {isVisitingAdmin
-                ? 'Visiting as admin'
-                : (me.data?.name ?? host?.split(':')[0] ?? 'Sckools')}
-            </div>
+            <div className="s">{me.data?.name ?? host?.split(':')[0] ?? 'Sckools'}</div>
           </div>
           <div style={{ flex: 1 }} />
-          {/* THE WAY BACK. The library is its own portal, so entering it from
-              the admin console swaps the entire shell — different rail,
-              different chrome, and (before this) no exit but "Sign out", which
-              ends the session instead of returning to the console. An admin
-              read that as being thrown out of their own product. The librarian
-              has no admin console to return to, so she never sees this. */}
-          {isVisitingAdmin ? (
-            <Link className="sk-signout" href="/app">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Back to admin</span>
-            </Link>
-          ) : null}
           <ThemeToggle />
           <button className="sk-signout" onClick={handleLogout}>
             <LogOut className="h-3.5 w-3.5" />
@@ -137,42 +120,11 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {/* The shelf. Horizontal scroll strip on phones (always visible above
-            the page), spine rail pinned to the side on desktop with its own
-            scrollbar — scrolling the page never moves it. */}
-        <nav
-          aria-label="Library sections"
-          className="flex shrink-0 gap-2 overflow-x-auto px-3 pb-1 pt-3 md:w-48 md:flex-col md:overflow-y-auto md:overflow-x-visible md:py-4 md:pl-5 md:pr-0"
-        >
-          {NAV.map((item) => {
-            const active = isActive(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? 'page' : undefined}
-                className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-r-lg rounded-l-[5px] border border-[var(--sk-line)] bg-[var(--sk-card)] py-2.5 pl-2 pr-3 text-[13px] font-semibold shadow-sm transition-transform ${
-                  active
-                    ? 'translate-x-0 text-[var(--sk-ink)] shadow md:translate-x-1.5'
-                    : 'text-[var(--sk-ink-2)] hover:translate-x-0.5'
-                }`}
-                style={{ borderLeft: `5px solid ${item.spine}` }}
-              >
-                <span aria-hidden="true" className="text-sm">{item.glyph}</span>
-                {item.label}
-                {active ? (
-                  <span aria-hidden="true" className="ml-auto hidden h-1.5 w-1.5 rounded-full bg-[var(--sk-amber)] md:block" />
-                ) : null}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4 pt-3 md:px-6 md:py-4">
+      <main className="sk-anim min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-6 pt-4 md:px-6 md:py-6">
+        <LibraryShell base="/library" subtitle="Circulation, the reading hall and fines.">
           {children}
-        </main>
-      </div>
+        </LibraryShell>
+      </main>
     </div>
   );
 }

@@ -63,6 +63,10 @@ export class FeePaymentService {
           proof.filename,
           proof.buffer,
           proof.contentType,
+          // Private bucket: a bank screenshot carries an account number and a
+          // payer's name. Read back through presignedGet, which this path
+          // already does — so nothing else changes.
+          { private: true },
         );
         proofKey = up.key;
       }

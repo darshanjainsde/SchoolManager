@@ -100,7 +100,7 @@ export class StudentsService {
     if (dto.classSectionId !== undefined) {
       await this.validateClassSection(schoolId, dto.classSectionId);
     }
-    const { dob, ...rest } = dto;
+    const { dob, firstAdmissionDate, ...rest } = dto;
     try {
       return await withTenant(schoolId, async (tx) => {
         // A CODE IS PART OF BEING A STUDENT, not part of being invited.
@@ -122,6 +122,7 @@ export class StudentsService {
             schoolId,
             code,
             dob: dob ? new Date(dob) : undefined,
+            firstAdmissionDate: firstAdmissionDate ? new Date(firstAdmissionDate) : undefined,
           },
         });
       });
@@ -144,7 +145,7 @@ export class StudentsService {
     if (dto.classSectionId !== undefined) {
       await this.validateClassSection(schoolId, dto.classSectionId);
     }
-    const { dob, ...rest } = dto;
+    const { dob, firstAdmissionDate, ...rest } = dto;
     try {
       return await withTenant(schoolId, (tx) =>
         tx.student.update({
@@ -152,6 +153,7 @@ export class StudentsService {
           data: {
             ...rest,
             ...(dob !== undefined ? { dob: new Date(dob) } : {}),
+            ...(firstAdmissionDate !== undefined ? { firstAdmissionDate: new Date(firstAdmissionDate) } : {}),
           },
         }),
       );
@@ -165,7 +167,21 @@ export class StudentsService {
 
   async remove(schoolId: string, id: string) {
     try {
-      await withTenant(schoolId, (tx) => tx.student.delete({ where: { id } }));
+      await withTenant(schoolId, async (tx) => {
+        // A child with issued documents cannot be deleted — the Press
+        // register is a permanent record and its serials must stay
+        // accountable. (The DB trigger under it refuses the cascade too;
+        // this check is what turns that refusal into a human sentence.)
+        const inRegister = await tx.pressIssue.findFirst({
+          where: { studentId: id }, select: { id: true },
+        });
+        if (inRegister) {
+          throw new ConflictException(
+            'This student has documents in the Press register, which is permanent. Mark them inactive instead of deleting.',
+          );
+        }
+        await tx.student.delete({ where: { id } });
+      });
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('Student not found');
       if (isP2003(e))

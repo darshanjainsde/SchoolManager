@@ -1,9 +1,15 @@
 'use client';
 import Link from 'next/link';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { Globe, CalendarX } from 'lucide-react';
+import { useState } from 'react';
+import type { DashboardPulse, MorningBell } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
+import { Z } from '@/lib/z-layers';
 import { useHost } from '@/components/use-host';
+import { BellCard } from './bell-card';
+import { CommandBar, type BarAction } from './command-bar';
+import { Dock, type DockDrawerKind } from './dock';
+import { PulseTiles } from './pulse-tiles';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,14 +34,6 @@ interface Student {
   id: string;
 }
 
-interface LeaveApplication {
-  id: string;
-}
-
-interface CoverageGap {
-  id: string;
-  substituteTeacherId: string | null;
-}
 
 interface SetupStep {
   key: string;
@@ -96,24 +94,28 @@ export default function DashboardPage() {
     enabled: !!host,
     staleTime: 60_000,
   });
-  const pendingLeaveQuery = useQuery({
-    queryKey: ['dash-leave-pending'],
-    queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=PENDING'),
-    enabled: !!host,
-    staleTime: 60_000,
+  const pulseQuery = useQuery({
+    queryKey: ['pulse', host], enabled: !!host,
+    queryFn: () => api.get<DashboardPulse>('/manage/pulse'),
+    refetchInterval: 5 * 60_000,
   });
-  const leaveCoverageQuery = useQuery({
-    queryKey: ['dash-leave-coverage'],
-    queryFn: () => {
-      const from = new Date().toISOString().slice(0, 10);
-      const toDate = new Date(`${from}T00:00:00Z`);
-      toDate.setUTCDate(toDate.getUTCDate() + 30);
-      const to = toDate.toISOString().slice(0, 10);
-      return api.get<CoverageGap[]>(`/manage/leave/coverage?from=${from}&to=${to}`);
-    },
-    enabled: !!host,
-    staleTime: 60_000,
+  const [drawer, setDrawer] = useState<DockDrawerKind | null>(null);
+  const hasFees = pulseQuery.data ? pulseQuery.data.fees !== null : false;
+
+  /** What the command bar can DO, beyond finding people. */
+  const barActions: BarAction[] = [
+    ...(hasFees ? [{ label: 'Record a counter payment', hint: 'Fees → the verify queue', keywords: 'record payment fee cash counter paisa', run: () => setDrawer('pay') }] : []),
+    { label: 'New enquiry', hint: 'Admissions queue', keywords: 'enquiry admission walk-in lead', run: () => setDrawer('enquiry') },
+    { label: 'Make an announcement', hint: 'School-wide, every portal', keywords: 'announce announcement notice circular', run: () => setDrawer('announce') },
+  ];
+
+  const bellQuery = useQuery({
+    queryKey: ['bell', host], enabled: !!host,
+    queryFn: () => api.get<MorningBell>('/manage/bell'),
+    // The Bell describes a morning; re-ring it if the tab stays open.
+    refetchInterval: 5 * 60_000,
   });
+
 
   const years = yearsQuery.data ?? [];
   const periods = periodsQuery.data ?? [];
@@ -180,10 +182,6 @@ export default function DashboardPage() {
     },
   ];
 
-  const pendingLeaveCount = pendingLeaveQuery.data?.length ?? 0;
-  const uncoveredGapCount = (leaveCoverageQuery.data ?? []).filter((g) => !g.substituteTeacherId).length;
-  const showLeaveAlert = pendingLeaveCount > 0 || uncoveredGapCount > 0;
-
   const doneCount = steps.filter((s) => s.done).length;
   const allDone = doneCount === steps.length;
   const anySetupLoading = [
@@ -207,50 +205,36 @@ export default function DashboardPage() {
     <>
       <header className="sk-pagehead">
         <h1>Welcome back</h1>
-        <p>Set up your school and manage it from here.</p>
+        <p>Ask for anything, act in one tap — the desk is yours.</p>
       </header>
 
-      {/* Leave & coverage signal — only shown when something needs attention */}
-      {showLeaveAlert && (
-        <Link href="/app/leave" className="sk-remind sk-press" style={{ marginBottom: 18 }}>
-          <span className="ic">
-            <CalendarX className="h-4 w-4" />
-          </span>
-          <div style={{ flex: 1 }}>
-            <b>
-              {[
-                pendingLeaveCount > 0 &&
-                  `${pendingLeaveCount} leave ${pendingLeaveCount === 1 ? 'request' : 'requests'} awaiting review`,
-                uncoveredGapCount > 0 &&
-                  `${uncoveredGapCount} class ${uncoveredGapCount === 1 ? 'period needs' : 'periods need'} a substitute`,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </b>
-            <p>Go to Leave to review requests and cover the gaps.</p>
-          </div>
-        </Link>
-      )}
+      {/* The command bar — the Front Desk's front door.
+          position:relative + z-index on THIS wrapper is load-bearing: it is a
+          direct child of the layout's `.sk-anim`, whose entrance animation
+          (fill-mode: both) leaves every sibling a PERSISTENT stacking
+          context — so without it, the bell/dock row (a later sibling) paints
+          OVER the bar's dropdown no matter how high the dropdown's own
+          z-index goes. Proven in headless Chrome with the real sk-rise rule:
+          later-sibling card covers a z-40 menu; wrapper z-60 wins. Same root
+          as the twice-logged trapped-modal bug, in z-order form. 60 stays
+          below the drawers' 80, so a drawer still covers everything. */}
+      <div style={{ marginBottom: 18, position: 'relative', zIndex: Z.PAGE_CHROME }}>
+        <CommandBar actions={barActions} />
+      </div>
 
-      {/* At-a-glance KPIs — always shown */}
-      <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
-        {/* The three roll counts are read against each other ("400 students,
-            22 teachers, 14 classes"), so they get the register's monospace
-            face and tabular figures — the digits then sit on one grid and the
-            numbers stop jittering as each query settles. */}
-        <div className="sk-kpi">
-          <span className="lab">Students</span>
-          <span className="n sk-num">{kpiValue(studentsQuery, students.length)}</span>
+      {/* The Bell and the dock share the desk row: what needs you, and what
+          you reach for. */}
+      <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', flexWrap: 'wrap', marginBottom: 18 }}>
+        <div style={{ flex: '1.7 1 340px', minWidth: 0 }}>
+          {bellQuery.data ? <BellCard bell={bellQuery.data} /> : <p className="sk-state">Ringing the bell…</p>}
         </div>
-        <div className="sk-kpi">
-          <span className="lab">Teachers</span>
-          <span className="n sk-num">{kpiValue(teachersQuery, teachers.length)}</span>
-        </div>
-        <div className="sk-kpi">
-          <span className="lab">Classes</span>
-          <span className="n sk-num">{kpiValue(classesQuery, classes.length)}</span>
+        <div style={{ flex: '1 1 260px' }}>
+          <Dock hasFees={hasFees} open={drawer} setOpen={setDrawer} />
         </div>
       </div>
+
+      {/* The pulse — living tiles, replacing the three static counts. */}
+      {pulseQuery.data && <div style={{ marginBottom: 18 }}><PulseTiles pulse={pulseQuery.data} /></div>}
 
       {/* Setup checklist — hidden once everything is done */}
       {!allDone && (
@@ -294,19 +278,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Quick action */}
-      <Link href="/app/website" className="sk-entity sk-press" style={{ maxWidth: 360 }}>
-        <span
-          className="av"
-          style={{ background: 'var(--sk-brand)' }}
-        >
-          <Globe className="h-5 w-5" />
-        </span>
-        <div>
-          <div className="nm">Edit your website</div>
-          <div className="meta">Update your homepage, gallery, and contact info.</div>
-        </div>
-      </Link>
     </>
   );
 }

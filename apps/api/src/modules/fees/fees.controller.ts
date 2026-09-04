@@ -5,6 +5,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
+import { StaffScopeGuard } from '../../common/auth/staff-scope.guard';
+import { StaffRoles } from '../../common/auth/staff-role.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
@@ -21,6 +23,7 @@ import {
   SaveConcessionDto, SaveGridDto, SaveProviderConfigDto, SaveSettingsDto, SaveTermsDto,
   SubmitPaymentDto,
 } from './fees.dto';
+import { assertUploadKind, IMAGE_KINDS } from '../../common/storage/upload-kind';
 
 /** 5 MB. A phone screenshot is well under this; a photo of a printed slip fits too. */
 export const MAX_PROOF_BYTES = 5 * 1024 * 1024;
@@ -33,10 +36,34 @@ export const MAX_PROOF_BYTES = 5 * 1024 * 1024;
  * into a central account-manager portal later is a routing and role change
  * rather than a rewrite of the service beneath it.
  */
+/**
+ * STAFF vs SCHOOL_ADMIN on this desk.
+ *
+ * The class grants SCHOOL_ADMIN and STAFF, and `STAFF` is not one job — the
+ * enum covers OFFICE, SUPPORT, DRIVER, HELPER, SECURITY and LIBRARIAN. An
+ * audit on 4 Sept 2026 signed in as a seeded OFFICE login and reached the
+ * payment-gateway credentials, the bank account fees are routed to, and
+ * payment reversal; the same token was correctly refused (403) on
+ * /manage/students, which is how we know those were real authorization
+ * passes and not a broken probe.
+ *
+ * Recording, verifying and rejecting a payment is the fee desk's daily job and
+ * stays open to STAFF. What moves money, changes the fee structure, grants a
+ * concession or reverses a completed payment is SCHOOL_ADMIN, marked
+ * per-handler below. LibraryController narrows the same role pair with
+ * LibrarianGuard; the same could be done here off Staff.role if an accounts
+ * role is ever added.
+ */
 @Controller('manage/fees')
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard, StaffScopeGuard)
 @RequireFeature('FEES')
 @Roles('SCHOOL_ADMIN', 'STAFF')
+/** The fee desk is the office's. `@Roles('SCHOOL_ADMIN','STAFF')` alone let
+ * every staff kind in — driver, helper, security — at the bank details, the
+ * payment gateway credentials and payment reversal. fees-authz.e2e-spec.ts
+ * already stated the rule this now enforces: "Every /manage/fees/* route:
+ * office only." */
+@StaffRoles('OFFICE')
 export class FeesController {
   constructor(
     private readonly setup: FeeSetupService,
@@ -130,11 +157,9 @@ export class FeesController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
   saveQr(@UploadedFile() file?: { originalname: string; buffer: Buffer; mimetype: string }) {
     if (!file) throw new ApiError('VALIDATION', 'Choose an image to upload.', 400, 'file');
-    if (!file.mimetype.startsWith('image/')) {
-      throw new ApiError('VALIDATION', 'The QR code must be an image.', 400, 'file');
-    }
+    const kind = assertUploadKind(file.buffer, IMAGE_KINDS, 'QR image');
     return this.config.saveUpiQr(this.sid(), {
-      buffer: file.buffer, filename: file.originalname, contentType: file.mimetype,
+      buffer: file.buffer, filename: file.originalname, contentType: kind.mime,
     });
   }
 

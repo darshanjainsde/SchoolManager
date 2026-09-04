@@ -4,9 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MAX_QUESTIONS, filterableKinds, type JobQuestionDraft } from '@/lib/jobs-admin';
 import { JOB_TEMPLATES, type JobTemplate } from '@/lib/job-templates';
 // The public listing's own labels — imported, not restated, so the preview
@@ -23,6 +20,10 @@ interface Job {
   status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CLOSED';
   rejectedReason: string | null;
   questions: { id: string; prompt: string; kind: JobQuestionDraft['kind']; options: string[] }[];
+  /** Everyone who has applied. */
+  applicationCount?: number;
+  /** Of those, the ones nobody has opened yet. The number that decides the day. */
+  newApplicationCount?: number;
 }
 
 const STATUS_COPY: Record<Job['status'], string> = {
@@ -33,12 +34,37 @@ const STATUS_COPY: Record<Job['status'], string> = {
   CLOSED: 'Closed',
 };
 
+/**
+ * Shorter words for a table cell, where the sentence above does not fit. The
+ * full sentence is not thrown away — it rides along as the pill's title, so
+ * "Live" can still explain itself to somebody who has not met it before.
+ */
+const STATUS_PILL: Record<Job['status'], { label: string; tone: string }> = {
+  DRAFT: { label: 'Draft', tone: 'neutral' },
+  PENDING: { label: 'In review', tone: 'warn' },
+  APPROVED: { label: 'Live', tone: 'good' },
+  REJECTED: { label: 'Sent back', tone: 'bad' },
+  CLOSED: { label: 'Closed', tone: 'neutral' },
+};
+
+type JobFilter = 'ALL' | Job['status'];
+
+const FILTERS: { key: JobFilter; label: string }[] = [
+  { key: 'ALL', label: 'All' },
+  { key: 'APPROVED', label: 'Live' },
+  { key: 'PENDING', label: 'In review' },
+  { key: 'DRAFT', label: 'Draft' },
+  { key: 'REJECTED', label: 'Sent back' },
+  { key: 'CLOSED', label: 'Closed' },
+];
+
 export default function JobsPage() {
   const host = useHost();
   const api = useApi({ hostHeader: host });
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'vacancies' | 'applications'>('vacancies');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<JobFilter>('ALL');
 
   const { data: jobs } = useQuery<Job[]>({
     queryKey: ['manage-jobs'],
@@ -64,66 +90,169 @@ export default function JobsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const all = jobs ?? [];
+  const shown = filter === 'ALL' ? all : all.filter((j) => j.status === filter);
+  const live = all.filter((j) => j.status === 'APPROVED').length;
+  const inReview = all.filter((j) => j.status === 'PENDING').length;
+  const drafts = all.filter((j) => j.status === 'DRAFT' || j.status === 'REJECTED').length;
+  const unread = all.reduce((n, j) => n + (j.newApplicationCount ?? 0), 0);
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Jobs</h1>
-        <p className="text-sm text-slate-500">
-          Vacancies you post appear on the Sckools jobs board once we have reviewed them. They do not appear on your
-          own school website.
-        </p>
+    <div className="skosx">
+      <header className="sk-pagehead flex items-start justify-between gap-3">
+        <div>
+          <h1>Jobs</h1>
+          <p>
+            Vacancies you post appear on the Sckools jobs board once we have reviewed them. They do
+            not appear on your own school website.
+          </p>
+        </div>
+      </header>
+
+      {/* The four numbers that decide what an admin does next. Unread
+          applications leads, because a posting nobody has opened is the only
+          one of these that is costing the school a candidate. */}
+      <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))' }}>
+        <button className="sk-kpi" type="button" data-tone={unread > 0 ? 'warn' : undefined} onClick={() => setTab('applications')}>
+          <span className="lab">New applications</span>
+          <span className="n sk-num">{unread}</span>
+          <span className="hint">{unread > 0 ? 'nobody has opened these' : 'all caught up'}</span>
+        </button>
+        <button className="sk-kpi" type="button" data-tone="good" aria-pressed={filter === 'APPROVED'} onClick={() => setFilter(filter === 'APPROVED' ? 'ALL' : 'APPROVED')}>
+          <span className="lab">Live</span>
+          <span className="n sk-num">{live}</span>
+          <span className="hint">on the jobs board</span>
+        </button>
+        <button className="sk-kpi" type="button" aria-pressed={filter === 'PENDING'} onClick={() => setFilter(filter === 'PENDING' ? 'ALL' : 'PENDING')}>
+          <span className="lab">With Sckools</span>
+          <span className="n sk-num">{inReview}</span>
+          <span className="hint">waiting on our review</span>
+        </button>
+        <button className="sk-kpi" type="button" aria-pressed={filter === 'DRAFT'} onClick={() => setFilter(filter === 'DRAFT' ? 'ALL' : 'DRAFT')}>
+          <span className="lab">Not sent</span>
+          <span className="n sk-num">{drafts}</span>
+          <span className="hint">{drafts > 0 ? 'nobody can see these yet' : 'nothing waiting on you'}</span>
+        </button>
       </div>
 
-      <div className="flex gap-2 border-b border-slate-200">
+      <nav className="sk-tabs sk-lib-tabs" style={{ marginTop: 18 }} aria-label="Jobs sections">
         {(['vacancies', 'applications'] as const).map((t) => (
           <button
             key={t}
             type="button"
+            className="sk-tab"
+            data-active={tab === t}
+            aria-current={tab === t ? 'page' : undefined}
             onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold capitalize ${
-              tab === t ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500'
-            }`}
           >
-            {t}
+            {t === 'vacancies' ? 'Vacancies' : 'Applications'}
+            {t === 'applications' && unread > 0 ? <span className="sk-pill" data-tone="warn">{unread}</span> : null}
           </button>
         ))}
-      </div>
+      </nav>
 
       {tab === 'vacancies' && (
         <>
           <NewVacancy onCreate={(body) => create.mutate(body)} busy={create.isPending} />
-          <div className="space-y-3">
-            {(jobs ?? []).map((job) => (
-              <Card key={job.id}>
-                <CardHeader className="flex-row flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>{job.title}</CardTitle>
-                    <p className="text-sm text-slate-500">{job.summary}</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-600">
-                      {STATUS_COPY[job.status]}
-                      {job.posts > 1 ? ` · ${job.posts} positions` : ''}
-                    </p>
-                    {job.status === 'REJECTED' && job.rejectedReason && (
-                      <p className="mt-1 text-xs text-amber-700">Reason: {job.rejectedReason}</p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    {(job.status === 'DRAFT' || job.status === 'REJECTED') && (
-                      <Button size="sm" disabled={submit.isPending} onClick={() => submit.mutate(job.id)}>
-                        Send for review
-                      </Button>
-                    )}
-                    <Button size="sm" variant="outline" onClick={() => { setOpenId(job.id); setTab('applications'); }}>
-                      Applications
-                    </Button>
-                  </div>
-                </CardHeader>
-              </Card>
+
+          <div className="sk-toolbar" style={{ marginTop: 18 }} role="group" aria-label="Filter by status">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                className="sk-enq-chip"
+                aria-pressed={filter === f.key}
+                onClick={() => setFilter(f.key)}
+              >
+                {f.label} {f.key === 'ALL' ? all.length : all.filter((j) => j.status === f.key).length}
+              </button>
             ))}
-            {(jobs ?? []).length === 0 && (
-              <p className="text-sm text-slate-500">No vacancies yet.</p>
-            )}
           </div>
+
+          {shown.length === 0 ? (
+            <p className="sk-state">
+              {all.length === 0 ? 'No vacancies yet. Start from a role above.' : 'Nothing with that status.'}
+            </p>
+          ) : (
+            <div className="sk-card" style={{ overflow: 'hidden' }}>
+              <div className="sk-tblwrap">
+                <table className="sk-tbl">
+                  <thead>
+                    <tr>
+                      <th>Role</th>
+                      <th data-priority="2">Posts</th>
+                      <th>Status</th>
+                      <th>Applications</th>
+                      <th className="acts"><span className="sr-only">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((job) => {
+                      const pill = STATUS_PILL[job.status];
+                      const total = job.applicationCount ?? 0;
+                      const fresh = job.newApplicationCount ?? 0;
+                      return (
+                        <tr key={job.id}>
+                          <td data-wrap="true">
+                            <span style={{ fontWeight: 650 }}>{job.title}</span>
+                            <span className="sk-muted" style={{ display: 'block', fontSize: 11.5 }}>
+                              {job.summary}
+                            </span>
+                            {job.status === 'REJECTED' && job.rejectedReason ? (
+                              <span style={{ display: 'block', fontSize: 11.5, color: 'var(--sk-amber-ink)' }}>
+                                Reason: {job.rejectedReason}
+                              </span>
+                            ) : null}
+                          </td>
+                          <td data-priority="2" className="num">{job.posts}</td>
+                          <td>
+                            <span className="sk-pill" data-tone={pill.tone} title={STATUS_COPY[job.status]}>
+                              {pill.label}
+                            </span>
+                          </td>
+                          <td>
+                            {/* A count on its own is a number to ignore. The
+                                unread one is the reason to click. */}
+                            <span className="pairs">
+                              <span className="sk-num">{total}</span>
+                              {fresh > 0 ? <span className="sk-pill" data-tone="warn">{fresh} new</span> : null}
+                            </span>
+                          </td>
+                          <td className="acts">
+                            <span>
+                              {(job.status === 'DRAFT' || job.status === 'REJECTED') && (
+                                <button
+                                  className="sk-btn"
+                                  data-size="sm"
+                                  data-variant="primary"
+                                  type="button"
+                                  disabled={submit.isPending}
+                                  onClick={() => submit.mutate(job.id)}
+                                >
+                                  Send for review
+                                </button>
+                              )}
+                              <button
+                                className="sk-btn"
+                                data-size="sm"
+                                type="button"
+                                onClick={() => {
+                                  setOpenId(job.id);
+                                  setTab('applications');
+                                }}
+                              >
+                                Applications
+                              </button>
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -162,15 +291,15 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
 
   if (!picked) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Post a vacancy</CardTitle>
-          <p className="text-sm text-slate-500">
+      <div className="sk-card">
+        <div className="sk-card-h">
+          <h3>Post a vacancy</h3>
+          <p className="text-sm text-[var(--sk-ink-3)]">
             Start from a role and edit anything. Each one comes with screening questions already set up — those
             become the filters on your applications list.
           </p>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="sk-card-b">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {JOB_TEMPLATES.map((t) => (
               <button
@@ -178,94 +307,94 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
                 type="button"
                 onClick={() => choose(t)}
                 className={[
-                  'rounded-xl border p-3 text-left transition hover:border-teal-500 hover:shadow-sm',
-                  t.value === 'BLANK' ? 'border-dashed border-slate-300' : 'border-slate-200',
+                  'rounded-xl border p-3 text-left transition hover:border-[var(--sk-brand)] hover:shadow-sm',
+                  t.value === 'BLANK' ? 'border-dashed border-[var(--sk-line-2)]' : 'border-[var(--sk-line)]',
                 ].join(' ')}
               >
-                <span className="block text-sm font-semibold text-slate-800">{t.label}</span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-slate-400">{t.hint}</span>
+                <span className="block text-sm font-semibold text-[var(--sk-ink)]">{t.label}</span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-[var(--sk-ink-3)]">{t.hint}</span>
                 {t.questions.length > 0 && (
-                  <span className="mt-2 inline-block rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                  <span className="mt-2 inline-block rounded-full bg-[var(--sk-brand-tint)] px-2 py-0.5 text-[10px] font-semibold text-[var(--sk-brand-2)]">
                     {t.questions.length} question{t.questions.length === 1 ? '' : 's'} ready
                   </span>
                 )}
               </button>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   const budgetLeft = MAX_QUESTIONS - questions.length;
 
   return (
-    <Card>
-      <CardHeader className="flex-row flex-wrap items-start justify-between gap-4">
+    <div className="sk-card">
+      <div className="sk-card-h" style={{ justifyContent: 'space-between' }}>
         <div>
-          <CardTitle>{picked.value === 'BLANK' ? 'New vacancy' : picked.label}</CardTitle>
-          <p className="text-sm text-slate-500">Everything here is editable — the template is only a head start.</p>
+          <h3>{picked.value === 'BLANK' ? 'New vacancy' : picked.label}</h3>
+          <p className="text-sm text-[var(--sk-ink-3)]">Everything here is editable — the template is only a head start.</p>
         </div>
-        <Button size="sm" variant="ghost" onClick={() => setPicked(null)}>
+        <button type="button" className="sk-btn" data-size="sm" onClick={() => setPicked(null)}>
           Change role
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-6">
+        </button>
+      </div>
+      <div className="sk-card-b" style={{ gap: 22 }}>
         <section className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">The role</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--sk-ink-3)]">The role</h3>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-[var(--sk-ink-2)]">
               Job title
-              <Input aria-label="Job title" value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 font-normal" />
+              <input className="sk-input" aria-label="Job title" value={title} onChange={(e) => setTitle(e.target.value)} style={{ marginTop: 4 }} />
             </label>
-            <label className="block text-sm font-semibold text-slate-700">
-              Subject or area <span className="font-normal text-slate-400">(optional)</span>
-              <Input aria-label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1 font-normal" />
+            <label className="block text-sm font-semibold text-[var(--sk-ink-2)]">
+              Subject or area <span className="font-normal text-[var(--sk-ink-3)]">(optional)</span>
+              <input className="sk-input" aria-label="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} style={{ marginTop: 4 }} />
             </label>
           </div>
-          <label className="block text-sm font-semibold text-slate-700">
+          <label className="block text-sm font-semibold text-[var(--sk-ink-2)]">
             One-line summary
-            <Input aria-label="One-line summary" value={summary} onChange={(e) => setSummary(e.target.value)} className="mt-1 font-normal" />
-            <span className="mt-1 block text-[11px] font-normal text-slate-400">
+            <input className="sk-input" aria-label="One-line summary" value={summary} onChange={(e) => setSummary(e.target.value)} style={{ marginTop: 4 }} />
+            <span className="mt-1 block text-[11px] font-normal text-[var(--sk-ink-3)]">
               This is the line candidates read on the jobs board before they click.
             </span>
           </label>
-          <label className="block text-sm font-semibold text-slate-700">
+          <label className="block text-sm font-semibold text-[var(--sk-ink-2)]">
             Full description
             <textarea
               aria-label="Full description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={10}
-              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal"
+              className="mt-1 w-full rounded-xl border border-[var(--sk-line)] px-3 py-2 text-sm font-normal"
             />
           </label>
         </section>
 
         <section className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Positions and terms</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--sk-ink-3)]">Positions and terms</h3>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-[var(--sk-ink-2)]">
               How many people do you need?
-              <Input
+              <input className="sk-input"
                 aria-label="Number of positions"
                 type="number"
                 min={1}
                 value={posts}
                 onChange={(e) => setPosts(Math.max(1, Number(e.target.value) || 1))}
-                className="mt-1 w-24 font-normal"
+                style={{ marginTop: 4, width: 96 }}
               />
-              <span className="mt-1 block text-[11px] font-normal text-slate-400">
+              <span className="mt-1 block text-[11px] font-normal text-[var(--sk-ink-3)]">
                 Shown on the listing — “3 positions” tells a candidate far more than “we are hiring”.
               </span>
             </label>
-            <label className="block text-sm font-semibold text-slate-700">
+            <label className="block text-sm font-semibold text-[var(--sk-ink-2)]">
               Type
               <select
                 aria-label="Employment type"
                 value={employmentType}
                 onChange={(e) => setEmploymentType(e.target.value)}
-                className="mt-1 block rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal"
+                className="mt-1 block rounded-xl border border-[var(--sk-line)] px-3 py-2 text-sm font-normal"
               >
                 <option value="FULL_TIME">Full time</option>
                 <option value="PART_TIME">Part time</option>
@@ -278,25 +407,25 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
 
         <section className="space-y-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Screening questions</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--sk-ink-3)]">Screening questions</h3>
             {/* The budget is shown, not discovered on save. */}
-            <span className={`text-[11px] font-semibold ${budgetLeft === 0 ? 'text-amber-700' : 'text-slate-400'}`}>
+            <span className={`text-[11px] font-semibold ${budgetLeft === 0 ? 'text-[var(--sk-amber-ink)]' : 'text-[var(--sk-ink-3)]'}`}>
               {questions.length} of {MAX_QUESTIONS} used
             </span>
           </div>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-[var(--sk-ink-3)]">
             Every answer becomes a filter on your applications list. Four is the maximum — each one costs the
             candidate something, and the benefit lands on you.
           </p>
 
           {questions.map((q, i) => (
-            <div key={i} className="rounded-xl border border-slate-200 p-3">
+            <div key={i} className="rounded-xl border border-[var(--sk-line)] p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Input
+                <input className="sk-input"
                   aria-label={`Question ${i + 1}`}
                   value={q.prompt}
                   onChange={(e) => setQuestions((qs) => qs.map((x, xi) => (xi === i ? { ...x, prompt: e.target.value } : x)))}
-                  className="max-w-sm"
+                  style={{ maxWidth: 380 }}
                 />
                 <select
                   aria-label={`Answer type for question ${i + 1}`}
@@ -306,7 +435,7 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
                       qs.map((x, xi) => (xi === i ? { ...x, kind: e.target.value as JobQuestionDraft['kind'] } : x)),
                     )
                   }
-                  className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                  className="rounded-lg border border-[var(--sk-line)] px-2 py-1.5 text-xs"
                 >
                   <option value="CHOICE">Choose one</option>
                   <option value="YES_NO">Yes / No</option>
@@ -317,13 +446,13 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
                   type="button"
                   aria-label={`Remove question ${i + 1}`}
                   onClick={() => setQuestions((qs) => qs.filter((_, xi) => xi !== i))}
-                  className="ml-auto rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  className="ml-auto rounded px-2 py-1 text-xs text-[var(--sk-ink-3)] hover:bg-[var(--sk-bg-2)] hover:text-[var(--sk-ink-2)]"
                 >
                   Remove
                 </button>
               </div>
               {q.kind === 'CHOICE' && (
-                <Input
+                <input className="sk-input"
                   aria-label={`Options for question ${i + 1}`}
                   placeholder="Options, comma separated"
                   value={q.options.join(', ')}
@@ -334,25 +463,26 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
                       ),
                     )
                   }
-                  className="mt-2 max-w-md"
+                  style={{ marginTop: 8, maxWidth: 440 }}
                 />
               )}
               {!filterableKinds.includes(q.kind) && (
-                <p className="mt-2 text-[11px] font-semibold text-amber-700">
+                <p className="mt-2 text-[11px] font-semibold text-[var(--sk-amber-ink)]">
                   Free text cannot be filtered — you will read every answer by hand.
                 </p>
               )}
             </div>
           ))}
 
-          <Button
-            size="sm"
-            variant="outline"
+          <button
+            type="button"
+            className="sk-btn"
+            data-size="sm"
             disabled={budgetLeft === 0}
             onClick={() => setQuestions((qs) => [...qs, { prompt: '', kind: 'CHOICE', options: [], required: false }])}
           >
             {budgetLeft === 0 ? 'Four is the maximum' : 'Add a question'}
-          </Button>
+          </button>
         </section>
 
         {/* WHAT THE CANDIDATE SEES.
@@ -362,7 +492,7 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
             on the jobs board. This mirrors the public listing's own layout, so
             the writing is judged in the shape it will be read in. */}
         <section className="space-y-2 border-t pt-4" style={{ borderColor: 'var(--sk-line)' }}>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--sk-ink-3)]">
             How candidates will see it
           </h3>
           <div
@@ -404,8 +534,8 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
           </div>
         </section>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
-          <Button
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--sk-line)] pt-4">
+          <button type="button" className="sk-btn" data-variant="primary"
             disabled={busy || !title.trim() || !summary.trim() || !description.trim()}
             onClick={() =>
               onCreate({
@@ -420,13 +550,13 @@ function NewVacancy({ onCreate, busy }: { onCreate: (body: unknown) => void; bus
             }
           >
             Save as draft
-          </Button>
-          <span className="text-[11px] text-slate-400">
+          </button>
+          <span className="text-[11px] text-[var(--sk-ink-3)]">
             Saved as a draft — it only reaches the jobs board after you send it for review.
           </span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -461,7 +591,7 @@ function Applications({
     }),
   );
 
-  if (!job) return <p className="text-sm text-slate-500">Post a vacancy first.</p>;
+  if (!job) return <p className="text-sm text-[var(--sk-ink-3)]">Post a vacancy first.</p>;
 
   return (
     <div className="space-y-4">
@@ -469,7 +599,7 @@ function Applications({
         aria-label="Vacancy"
         value={jobId ?? ''}
         onChange={(e) => onPick(e.target.value)}
-        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        className="rounded-lg border border-[var(--sk-line)] px-3 py-2 text-sm"
       >
         {jobs.map((j) => (
           <option key={j.id} value={j.id}>
@@ -482,14 +612,14 @@ function Applications({
         {job.questions
           .filter((q) => filterableKinds.includes(q.kind))
           .map((q) => (
-            <label key={q.id} className="text-xs font-semibold text-slate-600">
+            <label key={q.id} className="text-xs font-semibold text-[var(--sk-ink-2)]">
               {q.prompt}
               {q.kind === 'CHOICE' && (
                 <select
                   aria-label={`Filter by ${q.prompt}`}
                   value={filters[q.id] ?? ''}
                   onChange={(e) => setFilters((f) => ({ ...f, [q.id]: e.target.value }))}
-                  className="ml-2 rounded-lg border border-slate-200 px-2 py-1 font-normal"
+                  className="ml-2 rounded-lg border border-[var(--sk-line)] px-2 py-1 font-normal"
                 >
                   <option value="">Any</option>
                   {q.options.map((o) => (
@@ -504,7 +634,7 @@ function Applications({
                   aria-label={`Filter by ${q.prompt}`}
                   value={filters[q.id] ?? ''}
                   onChange={(e) => setFilters((f) => ({ ...f, [q.id]: e.target.value }))}
-                  className="ml-2 rounded-lg border border-slate-200 px-2 py-1 font-normal"
+                  className="ml-2 rounded-lg border border-[var(--sk-line)] px-2 py-1 font-normal"
                 >
                   <option value="">Any</option>
                   <option value="true">Yes</option>
@@ -518,7 +648,7 @@ function Applications({
                   value={filters[q.id] ?? ''}
                   onChange={(e) => setFilters((f) => ({ ...f, [q.id]: e.target.value }))}
                   placeholder="min"
-                  className="ml-2 w-20 rounded-lg border border-slate-200 px-2 py-1 font-normal"
+                  className="ml-2 w-20 rounded-lg border border-[var(--sk-line)] px-2 py-1 font-normal"
                 />
               )}
             </label>
@@ -527,20 +657,20 @@ function Applications({
 
       <div className="space-y-2">
         {rows.map((a) => (
-          <Card key={a.id}>
-            <CardHeader>
-              <CardTitle>{a.name}</CardTitle>
-              <p className="text-sm text-slate-500">
+          <div className="sk-card" key={a.id}>
+            <div className="sk-card-h">
+              <h3>{a.name}</h3>
+              <p className="text-sm text-[var(--sk-ink-3)]">
                 {a.email}
                 {a.phone ? ` · ${a.phone}` : ''}
               </p>
-              <a href={a.cvUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold text-teal-700">
+              <a href={a.cvUrl} target="_blank" rel="noreferrer" className="text-sm font-semibold text-[var(--sk-brand-2)]">
                 Open CV →
               </a>
-            </CardHeader>
-          </Card>
+            </div>
+          </div>
         ))}
-        {rows.length === 0 && <p className="text-sm text-slate-500">No applications match.</p>}
+        {rows.length === 0 && <p className="text-sm text-[var(--sk-ink-3)]">No applications match.</p>}
       </div>
     </div>
   );

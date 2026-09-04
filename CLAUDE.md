@@ -3,14 +3,52 @@
 Standing instructions. These are not suggestions — each one exists because
 skipping it already cost real time or shipped a real defect.
 
+## The environments (read this before touching data or deploys)
+
+| | Branch | What it is |
+|---|---|---|
+| **Production** | `main` | Real schools. Migrations are a MANUAL `db-migrate` dispatch (`environment=production`); Darshan runs it. Never seed, never demo-data — the workflow has no production option by design. |
+| **Staging** | `staging` | The integration branch and the only environment that gets seeded. Push to `staging` auto-applies migrations AND re-runs `demo-data` when the seed files change. |
+
+**Staging facts** (credentials live in the GitHub `staging` Environment and in
+Vercel's Preview env — never in this repo, never in chat):
+
+- Postgres: Supabase project ref `pnczxkyteaocpdoufwyz` (`db.<ref>.supabase.co`).
+- Object storage: Supabase Storage on the SAME project. **As of 3 Sept 2026 the
+  API's `S3_ENDPOINT` still pointed at an older ref (`uehgshnytylrjdclxxig`)
+  that no longer exists — it answers `410 Project removed`, so every upload
+  (fee proofs, logos, print-order PDFs) 500s.** Fix is env-only: point
+  `S3_ENDPOINT` / keys / `S3_BUCKET` at the live project.
+- Hosts: `raffles.test.sckools.com` (demo school), `api.test.sckools.com`,
+  `owner.test.sckools.com`.
+- **The demo school is `raffles`, and every one of its logins has the password
+  `password`** — deliberately, for testing ease. `admin@raffles.test`,
+  `teacher1@raffles.test`, … all the same. The demo-data workflow's default
+  input sets it, so a push-triggered run keeps it that way.
+- Student identifiers there follow ONE standard: `admissionNo` == `code` ==
+  `RPS-00001`, allocated in grade → section → roll order by the seed.
+
+**Never paste a credential into a chat, a file, or a commit.** If one arrives
+that way, say so and treat it as compromised — the fix is rotation, not
+silence.
+
 ## Before touching anything
 
 1. **Read `docs/superpowers/LIBRARY-TRAPS.md`.** 16 checks, each paid for by a
    defect on this service. Re-hitting one is a logged repeat, not a discovery.
 2. **Read the mistake ledger.** `node ~/.claude/projects/-Users-darshanjain-Documents-SchoolManager-SchoolManager/mistakes/log.mjs list`
    — anything marked ⚠️ (2+) is a pattern that has already bitten twice.
-3. **Check the branch.** Local checkouts drift behind `main`, and `main` is what
-   production runs. `git log --oneline HEAD..origin/main | head`.
+3. **Check the branch — and fetch first.** `git fetch origin` , then
+   `git log --oneline HEAD..origin/<target> | head` where `<target>` is the
+   branch you will actually push to: `origin/staging` for staging work,
+   `origin/main` for production. **Never diff against a LOCAL branch ref.** A
+   local `staging` (or `main`) can be months behind its remote if no worktree
+   has pulled it — this cost a full rebase on 3 Sept 2026, when a worktree cut
+   from a local `staging` at `fac7576` turned out to be hundreds of commits
+   behind `origin/staging`, on the far side of the grouped-sidebar rewrite that
+   moved `NAV_ITEMS` into `app/app/nav-model.ts`. Comparing against `main`
+   would not have caught it either: staging was ahead of main, which reads as
+   "I am current".
 4. **Touching any user-facing UI? Read
    `.claude/skills/sckools-ui-taste/SKILL.md` FIRST** — before the first class
    is written, not at review. Every rule in it was paid for by a screenshot

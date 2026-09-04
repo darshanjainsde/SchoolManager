@@ -3,6 +3,7 @@ import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { AppEnv } from '@skoolos/config';
 import { ApiErrorFilter } from './common/errors/api-error.filter';
+import { getPlatformPrisma } from '@skoolos/db';
 
 /**
  * Shared application configuration applied by BOTH the local server
@@ -26,7 +27,7 @@ export function configureApp(app: INestApplication, env: AppEnv): void {
     origin: buildCorsOrigin(env),
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Forwarded-Host', 'X-Skoolos-Host'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Forwarded-Host', 'X-Skoolos-Host', 'X-Skoolos-Client'],
   });
 
   // Swagger UI is opt-in via env so a misconfigured controller can't take down
@@ -50,9 +51,20 @@ export function configureApp(app: INestApplication, env: AppEnv): void {
 
 /**
  * Browsers on the school portals hit the API cross-origin. In development we
- * allow any `*.localhost`. In production we allow the platform apex and all its
- * subdomains (e.g. `skoolos.app` + `*.skoolos.app`), the owner host, plus any
- * hosts in the comma-separated `CORS_EXTRA_ORIGINS` env (for custom domains).
+ * allow any `*.localhost`. In production we allow the platform apex and all
+ * its subdomains, the owner host, every school's own verified domain, plus
+ * any hosts in the comma-separated `CORS_EXTRA_ORIGINS` env.
+ *
+ * The custom-domain case is the one that used to be broken. It was served
+ * only by `CORS_EXTRA_ORIGINS`, which means putting a school on its own
+ * address required an env edit and an API redeploy — per school. Until that
+ * happened every browser call from the school's domain was refused, and
+ * because the rejection is thrown rather than returned, the browser saw a
+ * bare 500 with no CORS header and no explanation.
+ *
+ * So the allowlist now reads from the same table the request path already
+ * trusts: a `Domain` row that is LIVE is, by definition, a hostname we serve.
+ * One source of truth, no redeploy, and revoking a domain revokes its origin.
  */
 function buildCorsOrigin(env: AppEnv) {
   const platformHost = env.PLATFORM_HOST.toLowerCase();
@@ -62,22 +74,69 @@ function buildCorsOrigin(env: AppEnv) {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 
-  // Escape dots for the subdomain regex: skoolos.app -> skoolos\.app
+  // Escape dots for the subdomain regex: sckools.com -> sckools\.com
   const hostRe = platformHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const platformOriginRe = new RegExp(`^https?://([a-z0-9-]+\\.)*${hostRe}(:\\d+)?$`, 'i');
+  // Development convenience, and only that: paired with `credentials: true`,
+  // a production deployment that trusts localhost origins is one SameSite
+  // change away from letting a page on a developer's machine make credentialed
+  // calls against real data.
+  const allowLocalhost = env.NODE_ENV !== 'production';
   const localhostRe = /^https?:\/\/([a-z0-9-]+\.)*localhost(:\d+)?$/i;
+
+  /**
+   * Verified custom domains, memoised briefly. CORS runs on every preflight,
+   * so this must not become a database read per request; 60s matches the
+   * host→tenant cache, so a newly verified domain starts working within the
+   * same window everywhere.
+   */
+  let cache: { at: number; hosts: Set<string> } = { at: 0, hosts: new Set() };
+  const TTL_MS = 60_000;
+
+  async function liveDomains(): Promise<Set<string>> {
+    if (Date.now() - cache.at < TTL_MS) return cache.hosts;
+    try {
+      const rows = await getPlatformPrisma().domain.findMany({
+        where: { status: 'LIVE' },
+        select: { hostname: true },
+      });
+      cache = { at: Date.now(), hosts: new Set(rows.map((r) => r.hostname.toLowerCase())) };
+    } catch {
+      // A database blip must not revoke every school's origin at once. Keep
+      // serving the last known set and retry on the next request.
+      cache = { ...cache, at: Date.now() - TTL_MS + 5_000 };
+    }
+    return cache.hosts;
+  }
 
   return (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) return cb(null, true); // same-origin / server-to-server / curl
     const o = origin.toLowerCase();
     if (
-      localhostRe.test(o) ||
+      (allowLocalhost && localhostRe.test(o)) ||
       platformOriginRe.test(o) ||
       o === `https://${ownerHost}` ||
       extra.includes(o)
     ) {
       return cb(null, true);
     }
-    return cb(new Error(`CORS: origin ${origin} not allowed`));
+
+    // Only a well-formed https origin can be a school domain — checking the
+    // table for anything else invites junk lookups.
+    let hostname: string;
+    try {
+      const u = new URL(o);
+      if (u.protocol !== 'https:') return cb(null, false);
+      hostname = u.hostname;
+    } catch {
+      return cb(null, false);
+    }
+
+    void liveDomains()
+      // Refusal is `false`, not an Error. Throwing here produced a 500 with no
+      // CORS headers, which tells the developer nothing; a clean deny lets the
+      // browser report the actual same-origin-policy failure.
+      .then((hosts) => cb(null, hosts.has(hostname)))
+      .catch(() => cb(null, false));
   };
 }

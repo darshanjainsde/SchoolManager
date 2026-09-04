@@ -8,10 +8,8 @@ import type { PressDocType, PressIssueRow, PressRegisterPage, PressSnapshot } fr
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
-import { PRESS_TYPE_LABEL, pressDateLabel, printPressSheets } from '@/lib/press';
-import { CertificateSheet, ReportCardSheet } from '@/components/press/press-sheets';
-import { PressPrintPortal } from '@/components/press/press-print-portal';
-import '@/components/press/press-print.css';
+import { PRESS_TYPE_LABEL, pressDateLabel } from '@/lib/press';
+import { PrintRoom, type PrintRoomSheet } from '@/components/press/print-room';
 
 /**
  * The register — the drawer of everything ever issued.
@@ -34,19 +32,18 @@ export default function PressRegisterPage() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<PressDocType | 'ALL'>('ALL');
   const [q, setQ] = useState('');
-  const [reprint, setReprint] = useState<OneIssue | null>(null);
+  const [viewing, setViewing] = useState<OneIssue | null>(null);
   const [fetching, setFetching] = useState<string | null>(null);
   /** The entry whose void-note row is open, and the note being typed. */
   const [voiding, setVoiding] = useState<{ id: string; note: string } | null>(null);
-  const printedIdRef = useRef<string | null>(null);
 
-  // Print AFTER the reprint content committed — a timer raced React and could
-  // open the dialog on an empty portal (blank pages).
+  // The command bar and the Press counter link here as /register?q=SERIAL —
+  // seed the filter from the URL once, after mount (no Suspense dance).
   useEffect(() => {
-    if (!reprint || printedIdRef.current === reprint.id) return;
-    printedIdRef.current = reprint.id;
-    printPressSheets();
-  }, [reprint]);
+    const fromUrl = new URLSearchParams(window.location.search).get('q');
+    if (fromUrl) setQ(fromUrl);
+  }, []);
+
 
   /** Older pages, appended below the live first page. A register is a book —
    *  every entry stays reachable, not just the newest 50. */
@@ -65,12 +62,12 @@ export default function PressRegisterPage() {
       ),
   });
 
-  async function openReprint(id: string) {
+  /** Opens the entry in the Print Room — VIEW first, print from there. */
+  async function openEntry(id: string) {
     setFetching(id);
     try {
       const row = await api.get<OneIssue>(`/manage/press/register/${id}`);
-      printedIdRef.current = null; // re-opening the same entry prints again
-      setReprint(row);
+      setViewing(row);
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : 'Could not open that entry.');
     } finally {
@@ -182,9 +179,9 @@ export default function PressRegisterPage() {
                       <td style={{ padding: '8px', whiteSpace: 'nowrap', color: 'var(--sk-ink-3)' }}>{pressDateLabel(r.issuedAt)}</td>
                       <td style={{ padding: '8px 16px 8px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         <button
-                          className="sk-btn" data-icon aria-label={`Reprint ${r.serial}`}
+                          className="sk-btn" data-icon aria-label={`View ${r.serial}`}
                           disabled={fetching === r.id}
-                          onClick={() => openReprint(r.id)}
+                          onClick={() => openEntry(r.id)}
                         >
                           <Printer size={15} aria-hidden="true" />
                         </button>
@@ -235,23 +232,22 @@ export default function PressRegisterPage() {
         </button>
       )}
 
-      {reprint && (
-        <PressPrintPortal>
-          {reprint.snapshot.kind === 'REPORT_CARD' ? (
-            <ReportCardSheet
-              snapshot={reprint.snapshot}
-              serial={reprint.serial}
-              stamp={reprint.voidedAt ? 'CANCELLED' : 'DUPLICATE'}
-            />
-          ) : (
-            <CertificateSheet
-              snapshot={reprint.snapshot}
-              serial={reprint.serial}
-              issuedAt={reprint.issuedAt}
-              stamp={reprint.voidedAt ? 'CANCELLED' : 'DUPLICATE'}
-            />
-          )}
-        </PressPrintPortal>
+      {viewing && (
+        <PrintRoom
+          title={`${viewing.serial} · ${PRESS_TYPE_LABEL[viewing.snapshot.kind === 'REPORT_CARD' ? 'REPORT_CARD' : viewing.snapshot.type]}`}
+          onClose={() => setViewing(null)}
+          sheets={[
+            viewing.snapshot.kind === 'REPORT_CARD'
+              ? {
+                  kind: 'REPORT_CARD', snapshot: viewing.snapshot, serial: viewing.serial,
+                  stamp: viewing.voidedAt ? 'CANCELLED' : 'DUPLICATE',
+                }
+              : {
+                  kind: 'CERTIFICATE', snapshot: viewing.snapshot, serial: viewing.serial,
+                  issuedAt: viewing.issuedAt, stamp: viewing.voidedAt ? 'CANCELLED' : 'DUPLICATE',
+                } satisfies PrintRoomSheet,
+          ]}
+        />
       )}
     </div>
   );

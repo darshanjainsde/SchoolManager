@@ -183,6 +183,22 @@ export class PortalService {
       });
     } catch (e) {
       if (!isP2002(e)) throw e;
+      // Deliberately keyed on the token ALONE, and deliberately on the
+      // platform (BYPASSRLS) client.
+      //
+      // A 4 Sept 2026 audit flagged this as the one privileged write keyed on
+      // attacker input: someone holding another device's Expo token could
+      // re-point that row into their own school. That is true, and it is
+      // still the right behaviour. A push token is a per-DEVICE identity, not
+      // a per-tenant one (see push.channel.ts). A phone handed from one child
+      // to a sibling at another school must re-register, and last-writer-wins
+      // is what stops the device continuing to receive the PREVIOUS school's
+      // notifications — a worse leak, and a far likelier one, than the theft
+      // the narrower predicate would prevent.
+      //
+      // Adding `userId` here was tried and reverted: it breaks that case
+      // silently. The precondition for abuse is real but narrow — the token is
+      // device-local and no API returns it.
       return getPlatformPrisma().pushToken.update({
         where: { token },
         data: { schoolId, userId, email, platform, lastSeenAt: new Date() },

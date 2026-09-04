@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
@@ -10,6 +10,7 @@ import { ModerateJobDto } from './owner.dto';
 import { CreateSchoolDto, ModerateEventDto, OwnerCreateEventDto, SetFeatureDto, SetStatusDto, SetTierDto } from './owner.dto';
 import { ImpersonationService } from './impersonation.service';
 import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
+import { OwnerCacheInterceptor } from './owner-cache.interceptor';
 import { OwnerEventsService } from './owner-events.service';
 import { OwnerOverviewService } from './owner-overview.service';
 import { OwnerSchoolsService } from './owner-schools.service';
@@ -18,6 +19,8 @@ import { AddDomainDto } from './owner.dto';
 
 @Controller('owner')
 @UseGuards(OwnerHostGuard, PlatformJwtGuard)
+// Any write here invalidates the cached dashboard — see the interceptor.
+@UseInterceptors(OwnerCacheInterceptor)
 export class OwnerController {
   constructor(
     private readonly schools: OwnerSchoolsService,
@@ -110,8 +113,14 @@ export class OwnerController {
   }
 
   @Post('schools/:id/impersonate')
-  impersonate(@Param('id', ParseUUIDPipe) id: string) {
-    return this.impersonation.mint(id);
+  impersonate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() operator: PlatformJwtPayload,
+  ) {
+    // Stamp the operator on the token. The exchange mints a school JWT whose
+    // `sub` is the school ADMIN, so without this every action the operator
+    // then takes inside the school is audited as that admin's own work.
+    return this.impersonation.mint(id, operator?.sub);
   }
 
   // ── Custom domains ──────────────────────────────────────

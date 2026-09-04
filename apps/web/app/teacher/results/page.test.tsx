@@ -66,9 +66,10 @@ describe('TeacherResultsPage', () => {
 
     // Whitelist the endpoints actually expected — anything outside this set
     // (in particular the old unscoped roster endpoint) is a regression.
-    expect(vi.mocked(api.get).mock.calls.every(([p]) => p.startsWith('/manage/attendance/my-classes'))).toBe(
-      true,
-    );
+    // result-days is the Result Room's due-date banner.
+    expect(vi.mocked(api.get).mock.calls.every(([p]) =>
+      p.startsWith('/manage/attendance/my-classes') || p.startsWith('/manage/exams/result-days'),
+    )).toBe(true);
   });
 
   it('excludes a covering:true class — the server rejects a covering-only teacher publishing results', async () => {

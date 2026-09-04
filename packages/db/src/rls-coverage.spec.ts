@@ -47,6 +47,37 @@ function modelTables(): string[] {
  * loop the older migrations use. Reading only the literal form would report
  * fifty false positives and teach everyone to ignore this test.
  */
+/**
+ * Tables that some migration creates an actual POLICY for.
+ *
+ * `ENABLE ROW LEVEL SECURITY` alone denies everything to non-owners, but this
+ * suite's docstring claims tenant isolation, and that needs a policy. A table
+ * enabled with a permissive `USING (true)` would have passed the check below
+ * while isolating nothing — flagged by a 4 Sept 2026 audit.
+ */
+function tablesWithPolicy(): Set<string> {
+  const found = new Set<string>();
+  for (const dir of readdirSync(MIGRATIONS_DIR, { withFileTypes: true })) {
+    if (!dir.isDirectory()) continue;
+    let sql: string;
+    try {
+      sql = readFileSync(join(MIGRATIONS_DIR, dir.name, 'migration.sql'), 'utf8');
+    } catch {
+      continue;
+    }
+    for (const [, table] of sql.matchAll(/CREATE POLICY\s+"?[A-Za-z_]+"?\s+ON\s+"?([A-Za-z_]+)"?/gi)) {
+      found.add(table);
+    }
+    // The FOREACH loops create policies for every table in their array.
+    if (/CREATE POLICY/i.test(sql)) {
+      for (const [, arr] of sql.matchAll(/ARRAY\s*\[([^\]]+)\]/g)) {
+        for (const [, t] of arr.matchAll(/'([A-Za-z_]+)'/g)) found.add(t);
+      }
+    }
+  }
+  return found;
+}
+
 function tablesWithRls(): Set<string> {
   const found = new Set<string>();
   for (const dir of readdirSync(MIGRATIONS_DIR, { withFileTypes: true })) {
@@ -85,5 +116,52 @@ describe('RLS coverage', () => {
     const covered = tablesWithRls();
     expect(covered.has('Student')).toBe(true); // only ever enabled via a loop
     expect(covered.has('EmailSettings')).toBe(true); // only ever via ALTER TABLE
+  });
+});
+
+describe('the coverage check is measuring something', () => {
+  // Both lists are produced by regex over files. If the schema is ever
+  // reformatted so `modelTables()` matches nothing, `uncovered` is empty and
+  // the suite above passes having verified nothing at all. The e2e sibling
+  // already guards its own count for exactly this reason ("not a vacuous pass
+  // against an empty database"); this is the static half.
+  it('parses a realistic number of models out of the schema', () => {
+    expect(modelTables().length).toBeGreaterThan(80);
+  });
+
+  it('finds RLS statements in the migrations', () => {
+    expect(tablesWithRls().size).toBeGreaterThan(80);
+  });
+
+  it('finds CREATE POLICY statements in the migrations', () => {
+    expect(tablesWithPolicy().size).toBeGreaterThan(80);
+  });
+});
+
+describe('every tenant table has a policy, not just RLS enabled', () => {
+  // ENABLE ROW LEVEL SECURITY denies non-owners everything; it does not
+  // isolate tenants. Only a policy does. Asserting the enable alone let a
+  // permissive `USING (true)` pass as "covered".
+  it('creates a policy for every model it enables RLS on', () => {
+    const policies = tablesWithPolicy();
+    const missing = modelTables()
+      .filter((t) => !(t in ALLOWED_WITHOUT_RLS))
+      .filter((t) => !policies.has(t));
+    expect(missing).toEqual([]);
+  });
+
+  it('never writes a permissive USING (true) policy', () => {
+    const offenders: string[] = [];
+    for (const dir of readdirSync(MIGRATIONS_DIR, { withFileTypes: true })) {
+      if (!dir.isDirectory()) continue;
+      let sql: string;
+      try {
+        sql = readFileSync(join(MIGRATIONS_DIR, dir.name, 'migration.sql'), 'utf8');
+      } catch {
+        continue;
+      }
+      if (/USING\s*\(\s*true\s*\)/i.test(sql)) offenders.push(dir.name);
+    }
+    expect(offenders).toEqual([]);
   });
 });

@@ -130,3 +130,28 @@ describe('cascade order — a media query must not be overridden by a later base
     ).toBeLessThan((inMedia as RegExpMatchArray).index as number);
   });
 });
+
+describe('every custom property the stylesheet uses is one it also defines', () => {
+  // Paid for while adding the owner-console family: --sk-muted, --sk-wash and
+  // --sk-display were all written from memory of the palette. None exist. CSS
+  // does not complain about an unresolvable var() — it drops the declaration
+  // and the element renders unstyled, which reads as a layout bug three files
+  // away from the typo. The real names were --sk-ink-3, --sk-bg-2, --sk-serif.
+  const declared = new Set(
+    [...css.matchAll(/(--sk-[a-z0-9-]+)\s*:/g)].map((m) => m[1]),
+  );
+  // Only bare uses. `var(--x, #fff)` carries its own answer and is a choice,
+  // not a typo — sk-theme.css:895 does exactly that on purpose.
+  const used = [...css.matchAll(/var\(\s*(--sk-[a-z0-9-]+)\s*\)/g)].map((m) => m[1]);
+
+  it('declares at least the palette the file is built on', () => {
+    expect(declared.size).toBeGreaterThan(20);
+    expect(used.length).toBeGreaterThan(50);
+  });
+
+  it('never references a token it does not declare', () => {
+    // A var() with its own fallback is fine; these are the bare ones.
+    const undeclared = [...new Set(used)].filter((v) => !declared.has(v));
+    expect(undeclared).toEqual([]);
+  });
+});

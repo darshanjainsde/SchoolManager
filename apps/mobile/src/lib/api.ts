@@ -46,7 +46,11 @@ async function safeFetch(url: string, init: RequestInit): Promise<Response> {
 // multipart boundary itself, and a manual header would omit it (the server
 // would then see an unparseable body).
 async function rawUpload(path: string, s: Session | null, form: FormData) {
-  const headers: Record<string, string> = {};
+  // Say so explicitly rather than letting the API infer it from a missing
+  // Origin header: the API only echoes the refresh token in the response body
+  // for native clients, because a browser has the HttpOnly cookie instead and
+  // script on the page must not be able to read one.
+  const headers: Record<string, string> = { 'X-Skoolos-Client': 'native' };
   if (s) {
     headers['X-Skoolos-Host'] = s.schoolHost;
     headers['Authorization'] = `Bearer ${s.accessToken}`;
@@ -55,7 +59,10 @@ async function rawUpload(path: string, s: Session | null, form: FormData) {
 }
 
 async function rawFetch(path: string, s: Session | null, opts: Opts) {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Skoolos-Client': 'native',
+  };
   if (s) {
     headers['X-Skoolos-Host'] = s.schoolHost;
     if (opts.auth !== false) headers['Authorization'] = `Bearer ${s.accessToken}`;

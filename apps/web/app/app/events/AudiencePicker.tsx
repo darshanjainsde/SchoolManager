@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 
-import { Label } from '@/components/ui/label';
 
 export type AudienceKind = 'SCHOOL_ONLY' | 'CITY' | 'SELECTED';
 
@@ -111,7 +110,7 @@ export function AudiencePicker({ kind, onKindChange, selectedIds, onSelectedChan
       />
       <span>
         <span style={{ fontWeight: 600, fontSize: 14 }}>{label}</span>
-        <span style={{ display: 'block', fontSize: 12, color: 'var(--sk-muted)', marginTop: 2 }}>
+        <span style={{ display: 'block', fontSize: 12, color: 'var(--sk-ink-3)', marginTop: 2 }}>
           {hint}
         </span>
       </span>
@@ -119,8 +118,8 @@ export function AudiencePicker({ kind, onKindChange, selectedIds, onSelectedChan
   );
 
   return (
-    <div className="space-y-2">
-      <Label>Who should see this event?</Label>
+    <div style={{ display: 'grid', gap: 6 }}>
+      <span className="sk-lab">Who should see this event?</span>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {opt('SCHOOL_ONLY', 'Just my school', 'Shown only on your own website. Goes live immediately.')}
         {opt(
@@ -156,13 +155,13 @@ export function AudiencePicker({ kind, onKindChange, selectedIds, onSelectedChan
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search schools by name…"
             aria-label="Search schools"
-            className="w-full rounded-md px-3 py-2 text-sm"
+            className="sk-input"
             style={{ border: '1px solid var(--sk-line-2)', background: 'transparent', color: 'var(--sk-ink)' }}
           />
           <div style={{ maxHeight: 208, overflowY: 'auto', marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {loading && <p style={{ fontSize: 12, color: 'var(--sk-muted)', padding: 6 }}>Searching…</p>}
+            {loading && <p style={{ fontSize: 12, color: 'var(--sk-ink-3)', padding: 6 }}>Searching…</p>}
             {!loading && candidates.length === 0 && (
-              <p style={{ fontSize: 12, color: 'var(--sk-muted)', padding: 6 }}>
+              <p style={{ fontSize: 12, color: 'var(--sk-ink-3)', padding: 6 }}>
                 {query.trim() ? 'No schools match that name.' : 'No other schools are live yet.'}
               </p>
             )}
@@ -186,7 +185,7 @@ export function AudiencePicker({ kind, onKindChange, selectedIds, onSelectedChan
                   <span style={{ fontSize: 13 }}>
                     {c.name}
                     {c.city && (
-                      <span style={{ color: 'var(--sk-muted)' }}> · {c.city}</span>
+                      <span style={{ color: 'var(--sk-ink-3)' }}> · {c.city}</span>
                     )}
                   </span>
                 </label>

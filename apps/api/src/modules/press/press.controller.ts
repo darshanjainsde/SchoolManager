@@ -3,16 +3,21 @@ import {
 } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
+import { StaffScopeGuard } from '../../common/auth/staff-scope.guard';
+import { StaffRoles } from '../../common/auth/staff-role.decorator';
 import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { CertificateService } from './certificate.service';
+import { PressOverviewService } from './press-overview.service';
+import { ResultRoomService } from './result-room.service';
 import { PressRegisterService } from './press-register.service';
 import { ReportCardService } from './report-card.service';
 import {
-  IssueCertificateDto, IssueReportCardsDto, SaveRemarkDto, SaveWindowDto, VoidIssueDto,
+  BulkCertificatesDto, GenerateClassDto, IssueCertificateDto, IssueReportCardsDto,
+  NudgeResultsDto, SaveRemarkDto, SaveWindowDto, VoidIssueDto,
 } from './press.dto';
 
 /**
@@ -22,20 +27,38 @@ import {
  * a term's cards is front-office work, and gating it tighter than the fee desk
  * would only route it through the principal's password.
  */
+/**
+ * A transfer certificate is a legal document and voiding the register unmakes
+ * one. Those three routes are SCHOOL_ADMIN even though the desk itself is open
+ * to STAFF — see the note on FeesController for why the STAFF role is too
+ * coarse to carry that authority.
+ */
 @Controller('manage/press')
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard, StaffScopeGuard)
 @RequireFeature('PRESS')
 @Roles('SCHOOL_ADMIN', 'STAFF')
+/** The press desk is the office's, for the same reason as the fee desk: a
+ * transfer certificate is a legal document and voiding the register unmakes
+ * one. STAFF alone admitted every staff kind. */
+@StaffRoles('OFFICE')
 export class PressController {
   constructor(
     private readonly reportCards: ReportCardService,
     private readonly certificates: CertificateService,
     private readonly register: PressRegisterService,
+    private readonly overviewSvc: PressOverviewService,
+    private readonly resultRoom: ResultRoomService,
     private readonly tenant: TenantContextService,
   ) {}
 
   private sid(): string {
     return this.tenant.requireTenant().schoolId;
+  }
+
+  /** The home's one read: scoreboard, register facts, live order facts. */
+  @Get('overview')
+  overview(@Query('windowId') windowId?: string) {
+    return this.overviewSvc.overview(this.sid(), windowId || undefined);
   }
 
   // ── Reference reads (the Press's own — see ReportCardService.listClasses) ─
@@ -50,6 +73,25 @@ export class PressController {
 
   @Get('students') searchStudents(@Query('q') q = '') {
     return this.reportCards.searchStudents(this.sid(), q);
+  }
+
+  // ── The Result Room ───────────────────────────────────────────────────────
+
+  @Get('results')
+  resultBoard(@Query('windowId') windowId?: string) {
+    return this.resultRoom.board(this.sid(), windowId || undefined);
+  }
+
+  /** One tap → the subject teacher's bell. Logged against double-nagging. */
+  @Post('results/nudge') @HttpCode(200)
+  nudgeResults(@CurrentUser() u: SchoolJwtPayload, @Body() dto: NudgeResultsDto) {
+    return this.resultRoom.nudge(this.sid(), dto, u.sub);
+  }
+
+  /** The gate: ready classes generate; unready needs a written, audited reason. */
+  @Post('results/generate') @HttpCode(200)
+  generateClass(@CurrentUser() u: SchoolJwtPayload, @Body() dto: GenerateClassDto) {
+    return this.resultRoom.generate(this.sid(), dto, u.sub);
   }
 
   // ── Report windows ────────────────────────────────────────────────────────
@@ -91,6 +133,12 @@ export class PressController {
   @Post('certificates/issue') @HttpCode(201)
   issueCertificate(@CurrentUser() u: SchoolJwtPayload, @Body() dto: IssueCertificateDto) {
     return this.certificates.issue(this.sid(), dto, u.sub);
+  }
+
+  /** One class, one type, one run — see CertificateService.bulkIssue. */
+  @Post('certificates/bulk') @HttpCode(200)
+  bulkCertificates(@CurrentUser() u: SchoolJwtPayload, @Body() dto: BulkCertificatesDto) {
+    return this.certificates.bulkIssue(this.sid(), dto, u.sub);
   }
 
   // ── The register ──────────────────────────────────────────────────────────

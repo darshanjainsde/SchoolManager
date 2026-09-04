@@ -40,6 +40,12 @@ export class ExamsController {
   }
 
   /** Marks already stored for this exam — lets the entry screen prefill. */
+  /** Result-day banner for the teacher portal — see ExamsService.resultDays. */
+  @Get('result-days')
+  resultDays() {
+    return this.exams.resultDays(this.sid());
+  }
+
   @Get(':id/results')
   listResults(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
     return this.exams.results(this.sid(), id, u.sub, u.role);

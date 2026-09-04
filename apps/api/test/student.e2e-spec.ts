@@ -18,9 +18,14 @@
  */
 
 import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
-import { describeLiveApi } from './requires-live-api';
+import { describeLiveApi, LIVE_API_BASE } from './requires-live-api';
 
-const BASE = 'http://localhost:3001';
+// Honour E2E_API_BASE. requires-live-api.ts has exported LIVE_API_BASE all
+// along and all four suites ignored it, so pointing them at a purpose-booted
+// API was impossible — they always hit whatever happened to hold :3001. That
+// is the exact failure this file's own docstring warns about: a stale server
+// on the wrong database answers /health and fails every assertion.
+const BASE = LIVE_API_BASE;
 
 /** Obtain a school-scoped JWT (school admins have no TOTP). */
 async function schoolToken(slug: string): Promise<string> {

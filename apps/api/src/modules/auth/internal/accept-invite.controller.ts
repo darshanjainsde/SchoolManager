@@ -38,9 +38,15 @@ export class AcceptInviteDto {
  * Cross-tenant safety:
  *   We trust ctx.schoolId from the tenant middleware (resolved from Host).
  *   If a user row with the supplied id belongs to a different school we
- *   return 404 — never reveal existence. Cross-tenant exploitation requires
- *   the attacker to control DNS for *that* tenant's host, which is gated
- *   by the platform's domain-verification flow.
+ *   return 404 — never reveal existence.
+ *
+ *   NOTE: an earlier version of this comment said cross-tenant use "requires
+ *   the attacker to control DNS for that tenant's host". It does not. The
+ *   tenant is resolved from `X-Skoolos-Host`, a header any client can set
+ *   (tenant.middleware.ts) — one curl flag, no DNS. The route is still safe,
+ *   because the invite token is required and is checked against the school
+ *   the header selected; but nothing here should be relied on as a network
+ *   boundary, because there isn't one.
  *
  * Rate limit: 10 req / minute (per-IP) — combined with 192-bit token entropy
  * this is unbreakable in practice.

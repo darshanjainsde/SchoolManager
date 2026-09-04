@@ -99,10 +99,10 @@ export default function BlogQueuePage() {
   const rows = data ?? [];
 
   return (
-    <div className="p-8 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-bold text-slate-900">Blog approval queue</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="sk-own-h1">Blog approval queue</h1>
+        <p className="sk-own-sub">
           Review posts schools have submitted for syndication on the shared sckools.com blog.
         </p>
       </header>
@@ -113,10 +113,10 @@ export default function BlogQueuePage() {
           <CardDescription>{rows.length} post{rows.length !== 1 ? 's' : ''} awaiting a decision</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading && <div className="text-sm text-slate-500">Loading…</div>}
+          {isLoading && <div className="sk-muted">Loading…</div>}
           {error && <div className="text-sm text-rose-600">{(error as Error).message}</div>}
           {!isLoading && !error && rows.length === 0 && (
-            <p className="text-sm text-slate-500">
+            <p className="sk-muted">
               Nothing to review right now — schools submit posts here when they want them syndicated to the
               global sckools.com blog.
             </p>
@@ -140,7 +140,7 @@ export default function BlogQueuePage() {
                           {' · '}
                           Submitted {formatDate(post.updatedAt)}
                         </p>
-                        <p className="mt-1 text-sm text-slate-500">{post.description}</p>
+                        <p className="sk-own-sub">{post.description}</p>
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center gap-2">
                         <Button
@@ -241,7 +241,7 @@ function RejectDialog({
     >
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
         <h2 className="text-lg font-semibold text-slate-900">Reject &ldquo;{post.title}&rdquo;</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="sk-own-sub">
           Tell {post.schoolName ?? 'the school'} why this post isn&rsquo;t being syndicated. They&rsquo;ll see
           this reason and can revise and resubmit.
         </p>

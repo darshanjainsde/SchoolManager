@@ -219,7 +219,7 @@ function QrUpload({
     mutationFn: async (file: File) => {
       const form = new FormData();
       form.append('file', file);
-      return api.post('/manage/fees/payment-setup/bank/qr', form);
+      return api.postForm('/manage/fees/payment-setup/bank/qr', form);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['fee-payment-setup', host] }); toast.success('QR code updated'); },
     onError: (e: Error) => toast.error(e.message),

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { withTenant, type TenantTx } from '@skoolos/db';
+import { Prisma, withTenant, type TenantTx } from '@skoolos/db';
 import type {
   IssueReportCardsResponse,
   PressSchoolHeader,
@@ -52,12 +52,12 @@ export function rollOrder(a: { rollNo: string | null; name: string }, b: { rollN
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 /** UTC instant at which the IST calendar day of `d` (a DATE column) begins. */
-function istDayStartUtc(d: Date): Date {
+export function istDayStartUtc(d: Date): Date {
   return new Date(d.getTime() - IST_OFFSET_MS);
 }
 
 /** UTC instant at which the IST day AFTER `d` begins — the exclusive bound. */
-function istDayAfterUtc(d: Date): Date {
+export function istDayAfterUtc(d: Date): Date {
   return new Date(d.getTime() + 24 * 60 * 60 * 1000 - IST_OFFSET_MS);
 }
 
@@ -168,6 +168,7 @@ export class ReportCardService {
         name: w.name,
         startDate: isoDay(w.startDate),
         endDate: isoDay(w.endDate),
+        resultDay: w.resultDay ? isoDay(w.resultDay) : null,
         issuedCount: countByWindow.get(w.id) ?? 0,
       }));
     });
@@ -188,7 +189,13 @@ export class ReportCardService {
       });
       if (!year) throw new ApiError('NOT_FOUND', 'That academic year was not found.', 404);
 
-      const data = { name: dto.name.trim(), startDate: start, endDate: end };
+      const data = {
+        name: dto.name.trim(), startDate: start, endDate: end,
+        // Result day may be set, moved, or cleared (null clears; omitted keeps).
+        ...(dto.resultDay !== undefined
+          ? { resultDay: dto.resultDay ? new Date(dto.resultDay) : null }
+          : {}),
+      };
       try {
         let row;
         if (dto.id) {
@@ -214,6 +221,7 @@ export class ReportCardService {
           name: row.name,
           startDate: isoDay(row.startDate),
           endDate: isoDay(row.endDate),
+          resultDay: row.resultDay ? isoDay(row.resultDay) : null,
           issuedCount,
         };
       } catch (e) {
@@ -239,15 +247,33 @@ export class ReportCardService {
       if (!student) throw new ApiError('NOT_FOUND', 'That student was not found.', 404);
 
       const text = dto.text.trim();
-      if (text === '') {
-        // Clearing a remark is deleting it, not storing an empty sentence.
-        await tx.reportRemark.deleteMany({ where: { windowId: dto.windowId, studentId: dto.studentId } });
-        return;
+      // The extras bucket (co-scholastic, house, height/weight, promotion) is
+      // validated by the DTO and stored as printed. `undefined` = untouched;
+      // an explicit empty object clears it.
+      const extras = dto.extras === undefined
+        ? undefined
+        : Object.keys(dto.extras).length === 0
+          ? Prisma.JsonNull
+          : (dto.extras as object);
+      if (text === '' && extras === undefined) {
+        // Clearing a remark is deleting it, not storing an empty sentence —
+        // unless extras live on the row, in which case the text just empties.
+        const existing = await tx.reportRemark.findFirst({
+          where: { windowId: dto.windowId, studentId: dto.studentId },
+          select: { extras: true },
+        });
+        if (!existing?.extras) {
+          await tx.reportRemark.deleteMany({ where: { windowId: dto.windowId, studentId: dto.studentId } });
+          return;
+        }
       }
       await tx.reportRemark.upsert({
         where: { windowId_studentId: { windowId: dto.windowId, studentId: dto.studentId } },
-        create: { schoolId, windowId: dto.windowId, studentId: dto.studentId, text, authorId },
-        update: { text, authorId },
+        create: {
+          schoolId, windowId: dto.windowId, studentId: dto.studentId, text, authorId,
+          ...(extras !== undefined ? { extras } : {}),
+        },
+        update: { text, authorId, ...(extras !== undefined ? { extras } : {}) },
       });
     });
     return { saved: true };
@@ -297,6 +323,7 @@ export class ReportCardService {
           name: window.name,
           startDate: isoDay(window.startDate),
           endDate: isoDay(window.endDate),
+          resultDay: window.resultDay ? isoDay(window.resultDay) : null,
           issuedCount: windowIssuedCount,
         },
         classSection: {
@@ -343,7 +370,8 @@ export class ReportCardService {
         classSectionId,
         scheduledAt: { gte: istDayStartUtc(startDate), lt: istDayAfterUtc(endDate) },
       },
-      select: { id: true, subjectId: true, maxMarks: true },
+      select: { id: true, subjectId: true, title: true, maxMarks: true, scheduledAt: true },
+      orderBy: { scheduledAt: 'asc' },
     });
     const examIds = exams.map((e) => e.id);
 
@@ -364,7 +392,7 @@ export class ReportCardService {
             // GOES to the family; draft marks a teacher has not published
             // must not be frozen into a snapshot the portal then serves.
             where: { examId: { in: examIds }, studentId: { in: studentIds }, publishedAt: { not: null } },
-            select: { examId: true, studentId: true, marks: true },
+            select: { examId: true, studentId: true, marks: true, status: true },
           })
         : Promise.resolve([]),
       exams.length
@@ -388,7 +416,7 @@ export class ReportCardService {
       studentIds.length
         ? tx.reportRemark.findMany({
             where: { windowId, studentId: { in: studentIds } },
-            select: { studentId: true, text: true },
+            select: { studentId: true, text: true, extras: true },
           })
         : Promise.resolve([]),
       studentIds.length
@@ -406,14 +434,16 @@ export class ReportCardService {
       .map((s) => ({ subjectId: s.id, subjectName: s.name }))
       .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
 
-    const examsBySubject = new Map<string, { id: string; maxMarks: number }[]>();
+    const examsBySubject = new Map<string, { id: string; title: string; maxMarks: number }[]>();
     for (const e of exams) {
       const list = examsBySubject.get(e.subjectId) ?? [];
-      list.push({ id: e.id, maxMarks: e.maxMarks });
+      list.push({ id: e.id, title: e.title, maxMarks: e.maxMarks });
       examsBySubject.set(e.subjectId, list);
     }
-    const resultByExamStudent = new Map<string, number>();
-    for (const r of results) resultByExamStudent.set(`${r.examId}:${r.studentId}`, r.marks);
+    const resultByExamStudent = new Map<string, { marks: number; status: string }>();
+    for (const r of results) {
+      resultByExamStudent.set(`${r.examId}:${r.studentId}`, { marks: r.marks, status: r.status });
+    }
 
     const attendanceByStudent = new Map<string, { present: number; total: number }>();
     for (const row of attendanceRows) {
@@ -426,6 +456,11 @@ export class ReportCardService {
     }
 
     const remarkByStudent = new Map(remarkRows.map((r) => [r.studentId, r.text]));
+    const extrasByStudent = new Map(
+      remarkRows
+        .filter((r) => r.extras)
+        .map((r) => [r.studentId, r.extras as unknown as import('@skoolos/types').CardExtras]),
+    );
     const issuedByStudent = new Map(
       issuedRows.map((r) => [r.studentId, { serial: r.serial, issuedAt: r.issuedAt.toISOString() }]),
     );
@@ -434,21 +469,37 @@ export class ReportCardService {
       .map((s) => {
         const lines: ReportSubjectLine[] = subjects.map(({ subjectId, subjectName }) => {
           const subjectExams = examsBySubject.get(subjectId) ?? [];
-          let attempted = 0;
+          // Three truths per exam, never one dash:
+          //   PRESENT — marks count, max counts.
+          //   AB      — absent: 0 counts, max counts, prints "AB".
+          //   EX      — exempted: the exam LEAVES the child's max entirely,
+          //             so an exemption never drags a percentage down.
+          //   no row  — no data yet: neither marks nor max (as before).
+          let counted = 0;        // PRESENT + AB rows
           let marks = 0;
-          let attemptedMax = 0;
+          let countedMax = 0;     // the pro-rata base
           let totalMax = 0;
+          const perExam: NonNullable<ReportSubjectLine['perExam']> = [];
           for (const e of subjectExams) {
             totalMax += e.maxMarks;
-            const m = resultByExamStudent.get(`${e.id}:${s.id}`);
-            if (m !== undefined) {
-              attempted += 1;
-              marks += m;
-              attemptedMax += e.maxMarks;
+            const r = resultByExamStudent.get(`${e.id}:${s.id}`);
+            if (r === undefined) {
+              perExam.push({ examId: e.id, title: e.title, maxMarks: e.maxMarks, value: null });
+            } else if (r.status === 'EX') {
+              perExam.push({ examId: e.id, title: e.title, maxMarks: e.maxMarks, value: 'EX' });
+            } else if (r.status === 'AB') {
+              counted += 1;
+              countedMax += e.maxMarks;
+              perExam.push({ examId: e.id, title: e.title, maxMarks: e.maxMarks, value: 'AB' });
+            } else {
+              counted += 1;
+              marks += r.marks;
+              countedMax += e.maxMarks;
+              perExam.push({ examId: e.id, title: e.title, maxMarks: e.maxMarks, value: r.marks });
             }
           }
-          const hasMarks = attempted > 0;
-          const pct = hasMarks ? pctOf(marks, attemptedMax) : null;
+          const hasMarks = counted > 0;
+          const pct = hasMarks && countedMax > 0 ? pctOf(marks, countedMax) : null;
           return {
             subjectId,
             subjectName,
@@ -456,9 +507,11 @@ export class ReportCardService {
             // Float sums drift (36.7+42.1 = 78.80000000000001); one decimal
             // place at COMPILE time so no surface can print the artifact.
             marks: hasMarks ? Math.round(marks * 10) / 10 : null,
-            maxMarks: hasMarks ? attemptedMax : totalMax,
+            maxMarks: hasMarks ? countedMax : totalMax,
             pct,
             grade: gradeForPct(pct),
+            perExam,
+            countedMax,
           };
         });
 
@@ -482,12 +535,61 @@ export class ReportCardService {
             pct: att.total > 0 ? Math.round((att.present / att.total) * 100) : null,
           },
           remark: remarkByStudent.get(s.id) ?? null,
+          extras: extrasByStudent.get(s.id),
           issued: issuedByStudent.get(s.id) ?? null,
         };
       })
       .sort((a, b) => rollOrder({ rollNo: a.rollNo, name: a.studentName }, { rollNo: b.rollNo, name: b.studentName }));
 
     return { subjects, students: compiled, unpublishedCount };
+  }
+
+  /**
+   * One child's compile for the LATEST report window — the Student 360's
+   * academics panel. Same `compileStudents` core as the batch and the issued
+   * snapshot, so the profile, the batch screen and the printed card can never
+   * disagree. Null when the school has no window yet or the child no class.
+   */
+  async compileForStudent(schoolId: string, studentId: string): Promise<{
+    windowName: string;
+    academicYearName: string;
+    subjects: import('@skoolos/types').ReportSubjectLine[];
+    overall: ReportCardStudent['overall'];
+    remark: string | null;
+  } | null> {
+    return withTenant(schoolId, async (tx) => {
+      const student = await tx.student.findFirst({
+        where: { id: studentId },
+        select: {
+          id: true, firstName: true, lastName: true, rollNo: true,
+          admissionNo: true, dob: true, guardianName: true, classSectionId: true,
+        },
+      });
+      if (!student || !student.classSectionId) return null;
+      const window = await tx.reportWindow.findFirst({
+        orderBy: { startDate: 'desc' },
+        include: { academicYear: { select: { name: true } } },
+      });
+      if (!window) return null;
+
+      const compiled = await this.compileStudents(tx, {
+        schoolId,
+        windowId: window.id,
+        classSectionId: student.classSectionId,
+        startDate: window.startDate,
+        endDate: window.endDate,
+        students: [student],
+      });
+      const row = compiled.students[0];
+      if (!row) return null;
+      return {
+        windowName: window.name,
+        academicYearName: window.academicYear.name,
+        subjects: row.subjects,
+        overall: row.overall,
+        remark: row.remark,
+      };
+    });
   }
 
   // ── Issue ──────────────────────────────────────────────────────────────────
@@ -552,6 +654,7 @@ export class ReportCardService {
         overall: s.overall,
         attendance: s.attendance,
         remark: s.remark,
+        ...(s.extras ? { extras: s.extras } : {}),
       };
 
       try {
@@ -607,7 +710,7 @@ export class ReportCardService {
       tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
       tx.schoolProfile.findFirst({
         where: { schoolId },
-        select: { logoAssetId: true, addressLine1: true, city: true, region: true, phone: true, email: true },
+        select: { logoAssetId: true, addressLine1: true, city: true, region: true, phone: true, email: true, board: true, affiliationNo: true },
       }),
     ]);
     let logoUrl: string | null = null;
@@ -626,6 +729,8 @@ export class ReportCardService {
       addressLine,
       phone: profile?.phone ?? null,
       email: profile?.email ?? null,
+      board: profile?.board ?? null,
+      affiliationNo: profile?.affiliationNo ?? null,
     };
   }
 }

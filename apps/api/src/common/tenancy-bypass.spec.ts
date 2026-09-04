@@ -55,6 +55,8 @@ const ALLOWED: Record<string, string> = {
   'modules/owner/internal/owner-domains.service.ts': 'operator console',
   'modules/owner/internal/owner-events.service.ts': 'operator console',
   'modules/owner/internal/impersonation.service.ts': 'operator console',
+  'modules/press/operator-orders.service.ts':
+    'the print-order desk at sckools.com/sv/orders — cross-tenant BY PURPOSE (every school\'s orders on one queue), behind OwnerHostGuard + platform JWT; writes touch one order by id and its events only',
   'common/metrics/metrics.service.ts':
     'writes MetricRollup — platform-wide request counts and latency histograms. The table has no schoolId and holds no tenant row content, only route names and numbers',
   'modules/owner/internal/ops.service.ts':
@@ -88,6 +90,8 @@ const ALLOWED: Record<string, string> = {
   'common/audit/audit.service.ts':
     'the audit log must record attempts that a tenant scope would hide',
   'health/health.controller.ts': 'liveness probe; touches no tenant data',
+  'configure-app.ts':
+    'the CORS allow-list reads Domain.hostname for LIVE domains, so a school on its own address is not refused by the browser. Runs before any request context exists, so there is no tenant to scope to; reads two columns of platform routing metadata and no tenant row content',
   'modules/management/teachers.service.ts':
     'the one-school-per-teacher rule is cross-tenant by nature, and login shutdown revokes platform-wide auth state',
   'modules/management/email-settings.service.ts':

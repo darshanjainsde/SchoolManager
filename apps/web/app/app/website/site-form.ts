@@ -69,6 +69,8 @@ export function useSiteForm() {
   const [postalCode, setPostalCode] = useState('');
   const [country, setCountry] = useState('');
   const [mapEmbedUrl, setMapEmbedUrl] = useState('');
+  const [board, setBoard] = useState('');
+  const [affiliationNo, setAffiliationNo] = useState('');
   const [socialLinks, setSocialLinks] = useState<Array<{ platform: string; url: string }>>([]);
 
   // Seed all form state from fetched data; re-seeds if data is refetched
@@ -99,6 +101,8 @@ export function useSiteForm() {
     setPostalCode(data.profile.postalCode ?? '');
     setCountry(data.profile.country ?? '');
     setMapEmbedUrl(data.profile.mapEmbedUrl ?? '');
+    setBoard(data.profile.board ?? '');
+    setAffiliationNo(data.profile.affiliationNo ?? '');
     setSocialLinks(data.socialLinks.map((s) => ({ platform: s.platform, url: s.url })));
   }, [data]);
 
@@ -187,6 +191,8 @@ export function useSiteForm() {
           postalCode,
           country,
           mapEmbedUrl,
+          board,
+          affiliationNo,
         }),
         api.put('/site/social', {
           links: socialLinks.map((s, i) => ({ platform: s.platform, url: s.url, order: i })),
@@ -333,6 +339,7 @@ export function useSiteForm() {
     addressLine1, setAddressLine1, addressLine2, setAddressLine2,
     city, setCity, region, setRegion, postalCode, setPostalCode, country, setCountry,
     mapEmbedUrl, setMapEmbedUrl,
+    board, setBoard, affiliationNo, setAffiliationNo,
     socialLinks, addSocialLink, removeSocialLink, updateSocialLink, contactMutation,
   };
 }

@@ -156,10 +156,20 @@ enum PaymentStatus {
   REFUNDED
 }
 
+/// The admissions pipeline, in the order a family moves through it.
+///
+/// CLOSED is retained and never written by new code: it is what the original
+/// three-state model called a finished lead, and existing rows still carry it.
+/// The desk reads it as LOST. Dropping it would rewrite history that a school
+/// may well be asked about.
 enum EnquiryStatus {
   NEW
   CONTACTED
+  VISITED
+  APPLIED
+  ENROLLED
   CLOSED
+  LOST
 }
 
 enum AttendanceStatus {
@@ -329,7 +339,14 @@ model School {
   feeAudits              FeeAudit[]
   feeCounters            FeeCounter[]
   feeSettings            FeeSettings?
+  /// The reception-TV display token. Null = TV off. The /tv page is public
+  /// but useless without this key in its URL — one revocable string, not an
+  /// account, because a lobby screen cannot type a password.
+  tvKey                  String?
   pressIssues            PressIssue[]
+  printOrders            PrintOrder[]
+  resultNudges           ResultNudge[]
+  printOrderEvents       PrintOrderEvent[]
   pressCounters          PressCounter[]
   reportWindows          ReportWindow[]
   reportRemarks          ReportRemark[]
@@ -594,6 +611,15 @@ model SchoolProfile {
   country             String?
   geoLat              Float?
   geoLng              Float?
+  /// Printed on statutory documents (TC head): "CBSE, New Delhi" and the
+  /// Board affiliation number. Blank until the school fills them in the
+  /// website studio's contact tab.
+  board               String?
+  affiliationNo       String?
+  /// Which statutory certificate face the school prints: CBSE (Annexure-I,
+  /// default) | CISCE (adds Index No. + year of passing) | STATE (Leaving
+  /// Certificate naming). See CERT_VARIANTS.
+  certVariant         String?
   mapEmbedUrl         String?
   school              School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
@@ -922,43 +948,59 @@ model TeacherSubject {
 }
 
 model Student {
-  id                String             @id @default(uuid()) @db.Uuid
-  schoolId          String             @db.Uuid
-  admissionNo       String
+  id                  String             @id @default(uuid()) @db.Uuid
+  schoolId            String             @db.Uuid
+  admissionNo         String
   /// The human-friendly student code, e.g. RAF-00042 ({School.codePrefix} +
   /// zero-padded per-school counter). Allocated when the login is created
   /// (Phase 5·1); doubles as the login identifier and the add-a-child key.
-  code              String?
-  firstName         String
-  lastName          String
-  email             String?
-  classSectionId    String?            @db.Uuid
-  rollNo            String?
-  dob               DateTime?
-  gender            String?
-  guardianName      String?
-  guardianPhone     String?
-  photoAssetId      String?            @db.Uuid
-  userId            String?            @unique @db.Uuid
-  isActive          Boolean            @default(true)
-  createdAt         DateTime           @default(now())
-  school            School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSection      ClassSection?      @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
-  attendance        Attendance[]
-  results           Result[]
-  assignmentsSeen   AssignmentSeen[]
-  messageThreads    MessageThread[]
-  diaryReceipts     DiaryRecipient[]
-  diaryAcks         DiaryAck[]
-  attendanceNotices AttendanceNotice[]
-  libraryIssues     LibraryIssue[]
-  feeAssignments    FeeAssignment[]
-  feeConcessions    FeeConcession[]
-  feeInvoices       FeeInvoice[]
-  feePayments       FeePayment[]
-  feeLedgerEntries  FeeLedgerEntry[]
-  pressIssues       PressIssue[]
-  reportRemarks     ReportRemark[]
+  code                String?
+  firstName           String
+  lastName            String
+  email               String?
+  classSectionId      String?            @db.Uuid
+  rollNo              String?
+  dob                 DateTime?
+  gender              String?
+  guardianName        String?
+  guardianPhone       String?
+  // ── The admission-register facts a statutory Transfer Certificate prints
+  //    (CBSE Examination Bye-laws, Annexure-I). All optional: collected on
+  //    the student form, or asked ONCE by the certificate drawer and saved
+  //    back here. TEXT throughout — category follows the PressIssue.type
+  //    decision and is validated by assertStudentCategory at write time.
+  fatherName          String?
+  motherName          String?
+  nationality         String?
+  /// GENERAL | SC | ST | OBC | EWS — see STUDENT_CATEGORIES.
+  category            String?
+  /// Annexure-I field 5: date of FIRST admission, with the class joined.
+  firstAdmissionDate  DateTime?          @db.Date
+  firstAdmissionClass String?
+  previousSchool      String?
+  /// PEN / APAAR id — the Government Window will want this anyway.
+  penId               String?
+  photoAssetId        String?            @db.Uuid
+  userId              String?            @unique @db.Uuid
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  school              School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection        ClassSection?      @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
+  attendance          Attendance[]
+  results             Result[]
+  assignmentsSeen     AssignmentSeen[]
+  messageThreads      MessageThread[]
+  diaryReceipts       DiaryRecipient[]
+  diaryAcks           DiaryAck[]
+  attendanceNotices   AttendanceNotice[]
+  libraryIssues       LibraryIssue[]
+  feeAssignments      FeeAssignment[]
+  feeConcessions      FeeConcession[]
+  feeInvoices         FeeInvoice[]
+  feePayments         FeePayment[]
+  feeLedgerEntries    FeeLedgerEntry[]
+  pressIssues         PressIssue[]
+  reportRemarks       ReportRemark[]
 
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
@@ -1185,6 +1227,11 @@ model Result {
   examId      String    @db.Uuid
   studentId   String    @db.Uuid
   marks       Float
+  /// PRESENT | AB | EX — see RESULT_STATUSES (@skoolos/types). AB (absent)
+  /// stores marks 0 but PRINTS "AB"; EX (exempted) stores 0 and leaves the
+  /// exam's max out of that child's percentage. Three different truths that
+  /// must never collapse into one dash.
+  status      String    @default("PRESENT")
   publishedAt DateTime?
   school      School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
@@ -1492,6 +1539,13 @@ model Event {
   title            String
   description      String?
   coverAssetId     String?               @db.Uuid
+  /// Which archetype the cover art draws — see EVENT_ART_KEYS (@skoolos/types).
+  /// Null means "derive it from the title", which is what every existing row
+  /// does; no event is ever without a cover.
+  coverArt         String?
+  /// Which band of a tall cover photo the 16:9 tile keeps — see
+  /// EVENT_COVER_FOCUS. Null means the middle, which is what a browser does.
+  coverFocus       String?
   startAt          DateTime
   endAt            DateTime?
   venue            String?
@@ -1656,10 +1710,47 @@ model Enquiry {
   gradeInterest String?
   message       String?
   status        EnquiryStatus @default(NEW)
+  /// The day somebody promised to ring this family back. A DATE, not a
+  /// timestamp: an admissions desk works in days, and a time would imply a
+  /// precision nobody keeps. Null means no next step has been agreed — which
+  /// the desk surfaces, because that is how a family gets quietly forgotten.
+  followUpAt    DateTime?     @db.Date
+  /// Which staff member is chasing this, so two people do not ring the same
+  /// parent. Not a relation: staff can be removed and the history should
+  /// survive them.
+  ownerUserId   String?       @db.Uuid
+  /// Why a LOST lead was lost. Free text — the reasons a school actually
+  /// records ("chose another school", "moved city") do not fit an enum, and a
+  /// wrong enum teaches people to pick the nearest lie.
+  lostReason    String?
   createdAt     DateTime      @default(now())
   school        School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  notes         EnquiryNote[]
 
   @@index([schoolId])
+  /// The desk's own query: open leads ordered by when they are due.
+  @@index([schoolId, status, followUpAt])
+}
+
+/// One line of an enquiry's history: a note somebody typed, or a stage change.
+///
+/// Append-only by convention — nothing in the app updates or deletes a row.
+/// "Contacted" is a claim, and this is what makes it checkable.
+model EnquiryNote {
+  id         String   @id @default(uuid()) @db.Uuid
+  schoolId   String   @db.Uuid
+  enquiryId  String   @db.Uuid
+  /// NOTE (a person wrote it) | STAGE (the pipeline moved) | SYSTEM (we did it)
+  kind       String   @default("NOTE")
+  body       String
+  authorUserId String? @db.Uuid
+  /// Denormalised at write time so a note still says who wrote it after that
+  /// member of staff has left.
+  authorName String?
+  createdAt  DateTime @default(now())
+  enquiry    Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, enquiryId, createdAt])
 }
 
 model Announcement {
@@ -1724,6 +1815,10 @@ model ImpersonationToken {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
+  /// The platform user who minted this link. Deliberately not a relation: the
+  /// owner is a platform user (schoolId null) and this table is tenant-scoped,
+  /// so an FK would cross the tenant boundary. Attribution, not a reference.
+  mintedByUserId String? @db.Uuid
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -3472,31 +3567,31 @@ model FeeSettings {
 /// atomic per-school upsert, same shape as `fee_next_number`) inside the same
 /// transaction as this row, so two clerks issuing at once cannot collide.
 model PressIssue {
-  id         String   @id @default(uuid()) @db.Uuid
-  schoolId   String   @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
+  schoolId   String    @db.Uuid
   /// REPORT_CARD | TC | BONAFIDE | CHARACTER — see PRESS_DOC_TYPES.
   type       String
   /// e.g. "TC/2026/0041". Unique per school+type; allocated on ISSUE, never on
   /// print — reprints keep the serial (the FeeReceipt rule).
   serial     String
-  studentId  String   @db.Uuid
+  studentId  String    @db.Uuid
   /// REPORT_CARD only: the window the card belongs to. Certificates carry
   /// null. With the unique below (Postgres treats NULLs as distinct) this
   /// makes issuing a card idempotent per window at the DATABASE level — a
   /// double-click or a concurrent clerk gets "already issued", never a
   /// second serial for the same child.
-  windowId   String?  @db.Uuid
+  windowId   String?   @db.Uuid
   /// Everything the sheet renders, resolved to display strings at issue time.
   payload    Json
-  issuedById String   @db.Uuid // User.id
-  issuedAt   DateTime @default(now())
+  issuedById String    @db.Uuid // User.id
+  issuedAt   DateTime  @default(now())
   /// The one-way correction path: a voided entry stays in the register (a
   /// struck-through page in a paper book) and frees the once-per-window slot
   /// so a corrected card can be issued afresh. Enforced by the
   /// `press_issue_immutable` trigger — the ONLY update the database accepts
   /// is this transition, and deletes are refused.
   voidedAt   DateTime?
-  voidedById String?  @db.Uuid
+  voidedById String?   @db.Uuid
   voidNote   String?
 
   school  School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -3534,14 +3629,18 @@ model PressCounter {
 /// office screen, the printed card and the parent's copy cannot disagree
 /// (the late-fee rule, applied to marks).
 model ReportWindow {
-  id             String   @id @default(uuid()) @db.Uuid
-  schoolId       String   @db.Uuid
-  academicYearId String   @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  schoolId       String    @db.Uuid
+  academicYearId String    @db.Uuid
   name           String
-  startDate      DateTime @db.Date
-  endDate        DateTime @db.Date
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  startDate      DateTime  @db.Date
+  endDate        DateTime  @db.Date
+  /// Result day: the date scores are due and cards go out. Shown on the
+  /// teacher portal next to unfinished classes; the Result Room counts
+  /// down to it. Optional — a window without one simply shows no clock.
+  resultDay      DateTime? @db.Date
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   school       School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   academicYear AcademicYear   @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
@@ -3561,6 +3660,10 @@ model ReportRemark {
   windowId  String   @db.Uuid
   studentId String   @db.Uuid
   text      String
+  /// The card's optional blocks, per child per window: co-scholastic grades,
+  /// house, height/weight, a promotion line. One Json bucket (validated at
+  /// write) — these print ONLY when recorded, never invented.
+  extras    Json?
   authorId  String   @db.Uuid // User.id
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3571,4 +3674,103 @@ model ReportRemark {
 
   @@unique([windowId, studentId])
   @@index([schoolId, studentId])
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Press Orders — print fulfilment. The school hands the Press's paper to
+// Sckools to print in bulk: request → quote (price + promised date) →
+// confirm → printing → dispatched → delivered.
+//
+// Decisions, each inherited:
+//   1. `status`/`kind`/event `action` are TEXT (the PressIssue.type decision).
+//   2. Every transition writes a PrintOrderEvent — HISTORY, NOT STATUS (the
+//      GiftEvent decision): the school's timeline and the operator's SLA view
+//      render the same log, so a step that forgot to log did not happen.
+//   3. The quote (priceMinor + promisedBy) freezes on confirmation — the
+//      transition map in the service refuses a re-quote after CONFIRMED.
+//   4. We print SNAPSHOTS: a report-card order references issued register
+//      rows (immutable by trigger); an upload IS its own snapshot, stored
+//      privately and purged after delivery (P2 cron).
+// ════════════════════════════════════════════════════════════════════════════
+
+/// The Result Room's nudge log: one row per reminder an admin sent a teacher
+/// about pending marks. Exists so the room can show "nudged yesterday" and an
+/// admin never nags twice by accident. Append-only in practice.
+model ResultNudge {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  windowId       String   @db.Uuid
+  classSectionId String   @db.Uuid
+  subjectId      String   @db.Uuid
+  /// The User.id the notification went to (the exam's creator).
+  teacherUserId  String   @db.Uuid
+  /// ENTER (marks missing) | PUBLISH (entered, not published).
+  kind           String
+  sentById       String   @db.Uuid
+  sentAt         DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, windowId, classSectionId, subjectId])
+}
+
+model PrintOrder {
+  id        String    @id @default(uuid()) @db.Uuid
+  schoolId  String    @db.Uuid
+  /// REPORT_CARDS | UPLOAD — see PRINT_ORDER_KINDS (@skoolos/types).
+  kind      String
+  title     String
+  /// Copies of the whole set.
+  quantity  Int
+  /// Paper/finish spec the school chose: { size, colour, sides, gsm, finish }.
+  spec      Json
+  /// What we print. REPORT_CARDS: { windowId, classSectionId, issuedCount,
+  /// serialFrom, serialTo } — resolved+counted at request time; the sheets
+  /// themselves come from the register's immutable snapshots at print time.
+  /// UPLOAD: { fileKey, filename, bytes, contentType } in PRIVATE storage.
+  source    Json
+  /// Denormalised at request time: { schoolName, address, contactName, phone }.
+  deliverTo Json
+  neededBy  DateTime? @db.Date
+  note      String?
+
+  /// REQUESTED | QUOTED | CONFIRMED | DECLINED | CANCELLED | PRINTING |
+  /// DISPATCHED | DELIVERED — see PRINT_ORDER_STATUSES.
+  status String @default("REQUESTED")
+
+  /// The promise. Set by quote, FROZEN by confirmation.
+  quotePriceMinor Int?
+  promisedBy      DateTime? @db.Date
+  quoteNote       String?
+  quotedAt        DateTime?
+  confirmedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  events PrintOrderEvent[]
+
+  @@index([schoolId, createdAt])
+  @@index([status, promisedBy])
+}
+
+model PrintOrderEvent {
+  id       String   @id @default(uuid()) @db.Uuid
+  schoolId String   @db.Uuid
+  orderId  String   @db.Uuid
+  at       DateTime @default(now())
+  /// SCHOOL | SCKOOLS — who moved it.
+  actor    String
+  /// REQUESTED | QUOTED | CONFIRMED | DECLINED | CANCELLED | PRINTING |
+  /// DISPATCHED | DELIVERED — mirrors the status it produced.
+  action   String
+  note     String?
+  /// Transition payload worth keeping: the quote, the courier + ref, …
+  data     Json?
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  order  PrintOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, orderId, at])
 }

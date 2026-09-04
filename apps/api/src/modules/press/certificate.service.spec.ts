@@ -1,6 +1,8 @@
 const txMock = {
-  student: { findFirst: jest.fn() },
-  pressIssue: { findMany: jest.fn(), create: jest.fn() },
+  student: { findFirst: jest.fn(), update: jest.fn() },
+  academicYear: { findFirst: jest.fn() },
+  attendance: { groupBy: jest.fn() },
+  pressIssue: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
   feeLedgerEntry: { groupBy: jest.fn() },
   school: { findFirst: jest.fn() },
   schoolProfile: { findFirst: jest.fn() },
@@ -40,6 +42,8 @@ describe('CertificateService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    txMock.academicYear.findFirst.mockResolvedValue(null);
+    txMock.attendance.groupBy.mockResolvedValue([]);
     withTenantMock.mockImplementation((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
     txMock.student.findFirst.mockResolvedValue(studentRow);
     txMock.pressIssue.findMany.mockResolvedValue([]);

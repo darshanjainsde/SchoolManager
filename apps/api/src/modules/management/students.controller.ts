@@ -20,6 +20,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { StudentsService } from './students.service';
+import { StudentReportService } from './student-report.service';
 import { CreateLoginDto, CreateStudentDto, UpdateStudentDto } from './management.dto';
 
 @Controller('manage/students')
@@ -29,6 +30,7 @@ import { CreateLoginDto, CreateStudentDto, UpdateStudentDto } from './management
 export class StudentsController {
   constructor(
     private readonly students: StudentsService,
+    private readonly studentReport: StudentReportService,
     private readonly tenant: TenantContextService,
   ) {}
 
@@ -101,5 +103,15 @@ export class StudentsController {
   @HttpCode(204)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.students.remove(this.sid(), id);
+  }
+
+  /**
+   * The Student 360 — the composed report the office reads on screen and
+   * prints when a parent asks. SCHOOL_ADMIN (the class-level rule): it
+   * carries the fee position alongside everything else.
+   */
+  @Get(':id/report')
+  report(@Param('id', ParseUUIDPipe) id: string) {
+    return this.studentReport.report(this.sid(), id);
   }
 }

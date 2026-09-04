@@ -91,6 +91,13 @@ export class RegistrationsService {
         event: {
           id: event.id,
           title: event.title,
+          // description and coverArt are here for the Promo Kit, which draws
+          // its poster from this same payload rather than asking for a second
+          // fetch of a row the desk has already loaded.
+          description: event.description,
+          coverArt: event.coverArt,
+          coverFocus: event.coverFocus,
+          coverUrl: event.coverUrl,
           startAt: event.startAt.toISOString(),
           endAt: event.endAt?.toISOString() ?? null,
           venue: event.venue,
@@ -206,6 +213,25 @@ export class RegistrationsService {
       // recorded — today by an admin, later by a gateway, same row either way.
       const free = amountMinor === 0;
 
+      // Never the raw body value. `read_own_outbound_registrations` grants a
+      // school SELECT on rows whose fromSchoolId is theirs, so an unchecked
+      // value lets one school plant fabricated attendees — names, emails,
+      // phones — into another school's read scope. School ids are enumerable
+      // via /manage/events/audience-candidates. No route reads by that column
+      // today, which is the only reason this was not already a cross-tenant
+      // read; it would become one the moment such a route shipped.
+      //
+      // A stale id collapses to the caller's own school rather than erroring:
+      // the row simply stops claiming a provenance it cannot prove.
+      let fromSchoolId = schoolId;
+      if (dto.fromSchoolId && dto.fromSchoolId !== schoolId) {
+        const invited = await tx.eventAudienceSchool.findFirst({
+          where: { eventId, schoolId: dto.fromSchoolId },
+          select: { schoolId: true },
+        });
+        if (invited) fromSchoolId = dto.fromSchoolId;
+      }
+
       return tx.eventRegistration.create({
         data: {
           eventId,
@@ -215,7 +241,15 @@ export class RegistrationsService {
           // Forced null on the public path: `registerPublicly` never forwards a
           // studentId, so a stranger cannot file a place as somebody's child.
           studentId: dto.studentId ?? null,
-          fromSchoolId: dto.fromSchoolId ?? schoolId,
+          // Never the raw body value. `read_own_outbound_registrations` grants
+          // a school SELECT on rows whose fromSchoolId is theirs, so an
+          // unchecked value lets one school plant fabricated attendees — names,
+          // emails, phones — into another school's read scope. School ids are
+          // enumerable via /manage/events/audience-candidates. No route reads
+          // by that column today, which is the only reason this was not
+          // already a cross-tenant read; it would become one the moment such a
+          // route shipped.
+          fromSchoolId,
           guestName: dto.guestName ?? null,
           guestEmail: dto.guestEmail ?? null,
           guestPhone: dto.guestPhone ?? null,
