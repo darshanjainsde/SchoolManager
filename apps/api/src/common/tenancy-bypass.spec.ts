@@ -90,6 +90,8 @@ const ALLOWED: Record<string, string> = {
   'common/audit/audit.service.ts':
     'the audit log must record attempts that a tenant scope would hide',
   'health/health.controller.ts': 'liveness probe; touches no tenant data',
+  'configure-app.ts':
+    'the CORS allow-list reads Domain.hostname for LIVE domains, so a school on its own address is not refused by the browser. Runs before any request context exists, so there is no tenant to scope to; reads two columns of platform routing metadata and no tenant row content',
   'modules/management/teachers.service.ts':
     'the one-school-per-teacher rule is cross-tenant by nature, and login shutdown revokes platform-wide auth state',
   'modules/management/email-settings.service.ts':

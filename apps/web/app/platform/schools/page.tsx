@@ -96,7 +96,15 @@ export default function SchoolsListPage() {
                   <td><b>{s.name}</b></td>
                   <td data-priority="2" className="sk-muted">{s.primaryDomain ?? '—'}</td>
                   <td><span className="sk-pill" data-tone={TIER_TONE[s.tier]}>{TIER_LABEL[s.tier]}</span></td>
-                  <td data-priority="2" className="sk-muted">
+                  {/* Truncating, not wrapping: a PRO school lists eleven features and
+                      a wrapped cell would make every row three lines tall. The full
+                      list stays available on hover and to assistive tech. */}
+                  <td
+                    data-priority="2"
+                    data-truncate="true"
+                    className="sk-muted"
+                    title={s.features.length > 0 ? s.features.join(' · ') : undefined}
+                  >
                     {s.features.length > 0 ? s.features.join(' · ') : '—'}
                   </td>
                   <td className="sk-muted">{s.status}</td>

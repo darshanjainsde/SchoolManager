@@ -2592,6 +2592,25 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
   white-space: nowrap;
 }
 .sk-tbl td[data-wrap="true"] { white-space: normal; }
+/* A cell whose contents have no natural ceiling — a joined list, a long URL —
+   must not be allowed to widen the table past its container. Every td is
+   `nowrap` and .sk-tblwrap is `overflow: auto`, so one long cell silently
+   scrolls the ACTIONS column out of reach: the Schools list rendered eleven
+   feature keys on one unbreakable line and pushed Status and Manage off the
+   right edge, which reads as "this page is a static report" rather than "this
+   table scrolls sideways". The action column is the only one that does
+   anything, so it is the last thing that may be pushed away.
+
+   max-width:0 + width:100% is the standard pair for this: width:100% makes
+   this the column that absorbs the leftover space, max-width:0 stops its
+   content from voting on the table's width. Opt-in, so no existing table
+   changes behaviour. */
+.sk-tbl td[data-truncate="true"] {
+  max-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .sk-tbl tbody tr:hover td { background: var(--sk-bg-2); }
 .sk-tbl .num { font-family: var(--sk-mono); font-size: 12px; color: var(--sk-ink-3); }
 /* Actions sit hard right, so the eye finds them in the same place on every

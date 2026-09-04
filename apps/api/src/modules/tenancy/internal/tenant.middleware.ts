@@ -14,7 +14,11 @@ const ctxService = new TenantContextService();
 
 export function tenantMiddleware(req: Request, res: Response, next: NextFunction): void {
   // Tenant identity is carried by the request host. Resolution order:
-  //   1. `X-Skoolos-Host` — an explicit, app-controlled header. Required on
+  //   1. `X-Skoolos-Host` — set by our own web app. CLIENT-CONTROLLED: the
+  //      browser sends it, so it selects which tenant a request addresses and
+  //      must never be mistaken for proof of who the caller is. Every guard
+  //      downstream re-checks the caller's token against this context rather
+  //      than trusting the context alone. Required on
   //      platforms whose ingress rewrites `X-Forwarded-Host` (e.g. Vercel
   //      overwrites it with the real deployment host), which would otherwise
   //      make every request resolve to the same host. This is also

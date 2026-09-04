@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
@@ -10,6 +10,7 @@ import { ModerateJobDto } from './owner.dto';
 import { CreateSchoolDto, ModerateEventDto, OwnerCreateEventDto, SetFeatureDto, SetStatusDto, SetTierDto } from './owner.dto';
 import { ImpersonationService } from './impersonation.service';
 import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
+import { OwnerCacheInterceptor } from './owner-cache.interceptor';
 import { OwnerEventsService } from './owner-events.service';
 import { OwnerOverviewService } from './owner-overview.service';
 import { OwnerSchoolsService } from './owner-schools.service';
@@ -18,6 +19,8 @@ import { AddDomainDto } from './owner.dto';
 
 @Controller('owner')
 @UseGuards(OwnerHostGuard, PlatformJwtGuard)
+// Any write here invalidates the cached dashboard — see the interceptor.
+@UseInterceptors(OwnerCacheInterceptor)
 export class OwnerController {
   constructor(
     private readonly schools: OwnerSchoolsService,

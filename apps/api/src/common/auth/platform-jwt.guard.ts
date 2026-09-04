@@ -31,8 +31,11 @@ export class PlatformJwtGuard implements CanActivate {
 
     const req = ctx.switchToHttp().getRequest<Request & { tenant?: TenantContext; user?: PlatformJwtPayload }>();
     if (req.tenant?.kind !== 'platform') {
-      // School users have no path to the platform host — even with a valid
-      // platform token, requests on a tenant host are denied.
+      // Routing, not perimeter: tenant identity comes from X-Skoolos-Host,
+      // which any client can set (see OwnerHostGuard for why the API has to
+      // trust it). The check below — a platform-audience token signed with
+      // JWT_PLATFORM_ACCESS_SECRET — is what actually separates an operator
+      // from a school user.
       throw new ForbiddenException('Platform endpoints are only available on the owner host');
     }
 

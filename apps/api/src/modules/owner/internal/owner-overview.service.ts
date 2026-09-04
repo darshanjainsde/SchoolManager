@@ -73,6 +73,28 @@ export class OwnerOverviewService {
     return fresh;
   }
 
+  /**
+   * Drops the cached payload so the next view recomputes.
+   *
+   * Without this the dashboard was simply wrong for up to two minutes after
+   * any change: add a school and it is missing, publish one and the LIVE count
+   * is stale, attach a domain and the column stays empty. The operator's
+   * reasonable conclusion is that the action failed, so they do it again —
+   * which is how you get two schools with the same name. A cache with no
+   * invalidation hook is a correctness bug, not a performance trade-off.
+   *
+   * Best-effort by design: if Redis is unreachable the read path already falls
+   * through to a live query, so a failed delete costs freshness, never a write.
+   */
+  async invalidate(): Promise<void> {
+    try {
+      if (!(await ensureConnected(this.redis))) return;
+      await this.redis!.del(OwnerOverviewService.CACHE_KEY);
+    } catch {
+      /* the TTL is the backstop */
+    }
+  }
+
   private async computeOverview(): Promise<OverviewResponse> {
     const db = getPlatformPrisma();
     const monthStart = new Date();
