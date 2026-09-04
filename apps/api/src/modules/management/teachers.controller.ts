@@ -21,8 +21,9 @@ import { TeachersService } from './teachers.service';
 import { CreateLoginDto, CreateTeacherDto, UpdateTeacherDto } from './management.dto';
 
 @Controller('manage/teachers')
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard)
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
 @RequireFeature('MANAGEMENT')
+@Roles('SCHOOL_ADMIN')
 export class TeachersController {
   constructor(
     private readonly teachers: TeachersService,
@@ -47,7 +48,6 @@ export class TeachersController {
    * every MANAGEMENT-feature role.
    */
   @Get('me')
-  @UseGuards(RolesGuard)
   @Roles('TEACHER')
   me(@CurrentUser() u: SchoolJwtPayload) {
     return this.teachers.me(this.sid(), u.sub);
@@ -73,21 +73,17 @@ export class TeachersController {
   }
 
   /**
-   * Login-invite routes are SCHOOL_ADMIN-only (mirrors StudentsController),
-   * so RolesGuard + @Roles are applied per-handler here rather than at the
-   * class level — the other handlers on this controller intentionally stay
-   * open to any authenticated MANAGEMENT-feature role (e.g. TEACHER reads
-   * `/manage/teachers` from the classes/timetable pages).
+   * Kept as an explicit per-handler @Roles even though the class already says
+   * SCHOOL_ADMIN, because these mint credentials and should read as
+   * deliberately restricted at the call site.
    */
   @Post(':id/login')
-  @UseGuards(RolesGuard)
   @Roles('SCHOOL_ADMIN')
   createLogin(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateLoginDto) {
     return this.teachers.createLogin(this.sid(), id, dto);
   }
 
   @Post(':id/invite/resend')
-  @UseGuards(RolesGuard)
   @Roles('SCHOOL_ADMIN')
   resendInvite(@Param('id', ParseUUIDPipe) id: string) {
     return this.teachers.resendInvite(this.sid(), id);
@@ -98,7 +94,6 @@ export class TeachersController {
    * (never a hard delete), freeing the teacher for onboarding elsewhere.
    */
   @Post(':id/release')
-  @UseGuards(RolesGuard)
   @Roles('SCHOOL_ADMIN')
   release(@Param('id', ParseUUIDPipe) id: string) {
     return this.teachers.release(this.sid(), id);

@@ -263,6 +263,132 @@ describe('management authorization', () => {
     }
   });
 
+  // The same hole 0e283ad closed on StaffController, found again on two more
+  // controllers by an audit on 4 Sept 2026 and proved against live staging: a
+  // STUDENT token got 404/400 rather than 403 on every one of these, meaning it
+  // had passed authorization and reached the service. RequireFeatureGuard asks
+  // whether the SCHOOL bought MANAGEMENT and never who is asking.
+  const GHOST = '00000000-0000-4000-8000-000000000000';
+
+  describe('teacher records — SCHOOL_ADMIN, except the teacher’s own profile', () => {
+    it('a STUDENT cannot list teachers — the rows carry staff email and phone', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/teachers')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('a STUDENT cannot create a teacher', async () => {
+      await request(app.getHttpServer())
+        .post('/manage/teachers')
+        .set(as(studentToken))
+        .send({ firstName: 'Not', lastName: 'Allowed' })
+        .expect(403);
+    });
+
+    // 403 must come from the guard, BEFORE the handler looks the row up. A 404
+    // here would mean authorization ran second — which is exactly what the
+    // audit measured before this fix.
+    it('a STUDENT cannot delete a teacher', async () => {
+      await request(app.getHttpServer())
+        .delete(`/manage/teachers/${GHOST}`)
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('a TEACHER cannot delete a teacher', async () => {
+      await request(app.getHttpServer())
+        .delete(`/manage/teachers/${GHOST}`)
+        .set(as(teacherToken))
+        .expect(403);
+    });
+
+    // Asserted as "not 403" rather than 200 on purpose: seedMinimalSchool
+    // creates a User with role TEACHER but no Teacher profile row, so the
+    // handler correctly answers 404. What this guards is that promoting
+    // RolesGuard to the class did not lock teachers out of their own profile —
+    // that failure would show as 403, from the guard, before the lookup.
+    it('a TEACHER is not locked out of their own profile', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/manage/teachers/me')
+        .set(as(teacherToken));
+      expect(res.status).not.toBe(403);
+    });
+
+    it('a STUDENT cannot read a teacher profile', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/teachers/me')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('an admin can still list teachers', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/teachers')
+        .set(as(adminToken))
+        .expect(200);
+    });
+  });
+
+  describe('academic catalogue — SCHOOL_ADMIN, except the subject list', () => {
+    for (const path of ['years', 'grades', 'subjects', 'periods']) {
+      it(`a STUDENT cannot create a ${path.slice(0, -1)}`, async () => {
+        await request(app.getHttpServer())
+          .post(`/manage/${path}`)
+          .set(as(studentToken))
+          .send({ name: 'Injected' })
+          .expect(403);
+      });
+    }
+
+    for (const path of ['grades', 'subjects', 'periods']) {
+      it(`a STUDENT cannot delete a ${path.slice(0, -1)}`, async () => {
+        await request(app.getHttpServer())
+          .delete(`/manage/${path}/${GHOST}`)
+          .set(as(studentToken))
+          .expect(403);
+      });
+
+      it(`a STUDENT cannot edit a ${path.slice(0, -1)}`, async () => {
+        await request(app.getHttpServer())
+          .put(`/manage/${path}/${GHOST}`)
+          .set(as(studentToken))
+          .send({ name: 'Injected' })
+          .expect(403);
+      });
+    }
+
+    it('a STUDENT cannot read the staff free/busy grid', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/availability')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    // The one deliberate widening. The teacher portal's assignment and test
+    // forms read this; breaking it breaks those pages.
+    it('a TEACHER can still read the subject list', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/subjects')
+        .set(as(teacherToken))
+        .expect(200);
+    });
+
+    it('a STUDENT still cannot read the subject list', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/subjects')
+        .set(as(studentToken))
+        .expect(403);
+    });
+
+    it('an admin can still read and write the catalogue', async () => {
+      await request(app.getHttpServer())
+        .get('/manage/grades')
+        .set(as(adminToken))
+        .expect(200);
+    });
+  });
+
   describe('staff records — every route is SCHOOL_ADMIN-only', () => {
     it('a STUDENT cannot list staff', async () => {
       await request(app.getHttpServer())

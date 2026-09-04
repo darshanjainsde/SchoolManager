@@ -21,11 +21,20 @@ export class TeachersService {
 
   async list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
+      // An explicit select, not a bare findMany: `include: { school: false }`
+      // still ships every column of Teacher, and this row carries staff email,
+      // phone and the userId that links to their login. The route is
+      // SCHOOL_ADMIN-only now, but the payload should be a deliberate list
+      // rather than whatever the model happens to grow next.
       tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-        include: {
-          school: false,
+        select: {
+          id: true, schoolId: true, userId: true,
+          firstName: true, lastName: true,
+          email: true, phone: true,
+          photoAssetId: true, primarySubjectId: true,
+          bio: true, isActive: true,
         },
       }),
     );
