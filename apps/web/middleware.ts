@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { IS_LOCAL, OWNER_HOST } from '@/lib/hosts';
+import { IS_LOCAL, OWNER_HOST, PLATFORM_HOST } from '@/lib/hosts';
 
 /**
  * CSP for the authenticated consoles — the routes that hold a session and PII.
@@ -44,6 +44,24 @@ function isOwnerOnlyRoute(pathname: string): boolean {
 function ownerRouteAllowed(req: NextRequest): boolean {
   const host = (req.headers.get('host') ?? '').split(':')[0].toLowerCase();
   if (host === OWNER_HOST) return true;
+
+  // Our own apex serves them too. sckools.com/owner is the one-password gate
+  // (app/owner/page.tsx documents it in as many words), and unlocking there
+  // navigates straight to /platform — so both have to answer on the apex or
+  // the door opens onto nothing.
+  //
+  // This is NOT the case the gate was written for. Its threat is our console
+  // appearing on a SCHOOL's brand: archaiccandles.com/platform advertises that
+  // we exist and invites credential-stuffing from an origin nobody watches.
+  // sckools.com is ours. A school subdomain and a school's custom domain both
+  // still 404, which is the part that matters.
+  //
+  // Nothing here is the security boundary in any case. The API refuses every
+  // platform route without BOTH the owner host and a platform JWT
+  // (OwnerHostGuard + PlatformJwtGuard), and the gate password carries a
+  // lockout and a 5/min throttle. This only decides which host will hand out
+  // the shell.
+  if (host === PLATFORM_HOST) return true;
 
   // Safety valve for a config/deployment mismatch. If the build carries the
   // localhost defaults (NEXT_PUBLIC_PLATFORM_OWNER_HOST unset) but the request
