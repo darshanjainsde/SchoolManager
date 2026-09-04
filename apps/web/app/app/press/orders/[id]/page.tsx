@@ -147,7 +147,7 @@ export default function PressOrderPage() {
                     {o.source.filename}
                   </b>
                   <span className="sk-muted" style={{ fontSize: 11.5 }}>
-                    {(o.source.bytes / 1024 / 1024).toFixed(1)} MB · kept private, opened only by the press
+                    {(o.source.bytes / 1024 / 1024).toFixed(1)} MB · sent to Sckools to print
                   </span>
                 </span>
                 <span style={{ flex: 1 }} />
