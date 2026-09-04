@@ -283,8 +283,12 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
       {/* Main content */}
       {/* Every page used to supply its own padding, or forget to — which is
           why headings sat flush against the rail. The shell owns it now. */}
+      {/* `skosx` is not decoration — sk-theme.css declares every --sk-* token
+          inside that class. Without it each var() is unresolvable, CSS drops
+          the whole declaration, and the console renders as unstyled text with
+          no error anywhere. */}
       <main
-        className="min-w-0 flex-1 overflow-auto overflow-x-hidden"
+        className="skosx min-w-0 flex-1 overflow-auto overflow-x-hidden"
         style={{ background: 'var(--sk-bg-2)', padding: 'clamp(16px, 3vw, 30px)' }}
       >
         <div style={{ maxWidth: 1180, margin: '0 auto' }}>{children}</div>
