@@ -223990,6 +223990,7 @@ const platform_express_1 = __nccwpck_require__(28454);
 const app_module_1 = __nccwpck_require__(95516);
 const config_1 = __nccwpck_require__(58347);
 const configure_app_1 = __nccwpck_require__(477);
+const db_1 = __nccwpck_require__(46919);
 /**
  * Vercel serverless entrypoint. Vercel detects NestJS and treats this file's
  * exported handler as the app. The Nest app is bootstrapped once and cached
@@ -224000,6 +224001,18 @@ const expressApp = (0, express_1.default)();
 let ready = null;
 async function bootstrap() {
     const env = (0, config_1.loadEnv)();
+    // Before serving anything: if the tenant role can bypass RLS, no amount of
+    // application-level scoping is protecting one school from another.
+    //
+    // This runs HERE as well as in src/main.ts, and this is the copy that
+    // matters — main.ts is the local entrypoint that binds a port, so a check
+    // living only there never runs in the environments that hold real schools'
+    // data. `entrypoint-guards.spec.ts` asserts both call it.
+    //
+    // One query per cold start: bootstrap() is cached across warm invocations.
+    // It warns and continues when the database is simply unreachable, and only
+    // refuses when the role genuinely has BYPASSRLS.
+    await (0, db_1.assertTenantIsolationEnforced)({ allowBypass: env.NODE_ENV !== 'production' });
     const app = await core_1.NestFactory.create(app_module_1.AppModule, new platform_express_1.ExpressAdapter(expressApp), {
         bufferLogs: true,
         rawBody: true,
@@ -228791,8 +228804,31 @@ let HealthController = HealthController_1 = class HealthController {
     async ready() {
         const db = await this.checkDb();
         const redis = await this.checkRedis();
+        const isolation = await this.checkIsolation();
         const ok = db === 'ok' && redis === 'ok';
-        return { status: ok ? 'ok' : 'degraded', db, redis };
+        return { status: ok ? 'ok' : 'degraded', db, redis, isolation };
+    }
+    /**
+     * Whether tenant queries are actually isolated.
+     *
+     * Deliberately observable from outside, and deliberately a single word: it
+     * says whether the connection's role can bypass row-level security, not
+     * which role or which database. That one bit is the difference between a
+     * multi-tenant system and a flat one, and until it was reported there was
+     * no way to know from outside which of the two was running.
+     *
+     * It exists so the boot check can be turned on with evidence rather than
+     * hope — see the deploy note in tenant-isolation.ts.
+     */
+    async checkIsolation() {
+        try {
+            const { bypassesRls } = await (0, db_1.tenantRoleRlsStatus)();
+            return bypassesRls ? 'bypassable' : 'enforced';
+        }
+        catch (e) {
+            this.logger.error(`readiness: isolation check failed: ${e.message}`);
+            return 'unknown';
+        }
     }
     /**
      * `ok` or `down` — never the driver's message.
@@ -270964,7 +271000,24 @@ __exportStar(__nccwpck_require__(14378), exports);
  * reader, which asks Postgres about the connection's own role.
  */
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isolationIsEnforced = isolationIsEnforced;
 exports.buildIsolationAssertion = buildIsolationAssertion;
+/**
+ * Turning this check on is itself a deploy risk, so it is staged.
+ *
+ * The check refuses to serve when the tenant role can bypass RLS. That is the
+ * right behaviour and it is also, on the first deploy, a way to take an
+ * environment down over a configuration nobody has looked at yet — the
+ * failure would happen at bootstrap, before /ready could report why.
+ *
+ * So: this deploy REPORTS. `GET /ready` now answers
+ * `isolation: enforced | bypassable | unknown`. Confirm it says "enforced" in
+ * an environment, then set ENFORCE_TENANT_ISOLATION=true there to make it
+ * fatal. Evidence first, enforcement second.
+ */
+function isolationIsEnforced(env = process.env) {
+    return env.ENFORCE_TENANT_ISOLATION === 'true';
+}
 function buildIsolationAssertion(read) {
     return async function assertTenantIsolationEnforced(opts = {}) {
         const log = opts.log ?? ((m) => console.warn(m));
@@ -270984,8 +271037,11 @@ function buildIsolationAssertion(read) {
         const message = `The tenant database role "${status.role}" has BYPASSRLS. Every withTenant() ` +
             'query would read and write across all schools. Point DATABASE_URL_APP at the ' +
             'unprivileged application role.';
-        if (opts.allowBypass) {
-            log(`${message} (allowed: not production)`);
+        if (opts.allowBypass || !isolationIsEnforced()) {
+            log(`${message} ` +
+                (opts.allowBypass
+                    ? '(allowed: not production)'
+                    : '(reporting only — set ENFORCE_TENANT_ISOLATION=true to make this fatal)'));
             return;
         }
         throw new Error(message);

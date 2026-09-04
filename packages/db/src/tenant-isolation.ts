@@ -20,6 +20,23 @@ export interface IsolationAssertOptions {
   log?: (message: string) => void;
 }
 
+/**
+ * Turning this check on is itself a deploy risk, so it is staged.
+ *
+ * The check refuses to serve when the tenant role can bypass RLS. That is the
+ * right behaviour and it is also, on the first deploy, a way to take an
+ * environment down over a configuration nobody has looked at yet — the
+ * failure would happen at bootstrap, before /ready could report why.
+ *
+ * So: this deploy REPORTS. `GET /ready` now answers
+ * `isolation: enforced | bypassable | unknown`. Confirm it says "enforced" in
+ * an environment, then set ENFORCE_TENANT_ISOLATION=true there to make it
+ * fatal. Evidence first, enforcement second.
+ */
+export function isolationIsEnforced(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ENFORCE_TENANT_ISOLATION === 'true';
+}
+
 export function buildIsolationAssertion(read: RoleReader) {
   return async function assertTenantIsolationEnforced(
     opts: IsolationAssertOptions = {},
@@ -44,8 +61,13 @@ export function buildIsolationAssertion(read: RoleReader) {
       'query would read and write across all schools. Point DATABASE_URL_APP at the ' +
       'unprivileged application role.';
 
-    if (opts.allowBypass) {
-      log(`${message} (allowed: not production)`);
+    if (opts.allowBypass || !isolationIsEnforced()) {
+      log(
+        `${message} ` +
+        (opts.allowBypass
+          ? '(allowed: not production)'
+          : '(reporting only — set ENFORCE_TENANT_ISOLATION=true to make this fatal)'),
+      );
       return;
     }
     throw new Error(message);

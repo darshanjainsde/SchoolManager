@@ -1,6 +1,6 @@
 import { Controller, Get, Inject, Logger, Optional } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { getPlatformPrisma } from '@skoolos/db';
+import { getPlatformPrisma, tenantRoleRlsStatus } from '@skoolos/db';
 import { REDIS_CLIENT, ensureConnected, sharedRedis, type SharedRedis } from '../common/redis/redis.client';
 
 @ApiTags('health')
@@ -18,8 +18,31 @@ export class HealthController {
   async ready() {
     const db = await this.checkDb();
     const redis = await this.checkRedis();
+    const isolation = await this.checkIsolation();
     const ok = db === 'ok' && redis === 'ok';
-    return { status: ok ? 'ok' : 'degraded', db, redis };
+    return { status: ok ? 'ok' : 'degraded', db, redis, isolation };
+  }
+
+  /**
+   * Whether tenant queries are actually isolated.
+   *
+   * Deliberately observable from outside, and deliberately a single word: it
+   * says whether the connection's role can bypass row-level security, not
+   * which role or which database. That one bit is the difference between a
+   * multi-tenant system and a flat one, and until it was reported there was
+   * no way to know from outside which of the two was running.
+   *
+   * It exists so the boot check can be turned on with evidence rather than
+   * hope — see the deploy note in tenant-isolation.ts.
+   */
+  private async checkIsolation(): Promise<'enforced' | 'bypassable' | 'unknown'> {
+    try {
+      const { bypassesRls } = await tenantRoleRlsStatus();
+      return bypassesRls ? 'bypassable' : 'enforced';
+    } catch (e) {
+      this.logger.error(`readiness: isolation check failed: ${(e as Error).message}`);
+      return 'unknown';
+    }
   }
 
   /**
