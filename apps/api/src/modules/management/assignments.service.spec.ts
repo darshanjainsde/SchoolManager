@@ -348,7 +348,12 @@ describe('AssignmentsService', () => {
   });
 
   describe('upload', () => {
-    const file = { originalname: 'worksheet.pdf', buffer: Buffer.from('x'), mimetype: 'application/pdf', size: 1024 };
+    // Real signatures: the service decides the type from the bytes now, so a
+    // one-character buffer labelled application/pdf is no longer a PDF.
+    const PDF_BYTES = Buffer.concat([Buffer.from('%PDF-1.7', 'latin1'), Buffer.alloc(32)]);
+    const JPEG_BYTES = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(32)]);
+    const MP4_BYTES = Buffer.concat([Buffer.alloc(4), Buffer.from('ftypisom', 'latin1')]);
+    const file = { originalname: 'worksheet.pdf', buffer: PDF_BYTES, mimetype: 'application/pdf', size: 1024 };
 
     it('uploads a PDF via StorageService under schools/<id>/assignments and returns {url,name,kind}', async () => {
       storage.upload.mockResolvedValue({ key: 'k', url: 'https://x/worksheet.pdf' });
@@ -367,7 +372,7 @@ describe('AssignmentsService', () => {
     it('uploads an image and returns kind: "image"', async () => {
       storage.upload.mockResolvedValue({ key: 'k', url: 'https://x/photo.jpg' });
 
-      const result = await svc.upload(SCHOOL, { ...file, originalname: 'photo.jpg', mimetype: 'image/jpeg' });
+      const result = await svc.upload(SCHOOL, { ...file, originalname: 'photo.jpg', buffer: JPEG_BYTES, mimetype: 'image/jpeg' });
 
       expect(result.kind).toBe('image');
     });
@@ -381,7 +386,7 @@ describe('AssignmentsService', () => {
 
     it('rejects a disallowed mimetype (e.g. video) with VALIDATION, without ever calling StorageService', async () => {
       await expect(
-        svc.upload(SCHOOL, { ...file, originalname: 'clip.mp4', mimetype: 'video/mp4' }),
+        svc.upload(SCHOOL, { ...file, originalname: 'clip.mp4', buffer: MP4_BYTES, mimetype: 'video/mp4' }),
       ).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
       expect(storage.upload).not.toHaveBeenCalled();
     });

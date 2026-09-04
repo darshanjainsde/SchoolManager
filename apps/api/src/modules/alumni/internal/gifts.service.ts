@@ -27,6 +27,7 @@ import type {
 } from './alumni.dto';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 import { studentCountsBySection } from '../../../common/lists/relation-counts';
+import { assertUploadKind, IMAGE_OR_PDF_KINDS } from '../../../common/storage/upload-kind';
 
 @Injectable()
 export class GiftsService {
@@ -648,9 +649,14 @@ export class GiftsService {
    *
    * These are NOT site media: a distribution photograph must never land in the
    * school's media library, where it could be dropped onto a public page by
-   * accident. It is stored under the pledge, deleted with it, and seen by the
-   * office and the donor and nobody else.
-   */
+   * accident. It is stored under the pledge and deleted with it.
+ *
+ * NOTE on where it lives: unlike fee proofs and print-order PDFs, this object
+ * is still in the PUBLIC bucket, because it is read back from a stored URL
+ * rather than presigned on demand — moving it needs a read-path change first.
+ * The key carries a randomUUID so it is not discoverable, but a link that
+ * leaks once is permanent. Do not describe this as private until it is.
+ */
   async attach(
     schoolId: string,
     pledgeId: string,
@@ -659,9 +665,8 @@ export class GiftsService {
     dto: AttachGiftDto,
   ) {
     if (!file) throw new ApiError('FILE_REQUIRED', 'Choose a file first.', 400);
-    if (!/^image\/(png|jpe?g|webp|gif)$|^application\/pdf$/.test(file.mimetype)) {
-      throw new ApiError('BAD_FILE_TYPE', 'Photographs or a PDF bill, nothing else.', 400);
-    }
+    // Allowlisted by name already; now also verified against the bytes.
+    const uploadKind = assertUploadKind(file.buffer, IMAGE_OR_PDF_KINDS, 'attachment');
     return withTenant(schoolId, async (tx) => {
       const pledge = await tx.giftPledge.findFirst({ where: { id: pledgeId, schoolId } });
       if (!pledge) throw new NotFoundException('Pledge not found');
@@ -669,7 +674,7 @@ export class GiftsService {
         `schools/${schoolId}/gifts/${pledgeId}`,
         file.originalname,
         file.buffer,
-        file.mimetype,
+        uploadKind.mime,
       );
       const row = await tx.giftAttachment.create({
         data: {

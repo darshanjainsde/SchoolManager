@@ -23,6 +23,7 @@ import {
   SaveConcessionDto, SaveGridDto, SaveProviderConfigDto, SaveSettingsDto, SaveTermsDto,
   SubmitPaymentDto,
 } from './fees.dto';
+import { assertUploadKind, IMAGE_KINDS } from '../../common/storage/upload-kind';
 
 /** 5 MB. A phone screenshot is well under this; a photo of a printed slip fits too. */
 export const MAX_PROOF_BYTES = 5 * 1024 * 1024;
@@ -156,11 +157,9 @@ export class FeesController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
   saveQr(@UploadedFile() file?: { originalname: string; buffer: Buffer; mimetype: string }) {
     if (!file) throw new ApiError('VALIDATION', 'Choose an image to upload.', 400, 'file');
-    if (!file.mimetype.startsWith('image/')) {
-      throw new ApiError('VALIDATION', 'The QR code must be an image.', 400, 'file');
-    }
+    const kind = assertUploadKind(file.buffer, IMAGE_KINDS, 'QR image');
     return this.config.saveUpiQr(this.sid(), {
-      buffer: file.buffer, filename: file.originalname, contentType: file.mimetype,
+      buffer: file.buffer, filename: file.originalname, contentType: kind.mime,
     });
   }
 

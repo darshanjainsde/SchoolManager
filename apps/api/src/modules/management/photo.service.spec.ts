@@ -20,8 +20,14 @@ import type { StorageService } from '../../common/storage/storage.service';
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const USER = 'user-1';
 
+/** A real JPEG signature. The service sniffs the BYTES now, not the mimetype
+ *  string — `Buffer.from('img')` labelled image/jpeg is exactly the upload
+ *  that used to be waved through. */
+const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)]);
+const NOT_AN_IMAGE = Buffer.from('%PDF-1.7 this is a pdf', 'latin1');
+
 function file(over: Partial<{ originalname: string; buffer: Buffer; mimetype: string }> = {}) {
-  return { originalname: 'me.jpg', buffer: Buffer.from('img'), mimetype: 'image/jpeg', ...over };
+  return { originalname: 'me.jpg', buffer: JPEG, mimetype: 'image/jpeg', ...over };
 }
 
 describe('PhotoService', () => {
@@ -85,11 +91,11 @@ describe('PhotoService', () => {
   it('rejects a missing file (400), a non-image (415) and an oversize image (413) before any upload', async () => {
     txMock.student.findFirst.mockResolvedValue({ id: 'stu-1' });
     await expect(svc.setOwn(USER, 'STUDENT', undefined)).rejects.toMatchObject({ response: { code: 'FILE_REQUIRED' } });
-    await expect(svc.setOwn(USER, 'STUDENT', file({ mimetype: 'application/pdf' }))).rejects.toMatchObject({
+    await expect(svc.setOwn(USER, 'STUDENT', file({ buffer: NOT_AN_IMAGE, mimetype: 'application/pdf' }))).rejects.toMatchObject({
       status: 415, response: { code: 'UNSUPPORTED_TYPE' },
     });
     await expect(
-      svc.setOwn(USER, 'STUDENT', file({ buffer: Buffer.alloc(MAX_AVATAR_BYTES + 1) })),
+      svc.setOwn(USER, 'STUDENT', file({ buffer: Buffer.concat([JPEG, Buffer.alloc(MAX_AVATAR_BYTES + 1)]) })),
     ).rejects.toMatchObject({ status: 413, response: { code: 'FILE_TOO_LARGE' } });
     expect(storage.upload).not.toHaveBeenCalled();
   });

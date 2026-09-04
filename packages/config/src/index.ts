@@ -39,6 +39,22 @@ const envSchema = z.object({
   S3_ACCESS_KEY: z.string().min(1),
   S3_SECRET_KEY: z.string().min(1),
   S3_BUCKET: z.string().min(1),
+  /**
+   * Optional second bucket, NOT public, for files that are nobody's business
+   * but the school's: fee payment proofs (bank screenshots with account
+   * numbers and payer names) and print-order PDFs (unsat exam papers).
+   *
+   * The main bucket is public — an unsigned GET of
+   * /object/public/<bucket>/<key> returns the object — which is correct for
+   * site media and wrong for those two. Keys carry a randomUUID so nothing is
+   * enumerable, but a link that leaks once is then permanent, and the
+   * short-lived presigned URLs those paths already use are decorative while
+   * the object is reachable without a signature.
+   *
+   * Unset → both categories stay in S3_BUCKET and behave exactly as before,
+   * so this can be deployed before the bucket exists.
+   */
+  S3_PRIVATE_BUCKET: z.string().min(1).optional(),
   S3_REGION: z.string().default('us-east-1'),
   S3_FORCE_PATH_STYLE: z
     .string()
@@ -83,8 +99,50 @@ const envSchema = z.object({
     .string()
     .default('')
     .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
-  INGRESS_CNAME_TARGET: z.string().default('ingress.skoolos.app'),
-  INGRESS_A_RECORD: z.string().default('127.0.0.1'),
+  /**
+   * Where a school's own domain is told to point.
+   *
+   * This MUST be a hostname we control and can re-point without touching a
+   * single school's DNS — that indirection is the whole reason it exists. The
+   * old default was `ingress.skoolos.app`, a domain this project does not own:
+   * it resolves to an unrelated product's nginx (cert `*.app.classmind.in`),
+   * so every school that followed the setup instructions pointed its traffic
+   * at a stranger. Point this at a record in our own zone that CNAMEs to the
+   * current host (Vercel today, whatever comes next later).
+   */
+  INGRESS_CNAME_TARGET: z.string().default('ingress.localhost'),
+  /**
+   * The apex answer. A root domain cannot hold a CNAME, so apex schools get an
+   * A record — and an A record's value must be a literal IPv4 address, never a
+   * hostname. Registrars reject anything else at the form ("Value must be a
+   * valid IPv4 address"), which is exactly what the instructions used to hand
+   * out. Validated as an IP here so a hostname can never reach a school again.
+   */
+  INGRESS_A_RECORD: z.string().ip({ version: 'v4' }).default('127.0.0.1'),
+
+  /**
+   * Vercel API credentials, used to attach a school's domain to the hosting
+   * project. DNS alone is not enough: an unattached hostname resolves to
+   * Vercel and is answered with `DEPLOYMENT_NOT_FOUND`, and no certificate is
+   * ever issued. Unset → `add` still records the domain and the operator is
+   * told, in the response, that the attach step must be done by hand.
+   */
+  VERCEL_TOKEN: z.string().min(1).optional(),
+  VERCEL_PROJECT_ID: z.string().min(1).optional(),
+  VERCEL_TEAM_ID: z.string().min(1).optional(),
+  /**
+   * Which deployment a school's domain should serve.
+   *
+   * A domain attached to a Vercel project points at the PRODUCTION deployment
+   * unless it is pinned to a git branch. On staging that is the wrong answer
+   * in the most confusing way possible: the domain resolves, TLS is valid, and
+   * it serves the production app against the production database — so a school
+   * created on staging is simply not found, and the domain looks broken rather
+   * than mis-targeted. Set this to the branch a given environment deploys from
+   * (e.g. `staging`); leave unset in production to mean the production
+   * deployment.
+   */
+  VERCEL_GIT_BRANCH: z.string().min(1).optional(),
 });
 
 /**
@@ -119,13 +177,54 @@ const requireRlsRolesInProduction = <T extends { NODE_ENV: string; DATABASE_URL_
   }
 };
 
+/**
+ * A production deployment must NAME its own ingress.
+ *
+ * The old default was `ingress.skoolos.app`, a domain this project does not
+ * own — it answers with an unrelated product's nginx. Because the variable was
+ * never set on any environment, that default was the live value, so every
+ * school onboarded was handed DNS pointing at a stranger's server. A default
+ * that is wrong in production must fail at boot rather than quietly become the
+ * answer, which is the same argument `requireRlsRolesInProduction` makes above.
+ */
+const requireIngressInProduction = <T extends { NODE_ENV: string; INGRESS_CNAME_TARGET: string; INGRESS_A_RECORD: string }>(
+  env: T,
+  ctx: z.RefinementCtx,
+): void => {
+  if (env.NODE_ENV !== 'production') return;
+  if (env.INGRESS_CNAME_TARGET === 'ingress.localhost') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['INGRESS_CNAME_TARGET'],
+      message:
+        'INGRESS_CNAME_TARGET is required in production. Set it to a hostname you ' +
+        'control and can re-point without touching a single school (e.g. ' +
+        'ingress.sckools.com, itself CNAMEd to the current host). Schools are told ' +
+        'to point their DNS at this name.',
+    });
+  }
+  if (env.INGRESS_A_RECORD === '127.0.0.1') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['INGRESS_A_RECORD'],
+      message:
+        'INGRESS_A_RECORD is required in production. Set it to the public IPv4 that ' +
+        'apex school domains should A-record to (216.198.79.1 for Vercel). It must be ' +
+        'an address, not a hostname — registrars reject anything else.',
+    });
+  }
+};
+
 export type AppEnv = z.infer<typeof envSchema>;
 
 let cached: AppEnv | undefined;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (cached) return cached;
-  const result = envSchema.superRefine(requireRlsRolesInProduction).safeParse(source);
+  const result = envSchema
+    .superRefine(requireRlsRolesInProduction)
+    .superRefine(requireIngressInProduction)
+    .safeParse(source);
   if (!result.success) {
     console.error('Invalid environment configuration:', result.error.flatten().fieldErrors);
     throw new Error('Invalid environment configuration');

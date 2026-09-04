@@ -12,6 +12,7 @@ import { RequireFeature, RequireFeatureGuard } from '../features';
 import { FeePortalService } from './fee-portal.service';
 import { MAX_PROOF_BYTES } from './fees.controller';
 import { SubmitPaymentDto } from './fees.dto';
+import { assertUploadKind, IMAGE_KINDS } from '../../common/storage/upload-kind';
 
 /**
  * `/me/fees/*` — the student and parent surface, web and app alike.
@@ -47,10 +48,11 @@ export class FeePortalController {
     @Body() dto: SubmitPaymentDto,
     @UploadedFile() file?: { originalname: string; buffer: Buffer; mimetype: string },
   ) {
-    if (file && !file.mimetype.startsWith('image/')) {
-      throw new ApiError('VALIDATION', 'The proof must be an image (JPG or PNG).', 400, 'file');
-    }
+    const kind = file ? assertUploadKind(file.buffer, IMAGE_KINDS, 'payment proof', {
+          code: 'VALIDATION', status: 400, field: 'file',
+          message: 'The proof must be an image (JPG or PNG).',
+        }) : null;
     return this.portal.submit(u.sub, dto,
-      file ? { buffer: file.buffer, filename: file.originalname, contentType: file.mimetype } : undefined);
+      file && kind ? { buffer: file.buffer, filename: file.originalname, contentType: kind.mime } : undefined);
   }
 }

@@ -164,7 +164,7 @@ export class PressOrdersService {
   }
 
   /** Print an uploaded PDF — an exam paper, a circular, a form. Confidential:
-   *  stored privately, served ONLY to the operator via short-lived links. */
+   *  stored privately, served from the private bucket (S3_PRIVATE_BUCKET) and reachable only through a short-lived signed link. */
   async createForUpload(
     schoolId: string,
     dto: CreateUploadOrderDto,
@@ -182,6 +182,9 @@ export class PressOrdersService {
     // fails, delete best-effort so nothing confidential lingers unreferenced.
     const { key } = await this.storage.upload(
       `print-orders/${schoolId}`, file.originalname, file.buffer, file.mimetype,
+      // Private bucket: this is the school's own document — an unsat exam
+      // paper, a circular. It is read back through a signed link already.
+      { private: true },
     );
     try {
       return await withTenant(schoolId, async (tx) => {

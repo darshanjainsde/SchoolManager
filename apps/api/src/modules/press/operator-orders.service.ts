@@ -211,7 +211,7 @@ export class OperatorOrdersService {
   /** What to actually print. Report cards come back as the register's frozen
    *  snapshots — NEVER recompiled, so what the operator prints is
    *  byte-identical to what the school issued. Uploads come back as one
-   *  short-lived private link; the file has no public URL anywhere. */
+   *  short-lived private link; the file lives in the private bucket, so it has no public URL. */
   async artifact(id: string): Promise<OperatorOrderArtifact> {
     const db = getPlatformPrisma();
     const o = await db.printOrder.findUnique({

@@ -16,6 +16,7 @@ import { AttendanceService } from './attendance.service';
 import type { CreateAssignmentDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { seenCountsByAssignment } from '../../common/lists/relation-counts';
+import { assertUploadKind, IMAGE_OR_PDF_KINDS } from '../../common/storage/upload-kind';
 
 export type { Assignment, AssignmentList, AssignmentUploadResponse };
 
@@ -152,17 +153,20 @@ export class AssignmentsService {
         'file',
       );
     }
-    const isPdf = file.mimetype === 'application/pdf';
-    const isImage = /^image\//.test(file.mimetype);
-    if (!isPdf && !isImage) {
-      throw new ApiError('VALIDATION', 'Only PDF or image files are allowed.', 400, 'file');
-    }
+    // Decided from the bytes. The old check read file.mimetype, which the
+    // client sets, and then stored that same string as the object's
+    // Content-Type — so `image/svg+xml` passed and came back executable.
+    const kind = assertUploadKind(file.buffer, IMAGE_OR_PDF_KINDS, 'attachment', {
+      code: 'VALIDATION', status: 400, field: 'file',
+      message: 'Only PDF or image files are allowed.',
+    });
+    const isPdf = kind.kind === 'pdf';
 
     const { url } = await this.storage.upload(
       `schools/${schoolId}/assignments`,
       file.originalname,
       file.buffer,
-      file.mimetype,
+      kind.mime,
     );
     return { url, name: file.originalname, kind: isPdf ? 'pdf' : 'image' };
   }
