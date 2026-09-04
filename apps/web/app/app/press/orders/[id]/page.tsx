@@ -11,6 +11,7 @@ import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
 import { rupees } from '@/lib/fees';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, pressDateLabel, specLabel } from '@/lib/press';
+import { reserveTab, sendTabTo, dropTab, type OpenedTab } from './open-file';
 
 /**
  * One print order — the school's copy of the ledger page.
@@ -85,18 +86,18 @@ export default function PressOrderPage() {
    * a tab inside a promise callback loses the user-gesture the popup blocker
    * checks for, and the file silently never appears.
    */
+  // window.open, narrowed to what open-file needs.
+  const openWindow = (url: string, target: string, features?: string) =>
+    window.open(url, target, features) as unknown as OpenedTab | null;
+
   const viewFile = useMutation({
     mutationFn: () => api.get<{ url: string; filename: string }>(`/manage/press/orders/${id}/file`),
-    onMutate: () => {
-      const tab = window.open('', '_blank', 'noopener,noreferrer');
-      return { tab };
-    },
-    onSuccess: (res, _v, ctx) => {
-      if (ctx?.tab) ctx.tab.location.href = res.url;
-      else window.open(res.url, '_blank', 'noopener,noreferrer');
-    },
+    // Reserved during the click, navigated once the link is signed — see
+    // open-file.ts for why the reservation carries no `noopener`.
+    onMutate: () => ({ tab: reserveTab(openWindow) }),
+    onSuccess: (res, _v, ctx) => sendTabTo(ctx?.tab, res.url, openWindow),
     onError: (e: Error, _v, ctx) => {
-      ctx?.tab?.close();
+      dropTab(ctx?.tab);
       toast.error(e.message);
     },
   });
