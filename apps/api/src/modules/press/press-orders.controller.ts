@@ -41,6 +41,18 @@ export class PressOrdersController {
     return this.orders.one(this.sid(), id);
   }
 
+  /**
+   * A short-lived link to the PDF the school itself sent.
+   *
+   * Separate from `one()` on purpose: the detail payload deliberately never
+   * carries the storage key, so the link is minted per request rather than
+   * handed out with every read of the order.
+   */
+  @Get(':id/file')
+  file(@Param('id', ParseUUIDPipe) id: string) {
+    return this.orders.fileUrl(this.sid(), id);
+  }
+
   /** Bulk-print an issued report-card batch. */
   @Post('report-cards') @HttpCode(201)
   createForReportCards(@CurrentUser() u: SchoolJwtPayload, @Body() dto: CreateReportCardOrderDto) {

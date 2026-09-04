@@ -160,6 +160,9 @@ export type ErrorCode =
    *  said no): confirming an unquoted order, quoting a confirmed one,
    *  dispatching before printing. Pair with 409. */
   | 'ORDER_TRANSITION_ILLEGAL'
+  /** Asked for the file of an order that prints from the register rather than
+   *  from an uploaded document. There is nothing to open. Pair with 409. */
+  | 'ORDER_HAS_NO_FILE'
   /** A report-card print order needs at least one ISSUED card in the batch —
    *  we print the register's frozen snapshots, never a live preview. 409. */
   | 'ISSUED_BATCH_REQUIRED'

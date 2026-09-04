@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle2, Truck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, FileText, Truck } from 'lucide-react';
 import type { PrintOrderDetail, PrintOrderEventRow } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -73,6 +73,34 @@ export default function PressOrderPage() {
 
   const o = order.data;
 
+  /**
+   * Open the PDF the school sent.
+   *
+   * A link rather than a stored URL: the server mints a presigned one per
+   * request and the order payload deliberately never carries the storage key.
+   * It is short-lived, so fetching on click — instead of on page load — means
+   * the link cannot expire while somebody reads the page.
+   *
+   * `window.open` is called BEFORE the await and filled in afterwards. Opening
+   * a tab inside a promise callback loses the user-gesture the popup blocker
+   * checks for, and the file silently never appears.
+   */
+  const viewFile = useMutation({
+    mutationFn: () => api.get<{ url: string; filename: string }>(`/manage/press/orders/${id}/file`),
+    onMutate: () => {
+      const tab = window.open('', '_blank', 'noopener,noreferrer');
+      return { tab };
+    },
+    onSuccess: (res, _v, ctx) => {
+      if (ctx?.tab) ctx.tab.location.href = res.url;
+      else window.open(res.url, '_blank', 'noopener,noreferrer');
+    },
+    onError: (e: Error, _v, ctx) => {
+      ctx?.tab?.close();
+      toast.error(e.message);
+    },
+  });
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-5">
       <Link href="/app/press/orders" className="sk-seelink" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -99,10 +127,40 @@ export default function PressOrderPage() {
               {o.quantity} {o.quantity === 1 ? 'copy' : 'copies'} · {specLabel(o.spec)}
               {o.source.kind === 'REPORT_CARDS'
                 ? ` · ${o.source.issuedCount} cards, serials ${o.source.serialFrom} – ${o.source.serialTo}`
-                : ` · ${o.source.filename}`}
+                : ''}
               {o.neededBy && ` · needed by ${pressDateLabel(o.neededBy)}`}
             </p>
           </header>
+
+          {/* ── What is actually being printed ────────────────────────────
+              The school could see a filename and nothing else, then be asked to
+              approve a paid run on trust. Checking the right document was
+              attached is the one thing this page was missing. */}
+          {o.source.kind === 'UPLOAD' && (
+            <div className="sk-card"><div className="sk-card-b">
+              <span className="sk-lab">What we will print</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <FileText size={20} aria-hidden="true" style={{ color: 'var(--sk-ink-3)', flex: 'none' }} />
+                <span style={{ minWidth: 0 }}>
+                  <b style={{ display: 'block', fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {o.source.filename}
+                  </b>
+                  <span className="sk-muted" style={{ fontSize: 11.5 }}>
+                    {(o.source.bytes / 1024 / 1024).toFixed(1)} MB · kept private, opened only by the press
+                  </span>
+                </span>
+                <span style={{ flex: 1 }} />
+                <button
+                  className="sk-btn"
+                  type="button"
+                  disabled={viewFile.isPending}
+                  onClick={() => viewFile.mutate()}
+                >
+                  {viewFile.isPending ? 'Opening…' : 'View the PDF'}
+                </button>
+              </div>
+            </div></div>
+          )}
 
           {/* ── The decision card ─────────────────────────────────────────── */}
           {o.status === 'QUOTED' && o.quote && (

@@ -271,6 +271,48 @@ export class PressOrdersService {
     });
   }
 
+  /**
+   * A short-lived link to the school's OWN uploaded PDF.
+   *
+   * The school could not see what it had sent. It uploaded a file, got a row
+   * that named it, and was then asked to approve a paid print run on trust —
+   * with no way to check it had attached the right document. This is the one
+   * thing missing from that loop.
+   *
+   * Deliberately NOT gated on status, unlike the operator's `artifact`. The
+   * operator may not peek before the school commits; the school is looking at
+   * its own document, and the moment it most needs to look is BEFORE it
+   * confirms. Gating it would remove the only check that matters.
+   *
+   * The key itself never leaves the server — `detail()` strips it on purpose,
+   * and this hands back a presigned URL rather than reinstating it. Five
+   * minutes: long enough to open, short enough that a copied link dies quickly.
+   */
+  async fileUrl(schoolId: string, id: string): Promise<{ filename: string; url: string; expiresInSeconds: number }> {
+    return withTenant(schoolId, async (tx) => {
+      // findFirst under withTenant: RLS binds this to the caller's school, so
+      // another school's order is not found rather than forbidden.
+      const o = await tx.printOrder.findFirst({ where: { id }, select: { kind: true, source: true } });
+      if (!o) throw new ApiError('NOT_FOUND', 'That order was not found.', 404);
+      if (o.kind !== 'UPLOAD') {
+        throw new ApiError(
+          'ORDER_HAS_NO_FILE',
+          'This order prints from the register, not from a file you sent. Open it in the Result Room to see the sheets.',
+          409,
+        );
+      }
+      const src = o.source as Record<string, unknown>;
+      const key = String(src.fileKey ?? '');
+      if (!key) throw new ApiError('NOT_FOUND', 'That order has no file attached.', 404);
+      const ttl = 300;
+      return {
+        filename: String(src.filename ?? 'document.pdf'),
+        url: await this.storage.presignedGet(key, ttl),
+        expiresInSeconds: ttl,
+      };
+    });
+  }
+
   private async detail(tx: TenantTx, id: string): Promise<PrintOrderDetail> {
     const o = await tx.printOrder.findFirst({
       where: { id },
