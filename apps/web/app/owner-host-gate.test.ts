@@ -15,10 +15,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const OWNER = 'owner.test.sckools.com';
+const APEX = 'test.sckools.com';
 
 async function load(ownerHost: string, isLocal: boolean) {
   vi.resetModules();
-  vi.doMock('@/lib/hosts', () => ({ OWNER_HOST: ownerHost, IS_LOCAL: isLocal }));
+  vi.doMock('@/lib/hosts', () => ({ OWNER_HOST: ownerHost, PLATFORM_HOST: APEX, IS_LOCAL: isLocal }));
   return (await import('./../middleware')).middleware;
 }
 
@@ -39,6 +40,17 @@ describe('owner-only routes', () => {
     }
   });
 
+  it('serves /owner AND /platform on our own apex — the one-password door', async () => {
+    // sckools.com/owner is the documented gate (app/owner/page.tsx), and
+    // unlocking navigates to /platform, so both must answer on the apex or the
+    // door opens onto nothing. Gating on OWNER_HOST alone 404'd it; that
+    // reached production on 4 Sept 2026 and was found by someone signing in.
+    const mw = await load(OWNER, false);
+    for (const path of ['/owner', '/platform', '/platform/schools']) {
+      expect(mw(req(APEX, path)).status).not.toBe(404);
+    }
+  });
+
   it('are NOT served on a school subdomain', async () => {
     const mw = await load(OWNER, false);
     expect(mw(req('sample-public.test.sckools.com', '/platform')).status).toBe(404);
@@ -51,9 +63,18 @@ describe('owner-only routes', () => {
     }
   });
 
-  it('are NOT served on the marketing apex either', async () => {
+  // Deliberately reversed on 4 Sept 2026. The original assertion 404'd the
+  // apex, which also killed sckools.com/owner — the one-password entry point
+  // the product depends on. The gate's real target is a SCHOOL's domain, and
+  // those two cases below still hold. The API is what actually protects the
+  // data: OwnerHostGuard + PlatformJwtGuard on every platform route.
+  it('serves owner routes on our own apex, but never on anyone else’s host', async () => {
     const mw = await load(OWNER, false);
-    expect(mw(req('test.sckools.com', '/platform')).status).toBe(404);
+    expect(mw(req(APEX, '/platform')).status).not.toBe(404);
+    for (const host of ['archaiccandles.com', 'sample-public.test.sckools.com', 'beacon.test.sckools.com']) {
+      expect(mw(req(host, '/platform')).status).toBe(404);
+      expect(mw(req(host, '/owner')).status).toBe(404);
+    }
   });
 
   it('ignores the port, so owner.localhost:3000 still works in dev', async () => {
