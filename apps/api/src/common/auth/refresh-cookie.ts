@@ -60,12 +60,13 @@ interface CookieEnv {
  * `.sckools.com` in production so every school subdomain and the API share the
  * cookie; undefined on localhost, where a host-only cookie is what works.
  */
-function cookieDomain(env: CookieEnv): string | undefined {
+function isLocalHost(env: CookieEnv): boolean {
   const host = env.PLATFORM_HOST.toLowerCase().split(':')[0];
-  if (host === 'localhost' || host.endsWith('.localhost') || /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
-    return undefined;
-  }
-  return `.${host}`;
+  return host === 'localhost' || host.endsWith('.localhost') || /^\d+\.\d+\.\d+\.\d+$/.test(host);
+}
+
+function cookieDomain(env: CookieEnv): string | undefined {
+  return isLocalHost(env) ? undefined : `.${env.PLATFORM_HOST.toLowerCase().split(':')[0]}`;
 }
 
 export function setRefreshCookie(res: Response, name: string, token: string, env: CookieEnv): void {
@@ -74,7 +75,12 @@ export function setRefreshCookie(res: Response, name: string, token: string, env
   if (!token) return;
   res.cookie(name, token, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
+    // Keyed on the HOST, not NODE_ENV. NODE_ENV defaults to 'development' in
+    // the config schema, so one unset or misspelled variable in a deployed
+    // environment would ship a 30-day refresh cookie without Secure over a
+    // real HTTPS site — no error, no log line, nothing to notice. The host is
+    // the thing that actually decides whether TLS is available.
+    secure: !isLocalHost(env),
     sameSite: 'lax',
     path: '/',
     domain: cookieDomain(env),
@@ -86,7 +92,12 @@ export function clearRefreshCookie(res: Response, name: string, env: CookieEnv):
   // Same attributes as when it was set, or the browser keeps the old cookie.
   res.clearCookie(name, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
+    // Keyed on the HOST, not NODE_ENV. NODE_ENV defaults to 'development' in
+    // the config schema, so one unset or misspelled variable in a deployed
+    // environment would ship a 30-day refresh cookie without Secure over a
+    // real HTTPS site — no error, no log line, nothing to notice. The host is
+    // the thing that actually decides whether TLS is available.
+    secure: !isLocalHost(env),
     sameSite: 'lax',
     path: '/',
     domain: cookieDomain(env),

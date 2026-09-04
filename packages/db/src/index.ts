@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { buildIsolationAssertion, type TenantRoleStatus } from './tenant-isolation';
 
 export type TenantTx = Prisma.TransactionClient;
 
@@ -58,6 +59,28 @@ export function getTenantPrisma(): PrismaClient {
   }
   return tenantClient;
 }
+
+/**
+ * Asks Postgres whether the tenant connection's own role can bypass RLS.
+ *
+ * The config schema requires DATABASE_URL_APP in production, which catches the
+ * variable being absent. This catches the other half: a URL that is present
+ * but points at a superuser anyway. Both failures are silent — RLS does not
+ * error when it is bypassed, it simply returns other schools' rows — so the
+ * only way to know is to ask.
+ */
+export async function tenantRoleRlsStatus(): Promise<TenantRoleStatus> {
+  const rows = await getTenantPrisma().$queryRaw<{ role: string; bypassrls: boolean }[]>`
+    SELECT current_user AS role, rolbypassrls AS bypassrls
+    FROM pg_roles WHERE rolname = current_user
+  `;
+  const row = rows[0];
+  if (!row) throw new Error('Could not resolve the current database role');
+  return { role: row.role, bypassesRls: row.bypassrls === true };
+}
+
+/** Refuse to serve if tenant queries would not be isolated. See tenant-isolation.ts. */
+export const assertTenantIsolationEnforced = buildIsolationAssertion(tenantRoleRlsStatus);
 
 export function getPlatformPrisma(): PrismaClient {
   if (!platformClient) {
@@ -187,3 +210,5 @@ export * from '@prisma/client';
 export * from './features';
 export * from './default-content';
 export * from './blog-blocks';
+
+export type { TenantRoleStatus, RoleReader, IsolationAssertOptions } from './tenant-isolation';

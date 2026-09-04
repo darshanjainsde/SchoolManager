@@ -87,13 +87,45 @@ const envSchema = z.object({
   INGRESS_A_RECORD: z.string().default('127.0.0.1'),
 });
 
+/**
+ * The RLS-enforcing connection is optional in the schema because local dev and
+ * the test harness share one superuser URL. In production it is not optional,
+ * and the failure mode if it is missing is silent and total:
+ * `getTenantPrisma()` falls back to DATABASE_URL, which on Supabase is the
+ * `postgres` role holding BYPASSRLS. Every `withTenant` call then runs with no
+ * isolation, with no error and no failed request — and the codebase leans on
+ * RLS deliberately instead of repeating `where: { schoolId }`, so hundreds of
+ * lookups become cross-tenant reads at once.
+ *
+ * apps/library-api already made the same variable required
+ * (`LIBRARY_DATABASE_URL_APP`); this brings the school API in line.
+ */
+const requireRlsRolesInProduction = <T extends { NODE_ENV: string; DATABASE_URL_APP?: string; DATABASE_URL_PLATFORM?: string }>(
+  env: T,
+  ctx: z.RefinementCtx,
+): void => {
+  if (env.NODE_ENV !== 'production') return;
+  for (const key of ['DATABASE_URL_APP', 'DATABASE_URL_PLATFORM'] as const) {
+    if (!env[key]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message:
+          `${key} is required in production. Without it the app would connect as ` +
+          'DATABASE_URL, which is the superuser role and bypasses row-level security ' +
+          'for every tenant query.',
+      });
+    }
+  }
+};
+
 export type AppEnv = z.infer<typeof envSchema>;
 
 let cached: AppEnv | undefined;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (cached) return cached;
-  const result = envSchema.safeParse(source);
+  const result = envSchema.superRefine(requireRlsRolesInProduction).safeParse(source);
   if (!result.success) {
     console.error('Invalid environment configuration:', result.error.flatten().fieldErrors);
     throw new Error('Invalid environment configuration');

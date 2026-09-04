@@ -65,13 +65,18 @@ function buildCorsOrigin(env: AppEnv) {
   // Escape dots for the subdomain regex: skoolos.app -> skoolos\.app
   const hostRe = platformHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const platformOriginRe = new RegExp(`^https?://([a-z0-9-]+\\.)*${hostRe}(:\\d+)?$`, 'i');
+  // Development convenience, and only that: paired with `credentials: true`,
+  // a production deployment that trusts localhost origins is one SameSite
+  // change away from letting a page on a developer's machine make credentialed
+  // calls against real data.
+  const allowLocalhost = env.NODE_ENV !== 'production';
   const localhostRe = /^https?:\/\/([a-z0-9-]+\.)*localhost(:\d+)?$/i;
 
   return (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
     if (!origin) return cb(null, true); // same-origin / server-to-server / curl
     const o = origin.toLowerCase();
     if (
-      localhostRe.test(o) ||
+      (allowLocalhost && localhostRe.test(o)) ||
       platformOriginRe.test(o) ||
       o === `https://${ownerHost}` ||
       extra.includes(o)

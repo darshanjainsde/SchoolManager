@@ -244,3 +244,44 @@ describe('per-school refresh cookies', () => {
     expect(resolveSchoolRefreshTokens(req('skoolos_rt_beacon=a'), 'beacon', 'b')).toEqual(['a', 'b']);
   });
 });
+
+describe('Secure is decided by the host, not NODE_ENV', () => {
+  // NODE_ENV defaults to 'development' in the config schema, so keying Secure
+  // on it meant one unset variable in a deployed environment shipped a 30-day
+  // refresh cookie in cleartext, silently.
+  const res = () => {
+    const calls: { name: string; token: string; opts: Record<string, unknown> }[] = [];
+    return {
+      calls,
+      cookie: (name: string, token: string, opts: Record<string, unknown>) =>
+        calls.push({ name, token, opts }),
+    };
+  };
+
+  const env = (over: Record<string, unknown>) =>
+    ({ PLATFORM_HOST: 'sckools.com', NODE_ENV: 'production', JWT_REFRESH_TTL: 2_592_000, ...over }) as never;
+
+  it('sets Secure on a real host even when NODE_ENV says development', () => {
+    const r = res();
+    setRefreshCookie(r as never, 'rt', 'tok', env({ NODE_ENV: 'development' }));
+    expect(r.calls[0].opts.secure).toBe(true);
+  });
+
+  it('omits Secure on localhost, where there is no TLS to require', () => {
+    const r = res();
+    setRefreshCookie(r as never, 'rt', 'tok', env({ PLATFORM_HOST: 'localhost' }));
+    expect(r.calls[0].opts.secure).toBe(false);
+  });
+
+  it('omits Secure on a bare IP too', () => {
+    const r = res();
+    setRefreshCookie(r as never, 'rt', 'tok', env({ PLATFORM_HOST: '127.0.0.1' }));
+    expect(r.calls[0].opts.secure).toBe(false);
+  });
+
+  it('still sets HttpOnly and SameSite alongside it', () => {
+    const r = res();
+    setRefreshCookie(r as never, 'rt', 'tok', env({}));
+    expect(r.calls[0].opts).toMatchObject({ httpOnly: true, sameSite: 'lax', secure: true });
+  });
+});
