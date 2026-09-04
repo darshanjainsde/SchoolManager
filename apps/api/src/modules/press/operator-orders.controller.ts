@@ -16,6 +16,12 @@ import { DeclineOrderDto, DispatchOrderDto, QuoteOrderDto } from './press-orders
 export class OperatorOrdersController {
   constructor(private readonly orders: OperatorOrdersService) {}
 
+  /** Tab counts for the desk. Cheap enough to sit beside every list call. */
+  @Get('counts')
+  counts() {
+    return this.orders.counts();
+  }
+
   @Get()
   list(@Query('status') status?: string) {
     return this.orders.listAll(status);

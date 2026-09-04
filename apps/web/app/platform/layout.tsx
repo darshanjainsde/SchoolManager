@@ -7,7 +7,12 @@ import { useHydrated } from '@/lib/use-hydrated';
 import { useApi } from '@/lib/use-api';
 import { useSessionProbe } from '@/lib/use-session-probe';
 import { OWNER_HOST } from '@/lib/hosts';
-import { LogOut, Menu, X } from 'lucide-react';
+import {
+  LayoutDashboard, TrendingUp, School, FileText, PlusCircle,
+  Printer, Briefcase, Link2, Compass, LogOut, Menu, X,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import '../sk-theme.css';
 import { cn } from '@/lib/cn';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 
@@ -20,16 +25,19 @@ import { SckoolsLogo } from '@/components/brand/sckools-logo';
  * longer exists. We just clear the auth store and redirect.
  */
 
-const NAV_ITEMS = [
-  { href: '/platform', label: 'Dashboard', emoji: '📊' },
-  { href: '/platform/scale', label: 'Scale', emoji: '📈' },
-  { href: '/platform/schools', label: 'Schools', emoji: '🏫' },
-  { href: '/platform/blog', label: 'Blog Queue', emoji: '📝' },
-  { href: '/platform/onboard', label: 'Add School', emoji: '➕' },
-  { href: '/platform/orders', label: 'Print Orders', emoji: '🖨️' },
-  { href: '/platform/jobs', label: 'Jobs', emoji: '💼' },
-  { href: '/platform/connect', label: 'Connect', emoji: '🔗' },
-  { href: '/platform/remaining', label: 'Remaining work', emoji: '🧭' },
+/* Line icons, not emoji. Emoji render in the OS's own colours and sizes, so
+   nine of them down a dark rail read as nine unrelated stickers rather than
+   one navigation — and they are the surest tell of an unfinished interface. */
+const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: '/platform', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/platform/scale', label: 'Scale', icon: TrendingUp },
+  { href: '/platform/schools', label: 'Schools', icon: School },
+  { href: '/platform/blog', label: 'Blog Queue', icon: FileText },
+  { href: '/platform/onboard', label: 'Add School', icon: PlusCircle },
+  { href: '/platform/orders', label: 'Print Orders', icon: Printer },
+  { href: '/platform/jobs', label: 'Jobs', icon: Briefcase },
+  { href: '/platform/connect', label: 'Connect', icon: Link2 },
+  { href: '/platform/remaining', label: 'Remaining work', icon: Compass },
 ];
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
@@ -53,13 +61,13 @@ function trapFocus(e: React.KeyboardEvent<HTMLDivElement>, container: HTMLDivEle
 function OwnerNavLink({
   href,
   label,
-  emoji,
+  icon: Icon,
   pathname,
   onNavigate,
 }: {
   href: string;
   label: string;
-  emoji: string;
+  icon: LucideIcon;
   pathname: string;
   onNavigate?: () => void;
 }) {
@@ -70,10 +78,12 @@ function OwnerNavLink({
       onClick={onNavigate}
       className={cn(
         'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm',
-        active ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-300 hover:bg-white/5',
+        // A translucent tint on the rail, not a solid light pill: a filled
+        // chip on navy reads as a torn-out sticker and drowns the label.
+        active ? 'bg-indigo-400/15 font-semibold text-indigo-300' : 'text-slate-300 hover:bg-white/5',
       )}
     >
-      <span>{emoji}</span>
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       {label}
     </Link>
   );
@@ -149,7 +159,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   return (
     // The console is a light-only UI — pin the colour scheme so native controls
     // (inputs, selects, scrollbars) don't render with the OS's dark UA colours.
-    <div className="flex min-h-screen flex-col sm:flex-row [color-scheme:light]">
+    <div className="sk-own flex min-h-screen flex-col sm:flex-row [color-scheme:light]">
       {/* Mobile top bar — hidden at sm and above, where the sidebar takes over. */}
       <div className="flex items-center justify-between bg-slate-900 px-4 py-2.5 sm:hidden">
         <div className="flex items-center gap-2">
@@ -271,8 +281,13 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <main className="min-w-0 flex-1 overflow-auto overflow-x-hidden bg-slate-100">
-        {children}
+      {/* Every page used to supply its own padding, or forget to — which is
+          why headings sat flush against the rail. The shell owns it now. */}
+      <main
+        className="min-w-0 flex-1 overflow-auto overflow-x-hidden"
+        style={{ background: 'var(--sk-bg-2)', padding: 'clamp(16px, 3vw, 30px)' }}
+      >
+        <div style={{ maxWidth: 1180, margin: '0 auto' }}>{children}</div>
       </main>
     </div>
   );

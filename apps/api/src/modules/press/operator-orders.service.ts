@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
-import type { OperatorOrderArtifact, OperatorOrderRow, PrintOrderDetail, PrintOrderStatus, ReportCardSnapshot } from '@skoolos/types';
+import type { OperatorOrderArtifact, OperatorOrderCounts, OperatorOrderRow, PrintOrderDetail, PrintOrderStatus, ReportCardSnapshot } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { StorageService } from '../../common/storage/storage.service';
@@ -29,6 +29,37 @@ const OPEN_STATUSES = ['QUOTED', 'CONFIRMED', 'PRINTING', 'DISPATCHED'];
 @Injectable()
 export class OperatorOrdersService {
   constructor(private readonly storage: StorageService) {}
+
+  /**
+   * How many orders sit in each status, for the desk's filter tabs.
+   *
+   * Deliberately NOT derived by counting a fetched page: listAll stops at
+   * LIST_CEILING, so once the desk is busy the tab numbers would quietly
+   * under-report exactly when they matter most. A groupBy counts the table.
+   *
+   * `late` is separate from the statuses — an order is late *within* an open
+   * status, so it belongs alongside them, not among them.
+   */
+  async counts(): Promise<OperatorOrderCounts> {
+    const db = getPlatformPrisma();
+    const [byStatus, open] = await Promise.all([
+      db.printOrder.groupBy({ by: ['status'], _count: { _all: true } }),
+      db.printOrder.findMany({
+        where: { status: { in: OPEN_STATUSES }, promisedBy: { not: null } },
+        select: { promisedBy: true },
+        take: LIST_CEILING.ACTIVITY,
+      }),
+    ]);
+    const today = istDateStr(new Date());
+    const byStatusMap: Record<string, number> = {};
+    let total = 0;
+    for (const g of byStatus) {
+      byStatusMap[g.status] = g._count._all;
+      total += g._count._all;
+    }
+    const late = open.filter((o) => o.promisedBy && istDateStr(o.promisedBy) < today).length;
+    return { byStatus: byStatusMap, late, total };
+  }
 
   async listAll(status?: string): Promise<OperatorOrderRow[]> {
     const db = getPlatformPrisma();

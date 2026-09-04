@@ -1423,6 +1423,16 @@ export interface OperatorOrderRow extends PrintOrderRow {
   daysLate: number | null;
 }
 
+/** `GET /owner/print-orders/counts` — the desk's filter tabs.
+ *  Counted with a groupBy, not by measuring a fetched page, so the numbers
+ *  stay honest past the list ceiling. */
+export interface OperatorOrderCounts {
+  byStatus: Record<string, number>;
+  /** Open orders already past the date we promised. */
+  late: number;
+  total: number;
+}
+
 /** `GET /owner/print-orders/:id/artifact` — what the operator prints.
  *  REPORT_CARDS: the register's frozen snapshots (never recompiled).
  *  UPLOAD: a short-lived private link to the school's PDF. */
