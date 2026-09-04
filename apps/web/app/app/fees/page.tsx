@@ -130,7 +130,7 @@ export default function FeesHomePage() {
             wide container auto-fill leaves empty tracks, so the row stopped
             short and its right edge did not line up with the four tiles above.
           */}
-          <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+          <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))' }}>
             {ACTIONS.map((a) => (
               <Link key={a.href} href={a.href} className="sk-entity sk-press">
                 <span className="av" style={{ background: a.tint }}>

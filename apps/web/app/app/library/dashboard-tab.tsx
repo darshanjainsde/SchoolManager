@@ -51,7 +51,7 @@ export default function DashboardTab({ base }: { base: string }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <DeskSearch />
 
-      <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+      <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))' }}>
         <StatCard
           label="Copies"
           value={counts.totalCopies.toLocaleString('en-IN')}

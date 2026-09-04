@@ -108,7 +108,7 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
         {panel.kind === 'notices' && (
           <>
             <PanelTitle accent={s.school.ps1}>Notice board</PanelTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18, alignContent: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 18, alignContent: 'start' }}>
               {panel.items.slice(0, 4).map((a, i) => (
                 <div key={i} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px' }}>
                   <div style={{ fontSize: 22, fontWeight: 700 }}>{a.title}</div>
@@ -147,7 +147,7 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
         {panel.kind === 'birthdays' && (
           <>
             <PanelTitle accent={s.school.ps2}>Janamdin mubarak 🎂</PanelTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, alignContent: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 16, alignContent: 'start' }}>
               {panel.items.map((b, i) => (
                 <div key={i} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px', fontSize: 24, fontWeight: 700 }}>
                   {b.name}
@@ -159,7 +159,7 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
         )}
 
         {panel.kind === 'gallery' && (
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, minHeight: 0 }}>
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 12, minHeight: 0 }}>
             {panel.items.slice(0, 6).map((url, i) => (
               // eslint-disable-next-line @next/next/no-img-element -- kiosk collage from the school's own gallery
               <img key={i} src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 14, minHeight: 0 }} />

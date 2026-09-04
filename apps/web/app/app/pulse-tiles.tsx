@@ -36,7 +36,7 @@ export function PulseTiles({ pulse }: { pulse: DashboardPulse }) {
   const feePct = p.fees && p.fees.billedMinor > 0 ? Math.round((p.fees.collectedMinor / p.fees.billedMinor) * 100) : null;
 
   return (
-    <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+    <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))' }}>
       <Link href="/app/classes" className="sk-kpi">
         <div className="lab">Attendance today</div>
         <div className="n">{p.attendance.todayPct === null ? '—' : `${p.attendance.todayPct}%`}</div>

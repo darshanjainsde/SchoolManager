@@ -137,7 +137,7 @@ export default function ReportsDocumentsPage() {
       </div>
 
       {/* ── the three desks — one row, one live fact each ────────────────── */}
-      <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
+      <div className="sk-cardgrid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))' }}>
         {tiles.map((t) => (
           <Link key={t.href} href={t.href} className="sk-entity sk-press" style={{ minHeight: 76 }}>
             <span className="av" style={{ background: t.bg }}><t.icon size={20} aria-hidden="true" /></span>

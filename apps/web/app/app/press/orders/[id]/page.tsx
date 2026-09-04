@@ -214,7 +214,7 @@ export default function PressOrderPage() {
 
           {/* ── The agreed record, once confirmed ─────────────────────────── */}
           {o.quote && ['CONFIRMED', 'PRINTING', 'DISPATCHED', 'DELIVERED'].includes(o.status) && (
-            <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+            <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
               <div className="sk-kpi">
                 <div className="lab">Agreed price</div>
                 <div className="n">{rupees(o.quote.priceMinor)}</div>
