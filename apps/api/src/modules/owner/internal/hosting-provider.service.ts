@@ -109,13 +109,23 @@ export class HostingProviderService {
    * live host, which is how the platform's own www.sckools.com already behaves.
    * One canonical URL per school: better for search, and two hostnames serving
    * identical HTML would be two cache entries each earning half the hit rate.
+   *
+   * The alias is OPT-IN, because it is only ever right for a domain the school
+   * owns. On a `<slug>.<platform>` name it produces www.<slug>.<platform> —
+   * two labels under a wildcard that matches one, so it can never be served or
+   * certificated. It is not merely useless there: the unservable redirect is
+   * what made Vercel refuse to release raffles.sckools.com with a 409 until it
+   * was deleted by hand.
    */
-  async attach(hostname: string): Promise<{ ok: boolean; detail: string }> {
+  async attach(
+    hostname: string,
+    opts: { wwwAlias: boolean } = { wwwAlias: true },
+  ): Promise<{ ok: boolean; detail: string }> {
     const primary = await this.attachOne(hostname);
     // Best-effort, and deliberately not fatal: a school that never publishes a
     // www record loses nothing, and failing the whole add because the courtesy
     // alias could not be claimed would be the wrong trade.
-    if (primary.ok && !hostname.startsWith('www.')) {
+    if (opts.wwwAlias && primary.ok && !hostname.startsWith('www.')) {
       await this.attachOne(`www.${hostname}`, hostname);
     }
     return primary;

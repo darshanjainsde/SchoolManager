@@ -21,7 +21,8 @@ interface DomainRow {
   status: 'PENDING' | 'LIVE' | 'ERROR';
   isPrimary: boolean;
   createdAt: string;
-  instructions: { kind: 'A' | 'CNAME'; host: string; value: string; note: string; alsoRequired: string };
+  /** kind NONE = an address we serve ourselves; there is no record to add. */
+  instructions: { kind: 'A' | 'CNAME' | 'NONE'; host: string; value: string; note: string; alsoRequired: string };
 }
 interface DomainsResponse {
   school: { id: string; name: string; slug: string };
@@ -155,7 +156,23 @@ export function DomainsCard({ schoolId }: { schoolId: string }) {
               </p>
             )}
 
-            {open === row.id && (
+            {/*
+              A `<slug>.sckools.com` address has no setup: we own the zone, the
+              wildcard already answers it, and the three steps below are all
+              things only we could do. Printing them sends an operator to a
+              registrar panel that does not exist for this name.
+            */}
+            {open === row.id && row.instructions.kind === 'NONE' && (
+              <div className="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                <p className="font-bold text-slate-800">Nothing to set up</p>
+                <p className="mt-1.5">{row.instructions.note}</p>
+                <p className="mt-2.5">
+                  Verify still works — it confirms the address resolves and that the hosting project serves it.
+                </p>
+              </div>
+            )}
+
+            {open === row.id && row.instructions.kind !== 'NONE' && (
               <div className="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
                 <p className="font-bold text-slate-800">1 · Add this DNS record at the registrar</p>
                 <table className="mt-1.5 w-full text-left font-mono text-[11.5px]">
