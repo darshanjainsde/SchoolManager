@@ -26,6 +26,24 @@ export const revalidate = 60;
 /** A host we have never rendered still renders on demand, then caches. */
 export const dynamicParams = true;
 
+/**
+ * Empty on purpose, and NOT optional.
+ *
+ * Schools are created and renamed at runtime, so there is no build-time list
+ * of hosts to prerender — but a dynamic segment with no `generateStaticParams`
+ * at all is treated as fully dynamic, and Next then serves it
+ * `private, no-store` no matter what `revalidate` says. Returning an empty
+ * array is what puts the route in the cacheable family: nothing is built ahead
+ * of time, the first visitor to each host pays for the render, and everyone
+ * after them is served from the edge until it revalidates.
+ *
+ * This was measured, not reasoned: without it, raffles.test.sckools.com/
+ * answered `no-store` / MISS on every one of three consecutive requests.
+ */
+export function generateStaticParams(): { host: string }[] {
+  return [];
+}
+
 type Params = { params: Promise<{ host: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
