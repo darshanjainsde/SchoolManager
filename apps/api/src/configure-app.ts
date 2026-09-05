@@ -23,6 +23,42 @@ export function configureApp(app: INestApplication, env: AppEnv): void {
   // Honour X-Forwarded-Host behind an ingress / CDN (Vercel, custom domains).
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
+  // No ETags on API responses.
+  //
+  // Express adds one to every JSON body and pairs it with
+  // `Cache-Control: public, max-age=0, must-revalidate`, so the browser
+  // revalidates on every call. When the payload has not changed the server
+  // answers 304 — and Express writes a 304 WITHOUT the CORS headers the
+  // `enableCors` middleware put on the 200. The console is on a different
+  // origin to the API, so the browser discards that 304 and the fetch fails
+  // with a bare "Failed to fetch": no status, nothing in the console, and
+  // nothing in the API's own logs, which recorded a perfectly good 304.
+  //
+  // It only bites endpoints whose body is STABLE, which is why it looked
+  // random. /owner/marketing-config returns the same six prices every time,
+  // so its ETag never changes and it was broken 100% of the time; /owner/blog/
+  // pending did it whenever the queue stayed empty; /owner/overview mostly
+  // escaped because its counts move.
+  //
+  // Conditional caching buys nothing here — every response is authenticated,
+  // per-user and already small — so the fix is to stop offering it rather than
+  // to patch CORS onto the 304 path.
+  app.getHttpAdapter().getInstance().set('etag', false);
+
+  // Turning Express's ETag off is not enough on Vercel: the edge adds its own,
+  // so the browser still revalidates and still gets a CORS-less 304. Telling
+  // the browser not to store the response at all is what actually stops the
+  // conditional request being made.
+  //
+  // Safe as a blanket default — nothing in this API sets Cache-Control
+  // deliberately, and every response is authenticated and per-user, so none of
+  // it was ever cacheable. A handler that wants caching can still overwrite
+  // this header: it runs after this middleware.
+  app.use((_req: unknown, res: { setHeader: (k: string, v: string) => void }, next: () => void) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   app.enableCors({
     origin: buildCorsOrigin(env),
     credentials: true,
