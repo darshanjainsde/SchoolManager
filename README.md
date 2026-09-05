@@ -13,6 +13,9 @@ cp .env.example .env
 docker compose up -d
 
 # 3. Install deps and generate Prisma client
+#    (re-run `pnpm install` after every branch switch — branches pin different
+#     majors, and a stale node_modules fails as confusing type errors instead.
+#     See docs/DEPENDENCIES.md)
 pnpm install
 pnpm db:generate
 

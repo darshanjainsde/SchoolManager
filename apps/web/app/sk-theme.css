@@ -2950,3 +2950,243 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
   .sk-own-addr { max-width: none; }
   .sk-own-acts > .sk-own-btn { flex: 1 1 auto; justify-content: center; }
 }
+
+/* ============================================================================
+   Owner console — lead pipeline, timeline and work queues, lead timeline, work queues.
+   Everything below is owner-only chrome; the shell, cards, pills and buttons
+   above are shared with the teacher/admin portals unchanged.
+   ========================================================================== */
+
+/* ---- role badge in the sidebar brand block ---- */
+.sk-own-rolebadge {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 8px;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.11em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px; background: var(--sk-brand); color: #fff;
+}
+@media (prefers-color-scheme: dark) { .sk-own-rolebadge { color: #07130e; } }
+html[data-theme='dark'] .sk-own-rolebadge { color: #07130e; }
+
+/* ---- count badge riding on a nav item ---- */
+/* ---- "needs your attention" strip ---- */
+.sk-own-attention { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 11px; }
+.sk-own-attn {
+  display: flex; align-items: center; gap: 11px; text-decoration: none; color: inherit;
+  background: var(--sk-card); border: 1px solid var(--sk-line); border-left: 3px solid var(--sk-line-2);
+  border-radius: var(--sk-r); padding: 12px 14px; box-shadow: var(--sk-shadow-sm);
+  transition: transform 0.14s ease, border-color 0.14s ease;
+}
+.sk-own-attn:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
+.sk-own-attn[data-urgent='true'] { border-left-color: var(--sk-amber); background: var(--sk-amber-tint); }
+.sk-own-attn .n { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.sk-own-attn[data-urgent='true'] .n { color: var(--sk-amber); }
+.sk-own-attn .t { font-size: 12.5px; font-weight: 620; }
+.sk-own-attn .s { font-size: 11px; color: var(--sk-ink-3); margin-top: 1px; }
+
+/* ---- segmented control (view + stage filters) ---- */
+.sk-own-seg {
+  display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--sk-line-2);
+  border-radius: 11px; background: var(--sk-card); overflow-x: auto; max-width: 100%;
+}
+.sk-own-seg button {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border: 0; cursor: pointer;
+  padding: 6px 12px; border-radius: 8px; background: transparent; color: var(--sk-ink-2);
+  font-size: 12.5px; font-weight: 640;
+}
+.sk-own-seg button:hover { color: var(--sk-ink); }
+.sk-own-seg button[aria-pressed='true'] { background: var(--sk-brand); color: #fff; }
+@media (prefers-color-scheme: dark) { .sk-own-seg button[aria-pressed='true'] { color: #07130e; } }
+html[data-theme='dark'] .sk-own-seg button[aria-pressed='true'] { color: #07130e; }
+.sk-own-seg .c {
+  font-size: 10.5px; font-weight: 800; padding: 0 5px; border-radius: 999px;
+  background: var(--sk-line); color: var(--sk-ink-2);
+}
+.sk-own-seg button[aria-pressed='true'] .c { background: rgba(255, 255, 255, 0.25); color: inherit; }
+
+/* ---- search field ---- */
+.sk-own-search { position: relative; flex: 1; min-width: 190px; }
+.sk-own-search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--sk-ink-3); pointer-events: none; }
+.sk-own-search input { padding-left: 33px; }
+/* ---- toolbar row above a board / table ---- */
+/* ---- pipeline board ---- */
+.sk-own-board {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(min(100%, 248px), 1fr);
+  gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: start;
+}
+@media (max-width: 900px) { .sk-own-board { grid-auto-columns: minmax(min(100%, 230px), 82vw); } }
+.sk-own-col {
+  background: color-mix(in srgb, var(--sk-card) 55%, var(--sk-paper));
+  border: 1px solid var(--sk-line); border-radius: var(--sk-r); min-width: 0;
+}
+.sk-col-h {
+  display: flex; align-items: center; gap: 8px; padding: 11px 13px 9px;
+  border-bottom: 1px solid var(--sk-line); position: sticky; top: 0;
+}
+.sk-col-h .dot { width: 8px; height: 8px; border-radius: 999px; flex: none; }
+.sk-col-h .t { font-size: 12px; font-weight: 750; letter-spacing: 0.02em; text-transform: uppercase; }
+.sk-col-h .c { margin-left: auto; font-size: 11.5px; font-weight: 700; color: var(--sk-ink-3); }
+.sk-col-b { padding: 10px; display: flex; flex-direction: column; gap: 9px; min-height: 76px; }
+.sk-col-empty { font-size: 11.5px; color: var(--sk-ink-3); text-align: center; padding: 14px 6px; }
+
+/* ---- one lead card ---- */
+.sk-own-lead {
+  width: 100%; text-align: left; cursor: pointer; background: var(--sk-card);
+  border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); padding: 11px 12px;
+  box-shadow: var(--sk-shadow-sm); display: flex; flex-direction: column; gap: 6px;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.sk-own-lead:hover { transform: translateY(-1px); border-color: var(--sk-brand); }
+.sk-own-lead:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; }
+.sk-own-lead[data-selected='true'] { border-color: var(--sk-brand); box-shadow: 0 0 0 2px var(--sk-brand-tint); }
+.sk-own-lead .nm { font-weight: 700; font-size: 13.5px; letter-spacing: -0.01em; }
+.sk-own-lead .meta { font-size: 11.5px; color: var(--sk-ink-3); display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.sk-own-lead .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.sk-own-tag {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  background: var(--sk-line); color: var(--sk-ink-2);
+}
+.sk-own-tag[data-tone='due'] { background: var(--sk-bad-tint); color: var(--sk-bad); }
+.sk-own-tag[data-tone='soon'] { background: var(--sk-amber-tint); color: var(--sk-amber); }
+
+/* ---- quick contact buttons ---- */
+.sk-own-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.sk-own-quick a, .sk-own-quick button {
+  display: inline-flex; align-items: center; gap: 5px; text-decoration: none; cursor: pointer;
+  font-size: 11.5px; font-weight: 650; padding: 5px 9px; border-radius: 9px;
+  border: 1px solid var(--sk-line-2); background: var(--sk-card); color: var(--sk-ink-2);
+}
+.sk-own-quick a:hover, .sk-own-quick button:hover { border-color: var(--sk-brand); color: var(--sk-brand-2); }
+.sk-own-quick svg { width: 13px; height: 13px; }
+
+/* ---- detail drawer ---- */
+.sk-detail-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(10, 16, 13, 0.45); border: 0; cursor: pointer; }
+.sk-own-detail {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 61; width: 440px; max-width: 94vw;
+  background: var(--sk-paper); border-left: 1px solid var(--sk-line); display: flex; flex-direction: column;
+  box-shadow: var(--sk-shadow); outline: none; animation: sk-detail-in 0.22s ease-out both;
+}
+@keyframes sk-detail-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .sk-own-detail { animation: none; } }
+.sk-detail-h {
+  display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px 13px;
+  border-bottom: 1px solid var(--sk-line); background: var(--sk-card);
+}
+.sk-detail-b { flex: 1; overflow-y: auto; padding: 16px 18px 28px; display: flex; flex-direction: column; gap: 16px; }
+.sk-detail-sec { display: flex; flex-direction: column; gap: 8px; }
+
+/* ---- stage stepper inside the drawer ---- */
+.sk-own-stages { display: flex; flex-wrap: wrap; gap: 5px; }
+.sk-own-stages button {
+  border: 1px solid var(--sk-line-2); background: var(--sk-card); color: var(--sk-ink-2);
+  font-size: 11.5px; font-weight: 680; padding: 6px 10px; border-radius: 9px; cursor: pointer;
+}
+.sk-own-stages button:hover:not(:disabled) { border-color: var(--sk-brand); color: var(--sk-brand-2); }
+.sk-own-stages button[aria-current='true'] { background: var(--sk-brand); border-color: transparent; color: #fff; }
+@media (prefers-color-scheme: dark) { .sk-own-stages button[aria-current='true'] { color: #07130e; } }
+html[data-theme='dark'] .sk-own-stages button[aria-current='true'] { color: #07130e; }
+.sk-own-stages button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ---- activity timeline ---- */
+.sk-own-timeline { display: flex; flex-direction: column; gap: 0; }
+.sk-own-tl {
+  display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 0 0 14px;
+  position: relative;
+}
+.sk-own-tl:not(:last-child)::before {
+  content: ''; position: absolute; left: 12.5px; top: 26px; bottom: 0; width: 1px; background: var(--sk-line);
+}
+.sk-own-tl .ic {
+  width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; flex: none;
+  background: var(--sk-brand-tint); color: var(--sk-brand-2); z-index: 1;
+}
+.sk-own-tl .ic svg { width: 13px; height: 13px; }
+.sk-own-tl .bd { min-width: 0; padding-top: 3px; }
+.sk-own-tl .hd { font-size: 12.5px; font-weight: 650; }
+.sk-own-tl .tx { font-size: 12.5px; color: var(--sk-ink-2); margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sk-own-tl .tm { font-size: 10.5px; color: var(--sk-ink-3); margin-top: 3px; }
+
+/* ---- data table ---- */
+.sk-own-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sk-own-table th {
+  text-align: left; font-size: 10.5px; font-weight: 750; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--sk-ink-3); padding: 10px 12px; border-bottom: 1px solid var(--sk-line); white-space: nowrap;
+}
+.sk-own-table td { padding: 11px 12px; border-bottom: 1px solid var(--sk-line); vertical-align: middle; }
+.sk-own-table tr:last-child td { border-bottom: 0; }
+.sk-own-table tbody tr:hover { background: var(--sk-brand-tint); }
+.sk-own-tablewrap { overflow-x: auto; border-radius: var(--sk-r); border: 1px solid var(--sk-line); background: var(--sk-card); }
+
+/* ---- empty state ---- */
+.sk-own-empty { text-align: center; padding: 34px 20px; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.sk-own-empty .ic {
+  width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
+  background: var(--sk-brand-tint); color: var(--sk-brand-2); margin-bottom: 2px;
+}
+.sk-own-empty h4 { font-size: 14.5px; font-weight: 730; }
+.sk-own-empty p { font-size: 12.5px; color: var(--sk-ink-3); max-width: 42ch; }
+
+/* ---- field group ---- */
+.sk-own-fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.sk-own-fld > label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sk-ink-3); }
+.sk-own-fld .err { font-size: 11.5px; color: var(--sk-bad); }
+.sk-own-fldgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 13px; }
+
+/* ---- danger surface ---- */
+.sk-own-danger { border-color: color-mix(in srgb, var(--sk-bad) 40%, var(--sk-line)); }
+.sk-own-danger .sk-card-h h3 { color: var(--sk-bad); }
+/* ---- inline note / callout ---- */
+.sk-own-note {
+  display: flex; gap: 10px; align-items: flex-start; border-radius: var(--sk-r-sm);
+  padding: 11px 13px; font-size: 12.5px; color: var(--sk-ink-2);
+  background: var(--sk-brand-tint); border-left: 3px solid var(--sk-brand);
+}
+.sk-own-note[data-tone='warn'] { background: var(--sk-amber-tint); border-left-color: var(--sk-amber); }
+.sk-own-note svg { width: 15px; height: 15px; flex: none; margin-top: 1px; }
+
+/* ---- stage colour dots, shared by board headers and pills ---- */
+.sk-own-stagedot[data-stage='NEW'] { background: var(--sk-amber); }
+.sk-own-stagedot[data-stage='CONTACTED'] { background: #5b8def; }
+.sk-own-stagedot[data-stage='QUALIFIED'] { background: var(--sk-brand-2); }
+.sk-own-stagedot[data-stage='DEMO'] { background: #9b6bd6; }
+.sk-own-stagedot[data-stage='WON'] { background: var(--sk-good); }
+.sk-own-stagedot[data-stage='LOST'] { background: var(--sk-ink-3); }
+
+/* Native controls (select, datetime-local, scrollbars) follow the token set,
+   so the console no longer has to pin itself to light to keep them readable. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .skosx { color-scheme: dark; } }
+html[data-theme='dark'] .skosx { color-scheme: dark; }
+html[data-theme='light'] .skosx { color-scheme: light; }
+
+/* ---- console additions that extend, rather than redefine, the shared set ---- */
+
+/* A danger peer for the existing primary/default button variants. */
+.sk-btn[data-variant='danger'] {
+  border-color: color-mix(in srgb, var(--sk-bad) 45%, var(--sk-line-2));
+  color: var(--sk-bad);
+}
+.sk-btn[data-variant='danger']:hover:not(:disabled) {
+  background: var(--sk-bad-tint);
+  border-color: var(--sk-bad);
+}
+
+/* Work-queue count riding on a nav item. `.sk-nav` itself is untouched. */
+.sk-nav .sk-own-count {
+  margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 800; text-align: center;
+  background: var(--sk-amber); color: #2a1c04;
+}
+.sk-nav[data-active='true'] .sk-own-count { background: rgba(255, 255, 255, 0.9); color: var(--sk-brand); }
+
+/* The search field is a `.sk-input` with room for the icon sitting on top. */
+.sk-own-search { position: relative; flex: 1 1 240px; min-width: 0; }
+.sk-own-search svg {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  width: 15px; height: 15px; color: var(--sk-ink-3); pointer-events: none;
+}
+.sk-own-search .sk-input { width: 100%; padding-left: 33px; }
+
+/* Native controls (select, datetime-local, scrollbars) follow the tokens, so a
+   dark-mode OS no longer paints them with UA colours the console did not pick. */
+.skosx { color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .skosx { color-scheme: dark; } }
+html[data-theme='dark'] .skosx { color-scheme: dark; }
+html[data-theme='light'] .skosx { color-scheme: light; }

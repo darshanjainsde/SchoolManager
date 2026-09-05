@@ -25,6 +25,15 @@ interface SchoolMetrics {
 }
 
 interface OverviewResponse {
+  /** Work queues the console can link into — see the API's OwnerOverviewService. */
+  attention: {
+    newLeads: number;
+    followUpsDue: number;
+    pendingEvents: number;
+    pendingBlogPosts: number;
+    schoolsInSetup: number;
+    leadsWonThisMonth: number;
+  };
   totals: {
     schools: number;
     live: number;
@@ -37,23 +46,7 @@ interface OverviewResponse {
   schools: SchoolMetrics[];
 }
 
-interface Lead {
-  id: string;
-  name: string | null;
-  phone: string;
-  school: string | null;
-  interest: string | null;
-  source: string;
-  status: 'NEW' | 'CONTACTED' | 'CLOSED';
-  createdAt: string;
-}
 
-interface MarketingConfigRow {
-  priceBasicUsd: number; priceBasicInr: number;
-  priceStdUsd: number; priceStdInr: number;
-  priceProUsd: number; priceProInr: number;
-  contactEmail: string; contactPhone: string;
-}
 
 const TIER_TONE: Record<SchoolMetrics['tier'], string> = {
   BASIC: 'bg-sky-100 text-sky-700',
@@ -61,11 +54,6 @@ const TIER_TONE: Record<SchoolMetrics['tier'], string> = {
   PRO: 'bg-violet-100 text-violet-700',
 };
 
-const LEAD_TONE: Record<Lead['status'], string> = {
-  NEW: 'bg-amber-100 text-amber-700',
-  CONTACTED: 'bg-teal-100 text-teal-700',
-  CLOSED: 'bg-slate-100 text-slate-500',
-};
 
 function formatBytes(n: number): string {
   if (n >= 1_073_741_824) return (n / 1_073_741_824).toFixed(1) + ' GB';
@@ -88,27 +76,8 @@ export default function PlatformDashboardPage() {
     enabled: signedIn,
   });
 
-  const leads = useQuery({
-    queryKey: ['owner-leads'],
-    queryFn: () => api.get<Lead[]>('/owner/leads'),
-    enabled: signedIn,
-  });
 
-  const config = useQuery({
-    queryKey: ['owner-marketing-config'],
-    queryFn: () => api.get<MarketingConfigRow>('/owner/marketing-config'),
-    enabled: signedIn,
-  });
 
-  const leadStatus = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: Lead['status'] }) =>
-      api.patch(`/owner/leads/${id}`, { status }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['owner-leads'] });
-      void qc.invalidateQueries({ queryKey: ['owner-overview'] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
 
   async function impersonate(school: SchoolMetrics) {
     setImpersonating(school.id);
@@ -227,52 +196,27 @@ export default function PlatformDashboardPage() {
             <b>Login as admin</b> opens the school&rsquo;s admin portal in a new tab via a single-use link (valid 15 minutes, audit-logged, no password shown). The session can&rsquo;t be refreshed past expiry.
           </p>
 
-          {/* Marketing leads */}
+          {/* Leads and the sckools.com pricing/contact form each have their own
+              tab now. The table that used to sit here offered a CLOSED status
+              that no longer exists — the pipeline replaced it with WON/LOST. */}
           <h2 className="sk-eyebrow" style={{ margin: '30px 0 10px' }}>
-            Marketing leads · from sckools.com callback forms
+            Elsewhere in the console
           </h2>
-          <div className="sk-tblwrap">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">School</th>
-                  <th className="px-4 py-3">Interest</th>
-                  <th className="px-4 py-3">When</th>
-                  <th className="px-4 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(leads.data ?? []).map((l) => (
-                  <tr key={l.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3 font-medium text-slate-900">{l.name ?? '—'}</td>
-                    <td className="px-4 py-3"><a className="text-teal-700 hover:underline" href={`tel:${l.phone.replace(/\s/g, '')}`}>{l.phone}</a></td>
-                    <td className="px-4 py-3 text-slate-600">{l.school ?? '—'}</td>
-                    <td className="px-4 py-3 text-slate-600">{l.interest ?? '—'}</td>
-                    <td className="px-4 py-3 text-slate-500">{new Date(l.createdAt).toLocaleString()}</td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={l.status}
-                        onChange={(e) => leadStatus.mutate({ id: l.id, status: e.target.value as Lead['status'] })}
-                        className={`rounded-full border-0 px-2.5 py-1 text-[11px] font-bold ${LEAD_TONE[l.status]}`}
-                      >
-                        <option value="NEW">NEW</option>
-                        <option value="CONTACTED">CONTACTED</option>
-                        <option value="CLOSED">CLOSED</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-                {leads.data?.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-400">No leads yet — they&rsquo;ll appear the moment someone requests a callback on sckools.com.</td></tr>
-                )}
-              </tbody>
-            </table>
+          <div className="sk-own-attention">
+            <Link href="/platform/leads" className="sk-own-attn">
+              <span className="n">{overview.data.attention.newLeads}</span>
+              <div style={{ minWidth: 0 }}>
+                <div className="t">Leads</div>
+                <div className="s">callbacks from sckools.com</div>
+              </div>
+            </Link>
+            <Link href="/platform/settings" className="sk-own-attn">
+              <div style={{ minWidth: 0 }}>
+                <div className="t">Settings</div>
+                <div className="s">public pricing &amp; contact details</div>
+              </div>
+            </Link>
           </div>
-
-          {/* Marketing site settings */}
-          {config.data && <MarketingSettings initial={config.data} onSaved={() => void qc.invalidateQueries({ queryKey: ['owner-marketing-config'] })} />}
         </>
       )}
     </div>
@@ -321,67 +265,3 @@ function MoneyInput({
   );
 }
 
-function MarketingSettings({ initial, onSaved }: { initial: MarketingConfigRow; onSaved: () => void }) {
-  const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
-  const [form, setForm] = useState({ ...initial });
-
-  const save = useMutation({
-    mutationFn: () =>
-      api.put('/owner/marketing-config', {
-        priceBasicUsd: Number(form.priceBasicUsd), priceBasicInr: Number(form.priceBasicInr),
-        priceStdUsd: Number(form.priceStdUsd), priceStdInr: Number(form.priceStdInr),
-        priceProUsd: Number(form.priceProUsd), priceProInr: Number(form.priceProInr),
-        contactEmail: form.contactEmail, contactPhone: form.contactPhone,
-      }),
-    onSuccess: () => {
-      toast.success('Saved — live on sckools.com within a minute');
-      onSaved();
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const num = (key: keyof MarketingConfigRow) => ({
-    value: String(form[key]),
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [key]: e.target.value }),
-  });
-
-  return (
-    <div className="mt-8 sk-own-panel">
-      <h2 className="text-lg font-bold text-slate-900">
-        Marketing site settings <span className="text-xs font-semibold text-slate-500">· pricing &amp; contact shown on sckools.com, live within a minute</span>
-      </h2>
-      <p className="sk-own-sub">
-        Prices are <b>per year</b>. Schools in India are billed the ₹ INR figure, everyone else the $ USD figure —
-        other countries see the USD price converted live on sckools.com/pricing.
-      </p>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {([
-          ['Basic', 'priceBasicUsd', 'priceBasicInr'],
-          ['Standard', 'priceStdUsd', 'priceStdInr'],
-          ['Pro', 'priceProUsd', 'priceProInr'],
-        ] as const).map(([tier, usdKey, inrKey]) => (
-          <div key={usdKey} className="rounded-xl border border-slate-200 p-3">
-            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{tier} — per year</div>
-            <label htmlFor={inrKey} className="mt-2 block text-[11px] font-semibold text-slate-400">India (₹ INR)</label>
-            <MoneyInput id={inrKey} symbol="₹" {...num(inrKey)} />
-            <label htmlFor={usdKey} className="mt-3 block text-[11px] font-semibold text-slate-400">Rest of world ($ USD)</label>
-            <MoneyInput id={usdKey} symbol="$" {...num(usdKey)} />
-          </div>
-        ))}
-        <div className="rounded-xl border border-slate-200 p-3">
-          <label htmlFor="contactEmail" className="block text-[11px] font-bold uppercase tracking-wide text-slate-500">Public contact email</label>
-          <input id="contactEmail" type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} className={`${FIELD} mt-1`} />
-        </div>
-        <div className="rounded-xl border border-slate-200 p-3">
-          <label htmlFor="contactPhone" className="block text-[11px] font-bold uppercase tracking-wide text-slate-500">Public contact phone</label>
-          <input id="contactPhone" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="+91 ..." className={`${FIELD} mt-1`} />
-        </div>
-        <div className="flex items-end">
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            {save.isPending ? 'Saving…' : 'Save settings'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}

@@ -4,7 +4,13 @@ import { CurrentUser } from '../../../common/auth/current-user.decorator';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
 import { OpsService } from './ops.service';
 import type { PlatformJwtPayload } from '../../../common/auth/jwt-payload';
-import { MarketingService, SetLeadStatusDto, UpdateMarketingConfigDto } from '../../marketing';
+import {
+  CreateLeadActivityDto,
+  MarketingService,
+  UpdateLeadDto,
+  UpdateMarketingConfigDto,
+  type LeadStatusValue,
+} from '../../marketing';
 import { JobsService } from '../../hiring';
 import { ModerateJobDto } from './owner.dto';
 import { CreateSchoolDto, ModerateEventDto, OwnerCreateEventDto, SetFeatureDto, SetStatusDto, SetTierDto } from './owner.dto';
@@ -41,13 +47,32 @@ export class OwnerController {
   }
 
   @Get('leads')
-  listLeads(@Query('status') status?: 'NEW' | 'CONTACTED' | 'CLOSED') {
-    return this.marketing.listLeads(status);
+  listLeads(@Query('status') status?: LeadStatusValue, @Query('q') q?: string) {
+    return this.marketing.listLeads(status, q);
   }
 
+  @Get('leads/:id')
+  getLead(@Param('id', ParseUUIDPipe) id: string) {
+    return this.marketing.getLead(id);
+  }
+
+  /** Stage moves, follow-up scheduling and contact corrections all land here. */
   @Patch('leads/:id')
-  setLeadStatus(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetLeadStatusDto) {
-    return this.marketing.setLeadStatus(id, dto.status);
+  updateLead(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateLeadDto,
+    @CurrentUser() user: PlatformJwtPayload,
+  ) {
+    return this.marketing.updateLead(id, dto, user.sub);
+  }
+
+  @Post('leads/:id/activities')
+  addLeadActivity(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateLeadActivityDto,
+    @CurrentUser() user: PlatformJwtPayload,
+  ) {
+    return this.marketing.addLeadActivity(id, dto, user.sub);
   }
 
   @Get('marketing-config')

@@ -28,6 +28,19 @@ export interface OverviewResponse {
     students: number;
     images: number;
   };
+  /**
+   * Everything the console's "needs your attention" strip and its sidebar
+   * badges count. Grouped separately from `totals` because these are work
+   * queues (act on them and they shrink), not growth metrics.
+   */
+  attention: {
+    newLeads: number;
+    followUpsDue: number;
+    pendingEvents: number;
+    pendingBlogPosts: number;
+    schoolsInSetup: number;
+    leadsWonThisMonth: number;
+  };
   schools: SchoolMetrics[];
 }
 
@@ -101,8 +114,15 @@ export class OwnerOverviewService {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const [schools, storage, enquiries, newEnquiries, events, enquiriesThisMonth, newLeads, students, images] =
-      await Promise.all([
+    // "Due" means the follow-up moment has passed by end of today, so a lead
+    // booked for this afternoon counts as due now rather than only at midnight.
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const [
+      schools, storage, enquiries, newEnquiries, events, enquiriesThisMonth, newLeads, students, images,
+      followUpsDue, pendingEvents, pendingBlogPosts, leadsWonThisMonth,
+    ] = await Promise.all([
         db.school.findMany({
           orderBy: { name: 'asc' },
           include: { domains: { where: { isPrimary: true }, take: 1 } },
@@ -115,6 +135,12 @@ export class OwnerOverviewService {
         db.marketingLead.count({ where: { status: 'NEW' } }),
         db.student.groupBy({ by: ['schoolId'], _count: true }),
         db.mediaAsset.groupBy({ by: ['schoolId'], _count: true }),
+        db.marketingLead.count({
+          where: { nextFollowUpAt: { not: null, lte: endOfToday }, status: { notIn: ['WON', 'LOST', 'CLOSED'] } },
+        }),
+        db.event.count({ where: { scope: 'NETWORK', status: 'PENDING' } }),
+        db.blogPost.count({ where: { globalStatus: 'PENDING' } }),
+        db.marketingLead.count({ where: { status: 'WON', updatedAt: { gte: monthStart } } }),
       ]);
 
     const byId = <T extends { schoolId: string }>(rows: T[]) =>
@@ -150,6 +176,14 @@ export class OwnerOverviewService {
         newLeads,
         students: rows.reduce((sum, r) => sum + r.students, 0),
         images: rows.reduce((sum, r) => sum + r.images, 0),
+      },
+      attention: {
+        newLeads,
+        followUpsDue,
+        pendingEvents,
+        pendingBlogPosts,
+        schoolsInSetup: schools.filter((s) => s.status === 'SETUP').length,
+        leadsWonThisMonth,
       },
       schools: rows,
     };

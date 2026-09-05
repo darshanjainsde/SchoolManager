@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
 import { useApi } from '@/lib/use-api';
@@ -9,7 +10,7 @@ import { useSessionProbe } from '@/lib/use-session-probe';
 import { OWNER_HOST } from '@/lib/hosts';
 import {
   LayoutDashboard, TrendingUp, School, FileText, PlusCircle,
-  Printer, Briefcase, Link2, Compass, Activity, Gauge, LogOut, Menu, X,
+  Printer, Briefcase, Link2, Compass, Activity, Gauge, LogOut, Menu, X, Users, Settings,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import '../sk-theme.css';
@@ -29,8 +30,9 @@ import { ThemeToggle } from '@/components/theme-toggle';
 /* Line icons, not emoji. Emoji render in the OS's own colours and sizes, so
    nine of them down a dark rail read as nine unrelated stickers rather than
    one navigation — and they are the surest tell of an unfinished interface. */
-const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
+const NAV_ITEMS: { href: string; label: string; icon: LucideIcon; badge?: 'newLeads' }[] = [
   { href: '/platform', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/platform/leads', label: 'Leads', icon: Users, badge: 'newLeads' },
   { href: '/platform/scale', label: 'Scale', icon: TrendingUp },
   { href: '/platform/schools', label: 'Schools', icon: School },
   { href: '/platform/blog', label: 'Blog Queue', icon: FileText },
@@ -41,6 +43,7 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/platform/ops', label: 'Runtime health', icon: Activity },
   { href: '/platform/speed', label: 'Site speed', icon: Gauge },
   { href: '/platform/remaining', label: 'Remaining work', icon: Compass },
+  { href: '/platform/settings', label: 'Settings', icon: Settings },
 ];
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
@@ -66,12 +69,14 @@ function OwnerNavLink({
   label,
   icon: Icon,
   pathname,
+  count,
   onNavigate,
 }: {
   href: string;
   label: string;
   icon: LucideIcon;
   pathname: string;
+  count?: number;
   onNavigate?: () => void;
 }) {
   const active = pathname === href || (href !== '/platform' && pathname.startsWith(href));
@@ -88,6 +93,14 @@ function OwnerNavLink({
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       {label}
+      {count !== undefined && count > 0 && (
+        <span
+          className="ml-auto min-w-[20px] rounded-full bg-amber-400 px-1.5 text-center text-[10.5px] font-extrabold text-amber-950"
+          aria-label={`${count} waiting`}
+        >
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
     </Link>
   );
 }
@@ -108,6 +121,16 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   // by asking the API once — not by reading storage.
   const probeApi = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   useSessionProbe(probeApi, 'platform', !isLogin);
+
+  // Shares the dashboard's key, so the count is free when the console has
+  // already loaded and quietly absent when it has not.
+  const overview = useQuery({
+    queryKey: ['owner-overview'],
+    queryFn: () => probeApi.get<{ attention?: { newLeads?: number } }>('/owner/overview'),
+    enabled: !isLogin && status === 'authed' && audience === 'platform',
+    staleTime: 60_000,
+  });
+  const attention = overview.data?.attention ?? {};
 
   useEffect(() => {
     if (hydrated && !isLogin && (status === 'anon' || (status === 'authed' && audience !== 'platform'))) {
@@ -230,7 +253,15 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
 
             <nav className="px-3 space-y-1 mt-2 text-sm flex-1 overflow-y-auto">
               {NAV_ITEMS.map((item) => (
-                <OwnerNavLink key={item.href} {...item} pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
+                <OwnerNavLink
+                  key={item.href}
+                  href={item.href}
+                  label={item.label}
+                  icon={item.icon}
+                  pathname={pathname}
+                  count={item.badge ? attention[item.badge] : undefined}
+                  onNavigate={() => setDrawerOpen(false)}
+                />
               ))}
             </nav>
 
@@ -278,7 +309,14 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
         {/* Nav */}
         <nav className="px-3 space-y-1 mt-2 text-sm flex-1">
           {NAV_ITEMS.map((item) => (
-            <OwnerNavLink key={item.href} {...item} pathname={pathname} />
+            <OwnerNavLink
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              icon={item.icon}
+              pathname={pathname}
+              count={item.badge ? attention[item.badge] : undefined}
+            />
           ))}
         </nav>
 

@@ -1775,20 +1775,68 @@ model Announcement {
 enum LeadStatus {
   NEW
   CONTACTED
+  QUALIFIED
+  DEMO
+  WON
+  LOST
+  /// Legacy. Predates the pipeline and means what LOST now means. Kept so the
+  /// migration never has to rewrite a row: the console shows these under Lost
+  /// and never writes CLOSED again, so they drain as leads are worked.
   CLOSED
 }
 
+/// What a LeadActivity records. STAGE_CHANGE rows are written automatically by
+/// the service on every status transition, so the timeline is never missing a
+/// move; the rest are logged by the owner as they work the lead.
+enum LeadActivityKind {
+  NOTE
+  CALL
+  WHATSAPP
+  EMAIL
+  MEETING
+  STAGE_CHANGE
+}
+
 model MarketingLead {
-  id        String     @id @default(uuid()) @db.Uuid
-  name      String?
-  phone     String
-  school    String?
-  interest  String?
-  source    String
-  status    LeadStatus @default(NEW)
-  createdAt DateTime   @default(now())
+  id       String     @id @default(uuid()) @db.Uuid
+  name     String?
+  phone    String
+  email    String?
+  school   String?
+  interest String?
+  source   String
+  status   LeadStatus @default(NEW)
+
+  /// When the owner next intends to reach out. Drives the "due" queue.
+  nextFollowUpAt DateTime?
+  /// Set by the service whenever a CALL/WHATSAPP/EMAIL/MEETING is logged.
+  lastContactedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activities LeadActivity[]
 
   @@index([status, createdAt])
+  @@index([nextFollowUpAt])
+}
+
+/// Append-only timeline for one lead: notes, logged contact attempts and the
+/// stage moves between them. Never updated — corrections are new rows.
+model LeadActivity {
+  id         String           @id @default(uuid()) @db.Uuid
+  leadId     String           @db.Uuid
+  lead       MarketingLead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  kind       LeadActivityKind
+  body       String?
+  /// Populated on STAGE_CHANGE rows only.
+  fromStatus LeadStatus?
+  toStatus   LeadStatus?
+  /// Platform user id (JWT `sub`) that performed it; null for system writes.
+  actorId    String?          @db.Uuid
+  createdAt  DateTime         @default(now())
+
+  @@index([leadId, createdAt])
 }
 
 /// Singleton (id = "default"): owner-editable pricing + public contact info.
