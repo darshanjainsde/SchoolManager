@@ -31,8 +31,12 @@ function req(host: string, pathname: string, method = 'GET') {
     method,
     headers: new Headers({ host }),
     nextUrl: { pathname },
+    url: `https://${host}${pathname}`,
   } as unknown as Parameters<Awaited<ReturnType<typeof load>>>[0];
 }
+
+/** Where middleware sent the request internally, or null if it passed through. */
+const rewrittenTo = (r: { headers: Headers }) => r.headers.get('x-middleware-rewrite');
 
 const cc = (r: { headers: Headers }) => r.headers.get('Cache-Control');
 
@@ -95,5 +99,54 @@ describe('pages the edge must never hold', () => {
     for (const p of ['/', '/pricing', '/platform']) {
       expect(cc(mw(req(OWNER, p))), p).toBeNull();
     }
+  });
+});
+
+
+describe('host-routed school pages', () => {
+  // The visitor's URL never changes; only the internal path does. This is what
+  // lets the response be cached at all — see the middleware comment.
+  it('rewrites a school host to its own path', async () => {
+    const mw = await load();
+    const to = rewrittenTo(mw(req(SCHOOL, '/')));
+    expect(to).toContain(`/s/${encodeURIComponent(SCHOOL)}`);
+  });
+
+  it('leaves the platform apex alone — it serves marketing, not a school', async () => {
+    const mw = await load();
+    expect(rewrittenTo(mw(req(PLATFORM, '/')))).toBeNull();
+  });
+
+  it('leaves the owner host alone', async () => {
+    const mw = await load();
+    expect(rewrittenTo(mw(req(OWNER, '/')))).toBeNull();
+  });
+
+  it('sends two different schools to two different paths', async () => {
+    const mw = await load();
+    const a = rewrittenTo(mw(req('alpha.test.sckools.com', '/')));
+    const b = rewrittenTo(mw(req('beta.test.sckools.com', '/')));
+    expect(a).not.toBe(b);
+    expect(a).toContain('alpha.test.sckools.com');
+    expect(b).toContain('beta.test.sckools.com');
+  });
+});
+
+describe('the internal /s/ address', () => {
+  // Typing another school's hostname into our own path must return nothing.
+  // The rewrite above is the ONLY way this route is ever reached.
+  it.each([SCHOOL, PLATFORM, OWNER, 'archaiccandles.com'])(
+    'is 404 when asked for directly on %s',
+    async (host) => {
+      const mw = await load();
+      for (const p of ['/s', '/s/', '/s/other.sckools.com', '/s/archaiccandles.com/academics']) {
+        expect(mw(req(host, p)).status, `${host}${p}`).toBe(404);
+      }
+    },
+  );
+
+  it('is not cacheable either', async () => {
+    const mw = await load();
+    expect(cc(mw(req(SCHOOL, '/s/other.sckools.com')))).toBeNull();
   });
 });

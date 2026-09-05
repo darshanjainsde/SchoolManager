@@ -19,14 +19,25 @@ const APEX = 'test.sckools.com';
 
 async function load(ownerHost: string, isLocal: boolean) {
   vi.resetModules();
-  vi.doMock('@/lib/hosts', () => ({ OWNER_HOST: ownerHost, PLATFORM_HOST: APEX, IS_LOCAL: isLocal }));
+  vi.doMock('@/lib/hosts', () => ({
+    OWNER_HOST: ownerHost,
+    PLATFORM_HOST: APEX,
+    IS_LOCAL: isLocal,
+    // Middleware also routes school hosts to their cacheable copy, so it needs
+    // to know which hosts are ours and which belong to a school.
+    isPlatformHost: (h?: string) =>
+      !!h && [APEX, ownerHost].includes(h.split(':')[0].toLowerCase()),
+  }));
   return (await import('./../middleware')).middleware;
 }
 
 function req(host: string, pathname: string) {
   return {
+    method: 'GET',
     headers: new Headers({ host }),
     nextUrl: { pathname },
+    // The rewrite builds an absolute URL from this.
+    url: `https://${host}${pathname}`,
   } as unknown as Parameters<Awaited<ReturnType<typeof load>>>[0];
 }
 

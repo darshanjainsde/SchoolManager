@@ -153,7 +153,15 @@ export async function fetchPublicSite(host: string): Promise<PublicSiteData | nu
       // Send both: X-Skoolos-Host survives ingress that rewrites
       // X-Forwarded-Host (e.g. Vercel); the API prefers X-Skoolos-Host.
       headers: { 'X-Forwarded-Host': host, 'X-Skoolos-Host': host },
-      cache: 'no-store',
+      // Was `cache: 'no-store'`, which did two things: it re-ran eleven
+      // database queries on every single view of every school website, and —
+      // because a no-store fetch opts the route into dynamic rendering — it
+      // was one of the two reasons no public page could ever be cached.
+      //
+      // Tagged per host so a school's own publish can purge exactly its own
+      // pages and nobody else's; 60s is the backstop until that purge is
+      // wired from the API.
+      next: { revalidate: 60, tags: [`site:${host}`] },
     });
     if (res.status === 404) return null;
     if (!res.ok) return null;

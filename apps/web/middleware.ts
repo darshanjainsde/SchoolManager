@@ -23,6 +23,31 @@ import { IS_LOCAL, OWNER_HOST, PLATFORM_HOST, isPlatformHost } from '@/lib/hosts
  * follow-up rather than pretended-at here.
  */
 
+
+/**
+ * Tenant hosts are served from a host-routed copy of the school site.
+ *
+ * `raffles.sckools.com/` is rewritten to `/s/raffles.sckools.com` — the
+ * visitor's URL never changes. This exists because reading the host from
+ * `headers()` makes a route dynamic, and Next serves dynamic routes
+ * `private, no-store`, which no CDN may cache. Setting Cache-Control from
+ * here does not override that; it was tried on staging and the framework
+ * header won. Putting the host in the path is what makes the page cacheable,
+ * and the edge cache key already includes the host, so schools cannot share
+ * an entry.
+ */
+const HOST_ROUTED = new Set(['/']);
+
+/**
+ * `/s/...` is an internal address. A request that arrives asking for it
+ * directly did not come through the rewrite above — it is someone typing
+ * another school's hostname into our path to see what comes back. It gets
+ * nothing, on every host including the platform's own.
+ */
+function isInternalSiteRoute(pathname: string): boolean {
+  return pathname === '/s' || pathname.startsWith('/s/');
+}
+
 /**
  * Pages whose HTML is identical for every visitor, so the CDN may hold them.
  *
@@ -114,7 +139,12 @@ function ownerRouteAllowed(req: NextRequest): boolean {
 }
 
 export function middleware(req: NextRequest) {
-  if (isOwnerOnlyRoute(req.nextUrl.pathname) && !ownerRouteAllowed(req)) {
+  const pathname = req.nextUrl.pathname;
+  if (isOwnerOnlyRoute(pathname) && !ownerRouteAllowed(req)) {
+    return new NextResponse(null, { status: 404 });
+  }
+  // Never reachable from outside — only our own rewrite may produce it.
+  if (isInternalSiteRoute(pathname)) {
     return new NextResponse(null, { status: 404 });
   }
 
@@ -144,7 +174,15 @@ export function middleware(req: NextRequest) {
     `object-src 'none'`,
   ].join('; ');
 
-  const res = NextResponse.next();
+  const bareHost = (req.headers.get('host') ?? '').split(':')[0].toLowerCase();
+
+  // School hosts get the host-routed, cacheable copy of the page.
+  const res =
+    !isPlatformHost(bareHost) && bareHost !== OWNER_HOST && HOST_ROUTED.has(pathname)
+      ? NextResponse.rewrite(
+          new URL(`/s/${encodeURIComponent(bareHost)}${pathname === '/' ? '' : pathname}`, req.url),
+        )
+      : NextResponse.next();
   res.headers.set('Content-Security-Policy', csp);
 
   // Let the CDN hold the anonymous public pages. 60s of shared cache with ten
@@ -152,8 +190,7 @@ export function middleware(req: NextRequest) {
   // pays for the render and everyone behind them is served from the edge,
   // including while the refresh happens. GET only: a POST must never be
   // answered from a cache.
-  const host = (req.headers.get('host') ?? '').split(':')[0].toLowerCase();
-  if (req.method === 'GET' && cacheableFor(req.nextUrl.pathname, host)) {
+  if (req.method === 'GET' && cacheableFor(pathname, bareHost)) {
     res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=600');
   }
   return res;
@@ -189,6 +226,7 @@ export const config = {
     '/gallery',
     '/contact',
     '/connect',
+    '/s/:path*',
     '/blog/:path*',
     '/p/:path*',
     '/overview/:path*',

@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
-import { fetchPublicSite, fetchMarketingConfig } from '@/lib/public-api';
+import { fetchMarketingConfig } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';
 import MarketingSite from '@/components/marketing/MarketingSite';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
+import { schoolMetadata, getPublicSite } from '@/lib/school-metadata';
 
 /** Real public profiles only — used for Organization.sameAs entity signals. */
 const SOCIAL_PROFILES: string[] = [
@@ -30,34 +31,6 @@ const OG_IMAGE = {
   height: 630,
   alt: 'Sckools — school websites, admissions and the inter-school events network',
 };
-
-/** One fetch per request even though generateMetadata and the page both need it. */
-const getPublicSite = cache(fetchPublicSite);
-
-async function schoolMetadata(host: string): Promise<Metadata> {
-  const data = await getPublicSite(host);
-  if (!data) return {};
-  const { school, profile, homepage } = data;
-  const title = profile?.city ? `${school.name} — ${profile.city}` : school.name;
-  const rawDesc =
-    homepage?.subheadline ||
-    homepage?.aboutText ||
-    `${school.name}: admissions, academics, gallery, events and contact details.`;
-  const description = rawDesc.replace(/\s+/g, ' ').trim().slice(0, 160);
-  const icon = profile?.faviconUrl ?? profile?.logoUrl ?? null;
-  return {
-    title,
-    description,
-    ...(icon ? { icons: { icon } } : {}),
-    openGraph: {
-      title,
-      description,
-      siteName: school.name,
-      type: 'website',
-      ...(homepage?.heroUrl ? { images: [{ url: homepage.heroUrl }] } : {}),
-    },
-  };
-}
 
 export async function generateMetadata(): Promise<Metadata> {
   const host = await getRequestHost();
