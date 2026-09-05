@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { IS_LOCAL, OWNER_HOST, PLATFORM_HOST } from '@/lib/hosts';
+import { IS_LOCAL, OWNER_HOST, PLATFORM_HOST, isPlatformHost } from '@/lib/hosts';
 
 /**
  * CSP for the authenticated consoles — the routes that hold a session and PII.
@@ -22,6 +22,45 @@ import { IS_LOCAL, OWNER_HOST, PLATFORM_HOST } from '@/lib/hosts';
  * means forcing the console routes to render dynamically — tracked as a
  * follow-up rather than pretended-at here.
  */
+
+/**
+ * Pages whose HTML is identical for every visitor, so the CDN may hold them.
+ *
+ * The audit found 22 of 22 public URLs answering `x-vercel-cache: MISS`: every
+ * view of every school website re-ran SSR, an API call and eleven queries for
+ * content that changed last month. Next marks these routes dynamic because
+ * `lib/request.ts` reads the tenant host from `headers()`, and a dynamic route
+ * is served `private, no-store` — which forbids both the edge cache and the
+ * browser's.
+ *
+ * These paths are safe to cache because their server output depends on the
+ * HOST and nothing else: `PublicSite` is rendered from `fetchPublicSite(host)`
+ * alone, reads no cookie, and sets none. The edge cache key already includes
+ * the host, so two schools never share an entry — that is what makes this safe
+ * without any change to how tenancy is resolved.
+ *
+ * Anything that can carry a session is deliberately absent: /login, /alumni,
+ * /app, /portal, /teacher, /staff, /library, /platform, /owner, /account.
+ */
+const CACHEABLE_TENANT_EXACT = new Set([
+  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect',
+]);
+const CACHEABLE_TENANT_PREFIX = ['/blog', '/p/', '/overview/'];
+/** Marketing pages on the platform apex — the same reasoning, no tenant involved. */
+const CACHEABLE_PLATFORM = new Set([
+  '/pricing', '/privacy', '/terms', '/school-website-builder', '/blog',
+]);
+
+function cacheableFor(pathname: string, host: string): boolean {
+  // The owner console's hostname is a platform host by `isPlatformHost`, which
+  // would otherwise let the marketing list through on it. Nothing on the
+  // operator's own domain belongs in a shared cache.
+  if (host === OWNER_HOST) return false;
+  if (isPlatformHost(host)) return CACHEABLE_PLATFORM.has(pathname);
+  if (CACHEABLE_TENANT_EXACT.has(pathname)) return true;
+  return CACHEABLE_TENANT_PREFIX.some((p) => pathname === p || pathname.startsWith(p));
+}
+
 /**
  * The owner console is not part of a school's website, and must not be
  * reachable from one.
@@ -107,6 +146,16 @@ export function middleware(req: NextRequest) {
 
   const res = NextResponse.next();
   res.headers.set('Content-Security-Policy', csp);
+
+  // Let the CDN hold the anonymous public pages. 60s of shared cache with ten
+  // minutes of stale-while-revalidate means the first visitor after an edit
+  // pays for the render and everyone behind them is served from the edge,
+  // including while the refresh happens. GET only: a POST must never be
+  // answered from a cache.
+  const host = (req.headers.get('host') ?? '').split(':')[0].toLowerCase();
+  if (req.method === 'GET' && cacheableFor(req.nextUrl.pathname, host)) {
+    res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=600');
+  }
   return res;
 }
 
@@ -132,6 +181,21 @@ export const config = {
     // console-segments.test.ts looks for — so the guard could not see it
     // either. That test now detects a session by the CREDENTIAL as well.
     '/alumni/:path*',
+    // Public school-site and marketing pages — matched so the cache header
+    // above can be applied. They carry no session; see cacheableFor.
+    '/',
+    '/academics',
+    '/admissions',
+    '/gallery',
+    '/contact',
+    '/connect',
+    '/blog/:path*',
+    '/p/:path*',
+    '/overview/:path*',
+    '/pricing',
+    '/privacy',
+    '/terms',
+    '/school-website-builder',
     '/login',
     '/owner',
     '/account/:path*',

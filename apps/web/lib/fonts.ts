@@ -19,12 +19,19 @@ import {
  * the @font-face rules, so there is no extra connection and no FOUT window.
  *
  * The choice is per-tenant data, not known at build time, so every family's
- * @font-face rule ships on every page. But only the ORIGINAL four preload:
- * the added families set `preload: false`, so their @font-face sits inert in
- * the CSS and the browser downloads a family only when a school actually
- * selects it (font files are fetched lazily on first use). That keeps a page
- * that never uses them from paying for them. All are subset to latin and
- * limited to the weights the theme uses.
+ * @font-face rule ships on every page. Only Inter preloads, because it is the
+ * one family EVERY page uses — the consoles, the login screens and the
+ * fallback stack. Every display family sets `preload: false`, so its
+ * @font-face sits inert in the CSS and the browser downloads it only when a
+ * school actually selects it.
+ *
+ * Preloading all four originals cost 152 KB of woff2 on every response, on
+ * every host, whether or not the school had chosen that family — measured as
+ * seven `Link: rel=preload` files, three of them 36-48 KB. Inter alone is
+ * ~31 KB. `display: 'swap'` means a school on Poppins still paints its text
+ * immediately in the fallback and swaps when the file lands, so nothing is
+ * hidden waiting on a font. All are subset to latin and limited to the
+ * weights the theme uses.
  */
 const inter = Inter({
   subsets: ['latin'],
@@ -38,6 +45,7 @@ const fraunces = Fraunces({
   weight: ['400', '700'],
   variable: '--f-fraunces',
   display: 'swap',
+  preload: false,
 });
 
 const poppins = Poppins({
@@ -45,6 +53,7 @@ const poppins = Poppins({
   weight: ['400', '500', '600', '700'],
   variable: '--f-poppins',
   display: 'swap',
+  preload: false,
 });
 
 const nunito = Nunito({
@@ -52,6 +61,7 @@ const nunito = Nunito({
   weight: ['400', '600', '700', '800'],
   variable: '--f-nunito',
   display: 'swap',
+  preload: false,
 });
 
 // ── Added families (loaded on demand — preload:false) ──

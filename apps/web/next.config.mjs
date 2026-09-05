@@ -24,6 +24,22 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  /**
+   * School logos, crests and gallery photos are uploaded by the school and
+   * served from object storage, so they arrive at whatever size and format the
+   * school happened to have. Registering the storage host here is what lets
+   * `next/image` resize and re-encode them — without it every `<Image>` fails
+   * at build/runtime and the only option is a raw `<img>` serving the original.
+   *
+   * Measured before this existed: a school crest displayed at 240px shipped a
+   * 238 KB JPEG, and it is the LCP element on every tenant page.
+   */
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '*.supabase.co', pathname: '/storage/v1/object/public/**' },
+    ],
+    formats: ['image/avif', 'image/webp'],
+  },
   // Don't advertise the framework to attackers.
   poweredByHeader: false,
   async headers() {
