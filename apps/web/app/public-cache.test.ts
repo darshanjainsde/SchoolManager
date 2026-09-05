@@ -171,3 +171,42 @@ describe('the internal /s/ address', () => {
     expect(cc(mw(req(SCHOOL, '/s/other.sckools.com')))).toBeNull();
   });
 });
+
+
+describe('www is the same site', () => {
+  const loc = (r: { headers: Headers }) => r.headers.get('location');
+
+  it('redirects a school www to its apex, permanently', async () => {
+    const mw = await load();
+    const r = mw(req(`www.${SCHOOL}`, '/'));
+    expect(r.status).toBe(308);
+    expect(loc(r)).toBe(`https://${SCHOOL}/`);
+  });
+
+  it('keeps the path when it redirects', async () => {
+    const mw = await load();
+    expect(loc(mw(req(`www.${SCHOOL}`, '/academics')))).toBe(`https://${SCHOOL}/academics`);
+    expect(loc(mw(req('www.archaiccandles.com', '/gallery')))).toBe('https://archaiccandles.com/gallery');
+  });
+
+  it('redirects the platform apex www too', async () => {
+    const mw = await load();
+    expect(loc(mw(req(`www.${PLATFORM}`, '/pricing')))).toBe(`https://${PLATFORM}/pricing`);
+  });
+
+  it('leaves a host that merely contains "www" alone', async () => {
+    const mw = await load();
+    for (const h of [SCHOOL, 'wwwschool.test.sckools.com', 'my-www.test.sckools.com']) {
+      expect(mw(req(h, '/')).status, h).not.toBe(308);
+    }
+  });
+
+  // A www host must never be rewritten into a tenant path — it redirects and
+  // stops. Otherwise www.<school> would become its own cache entry.
+  it('never rewrites or caches a www host', async () => {
+    const mw = await load();
+    const r = mw(req(`www.${SCHOOL}`, '/'));
+    expect(r.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(r.headers.get('Cache-Control')).toBeNull();
+  });
+});

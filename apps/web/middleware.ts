@@ -24,6 +24,36 @@ import { IS_LOCAL, OWNER_HOST, PLATFORM_HOST, isPlatformHost } from '@/lib/hosts
  */
 
 
+
+/**
+ * `www.` is the same site, not a different one.
+ *
+ * A school hands us stmarys.edu.in and their registrar almost always has a
+ * `www` record pointing at it too. Without this, www reaches us and 404s: the
+ * Domain row says `stmarys.edu.in`, so `www.stmarys.edu.in` resolves to no
+ * tenant at all. That is a dead address on the school's own letterhead, and
+ * nobody finds it until a parent types it — which is exactly what
+ * www.archaiccandles.com did while its apex served fine.
+ *
+ * Belt and braces with the hosting side: `HostingProviderService.attach`
+ * registers the www form as a platform-level 308 for every NEW domain, which
+ * costs nothing at runtime. This catches the ones already attached without it,
+ * and anything the platform redirect does not cover.
+ *
+ * Deliberately NOT paired with a catch-all matcher. Widening the matcher to
+ * every path would put the console's CSP on every public page, turning a host
+ * normalisation into a security-header change. The matcher already covers `/`
+ * and every school page, which is where www links actually land.
+ */
+function wwwRedirect(req: NextRequest): NextResponse | null {
+  const host = (req.headers.get('host') ?? '').toLowerCase();
+  if (!host.startsWith('www.')) return null;
+  const url = new URL(req.url);
+  url.host = host.slice(4);
+  // 308, so the method survives and the browser remembers it.
+  return NextResponse.redirect(url, 308);
+}
+
 /**
  * Tenant hosts are served from a host-routed copy of the school site.
  *
@@ -147,6 +177,10 @@ function ownerRouteAllowed(req: NextRequest): boolean {
 }
 
 export function middleware(req: NextRequest) {
+  // Host normalisation runs before anything that reasons about the host.
+  const www = wwwRedirect(req);
+  if (www) return www;
+
   const pathname = req.nextUrl.pathname;
   if (isOwnerOnlyRoute(pathname) && !ownerRouteAllowed(req)) {
     return new NextResponse(null, { status: 404 });
