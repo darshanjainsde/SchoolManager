@@ -15,6 +15,7 @@ import { HallOfFameService } from './hall-of-fame.service';
 import { HallOfFameController } from './hall-of-fame.controller';
 import { DesignDraftsService } from './design-drafts.service';
 import { DesignDraftsController } from './design-drafts.controller';
+import { SitePurgeInterceptor } from './site-purge.interceptor';
 import { SchoolPagesService } from './school-pages.service';
 import { SchoolPagesController } from './school-pages.controller';
 
@@ -29,6 +30,7 @@ import { SchoolPagesController } from './school-pages.controller';
     HallOfFameService,
     DesignDraftsService,
     SchoolPagesService,
+    SitePurgeInterceptor,
   ],
   controllers: [
     SiteContentController,

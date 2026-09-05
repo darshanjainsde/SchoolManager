@@ -143,6 +143,19 @@ const envSchema = z.object({
    * deployment.
    */
   VERCEL_GIT_BRANCH: z.string().min(1).optional(),
+
+  /**
+   * Where to tell the web app to drop a school's cached pages, and the secret
+   * that proves the request is ours.
+   *
+   * School pages are cached for 60 seconds, which is the only freshness cost
+   * the caching work introduced. Unset, that 60s stands and a head teacher who
+   * corrects a phone number waits for it; set, the correction appears at once.
+   * Both must be present or the purge is skipped — a URL without a secret
+   * would be refused, and a secret without a URL has nowhere to go.
+   */
+  WEB_REVALIDATE_URL: z.string().url().optional(),
+  REVALIDATE_SECRET: z.string().min(16).optional(),
 });
 
 /**

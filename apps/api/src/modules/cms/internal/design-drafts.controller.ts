@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { SitePurgeInterceptor } from './site-purge.interceptor';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards , UseInterceptors } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../../common/auth/roles.guard';
 import { Roles } from '../../../common/auth/roles.decorator';
@@ -7,6 +8,8 @@ import { DesignDraftsService } from './design-drafts.service';
 import { UpsertDesignDraftDto } from './cms.dto';
 
 @Controller('site/design-drafts')
+// Any write here drops this school's cached pages — see the interceptor.
+@UseInterceptors(SitePurgeInterceptor)
 @UseGuards(SchoolJwtGuard, RolesGuard)
 // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
 // all. Without RolesGuard beside it, "publish this draft to the live site" was

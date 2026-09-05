@@ -1,3 +1,4 @@
+import { SitePurgeInterceptor } from './site-purge.interceptor';
 import {
   BadRequestException,
   Controller,
@@ -23,6 +24,8 @@ import { assertUploadKind, IMAGE_KINDS } from '../../../common/storage/upload-ki
 const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT', 'EVENT'];
 
 @Controller('site/media')
+// Any write here drops this school's cached pages — see the interceptor.
+@UseInterceptors(SitePurgeInterceptor)
 // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
 // all. Without RolesGuard beside it every route here was reachable with a
 // STUDENT or PARENT token — and the enquiries ones hand back other families'

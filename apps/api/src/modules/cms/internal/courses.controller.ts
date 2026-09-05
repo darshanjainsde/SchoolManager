@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
+import { SitePurgeInterceptor } from './site-purge.interceptor';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Put, UseGuards , UseInterceptors } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../../common/auth/roles.guard';
 import { Roles } from '../../../common/auth/roles.decorator';
@@ -7,6 +8,8 @@ import { CoursesService } from './courses.service';
 import { UpsertCourseDto, UpsertCourseFeeDto } from './cms.dto';
 
 @Controller('site/courses')
+// Any write here drops this school's cached pages — see the interceptor.
+@UseInterceptors(SitePurgeInterceptor)
 // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
 // all. Without RolesGuard beside it every route here was reachable with a
 // STUDENT or PARENT token — and the enquiries ones hand back other families'
