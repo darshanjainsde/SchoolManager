@@ -15,6 +15,7 @@ import { useHost } from '@/components/use-host';
 import { useApi } from '@/lib/use-api';
 import { isSchoolHost, exampleSchoolHost, platformHref } from '@/lib/hosts';
 import { homeForRole } from '@/lib/role-routes';
+import { Z } from '@/lib/z-layers';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
@@ -359,9 +360,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </button>
       </div>
 
-      {/* Mobile drawer — mounted only while open, so it's never tab-reachable when closed. */}
+      {/* Mobile drawer — mounted only while open, so it's never tab-reachable when closed.
+
+          The layer comes from the ladder, never from a Tailwind `z-50`. The
+          dashboard's command bar sits at PAGE_CHROME (60) so its results clear
+          the cards beside it; a hand-written 50 here put the whole drawer
+          UNDER it, and the search field floated across the open menu on every
+          phone. Exactly the defect z-layers.ts was written for — in a file its
+          guard was not reading. */}
       {drawerOpen && (
-        <div className="fixed inset-0 z-50 sm:hidden">
+        <div className="fixed inset-0 sm:hidden" style={{ zIndex: Z.OVERLAY }}>
           <button
             type="button"
             aria-label="Close menu"
