@@ -5,6 +5,7 @@ import { loadEnv } from '@skoolos/config';
 import { ApiError } from '../../../common/errors/api-error';
 import { SchoolLookupService } from '../../tenancy';
 import { HostingProviderService, type HostingStatus } from './hosting-provider.service';
+import { classifyDomain, type DomainKind, type HostPolicy } from './domain-kind';
 
 /**
  * Putting a school on its OWN domain (stmarys.edu.in rather than
@@ -17,9 +18,16 @@ import { HostingProviderService, type HostingStatus } from './hosting-provider.s
  * marked LIVE whose DNS is not ready yet is worse than one still PENDING: the
  * school's whole site 404s, and nothing in the product explains why.
  *
- * WHAT THIS SERVICE DOES NOT DO: attach the domain to the hosting project.
- * That needs the hosting provider's own API token and is a deliberate manual
- * step — surfaced in `instructions` so it is never silently skipped.
+ * TWO KINDS OF NAME, ONE FLOW. Everything here was written for a domain the
+ * SCHOOL owns. A `<slug>.<platform>` name is ours instead: our zone, our
+ * wildcard, our certificate. Feeding one through the custom-domain path tells
+ * the school to add a record it cannot add, then marks the school ERROR when
+ * it does not appear. Every branch that cares asks `classifyDomain` rather
+ * than re-deriving the answer — see domain-kind.ts for why that matters.
+ *
+ * When hosting credentials are present this service also attaches the domain
+ * to the hosting project; when they are absent that stays the operator's job
+ * and `instructions` says so.
  */
 @Injectable()
 export class OwnerDomainsService {
@@ -35,6 +43,29 @@ export class OwnerDomainsService {
     return /^(?!-)[a-z0-9-]{1,63}(\.[a-z0-9-]{1,63})+$/.test(hostname) && !hostname.endsWith('.');
   }
 
+  /** The hosts this deployment reserves for itself, in one place. */
+  private get policy(): HostPolicy {
+    return {
+      platformHost: this.env.PLATFORM_HOST,
+      ownerHost: this.env.PLATFORM_OWNER_HOST,
+      ingressTarget: this.env.INGRESS_CNAME_TARGET,
+    };
+  }
+
+  /**
+   * The kind of a stored row, recomputed from the hostname rather than read
+   * from `Domain.type`.
+   *
+   * `type` was hardcoded to CUSTOM at `add` for the whole life of this flow, so
+   * every existing row claims to be a custom domain — including the ones that
+   * are plainly ours. Deriving it here means the rows heal on read instead of
+   * needing a migration that would have to hardcode a hostname per environment.
+   */
+  private kindOf(hostname: string, schoolSlug: string): DomainKind {
+    const c = classifyDomain(hostname, this.policy, schoolSlug);
+    return c.ok ? c.kind : 'CUSTOM';
+  }
+
   /**
    * The records a school's DNS admin must add, in their own words.
    *
@@ -44,7 +75,21 @@ export class OwnerDomainsService {
    * Hostinger and made every apex onboarding impossible. So the record kind
    * and the value are chosen together, never independently.
    */
-  private instructions(hostname: string) {
+  private instructions(hostname: string, kind: DomainKind) {
+    // Our own zone. There is no record for the school to add, and printing one
+    // sends a DNS admin looking for a panel they will never find.
+    if (kind === 'SUBDOMAIN') {
+      return {
+        kind: 'NONE' as const,
+        host: '',
+        value: '',
+        note:
+          `${hostname} is served by ${this.env.PLATFORM_HOST} automatically — there is nothing to add ` +
+          `at a registrar, and nothing to wait for.`,
+        alsoRequired: '',
+      };
+    }
+
     const isApex = hostname.split('.').length === 2;
     const label = hostname.split('.')[0];
 
@@ -103,15 +148,18 @@ export class OwnerDomainsService {
       /** Always reachable, never removable — the safety net under every school. */
       platformHost: `${school.slug}.${this.env.PLATFORM_HOST}`,
       cnameTarget: this.env.INGRESS_CNAME_TARGET,
-      domains: domains.map((d) => ({
-        id: d.id,
-        hostname: d.hostname,
-        type: d.type,
-        status: d.status,
-        isPrimary: d.isPrimary,
-        createdAt: d.createdAt.toISOString(),
-        instructions: this.instructions(d.hostname),
-      })),
+      domains: domains.map((d) => {
+        const kind = this.kindOf(d.hostname, school.slug);
+        return {
+          id: d.id,
+          hostname: d.hostname,
+          type: kind,
+          status: d.status,
+          isPrimary: d.isPrimary,
+          createdAt: d.createdAt.toISOString(),
+          instructions: this.instructions(d.hostname, kind),
+        };
+      }),
     };
   }
 
@@ -121,8 +169,22 @@ export class OwnerDomainsService {
       throw new ApiError('VALIDATION', 'That does not look like a domain name.', 400, 'hostname');
     }
     const db = getPlatformPrisma();
-    const school = await db.school.findUnique({ where: { id: schoolId }, select: { id: true } });
+    const school = await db.school.findUnique({
+      where: { id: schoolId },
+      select: { id: true, slug: true },
+    });
     if (!school) throw new NotFoundException('School not found');
+
+    // Is this name allowed to belong to THIS school at all? The clash check
+    // below cannot answer that: a sibling's `<slug>.<platform>` address has no
+    // Domain row of its own — it is served by the wildcard and the slug
+    // convention — so nothing collides, and the row we would write outranks
+    // that convention in SchoolLookupService. Without this, adding
+    // beacon.sckools.com under another school points beacon's URL at it.
+    const classified = classifyDomain(hostname, this.policy, school.slug);
+    if (!classified.ok) {
+      throw new ApiError('VALIDATION', classified.reason, 400, 'hostname');
+    }
 
     // hostname is globally unique: one address can only ever mean one school.
     const clash = await db.domain.findUnique({ where: { hostname }, select: { schoolId: true } });
@@ -133,7 +195,7 @@ export class OwnerDomainsService {
     }
 
     await db.domain.create({
-      data: { schoolId, hostname, type: 'CUSTOM', status: 'PENDING', isPrimary: false },
+      data: { schoolId, hostname, type: classified.kind, status: 'PENDING', isPrimary: false },
     });
 
     // Claim it on the host immediately. Doing this at `add` rather than at
@@ -141,7 +203,7 @@ export class OwnerDomainsService {
     // editing DNS, so the domain is usually servable the moment the record
     // lands. A failure here is reported, never fatal: the row exists, and
     // `verify` re-attempts the attach.
-    const attach = await this.hosting.attach(hostname);
+    const attach = await this.hosting.attach(hostname, { wwwAlias: classified.kind === 'CUSTOM' });
     if (!attach.ok) {
       this.logger.warn(`Domain ${hostname} recorded but not attached: ${attach.detail}`);
     }
@@ -160,16 +222,30 @@ export class OwnerDomainsService {
    */
   async verify(schoolId: string, domainId: string) {
     const db = getPlatformPrisma();
-    const domain = await db.domain.findFirst({ where: { id: domainId, schoolId } });
+    const domain = await db.domain.findFirst({
+      where: { id: domainId, schoolId },
+      include: { school: { select: { slug: true } } },
+    });
     if (!domain) throw new NotFoundException('Domain not found');
 
-    const dnsCheck = await this.pointsHere(domain.hostname);
+    // Rows written before the classifier existed can hold a name this school is
+    // not allowed to serve. Refuse to bless one rather than marking it LIVE,
+    // which is what would actually point a sibling's URL at this tenant.
+    const classified = classifyDomain(domain.hostname, this.policy, domain.school.slug);
+    if (!classified.ok) {
+      await db.domain.update({ where: { id: domain.id }, data: { status: 'ERROR' } });
+      await this.lookup.invalidate(domain.hostname);
+      return { ok: false, detail: classified.reason, dns: { ok: false, detail: classified.reason } };
+    }
+    const kind = classified.kind;
+
+    const dnsCheck = await this.pointsHere(domain.hostname, kind);
 
     // Re-attempt the attach before reading status: `add` may have run without
     // credentials, or against a hosting API that was briefly down.
     let hosting = await this.hosting.status(domain.hostname);
     if (hosting.state === 'not_attached') {
-      await this.hosting.attach(domain.hostname);
+      await this.hosting.attach(domain.hostname, { wwwAlias: kind === 'CUSTOM' });
       hosting = await this.hosting.status(domain.hostname);
     }
 
@@ -180,9 +256,11 @@ export class OwnerDomainsService {
     const hostingOk = hosting.state === 'ready' || hosting.state === 'unknown';
     const ok = dnsCheck.ok && hostingOk;
 
+    // `type` is corrected here too, so rows written while `add` hardcoded
+    // CUSTOM heal the first time anyone presses Verify.
     await db.domain.update({
       where: { id: domain.id },
-      data: { status: ok ? 'LIVE' : 'ERROR' },
+      data: { status: ok ? 'LIVE' : 'ERROR', type: kind },
     });
     // The resolver caches host→tenant; without this the domain keeps its old
     // answer for the length of the TTL after the status changes.
@@ -234,10 +312,37 @@ export class OwnerDomainsService {
    * while the ingress name resolves to a rotating anycast set — comparing only
    * against the latter would fail every correctly-configured apex domain.
    */
-  private async pointsHere(hostname: string): Promise<{ ok: boolean; detail: string }> {
+  private async pointsHere(
+    hostname: string,
+    kind: DomainKind,
+  ): Promise<{ ok: boolean; detail: string }> {
     const target = this.env.INGRESS_CNAME_TARGET.toLowerCase();
     const apexIp = this.env.INGRESS_A_RECORD;
     const seen: string[] = [];
+
+    // Our own wildcard answers this name, so "does it point here?" is not a
+    // question about the school's DNS — there is no record they could have got
+    // wrong. Demanding the ingress CNAME here failed EVERY school on the
+    // wildcard: the edge answers each host with its own anycast addresses, so
+    // a healthy raffles.sckools.com (216.198.79.1) and a healthy
+    // beacon.sckools.com (216.198.79.65) both look nothing like ingress. All
+    // that is worth asserting is that the name resolves at all, which catches
+    // the one real failure — the wildcard record missing from our zone.
+    if (kind === 'SUBDOMAIN') {
+      const [cnames, aRecords] = await Promise.all([
+        dns.resolveCname(hostname).catch(() => [] as string[]),
+        dns.resolve4(hostname).catch(() => [] as string[]),
+      ]);
+      if (!cnames.length && !aRecords.length) {
+        return {
+          ok: false,
+          detail:
+            `${hostname} does not resolve. It should be answered by the wildcard record for ` +
+            `${this.env.PLATFORM_HOST} — that record is missing or has not propagated.`,
+        };
+      }
+      return { ok: true, detail: `Served by the ${this.env.PLATFORM_HOST} wildcard.` };
+    }
 
     try {
       const [cnames, aRecords, targetIps] = await Promise.all([

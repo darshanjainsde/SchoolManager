@@ -48,16 +48,18 @@ export class SchoolLookupService {
 
   private async lookupInDb(hostname: string): Promise<LookupResult> {
     const platform = getPlatformPrisma();
-    // Custom domain — must be LIVE.
-    const domain = await platform.domain.findFirst({
-      where: { hostname, status: 'LIVE' },
-      include: { school: { select: { id: true, slug: true, status: true } } },
-    });
-    if (domain && domain.school.status !== 'SUSPENDED') {
-      return { kind: 'tenant', schoolId: domain.school.id, schoolSlug: domain.school.slug };
-    }
 
-    // Subdomain of platform host: <slug>.localhost / <slug>.skoolos.app
+    // Our OWN space is decided by the slug convention alone, and this branch
+    // runs FIRST so no Domain row can ever reinterpret it.
+    //
+    // Order is the security property here, not a preference. A `Domain` row is
+    // written from an operator-supplied string; the slug is the school's own
+    // identity. Consulting rows first let one school claim another's address —
+    // and nothing collided, because a school on the wildcard has no row of its
+    // own to clash with. Deciding by slug first makes that unreachable no
+    // matter what any row says, including rows written before this rule
+    // existed. `add` refuses such names too; this is the half that does not
+    // depend on every future write path remembering to ask.
     const platformHost = this.env.PLATFORM_HOST.toLowerCase();
     if (hostname.endsWith('.' + platformHost) && hostname !== platformHost) {
       const slug = hostname.slice(0, -('.' + platformHost).length);
@@ -70,6 +72,19 @@ export class SchoolLookupService {
           return { kind: 'tenant', schoolId: school.id, schoolSlug: school.slug };
         }
       }
+      // Under our host but not a school: api.<host>, a typo, a retired slug.
+      // Deliberately NOT falling through — a row naming one of these must not
+      // be able to turn a control-plane address into a tenant.
+      return { kind: 'unknown' };
+    }
+
+    // Custom domain — must be LIVE.
+    const domain = await platform.domain.findFirst({
+      where: { hostname, status: 'LIVE' },
+      include: { school: { select: { id: true, slug: true, status: true } } },
+    });
+    if (domain && domain.school.status !== 'SUSPENDED') {
+      return { kind: 'tenant', schoolId: domain.school.id, schoolSlug: domain.school.slug };
     }
 
     return { kind: 'unknown' };

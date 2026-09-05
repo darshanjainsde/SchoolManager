@@ -21,14 +21,17 @@ describe('OwnerDomainsService — the records we hand a school', () => {
       INGRESS_A_RECORD: '216.198.79.1',
     };
     return s as unknown as {
-      instructions(h: string): { kind: string; host: string; value: string; note: string; alsoRequired: string };
+      instructions(
+        h: string,
+        kind: 'SUBDOMAIN' | 'CUSTOM',
+      ): { kind: string; host: string; value: string; note: string; alsoRequired: string };
     };
   }
 
   const IPV4 = /^(\d{1,3}\.){3}\d{1,3}$/;
 
   describe('an apex domain (archaiccandles.com)', () => {
-    const i = svc(true).instructions('archaiccandles.com');
+    const i = svc(true).instructions('archaiccandles.com', 'CUSTOM');
 
     it('asks for an A record, because a root domain cannot hold a CNAME', () => {
       expect(i.kind).toBe('A');
@@ -46,7 +49,7 @@ describe('OwnerDomainsService — the records we hand a school', () => {
   });
 
   describe('a subdomain (sample.archaiccandles.com)', () => {
-    const i = svc(true).instructions('sample.archaiccandles.com');
+    const i = svc(true).instructions('sample.archaiccandles.com', 'CUSTOM');
 
     it('asks for a CNAME on the leftmost label only', () => {
       expect(i.kind).toBe('CNAME');
@@ -61,11 +64,11 @@ describe('OwnerDomainsService — the records we hand a school', () => {
 
   describe('the attach step', () => {
     it('is described as automatic when we hold hosting credentials', () => {
-      expect(svc(true).instructions('archaiccandles.com').alsoRequired).toContain('automatically');
+      expect(svc(true).instructions('archaiccandles.com', 'CUSTOM').alsoRequired).toContain('automatically');
     });
 
     it('is described as manual when we do not', () => {
-      expect(svc(false).instructions('archaiccandles.com').alsoRequired).toContain('hosting project');
+      expect(svc(false).instructions('archaiccandles.com', 'CUSTOM').alsoRequired).toContain('hosting project');
     });
   });
 });
