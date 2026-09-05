@@ -120,8 +120,24 @@ export default function PlatformDashboardPage() {
         </Link>
       </div>
 
-      {overview.isLoading && <div className="sk-muted">Loading…</div>}
-      {overview.error && <div className="text-sm text-rose-600">{(overview.error as Error).message}</div>}
+      {/* Not `isLoading`: a query between retries is neither loading nor
+          errored, and would render the header over an empty page. */}
+      {!overview.data && !overview.error && <div className="sk-muted">Loading…</div>}
+      {overview.error && (
+        <div className="sk-own-note" data-tone="warn">
+          <span>
+            Could not load metrics — {(overview.error as Error).message}.{' '}
+            <button
+              type="button"
+              onClick={() => void overview.refetch()}
+              style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer',
+                       color: 'var(--sk-brand-2)', fontWeight: 640 }}
+            >
+              Try again
+            </button>
+          </span>
+        </div>
+      )}
 
       {overview.data && (
         <>

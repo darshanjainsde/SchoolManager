@@ -174,8 +174,24 @@ export default function LeadsPage() {
         </button>
       </div>
 
-      {leads.isLoading && <p className="sk-state">Loading leads…</p>}
-      {leads.error && <p className="sk-state err">{(leads.error as Error).message}</p>}
+      {/* Not `isLoading`: a query between retries is neither loading nor
+          errored, and would render nothing at all. */}
+      {!leads.data && !leads.error && <p className="sk-state">Loading leads…</p>}
+      {leads.error && (
+        <div className="sk-own-note" data-tone="warn">
+          <span>
+            Could not load leads — {(leads.error as Error).message}.{' '}
+            <button
+              type="button"
+              onClick={() => void leads.refetch()}
+              style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer',
+                       color: 'var(--sk-brand-2)', fontWeight: 640 }}
+            >
+              Try again
+            </button>
+          </span>
+        </div>
+      )}
 
       {leads.data && visible.length === 0 && (
         <div className="sk-card">

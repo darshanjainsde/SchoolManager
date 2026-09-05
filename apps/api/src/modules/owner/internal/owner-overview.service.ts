@@ -119,29 +119,43 @@ export class OwnerOverviewService {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
-    const [
-      schools, storage, enquiries, newEnquiries, events, enquiriesThisMonth, newLeads, students, images,
-      followUpsDue, pendingEvents, pendingBlogPosts, leadsWonThisMonth,
-    ] = await Promise.all([
-        db.school.findMany({
-          orderBy: { name: 'asc' },
-          include: { domains: { where: { isPrimary: true }, take: 1 } },
-        }),
-        db.mediaAsset.groupBy({ by: ['schoolId'], _sum: { byteSize: true } }),
-        db.enquiry.groupBy({ by: ['schoolId'], _count: true }),
-        db.enquiry.groupBy({ by: ['schoolId'], _count: true, where: { status: 'NEW' } }),
-        db.event.groupBy({ by: ['schoolId'], _count: true }),
-        db.enquiry.count({ where: { createdAt: { gte: monthStart } } }),
-        db.marketingLead.count({ where: { status: 'NEW' } }),
-        db.student.groupBy({ by: ['schoolId'], _count: true }),
-        db.mediaAsset.groupBy({ by: ['schoolId'], _count: true }),
-        db.marketingLead.count({
-          where: { nextFollowUpAt: { not: null, lte: endOfToday }, status: { notIn: ['WON', 'LOST', 'CLOSED'] } },
-        }),
-        db.event.count({ where: { scope: 'NETWORK', status: 'PENDING' } }),
-        db.blogPost.count({ where: { globalStatus: 'PENDING' } }),
-        db.marketingLead.count({ where: { status: 'WON', updatedAt: { gte: monthStart } } }),
-      ]);
+    // Deliberately NOT one Promise.all over all thirteen.
+    //
+    // Prisma's pool here holds 5 connections. Firing thirteen queries at once
+    // asks for thirteen, so eight queue against a 10s pool timeout — and every
+    // OTHER request the API is serving queues behind them. The failure that
+    // showed up on staging was not this endpoint erroring; it was unrelated
+    // requests 503ing while this one held the pool.
+    //
+    // Three waves of at most five keep the burst inside what the pool can give.
+    // The whole payload is Redis-cached for two minutes, so the extra latency
+    // is paid about once every two minutes, by one request.
+    const [schools, storage, enquiries, newEnquiries, events] = await Promise.all([
+      db.school.findMany({
+        orderBy: { name: 'asc' },
+        include: { domains: { where: { isPrimary: true }, take: 1 } },
+      }),
+      db.mediaAsset.groupBy({ by: ['schoolId'], _sum: { byteSize: true } }),
+      db.enquiry.groupBy({ by: ['schoolId'], _count: true }),
+      db.enquiry.groupBy({ by: ['schoolId'], _count: true, where: { status: 'NEW' } }),
+      db.event.groupBy({ by: ['schoolId'], _count: true }),
+    ]);
+
+    const [enquiriesThisMonth, newLeads, students, images] = await Promise.all([
+      db.enquiry.count({ where: { createdAt: { gte: monthStart } } }),
+      db.marketingLead.count({ where: { status: 'NEW' } }),
+      db.student.groupBy({ by: ['schoolId'], _count: true }),
+      db.mediaAsset.groupBy({ by: ['schoolId'], _count: true }),
+    ]);
+
+    const [followUpsDue, pendingEvents, pendingBlogPosts, leadsWonThisMonth] = await Promise.all([
+      db.marketingLead.count({
+        where: { nextFollowUpAt: { not: null, lte: endOfToday }, status: { notIn: ['WON', 'LOST', 'CLOSED'] } },
+      }),
+      db.event.count({ where: { scope: 'NETWORK', status: 'PENDING' } }),
+      db.blogPost.count({ where: { globalStatus: 'PENDING' } }),
+      db.marketingLead.count({ where: { status: 'WON', updatedAt: { gte: monthStart } } }),
+    ]);
 
     const byId = <T extends { schoolId: string }>(rows: T[]) =>
       new Map(rows.map((r) => [r.schoolId, r]));

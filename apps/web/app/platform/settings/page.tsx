@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Globe, Info, Mail, Phone, Save } from 'lucide-react';
+import { AlertTriangle, Globe, Info, Mail, Phone, Save } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { OWNER_HOST, PLATFORM_HOST, platformHref } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
@@ -85,8 +85,28 @@ export default function PlatformSettingsPage() {
         <p>Pricing and contact details shown on the public sckools.com site.</p>
       </header>
 
-      {config.isLoading && <p className="sk-state">Loading settings…</p>}
-      {config.error && <p className="sk-state err">{(config.error as Error).message}</p>}
+      {/* `isLoading` alone leaves a blank page: a query that is disabled, or
+          between retries after a failure, is neither loading nor errored, and
+          `form` is still null — which is exactly what shipped, and what a 503
+          from the API looked like on screen. Key the fallback off having no
+          form instead, so there is always something to read. */}
+      {!form && !config.error && <p className="sk-state">Loading settings…</p>}
+      {config.error && (
+        <div className="sk-own-note" data-tone="warn">
+          <AlertTriangle aria-hidden="true" />
+          <span>
+            Could not load settings — {(config.error as Error).message}.{' '}
+            <button
+              type="button"
+              onClick={() => void config.refetch()}
+              style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer',
+                       color: 'var(--sk-brand-2)', fontWeight: 640 }}
+            >
+              Try again
+            </button>
+          </span>
+        </div>
+      )}
 
       {form && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 860 }}>
