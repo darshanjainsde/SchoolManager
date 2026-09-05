@@ -15,6 +15,7 @@ import { OwnerEventsService } from './owner-events.service';
 import { OwnerOverviewService } from './owner-overview.service';
 import { OwnerSchoolsService } from './owner-schools.service';
 import { OwnerDomainsService } from './owner-domains.service';
+import { SpeedService } from './speed.service';
 import { AddDomainDto } from './owner.dto';
 
 @Controller('owner')
@@ -31,6 +32,7 @@ export class OwnerController {
     private readonly jobs: JobsService,
     private readonly domains: OwnerDomainsService,
     private readonly opsService: OpsService,
+    private readonly speed: SpeedService,
   ) {}
 
   @Get('overview')
@@ -159,6 +161,15 @@ export class OwnerController {
     @Param('domainId', ParseUUIDPipe) domainId: string,
   ) {
     return this.domains.remove(id, domainId);
+  }
+
+  /**
+   * What a school's public homepage actually costs a visitor, measured now.
+   * `?force=1` skips the 60s memo — the button in the console sends it.
+   */
+  @Get('speed')
+  speedReport(@Query('force') force?: string) {
+    return this.speed.report(force === '1');
   }
 
   @Get('events')

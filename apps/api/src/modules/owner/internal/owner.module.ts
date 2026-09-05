@@ -15,11 +15,12 @@ import { OwnerSchoolsService } from './owner-schools.service';
 import { OwnerDomainsService } from './owner-domains.service';
 import { HostingProviderService } from './hosting-provider.service';
 import { OwnerCacheInterceptor } from './owner-cache.interceptor';
+import { SpeedService } from './speed.service';
 import { OwnerController } from './owner.controller';
 
 @Module({
   imports: [JwtModule.register({}), AuthModule, FeaturesModule, MarketingModule, HiringModule],
   controllers: [OwnerAuthController, OwnerController],
-  providers: [OpsService, OwnerAuthService, OwnerHostGuard, OwnerSchoolsService, OwnerDomainsService, HostingProviderService, OwnerCacheInterceptor, OwnerEventsService, ImpersonationService, OwnerOverviewService],
+  providers: [OpsService, OwnerAuthService, OwnerHostGuard, OwnerSchoolsService, OwnerDomainsService, HostingProviderService, OwnerCacheInterceptor, SpeedService, OwnerEventsService, ImpersonationService, OwnerOverviewService],
 })
 export class OwnerModule {}

@@ -59,6 +59,8 @@ const ALLOWED: Record<string, string> = {
     'the print-order desk at sckools.com/sv/orders — cross-tenant BY PURPOSE (every school\'s orders on one queue), behind OwnerHostGuard + platform JWT; writes touch one order by id and its events only',
   'common/metrics/metrics.service.ts':
     'writes MetricRollup — platform-wide request counts and latency histograms. The table has no schoolId and holds no tenant row content, only route names and numbers',
+  'modules/owner/internal/speed.service.ts':
+    'the operator speed board: reads name, slug and primary hostname for every LIVE school so it can fetch each public homepage and report what a visitor gets. Cross-tenant by definition — it is a platform-wide overview — and it reads no tenant row content, only the address each school publishes',
   'modules/owner/internal/ops.service.ts':
     'platform-wide health: outbox depth and DLQ across every tenant. Counts only — it reads no tenant row content',
 

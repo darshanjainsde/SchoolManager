@@ -9,7 +9,7 @@ import { useSessionProbe } from '@/lib/use-session-probe';
 import { OWNER_HOST } from '@/lib/hosts';
 import {
   LayoutDashboard, TrendingUp, School, FileText, PlusCircle,
-  Printer, Briefcase, Link2, Compass, Activity, LogOut, Menu, X,
+  Printer, Briefcase, Link2, Compass, Activity, Gauge, LogOut, Menu, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import '../sk-theme.css';
@@ -39,6 +39,7 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/platform/jobs', label: 'Jobs', icon: Briefcase },
   { href: '/platform/connect', label: 'Connect', icon: Link2 },
   { href: '/platform/ops', label: 'Runtime health', icon: Activity },
+  { href: '/platform/speed', label: 'Site speed', icon: Gauge },
   { href: '/platform/remaining', label: 'Remaining work', icon: Compass },
 ];
 
