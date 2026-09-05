@@ -343,6 +343,79 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 @media (max-width: 720px) {
   .sk-covrow { grid-template-columns: 1fr; gap: 4px; }
 }
+
+/* ---- attendance roster row: the four marks line up down the whole list ---- */
+/*
+   `.sk-row` lays the identity and the marks out on ONE flex line, and both are
+   allowed to shrink. The marks' min-content is the wider of the two, so on a
+   phone the name is what gives: it collapsed to about 60px, wrapping even
+   "Nitin Bhat" mid-name, while the four buttons folded into a 2x2 that began
+   at a different x on every row — a ragged column of controls down the roster,
+   with no two rows the same height.
+
+   Below 640px the row becomes two lines instead: identity, then the marks as a
+   fixed two-column grid. Every row is then the same shape, each mark sits in
+   the same place as the row above it, and the name gets the full width. Above
+   640px nothing changes — one line is right whenever there is room for it.
+
+   640px is Tailwind's `sm`, which the shell already uses for the same
+   phone/not-phone split. */
+.sk-markrow-marks { display: flex; flex-wrap: wrap; gap: 5px; }
+
+@media (max-width: 640px) {
+  .sk-markrow {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'badge who' 'marks marks';
+    gap: 9px 11px;
+    align-items: center;
+  }
+  .sk-markrow > .badge { grid-area: badge; }
+  .sk-markrow > .sk-markrow-who { grid-area: who; min-width: 0; }
+  /* The spacer only exists to push the marks right on one line. */
+  .sk-markrow > .sp { display: none; }
+  .sk-markrow > .sk-markrow-marks {
+    grid-area: marks;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  /* Equal targets: a 2x2 of buttons that are all the same size reads as one
+     control, and each is comfortably above the 44px touch minimum in height. */
+  .sk-markrow-marks > button { width: 100%; }
+}
+
+/* ---- week navigation: the arrows stay either side of the date ---- */
+/*
+   One flex line with wrap lays "<", the date, ">" and Today out in source
+   order and drops whatever does not fit onto a second row. On a phone the
+   date plus its "This week" pill is the widest item, so ">" wrapped away from
+   "<" while Today, pushed by `margin-left: auto`, landed alone at the right of
+   that second row. The two arrows ended up on different lines — it read as two
+   broken controls rather than one week picker.
+
+   Below 640px it becomes a two-row grid: the arrows flank the date, Today
+   spans the full width beneath. Above 640px, one line, exactly as before. */
+.sk-weekbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sk-weekbar-label {
+  font-weight: 700; font-size: 13.5px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.sk-weekbar-today { margin-left: auto; }
+
+@media (max-width: 640px) {
+  .sk-weekbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'prev label next' 'today today today';
+    gap: 10px;
+  }
+  .sk-weekbar > .sk-weekbar-prev { grid-area: prev; }
+  .sk-weekbar > .sk-weekbar-label { grid-area: label; justify-content: center; }
+  .sk-weekbar > .sk-weekbar-next { grid-area: next; }
+  /* Full width, and no auto margin to fight the grid placement. */
+  .sk-weekbar > .sk-weekbar-today { grid-area: today; margin-left: 0; width: 100%; }
+}
 .sk-covrow .cov-status { display: flex; align-items: center; gap: 8px; justify-self: end; }
 @media (max-width: 760px) {
   .sk-covrow { grid-template-columns: 1fr max-content; }

@@ -484,26 +484,16 @@ function TimetableInner() {
       {classSectionId && (
         <>
           {/* Week navigation */}
-          <div
-            className="sk-card"
-            style={{
-              marginBottom: 12,
-              padding: '10px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              flexWrap: 'wrap',
-            }}
-          >
+          <div className="sk-card sk-weekbar" style={{ marginBottom: 12, padding: '10px 14px' }}>
             <button
-              className="sk-btn sk-press"
+              className="sk-btn sk-press sk-weekbar-prev"
               onClick={() => setWeekOffset((w) => w - 1)}
               aria-label="Previous week"
               style={{ padding: '7px 10px' }}
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <div style={{ fontWeight: 700, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="sk-weekbar-label">
               {weekRangeLabel(viewedMonday)}
               {isCurrentWeek && (
                 <span className="sk-pill" data-tone="info">
@@ -517,7 +507,7 @@ function TimetableInner() {
               )}
             </div>
             <button
-              className="sk-btn sk-press"
+              className="sk-btn sk-press sk-weekbar-next"
               onClick={() => setWeekOffset((w) => w + 1)}
               aria-label="Next week"
               style={{ padding: '7px 10px' }}
@@ -525,10 +515,9 @@ function TimetableInner() {
               <ChevronRight className="h-4 w-4" />
             </button>
             <button
-              className="sk-btn sk-press"
+              className="sk-btn sk-press sk-weekbar-today"
               onClick={() => setWeekOffset(0)}
               disabled={isCurrentWeek}
-              style={{ marginLeft: 'auto' }}
             >
               Today
             </button>
