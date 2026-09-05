@@ -36,7 +36,15 @@ import { IS_LOCAL, OWNER_HOST, PLATFORM_HOST, isPlatformHost } from '@/lib/hosts
  * and the edge cache key already includes the host, so schools cannot share
  * an entry.
  */
-const HOST_ROUTED = new Set(['/']);
+const HOST_ROUTED_EXACT = new Set([
+  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect',
+]);
+/** Admin-built pages live at a frozen slug under /p/. */
+const HOST_ROUTED_PREFIX = ['/p/'];
+
+function hostRouted(pathname: string): boolean {
+  return HOST_ROUTED_EXACT.has(pathname) || HOST_ROUTED_PREFIX.some((p) => pathname.startsWith(p));
+}
 
 /**
  * `/s/...` is an internal address. A request that arrives asking for it
@@ -178,7 +186,7 @@ export function middleware(req: NextRequest) {
 
   // School hosts get the host-routed, cacheable copy of the page.
   const res =
-    !isPlatformHost(bareHost) && bareHost !== OWNER_HOST && HOST_ROUTED.has(pathname)
+    !isPlatformHost(bareHost) && bareHost !== OWNER_HOST && hostRouted(pathname)
       ? NextResponse.rewrite(
           new URL(`/s/${encodeURIComponent(bareHost)}${pathname === '/' ? '' : pathname}`, req.url),
         )

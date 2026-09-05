@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { fetchMarketingConfig } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';

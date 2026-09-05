@@ -106,10 +106,31 @@ describe('pages the edge must never hold', () => {
 describe('host-routed school pages', () => {
   // The visitor's URL never changes; only the internal path does. This is what
   // lets the response be cached at all — see the middleware comment.
-  it('rewrites a school host to its own path', async () => {
+  it.each(['/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/p/transport'])(
+    'rewrites a school host at %s to its own path',
+    async (path) => {
+      const mw = await load();
+      const to = rewrittenTo(mw(req(SCHOOL, path)));
+      expect(to).toContain(`/s/${encodeURIComponent(SCHOOL)}`);
+      if (path !== '/') expect(to).toContain(path);
+    },
+  );
+
+  // The apex serves marketing. A school view rewritten there would put one
+  // school's pages under the platform's own name.
+  it.each(['/academics', '/admissions', '/gallery', '/contact', '/connect', '/p/transport'])(
+    'never rewrites %s on the platform apex',
+    async (path) => {
+      const mw = await load();
+      expect(rewrittenTo(mw(req(PLATFORM, path)))).toBeNull();
+    },
+  );
+
+  it('never rewrites a route that carries a session', async () => {
     const mw = await load();
-    const to = rewrittenTo(mw(req(SCHOOL, '/')));
-    expect(to).toContain(`/s/${encodeURIComponent(SCHOOL)}`);
+    for (const p of ['/app', '/app/students', '/portal', '/teacher', '/login', '/platform']) {
+      expect(rewrittenTo(mw(req(SCHOOL, p))), p).toBeNull();
+    }
   });
 
   it('leaves the platform apex alone — it serves marketing, not a school', async () => {
