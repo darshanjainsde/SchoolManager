@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { optimised } from '@/lib/img';
 import { Fragment, useEffect, type ReactNode } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
@@ -476,7 +477,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
           hoists this into <head>. */}
       {heroPreloadUrl && (
         // eslint-disable-next-line @next/next/no-page-custom-font
-        <link rel="preload" as="image" href={heroPreloadUrl} fetchPriority="high" />
+        <link rel="preload" as="image" href={optimised(heroPreloadUrl, 1920)} fetchPriority="high" />
       )}
 
       {/* ── NAV (style selected by the school admin) ── */}

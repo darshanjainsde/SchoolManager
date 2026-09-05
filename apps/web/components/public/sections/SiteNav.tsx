@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { optimised } from '@/lib/img';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { heroIsPhotoLayout } from './HeroSection';
@@ -142,7 +143,9 @@ function Logo({ data, small }: { data: PublicSiteData; small?: boolean }) {
     >
       {logoUrl ? (
         <img
-          src={logoUrl}
+          // Painted 36-40px tall. Asking for 128 leaves room for a dense
+          // screen and still turns a 238 KB crest into a few kilobytes.
+          src={optimised(logoUrl, 128)}
           alt={schoolName}
           decoding="async"
           className={`${small ? 'h-9' : 'h-10'} w-auto flex-none`}

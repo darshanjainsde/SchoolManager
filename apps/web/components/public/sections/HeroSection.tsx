@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { optimised } from '@/lib/img';
 import type { PublicSiteData } from '@/lib/public-api';
 import { rgba } from '../site-utils';
 
@@ -187,7 +188,7 @@ function IllustratedCluster({ heroUrl }: { heroUrl: string | null }) {
     <div className="relative h-[400px] hidden lg:block">
       <div className="ps-float absolute top-2 right-4 w-64 rounded-3xl ps-card ps-soft p-2">
         {heroUrl ? (
-          <div className="rounded-2xl h-44 bg-cover bg-center" style={{ backgroundImage: `url('${heroUrl}')` }} />
+          <div className="rounded-2xl h-44 bg-cover bg-center" style={{ backgroundImage: `url('${optimised(heroUrl, 640)}')` }} />
         ) : (
           <div className="rounded-2xl h-44 ps-brandgrad grid place-items-center text-white text-6xl">🏫</div>
         )}
@@ -260,7 +261,7 @@ function Slides({ images, motionOff, showDots = true }: { images: string[]; moti
         <div
           key={i}
           className={`ps-slide ${i === idx ? 'on ps-kb' : ''}`}
-          style={{ backgroundImage: `url('${url}')` }}
+          style={{ backgroundImage: `url('${optimised(url, 1920)}')` }}
           aria-hidden="true"
         />
       ))}
@@ -354,7 +355,7 @@ export default function HeroSection({
           {useSlides ? (
             <Slides images={slidesImages} motionOff={motionOff} />
           ) : heroUrl ? (
-            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${heroUrl}')` }} />
+            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${optimised(heroUrl, 1920)}')` }} />
           ) : (
             // No poster (a video-only hero): a branded backdrop stands behind
             // the video and IS the fallback when the video is hidden for
@@ -397,7 +398,7 @@ export default function HeroSection({
                 full ? 'min-h-[72vh]' : 'min-h-[56vh]'
               }`}
             >
-              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${heroUrl}')` }} />
+              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('${optimised(heroUrl, 1920)}')` }} />
               {heroWantsVideo(data) && !motionOff && (
                 <HeroVideo url={data.profile!.heroVideoUrl as string} poster={heroUrl} />
               )}
