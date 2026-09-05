@@ -74,11 +74,33 @@ export class HostingProviderService {
   }
 
   /**
-   * Claims `hostname` for the project. Idempotent: a domain already attached to
-   * this project is a success, not an error — the operator may be re-running
-   * Verify, and `domain_already_in_use` by OUR project is the desired state.
+   * Claims `hostname` for the project, and `www.<hostname>` alongside it.
+   *
+   * A school hands us stmarys.edu.in and their registrar almost always has a
+   * `www` record pointing at it too. Attaching only the apex leaves
+   * www.stmarys.edu.in resolving to us and answering 404 — the Domain row says
+   * `stmarys.edu.in`, so the www form matches no tenant. That is a dead address
+   * on the school's own letterhead, and nobody discovers it until a parent
+   * types it.
+   *
+   * The www copy is registered as a REDIRECT to the apex rather than a second
+   * live host, which is how the platform's own www.sckools.com already behaves.
+   * One canonical URL per school: better for search, and two hostnames serving
+   * identical HTML would be two cache entries each earning half the hit rate.
    */
   async attach(hostname: string): Promise<{ ok: boolean; detail: string }> {
+    const primary = await this.attachOne(hostname);
+    // Best-effort, and deliberately not fatal: a school that never publishes a
+    // www record loses nothing, and failing the whole add because the courtesy
+    // alias could not be claimed would be the wrong trade.
+    if (primary.ok && !hostname.startsWith('www.')) {
+      await this.attachOne(`www.${hostname}`, hostname);
+    }
+    return primary;
+  }
+
+  /** Attach a single hostname; `redirectTo` makes it a redirect, not a site. */
+  private async attachOne(hostname: string, redirectTo?: string): Promise<{ ok: boolean; detail: string }> {
     if (!this.configured) {
       return { ok: false, detail: 'Hosting credentials are not configured — attach the domain by hand.' };
     }
@@ -89,7 +111,11 @@ export class HostingProviderService {
         // gitBranch pins the domain to a branch's latest deployment. Omitted
         // (undefined) it means production, which is what we want in prod and
         // exactly what we must NOT do on staging — see VERCEL_GIT_BRANCH.
-        body: { name: hostname, ...(this.env.VERCEL_GIT_BRANCH ? { gitBranch: this.env.VERCEL_GIT_BRANCH } : {}) },
+        body: {
+          name: hostname,
+          ...(this.env.VERCEL_GIT_BRANCH ? { gitBranch: this.env.VERCEL_GIT_BRANCH } : {}),
+          ...(redirectTo ? { redirect: redirectTo, redirectStatusCode: 308 } : {}),
+        },
       },
     );
     if (r.ok) {
@@ -106,8 +132,14 @@ export class HostingProviderService {
     return { ok: false, detail: r.message };
   }
 
+  /** Releases the hostname and its www alias, so neither stays claimed by us. */
   async detach(hostname: string): Promise<void> {
     if (!this.configured) return;
+    if (!hostname.startsWith('www.')) await this.detachOne(`www.${hostname}`);
+    await this.detachOne(hostname);
+  }
+
+  private async detachOne(hostname: string): Promise<void> {
     const r = await this.call(
       `/v9/projects/${this.env.VERCEL_PROJECT_ID}/domains/${encodeURIComponent(hostname)}`,
       { method: 'DELETE' },
