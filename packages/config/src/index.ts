@@ -128,7 +128,24 @@ const envSchema = z.object({
    * told, in the response, that the attach step must be done by hand.
    */
   VERCEL_TOKEN: z.string().min(1).optional(),
+  /**
+   * The project this service RUNS in. Vercel injects it, and it is the API's
+   * own id — which is exactly why it must not be used to attach a school's
+   * domain. See VERCEL_WEB_PROJECT_ID.
+   */
   VERCEL_PROJECT_ID: z.string().min(1).optional(),
+  /**
+   * The project that SERVES school websites (skoolos-web).
+   *
+   * On 5 Sept 2026 a school's domain was attached to the API project and its
+   * site 404'd in production: the attach code read VERCEL_PROJECT_ID, which on
+   * a split web/api deployment is the id of whichever project is asking — the
+   * API. It had been harmless only because no VERCEL_TOKEN was set; adding the
+   * token switched the feature on and the next attach went to the wrong place.
+   *
+   * Deliberately NOT defaulted to VERCEL_PROJECT_ID: that default is the bug.
+   */
+  VERCEL_WEB_PROJECT_ID: z.string().min(1).optional(),
   VERCEL_TEAM_ID: z.string().min(1).optional(),
   /**
    * Which deployment a school's domain should serve.

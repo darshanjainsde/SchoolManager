@@ -35,9 +35,31 @@ export class HostingProviderService {
   private readonly logger = new Logger(HostingProviderService.name);
   private readonly env = loadEnv();
 
-  /** False when credentials are absent — callers surface a manual step instead. */
+  /**
+   * The project a school's domain must be attached to: the one that serves
+   * school websites, NOT the one this code happens to run in.
+   *
+   * Reading VERCEL_PROJECT_ID here attached raffles.sckools.com to the API
+   * project on 5 Sept 2026 and 404'd that school's site in production — the
+   * API answers no route for `/`, so every page returned
+   * {"code":"NOT_FOUND","message":"Cannot GET /"}. Vercel injects
+   * VERCEL_PROJECT_ID as the id of whichever project is asking, so on a split
+   * web/api deployment it is always the wrong answer here.
+   */
+  private get webProjectId(): string | undefined {
+    return this.env.VERCEL_WEB_PROJECT_ID;
+  }
+
+  /**
+   * False when credentials are absent — callers surface a manual step instead.
+   *
+   * Requires VERCEL_WEB_PROJECT_ID specifically. Falling back to
+   * VERCEL_PROJECT_ID would re-create the outage silently, so an environment
+   * that sets only the token reports "not configured" and the operator attaches
+   * by hand, which is the safe half of the old behaviour.
+   */
   get configured(): boolean {
-    return Boolean(this.env.VERCEL_TOKEN && this.env.VERCEL_PROJECT_ID);
+    return Boolean(this.env.VERCEL_TOKEN && this.webProjectId);
   }
 
   private url(path: string): string {
@@ -105,7 +127,7 @@ export class HostingProviderService {
       return { ok: false, detail: 'Hosting credentials are not configured — attach the domain by hand.' };
     }
     const r = await this.call<{ name: string }>(
-      `/v10/projects/${this.env.VERCEL_PROJECT_ID}/domains`,
+      `/v10/projects/${this.webProjectId}/domains`,
       {
         method: 'POST',
         // gitBranch pins the domain to a branch's latest deployment. Omitted
@@ -120,7 +142,7 @@ export class HostingProviderService {
     );
     if (r.ok) {
       const where = this.env.VERCEL_GIT_BRANCH ? ` (branch ${this.env.VERCEL_GIT_BRANCH})` : '';
-      this.logger.log(`Attached ${hostname} to project ${this.env.VERCEL_PROJECT_ID}${where}`);
+      this.logger.log(`Attached ${hostname} to project ${this.webProjectId}${where}`);
       return { ok: true, detail: `${hostname} attached to the hosting project${where}.` };
     }
     if (r.code === 'domain_already_in_use' || r.status === 409) {
@@ -141,7 +163,7 @@ export class HostingProviderService {
 
   private async detachOne(hostname: string): Promise<void> {
     const r = await this.call(
-      `/v9/projects/${this.env.VERCEL_PROJECT_ID}/domains/${encodeURIComponent(hostname)}`,
+      `/v9/projects/${this.webProjectId}/domains/${encodeURIComponent(hostname)}`,
       { method: 'DELETE' },
     );
     // Best-effort: a domain removed from the platform but left on the host is
@@ -157,7 +179,7 @@ export class HostingProviderService {
       return { state: 'unknown', detail: 'Hosting credentials are not configured.' };
     }
     const r = await this.call<{ verified: boolean; misconfigured?: boolean }>(
-      `/v9/projects/${this.env.VERCEL_PROJECT_ID}/domains/${encodeURIComponent(hostname)}/config`,
+      `/v9/projects/${this.webProjectId}/domains/${encodeURIComponent(hostname)}/config`,
       { method: 'GET' },
     );
     if (!r.ok) {
