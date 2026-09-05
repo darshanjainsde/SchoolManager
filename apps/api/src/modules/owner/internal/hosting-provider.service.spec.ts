@@ -12,7 +12,12 @@ describe('HostingProviderService.attach', () => {
     const calls: { path: string; body: Record<string, unknown> }[] = [];
     const s = new HostingProviderService();
     (s as unknown as { env: Record<string, string> }).env = {
-      VERCEL_TOKEN: 't', VERCEL_PROJECT_ID: 'prj', VERCEL_TEAM_ID: 'team',
+      // Two DIFFERENT ids on purpose. This suite passed while the service
+      // attached to VERCEL_PROJECT_ID, because the fixture set only one and the
+      // assertions could not tell "our project" from "the web project" — which
+      // is how raffles.sckools.com ended up on skoolos-api and 404'd in
+      // production on 5 Sept 2026.
+      VERCEL_TOKEN: 't', VERCEL_WEB_PROJECT_ID: 'prj-web', VERCEL_PROJECT_ID: 'prj-api', VERCEL_TEAM_ID: 'team',
     };
     (s as unknown as { call: unknown }).call = async (path: string, init: { body?: unknown }) => {
       calls.push({ path, body: (init.body ?? {}) as Record<string, unknown> });
@@ -21,6 +26,18 @@ describe('HostingProviderService.attach', () => {
     };
     return { s, calls };
   }
+
+  // The regression this file could not catch before: with a single id in the
+  // fixture, "attached to prj" was true whichever variable the code read.
+  it('addresses the WEB project, never the one this service runs in', async () => {
+    const { s, calls } = svc(() => ({ ok: true }));
+    await s.attach('stmarys.edu.in');
+    expect(calls.length).toBeGreaterThan(0);
+    for (const c of calls) {
+      expect(c.path).toContain('prj-web');
+      expect(c.path).not.toContain('prj-api');
+    }
+  });
 
   it('claims the apex and the www alias', async () => {
     const { s, calls } = svc(() => ({ ok: true }));

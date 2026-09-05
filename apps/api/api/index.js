@@ -228651,6 +228651,40 @@ function configureApp(app, env) {
     app.useGlobalFilters(new api_error_filter_1.ApiErrorFilter());
     // Honour X-Forwarded-Host behind an ingress / CDN (Vercel, custom domains).
     app.getHttpAdapter().getInstance().set('trust proxy', 1);
+    // No ETags on API responses.
+    //
+    // Express adds one to every JSON body and pairs it with
+    // `Cache-Control: public, max-age=0, must-revalidate`, so the browser
+    // revalidates on every call. When the payload has not changed the server
+    // answers 304 — and Express writes a 304 WITHOUT the CORS headers the
+    // `enableCors` middleware put on the 200. The console is on a different
+    // origin to the API, so the browser discards that 304 and the fetch fails
+    // with a bare "Failed to fetch": no status, nothing in the console, and
+    // nothing in the API's own logs, which recorded a perfectly good 304.
+    //
+    // It only bites endpoints whose body is STABLE, which is why it looked
+    // random. /owner/marketing-config returns the same six prices every time,
+    // so its ETag never changes and it was broken 100% of the time; /owner/blog/
+    // pending did it whenever the queue stayed empty; /owner/overview mostly
+    // escaped because its counts move.
+    //
+    // Conditional caching buys nothing here — every response is authenticated,
+    // per-user and already small — so the fix is to stop offering it rather than
+    // to patch CORS onto the 304 path.
+    app.getHttpAdapter().getInstance().set('etag', false);
+    // Turning Express's ETag off is not enough on Vercel: the edge adds its own,
+    // so the browser still revalidates and still gets a CORS-less 304. Telling
+    // the browser not to store the response at all is what actually stops the
+    // conditional request being made.
+    //
+    // Safe as a blanket default — nothing in this API sets Cache-Control
+    // deliberately, and every response is authenticated and per-user, so none of
+    // it was ever cacheable. A handler that wants caching can still overwrite
+    // this header: it runs after this middleware.
+    app.use((_req, res, next) => {
+        res.setHeader('Cache-Control', 'no-store');
+        next();
+    });
     app.enableCors({
         origin: buildCorsOrigin(env),
         credentials: true,
@@ -236761,6 +236795,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AdmissionsController = void 0;
+const site_purge_interceptor_1 = __nccwpck_require__(35493);
 const common_1 = __nccwpck_require__(1587);
 const school_jwt_guard_1 = __nccwpck_require__(81293);
 const roles_guard_1 = __nccwpck_require__(1778);
@@ -236811,6 +236846,9 @@ __decorate([
 ], AdmissionsController.prototype, "updateSettings", null);
 exports.AdmissionsController = AdmissionsController = __decorate([
     (0, common_1.Controller)('site/admissions')
+    // Any write here drops this school's cached pages — see the interceptor.
+    ,
+    (0, common_1.UseInterceptors)(site_purge_interceptor_1.SitePurgeInterceptor)
     // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
     // all. Without RolesGuard beside it every route here was reachable with a
     // STUDENT or PARENT token — and the enquiries ones hand back other families'
@@ -237690,6 +237728,7 @@ const hall_of_fame_service_1 = __nccwpck_require__(64641);
 const hall_of_fame_controller_1 = __nccwpck_require__(34207);
 const design_drafts_service_1 = __nccwpck_require__(23961);
 const design_drafts_controller_1 = __nccwpck_require__(24692);
+const site_purge_interceptor_1 = __nccwpck_require__(35493);
 const school_pages_service_1 = __nccwpck_require__(88977);
 const school_pages_controller_1 = __nccwpck_require__(89564);
 let CmsModule = class CmsModule {
@@ -237707,6 +237746,7 @@ exports.CmsModule = CmsModule = __decorate([
             hall_of_fame_service_1.HallOfFameService,
             design_drafts_service_1.DesignDraftsService,
             school_pages_service_1.SchoolPagesService,
+            site_purge_interceptor_1.SitePurgeInterceptor,
         ],
         controllers: [
             site_content_controller_1.SiteContentController,
@@ -237744,6 +237784,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CoursesController = void 0;
+const site_purge_interceptor_1 = __nccwpck_require__(35493);
 const common_1 = __nccwpck_require__(1587);
 const school_jwt_guard_1 = __nccwpck_require__(81293);
 const roles_guard_1 = __nccwpck_require__(1778);
@@ -237816,6 +237857,9 @@ __decorate([
 ], CoursesController.prototype, "setFee", null);
 exports.CoursesController = CoursesController = __decorate([
     (0, common_1.Controller)('site/courses')
+    // Any write here drops this school's cached pages — see the interceptor.
+    ,
+    (0, common_1.UseInterceptors)(site_purge_interceptor_1.SitePurgeInterceptor)
     // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
     // all. Without RolesGuard beside it every route here was reachable with a
     // STUDENT or PARENT token — and the enquiries ones hand back other families'
@@ -238128,6 +238172,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DesignDraftsController = void 0;
+const site_purge_interceptor_1 = __nccwpck_require__(35493);
 const common_1 = __nccwpck_require__(1587);
 const school_jwt_guard_1 = __nccwpck_require__(81293);
 const roles_guard_1 = __nccwpck_require__(1778);
@@ -238198,7 +238243,10 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], DesignDraftsController.prototype, "publish", null);
 exports.DesignDraftsController = DesignDraftsController = __decorate([
-    (0, common_1.Controller)('site/design-drafts'),
+    (0, common_1.Controller)('site/design-drafts')
+    // Any write here drops this school's cached pages — see the interceptor.
+    ,
+    (0, common_1.UseInterceptors)(site_purge_interceptor_1.SitePurgeInterceptor),
     (0, common_1.UseGuards)(school_jwt_guard_1.SchoolJwtGuard, roles_guard_1.RolesGuard)
     // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
     // all. Without RolesGuard beside it, "publish this draft to the live site" was
@@ -238370,6 +238418,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.HallOfFameController = void 0;
+const site_purge_interceptor_1 = __nccwpck_require__(35493);
 const common_1 = __nccwpck_require__(1587);
 const school_jwt_guard_1 = __nccwpck_require__(81293);
 const roles_guard_1 = __nccwpck_require__(1778);
@@ -238411,6 +238460,9 @@ __decorate([
 ], HallOfFameController.prototype, "setForCourse", null);
 exports.HallOfFameController = HallOfFameController = __decorate([
     (0, common_1.Controller)('site/hall-of-fame')
+    // Any write here drops this school's cached pages — see the interceptor.
+    ,
+    (0, common_1.UseInterceptors)(site_purge_interceptor_1.SitePurgeInterceptor)
     // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
     // all. Without RolesGuard beside it every route here was reachable with a
     // STUDENT or PARENT token — and the enquiries ones hand back other families'
@@ -238491,6 +238543,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.MediaController = void 0;
+const site_purge_interceptor_1 = __nccwpck_require__(35493);
 const common_1 = __nccwpck_require__(1587);
 const platform_express_1 = __nccwpck_require__(28454);
 const school_jwt_guard_1 = __nccwpck_require__(81293);
@@ -238557,6 +238610,9 @@ __decorate([
 ], MediaController.prototype, "remove", null);
 exports.MediaController = MediaController = __decorate([
     (0, common_1.Controller)('site/media')
+    // Any write here drops this school's cached pages — see the interceptor.
+    ,
+    (0, common_1.UseInterceptors)(site_purge_interceptor_1.SitePurgeInterceptor)
     // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
     // all. Without RolesGuard beside it every route here was reachable with a
     // STUDENT or PARENT token — and the enquiries ones hand back other families'
@@ -238692,6 +238748,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SchoolPagesController = void 0;
+const site_purge_interceptor_1 = __nccwpck_require__(35493);
 const common_1 = __nccwpck_require__(1587);
 const school_jwt_guard_1 = __nccwpck_require__(81293);
 const roles_guard_1 = __nccwpck_require__(1778);
@@ -238752,7 +238809,10 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], SchoolPagesController.prototype, "remove", null);
 exports.SchoolPagesController = SchoolPagesController = __decorate([
-    (0, common_1.Controller)('site/pages'),
+    (0, common_1.Controller)('site/pages')
+    // Any write here drops this school's cached pages — see the interceptor.
+    ,
+    (0, common_1.UseInterceptors)(site_purge_interceptor_1.SitePurgeInterceptor),
     (0, common_1.UseGuards)(school_jwt_guard_1.SchoolJwtGuard, roles_guard_1.RolesGuard)
     // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
     // all. Without RolesGuard beside it, "publish this draft to the live site" was
@@ -238896,6 +238956,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SiteContentController = void 0;
+const site_purge_interceptor_1 = __nccwpck_require__(35493);
 const common_1 = __nccwpck_require__(1587);
 const school_jwt_guard_1 = __nccwpck_require__(81293);
 const roles_guard_1 = __nccwpck_require__(1778);
@@ -238966,6 +239027,9 @@ __decorate([
 ], SiteContentController.prototype, "social", null);
 exports.SiteContentController = SiteContentController = __decorate([
     (0, common_1.Controller)('site')
+    // Any write here drops this school's cached pages — see the interceptor.
+    ,
+    (0, common_1.UseInterceptors)(site_purge_interceptor_1.SitePurgeInterceptor)
     // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
     // all. Without RolesGuard beside it every route here was reachable with a
     // STUDENT or PARENT token — and the enquiries ones hand back other families'
@@ -239131,6 +239195,114 @@ exports.SiteContentService = SiteContentService = __decorate([
 
 /***/ }),
 
+/***/ 35493:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var SitePurgeInterceptor_1;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SitePurgeInterceptor = void 0;
+const common_1 = __nccwpck_require__(1587);
+const operators_1 = __nccwpck_require__(99510);
+const db_1 = __nccwpck_require__(46919);
+const config_1 = __nccwpck_require__(58347);
+const tenancy_1 = __nccwpck_require__(51854);
+/**
+ * When a school changes its site, drop that school's cached pages.
+ *
+ * Public school pages are cached at the edge for 60 seconds so a visit does
+ * not re-run eleven database queries. That 60s is the only freshness cost the
+ * caching work introduced, and it lands on the worst possible person: a head
+ * teacher who fixes a wrong phone number, reloads, still sees the old one, and
+ * reasonably concludes the save failed.
+ *
+ * WHY AN INTERCEPTOR: the eight `site/*` controllers hold twenty-three write
+ * endpoints between them, and the next person to add a twenty-fourth would
+ * have to remember to purge. Here the rule is structural — "a write to a
+ * school's site drops that school's cache" holds for endpoints nobody has
+ * written yet. Same argument as OwnerCacheInterceptor.
+ *
+ * Purges every host that school is reachable on, because each host is its own
+ * cache entry: the platform subdomain plus every LIVE custom domain. Never
+ * touches another tenant's pages.
+ */
+let SitePurgeInterceptor = class SitePurgeInterceptor {
+    static { SitePurgeInterceptor_1 = this; }
+    tenant;
+    logger = new common_1.Logger(SitePurgeInterceptor_1.name);
+    env = (0, config_1.loadEnv)();
+    static READ_ONLY = new Set(['GET', 'HEAD', 'OPTIONS']);
+    constructor(tenant) {
+        this.tenant = tenant;
+    }
+    intercept(ctx, next) {
+        const req = ctx.switchToHttp().getRequest();
+        if (SitePurgeInterceptor_1.READ_ONLY.has(req.method))
+            return next.handle();
+        const tenantCtx = this.tenant.get();
+        const schoolId = tenantCtx?.kind === 'tenant' ? tenantCtx.schoolId : null;
+        if (!schoolId)
+            return next.handle();
+        // After the handler resolves, never before: a write that throws must not
+        // pay for a purge, and a cache dropped ahead of a failed write is refilled
+        // from the same state anyway.
+        return next.handle().pipe((0, operators_1.tap)({ next: () => void this.purge(schoolId) }));
+    }
+    async purge(schoolId) {
+        const { WEB_REVALIDATE_URL: url, REVALIDATE_SECRET: secret } = this.env;
+        // Not configured is a valid state: the 60s revalidate window is the
+        // backstop, so the pages are stale rather than wrong.
+        if (!url || !secret)
+            return;
+        try {
+            const db = (0, db_1.getPlatformPrisma)();
+            const school = await db.school.findUnique({
+                where: { id: schoolId },
+                select: { slug: true, domains: { where: { status: 'LIVE' }, select: { hostname: true } } },
+            });
+            if (!school)
+                return;
+            const hosts = [
+                `${school.slug}.${this.env.PLATFORM_HOST}`,
+                ...school.domains.map((d) => d.hostname),
+            ];
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-revalidate-secret': secret },
+                body: JSON.stringify({ hosts }),
+                // A slow web app must not hold a school's save open.
+                signal: AbortSignal.timeout(5_000),
+            });
+            if (!res.ok) {
+                this.logger.warn(`Purge for ${school.slug} returned ${res.status}`);
+            }
+        }
+        catch (e) {
+            // Never allowed to surface: the write has already committed, and the
+            // TTL will catch up within a minute regardless.
+            this.logger.warn(`Purge failed for school ${schoolId}: ${e.message}`);
+        }
+    }
+};
+exports.SitePurgeInterceptor = SitePurgeInterceptor;
+exports.SitePurgeInterceptor = SitePurgeInterceptor = SitePurgeInterceptor_1 = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [tenancy_1.TenantContextService])
+], SitePurgeInterceptor);
+
+
+/***/ }),
+
 /***/ 31029:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -239150,6 +239322,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.StaffController = void 0;
+const site_purge_interceptor_1 = __nccwpck_require__(35493);
 const common_1 = __nccwpck_require__(1587);
 const school_jwt_guard_1 = __nccwpck_require__(81293);
 const roles_guard_1 = __nccwpck_require__(1778);
@@ -239211,6 +239384,9 @@ __decorate([
 ], StaffController.prototype, "remove", null);
 exports.StaffController = StaffController = __decorate([
     (0, common_1.Controller)('site/staff')
+    // Any write here drops this school's cached pages — see the interceptor.
+    ,
+    (0, common_1.UseInterceptors)(site_purge_interceptor_1.SitePurgeInterceptor)
     // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
     // all. Without RolesGuard beside it every route here was reachable with a
     // STUDENT or PARENT token — and the enquiries ones hand back other families'
@@ -261699,14 +261875,18 @@ exports.TimetableService = TimetableService = TimetableService_1 = __decorate([
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UpdateMarketingConfigDto = exports.SetLeadStatusDto = exports.CreateLeadDto = exports.MarketingService = exports.MarketingModule = void 0;
+exports.UpdateMarketingConfigDto = exports.UpdateLeadDto = exports.SetLeadStatusDto = exports.LEAD_STATUSES = exports.LEAD_ACTIVITY_KINDS = exports.CreateLeadDto = exports.CreateLeadActivityDto = exports.MarketingService = exports.MarketingModule = void 0;
 var marketing_module_1 = __nccwpck_require__(9558);
 Object.defineProperty(exports, "MarketingModule", ({ enumerable: true, get: function () { return marketing_module_1.MarketingModule; } }));
 var marketing_service_1 = __nccwpck_require__(60671);
 Object.defineProperty(exports, "MarketingService", ({ enumerable: true, get: function () { return marketing_service_1.MarketingService; } }));
 var marketing_dto_1 = __nccwpck_require__(90981);
+Object.defineProperty(exports, "CreateLeadActivityDto", ({ enumerable: true, get: function () { return marketing_dto_1.CreateLeadActivityDto; } }));
 Object.defineProperty(exports, "CreateLeadDto", ({ enumerable: true, get: function () { return marketing_dto_1.CreateLeadDto; } }));
+Object.defineProperty(exports, "LEAD_ACTIVITY_KINDS", ({ enumerable: true, get: function () { return marketing_dto_1.LEAD_ACTIVITY_KINDS; } }));
+Object.defineProperty(exports, "LEAD_STATUSES", ({ enumerable: true, get: function () { return marketing_dto_1.LEAD_STATUSES; } }));
 Object.defineProperty(exports, "SetLeadStatusDto", ({ enumerable: true, get: function () { return marketing_dto_1.SetLeadStatusDto; } }));
+Object.defineProperty(exports, "UpdateLeadDto", ({ enumerable: true, get: function () { return marketing_dto_1.UpdateLeadDto; } }));
 Object.defineProperty(exports, "UpdateMarketingConfigDto", ({ enumerable: true, get: function () { return marketing_dto_1.UpdateMarketingConfigDto; } }));
 
 
@@ -261790,13 +261970,26 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UpdateMarketingConfigDto = exports.SetLeadStatusDto = exports.CreateLeadDto = void 0;
+exports.UpdateMarketingConfigDto = exports.SetLeadStatusDto = exports.CreateLeadActivityDto = exports.UpdateLeadDto = exports.CreateLeadDto = exports.LEAD_ACTIVITY_KINDS = exports.PIPELINE_STAGES = exports.LEAD_STATUSES = void 0;
 const class_validator_1 = __nccwpck_require__(35471);
 /** Digits with optional +, spaces, dashes, parens — 7..16 significant chars. */
 const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
+/**
+ * The pipeline, in order, plus the legacy CLOSED.
+ *
+ * CLOSED is still accepted because the console deployed before this change
+ * sends it on every status change; rejecting it would turn this release into a
+ * breaking one for a client we have not replaced yet. Nothing new writes it —
+ * `PIPELINE_STAGES` is what the current console offers.
+ */
+exports.LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'DEMO', 'WON', 'LOST', 'CLOSED'];
+/** The stages a lead can be moved TO. CLOSED is deliberately absent. */
+exports.PIPELINE_STAGES = ['NEW', 'CONTACTED', 'QUALIFIED', 'DEMO', 'WON', 'LOST'];
+exports.LEAD_ACTIVITY_KINDS = ['NOTE', 'CALL', 'WHATSAPP', 'EMAIL', 'MEETING'];
 class CreateLeadDto {
     name;
     phone;
+    email;
     school;
     interest;
     source;
@@ -261815,6 +262008,11 @@ __decorate([
 ], CreateLeadDto.prototype, "phone", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEmail)(),
+    __metadata("design:type", String)
+], CreateLeadDto.prototype, "email", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.Length)(1, 160),
     __metadata("design:type", String)
@@ -261830,12 +262028,86 @@ __decorate([
     (0, class_validator_1.Length)(1, 80),
     __metadata("design:type", String)
 ], CreateLeadDto.prototype, "source", void 0);
+/**
+ * Partial update of a lead from the owner console. Every field is optional so
+ * the console can PATCH just the stage, just the follow-up date, or a
+ * corrected phone number, without round-tripping the whole row.
+ *
+ * `nextFollowUpAt: null` clears the follow-up — distinct from omitting it,
+ * which leaves it untouched.
+ */
+class UpdateLeadDto {
+    status;
+    name;
+    phone;
+    email;
+    school;
+    interest;
+    // `null` is an explicit "clear it", so the ISO check only applies to strings.
+    nextFollowUpAt;
+}
+exports.UpdateLeadDto = UpdateLeadDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(exports.LEAD_STATUSES),
+    __metadata("design:type", String)
+], UpdateLeadDto.prototype, "status", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 120),
+    __metadata("design:type", String)
+], UpdateLeadDto.prototype, "name", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(PHONE_RE, { message: 'phone must be a valid phone number' }),
+    __metadata("design:type", String)
+], UpdateLeadDto.prototype, "phone", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEmail)(),
+    __metadata("design:type", String)
+], UpdateLeadDto.prototype, "email", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(0, 160),
+    __metadata("design:type", String)
+], UpdateLeadDto.prototype, "school", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(0, 120),
+    __metadata("design:type", String)
+], UpdateLeadDto.prototype, "interest", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsISO8601)(),
+    __metadata("design:type", Object)
+], UpdateLeadDto.prototype, "nextFollowUpAt", void 0);
+class CreateLeadActivityDto {
+    kind;
+    body;
+}
+exports.CreateLeadActivityDto = CreateLeadActivityDto;
+__decorate([
+    (0, class_validator_1.IsIn)(exports.LEAD_ACTIVITY_KINDS),
+    __metadata("design:type", String)
+], CreateLeadActivityDto.prototype, "kind", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 4000),
+    __metadata("design:type", String)
+], CreateLeadActivityDto.prototype, "body", void 0);
+/** Kept for the legacy status-only PATCH the console used before the pipeline. */
 class SetLeadStatusDto {
     status;
 }
 exports.SetLeadStatusDto = SetLeadStatusDto;
 __decorate([
-    (0, class_validator_1.IsIn)(['NEW', 'CONTACTED', 'CLOSED']),
+    (0, class_validator_1.IsIn)(exports.LEAD_STATUSES),
     __metadata("design:type", String)
 ], SetLeadStatusDto.prototype, "status", void 0);
 class UpdateMarketingConfigDto {
@@ -261946,9 +262218,12 @@ const common_1 = __nccwpck_require__(1587);
 const db_1 = __nccwpck_require__(46919);
 const mail_service_1 = __nccwpck_require__(63291);
 const run_in_background_1 = __nccwpck_require__(87480);
+/** Logging one of these counts as having reached the lead. NOTE does not. */
+const CONTACT_KINDS = new Set(['CALL', 'WHATSAPP', 'EMAIL', 'MEETING']);
 /**
  * Platform-level marketing state for sckools.com: the owner-editable pricing/
- * contact config (singleton row) and the callback-request lead inbox.
+ * contact config (singleton row), and the callback-request lead pipeline with
+ * its per-lead activity timeline.
  */
 let MarketingService = MarketingService_1 = class MarketingService {
     mail;
@@ -261984,6 +262259,7 @@ let MarketingService = MarketingService_1 = class MarketingService {
             data: {
                 name: dto.name?.trim() || null,
                 phone: dto.phone.trim(),
+                email: dto.email?.trim() || null,
                 school: dto.school?.trim() || null,
                 interest: dto.interest?.trim() || null,
                 source: dto.source,
@@ -261996,20 +262272,141 @@ let MarketingService = MarketingService_1 = class MarketingService {
         (0, run_in_background_1.runInBackground)(() => this.mail.sendLeadNotification(config.contactEmail, lead), () => undefined);
         return { ok: true };
     }
-    async listLeads(status) {
+    /**
+     * Pipeline listing. `q` matches name / phone / school / interest so the
+     * console's one search box covers every way the owner remembers a lead.
+     */
+    async listLeads(status, q) {
         const db = (0, db_1.getPlatformPrisma)();
-        return db.marketingLead.findMany({
-            where: status ? { status } : undefined,
+        const term = q?.trim();
+        const rows = await db.marketingLead.findMany({
+            where: {
+                ...(status ? { status } : {}),
+                ...(term
+                    ? {
+                        OR: [
+                            { name: { contains: term, mode: 'insensitive' } },
+                            { phone: { contains: term, mode: 'insensitive' } },
+                            { school: { contains: term, mode: 'insensitive' } },
+                            { interest: { contains: term, mode: 'insensitive' } },
+                            { email: { contains: term, mode: 'insensitive' } },
+                        ],
+                    }
+                    : {}),
+            },
             orderBy: { createdAt: 'desc' },
             take: 500,
         });
+        // Counted with an explicit groupBy over just these leads, not a relation
+        // `_count` in the include above. Prisma compiles that form into a join
+        // that aggregates the WHOLE LeadActivity table and filters afterwards; the
+        // scoped groupBy rides the [leadId, createdAt] index instead. `_max`
+        // rides along, so the card's "last touch" costs no second query.
+        // See common/tenant-aggregates.spec.ts for why this shape is a rule.
+        const ids = rows.map((r) => r.id);
+        const stats = ids.length
+            ? await db.leadActivity.groupBy({
+                by: ['leadId'],
+                where: { leadId: { in: ids } },
+                _count: { _all: true },
+                _max: { createdAt: true },
+            })
+            : [];
+        const byLead = new Map(stats.map((s) => [s.leadId, s]));
+        return rows.map((lead) => ({
+            ...lead,
+            activityCount: byLead.get(lead.id)?._count._all ?? 0,
+            lastActivityAt: byLead.get(lead.id)?._max.createdAt ?? null,
+        }));
     }
-    async setLeadStatus(id, status) {
+    /** One lead with its full timeline, oldest first (reading order). */
+    async getLead(id) {
         const db = (0, db_1.getPlatformPrisma)();
-        const lead = await db.marketingLead.findUnique({ where: { id } });
+        const lead = await db.marketingLead.findUnique({
+            where: { id },
+            include: { activities: { orderBy: { createdAt: 'asc' } } },
+        });
         if (!lead)
             throw new common_1.NotFoundException(`Lead ${id} not found`);
-        return db.marketingLead.update({ where: { id }, data: { status } });
+        return lead;
+    }
+    /**
+     * Partial update. A status change also appends a STAGE_CHANGE activity, so
+     * the timeline records every move without the caller having to remember —
+     * both writes go in one transaction so a move can never be logged twice or
+     * lost half-way.
+     */
+    async updateLead(id, dto, actorId) {
+        const db = (0, db_1.getPlatformPrisma)();
+        const existing = await db.marketingLead.findUnique({ where: { id } });
+        if (!existing)
+            throw new common_1.NotFoundException(`Lead ${id} not found`);
+        const data = {};
+        if (dto.status !== undefined)
+            data.status = dto.status;
+        if (dto.name !== undefined)
+            data.name = dto.name.trim() || null;
+        if (dto.phone !== undefined)
+            data.phone = dto.phone.trim();
+        if (dto.email !== undefined)
+            data.email = dto.email.trim() || null;
+        if (dto.school !== undefined)
+            data.school = dto.school.trim() || null;
+        if (dto.interest !== undefined)
+            data.interest = dto.interest.trim() || null;
+        if (dto.nextFollowUpAt !== undefined) {
+            data.nextFollowUpAt = dto.nextFollowUpAt ? new Date(dto.nextFollowUpAt) : null;
+        }
+        // A no-op status "change" writes no activity — re-selecting the current
+        // stage in the console must not litter the timeline.
+        const moved = dto.status !== undefined && dto.status !== existing.status;
+        await db.$transaction([
+            db.marketingLead.update({ where: { id }, data }),
+            ...(moved
+                ? [
+                    db.leadActivity.create({
+                        data: {
+                            leadId: id,
+                            kind: 'STAGE_CHANGE',
+                            fromStatus: existing.status,
+                            toStatus: dto.status,
+                            actorId: actorId ?? null,
+                        },
+                    }),
+                ]
+                : []),
+        ]);
+        return this.getLead(id);
+    }
+    /**
+     * Appends a manually-logged activity. Contact kinds also stamp
+     * `lastContactedAt`, which is what the "not touched in N days" surfacing in
+     * the console keys off.
+     */
+    async addLeadActivity(id, dto, actorId) {
+        const db = (0, db_1.getPlatformPrisma)();
+        const existing = await db.marketingLead.findUnique({ where: { id } });
+        if (!existing)
+            throw new common_1.NotFoundException(`Lead ${id} not found`);
+        const now = new Date();
+        await db.$transaction([
+            db.leadActivity.create({
+                data: {
+                    leadId: id,
+                    kind: dto.kind,
+                    body: dto.body?.trim() || null,
+                    actorId: actorId ?? null,
+                },
+            }),
+            ...(CONTACT_KINDS.has(dto.kind)
+                ? [db.marketingLead.update({ where: { id }, data: { lastContactedAt: now } })]
+                : []),
+        ]);
+        return this.getLead(id);
+    }
+    /** Legacy status-only path, kept so older callers keep working. */
+    async setLeadStatus(id, status, actorId) {
+        return this.updateLead(id, { status }, actorId);
     }
 };
 exports.MarketingService = MarketingService;
@@ -262054,9 +262451,30 @@ const API = 'https://api.vercel.com';
 let HostingProviderService = HostingProviderService_1 = class HostingProviderService {
     logger = new common_1.Logger(HostingProviderService_1.name);
     env = (0, config_1.loadEnv)();
-    /** False when credentials are absent — callers surface a manual step instead. */
+    /**
+     * The project a school's domain must be attached to: the one that serves
+     * school websites, NOT the one this code happens to run in.
+     *
+     * Reading VERCEL_PROJECT_ID here attached raffles.sckools.com to the API
+     * project on 5 Sept 2026 and 404'd that school's site in production — the
+     * API answers no route for `/`, so every page returned
+     * {"code":"NOT_FOUND","message":"Cannot GET /"}. Vercel injects
+     * VERCEL_PROJECT_ID as the id of whichever project is asking, so on a split
+     * web/api deployment it is always the wrong answer here.
+     */
+    get webProjectId() {
+        return this.env.VERCEL_WEB_PROJECT_ID;
+    }
+    /**
+     * False when credentials are absent — callers surface a manual step instead.
+     *
+     * Requires VERCEL_WEB_PROJECT_ID specifically. Falling back to
+     * VERCEL_PROJECT_ID would re-create the outage silently, so an environment
+     * that sets only the token reports "not configured" and the operator attaches
+     * by hand, which is the safe half of the old behaviour.
+     */
     get configured() {
-        return Boolean(this.env.VERCEL_TOKEN && this.env.VERCEL_PROJECT_ID);
+        return Boolean(this.env.VERCEL_TOKEN && this.webProjectId);
     }
     url(path) {
         const team = this.env.VERCEL_TEAM_ID;
@@ -262087,24 +262505,49 @@ let HostingProviderService = HostingProviderService_1 = class HostingProviderSer
         return { ok: true, data: json };
     }
     /**
-     * Claims `hostname` for the project. Idempotent: a domain already attached to
-     * this project is a success, not an error — the operator may be re-running
-     * Verify, and `domain_already_in_use` by OUR project is the desired state.
+     * Claims `hostname` for the project, and `www.<hostname>` alongside it.
+     *
+     * A school hands us stmarys.edu.in and their registrar almost always has a
+     * `www` record pointing at it too. Attaching only the apex leaves
+     * www.stmarys.edu.in resolving to us and answering 404 — the Domain row says
+     * `stmarys.edu.in`, so the www form matches no tenant. That is a dead address
+     * on the school's own letterhead, and nobody discovers it until a parent
+     * types it.
+     *
+     * The www copy is registered as a REDIRECT to the apex rather than a second
+     * live host, which is how the platform's own www.sckools.com already behaves.
+     * One canonical URL per school: better for search, and two hostnames serving
+     * identical HTML would be two cache entries each earning half the hit rate.
      */
     async attach(hostname) {
+        const primary = await this.attachOne(hostname);
+        // Best-effort, and deliberately not fatal: a school that never publishes a
+        // www record loses nothing, and failing the whole add because the courtesy
+        // alias could not be claimed would be the wrong trade.
+        if (primary.ok && !hostname.startsWith('www.')) {
+            await this.attachOne(`www.${hostname}`, hostname);
+        }
+        return primary;
+    }
+    /** Attach a single hostname; `redirectTo` makes it a redirect, not a site. */
+    async attachOne(hostname, redirectTo) {
         if (!this.configured) {
             return { ok: false, detail: 'Hosting credentials are not configured — attach the domain by hand.' };
         }
-        const r = await this.call(`/v10/projects/${this.env.VERCEL_PROJECT_ID}/domains`, {
+        const r = await this.call(`/v10/projects/${this.webProjectId}/domains`, {
             method: 'POST',
             // gitBranch pins the domain to a branch's latest deployment. Omitted
             // (undefined) it means production, which is what we want in prod and
             // exactly what we must NOT do on staging — see VERCEL_GIT_BRANCH.
-            body: { name: hostname, ...(this.env.VERCEL_GIT_BRANCH ? { gitBranch: this.env.VERCEL_GIT_BRANCH } : {}) },
+            body: {
+                name: hostname,
+                ...(this.env.VERCEL_GIT_BRANCH ? { gitBranch: this.env.VERCEL_GIT_BRANCH } : {}),
+                ...(redirectTo ? { redirect: redirectTo, redirectStatusCode: 308 } : {}),
+            },
         });
         if (r.ok) {
             const where = this.env.VERCEL_GIT_BRANCH ? ` (branch ${this.env.VERCEL_GIT_BRANCH})` : '';
-            this.logger.log(`Attached ${hostname} to project ${this.env.VERCEL_PROJECT_ID}${where}`);
+            this.logger.log(`Attached ${hostname} to project ${this.webProjectId}${where}`);
             return { ok: true, detail: `${hostname} attached to the hosting project${where}.` };
         }
         if (r.code === 'domain_already_in_use' || r.status === 409) {
@@ -262115,10 +262558,16 @@ let HostingProviderService = HostingProviderService_1 = class HostingProviderSer
         this.logger.warn(`Attach ${hostname} failed: ${r.code} ${r.message}`);
         return { ok: false, detail: r.message };
     }
+    /** Releases the hostname and its www alias, so neither stays claimed by us. */
     async detach(hostname) {
         if (!this.configured)
             return;
-        const r = await this.call(`/v9/projects/${this.env.VERCEL_PROJECT_ID}/domains/${encodeURIComponent(hostname)}`, { method: 'DELETE' });
+        if (!hostname.startsWith('www.'))
+            await this.detachOne(`www.${hostname}`);
+        await this.detachOne(hostname);
+    }
+    async detachOne(hostname) {
+        const r = await this.call(`/v9/projects/${this.webProjectId}/domains/${encodeURIComponent(hostname)}`, { method: 'DELETE' });
         // Best-effort: a domain removed from the platform but left on the host is
         // an orphan, not a data risk, and must not block the operator's delete.
         if (!r.ok && r.status !== 404) {
@@ -262130,7 +262579,7 @@ let HostingProviderService = HostingProviderService_1 = class HostingProviderSer
         if (!this.configured) {
             return { state: 'unknown', detail: 'Hosting credentials are not configured.' };
         }
-        const r = await this.call(`/v9/projects/${this.env.VERCEL_PROJECT_ID}/domains/${encodeURIComponent(hostname)}/config`, { method: 'GET' });
+        const r = await this.call(`/v9/projects/${this.webProjectId}/domains/${encodeURIComponent(hostname)}/config`, { method: 'GET' });
         if (!r.ok) {
             if (r.status === 404)
                 return { state: 'not_attached' };
@@ -263351,7 +263800,22 @@ let OwnerOverviewService = class OwnerOverviewService {
         const monthStart = new Date();
         monthStart.setDate(1);
         monthStart.setHours(0, 0, 0, 0);
-        const [schools, storage, enquiries, newEnquiries, events, enquiriesThisMonth, newLeads, students, images] = await Promise.all([
+        // "Due" means the follow-up moment has passed by end of today, so a lead
+        // booked for this afternoon counts as due now rather than only at midnight.
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+        // Deliberately NOT one Promise.all over all thirteen.
+        //
+        // Prisma's pool here holds 5 connections. Firing thirteen queries at once
+        // asks for thirteen, so eight queue against a 10s pool timeout — and every
+        // OTHER request the API is serving queues behind them. The failure that
+        // showed up on staging was not this endpoint erroring; it was unrelated
+        // requests 503ing while this one held the pool.
+        //
+        // Three waves of at most five keep the burst inside what the pool can give.
+        // The whole payload is Redis-cached for two minutes, so the extra latency
+        // is paid about once every two minutes, by one request.
+        const [schools, storage, enquiries, newEnquiries, events] = await Promise.all([
             db.school.findMany({
                 orderBy: { name: 'asc' },
                 include: { domains: { where: { isPrimary: true }, take: 1 } },
@@ -263360,10 +263824,20 @@ let OwnerOverviewService = class OwnerOverviewService {
             db.enquiry.groupBy({ by: ['schoolId'], _count: true }),
             db.enquiry.groupBy({ by: ['schoolId'], _count: true, where: { status: 'NEW' } }),
             db.event.groupBy({ by: ['schoolId'], _count: true }),
+        ]);
+        const [enquiriesThisMonth, newLeads, students, images] = await Promise.all([
             db.enquiry.count({ where: { createdAt: { gte: monthStart } } }),
             db.marketingLead.count({ where: { status: 'NEW' } }),
             db.student.groupBy({ by: ['schoolId'], _count: true }),
             db.mediaAsset.groupBy({ by: ['schoolId'], _count: true }),
+        ]);
+        const [followUpsDue, pendingEvents, pendingBlogPosts, leadsWonThisMonth] = await Promise.all([
+            db.marketingLead.count({
+                where: { nextFollowUpAt: { not: null, lte: endOfToday }, status: { notIn: ['WON', 'LOST', 'CLOSED'] } },
+            }),
+            db.event.count({ where: { scope: 'NETWORK', status: 'PENDING' } }),
+            db.blogPost.count({ where: { globalStatus: 'PENDING' } }),
+            db.marketingLead.count({ where: { status: 'WON', updatedAt: { gte: monthStart } } }),
         ]);
         const byId = (rows) => new Map(rows.map((r) => [r.schoolId, r]));
         const storageMap = byId(storage);
@@ -263395,6 +263869,14 @@ let OwnerOverviewService = class OwnerOverviewService {
                 newLeads,
                 students: rows.reduce((sum, r) => sum + r.students, 0),
                 images: rows.reduce((sum, r) => sum + r.images, 0),
+            },
+            attention: {
+                newLeads,
+                followUpsDue,
+                pendingEvents,
+                pendingBlogPosts,
+                schoolsInSetup: schools.filter((s) => s.status === 'SETUP').length,
+                leadsWonThisMonth,
             },
             schools: rows,
         };
@@ -263670,6 +264152,7 @@ const owner_events_service_1 = __nccwpck_require__(81093);
 const owner_overview_service_1 = __nccwpck_require__(69755);
 const owner_schools_service_1 = __nccwpck_require__(44529);
 const owner_domains_service_1 = __nccwpck_require__(93489);
+const speed_service_1 = __nccwpck_require__(16233);
 const owner_dto_3 = __nccwpck_require__(96240);
 let OwnerController = class OwnerController {
     schools;
@@ -263680,7 +264163,8 @@ let OwnerController = class OwnerController {
     jobs;
     domains;
     opsService;
-    constructor(schools, ownerEvents, impersonation, overviewSvc, marketing, jobs, domains, opsService) {
+    speed;
+    constructor(schools, ownerEvents, impersonation, overviewSvc, marketing, jobs, domains, opsService, speed) {
         this.schools = schools;
         this.ownerEvents = ownerEvents;
         this.impersonation = impersonation;
@@ -263689,15 +264173,23 @@ let OwnerController = class OwnerController {
         this.jobs = jobs;
         this.domains = domains;
         this.opsService = opsService;
+        this.speed = speed;
     }
     overview() {
         return this.overviewSvc.overview();
     }
-    listLeads(status) {
-        return this.marketing.listLeads(status);
+    listLeads(status, q) {
+        return this.marketing.listLeads(status, q);
     }
-    setLeadStatus(id, dto) {
-        return this.marketing.setLeadStatus(id, dto.status);
+    getLead(id) {
+        return this.marketing.getLead(id);
+    }
+    /** Stage moves, follow-up scheduling and contact corrections all land here. */
+    updateLead(id, dto, user) {
+        return this.marketing.updateLead(id, dto, user.sub);
+    }
+    addLeadActivity(id, dto, user) {
+        return this.marketing.addLeadActivity(id, dto, user.sub);
     }
     marketingConfig() {
         return this.marketing.getConfigRow();
@@ -263762,6 +264254,13 @@ let OwnerController = class OwnerController {
     removeDomain(id, domainId) {
         return this.domains.remove(id, domainId);
     }
+    /**
+     * What a school's public homepage actually costs a visitor, measured now.
+     * `?force=1` skips the 60s memo — the button in the console sends it.
+     */
+    speedReport(force) {
+        return this.speed.report(force === '1');
+    }
     listEvents(status) {
         return this.ownerEvents.listNetwork(status);
     }
@@ -263797,18 +264296,36 @@ __decorate([
 __decorate([
     (0, common_1.Get)('leads'),
     __param(0, (0, common_1.Query)('status')),
+    __param(1, (0, common_1.Query)('q')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", void 0)
+], OwnerController.prototype, "listLeads", null);
+__decorate([
+    (0, common_1.Get)('leads/:id'),
+    __param(0, (0, common_1.Param)('id', common_1.ParseUUIDPipe)),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
-], OwnerController.prototype, "listLeads", null);
+], OwnerController.prototype, "getLead", null);
 __decorate([
     (0, common_1.Patch)('leads/:id'),
     __param(0, (0, common_1.Param)('id', common_1.ParseUUIDPipe)),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, marketing_1.SetLeadStatusDto]),
+    __metadata("design:paramtypes", [String, marketing_1.UpdateLeadDto, Object]),
     __metadata("design:returntype", void 0)
-], OwnerController.prototype, "setLeadStatus", null);
+], OwnerController.prototype, "updateLead", null);
+__decorate([
+    (0, common_1.Post)('leads/:id/activities'),
+    __param(0, (0, common_1.Param)('id', common_1.ParseUUIDPipe)),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, marketing_1.CreateLeadActivityDto, Object]),
+    __metadata("design:returntype", void 0)
+], OwnerController.prototype, "addLeadActivity", null);
 __decorate([
     (0, common_1.Get)('marketing-config'),
     __metadata("design:type", Function),
@@ -263942,6 +264459,13 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], OwnerController.prototype, "removeDomain", null);
 __decorate([
+    (0, common_1.Get)('speed'),
+    __param(0, (0, common_1.Query)('force')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], OwnerController.prototype, "speedReport", null);
+__decorate([
     (0, common_1.Get)('events'),
     __param(0, (0, common_1.Query)('status')),
     __metadata("design:type", Function),
@@ -263993,7 +264517,8 @@ exports.OwnerController = OwnerController = __decorate([
         marketing_1.MarketingService,
         hiring_1.JobsService,
         owner_domains_service_1.OwnerDomainsService,
-        ops_service_1.OpsService])
+        ops_service_1.OpsService,
+        speed_service_1.SpeedService])
 ], OwnerController);
 
 
@@ -264245,6 +264770,7 @@ const owner_schools_service_1 = __nccwpck_require__(44529);
 const owner_domains_service_1 = __nccwpck_require__(93489);
 const hosting_provider_service_1 = __nccwpck_require__(98054);
 const owner_cache_interceptor_1 = __nccwpck_require__(20006);
+const speed_service_1 = __nccwpck_require__(16233);
 const owner_controller_1 = __nccwpck_require__(36876);
 let OwnerModule = class OwnerModule {
 };
@@ -264253,9 +264779,105 @@ exports.OwnerModule = OwnerModule = __decorate([
     (0, common_1.Module)({
         imports: [jwt_1.JwtModule.register({}), auth_1.AuthModule, features_1.FeaturesModule, marketing_1.MarketingModule, hiring_1.HiringModule],
         controllers: [owner_auth_controller_1.OwnerAuthController, owner_controller_1.OwnerController],
-        providers: [ops_service_1.OpsService, owner_auth_service_1.OwnerAuthService, owner_host_guard_1.OwnerHostGuard, owner_schools_service_1.OwnerSchoolsService, owner_domains_service_1.OwnerDomainsService, hosting_provider_service_1.HostingProviderService, owner_cache_interceptor_1.OwnerCacheInterceptor, owner_events_service_1.OwnerEventsService, impersonation_service_1.ImpersonationService, owner_overview_service_1.OwnerOverviewService],
+        providers: [ops_service_1.OpsService, owner_auth_service_1.OwnerAuthService, owner_host_guard_1.OwnerHostGuard, owner_schools_service_1.OwnerSchoolsService, owner_domains_service_1.OwnerDomainsService, hosting_provider_service_1.HostingProviderService, owner_cache_interceptor_1.OwnerCacheInterceptor, speed_service_1.SpeedService, owner_events_service_1.OwnerEventsService, impersonation_service_1.ImpersonationService, owner_overview_service_1.OwnerOverviewService],
     })
 ], OwnerModule);
+
+
+/***/ }),
+
+/***/ 16233:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var SpeedService_1;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SpeedService = void 0;
+const common_1 = __nccwpck_require__(1587);
+const db_1 = __nccwpck_require__(46919);
+const config_1 = __nccwpck_require__(58347);
+let SpeedService = class SpeedService {
+    static { SpeedService_1 = this; }
+    logger = new common_1.Logger(SpeedService_1.name);
+    env = (0, config_1.loadEnv)();
+    /** Measuring is a network call per school; do not re-run it on every page view. */
+    cached = null;
+    static TTL_MS = 60_000;
+    async report(force = false) {
+        if (!force && this.cached && Date.now() - this.cached.at < SpeedService_1.TTL_MS) {
+            return this.cached.report;
+        }
+        const report = await this.measure();
+        this.cached = { at: Date.now(), report };
+        return report;
+    }
+    async measure() {
+        const db = (0, db_1.getPlatformPrisma)();
+        const schools = await db.school.findMany({
+            where: { status: 'LIVE' },
+            select: {
+                id: true,
+                name: true,
+                slug: true,
+                domains: { where: { status: 'LIVE', isPrimary: true }, select: { hostname: true }, take: 1 },
+            },
+            orderBy: { name: 'asc' },
+        });
+        const rows = await Promise.all(schools.map((s) => 
+        // A school is measured on the address it actually publishes: its own
+        // domain when it has one, otherwise the platform subdomain.
+        this.probe(s.id, s.name, s.domains[0]?.hostname ?? `${s.slug}.${this.env.PLATFORM_HOST}`)));
+        return {
+            measuredAt: new Date().toISOString(),
+            vantage: process.env.VERCEL_REGION ?? 'server',
+            rows,
+        };
+    }
+    async probe(schoolId, name, host) {
+        const base = {
+            schoolId, name, host,
+            ttfbMs: null, bytes: null, status: null, edgeCache: null, cacheable: false, error: null,
+        };
+        const started = Date.now();
+        try {
+            const res = await fetch(`https://${host}/`, {
+                // The point is to observe the shared cache, not to bypass it.
+                redirect: 'follow',
+                signal: AbortSignal.timeout(10_000),
+            });
+            // Headers arrive before the body, so this is the closest a server-side
+            // fetch gets to time-to-first-byte.
+            const ttfbMs = Date.now() - started;
+            const body = await res.arrayBuffer();
+            const cc = res.headers.get('cache-control') ?? '';
+            return {
+                ...base,
+                ttfbMs,
+                bytes: body.byteLength,
+                status: res.status,
+                edgeCache: res.headers.get('x-vercel-cache'),
+                // `no-store` / `private` means no shared cache may hold it — which was
+                // the state of every public page before the caching work.
+                cacheable: /max-age|s-maxage/.test(cc) && !/no-store|private/.test(cc),
+            };
+        }
+        catch (e) {
+            this.logger.warn(`Speed probe failed for ${host}: ${e.message}`);
+            return { ...base, error: e.message };
+        }
+    }
+};
+exports.SpeedService = SpeedService;
+exports.SpeedService = SpeedService = SpeedService_1 = __decorate([
+    (0, common_1.Injectable)()
+], SpeedService);
 
 
 /***/ }),
@@ -270621,7 +271243,24 @@ const envSchema = zod_1.z.object({
      * told, in the response, that the attach step must be done by hand.
      */
     VERCEL_TOKEN: zod_1.z.string().min(1).optional(),
+    /**
+     * The project this service RUNS in. Vercel injects it, and it is the API's
+     * own id — which is exactly why it must not be used to attach a school's
+     * domain. See VERCEL_WEB_PROJECT_ID.
+     */
     VERCEL_PROJECT_ID: zod_1.z.string().min(1).optional(),
+    /**
+     * The project that SERVES school websites (skoolos-web).
+     *
+     * On 5 Sept 2026 a school's domain was attached to the API project and its
+     * site 404'd in production: the attach code read VERCEL_PROJECT_ID, which on
+     * a split web/api deployment is the id of whichever project is asking — the
+     * API. It had been harmless only because no VERCEL_TOKEN was set; adding the
+     * token switched the feature on and the next attach went to the wrong place.
+     *
+     * Deliberately NOT defaulted to VERCEL_PROJECT_ID: that default is the bug.
+     */
+    VERCEL_WEB_PROJECT_ID: zod_1.z.string().min(1).optional(),
     VERCEL_TEAM_ID: zod_1.z.string().min(1).optional(),
     /**
      * Which deployment a school's domain should serve.
@@ -270636,6 +271275,18 @@ const envSchema = zod_1.z.object({
      * deployment.
      */
     VERCEL_GIT_BRANCH: zod_1.z.string().min(1).optional(),
+    /**
+     * Where to tell the web app to drop a school's cached pages, and the secret
+     * that proves the request is ours.
+     *
+     * School pages are cached for 60 seconds, which is the only freshness cost
+     * the caching work introduced. Unset, that 60s stands and a head teacher who
+     * corrects a phone number waits for it; set, the correction appears at once.
+     * Both must be present or the purge is skipped — a URL without a secret
+     * would be refused, and a secret without a URL has nowhere to go.
+     */
+    WEB_REVALIDATE_URL: zod_1.z.string().url().optional(),
+    REVALIDATE_SECRET: zod_1.z.string().min(16).optional(),
 });
 /**
  * The RLS-enforcing connection is optional in the schema because local dev and
