@@ -48,6 +48,30 @@ describe('the console stacking ladder', () => {
     expect(offenders.map(([f]) => f)).toEqual([]);
   });
 
+  /**
+   * The rule above keys on `skosx`, which every overlay INSIDE a page carries
+   * — and the app shell's own mobile drawer does not, because that class sits
+   * further up the tree. So the drawer kept a Tailwind `z-50`, landing it
+   * under the command bar's PAGE_CHROME (60): opening the menu on a phone left
+   * the search field floating across it.
+   *
+   * A full-viewport layer is exactly the thing that must never pick its own
+   * number, so match on the shape that MAKES it one — `fixed` with `inset-0` —
+   * instead of on a class that merely tends to travel with it.
+   */
+  it('no full-viewport layer picks its own z-index', () => {
+    const offenders: string[] = [];
+    for (const [file, src] of files) {
+      for (const m of src.matchAll(/className="([^"]*)"/g)) {
+        const cls = m[1];
+        if (/\bfixed\b/.test(cls) && /\binset-0\b/.test(cls) && /\bz-\d/.test(cls)) {
+          offenders.push(`${file}: ${cls}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('every school-audience API client carries the tenant host', () => {
     const offenders = files.filter(([, src]) =>
       /useApi\(\{\s*audience:\s*'school'\s*\}\)/.test(src)
