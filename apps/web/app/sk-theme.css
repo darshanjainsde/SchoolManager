@@ -416,6 +416,45 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
   /* Full width, and no auto margin to fight the grid placement. */
   .sk-weekbar > .sk-weekbar-today { grid-area: today; margin-left: 0; width: 100%; }
 }
+
+/* ---- a header row with a control pushed to the far end ---- */
+/*
+   `margin-left: auto` on the last child is how a header parks its control at
+   the right. The control still holds its min-content width on a phone, so the
+   TITLE is what compresses: "Formats & official references" broke over three
+   lines beside a "Certificate face" label broken over two, with the select
+   squeezed to nothing between them.
+
+   Below 640px the row wraps and the control takes its own full-width line —
+   the title reads on one or two lines and the control becomes a comfortable
+   target instead of a sliver. Above 640px it is the same single row it was. */
+.sk-headrow { display: flex; align-items: center; gap: 8px; }
+.sk-headrow-end { margin-left: auto; }
+
+@media (max-width: 640px) {
+  .sk-headrow { flex-wrap: wrap; }
+  .sk-headrow > .sk-headrow-end { margin-left: 0; width: 100%; }
+  /* A label that wraps its own control: give the control the free space rather
+     than letting the label's words be squeezed against it. */
+  .sk-headrow > .sk-headrow-end > .sk-input { flex: 1; width: auto; min-width: 0; }
+}
+
+/* ---- a list row whose trailing controls must not eat the text column ---- */
+/*
+   `.sk-row` gives the text column `flex: 1` — basis 0, so it yields first —
+   while the pills and the action button beside it do not shrink at all. On a
+   phone the text was squeezed to roughly one word per line: a book title ran
+   down EIGHT lines beside its two pills, three rows filled the screen, and the
+   Return button was still pushed off the right edge.
+
+   Below 640px the row wraps and the text takes a full-width first line, so the
+   title needs one or two lines instead of eight and the controls sit under it.
+   The row gets SHORTER, which is the actual complaint — more of the list fits
+   on screen. Above 640px it is the same single row as before. */
+@media (max-width: 640px) {
+  .sk-listrow { flex-wrap: wrap; }
+  .sk-listrow > .sp { flex: 1 1 100%; min-width: 0; }
+}
 .sk-covrow .cov-status { display: flex; align-items: center; gap: 8px; justify-self: end; }
 @media (max-width: 760px) {
   .sk-covrow { grid-template-columns: 1fr max-content; }

@@ -140,6 +140,36 @@ describe('a paged navigator keeps its arrows together', () => {
 });
 
 
+describe('a control at the end of a row does not eat the text beside it', () => {
+  // Reported three times in one sitting, always the same shape: a flex line
+  // holding a label and a control, both allowed to shrink, and the label is
+  // what gives. Certificates: "Formats & official references" over three lines
+  // beside a two-line "Certificate face". Library: a book title down EIGHT
+  // lines with the Return button pushed off the right edge.
+  it('.sk-headrow drops its trailing control to its own line on a phone', () => {
+    expect(code(css)).toMatch(
+      /@media[^{]*max-width[^{]*\{[\s\S]*?\.sk-headrow\s*>\s*\.sk-headrow-end\s*\{[^}]*width:\s*100%/,
+    );
+  });
+
+  it('.sk-listrow gives its text column a full-width line on a phone', () => {
+    expect(code(css)).toMatch(
+      /@media[^{]*max-width[^{]*\{[\s\S]*?\.sk-listrow\s*>\s*\.sp\s*\{[^}]*flex:\s*1 1 100%/,
+    );
+  });
+
+  // Above the breakpoint these classes must reproduce EXACTLY what the inline
+  // styles they replaced did, or moving the layout into CSS silently redesigns
+  // the desktop view. margin-left:auto is what parks the control at the end.
+  it('keeps the desktop behaviour the inline styles had', () => {
+    const c = code(css);
+    expect(c).toMatch(/\.sk-headrow\s*\{[^}]*display:\s*flex/);
+    expect(c).toMatch(/\.sk-headrow-end\s*\{[^}]*margin-left:\s*auto/);
+    expect(c).toMatch(/\.sk-weekbar-today\s*\{[^}]*margin-left:\s*auto/);
+  });
+});
+
+
 describe('deliberately wide blocks stay inside a scroller', () => {
   // A block with a min-width larger than a phone is fine — as long as the
   // scrolling happens inside it and not on the whole page.

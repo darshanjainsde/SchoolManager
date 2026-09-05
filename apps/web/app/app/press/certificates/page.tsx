@@ -92,7 +92,7 @@ function VariantPicker() {
   if (role !== 'SCHOOL_ADMIN') return null;
   const current = content.data?.profile?.certVariant ?? 'CBSE';
   return (
-    <label style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600 }}>
+    <label className="sk-headrow-end" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600 }}>
       Certificate face
       <select className="sk-input" style={{ width: 'auto', fontSize: 12, padding: '4px 8px' }} value={current}
         disabled={save.isPending} onChange={(e) => save.mutate(e.target.value)}>
@@ -639,7 +639,7 @@ export default function CertificateDeskPage() {
 
       {/* ── formats & references — shown so the office can verify the standard ── */}
       <div className="sk-card"><div className="sk-card-b">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="sk-headrow">
           <Shield size={14} aria-hidden="true" style={{ color: 'var(--sk-good)' }} />
           <b style={{ fontSize: 12.5 }}>Formats &amp; official references</b>
           <VariantPicker />
