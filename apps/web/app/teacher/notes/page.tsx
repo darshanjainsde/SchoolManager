@@ -239,7 +239,7 @@ function ClassDetail({
         </div>
         <div className="sk-card-b">
           {/* Composer — the segmented Note / To-do toggle. */}
-          <div role="group" aria-label="What to add" style={{ display: 'flex', gap: 8 }}>
+          <div role="group" aria-label="What to add" className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
             <button
               type="button"
               className="sk-chip"

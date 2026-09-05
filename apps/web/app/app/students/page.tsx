@@ -178,7 +178,7 @@ function InviteSentModal({
 }) {
   return (
     <DialogShell onClose={onClose} labelledBy="invite-sent-h">
-      <div className="sk-card-h" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <div className="sk-card-h sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <h3 id="invite-sent-h">Invite sent</h3>
         <button onClick={onClose} className="sk-btn sk-press" aria-label="Close" style={{ padding: 7 }}>
           <X className="h-4 w-4" />
@@ -211,7 +211,7 @@ function InviteSentModal({
             </p>
           </>
         )}
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+        <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           {!result.emailSent && (
             <button className="sk-btn sk-press" data-variant="primary" disabled={resending} onClick={onResend}>
               <Send className="h-3.5 w-3.5" />
@@ -265,7 +265,7 @@ function EmailPromptModal({
             placeholder="jane.doe@example.com"
           />
         </Field>
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+        <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
             className="sk-btn sk-press"
             data-variant="primary"
@@ -734,7 +734,7 @@ export default function StudentsPage() {
       )}
 
       {/* Page header */}
-      <header className="sk-pagehead" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+      <header className="sk-pagehead sk-wrap-sm" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <h1>Students</h1>
           <p>Manage enrolled students.</p>

@@ -91,7 +91,7 @@ export function PrintRoom({ sheets, startIndex = 0, title, onClose }: {
           value={zoom} onChange={(e) => setZoom(Number(e.target.value) as (typeof ZOOMS)[number])}>
           {ZOOMS.map((z) => <option key={z} value={z}>{Math.round(z * 100)}%</option>)}
         </select>
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span className="sk-wrap-sm" style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 11.5, opacity: 0.75 }}>
             Print{sheets.length > 1 ? `s all ${sheets.length}` : 's this sheet'} — exactly as shown
           </span>

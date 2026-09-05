@@ -455,6 +455,39 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
   .sk-listrow { flex-wrap: wrap; }
   .sk-listrow > .sp { flex: 1 1 100%; min-width: 0; }
 }
+
+/* ---- the console's row primitive may wrap on a phone ---- */
+/*
+   `.sk-row` is 97 rows across every portal, and it could not wrap. A row that
+   cannot wrap has only one way to resolve a conflict — shrink somebody — and
+   flex decides that by min-content, which prose always loses because it can
+   wrap one more time and a button cannot. That is the same defect reported on
+   four separate screens in one sitting.
+
+   This is strictly additive: a row whose contents already fit is untouched;
+   one that would have squeezed its text to a word per line now puts the
+   overflowing part on a second line instead. Rows that need a stronger answer
+   than "wrap" — the attendance marks, the library's text column — say so with
+   .sk-markrow / .sk-listrow above. */
+@media (max-width: 640px) {
+  .sk-row { flex-wrap: wrap; }
+}
+
+/* ---- an ad-hoc flex row that may wrap on a phone ---- */
+/*
+   69 rows across the console, the teacher portal and the platform put prose
+   beside a control on an inline `display: 'flex'` with no wrap. Each one
+   squeezes the text on a phone, and none can be fixed by a media query on the
+   properties they set — an inline declaration outranks the stylesheet.
+
+   But an inline style only outranks the properties it DECLARES, and not one of
+   these declares flex-wrap. So this rule reaches them where a rule for display
+   or gap never could, without touching a single desktop layout: above 640px it
+   does not apply, and below it the row wraps instead of squeezing. Marking the
+   element is the whole change at each site. */
+@media (max-width: 640px) {
+  .sk-wrap-sm { flex-wrap: wrap; }
+}
 .sk-covrow .cov-status { display: flex; align-items: center; gap: 8px; justify-self: end; }
 @media (max-width: 760px) {
   .sk-covrow { grid-template-columns: 1fr max-content; }

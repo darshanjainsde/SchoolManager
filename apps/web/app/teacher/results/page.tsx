@@ -56,7 +56,7 @@ function ConfirmPublish({
             Publishing makes every saved mark visible to students and parents, and emails them that
             results are out. Save any pending marks first — only marks already saved get published.
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="sk-btn" data-variant="primary" disabled={isPending} onClick={onConfirm}>
               {isPending ? 'Publishing…' : 'Yes, publish'}
             </button>

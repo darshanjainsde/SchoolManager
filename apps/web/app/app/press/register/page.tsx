@@ -130,7 +130,7 @@ export default function PressRegisterPage() {
                 {f === 'ALL' ? 'Everything' : PRESS_TYPE_LABEL[f]}
               </button>
             ))}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200 }}>
+            <label className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 200 }}>
               <Search size={14} style={{ color: 'var(--sk-ink-3)', flex: 'none' }} aria-hidden="true" />
               <input
                 className="sk-input" style={{ flex: 1 }}
@@ -200,7 +200,7 @@ export default function PressRegisterPage() {
                       <tr>
                         <td colSpan={5} style={{ padding: '4px 16px 12px' }}>
                           <form
-                            style={{ display: 'flex', gap: 8, alignItems: 'center' }}
+                            className="sk-wrap-sm" style={{ display: 'flex', gap: 8, alignItems: 'center' }}
                             onSubmit={(e) => { e.preventDefault(); if (voiding) voidIssue.mutate(voiding); }}
                           >
                             <input

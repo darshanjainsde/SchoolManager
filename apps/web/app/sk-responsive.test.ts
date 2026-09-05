@@ -170,6 +170,29 @@ describe('a control at the end of a row does not eat the text beside it', () => 
 });
 
 
+describe('an inline flex row can still be told to wrap', () => {
+  // The audit found 69 rows across the console, the teacher portal and the
+  // platform that put prose beside a control on an inline `display: 'flex'`
+  // with no wrap. A media query cannot reach `display` there — inline wins —
+  // but it CAN reach flex-wrap, because not one of them declares it. That is
+  // the only reason a single class fixes all 69 without touching desktop.
+  it('.sk-wrap-sm exists and applies only on a phone', () => {
+    expect(code(css)).toMatch(/@media[^{]*max-width:\s*640px[^{]*\{\s*\.sk-wrap-sm\s*\{[^}]*flex-wrap:\s*wrap/);
+  });
+
+  it('never sets a property the inline styles it marks already declare', () => {
+    // display/gap/align come from the style object; if this class set them too
+    // the rule would be dead on arrival and nobody would be told.
+    const rule = code(css).match(/\.sk-wrap-sm\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).not.toMatch(/display|gap|align-items|justify-content/);
+  });
+
+  it('.sk-row wraps on a phone too — the console primitive, 97 rows', () => {
+    expect(code(css)).toMatch(/@media[^{]*max-width[^{]*\{\s*\.sk-row\s*\{[^}]*flex-wrap:\s*wrap/);
+  });
+});
+
+
 describe('deliberately wide blocks stay inside a scroller', () => {
   // A block with a min-width larger than a phone is fine — as long as the
   // scrolling happens inside it and not on the whole page.

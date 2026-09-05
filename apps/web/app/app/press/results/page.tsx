@@ -54,7 +54,7 @@ function SubjectRow({ s, onNudge, nudging }: {
         </span>
       )}
       {s.state !== 'PUBLISHED' && (
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="sk-wrap-sm" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {s.lastNudge && (
             <span className="sk-muted" style={{ fontSize: 10.5 }}>nudged {pressDateLabel(s.lastNudge.at)}</span>
           )}
@@ -160,7 +160,7 @@ function ClassCard({ c, windowId, onGenerated }: { c: ResultRoomClass; windowId:
             <b style={{ fontSize: 12.5 }}>Generate {c.label} with gaps? The reason goes on the record (audit log).</b>
             <input className="sk-input" maxLength={300} placeholder="e.g. principal ordered — Hindi teacher on medical leave"
               value={note} onChange={(e) => setNote(e.target.value)} />
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
               <button className="sk-btn" data-variant="danger" disabled={note.trim().length < 5 || generate.isPending}
                 onClick={() => generate.mutate(note.trim())}>
                 Generate with gaps
@@ -302,7 +302,7 @@ export default function ResultRoomPage() {
               <input type="date" className="sk-input" required value={draft.endDate}
                 onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} />
             </label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
               <button type="submit" className="sk-btn" data-variant="primary" disabled={createWindow.isPending}>
                 {createWindow.isPending ? 'Saving…' : 'Save window'}
               </button>

@@ -79,7 +79,7 @@ export default function ReportsDocumentsPage() {
       {/* ── the counter ──────────────────────────────────────────────────── */}
       <div className="sk-card">
         <div className="sk-card-b">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <label className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Search size={15} style={{ color: 'var(--sk-ink-3)', flex: 'none' }} aria-hidden="true" />
             <input
               className="sk-input" style={{ flex: 1 }} autoComplete="off"

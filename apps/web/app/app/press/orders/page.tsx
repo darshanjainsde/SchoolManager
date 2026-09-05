@@ -33,7 +33,7 @@ export default function PressOrdersPage() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5">
-      <header className="sk-pagehead" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+      <header className="sk-pagehead sk-wrap-sm" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <h1>Print Store</h1>
           <p>Sckools prints and delivers — bulk report cards, exam papers, anything on paper. You confirm the price first.</p>

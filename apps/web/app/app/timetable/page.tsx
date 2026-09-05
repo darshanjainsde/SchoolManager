@@ -194,7 +194,7 @@ function AssignModal({
       }}
     >
       <div className="sk-card" style={{ width: '100%', maxWidth: 380 }}>
-        <div className="sk-card-h" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div className="sk-card-h sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <h3>
             Assign period — {dayLabel}, {periodLabel}
           </h3>
@@ -247,7 +247,7 @@ function AssignModal({
             </select>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <button
               className="sk-btn sk-press"
               data-variant="primary"

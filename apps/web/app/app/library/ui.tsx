@@ -372,7 +372,7 @@ export function PickedCard({
   return (
     <Card>
       <CardBody>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <div className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{

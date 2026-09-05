@@ -203,7 +203,7 @@ export default function PressOrderPage() {
               <b style={{ fontSize: 13 }}>Cancel this order?</b>
               <input className="sk-input" maxLength={300} placeholder="Why? (optional — the press reads it)"
                 value={cancelNote} onChange={(e) => setCancelNote(e.target.value)} />
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
                 <button className="sk-btn" data-variant="danger" disabled={move.isPending} onClick={() => move.mutate('cancel')}>
                   {move.isPending ? 'Cancelling…' : 'Yes, cancel it'}
                 </button>
