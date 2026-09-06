@@ -110,7 +110,7 @@ export function ClassNotes({
               </div>
             </div>
           ))}
-          <form onSubmit={submitNote} style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <form onSubmit={submitNote} className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <input
               className={fieldCls}
               placeholder="Add a note…"
@@ -144,7 +144,7 @@ export function ClassNotes({
               <span>{t.body}</span>
             </label>
           ))}
-          <form onSubmit={submitTodo} style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <form onSubmit={submitTodo} className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <input
               className={fieldCls}
               placeholder="Add a to-do…"

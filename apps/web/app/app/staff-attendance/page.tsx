@@ -559,11 +559,11 @@ export default function StaffAttendancePage() {
                 const k = markKey(p.kind, p.id);
                 const status = marks[k] ?? 'PRESENT';
                 return (
-                  <div className="sk-row" key={k}>
+                  <div className="sk-row sk-markrow" key={k}>
                     <span className="badge" style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}>
                       {initials(p.name)}
                     </span>
-                    <div>
+                    <div className="sk-markrow-who">
                       <button
                         type="button"
                         className="nm"
@@ -587,7 +587,7 @@ export default function StaffAttendancePage() {
                       <div className="meta">{p.kind === 'TEACHER' ? 'Teacher' : roleLabel(p.role) ?? 'Staff'}</div>
                     </div>
                     <span className="sp" />
-                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                    <div className="sk-markrow-marks">
                       {STATUSES.map((option) => {
                         const active = status === option;
                         return (

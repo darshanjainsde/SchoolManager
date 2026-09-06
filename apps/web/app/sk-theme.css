@@ -343,6 +343,151 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 @media (max-width: 720px) {
   .sk-covrow { grid-template-columns: 1fr; gap: 4px; }
 }
+
+/* ---- attendance roster row: the four marks line up down the whole list ---- */
+/*
+   `.sk-row` lays the identity and the marks out on ONE flex line, and both are
+   allowed to shrink. The marks' min-content is the wider of the two, so on a
+   phone the name is what gives: it collapsed to about 60px, wrapping even
+   "Nitin Bhat" mid-name, while the four buttons folded into a 2x2 that began
+   at a different x on every row — a ragged column of controls down the roster,
+   with no two rows the same height.
+
+   Below 640px the row becomes two lines instead: identity, then the marks as a
+   fixed two-column grid. Every row is then the same shape, each mark sits in
+   the same place as the row above it, and the name gets the full width. Above
+   640px nothing changes — one line is right whenever there is room for it.
+
+   640px is Tailwind's `sm`, which the shell already uses for the same
+   phone/not-phone split. */
+.sk-markrow-marks { display: flex; flex-wrap: wrap; gap: 5px; }
+
+@media (max-width: 640px) {
+  .sk-markrow {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'badge who' 'marks marks';
+    gap: 9px 11px;
+    align-items: center;
+  }
+  .sk-markrow > .badge { grid-area: badge; }
+  .sk-markrow > .sk-markrow-who { grid-area: who; min-width: 0; }
+  /* The spacer only exists to push the marks right on one line. */
+  .sk-markrow > .sp { display: none; }
+  .sk-markrow > .sk-markrow-marks {
+    grid-area: marks;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  /* Equal targets: a 2x2 of buttons that are all the same size reads as one
+     control, and each is comfortably above the 44px touch minimum in height. */
+  .sk-markrow-marks > button { width: 100%; }
+}
+
+/* ---- week navigation: the arrows stay either side of the date ---- */
+/*
+   One flex line with wrap lays "<", the date, ">" and Today out in source
+   order and drops whatever does not fit onto a second row. On a phone the
+   date plus its "This week" pill is the widest item, so ">" wrapped away from
+   "<" while Today, pushed by `margin-left: auto`, landed alone at the right of
+   that second row. The two arrows ended up on different lines — it read as two
+   broken controls rather than one week picker.
+
+   Below 640px it becomes a two-row grid: the arrows flank the date, Today
+   spans the full width beneath. Above 640px, one line, exactly as before. */
+.sk-weekbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sk-weekbar-label {
+  font-weight: 700; font-size: 13.5px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.sk-weekbar-today { margin-left: auto; }
+
+@media (max-width: 640px) {
+  .sk-weekbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'prev label next' 'today today today';
+    gap: 10px;
+  }
+  .sk-weekbar > .sk-weekbar-prev { grid-area: prev; }
+  .sk-weekbar > .sk-weekbar-label { grid-area: label; justify-content: center; }
+  .sk-weekbar > .sk-weekbar-next { grid-area: next; }
+  /* Full width, and no auto margin to fight the grid placement. */
+  .sk-weekbar > .sk-weekbar-today { grid-area: today; margin-left: 0; width: 100%; }
+}
+
+/* ---- a header row with a control pushed to the far end ---- */
+/*
+   `margin-left: auto` on the last child is how a header parks its control at
+   the right. The control still holds its min-content width on a phone, so the
+   TITLE is what compresses: "Formats & official references" broke over three
+   lines beside a "Certificate face" label broken over two, with the select
+   squeezed to nothing between them.
+
+   Below 640px the row wraps and the control takes its own full-width line —
+   the title reads on one or two lines and the control becomes a comfortable
+   target instead of a sliver. Above 640px it is the same single row it was. */
+.sk-headrow { display: flex; align-items: center; gap: 8px; }
+.sk-headrow-end { margin-left: auto; }
+
+@media (max-width: 640px) {
+  .sk-headrow { flex-wrap: wrap; }
+  .sk-headrow > .sk-headrow-end { margin-left: 0; width: 100%; }
+  /* A label that wraps its own control: give the control the free space rather
+     than letting the label's words be squeezed against it. */
+  .sk-headrow > .sk-headrow-end > .sk-input { flex: 1; width: auto; min-width: 0; }
+}
+
+/* ---- a list row whose trailing controls must not eat the text column ---- */
+/*
+   `.sk-row` gives the text column `flex: 1` — basis 0, so it yields first —
+   while the pills and the action button beside it do not shrink at all. On a
+   phone the text was squeezed to roughly one word per line: a book title ran
+   down EIGHT lines beside its two pills, three rows filled the screen, and the
+   Return button was still pushed off the right edge.
+
+   Below 640px the row wraps and the text takes a full-width first line, so the
+   title needs one or two lines instead of eight and the controls sit under it.
+   The row gets SHORTER, which is the actual complaint — more of the list fits
+   on screen. Above 640px it is the same single row as before. */
+@media (max-width: 640px) {
+  .sk-listrow { flex-wrap: wrap; }
+  .sk-listrow > .sp { flex: 1 1 100%; min-width: 0; }
+}
+
+/* ---- the console's row primitive may wrap on a phone ---- */
+/*
+   `.sk-row` is 97 rows across every portal, and it could not wrap. A row that
+   cannot wrap has only one way to resolve a conflict — shrink somebody — and
+   flex decides that by min-content, which prose always loses because it can
+   wrap one more time and a button cannot. That is the same defect reported on
+   four separate screens in one sitting.
+
+   This is strictly additive: a row whose contents already fit is untouched;
+   one that would have squeezed its text to a word per line now puts the
+   overflowing part on a second line instead. Rows that need a stronger answer
+   than "wrap" — the attendance marks, the library's text column — say so with
+   .sk-markrow / .sk-listrow above. */
+@media (max-width: 640px) {
+  .sk-row { flex-wrap: wrap; }
+}
+
+/* ---- an ad-hoc flex row that may wrap on a phone ---- */
+/*
+   69 rows across the console, the teacher portal and the platform put prose
+   beside a control on an inline `display: 'flex'` with no wrap. Each one
+   squeezes the text on a phone, and none can be fixed by a media query on the
+   properties they set — an inline declaration outranks the stylesheet.
+
+   But an inline style only outranks the properties it DECLARES, and not one of
+   these declares flex-wrap. So this rule reaches them where a rule for display
+   or gap never could, without touching a single desktop layout: above 640px it
+   does not apply, and below it the row wraps instead of squeezing. Marking the
+   element is the whole change at each site. */
+@media (max-width: 640px) {
+  .sk-wrap-sm { flex-wrap: wrap; }
+}
 .sk-covrow .cov-status { display: flex; align-items: center; gap: 8px; justify-self: end; }
 @media (max-width: 760px) {
   .sk-covrow { grid-template-columns: 1fr max-content; }

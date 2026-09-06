@@ -13,6 +13,25 @@ import { useHydrated } from '@/lib/use-hydrated';
  * know the second the TV will paint (the hydration-mismatch rule).
  */
 
+/**
+ * One fluid scale for the whole screen.
+ *
+ * This page must be legible on a 1920px lobby television AND on the phone the
+ * head teacher uses to check what the lobby is showing — a five-fold range.
+ * Fixed pixels serve the first and break the second: at 390px the 44px clock
+ * and the 30px school name could not both fit the masthead, so the name's box
+ * was squeezed to nothing and its text painted straight over the clock.
+ *
+ * `clamp` rather than a media query, deliberately. Every size on this page is
+ * set in an inline style object, and an inline declaration outranks any
+ * stylesheet rule — a media query written against these elements would never
+ * apply and would report nothing. clamp is a VALUE, so it works where a rule
+ * cannot. Each call names the phone floor and the television ceiling; the
+ * middle term is that ceiling expressed against a 1280px reference, where the
+ * two meet without a step.
+ */
+const fluid = (min: number, max: number) => `clamp(${min}px, ${(max / 12.8).toFixed(2)}vw, ${max}px)`;
+
 const ROTATE_MS = 12_000;
 const RELOAD_MS = 40 * 60_000;
 
@@ -81,39 +100,41 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
         position: 'fixed', inset: 0, overflow: 'hidden', cursor: 'none',
         background: `linear-gradient(140deg, color-mix(in srgb, ${s.school.ps1} 24%, #0d0b1a), #0d0b1a 55%, color-mix(in srgb, ${s.school.ps2} 18%, #0d0b1a))`,
         color: '#F4F2FC', fontFamily: 'system-ui, sans-serif',
+          // The masthead overlap: a squeezed box let the name paint over the clock.
+          overflowWrap: 'break-word',
         display: 'flex', flexDirection: 'column',
       }}
       data-tv-key={tvKey ? 'set' : 'missing'}
     >
       {/* Masthead */}
-      <header style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '28px 44px 18px' }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: fluid(10, 18), padding: `${fluid(14, 28)} ${fluid(16, 44)} ${fluid(10, 18)}` }}>
         {s.school.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- kiosk crest, fixed box
-          <img src={s.school.logoUrl} alt="" style={{ width: 56, height: 56, objectFit: 'contain' }} />
+          <img src={s.school.logoUrl} alt="" style={{ width: fluid(38, 56), height: fluid(38, 56), flex: 'none', objectFit: 'contain' }} />
         ) : null}
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.01em' }}>{s.school.name}</div>
-          <div style={{ fontSize: 16, opacity: 0.75 }}>
+          <div style={{ fontSize: fluid(19, 30), fontWeight: 800, letterSpacing: '-0.01em' }}>{s.school.name}</div>
+          <div style={{ fontSize: fluid(12, 16), opacity: 0.75 }}>
             {s.dateLabel}
             {s.school.festival ? ` · ${s.school.festival} ✨` : ''}
           </div>
         </div>
-        <div style={{ fontSize: 44, fontWeight: 700 }}><Clock /></div>
+        <div style={{ fontSize: fluid(24, 44), fontWeight: 700, flex: 'none' }}><Clock /></div>
       </header>
 
-      <div style={{ height: 3, margin: '0 44px', borderRadius: 2, background: `linear-gradient(90deg, ${s.school.ps1}, ${s.school.ps2})` }} />
+      <div style={{ height: 3, margin: `0 ${fluid(16, 44)}`, borderRadius: 2, background: `linear-gradient(90deg, ${s.school.ps1}, ${s.school.ps2})` }} />
 
       {/* The rotating stage */}
-      <main key={idx} className="tv-stage" style={{ flex: 1, minHeight: 0, padding: '30px 44px 18px', display: 'flex', flexDirection: 'column' }}>
+      <main key={idx} className="tv-stage" style={{ flex: 1, minHeight: 0, padding: `${fluid(16, 30)} ${fluid(16, 44)} ${fluid(10, 18)}`, display: 'flex', flexDirection: 'column' }}>
         {panel.kind === 'notices' && (
           <>
             <PanelTitle accent={s.school.ps1}>Notice board</PanelTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 18, alignContent: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: fluid(10, 18), alignContent: 'start' }}>
               {panel.items.slice(0, 4).map((a, i) => (
-                <div key={i} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px' }}>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>{a.title}</div>
-                  <div style={{ fontSize: 17, opacity: 0.85, marginTop: 6, lineHeight: 1.5 }}>{a.body}</div>
-                  <div style={{ fontSize: 13, opacity: 0.55, marginTop: 10 }}>{a.when}</div>
+                <div key={i} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: `${fluid(12, 18)} ${fluid(14, 22)}` }}>
+                  <div style={{ fontSize: fluid(16, 22), fontWeight: 700 }}>{a.title}</div>
+                  <div style={{ fontSize: fluid(13, 17), opacity: 0.85, marginTop: 6, lineHeight: 1.5 }}>{a.body}</div>
+                  <div style={{ fontSize: fluid(11, 13), opacity: 0.55, marginTop: 10 }}>{a.when}</div>
                 </div>
               ))}
             </div>
@@ -124,22 +145,22 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
           <>
             <PanelTitle accent={s.school.ps1}>Today at school</PanelTitle>
             {panel.holiday && (
-              <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 16 }}>
+              <div style={{ fontSize: fluid(18, 26), fontWeight: 700, marginBottom: 16 }}>
                 🎊 {panel.holiday} — the calendar marks today a holiday
               </div>
             )}
             {panel.items.length ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: fluid(9, 14) }}>
                 {panel.items.map((e, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 16, background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: '16px 22px' }}>
-                    <span style={{ fontSize: 22, fontWeight: 800, color: s.school.ps1, fontVariantNumeric: 'tabular-nums' }}>{e.time}</span>
-                    <span style={{ fontSize: 24, fontWeight: 700 }}>{e.title}</span>
-                    {e.venue && <span style={{ fontSize: 17, opacity: 0.7 }}>· {e.venue}</span>}
+                  <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: fluid(8, 16), background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: `${fluid(11, 16)} ${fluid(14, 22)}` }}>
+                    <span style={{ fontSize: fluid(15, 22), fontWeight: 800, color: s.school.ps1, fontVariantNumeric: 'tabular-nums' }}>{e.time}</span>
+                    <span style={{ fontSize: fluid(16, 24), fontWeight: 700 }}>{e.title}</span>
+                    {e.venue && <span style={{ fontSize: fluid(12, 17), opacity: 0.7 }}>· {e.venue}</span>}
                   </div>
                 ))}
               </div>
             ) : !panel.holiday ? (
-              <div style={{ fontSize: 24, opacity: 0.75 }}>A regular school day. Classes as per the timetable.</div>
+              <div style={{ fontSize: fluid(16, 24), opacity: 0.75 }}>A regular school day. Classes as per the timetable.</div>
             ) : null}
           </>
         )}
@@ -147,11 +168,11 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
         {panel.kind === 'birthdays' && (
           <>
             <PanelTitle accent={s.school.ps2}>Janamdin mubarak 🎂</PanelTitle>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 16, alignContent: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: fluid(10, 16), alignContent: 'start' }}>
               {panel.items.map((b, i) => (
-                <div key={i} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 22px', fontSize: 24, fontWeight: 700 }}>
+                <div key={i} style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: `${fluid(12, 18)} ${fluid(14, 22)}`, fontSize: fluid(17, 24), fontWeight: 700 }}>
                   {b.name}
-                  {b.className && <span style={{ fontSize: 16, opacity: 0.7, fontWeight: 500 }}> · {b.className}</span>}
+                  {b.className && <span style={{ fontSize: fluid(12, 16), opacity: 0.7, fontWeight: 500 }}> · {b.className}</span>}
                 </div>
               ))}
             </div>
@@ -170,12 +191,12 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
         {panel.kind === 'upcoming' && (
           <>
             <PanelTitle accent={s.school.ps1}>Coming up</PanelTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: fluid(9, 14) }}>
               {panel.items.map((e, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 16, background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: '16px 22px' }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, color: s.school.ps2 }}>{e.when}</span>
-                  <span style={{ fontSize: 24, fontWeight: 700 }}>{e.title}</span>
-                  {e.venue && <span style={{ fontSize: 17, opacity: 0.7 }}>· {e.venue}</span>}
+                <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: fluid(8, 16), background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: `${fluid(11, 16)} ${fluid(14, 22)}` }}>
+                  <span style={{ fontSize: fluid(14, 20), fontWeight: 800, color: s.school.ps2 }}>{e.when}</span>
+                  <span style={{ fontSize: fluid(16, 24), fontWeight: 700 }}>{e.title}</span>
+                  {e.venue && <span style={{ fontSize: fluid(12, 17), opacity: 0.7 }}>· {e.venue}</span>}
                 </div>
               ))}
             </div>
@@ -184,7 +205,7 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
       </main>
 
       {/* Footer: rotation dots */}
-      <footer style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: '0 0 22px' }}>
+      <footer style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: `0 0 ${fluid(12, 22)}` }}>
         {panels.map((_, i) => (
           <span
             key={i}
@@ -207,7 +228,7 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
 
 function PanelTitle({ children, accent }: { children: React.ReactNode; accent: string }) {
   return (
-    <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: accent, marginBottom: 18 }}>
+    <div style={{ fontSize: fluid(12, 15), fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: accent, marginBottom: fluid(10, 18) }}>
       {children}
     </div>
   );

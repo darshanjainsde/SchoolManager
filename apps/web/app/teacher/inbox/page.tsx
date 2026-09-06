@@ -152,7 +152,7 @@ export default function TeacherInboxPage() {
         </div>
       ) : (
         <div className="sk-card">
-          <div className="sk-card-h" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="sk-card-h sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
               type="button"
               className="sk-btn"

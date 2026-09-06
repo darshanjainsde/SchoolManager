@@ -147,7 +147,7 @@ function AddYearForm({ isSaving, onSave }: { isSaving: boolean; onSave: (data: {
           />
         </div>
       </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--sk-ink-3)' }}>
+      <label className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--sk-ink-3)' }}>
         <input type="checkbox" checked={isCurrent} onChange={(e) => setIsCurrent(e.target.checked)} />
         Set as current academic year
       </label>
@@ -346,7 +346,7 @@ function ClassNoteVisibilityCard({
             {CLASS_NOTE_VISIBILITY_OPTIONS.map((opt) => (
               <label
                 key={opt.value}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: isSaving ? 'default' : 'pointer' }}
+                className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: isSaving ? 'default' : 'pointer' }}
               >
                 <input
                   type="radio"
@@ -563,7 +563,7 @@ function PeriodRow({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span className="sk-lab">Kind</span>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div className="sk-wrap-sm" style={{ display: 'flex', gap: 6 }}>
               <button
                 type="button"
                 className="sk-btn sk-press"
@@ -585,7 +585,7 @@ function PeriodRow({
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
           <button
             className="sk-btn sk-press"
             data-variant="primary"
@@ -900,7 +900,7 @@ export default function SettingsPage() {
                   onChange={(e) => setBreakDraft({ ...breakDraft, duration: e.target.value })}
                 />
               </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+              <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 2 }}>
                 <button
                   className="sk-btn sk-press"
                   data-variant="primary"
@@ -993,7 +993,7 @@ export default function SettingsPage() {
               onSave={(data) => addPeriodMutation.mutate(data)}
             />
 
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
               <button className="sk-btn sk-press" onClick={() => addBreakLike('Break')} disabled={addPeriodMutation.isPending}>
                 <Coffee className="h-4 w-4" />
                 Add break

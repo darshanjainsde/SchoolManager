@@ -315,7 +315,7 @@ export default function TeacherAssignmentsPage() {
                   {attachments.map((a) => (
                     <li
                       key={a.url}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                      className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                       data-testid={`attachment-${a.name}`}
                     >
                       <span className="sk-muted" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -334,7 +334,7 @@ export default function TeacherAssignmentsPage() {
                 </ul>
               )}
             </div>
-            <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="sm:col-span-2 sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
                 type="button"
                 className="sk-btn sk-press"

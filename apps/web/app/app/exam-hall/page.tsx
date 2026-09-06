@@ -411,7 +411,7 @@ export default function ExamHallPage() {
 
   return (
     <div>
-      <header className="sk-pagehead" style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <header className="sk-pagehead sk-wrap-sm" style={{ display: 'flex', justifyContent: 'space-between' }}>
         <div>
           <h1>Exam Hall</h1>
           <p>Draw the room once, tick the classes, print. Nothing in the hall needs a phone.</p>
@@ -493,7 +493,7 @@ export default function ExamHallPage() {
                   placeholder="Hall A"
                   onChange={(e) => edit({ name: e.target.value })}
                 />
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div className="sk-wrap-sm" style={{ display: 'flex', gap: 10 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <label className="sk-lab" htmlFor="eh-rows" style={{ textTransform: 'none', letterSpacing: 0 }}>
                       Rows
@@ -632,7 +632,7 @@ export default function ExamHallPage() {
                 The back row is kept empty so the teacher can stand behind everyone. That is the only rule
                 this screen applies.
               </p>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+              <div className="sk-wrap-sm" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
                 <button
                   type="button"
                   className="sk-btn sk-press"
@@ -730,7 +730,7 @@ export default function ExamHallPage() {
                 {makeSeating.isPending ? 'Working…' : 'Make the seating'}
               </button>
               {plan ? (
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
                   <button
                     type="button"
                     className="sk-btn sk-press"
@@ -813,7 +813,7 @@ export default function ExamHallPage() {
                     )}
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+                  <div className="sk-wrap-sm" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
                     <button
                       type="button"
                       className="sk-btn sk-press"

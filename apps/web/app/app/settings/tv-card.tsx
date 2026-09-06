@@ -49,7 +49,7 @@ export function TvCard() {
 
   return (
     <div className="sk-card">
-      <div className="sk-card-h" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="sk-card-h sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <MonitorPlay size={16} style={{ color: 'var(--sk-brand-2)' }} aria-hidden="true" />
         <h3>Reception TV</h3>
       </div>
@@ -79,7 +79,7 @@ export function TvCard() {
                 <Copy size={14} aria-hidden="true" /> {copied ? 'Copied' : 'Copy link'}
               </button>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
               <button className="sk-btn" disabled={act.isPending} onClick={() => act.mutate('rotate')}>
                 <RefreshCw size={14} aria-hidden="true" /> New link (old one dies)
               </button>

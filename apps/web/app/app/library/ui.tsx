@@ -299,7 +299,7 @@ export function ListRow({
   children?: ReactNode;
 }) {
   return (
-    <div className="sk-row">
+    <div className="sk-row sk-listrow">
       {/* `.sp` IS the text column here — it carries flex:1 and holds .nm/.meta.
           Copied from app/app/alumni/page.tsx rather than invented, so a row in
           the library measures and wraps exactly like a row anywhere else. */}
@@ -372,7 +372,7 @@ export function PickedCard({
   return (
     <Card>
       <CardBody>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <div className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{

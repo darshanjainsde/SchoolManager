@@ -69,11 +69,11 @@ function TypeRow({
         onBlur={ringBlur}
         style={{ ...fieldStyle, minWidth: 150, flex: 1 }}
       />
-      <label className="sk-lab" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <label className="sk-lab sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         <input type="checkbox" checked={isPaid} onChange={(e) => setIsPaid(e.target.checked)} />
         Paid
       </label>
-      <label className="sk-lab" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <label className="sk-lab sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         Days/year
         <input
           type="number"
@@ -86,7 +86,7 @@ function TypeRow({
           style={numStyle}
         />
       </label>
-      <label className="sk-lab" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <label className="sk-lab sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         Carry-forward cap
         <input
           type="number"
@@ -99,7 +99,7 @@ function TypeRow({
           style={numStyle}
         />
       </label>
-      <label className="sk-lab" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+      <label className="sk-lab sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
         Active
       </label>
@@ -317,7 +317,7 @@ export default function LeavePolicyPage() {
             />
           ))}
           <form
-            style={{ display: 'flex', gap: 8, marginTop: 6 }}
+            className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 6 }}
             onSubmit={(e) => {
               e.preventDefault();
               if (newType.trim()) addType.mutate(newType.trim());

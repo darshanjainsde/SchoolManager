@@ -198,7 +198,7 @@ export default function TeacherTestsPage() {
                 placeholder="Chapters 1–4, plus the worksheet from last week."
               />
             </div>
-            <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="sm:col-span-2 sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
                 type="button"
                 className="sk-btn sk-press"

@@ -292,7 +292,7 @@ export default function AdminRequestsPage() {
                       </button>
                     </div>
                   ) : (
-                    <div style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                    <div className="sk-wrap-sm" style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
                       <button
                         type="button"
                         className="sk-btn sk-press"

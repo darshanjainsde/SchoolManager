@@ -273,7 +273,7 @@ export default function TeacherAnnouncementsPage() {
                     disabled={editMutation.isPending}
                     maxLength={4000}
                   />
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <button type="button" className="sk-btn" onClick={cancelEdit} disabled={editMutation.isPending}>
                       Cancel
                     </button>

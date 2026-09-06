@@ -340,7 +340,7 @@ export default function ClassesPage() {
           <h1>Classes</h1>
           <p>Manage your school&apos;s classes by grade and section.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
           <Link href="/app/classes/structure" className="sk-btn sk-press">
             <Layers className="h-4 w-4" />
             Manage grades &amp; subjects
@@ -406,7 +406,7 @@ export default function ClassesPage() {
                     autoFocus
                   />
                 </Field>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
                   <button
                     className="sk-btn sk-press"
                     data-variant="primary"
@@ -448,7 +448,7 @@ export default function ClassesPage() {
                     <span className="sk-num">{cls._count.students}</span>
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8 }}>
                   <button
                     className="sk-btn sk-press"
                     onClick={() => {

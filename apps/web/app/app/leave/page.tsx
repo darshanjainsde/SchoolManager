@@ -327,7 +327,7 @@ export default function AdminLeavePage() {
                 >
                   {outcome === 'approved' ? 'APPROVED' : outcome === 'rejected' ? 'REJECTED' : 'PENDING'}
                 </span>
-                <div style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                <div className="sk-wrap-sm" style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
                   <button
                     type="button"
                     className="sk-btn sk-press"
@@ -405,7 +405,7 @@ export default function AdminLeavePage() {
               <span className="sk-reqstamp" data-state="approved" aria-hidden="true">
                 APPROVED
               </span>
-              <div style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+              <div className="sk-wrap-sm" style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
                   className="sk-btn sk-press"
@@ -436,7 +436,7 @@ export default function AdminLeavePage() {
                   } a substitute`}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label htmlFor="cov-from" className="sk-lab">
                 From

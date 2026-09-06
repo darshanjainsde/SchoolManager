@@ -337,7 +337,7 @@ function TeacherAttendanceInner() {
               it costs no extra request. */}
           {classDayRows.length > 0 && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 2 }}>
+              <div className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 2 }}>
                 <p className="sk-lab" style={{ margin: 0 }}>
                   {classSectionId ? 'Taking' : 'Pick a class'}
                 </p>

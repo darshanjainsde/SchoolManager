@@ -164,7 +164,7 @@ function InviteSentModal({
         aria-labelledby="s-invite-h"
       >
         <div
-          className="sk-card-h"
+          className="sk-card-h sk-wrap-sm"
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
         >
           <h3 id="s-invite-h">Invite sent</h3>
@@ -197,7 +197,7 @@ function InviteSentModal({
               </p>
             </>
           )}
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             {!result.emailSent && (
               <button className="sk-btn sk-press" data-variant="primary" disabled={resending} onClick={onResend}>
                 <Send className="h-3.5 w-3.5" />
@@ -458,7 +458,7 @@ export default function StaffPage() {
           resending={resendInviteMutation.isPending}
         />
       )}
-      <header className="sk-pagehead" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+      <header className="sk-pagehead sk-wrap-sm" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <h1>Staff</h1>
           <p>Manage your school&apos;s non-teaching staff — office, support, drivers, and more.</p>

@@ -103,7 +103,7 @@ export function OrderDrawer({ target, onClose }: { target: OrderTarget; onClose:
           background: 'var(--sk-card)', color: 'var(--sk-ink)', borderLeft: '1px solid var(--sk-line)',
           padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14,
         }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <b style={{ fontSize: 15 }}>Print via Sckools</b>
           <button className="sk-btn" data-icon aria-label="Close" onClick={onClose}><X size={15} /></button>
         </div>

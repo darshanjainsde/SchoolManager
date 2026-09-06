@@ -304,7 +304,7 @@ export function EmailSettingsCard() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <label className="sk-lab" htmlFor="em-accent">Accent colour</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
                   id="em-accent" type="color" value={accent || d.effective.accent}
                   onChange={(e) => setAccent(e.target.value)}
@@ -357,7 +357,7 @@ export function EmailSettingsCard() {
                 }}
               />
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div className="sk-wrap-sm" style={{ display: 'flex', gap: 6 }}>
               <input
                 style={{ ...field, flex: 1 }} value={testTo} placeholder="you@example.com"
                 onChange={(e) => setTestTo(e.target.value)} aria-label="Send a test to"

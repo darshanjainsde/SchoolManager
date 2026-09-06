@@ -246,7 +246,7 @@ function ContactBlock({ lead }: { lead: LeadDetail }) {
 
 function Row({ label, value, onCopy }: { label: string; value: string; onCopy?: () => void }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+    <div className="sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
       <span className="sk-muted" style={{ minWidth: 106, fontSize: 12 }}>
         {label}
       </span>
