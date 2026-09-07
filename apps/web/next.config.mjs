@@ -58,20 +58,29 @@ const nextConfig = {
    * school should sit on the same name as the brochure and the email address.
    */
   async rewrites() {
-    return [
-      { source: '/demo', destination: '/demo/index.html' },
-      /**
-       * test.sckools.com only: the rebuilt marketing site, served as one static
-       * page (public/site-preview/index.html) while it is verified on real
-       * devices. Same mechanism as /demo above; gated on the host so nothing
-       * changes for sckools.com or any school site until the React port lands.
-       */
-      ...['/', '/features', '/start'].map((source) => ({
-        source,
-        destination: '/site-preview/index.html',
-        has: [{ type: 'host', value: 'test.sckools.com' }],
-      })),
-    ];
+    /**
+     * test.sckools.com only: the rebuilt marketing site, served as one static
+     * page (public/site-preview/index.html) while it is verified on real
+     * devices. Same mechanism as /demo; gated on the host so nothing changes
+     * for sckools.com or any school site until the React port lands.
+     *
+     * `/` must be a beforeFiles rewrite: an afterFiles rewrite is only
+     * consulted when no page matches, and app/page.tsx matches `/`. Verified
+     * on staging — /features and /start (no page) rewrote, / did not.
+     */
+    const preview = (source) => ({
+      source,
+      destination: '/site-preview/index.html',
+      has: [{ type: 'host', value: 'test.sckools.com' }],
+    });
+    return {
+      beforeFiles: [preview('/')],
+      afterFiles: [
+        { source: '/demo', destination: '/demo/index.html' },
+        preview('/features'),
+        preview('/start'),
+      ],
+    };
   },
 };
 
