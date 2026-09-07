@@ -557,6 +557,31 @@ html,body{margin:0;background:#fcfdff}
   .mkt .brow{gap:6px;padding:10px 12px 12px} .mkt .bcell{padding:8px 6px;font-size:10px;text-align:center} .mkt .bcell span{display:none} .mkt .bcell b{font-size:11.5px}
   .mkt .rcpt dl{grid-template-columns:auto 1fr;gap:4px 10px} .mkt .rcpt .cr{font-size:13px}
 }
+/* ── pricing (per student, per year; owner-set INR + USD) ── */
+.mkt .tier .price{margin:10px 0 2px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap} .mkt .tier .price b{font-size:1.9rem;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1} .mkt .tier .price small{font-size:12px;font-weight:700;color:var(--dim)}
+.mkt .cur{display:inline-flex;border:1.5px solid var(--line2);border-radius:999px;padding:3px;background:#fff} .mkt .cur button{border:0;background:none;padding:6px 14px;border-radius:999px;font-weight:800;font-size:13.5px;color:var(--muted);cursor:pointer;font-family:inherit} .mkt .cur button.on{background:var(--ink);color:#fff}
+.mkt .from{margin-top:14px;display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--gold-soft);border:1px solid #f2e2bc;border-radius:999px;padding:8px 14px 8px 10px;font-size:14px;font-weight:700;color:#7a5200}
+.mkt .from .fb{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#4a3100;font-size:13px}
+.mkt .from b{font-size:15.5px;color:var(--ink);font-variant-numeric:tabular-nums} .mkt .from a{color:var(--teal);font-weight:800}
+.mkt .phero{padding:clamp(40px,6vw,72px) 0 20px;text-align:center;position:relative;overflow:hidden;background:radial-gradient(ellipse 46% 40% at 82% 12%,rgba(109,74,255,.1),transparent 70%),radial-gradient(ellipse 50% 45% at 10% 85%,rgba(20,184,166,.12),transparent 70%),var(--paper)}
+.mkt .phero .lede{margin:14px auto 0} .mkt .phero .cur{margin-top:22px}
+.mkt .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px;align-items:stretch} @media(max-width:900px){.mkt .pgrid{grid-template-columns:1fr}}
+.mkt .pcard{border-radius:var(--r);padding:26px 24px 22px;background:#fff;border:1px solid var(--line);box-shadow:var(--sh);display:flex;flex-direction:column;position:relative}
+.mkt .pcard.basic{border-top:5px solid var(--sky)} .mkt .pcard.std{border-top:5px solid var(--teal-hi)} .mkt .pcard.pro{border-top:5px solid var(--violet);box-shadow:0 6px 14px rgba(109,74,255,.08),0 36px 70px -24px rgba(109,74,255,.35)}
+.mkt .pcard .nm{font-size:1.35rem;font-weight:800} .mkt .pcard .who{color:var(--muted);font-size:14px;margin-top:2px}
+.mkt .pcard .big{margin-top:16px;display:flex;align-items:baseline;gap:6px} .mkt .pcard .big b{font-size:2.6rem;font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums} .mkt .pcard .big small{font-size:13px;font-weight:700;color:var(--dim)}
+.mkt .pcard .est{margin-top:6px;font-size:13px;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums} .mkt .pcard .est b{color:var(--ink)}
+.mkt .pcard ul{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:7px;font-size:14px} .mkt .pcard li{display:flex;gap:9px;align-items:flex-start} .mkt .pcard li::before{content:'✓';color:var(--teal);font-weight:800;flex-shrink:0}
+.mkt .pcard .btn{margin-top:auto;justify-content:center;margin-top:20px}
+.mkt .pcard.pro::after{content:'MOST SCHOOLS';position:absolute;top:-13px;right:22px;font-size:10px;font-weight:800;letter-spacing:.16em;background:linear-gradient(135deg,var(--violet),#9b7bff);padding:5px 15px;border-radius:999px;color:#fff}
+.mkt .calc{margin-top:26px;border-radius:var(--r);padding:22px 24px;background:linear-gradient(120deg,var(--violet-soft),var(--teal-soft));border:1px solid #d9d2f5;display:grid;grid-template-columns:1fr auto;gap:16px 28px;align-items:center} @media(max-width:760px){.mkt .calc{grid-template-columns:1fr}}
+.mkt .calc h3{font-size:1.1rem} .mkt .calc p{font-size:13.5px;color:var(--muted);margin-top:4px}
+.mkt .calc input[type=range]{width:100%;margin-top:14px;accent-color:var(--teal)}
+.mkt .calc .n{font-size:2rem;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;text-align:right;line-height:1} .mkt .calc .n small{display:block;font-size:12px;color:var(--muted);font-weight:700;letter-spacing:0;margin-top:4px}
+.mkt .calc .rows{display:grid;gap:6px;margin-top:10px;font-size:14px;font-variant-numeric:tabular-nums} .mkt .calc .rows div{display:flex;justify-content:space-between;gap:12px;border-top:1px solid rgba(16,36,59,.08);padding-top:6px} .mkt .calc .rows b{font-weight:800}
+.mkt .incl{margin-top:26px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px} .mkt .incl div{display:flex;gap:10px;align-items:center;font-size:14px;font-weight:700;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px} .mkt .incl span{font-size:18px}
+.mkt .faq{margin-top:26px;display:grid;gap:10px} .mkt .faq details{border:1px solid var(--line);border-radius:14px;background:var(--paper2);padding:0 18px} .mkt .faq summary{cursor:pointer;font-weight:800;padding:14px 0;list-style:none;position:relative;padding-right:30px} .mkt .faq summary::-webkit-details-marker{display:none} .mkt .faq summary::after{content:'+';position:absolute;right:2px;top:10px;font-size:20px;color:var(--dim)} .mkt .faq details[open] summary::after{content:'−'} .mkt .faq p{margin:0;padding:0 0 16px;color:var(--muted);font-size:14.5px;line-height:1.6}
+.mkt .jy-fit{margin-top:12px;border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:linear-gradient(120deg,var(--violet-soft),var(--teal-soft));display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;font-size:13.5px} .mkt .jy-fit b{font-size:15px} .mkt .jy-fit .amt{font-size:1.3rem;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-align:right} .mkt .jy-fit .amt small{display:block;font-size:11px;color:var(--muted);font-weight:700}
 </style>
 </head>
 <body>
@@ -667,7 +692,20 @@ const PILLARS=[
  {id:'stage',icon:'❖',tab:'A stage beyond the gates',sub:'network, sponsors, TV',title:'A stage beyond your gates.',tag:'Your events radiate across the network — sponsors light up.',desc:'Alone, a school event reaches your students. On the Sckools network it reaches every school — bigger crowds, real competition, and sponsors we bring to you.',feats:['Published to the shared network feed; families register on your site','Sponsor matchmaking — we pitch brands to back your events','Sckools TV — the reception notice board on any television','Jobs board — vacancies on sckools.com, applications in your console'],vars:'--pa:var(--gold);--pa-t:rgba(245,166,35,.22);--pa-g:rgba(245,166,35,.6);--pa-c:#ffd98a',glow:'rgba(245,166,35,.4)',scene:3},
 ];
 const MARQ=[['🔔','Morning Bell','the 7:40 glance'],['✅','The register','taps, not pen'],['🧾','Fees','receipts & late-fee rules'],['🖨️','Report cards','printed by the press'],['📓','Daily Diary','signed at home'],['📚','Library counter',''],['📺','Sckools TV','one URL'],['🎨','Website Studio','118 designs'],['🎪','Events network',''],['💼','Jobs board',''],['📱','Family app','Android'],['✉️','Letterhead',''],['⚡','Monthly updates','free']];
-const NAV=[{href:'#/features',label:'Features'},{href:'#/#day',label:'A school day'},{href:'#/#events',label:'Events Network'},{href:'#/#tiers',label:'Plans'},{href:'#/#switch',label:'Why switch'},{href:'#/features#shipped',label:'What\'s new'}];
+const NAV=[{href:'#/features',label:'Features'},{href:'#/pricing',label:'Pricing'},{href:'#/#day',label:'A school day'},{href:'#/#events',label:'Events Network'},{href:'#/#switch',label:'Why switch'},{href:'#/features#shipped',label:'What\'s new'}];
+/* ── pricing: per student, per year. Owner sets INR + USD in the owner console; GET /marketing/config serves them. ── */
+const PRICES={basic:{inr:60,usd:1},standard:{inr:90,usd:2},pro:{inr:120,usd:3}}; // sample until the config loads
+let CUR='inr';try{CUR=localStorage.getItem('sk-cur')||'inr';}catch(e){}
+const fmtMoney=(n,c)=>c==='usd'?'$'+Math.round(n).toLocaleString('en-US'):'₹'+Math.round(n).toLocaleString('en-IN');
+const priceOf=(plan,c)=>PRICES[plan][c||CUR];
+const SIZE_MID={'Under 300':250,'300 – 800':550,'800 – 1,500':1150,'1,500+':2000};
+async function loadPricing(){try{const base=typeof API_BASE!=='undefined'?API_BASE:'https://api.sckools.com';const r=await fetch(base+'/marketing/config',{headers:{'X-Skoolos-Host':location.host}});if(!r.ok)return;const j=await r.json();if(j&&j.prices){for(const k of ['basic','standard','pro']){if(j.prices[k]){PRICES[k]={inr:+j.prices[k].inr||PRICES[k].inr,usd:+j.prices[k].usd||PRICES[k].usd};}}PRICES.live=true;renderPrices();}}catch(e){}}
+function renderPrices(){document.querySelectorAll('[data-price]').forEach(el=>{el.textContent=fmtMoney(priceOf(el.dataset.price),CUR);});document.querySelectorAll('[data-est]').forEach(el=>{const n=+document.getElementById('calc-n')?.value||500;el.textContent=fmtMoney(priceOf(el.dataset.est)*n,CUR)+' / year';});document.querySelectorAll('[data-from]').forEach(el=>{el.textContent=fmtMoney(priceOf('basic'),CUR);});document.querySelectorAll('.cur button').forEach(b=>b.classList.toggle('on',b.dataset.cur===CUR));const cn=document.getElementById('calc-n');if(cn){const out=document.getElementById('calc-out');if(out)out.textContent=(+cn.value).toLocaleString('en-IN');}}
+const PLAN_DEFS=[
+ {key:'basic',tier:'BASIC',cls:'basic',name:'Basic',tag:'Be found.',who:'A world-class website and every enquiry on your admissions desk.',items:['Your website — studio, 7 first screens, 118 designs, 15 festivals','Courses, gallery, admissions & hall of fame','Admissions desk: enquiry → visit → admitted','Own domain, SSL, hosting, nightly backups','Updates every month, free']},
+ {key:'standard',tier:'STANDARD',cls:'std',name:'Standard',tag:'Join the network.',who:'Everything in Basic, plus your community connected and your events on every school.',items:['Events on the shared network feed; families register on your site','Ticket types, audiences, sponsors we bring','About, principal & contact pages; announcements on site and TV','School blog syndicated to sckools.com','Priority support — real humans, fast']},
+ {key:'pro',tier:'PRO',cls:'pro',name:'Pro',tag:'Run the school.',who:'Everything in Standard, plus the office, the staff room and the family app.',items:['Morning Bell, admissions desk, timetable, leave & cover','Fees — counter, UPI, online, receipts, late-fee rules','The register — taps, offline-safe, families told at 08:14','Tests & results, diary, messages, the family app','Library counter, Sckools TV, jobs board','Report cards, certificates, exam hall — on request']},
+];
 const byId=Object.fromEntries(F.map(f=>[f.id,f]));
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pill=f=>{const t=tierOf(f.key);return `<span class="pill ${TP[t]}">${TL[t]}</span>`;};
@@ -698,7 +736,7 @@ function proHTML(){return `<section class="pro-band" id="pro" aria-label="Inside
   </div>
 </div></div></section>`;}
 function tierCard(cls,tk,h,why,tier,inherit,groups,btn){const n=F.filter(f=>tierOf(f.key)===tier&&f.key!=='CORE').length;
-  return `<div class="tier ${cls}"><span class="tk">${tk} · ${inherit?'+':''}${n} features</span><h3>${h}</h3><p class="why">${why}</p>${inherit?`<span class="inherit">↑ ${inherit}</span>`:''}<div class="tfeats">${groups.map(g=>`<div><div class="grp">${g.g}</div><ul>${g.items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`).join('')}</div><button class="btn ${btn} btn-sm" style="margin-top:6px" data-journey="${tier}">Get a quote for ${tk}</button></div>`;}
+  return `<div class="tier ${cls}"><span class="tk">${tk} · ${inherit?'+':''}${n} features</span><h3>${h}</h3><div class="price"><b data-price="${tier.toLowerCase()}">${fmtMoney(priceOf(tier.toLowerCase()),CUR)}</b><small>per student / year</small></div><p class="why">${why}</p>${inherit?`<span class="inherit">↑ ${inherit}</span>`:''}<div class="tfeats">${groups.map(g=>`<div><div class="grp">${g.g}</div><ul>${g.items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`).join('')}</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn ${btn} btn-sm" data-journey="${tier}">Get ${tk} for your school</button><a class="btn btn-ghost btn-sm" href="#/pricing">Full pricing</a></div></div>`;}
 function renderHome(){return `
 <header class="hero" id="top"><div class="dots" aria-hidden="true"></div><div class="aura a1" aria-hidden="true"></div><div class="aura a2" aria-hidden="true"></div><div class="aura a3" aria-hidden="true"></div>
 <div class="wrap hero-in">
@@ -708,6 +746,7 @@ function renderHome(){return `
     <p class="lede hrv" style="--d:.36s">A stunning website, an admissions desk, fees and receipts, the register, report cards, the library, a family app, the TV in reception — and a live network of schools where your students compete and get discovered. One login.</p>
     <div class="hero-ctas hrv" style="--d:.48s"><button class="btn btn-hot" data-journey>Get for your school →</button><button class="btn btn-ghost" data-callback>Request a callback</button></div>
     <div class="hero-call hrv" style="--d:.54s">Prefer to talk? <a href="tel:+919599443324">Call +91 95994 43324</a></div>
+    <div class="from hrv" style="--d:.6s"><span class="fb">₹</span>Upgrade your school from <b><span data-from>₹60</span> per student, a year</b> <a href="#/pricing">See pricing →</a></div>
     <div class="trust hrv" style="--d:.6s"><div class="t"><b data-count="13">0</b><span>modules, one login</span></div><div class="t"><b data-count="51">0</b><span>features, listed</span></div><div class="t"><b data-count="12">0</b><span>shipped in 2 weeks</span></div><div class="t"><b data-count="4">0</b><span>apps + the TV</span></div></div>
   </div>
   <div class="stage hrv r" style="--d:.3s">
@@ -765,8 +804,8 @@ ${proHTML()}
 </div></div></section>
 
 <section id="tiers" aria-label="Plans"><div class="wrap">
-  <div class="rv"><span class="eyebrow violet">Pick what you need</span></div>
-  <h2 class="h-lg rv" style="transition-delay:.06s">Every tier is a growth story. <span style="color:var(--muted);font-weight:600;font-size:.6em">No price list — pick modules, get a quote, add more any day.</span></h2>
+  <div class="rv" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap"><span class="eyebrow violet">Pricing · per student, per year</span><span class="cur" role="group" aria-label="Currency"><button data-cur="inr" class="on">₹ INR</button><button data-cur="usd">$ USD</button></span></div>
+  <h2 class="h-lg rv" style="transition-delay:.06s">Every tier is a growth story. <span style="color:var(--muted);font-weight:600;font-size:.6em">Priced per student, billed once a year. Add modules any day.</span></h2>
   <div class="grid ladder" style="margin-top:16px">
     <div class="rv">${tierCard('basic','Basic','Be found.','A world-class site, every enquiry on your admissions desk.','BASIC',null,[{g:'Your website',items:['Studio: 7 first screens, 118 designs, 15 festivals','Courses, gallery, admissions & hall of fame','Own domain, SSL, hosting, nightly backups']},{g:'Admissions',items:['Enquiry forms on every page → one desk']}],'btn-ghost')}</div>
     <div class="rv" style="transition-delay:.1s">${tierCard('std','Standard','Be engaging.','Your community connected, your events on every school.','STANDARD','Everything in Basic, plus',[{g:'Network reach',items:['Events on the shared feed, families register on your site','Ticket types, audiences, sponsors we bring']},{g:'Community',items:['About, principal & contact pages, announcements','School blog syndicated to sckools.com','Priority support — real humans, fast']}],'btn-hot')}</div>
@@ -798,6 +837,28 @@ ${proHTML()}
 ${footer()}`;}
 function footer(){return `<footer class="foot"><div class="wrap"><div><b>Sckools</b>The complete operating system for schools.<br>admin@sckools.com · +91 95994 43324</div><div class="fc"><div><b>Product</b><a href="#/features">Features</a><a href="#/#tiers">Pricing</a><a href="#/features#shipped">What's new</a></div><div><b>Network</b><a href="#/#events">Events</a><a href="#/features/jobs">Jobs</a><a href="#/features/blog">Blog</a></div><div><b>Legal</b><a href="#/">Privacy</a><a href="#/">Terms</a><a href="#/">Delete account</a></div></div></div></footer>`;}
 
+/* ═════════ PRICING ═════════ */
+function renderPricing(){return `
+<header class="phero"><div class="dots" aria-hidden="true"></div><div class="wrap" style="position:relative">
+  <span class="eyebrow hrv" style="--d:0s">✦ Simple pricing</span>
+  <h1 class="h-xl" style="margin-top:14px"><span class="ln"><i style="--d:.05s">Per student. Per year.</i></span><span class="ln"><i style="--d:.18s">Nothing <span class="hl">hidden<svg viewBox="0 0 300 24" preserveAspectRatio="none" aria-hidden="true"><path d="M4 16 C 60 22, 120 6, 170 12 S 270 20, 296 10"/></svg></span>.</i></span></h1>
+  <p class="lede hrv" style="--d:.36s">One number per student, billed once a year. Hosting, your domain, updates every month and support are always included. Switch on more modules whenever you're ready.</p>
+  <div class="hrv" style="--d:.48s"><span class="cur" role="group" aria-label="Currency"><button data-cur="inr" class="on">₹ INR</button><button data-cur="usd">$ USD</button></span></div>
+</div></header>
+<section style="padding-top:18px"><div class="wrap">
+  <div class="pgrid">${PLAN_DEFS.map((p,i)=>`<div class="pcard ${p.cls} rv" style="transition-delay:${i*.08}s"><div class="nm">${p.name} <span style="color:var(--muted);font-weight:700;font-size:.9rem">— ${p.tag}</span></div><div class="who">${p.who}</div><div class="big"><b data-price="${p.key}">${fmtMoney(priceOf(p.key),CUR)}</b><small>per student / year</small></div><div class="est">for <b><span class="calc-n-echo">500</span> students</b> ≈ <b data-est="${p.key}">${fmtMoney(priceOf(p.key)*500,CUR)} / year</b></div><ul>${p.items.map(x=>`<li>${x}</li>`).join('')}</ul><button class="btn ${p.key==='pro'?'btn-ink':p.key==='standard'?'btn-hot':'btn-ghost'} btn-sm" data-journey="${p.tier}">Get ${p.name} for your school</button></div>`).join('')}</div>
+  <div class="calc rv"><div><h3>What would it cost your school?</h3><p>Slide to your student count — every plan updates. Billed once a year; no per-user seats, no setup fee.</p><input type="range" id="calc-n" min="100" max="3000" step="50" value="500" aria-label="Number of students"><div class="rows">${PLAN_DEFS.map(p=>`<div><span>${p.name}</span><b data-est="${p.key}">${fmtMoney(priceOf(p.key)*500,CUR)} / year</b></div>`).join('')}</div></div><div class="n"><span id="calc-out">500</span><small>students</small></div></div>
+  <div class="incl"><div><span>🌐</span>Own domain, SSL &amp; hosting</div><div><span>⚡</span>Updates every month, free</div><div><span>🔁</span>We migrate your site, free</div><div><span>🛠️</span>2 months of custom features</div><div><span>🧩</span>Add a module any day</div><div><span>📞</span>Real people on the phone</div></div>
+  <div class="faq">
+    <details><summary>Is it really per student, per year?</summary><p>Yes. Multiply the plan price by your student count — that's the year. No per-teacher seats, no setup fee, no charge for the app.</p></details>
+    <details><summary>Can we start small and add modules later?</summary><p>Yes. Pick what you need today; ask for more whenever you're ready and it's on the same day. You only pay for what's switched on.</p></details>
+    <details><summary>What if we already have a website?</summary><p>We move it for free — same domain, same branding, zero downtime. Then it starts improving every month instead of going stale.</p></details>
+    <details><summary>Do fees, report cards and the library cost extra?</summary><p>They're part of Pro. Report cards, certificates and alumni are switched on per school, on request, at no extra charge.</p></details>
+    <details><summary>How do we pay?</summary><p>Once a year, by bank transfer or UPI, against a GST invoice. Ask for a quote and we'll send exact figures for your school.</p></details>
+  </div>
+</div></section>
+<section class="band ctaband" style="margin-top:var(--sec)"><div class="wrap"><div><h2 class="h2">Want an exact figure for your school?</h2><p class="one">Pick your modules; we call within a working day with the number.</p></div><button class="btn btn-amber" data-journey>Get for your school →</button></div></section>
+${footer()}`;}
 /* ═════════ FEATURES ═════════ */
 const filt={who:'all',plan:'all',q:''};
 function matches(f){if(filt.who!=='all'&&f.col!==filt.who)return false;if(filt.plan!=='all'){const t=tierOf(f.key),o=['BASIC','STANDARD','PRO'];if(t==='REQUEST')return false;if(o.indexOf(t)>o.indexOf(filt.plan))return false;}if(filt.q){const q=filt.q.toLowerCase();if(!(f.name+' '+f.hint+' '+f.does+' '+f.moment).toLowerCase().includes(q))return false;}return true;}
@@ -939,11 +1000,11 @@ function fitPhones(){document.querySelectorAll('.fpw').forEach(w=>{const fp=w.qu
 addEventListener('resize',()=>{clearTimeout(fitPhones._t);fitPhones._t=setTimeout(fitPhones,80);},{passive:true});
 /* ═════════ router ═════════ */
 function parseHash(){const h=location.hash||'#/';const [path,anchor]=h.slice(1).split('#');const [p,qs]=path.split('?');const parts=p.split('/').filter(Boolean);return{page:parts[0]||'home',id:parts[1],anchor,params:Object.fromEntries(new URLSearchParams(qs||''))};}
-function renderNav(page){const on=h=>(h==='#/features'&&page==='features')?'on':'';document.getElementById('navlinks').innerHTML=NAV.map(n=>`<a href="${n.href}" class="lnk ${on(n.href)}">${n.label}</a>`).join('');document.getElementById('mmenu').innerHTML=NAV.map(n=>`<a href="${n.href}" class="${on(n.href)}">${n.label}</a>`).join('')+`<a href="tel:+919599443324" style="color:var(--teal)">📞 Call +91 95994 43324</a><button class="btn btn-hot btn-sm" data-callback>Request a callback</button>`;}
+function renderNav(page){const on=h=>(h==='#/features'&&page==='features')||(h==='#/pricing'&&page==='pricing')?'on':'';document.getElementById('navlinks').innerHTML=NAV.map(n=>`<a href="${n.href}" class="lnk ${on(n.href)}">${n.label}</a>`).join('');document.getElementById('mmenu').innerHTML=NAV.map(n=>`<a href="${n.href}" class="${on(n.href)}">${n.label}</a>`).join('')+`<a href="tel:+919599443324" style="color:var(--teal)">📞 Call +91 95994 43324</a><button class="btn btn-hot btn-sm" data-callback>Request a callback</button>`;}
 let lastPage=null;
-function route(){const r=parseHash(),app=document.getElementById('app'),first=lastPage===null;if(r.params.who)filt.who=r.params.who;if(r.params.plan)filt.plan=r.params.plan;const page=r.page==='features'?'features':'home',isStart=r.page==='start';
-  if(page!==lastPage){clearTimeout(proTimer);app.innerHTML=page==='features'?renderFeatures():renderHome();lastPage=page;if(!r.anchor)scrollTo(0,0);if(root.classList.contains('go'))observe();if(page==='home'){heroLoop();startPro();if(root.classList.contains('built'))setTimeout(typeUrl,200);}fitPhones();setTimeout(fitPhones,350);}
-  renderNav(page);document.getElementById('mmenu').classList.remove('open');document.getElementById('burger').setAttribute('aria-expanded','false');
+function route(){const r=parseHash(),app=document.getElementById('app'),first=lastPage===null;if(r.params.who)filt.who=r.params.who;if(r.params.plan)filt.plan=r.params.plan;const page=r.page==='features'?'features':r.page==='pricing'?'pricing':'home',isStart=r.page==='start';
+  if(page!==lastPage){clearTimeout(proTimer);app.innerHTML=page==='features'?renderFeatures():page==='pricing'?renderPricing():renderHome();lastPage=page;if(!r.anchor)scrollTo(0,0);if(root.classList.contains('go'))observe();if(page==='home'){heroLoop();startPro();if(root.classList.contains('built'))setTimeout(typeUrl,200);}fitPhones();setTimeout(fitPhones,350);}
+  renderNav(page);renderPrices();document.getElementById('mmenu').classList.remove('open');document.getElementById('burger').setAttribute('aria-expanded','false');
   if(r.anchor){const go=()=>{const el=document.getElementById(r.anchor);if(el)el.scrollIntoView({behavior:(first||document.hidden)?'auto':'smooth',block:'start'});};setTimeout(go,40);setTimeout(go,420);}
   if(page==='features'&&r.id)openDrawer(r.id);else closeDrawer();
   if(isStart)showJourney(+r.params.step||J.step);else hideJourney();}
@@ -966,7 +1027,8 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-journey],[
   if(t.matches('[data-pro]')){setPro(+t.dataset.pro);return;}
   if(t.id==='listtoggle'){const w=document.getElementById('listwrap');w.classList.toggle('open');const o=w.classList.contains('open');t.textContent=o?'Hide the list':'Show as a list';t.setAttribute('aria-expanded',o);return;}
   if(t.id==='burger'){const m=document.getElementById('mmenu');m.classList.toggle('open');t.setAttribute('aria-expanded',m.classList.contains('open'));return;}});
-document.addEventListener('input',e=>{if(e.target.id==='q'){filt.q=e.target.value.trim();refilter();}});
+document.addEventListener('input',e=>{if(e.target.id==='q'){filt.q=e.target.value.trim();refilter();}if(e.target.id==='calc-n'){document.querySelectorAll('.calc-n-echo').forEach(x=>x.textContent=(+e.target.value).toLocaleString('en-IN'));renderPrices();}});
+document.addEventListener('click',e=>{const b=e.target.closest('.cur [data-cur]');if(!b)return;CUR=b.dataset.cur;try{localStorage.setItem('sk-cur',CUR);}catch(x){}renderPrices();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDrawer();closeModal();}});
 document.getElementById('mform').addEventListener('submit',async e=>{e.preventDefault();const f=e.target,btn=f.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Sending…';const r=await submitLead({school:f.school.value.trim(),phone:f.phone.value.trim(),interest:document.getElementById('msub').dataset.interest||'',source:'modal'});btn.disabled=false;btn.textContent='Request a callback';let err=f.querySelector('.err');if(r==='ok'){err&&err.remove();document.getElementById('modal').classList.add('done');f.reset();}else{if(!err){err=document.createElement('p');err.className='err';err.style.cssText='color:#d14e1b;font-size:13px;margin-top:10px;font-weight:700';f.appendChild(err);}err.textContent=r==='rate'?'Too many requests — please try again in a minute.':'Could not send. Please call +91 95994 43324.';}});
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
@@ -1025,15 +1087,17 @@ function panelHTML(){const n=J.mods.length;
   <span class="lab">Your modules</span><div class="jm">${MODULES.map(m=>{const on=J.mods.includes(m.k);return `<button type="button" class="${m.locked?'on lock':on?'on':''}" data-j="mod" data-v="${m.k}" role="switch" aria-checked="${on}" aria-label="${esc(m.name)}"><span class="em">${m.em}</span><span class="tx"><b>${m.name}</b><small>${m.hint}</small></span>${m.locked?'<span class="inc">Included</span>':'<span class="sw"></span>'}</button>`;}).join('')}</div>
   ${J.depNote?`<div class="jy-note">✦ ${esc(J.depNote)}</div>`:''}`;
  return `<div class="step">Step 2 of 2</div><h2>Here's your Sckools.</h2><p class="why">We call within a working day with a quote for exactly this — and show it to you on your own school, live.</p>
-  <div class="jy-sum"><b>${esc(J.name)}</b><span>${esc(J.size)} students · ${n} module${n===1?'':'s'}</span><div class="tags">${J.mods.map(k=>`<i>${modByK[k].em} ${modByK[k].name}</i>`).join('')}</div><button class="edit" data-j="go" data-v="1">← Change modules</button></div>
+  <div class="jy-sum"><b>${esc(J.name)}</b><span>${esc(J.size)} students · ${n} module${n===1?'':'s'}</span><div class="tags">${J.mods.map(k=>`<i>${modByK[k].em} ${modByK[k].name}</i>`).join('')}</div><button class="edit" data-j="go" data-v="1">← Change modules</button></div>${fitHTML()}
   <div class="jy-2" style="margin-top:18px"><div><label class="lab" for="jcontact" style="margin-top:0">Your name${req(J.contact.trim().length>1)}</label><input class="jy-in ${J.tried&&J.contact.trim().length<2?'miss':''}" id="jcontact" data-ji="contact" value="${esc(J.contact)}" placeholder="Full name" autocomplete="name">${err(J.contact.trim().length<2,'So we know who to ask for')}</div><div><label class="lab" for="jphone" style="margin-top:0">Phone${req(J.phone.replace(/\D/g,'').length>=10)}</label><input class="jy-in ${J.tried&&J.phone.replace(/\D/g,'').length<10?'miss':''}" id="jphone" data-ji="phone" value="${esc(J.phone)}" placeholder="+91 98765 43210" type="tel" inputmode="tel" autocomplete="tel">${err(J.phone.replace(/\D/g,'').length<10,'A 10-digit number we can call')}</div></div>
   <span class="lab">You are the</span>${chips('role',ROLES)}
   <span class="lab">Best time to call</span>${chips('time',TIMES)}
   <label class="lab" for="jnote">Anything we should know? <small>optional — e.g. “an agency runs our site today”</small></label><textarea class="jy-in" id="jnote" data-ji="note" placeholder="Fees on paper, WhatsApp groups for notices, an old website…">${esc(J.note)}</textarea>`;}
+function fitPlan(){const o=['BASIC','STANDARD','PRO'];let best=0;J.mods.forEach(k=>{const m=modByK[k];const t=tierOf(m.key||m.k);const i=o.indexOf(t);if(i>best)best=i;});return o[best];}
+function fitHTML(){const t=fitPlan(),key=t.toLowerCase(),p=priceOf(key),mid=SIZE_MID[J.size]||500;return `<div class="jy-fit"><div><b>Fits the ${TL[t]} plan</b><br><span>${fmtMoney(p,CUR)} per student, a year${J.size?` · ~${mid.toLocaleString('en-IN')} students`:''}</span></div><div class="amt">≈ ${fmtMoney(p*mid,CUR)}<small>a year, estimate</small></div></div>`;}
 function railHTML(){const n=J.mods.length;return `<div class="jy-pv"><div class="bar"><i></i><i></i><i></i><span>${slug(J.name)}.sckools.com</span></div>
   <div class="site"><div class="nv"><span class="crest"></span><b>${esc(J.name||'Your school')}</b><span class="lk"><i></i><i></i><i></i></span></div><div class="hero"><b>Admissions open 2027–28</b><span>${esc(J.size?J.size+' students':'Nursery to Grade 12')}</span></div></div>
   <div class="stack">${MODULES.map(m=>`<i class="${J.mods.includes(m.k)?'':'off'}">${m.em} ${m.name}</i>`).join('')}</div>
-  <div class="pvf"><span>${n} of ${MODULES.length} modules on</span><span>${esc(J.size||'—')}</span></div></div>
+  <div class="pvf"><span>${n} of ${MODULES.length} modules on</span><span>${esc(J.size||'—')}</span></div></div>${fitHTML()}
   <div class="jy-tips"><div><span>🧩</span>Pay only for what's on</div><div><span>⚡</span>Add a module any time — same day</div><div><span>🔁</span>We move your current site, free</div><div><span>🛠️</span>Two months of custom features</div></div>`;}
 function footHTML(){if(J.done)return '';const s=J.step,miss=missing(s),ok=miss.length===0,n=J.mods.length;const stat=ok?`<span class="stat"><b>${n} module${n===1?'':'s'} on</b>${J.name?' · '+esc(J.name):''}${J.size?' · '+esc(J.size):''}</span>`:`<span class="todo">To continue: <b>${miss.map(m=>m.what).join('</b> · <b>')}</b></span>`;return `<div class="in">${stat}${s>1?'<button class="btn btn-ghost btn-sm" data-j="back">← Back</button>':''}<button class="btn btn-hot ${ok?'':'off'}" data-j="${s===2?'submit':'next'}" aria-disabled="${!ok}">${s===2?'Request my quote':'Get my quote →'}</button></div>`;}
 function stepsHTML(){return STEPS.map((t,i)=>{const nn=i+1,cls=J.done||nn<J.step?'done':nn===J.step?'on':'';const can=!J.done&&(nn<J.step||nn===J.step||(nn===J.step+1&&valid(J.step)));return `<button type="button" class="${cls}" data-j="go" data-v="${nn}" ${can?'':'disabled'} aria-label="Step ${nn}: ${t}"><i></i><b>${nn}. ${t}</b></button>`;}).join('');}
@@ -1063,7 +1127,7 @@ document.addEventListener('input',e=>{const t=e.target;if(!t.dataset||!t.dataset
 function okNow_(t){return t.dataset.ji==='phone'?t.value.replace(/\D/g,'').length>=10:t.value.trim().length>1;}
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('#jy input.jy-in')){e.preventDefault();if(J.step===1){if(valid(1)){J.tried=false;goStep(2);}else{J.tried=true;saveJ();refreshJourney();}}else if(J.step===2){if(valid(2)){document.querySelector('#jy-foot [data-j="submit"]')?.click();}else{J.tried=true;saveJ();refreshJourney();}}}});
 
-route();
+route();loadPricing();
 </script>
 </body>
 </html>
