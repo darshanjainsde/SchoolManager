@@ -587,15 +587,22 @@ html,body{margin:0;background:#fcfdff}
 .mkt .ptag:hover{border-color:#e08e0b;box-shadow:0 18px 36px -14px rgba(245,166,35,.7),var(--sh-lift)}
 .mkt .ptag::before{content:"";position:absolute;left:9px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:var(--paper);border:1.5px solid var(--gold);box-shadow:inset 0 0 0 2px #fff}
 .mkt .ptag::after{content:"";position:absolute;left:13px;top:-24px;width:2px;height:26px;background:var(--coral);border-radius:2px;transform:rotate(-20deg);transform-origin:bottom}
+.mkt .ptag .amt em{display:block;font-style:normal;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#b27200;margin-bottom:3px}
 .mkt .ptag .amt{display:block;font-size:2.2rem;font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mkt .ptag .amt [data-from]{background:linear-gradient(90deg,var(--teal),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
 .mkt .ptag .amt small{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:800;margin-top:3px}
-.mkt .ptag .tx{display:block;min-width:0}.mkt .ptag .tx b{display:block;font-size:14.5px;letter-spacing:-.01em;line-height:1.25}.mkt .ptag .tx span{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.35}.mkt .ptag .tx i{display:inline-block;font-style:normal;margin-top:6px;font-size:12.5px;font-weight:800;color:var(--teal)}
+.mkt .ptag .tx{display:block;min-width:0}.mkt .ptag .tx b{display:block;font-size:14.5px;letter-spacing:-.01em;line-height:1.25}.mkt .ptag .tx span{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.35}.mkt .ptag .tx i{display:inline-flex;align-items:center;gap:6px;font-style:normal;margin-top:7px;font-size:12.5px;font-weight:800;color:var(--teal);text-decoration:underline;text-decoration-color:rgba(13,148,136,.4);text-underline-offset:3px}
+.mkt .ptag .tx i u{text-decoration:none;display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--teal-soft);color:var(--teal);font-size:12px;transition:transform .25s,background .25s}
+.mkt .ptag:hover .tx i u{transform:translateX(3px);background:var(--teal);color:#fff}
+.mkt .ptag:hover .tx i{text-decoration-color:var(--teal)}
+/* one-time attention ring once the hero has landed — then it just swings */
+.mkt.go .ptag.hrv{animation:mkTagSwing 6s ease-in-out infinite,mkTagRing 1.6s ease-out 1.4s 2}
+@keyframes mkTagRing{0%{box-shadow:0 14px 30px -14px rgba(245,166,35,.55),var(--sh),0 0 0 0 rgba(245,166,35,.55)}70%{box-shadow:0 14px 30px -14px rgba(245,166,35,.55),var(--sh),0 0 0 14px rgba(245,166,35,0)}100%{box-shadow:0 14px 30px -14px rgba(245,166,35,.55),var(--sh),0 0 0 0 rgba(245,166,35,0)}}
 @keyframes mkTagSwing{0%,100%{transform:rotate(-1.2deg)}50%{transform:rotate(1.2deg)}}
 .mkt.go .ptag.hrv{animation:mkTagSwing 6s ease-in-out infinite}
-@media(max-width:560px){.mkt .ptag{display:grid;width:100%;margin-top:28px;padding:12px 14px 12px 22px;gap:0 12px}.mkt .ptag .amt{font-size:1.9rem}.mkt .ptag .amt small{white-space:normal;max-width:88px;line-height:1.2;font-size:9.5px;letter-spacing:.05em}.mkt .ptag .tx b{font-size:13.5px}.mkt .ptag .tx span{font-size:12px}}
+@media(max-width:560px){.mkt .ptag{display:grid;width:100%;margin-top:28px;padding:12px 14px 12px 22px;gap:0 12px}.mkt .ptag .amt{font-size:1.9rem}.mkt .ptag .amt em{font-size:9px}.mkt .ptag .amt small{white-space:normal;max-width:88px;line-height:1.2;font-size:9.5px;letter-spacing:.05em}.mkt .ptag .tx b{font-size:13.5px}.mkt .ptag .tx span{font-size:12px}}
 @media(max-width:360px){.mkt .ptag{grid-template-columns:1fr;gap:6px 0}.mkt .ptag .amt{font-size:1.8rem}}
-@media(prefers-reduced-motion:reduce){.mkt .ptag,.mkt.go .ptag.hrv{animation:none}}
+@media(prefers-reduced-motion:reduce){.mkt .ptag,.mkt.go .ptag.hrv{animation:none}.mkt .ptag:hover .tx i u{transform:none}}
 </style>
 </head>
 <body>
@@ -759,7 +766,7 @@ function renderHome(){return `
     <h1 class="h-xl"><span class="ln"><i style="--d:.05s">Your school,</i></span><span class="ln"><i style="--d:.18s">on a <span class="hl">bigger stage<svg viewBox="0 0 300 24" preserveAspectRatio="none" aria-hidden="true"><path d="M4 16 C 60 22, 120 6, 170 12 S 270 20, 296 10"/></svg></span></i></span></h1>
     <p class="lede hrv" style="--d:.36s">A stunning website, an admissions desk, fees and receipts, the register, report cards, the library, a family app, the TV in reception — and a live network of schools where your students compete and get discovered. One login.</p>
     <div class="hero-ctas hrv" style="--d:.48s"><button class="btn btn-hot" data-journey>Get for your school →</button><button class="btn btn-ghost" data-callback>Request a callback</button></div>
-    <a class="ptag hrv" style="--d:.56s" href="#/pricing" aria-label="Pricing: from ₹ per student, a year — see what's included"><span class="amt"><span data-from>₹60</span><small>per student · a year</small></span><span class="tx"><b>The whole school. One price.</b><span>Website to report cards, app included.</span><i>See what's included →</i></span></a>
+    <a class="ptag hrv" style="--d:.56s" href="#/pricing" title="Click to see exact pricing" aria-label="Pricing starts from ₹ per student, a year. Click to see exact pricing."><span class="amt"><em>Starting from</em><span data-from>₹60</span><small>per student · a year</small></span><span class="tx"><b>Basic · Standard · Pro</b><span>Priced per student. App included.</span><i>Click to see exact pricing <u>→</u></i></span></a>
     <div class="trust hrv" style="--d:.6s"><div class="t"><b data-count="13">0</b><span>modules, one login</span></div><div class="t"><b data-count="51">0</b><span>features, listed</span></div><div class="t"><b data-count="12">0</b><span>shipped in 2 weeks</span></div><div class="t"><b data-count="4">0</b><span>apps + the TV</span></div></div>
   </div>
   <div class="stage hrv r" style="--d:.3s">
@@ -818,7 +825,7 @@ ${proHTML()}
 
 <section id="tiers" aria-label="Plans"><div class="wrap">
   <div class="rv" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap"><span class="eyebrow violet">Pricing · per student, per year</span><span class="cur" role="group" aria-label="Currency"><button data-cur="inr" class="on">₹ INR</button><button data-cur="usd">$ USD</button></span></div>
-  <h2 class="h-lg rv" style="transition-delay:.06s">Upgrade your school from <span data-from>₹60</span> per student, a year. <span style="color:var(--muted);font-weight:600;font-size:.6em">Billed once a year. Add modules any day.</span></h2>
+  <h2 class="h-lg rv" style="transition-delay:.06s">Upgrade your school, starting from <span data-from>₹60</span> per student, a year. <span style="color:var(--muted);font-weight:600;font-size:.6em">Billed once a year. Add modules any day.</span></h2>
   <div class="grid ladder" style="margin-top:16px">
     <div class="rv">${tierCard('basic','Basic','Be found.','A world-class site, every enquiry on your admissions desk.','BASIC',null,[{g:'Your website',items:['Studio: 7 first screens, 118 designs, 15 festivals','Courses, gallery, admissions & hall of fame','Own domain, SSL, hosting, nightly backups']},{g:'Admissions',items:['Enquiry forms on every page → one desk']}],'btn-ghost')}</div>
     <div class="rv" style="transition-delay:.1s">${tierCard('std','Standard','Be engaging.','Your community connected, your events on every school.','STANDARD','Everything in Basic, plus',[{g:'Network reach',items:['Events on the shared feed, families register on your site','Ticket types, audiences, sponsors we bring']},{g:'Community',items:['About, principal & contact pages, announcements','School blog syndicated to sckools.com','Priority support — real humans, fast']}],'btn-hot')}</div>
@@ -846,7 +853,7 @@ ${proHTML()}
   <div class="ship">${SHIPPED.map((s,i)=>`<div class="shp" data-a="up" style="--d:${i*.05}s"><span class="d">${s.d}</span><div><b>${esc(s.name)}</b><span>${esc(s.what)}</span></div></div>`).join('')}</div>
 </div></section>
 
-<section class="cta-band" aria-label="Get started"><div class="wrap"><div class="cta-card"><div class="blob b1" aria-hidden="true"></div><div class="blob b2" aria-hidden="true"></div><h2 class="h-lg" data-a="zoom">Ready to put your school<br>on a bigger stage?</h2><p class="lede rv" style="transition-delay:.08s">As little as <b style="color:#fff"><span data-from>₹60</span> per student, a year</b>. Pick your modules, get an exact figure — or just ask us to call.</p><div class="rv" style="transition-delay:.16s;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn-hot" data-journey>Get for your school →</button><button class="btn btn-ghost" data-callback>Request a callback</button></div></div></div></section>
+<section class="cta-band" aria-label="Get started"><div class="wrap"><div class="cta-card"><div class="blob b1" aria-hidden="true"></div><div class="blob b2" aria-hidden="true"></div><h2 class="h-lg" data-a="zoom">Ready to put your school<br>on a bigger stage?</h2><p class="lede rv" style="transition-delay:.08s">Starting from <b style="color:#fff"><span data-from>₹60</span> per student, a year</b>. Pick your modules, get an exact figure — or just ask us to call.</p><div class="rv" style="transition-delay:.16s;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn btn-hot" data-journey>Get for your school →</button><button class="btn btn-ghost" data-callback>Request a callback</button></div></div></div></section>
 ${footer()}`;}
 function footer(){return `<footer class="foot"><div class="wrap"><div><b>Sckools</b>The complete operating system for schools.<br>admin@sckools.com · +91 95994 43324</div><div class="fc"><div><b>Product</b><a href="#/features">Features</a><a href="#/#tiers">Pricing</a><a href="#/features#shipped">What's new</a></div><div><b>Network</b><a href="#/#events">Events</a><a href="#/features/jobs">Jobs</a><a href="#/features/blog">Blog</a></div><div><b>Legal</b><a href="#/">Privacy</a><a href="#/">Terms</a><a href="#/">Delete account</a></div></div></div></footer>`;}
 
