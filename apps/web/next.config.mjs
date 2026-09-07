@@ -74,7 +74,8 @@ const nextConfig = {
       has: [{ type: 'host', value: 'test.sckools.com' }],
     });
     return {
-      beforeFiles: [preview('/')],
+      // `/pricing` has a page too (app/pricing/page.tsx), so it joins `/` here.
+      beforeFiles: [preview('/'), preview('/pricing')],
       afterFiles: [
         { source: '/demo', destination: '/demo/index.html' },
         preview('/features'),

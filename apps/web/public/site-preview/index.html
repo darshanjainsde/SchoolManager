@@ -712,7 +712,7 @@ const pill=f=>{const t=tierOf(f.key);return `<span class="pill ${TP[t]}">${TL[t]
 </script>
 <script>
 /* deep links: /features and /start arrive as paths (next.config rewrite); the page routes by hash */
-if(!location.hash&&/^\/(features|start)\/?$/.test(location.pathname))history.replaceState(null,"","/#/"+location.pathname.replace(/\//g,"")+(location.pathname.startsWith("/start")?"?step=1":""));
+if(!location.hash&&/^\/(features|start|pricing)\/?$/.test(location.pathname))history.replaceState(null,"","/#/"+location.pathname.replace(/\//g,"")+(location.pathname.startsWith("/start")?"?step=1":""));
 /* ── real leads (staging/prod API), same contract as components/marketing/marketing-client.ts ── */
 const API_BASE=location.hostname.endsWith('test.sckools.com')?'https://api.test.sckools.com':location.hostname.endsWith('sckools.com')?'https://api.sckools.com':'http://localhost:3001';
 async function submitLead(fields){try{const res=await fetch(API_BASE+'/marketing/leads',{method:'POST',headers:{'Content-Type':'application/json','X-Forwarded-Host':location.host,'X-Skoolos-Host':location.host},body:JSON.stringify(Object.fromEntries(Object.entries(fields).filter(([,v])=>v)))});if(res.status===429)return 'rate';if(!res.ok)return 'error';return 'ok';}catch(e){return 'error';}}
