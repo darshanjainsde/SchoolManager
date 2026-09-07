@@ -46,17 +46,19 @@ FROM "HallOfFameGroup" g
 WHERE g."courseId" = e."courseId" AND g."kind" = 'COURSE';
 
 -- Batch year: a 4-digit year in the old caption, else the current academic
--- year's start year, else this year. A caption that was not a year is kept
+-- year's start year, else this year. NOTE substring(x from pattern) returns
+-- the FIRST parenthesized group, so the whole year is the group and the
+-- alternation inside it is non-capturing. A caption that was not a year is kept
 -- as part of the achievement so no words are lost.
 UPDATE "HallOfFameEntry" e
 SET "batchYear" = COALESCE(
-      NULLIF(substring(e."year" from '(19|20)[0-9]{2}'), '')::INTEGER,
+      NULLIF(substring(e."year" from '((?:19|20)[0-9]{2})'), '')::INTEGER,
       (SELECT EXTRACT(YEAR FROM ay."startDate")::INTEGER FROM "AcademicYear" ay
          WHERE ay."schoolId" = e."schoolId" AND ay."isCurrent" = TRUE LIMIT 1),
       EXTRACT(YEAR FROM now())::INTEGER
     ),
     "achievement" = CASE
-      WHEN e."year" IS NOT NULL AND btrim(e."year") <> '' AND substring(e."year" from '(19|20)[0-9]{2}') IS NULL
+      WHEN e."year" IS NOT NULL AND btrim(e."year") <> '' AND substring(e."year" from '((?:19|20)[0-9]{2})') IS NULL
         THEN NULLIF(concat_ws(' · ', e."achievement", btrim(e."year")), '')
       ELSE e."achievement"
     END;
