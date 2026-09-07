@@ -108,6 +108,39 @@ describe('PortalService', () => {
 
   // ── attendance ──────────────────────────────────────────────────────────
 
+  // ── profile ─────────────────────────────────────────────────────────────
+
+  describe('profile', () => {
+    const base = {
+      id: STUDENT,
+      userId: USER,
+      firstName: 'Aarav',
+      lastName: 'Sharma',
+      admissionNo: 'SUN-2231',
+      code: null,
+      rollNo: '12',
+      photoAssetId: null,
+      createdAt: day('2026-04-05'),
+    };
+
+    it('labels the class with its grade, not the bare section name', async () => {
+      // A section is only "B"; the student (and the family app) need "Grade 6-B".
+      txMock.student.findFirst.mockResolvedValue({
+        ...base,
+        classSectionId: CLASS_SECTION,
+        classSection: { id: CLASS_SECTION, name: 'B', grade: { name: 'Grade 6' } },
+      });
+      const p = await svc.profile(USER);
+      expect(p.className).toBe('Grade 6-B');
+    });
+
+    it('is null when the student has no section yet', async () => {
+      txMock.student.findFirst.mockResolvedValue({ ...base, classSectionId: null, classSection: null });
+      const p = await svc.profile(USER);
+      expect(p.className).toBeNull();
+    });
+  });
+
   describe('attendance', () => {
     it('computes percent from present/(present+absent+late) and returns the day list', async () => {
       txMock.attendance.findMany.mockResolvedValue([
