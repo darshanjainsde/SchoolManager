@@ -275,6 +275,8 @@ model School {
   admissionSteps         AdmissionStep[]
   admissionsSettings     AdmissionsSettings?
   hallOfFameEntries      HallOfFameEntry[]
+  hallOfFameGroups       HallOfFameGroup[]
+  hallOfFameSettings     HallOfFameSettings?
   attendance             Attendance[]
   substitutions          Substitution[]
   staff                  Staff[]
@@ -779,7 +781,7 @@ model Course {
   order        Int               @default(0)
   school       School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   fee          CourseFee?
-  hallOfFame   HallOfFameEntry[]
+  hallOfFameGroups HallOfFameGroup[]
 
   @@index([schoolId])
 }
@@ -818,20 +820,63 @@ model AdmissionsSettings {
   school           School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
+/// What a Hall of Fame podium is FOR. COURSE = a website course (every plan,
+/// the 2026-07 behaviour); GRADES = real Management grades, sections clubbed
+/// unless sectionIds narrows it (Pro); CUSTOM = a free label ("Board toppers").
+enum HallOfFameGroupKind {
+  COURSE
+  GRADES
+  CUSTOM
+}
+
+model HallOfFameGroup {
+  id         String              @id @default(uuid()) @db.Uuid
+  schoolId   String              @db.Uuid
+  kind       HallOfFameGroupKind
+  label      String
+  order      Int                 @default(0)
+  courseId   String?             @db.Uuid
+  /// GRADES: the grades this group covers (clubbed — every section counts).
+  gradeIds   String[]            @default([]) @db.Uuid
+  /// GRADES: when set, only these sections (one group per section is the
+  /// admin's "don't club" choice).
+  sectionIds String[]            @default([]) @db.Uuid
+  school     School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  course     Course?             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  entries    HallOfFameEntry[]
+
+  @@index([schoolId])
+}
+
+/// One podium place for one group in one batch year. Batches never replace
+/// each other: (group, year, rank) is the key, so Batch of 2022 keeps its
+/// place beside 2025.
 model HallOfFameEntry {
-  id           String  @id @default(uuid()) @db.Uuid
-  schoolId     String  @db.Uuid
-  courseId     String  @db.Uuid
+  id           String          @id @default(uuid()) @db.Uuid
+  schoolId     String          @db.Uuid
+  groupId      String          @db.Uuid
+  batchYear    Int
   rank         Int // 1..3
   name         String
   achievement  String?
-  year         String?
-  photoAssetId String? @db.Uuid
-  school       School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  course       Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  photoAssetId String?         @db.Uuid
+  /// Pro: picked from the register; name/photo default from the student.
+  studentId    String?         @db.Uuid
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  group        HallOfFameGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student      Student?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
 
-  @@unique([courseId, rank])
+  @@unique([groupId, batchYear, rank])
   @@index([schoolId])
+}
+
+/// Which batch the public section lands on (null = latest with entries) and
+/// how many earlier batches it lists.
+model HallOfFameSettings {
+  schoolId    String @id @db.Uuid
+  landingYear Int?
+  pastBatches Int    @default(4)
+  school      School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
 // ── Management (Pro) ─────────────────────────────────────
@@ -1002,6 +1047,7 @@ model Student {
   pressIssues         PressIssue[]
   reportRemarks       ReportRemark[]
 
+  hallOfFameEntries   HallOfFameEntry[]
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
   @@index([schoolId, classSectionId])

@@ -5,7 +5,7 @@ import type { PublicSiteData } from '@/lib/public-api';
 import { PS_CSS } from './ps-css';
 import { themeRootProps, navFlagsFor } from './site-theme';
 import { admissionsHasContent } from './sections/AdmissionsSection';
-import { hofCourses } from './sections/HallOfFame';
+import { hofHasEntries } from './sections/HallOfFame';
 import SiteNav from './sections/SiteNav';
 
 /**
@@ -32,7 +32,7 @@ export default function SchoolChrome({
     hasAbout: !!data.homepage?.aboutText,
     hasAcademics: data.courses.length > 0,
     hasAdmissions: admissionsHasContent(data.admissions, data.courses),
-    hasHof: hofCourses(data.courses).length > 0,
+    hasHof: hofHasEntries(data.hallOfFame),
   });
 
   // The nav elevates on scroll on every other page; without this the blog's

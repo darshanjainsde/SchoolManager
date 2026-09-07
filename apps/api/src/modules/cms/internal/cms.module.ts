@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TenancyModule } from '../../tenancy';
 import { StorageModule } from '../../../common/storage/storage.module';
+import { FeaturesModule } from '../../features';
 import { SiteContentService } from './site-content.service';
 import { SiteContentController } from './site-content.controller';
 import { MediaService } from './media.service';
@@ -20,7 +21,7 @@ import { SchoolPagesService } from './school-pages.service';
 import { SchoolPagesController } from './school-pages.controller';
 
 @Module({
-  imports: [TenancyModule, StorageModule],
+  imports: [TenancyModule, StorageModule, FeaturesModule],
   providers: [
     SiteContentService,
     MediaService,

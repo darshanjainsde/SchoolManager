@@ -10,7 +10,7 @@ import SiteNav from './sections/SiteNav';
 import CoursesFeatured from './sections/CoursesFeatured';
 import AcademicsSection from './sections/AcademicsSection';
 import AdmissionsSection, { admissionsHasContent } from './sections/AdmissionsSection';
-import HallOfFame, { hofCourses } from './sections/HallOfFame';
+import HallOfFame, { hofHasEntries } from './sections/HallOfFame';
 import GallerySection from './sections/GallerySection';
 import EventsSection from './sections/EventsSection';
 import ConnectSection from './sections/ConnectSection';
@@ -108,7 +108,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
   const hasBlog = data.school.features.includes('BLOG');
   const hasAcademics = data.courses.length > 0;
   const hasAdmissions = admissionsHasContent(data.admissions, data.courses);
-  const hasHof = hofCourses(data.courses).length > 0;
+  const hasHof = hofHasEntries(data.hallOfFame);
   // Admin-controlled homepage visibility; full details always live on the
   // dedicated pages (/admissions, /gallery, /connect, /contact).
   const show = {
@@ -391,7 +391,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
       </div>
     ),
 
-    hof: hasHof && <HallOfFame courses={data.courses} />,
+    hof: hasHof && data.hallOfFame && <HallOfFame hof={data.hallOfFame} layout={variants.hof?.layout} />,
 
     events: hasEvents && show.events && <EventsSection events={data.events} timezone={data.school.timezone} />,
 

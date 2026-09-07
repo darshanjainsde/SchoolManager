@@ -124,6 +124,8 @@ export interface PublicSiteData {
   gallery: { url: string; caption: string | null }[];
   staff: { name: string; role: string; photoUrl: string | null }[];
   courses: PublicCourse[];
+  /** Batches × groups × podium. null = nothing to show (or the migration has not run yet). */
+  hallOfFame: PublicHallOfFame | null;
   admissions: {
     steps: { title: string; description: string | null }[];
     showFees: boolean;
@@ -146,4 +148,25 @@ export interface PublicCourse {
   // null when the school hides fees or hasn't set them
   fee: { admissionFee: string | null; annualFee: string | null; includes: string | null } | null;
   hallOfFame: { rank: number; name: string; achievement: string | null; year: string | null; photoUrl: string | null }[];
+}
+
+export interface PublicHallOfFameEntry {
+  batchYear: number;
+  rank: number;
+  name: string;
+  achievement: string | null;
+  photoUrl: string | null;
+}
+export interface PublicHallOfFameGroup {
+  id: string;
+  label: string;
+  entries: PublicHallOfFameEntry[];
+}
+export interface PublicHallOfFame {
+  /** The batch the section opens on. */
+  landingYear: number;
+  /** Newest first; the chips the visitor can pick. */
+  years: number[];
+  /** Only groups with a podium inside the shown years. */
+  groups: PublicHallOfFameGroup[];
 }
