@@ -43,7 +43,17 @@ const nextConfig = {
   // Don't advertise the framework to attackers.
   poweredByHeader: false,
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // The staging copy of the marketing site must never be indexed: the
+      // static pages carry index,follow (they are the production pages), so
+      // the host-level header is what keeps test.sckools.com out of Google.
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'test.sckools.com' }],
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      },
+    ];
   },
   /**
    * sckools.com/demo — the sales deck, served as a plain static file.
@@ -59,27 +69,25 @@ const nextConfig = {
    */
   async rewrites() {
     /**
-     * test.sckools.com only: the rebuilt marketing site, served as one static
-     * page (public/site-preview/index.html) while it is verified on real
-     * devices. Same mechanism as /demo; gated on the host so nothing changes
-     * for sckools.com or any school site until the React port lands.
+     * The marketing site (sckools.com and its staging twin test.sckools.com)
+     * is served as self-contained static pages from public/site-preview —
+     * one file per route so each URL carries its own title, description and
+     * canonical. Same mechanism as /demo; gated on the host so school sites
+     * and the school subdomains are untouched. Generated from the design
+     * prototype; do not hand-edit the HTML.
      *
-     * `/` must be a beforeFiles rewrite: an afterFiles rewrite is only
-     * consulted when no page matches, and app/page.tsx matches `/`. Verified
-     * on staging — /features and /start (no page) rewrote, / did not.
+     * `/` and `/pricing` must be beforeFiles rewrites: an afterFiles rewrite
+     * is only consulted when no page matches, and app/page.tsx and
+     * app/pricing/page.tsx match them. /features and /start have no page.
      */
-    const preview = (source) => ({
-      source,
-      destination: '/site-preview/index.html',
-      has: [{ type: 'host', value: 'test.sckools.com' }],
-    });
+    const marketingHost = { type: 'host', value: '(test\\.)?sckools\\.com' };
+    const site = (source, file) => ({ source, destination: `/site-preview/${file}.html`, has: [marketingHost] });
     return {
-      // `/pricing` has a page too (app/pricing/page.tsx), so it joins `/` here.
-      beforeFiles: [preview('/'), preview('/pricing')],
+      beforeFiles: [site('/', 'index'), site('/pricing', 'pricing')],
       afterFiles: [
         { source: '/demo', destination: '/demo/index.html' },
-        preview('/features'),
-        preview('/start'),
+        site('/features', 'features'),
+        site('/start', 'start'),
       ],
     };
   },
