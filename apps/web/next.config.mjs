@@ -58,7 +58,20 @@ const nextConfig = {
    * school should sit on the same name as the brochure and the email address.
    */
   async rewrites() {
-    return [{ source: '/demo', destination: '/demo/index.html' }];
+    return [
+      { source: '/demo', destination: '/demo/index.html' },
+      /**
+       * test.sckools.com only: the rebuilt marketing site, served as one static
+       * page (public/site-preview/index.html) while it is verified on real
+       * devices. Same mechanism as /demo above; gated on the host so nothing
+       * changes for sckools.com or any school site until the React port lands.
+       */
+      ...['/', '/features', '/start'].map((source) => ({
+        source,
+        destination: '/site-preview/index.html',
+        has: [{ type: 'host', value: 'test.sckools.com' }],
+      })),
+    ];
   },
 };
 
