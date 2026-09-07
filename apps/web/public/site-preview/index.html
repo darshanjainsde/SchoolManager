@@ -582,6 +582,20 @@ html,body{margin:0;background:#fcfdff}
 .mkt .incl{margin-top:26px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px} .mkt .incl div{display:flex;gap:10px;align-items:center;font-size:14px;font-weight:700;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px} .mkt .incl span{font-size:18px}
 .mkt .faq{margin-top:26px;display:grid;gap:10px} .mkt .faq details{border:1px solid var(--line);border-radius:14px;background:var(--paper2);padding:0 18px} .mkt .faq summary{cursor:pointer;font-weight:800;padding:14px 0;list-style:none;position:relative;padding-right:30px} .mkt .faq summary::-webkit-details-marker{display:none} .mkt .faq summary::after{content:'+';position:absolute;right:2px;top:10px;font-size:20px;color:var(--dim)} .mkt .faq details[open] summary::after{content:'−'} .mkt .faq p{margin:0;padding:0 0 16px;color:var(--muted);font-size:14.5px;line-height:1.6}
 .mkt .jy-fit{margin-top:12px;border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:linear-gradient(120deg,var(--violet-soft),var(--teal-soft));display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;font-size:13.5px} .mkt .jy-fit b{font-size:15px} .mkt .jy-fit .amt{font-size:1.3rem;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-align:right} .mkt .jy-fit .amt small{display:block;font-size:11px;color:var(--muted);font-weight:700}
+/* ── the price tag (hero offer) ── */
+.mkt .ptag{position:relative;margin-top:30px;display:inline-grid;grid-template-columns:auto minmax(0,1fr);gap:0 16px;align-items:center;background:#fff;border:1.5px solid var(--gold);border-radius:14px 22px 22px 14px;padding:13px 18px 13px 24px;box-shadow:0 14px 30px -14px rgba(245,166,35,.55),var(--sh);transform-origin:9px 50%;animation:mkTagSwing 6s ease-in-out infinite;text-decoration:none;color:inherit;max-width:100%;transition:box-shadow .3s,border-color .3s}
+.mkt .ptag:hover{border-color:#e08e0b;box-shadow:0 18px 36px -14px rgba(245,166,35,.7),var(--sh-lift)}
+.mkt .ptag::before{content:"";position:absolute;left:9px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:var(--paper);border:1.5px solid var(--gold);box-shadow:inset 0 0 0 2px #fff}
+.mkt .ptag::after{content:"";position:absolute;left:13px;top:-24px;width:2px;height:26px;background:var(--coral);border-radius:2px;transform:rotate(-20deg);transform-origin:bottom}
+.mkt .ptag .amt{display:block;font-size:2.2rem;font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mkt .ptag .amt [data-from]{background:linear-gradient(90deg,var(--teal),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+.mkt .ptag .amt small{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-weight:800;margin-top:3px}
+.mkt .ptag .tx{display:block;min-width:0}.mkt .ptag .tx b{display:block;font-size:14.5px;letter-spacing:-.01em;line-height:1.25}.mkt .ptag .tx span{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin-top:2px;line-height:1.35}.mkt .ptag .tx i{display:inline-block;font-style:normal;margin-top:6px;font-size:12.5px;font-weight:800;color:var(--teal)}
+@keyframes mkTagSwing{0%,100%{transform:rotate(-1.2deg)}50%{transform:rotate(1.2deg)}}
+.mkt.go .ptag.hrv{animation:mkTagSwing 6s ease-in-out infinite}
+@media(max-width:560px){.mkt .ptag{display:grid;width:100%;margin-top:28px;padding:12px 14px 12px 22px;gap:0 12px}.mkt .ptag .amt{font-size:1.9rem}.mkt .ptag .amt small{white-space:normal;max-width:88px;line-height:1.2;font-size:9.5px;letter-spacing:.05em}.mkt .ptag .tx b{font-size:13.5px}.mkt .ptag .tx span{font-size:12px}}
+@media(max-width:360px){.mkt .ptag{grid-template-columns:1fr;gap:6px 0}.mkt .ptag .amt{font-size:1.8rem}}
+@media(prefers-reduced-motion:reduce){.mkt .ptag,.mkt.go .ptag.hrv{animation:none}}
 </style>
 </head>
 <body>
@@ -745,8 +759,7 @@ function renderHome(){return `
     <h1 class="h-xl"><span class="ln"><i style="--d:.05s">Your school,</i></span><span class="ln"><i style="--d:.18s">on a <span class="hl">bigger stage<svg viewBox="0 0 300 24" preserveAspectRatio="none" aria-hidden="true"><path d="M4 16 C 60 22, 120 6, 170 12 S 270 20, 296 10"/></svg></span></i></span></h1>
     <p class="lede hrv" style="--d:.36s">A stunning website, an admissions desk, fees and receipts, the register, report cards, the library, a family app, the TV in reception — and a live network of schools where your students compete and get discovered. One login.</p>
     <div class="hero-ctas hrv" style="--d:.48s"><button class="btn btn-hot" data-journey>Get for your school →</button><button class="btn btn-ghost" data-callback>Request a callback</button></div>
-    <div class="hero-call hrv" style="--d:.54s">Prefer to talk? <a href="tel:+919599443324">Call +91 95994 43324</a></div>
-    <div class="from hrv" style="--d:.6s"><span class="fb">₹</span><span>The whole school online for <b>as little as <span data-from>₹60</span> per student, a year</b></span> <a href="#/pricing">See pricing →</a></div>
+    <a class="ptag hrv" style="--d:.56s" href="#/pricing" aria-label="Pricing: from ₹ per student, a year — see what's included"><span class="amt"><span data-from>₹60</span><small>per student · a year</small></span><span class="tx"><b>The whole school. One price.</b><span>Website to report cards, app included.</span><i>See what's included →</i></span></a>
     <div class="trust hrv" style="--d:.6s"><div class="t"><b data-count="13">0</b><span>modules, one login</span></div><div class="t"><b data-count="51">0</b><span>features, listed</span></div><div class="t"><b data-count="12">0</b><span>shipped in 2 weeks</span></div><div class="t"><b data-count="4">0</b><span>apps + the TV</span></div></div>
   </div>
   <div class="stage hrv r" style="--d:.3s">
