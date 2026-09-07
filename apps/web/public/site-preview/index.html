@@ -603,6 +603,89 @@ html,body{margin:0;background:#fcfdff}
 @media(max-width:560px){.mkt .ptag{display:grid;width:100%;margin-top:28px;padding:12px 14px 12px 22px;gap:0 12px}.mkt .ptag .amt{font-size:1.9rem}.mkt .ptag .amt em{font-size:9px}.mkt .ptag .amt small{white-space:normal;max-width:88px;line-height:1.2;font-size:9.5px;letter-spacing:.05em}.mkt .ptag .tx b{font-size:13.5px}.mkt .ptag .tx span{font-size:12px}}
 @media(max-width:360px){.mkt .ptag{grid-template-columns:1fr;gap:6px 0}.mkt .ptag .amt{font-size:1.8rem}}
 @media(prefers-reduced-motion:reduce){.mkt .ptag,.mkt.go .ptag.hrv{animation:none}.mkt .ptag:hover .tx i u{transform:none}}
+/* ── Why switch: self-check, maths, plan, standouts ── */
+.mkt .sw-head{max-width:46rem}
+.mkt .sw2{grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);align-items:start;gap:clamp(16px,2.6vw,28px);margin-top:22px}
+.mkt .sf{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start}
+.mkt .sf-item{display:grid;grid-template-columns:22px minmax(0,1fr);gap:12px;align-items:start;text-align:left;font:inherit;color:var(--ink);background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:13px 14px;cursor:pointer;box-shadow:var(--sh);transition:border-color .25s,background .25s,transform .25s,box-shadow .25s,opacity .8s cubic-bezier(.16,.8,.26,1)}
+.mkt .sf-item.rv:not(.in){transform:translateY(34px) scale(.98)}
+.mkt .sf-item:hover{transform:translateY(-2px);border-color:#c5d3e0}
+.mkt .sf-item:focus-visible{outline:3px solid var(--teal-hi);outline-offset:2px}
+.mkt .sf-box{width:22px;height:22px;border-radius:7px;border:2px solid #c3cfdb;background:#fff;position:relative;margin-top:1px;transition:background .25s,border-color .25s}
+.mkt .sf-box::after{content:'';position:absolute;left:6px;top:2px;width:6px;height:11px;border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg) scale(0);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.mkt .sf-item[aria-pressed="true"]{border-color:var(--teal);background:linear-gradient(170deg,#f0fbf9,#fff);box-shadow:0 12px 28px -16px rgba(13,148,136,.5),var(--sh)}
+.mkt .sf-item[aria-pressed="true"] .sf-box{background:var(--teal);border-color:var(--teal)}
+.mkt .sf-item[aria-pressed="true"] .sf-box::after{transform:rotate(45deg) scale(1)}
+.mkt .sf-body{display:block;min-width:0}
+.mkt .sf-body b{display:block;font-size:14px;line-height:1.3;letter-spacing:-.01em}
+.mkt .sf-body small{display:block;margin-top:5px;font-size:12px;line-height:1.45;color:var(--muted)}
+.mkt .sf-body i{display:grid;grid-template-rows:0fr;font-style:normal;font-size:12.5px;line-height:1.45;font-weight:700;color:var(--teal);transition:grid-template-rows .4s cubic-bezier(.16,.8,.26,1),margin-top .4s}
+.mkt .sf-body i>span{overflow:hidden;min-height:0}
+.mkt .sf-item[aria-pressed="true"] .sf-body i{grid-template-rows:1fr;margin-top:8px}
+.mkt .sf-side{position:sticky;top:84px;background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:18px 18px 16px;box-shadow:var(--sh);transition:border-color .35s,box-shadow .35s,opacity .8s cubic-bezier(.16,.8,.26,1),transform .8s cubic-bezier(.16,.8,.26,1)}
+.mkt .sf-side.hot{border-color:var(--gold);box-shadow:0 18px 40px -20px rgba(245,166,35,.55),var(--sh)}
+.mkt .sf-score{display:flex;align-items:center;gap:14px;padding-bottom:14px;border-bottom:1px dashed var(--line);margin-bottom:14px}
+.mkt .sf-score b{display:inline-flex;align-items:baseline;gap:5px;font-size:2.3rem;line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:var(--teal)}
+.mkt .sf-score b span{display:inline-block}
+.mkt .sf-score b small{font-size:.8rem;font-weight:800;color:var(--muted);letter-spacing:0}
+.mkt .sf-score p{margin:0;font-size:14px;font-weight:800;color:var(--ink);line-height:1.3}
+.mkt #sf-n.pop{animation:mkPop .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes mkPop{0%{transform:scale(.55)}100%{transform:scale(1)}}
+.mkt .swc h3{font-size:.98rem;margin:0 0 10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 8px}
+.mkt .swc h3 span{font-size:11.5px;font-weight:700;color:var(--muted)}
+.mkt .swc-n{display:block;margin-bottom:10px}
+.mkt .swc-n>span{display:flex;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.mkt .swc-n>span b{color:var(--ink);font-variant-numeric:tabular-nums}
+.mkt .swc-n input{width:100%;accent-color:var(--teal);margin:0}
+.mkt .swc-in{display:grid;gap:7px}
+.mkt .swc-in label{display:grid;grid-template-columns:minmax(0,1fr) 128px;align-items:center;gap:10px;font-size:12.5px;font-weight:700;color:var(--muted);line-height:1.25}
+.mkt .swc-f{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:10px;background:#fbfdfe;padding:0 8px;transition:border-color .2s}
+.mkt .swc-f:focus-within{border-color:var(--teal)}
+.mkt .swc-f i{font-style:normal;font-weight:800;color:var(--muted);font-size:13px}
+.mkt .swc-f input{width:100%;min-width:0;border:0;background:transparent;font:inherit;font-weight:800;font-size:14px;color:var(--ink);padding:7px 4px;text-align:right;font-variant-numeric:tabular-nums;-moz-appearance:textfield;outline:none}
+.mkt .swc-f input::-webkit-outer-spin-button,.mkt .swc-f input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.mkt .swc-plan{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:12px 0 10px;background:var(--paper2);border-radius:999px;padding:4px}
+.mkt .swc-plan button{font:inherit;font-size:12.5px;font-weight:800;border:0;border-radius:999px;padding:7px 4px;cursor:pointer;background:transparent;color:var(--muted);transition:background .2s,color .2s,box-shadow .2s}
+.mkt .swc-plan button[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 2px 8px rgba(16,36,59,.12)}
+.mkt .swc-out{border-top:1px dashed var(--line);padding-top:10px;margin-bottom:14px}
+.mkt .swc-out .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;font-weight:700;color:var(--muted);padding:4px 0}
+.mkt .swc-out .row b{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mkt .swc-out .row.you{color:var(--ink)}
+.mkt .swc-out .row.you em{font-style:normal;color:var(--teal)}
+.mkt .swc-out .row.you i{font-style:normal;font-weight:600;color:var(--muted);font-size:12px}
+.mkt .swc-out .row.you b{color:var(--teal);font-size:1.25rem}
+.mkt #sw-verdict{margin:8px 0 0;font-size:13px;line-height:1.45;font-weight:700;color:var(--ink);padding:9px 11px;border-radius:10px;background:var(--teal-soft)}
+.mkt #sw-verdict.more{background:#fff4e5}
+.mkt .sf-side .btn{width:100%;justify-content:center;text-align:center}
+.mkt .sf-link{display:block;text-align:center;margin-top:10px;font-size:13px;font-weight:800;color:var(--teal)}
+.mkt .swp{margin-top:clamp(28px,4vw,44px);padding-top:clamp(22px,3vw,30px);border-top:1px dashed var(--line)}
+.mkt .swp-h{max-width:44rem}
+.mkt .swp-h h3{font-size:clamp(1.2rem,2.2vw,1.6rem);letter-spacing:-.02em;line-height:1.15;margin:10px 0 6px}
+.mkt .swp-h p{margin:0;font-size:14.5px;color:var(--muted)}
+.mkt .swp-steps{list-style:none;padding:0;margin:18px 0 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;counter-reset:wk}
+.mkt .swp-steps li{position:relative;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px 14px 12px;box-shadow:var(--sh)}
+.mkt .swp-steps li span{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#b27200;background:#fff3dc;border-radius:999px;padding:3px 9px}
+.mkt .swp-steps li b{display:block;font-size:15px;margin:8px 0 4px;letter-spacing:-.01em}
+.mkt .swp-steps li p{margin:0;font-size:13px;line-height:1.45;color:var(--muted)}
+.mkt .swg{list-style:none;padding:0;margin:14px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+.mkt .swg li{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 12px}
+.mkt .swg li i{font-style:normal;font-size:14px;line-height:1}
+.mkt .sto-wrap{margin-top:clamp(28px,4vw,44px);padding-top:clamp(22px,3vw,30px);border-top:1px dashed var(--line)}
+.mkt .sto-h{font-size:clamp(1.25rem,2.4vw,1.8rem);letter-spacing:-.02em;line-height:1.15;margin:10px 0 18px;max-width:40rem}
+.mkt .sto-h b{color:var(--teal)}
+.mkt .sto{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;min-width:0}
+.mkt .sto-card{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:16px 16px 14px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:5px;transition:transform .3s,border-color .3s,opacity .8s cubic-bezier(.16,.8,.26,1)}
+.mkt .sto-card:hover{transform:translateY(-3px);border-color:var(--teal-hi)}
+.mkt .sto-ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:var(--teal-soft)}
+.mkt .sto-like{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--coral);margin-top:6px}
+.mkt .sto-card b{font-size:15px;line-height:1.25;letter-spacing:-.01em}
+.mkt .sto-card p{margin:0;font-size:13px;line-height:1.45;color:var(--muted)}
+.mkt .sw-src{margin:clamp(20px,3vw,28px) 0 0;font-size:11px;line-height:1.5;color:var(--muted);max-width:70rem}
+@media(max-width:1000px){.mkt .sw2{grid-template-columns:1fr}.mkt .sf-side{position:static}}
+@media(max-width:900px){.mkt .sto{grid-template-columns:1fr 1fr}.mkt .swp-steps{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.mkt .sf{grid-template-columns:1fr}.mkt .swp-steps{grid-template-columns:1fr}.mkt .sto{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;padding:4px 4px 14px;margin:0 -4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.mkt .sto::-webkit-scrollbar{display:none}.mkt .sto-card{flex:0 0 80%;scroll-snap-align:start}.mkt .swc-in label{grid-template-columns:minmax(0,1fr) 118px}}
+@media(prefers-reduced-motion:reduce){.mkt #sf-n.pop{animation:none}.mkt .sf-box::after,.mkt .sf-body i{transition:none}.mkt .sf-item.rv:not(.in){transform:none}}
+
 </style>
 </head>
 <body>
@@ -720,7 +803,7 @@ let CUR='inr';try{CUR=localStorage.getItem('sk-cur')||'inr';}catch(e){}
 const fmtMoney=(n,c)=>c==='usd'?'$'+Math.round(n).toLocaleString('en-US'):'₹'+Math.round(n).toLocaleString('en-IN');
 const priceOf=(plan,c)=>PRICES[plan][c||CUR];
 const SIZE_MID={'Under 300':250,'300 – 800':550,'800 – 1,500':1150,'1,500+':2000};
-async function loadPricing(){try{const base=typeof API_BASE!=='undefined'?API_BASE:'https://api.sckools.com';const r=await fetch(base+'/marketing/config',{headers:{'X-Skoolos-Host':location.host}});if(!r.ok)return;const j=await r.json();if(j&&j.prices){for(const k of ['basic','standard','pro']){if(j.prices[k]){PRICES[k]={inr:+j.prices[k].inr||PRICES[k].inr,usd:+j.prices[k].usd||PRICES[k].usd};}}PRICES.live=true;renderPrices();}}catch(e){}}
+async function loadPricing(){try{const base=typeof API_BASE!=='undefined'?API_BASE:'https://api.sckools.com';const r=await fetch(base+'/marketing/config',{headers:{'X-Skoolos-Host':location.host}});if(!r.ok)return;const j=await r.json();if(j&&j.prices){for(const k of ['basic','standard','pro']){if(j.prices[k]){PRICES[k]={inr:+j.prices[k].inr||PRICES[k].inr,usd:+j.prices[k].usd||PRICES[k].usd};}}PRICES.live=true;renderPrices();if(typeof swRender==="function")swRender();}}catch(e){}}
 function renderPrices(){document.querySelectorAll('[data-price]').forEach(el=>{el.textContent=fmtMoney(priceOf(el.dataset.price),CUR);});document.querySelectorAll('[data-est]').forEach(el=>{const n=+document.getElementById('calc-n')?.value||500;el.textContent=fmtMoney(priceOf(el.dataset.est)*n,CUR)+' / year';});document.querySelectorAll('[data-from]').forEach(el=>{el.textContent=fmtMoney(priceOf('basic'),CUR);});document.querySelectorAll('.cur button').forEach(b=>b.classList.toggle('on',b.dataset.cur===CUR));const cn=document.getElementById('calc-n');if(cn){const out=document.getElementById('calc-out');if(out)out.textContent=(+cn.value).toLocaleString('en-IN');}}
 const PLAN_DEFS=[
  {key:'basic',tier:'BASIC',cls:'basic',name:'Basic',tag:'Be found.',who:'A world-class website and every enquiry on your admissions desk.',items:['Your website — studio, 7 first screens, 118 designs, 15 festivals','Courses, gallery, admissions & hall of fame','Admissions desk: enquiry → visit → admitted','Own domain, SSL, hosting, nightly backups','Updates every month, free']},
@@ -834,17 +917,68 @@ ${proHTML()}
 </div></section>
 
 <section id="switch" style="background:var(--paper2);border-top:1px solid var(--line)" aria-label="Why switch"><div class="wrap">
-  <div class="sw2">
-    <div>
-      <div class="rv"><span class="eyebrow coral">Already have a website?</span></div>
-      <h2 class="h-lg" data-a="left" style="--d:.06s">A website is a brochure.<br>Sckools is infrastructure.</h2>
-      <div class="grid vs" style="margin-top:22px">
-        <div class="col old"><h3>😴 Your agency site</h3><ul><li style="--i:0">Built once, stale in a year — every change costs money</li><li style="--i:1">Enquiries land in an email nobody checks</li><li style="--i:2">Fees, registers and report cards still on paper</li></ul></div>
-        <div class="col new"><h3>🚀 Your school on Sckools</h3><ul><li style="--i:0">Updates every month — twelve in the last two weeks</li><li style="--i:1">Every enquiry on a desk, statused and followed up</li><li style="--i:2">Register, fees, report cards, app — one login</li></ul></div>
-      </div>
-    </div>
-    <div class="mission rv" style="margin-top:0"><span class="m-badge">🌍 Our only mission</span><h3>We are <b>totally dedicated</b> to the digital infrastructure of schools.</h3><p>Not an agency juggling twenty industries. Schools are the <em>only</em> thing we do. Switching is effortless:</p><div class="m-chips"><span class="m-chip" style="--i:0">🔁 We migrate your site — free</span><span class="m-chip" style="--i:1">🌐 Keep your domain &amp; branding</span><span class="m-chip" style="--i:2">⏱️ Zero downtime</span><span class="m-chip" style="--i:3">🛠️ 2 months of custom features</span></div></div>
+  <div class="sw-head">
+    <div class="rv"><span class="eyebrow coral">Already have a website and an ERP?</span></div>
+    <h2 class="h-lg" data-a="left" style="--d:.06s">So did the schools<br>that switched.</h2>
+    <p class="lede rv" style="transition-delay:.1s">Nobody moves because a feature list is longer. Schools move when the bill, the office and the phone stop adding up. Tick what sounds familiar — every line comes from public reviews, vendor price lists and the rules schools now live under — and each one has a fix on day one.</p>
   </div>
+  <div class="sw2">
+    <div class="sf" role="group" aria-label="Sound familiar?">
+      <button class="sf-item rv" style="transition-delay:0.08s" type="button" aria-pressed="false" data-pain="Website built once; every change is an invoice"><span class="sf-box" aria-hidden="true"></span><span class="sf-body"><b>The website was built once. Every change is a ticket and an invoice.</b><small>Agencies bill ₹18–36k a year in AMC and still take days for a notice. 87% of parents visit your website before they call — and CBSE now wants Appendix IX kept current on it.</small><i><span>On Sckools: Edit any section yourself, the same minute — 118 section designs, six themes. Updates ship every month, free.</span></i></span></button>
+      <button class="sf-item rv" style="transition-delay:0.13s" type="button" aria-pressed="false" data-pain="Three vendors, three logins, three bills"><span class="sf-box" aria-hidden="true"></span><span class="sf-body"><b>Three vendors. Three logins. Three bills.</b><small>Website agency, ERP vendor, SMS or app vendor. None of them talks to the others, and each renewal lands in a different month.</small><i><span>On Sckools: One login for the website, the office, the family app and the reception TV. One price per student, per year — the one on the tag.</span></i></span></button>
+      <button class="sf-item rv" style="transition-delay:0.18s" type="button" aria-pressed="false" data-pain="ERP is live but the office still runs on Excel and paper"><span class="sf-box" aria-hidden="true"></span><span class="sf-body"><b>The ERP is “live”. The office still runs on Excel and paper.</b><small>Rollouts fail on habit, not features: vendors promise training and vanish after go-live, so staff go back to the register they trust.</small><i><span>On Sckools: The register is one tap. The receipt prints at the counter. We onboard your office on a call and stay on the phone until it sticks.</span></i></span></button>
+      <button class="sf-item rv" style="transition-delay:0.23s" type="button" aria-pressed="false" data-pain="Parents live in WhatsApp groups, not the app"><span class="sf-box" aria-hidden="true"></span><span class="sf-body"><b>Parents don’t open the app. They open WhatsApp — and so does everything else.</b><small>A class group hits 500+ messages a day. Teachers get pinged at 11 pm. Notices drown between memes, and nobody can tell who actually read them.</small><i><span>On Sckools: “Marked absent”, a diary remark, a result — each is a push to that family, and only that family. Teachers post from the portal, not from their own number.</span></i></span></button>
+      <button class="sf-item rv" style="transition-delay:0.28s" type="button" aria-pressed="false" data-pain="Every reminder costs credits and add-ons"><span class="sf-box" aria-hidden="true"></span><span class="sf-body"><b>Every reminder costs credits.</b><small>SMS packs. WhatsApp packs at ₹1,000 per 4,000 messages. Transport, library and the app billed as add-ons. The advertised ERP price sits 40–60% below the real first-year cost.</small><i><span>On Sckools: Push and email notifications are included. No credits, no packs, no add-on invoices — the price on the tag is the price.</span></i></span></button>
+      <button class="sf-item rv" style="transition-delay:0.33s" type="button" aria-pressed="false" data-pain="Data locked in the vendor's format"><span class="sf-box" aria-hidden="true"></span><span class="sf-body"><b>Your data is in a format only the vendor can read.</b><small>Vague export clauses and proprietary formats turn leaving into a six-to-twelve-month project — which is exactly why the renewal never gets questioned.</small><i><span>On Sckools: Standard database, nothing proprietary. The data is the school’s. If you ever leave, we hand it back.</span></i></span></button>
+      <button class="sf-item rv" style="transition-delay:0.38s" type="button" aria-pressed="false" data-pain="DPDP: children's data law not addressed"><span class="sf-box" aria-hidden="true"></span><span class="sf-body"><b>Children’s data now has a law. Your vendor hasn’t mentioned it.</b><small>DPDP Act 2023 and the 2025 Rules: verifiable parental consent, breach reporting within 72 hours, vendor-oversight records. Penalties for children’s-data failures run to ₹200 crore.</small><i><span>On Sckools: One system to answer “where is our children’s data”: isolated per school, role-locked, and a student only ever sees their own row.</span></i></span></button>
+      <button class="sf-item rv" style="transition-delay:0.43s" type="button" aria-pressed="false" data-pain="No security updates since launch"><span class="sf-box" aria-hidden="true"></span><span class="sf-body"><b>The last security update was the day it launched.</b><small>Education is the most attacked sector in India — 7,000+ attempts per organisation, every week. In 2026 CBSE’s own marking portal was breached after months of ignored warnings.</small><i><span>On Sckools: Every school runs on the same hardened platform: SSL on your domain, updates every month, no plugins left to rot.</span></i></span></button>
+    </div>
+    <aside class="sf-side rv" style="transition-delay:.15s" aria-label="Your switch">
+      <div class="sf-score"><b><span id="sf-n">0</span><small>of 8</small></b><p id="sf-msg">Tick what sounds familiar.</p></div>
+      <div class="swc">
+        <h3>Do the maths <span>typical figures — put in yours</span></h3>
+        <label class="swc-n"><span>Students <b id="sw-nv">500</b></span><input type="range" id="sw-n" min="100" max="3000" step="50" value="500" aria-label="Number of students"></label>
+        <div class="swc-in">
+          <label><span>Website agency, per year</span><span class="swc-f"><i data-sym>₹</i><input type="number" id="sw-web" inputmode="numeric" min="0" step="1000" value="24000"></span></label>
+          <label><span>ERP, per student per year</span><span class="swc-f"><i data-sym>₹</i><input type="number" id="sw-erp" inputmode="numeric" min="0" step="10" value="150"></span></label>
+          <label><span>Setup, training, SMS packs, add-ons, per year</span><span class="swc-f"><i data-sym>₹</i><input type="number" id="sw-x" inputmode="numeric" min="0" step="1000" value="42000"></span></label>
+        </div>
+        <div class="swc-plan" role="group" aria-label="Sckools plan"><button type="button" data-swplan="basic" aria-pressed="false">Basic</button><button type="button" data-swplan="standard" aria-pressed="false">Standard</button><button type="button" data-swplan="pro" aria-pressed="true">Pro</button></div>
+        <div class="swc-out">
+          <div class="row"><span>Your stack today</span><b id="sw-today">—</b></div>
+          <div class="row you"><span>Sckools <em id="sw-plan">Pro</em> <i id="sw-calc"></i></span><b id="sw-us">—</b></div>
+          <p id="sw-verdict"></p>
+        </div>
+      </div>
+      <button class="btn btn-hot" type="button" data-switch-call>Book a 15-minute switch call →</button>
+      <a class="sf-link" href="#/pricing">See exact pricing →</a>
+    </aside>
+  </div>
+
+  <div class="swp">
+    <div class="swp-h rv"><span class="eyebrow gold">Switching takes a month, not a term</span><h3>Four weeks. The old site stays up until the new one is live.</h3><p>Schools are the only thing we build for, so the switch is our job — not your project.</p></div>
+    <ol class="swp-steps">
+      <li class="rv" style="transition-delay:.05s"><span>Week 1</span><b>We import</b><p>Students, classes, staff and fee heads come across from your ERP’s export. Your current website stays exactly where it is.</p></li>
+      <li class="rv" style="transition-delay:.12s"><span>Week 2</span><b>Your website goes live</b><p>Same domain, same branding, zero downtime. Designed with you in the studio, not sent over as a PDF for approval.</p></li>
+      <li class="rv" style="transition-delay:.19s"><span>Week 3</span><b>The office moves</b><p>Register, fees at the counter, timetable. We train on a call and stay on the phone through the first week.</p></li>
+      <li class="rv" style="transition-delay:.26s"><span>Week 4</span><b>Families get the app</b><p>The first “marked present” push goes out. Your old vendors get their notice — not before.</p></li>
+    </ol>
+    <ul class="swg rv" style="transition-delay:.3s"><li><i>🔁</i>We migrate your site and your data — free</li><li><i>🌐</i>You keep your domain and branding</li><li><i>⏱️</i>Zero downtime</li><li><i>🛠️</i>Two months of custom features, on us</li><li><i>🔓</i>Your data is yours — handed back if you ever leave</li></ul>
+  </div>
+
+  <div class="sto-wrap">
+    <div class="rv"><span class="eyebrow violet">Things your current stack can’t do</span></div>
+    <h3 class="sto-h rv" style="transition-delay:.05s">Google changes its logo for the day. <b>Your website can too.</b></h3>
+    <div class="sto">
+      <article class="sto-card rv" style="transition-delay:0.06s"><span class="sto-ic">🪔</span><span class="sto-like">Like Google’s doodles</span><b>Your website dresses up for the day.</b><p>Diwali, Holi, Eid, Onam, Republic Day — 15 festivals. The skin goes on that morning and takes itself off after. Nothing to remember, nothing to undo.</p></article>
+      <article class="sto-card rv" style="transition-delay:0.12s"><span class="sto-ic">📺</span><span class="sto-like">Like the airport departures board</span><b>The reception TV runs itself.</b><p>Notices, today’s events, birthdays and what’s coming up, on a loop on any TV with a browser. Change it from the office; the screen follows.</p></article>
+      <article class="sto-card rv" style="transition-delay:0.18s"><span class="sto-ic">✈️</span><span class="sto-like">Like a flight alert</span><b>Marked absent. Family told in minutes.</b><p>The teacher taps the register; the family gets a push. No phone call from the office, no message in a group of 250.</p></article>
+      <article class="sto-card rv" style="transition-delay:0.24s"><span class="sto-ic">🚕</span><span class="sto-like">Like a cab app finding a driver</span><b>Leave approved, cover assigned.</b><p>The substitute gets that class for that day — and only that day. The timetable, the register and the app all already know.</p></article>
+      <article class="sto-card rv" style="transition-delay:0.30s"><span class="sto-ic">🏦</span><span class="sto-like">Like a bank statement</span><b>The timetable keeps its history.</b><p>Change a period and the old version stays for the dates it ran. Open any past day and see what actually happened, not what it was later changed to.</p></article>
+      <article class="sto-card rv" style="transition-delay:0.36s"><span class="sto-ic">🏟️</span><span class="sto-like">Like a league table</span><b>A network of schools, not a lonely website.</b><p>Your events go out to every school on Sckools. Students compete across schools, get discovered, and your name travels with them.</p></article>
+    </div>
+  </div>
+  <p class="sw-src rv">Sources: CBSE Appendix IX notice (CareerIndia, 2026) · Check Point Research via CRN and BW Education (education: 7,000+ weekly attacks per organisation, 2025) · MediaNama on the CBSE OSM breach (June 2026) · KS&amp;K Partners and dpdpaforschools.in on the DPDP Rules 2025 · udteschool.com on ERP total cost of ownership · Schoolites pricing page (message packs) · eduTinker on parent WhatsApp groups · growmybiz.in parent survey (87%) · redpulsesoftware.in AMC ranges · Capterra reviews.</p>
 </div></section>
 
 <section id="shipped-home" aria-label="What shipped"><div class="wrap">
@@ -983,6 +1117,35 @@ function openDrawer(id){const f=byId[id];if(!f)return;const per=PERIODS.find(p=>
   document.getElementById('drawer-in').innerHTML=`<button class="x" data-close-drawer aria-label="Close">✕</button><span class="when">${per?`${per.t} · ${per.name}`:'Always'}</span><h2>${esc(f.name)}</h2><div class="pills">${pill(f)}${f.new?`<span class="pill pill-new">New · ${f.new}</span>`:''}<span class="pill pill-basic" style="background:var(--paper2);color:var(--muted)">${WHO[f.col]}</span></div><p class="does">${esc(f.does)}</p>${f.moment?`<div class="diary"><small>How it plays out</small><p>${esc(f.moment)}</p></div>`:''}<dl><dt>Plan</dt><dd>${t==='REQUEST'?'Switched on per school, on request — any plan.':`${TL[t]} and above`}</dd><dt>Runs on</dt><dd>${f.runs.join(', ')}</dd></dl><button class="btn btn-hot" data-callback="${esc(f.name)}">Ask about ${esc(f.name)}</button>`;
   const d=document.getElementById('drawer');d.classList.add('open');d.setAttribute('aria-hidden','false');document.getElementById('scrim').classList.add('open');document.body.style.overflow='hidden';d.querySelector('.x').focus();}
 function closeDrawer(){const d=document.getElementById('drawer');if(!d.classList.contains('open'))return;d.classList.remove('open');d.setAttribute('aria-hidden','true');document.getElementById('scrim').classList.remove('open');document.body.style.overflow='';if(location.hash.startsWith('#/features/'))location.hash='#/features';}
+
+/* ── Why switch: self-check + maths ── */
+const SW_DEF={inr:{web:24000,erp:150,x:42000},usd:{web:300,erp:2,x:500}};
+let SW={n:500,plan:'pro',cur:null,web:null,erp:null,x:null};
+try{const j=JSON.parse(localStorage.getItem('sk-switch')||'null');if(j&&typeof j==='object')SW=Object.assign(SW,j);}catch(e){}
+function swSave(){try{localStorage.setItem('sk-switch',JSON.stringify(SW));}catch(e){}}
+function swMoney(v){const c=(typeof CUR!=='undefined'&&CUR==='usd')?'usd':'inr';const n=Math.round(v);return c==='usd'?'$'+n.toLocaleString('en-US'):'₹'+n.toLocaleString('en-IN');}
+function swRender(){const nEl=document.getElementById('sw-n');if(!nEl)return;const c=(typeof CUR!=='undefined'&&CUR==='usd')?'usd':'inr';
+  if(SW.cur!==c){SW.cur=c;SW.web=SW_DEF[c].web;SW.erp=SW_DEF[c].erp;SW.x=SW_DEF[c].x;document.getElementById('sw-web').value=SW.web;document.getElementById('sw-erp').value=SW.erp;document.getElementById('sw-x').value=SW.x;swSave();}
+  document.querySelectorAll('.swc [data-sym]').forEach(i=>i.textContent=c==='usd'?'$':'₹');
+  nEl.value=SW.n;document.getElementById('sw-nv').textContent=SW.n.toLocaleString('en-IN');
+  const today=(+SW.web||0)+(+SW.erp||0)*SW.n+(+SW.x||0);const ps=(PRICES[SW.plan]||PRICES.pro)[c];const us=ps*SW.n;
+  document.getElementById('sw-today').textContent=swMoney(today);document.getElementById('sw-us').textContent=swMoney(us);
+  document.getElementById('sw-plan').textContent=SW.plan[0].toUpperCase()+SW.plan.slice(1);document.getElementById('sw-calc').textContent='· '+SW.n.toLocaleString('en-IN')+' × '+swMoney(ps);
+  document.querySelectorAll('[data-swplan]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.swplan===SW.plan?'true':'false'));
+  const v=document.getElementById('sw-verdict');const d=today-us;
+  if(d>0){v.className='';v.textContent='You keep '+swMoney(d)+' a year — and gain the app, the reception TV, the events network and monthly updates.';}
+  else if(d<0){v.className='more';v.textContent=swMoney(-d)+' more a year — for the website, the office, the app, the TV and the network in one bill, one login, updated every month.';}
+  else{v.className='';v.textContent='Same money. One bill, one login — with the app, the TV and the network thrown in.';}}
+function sfUpdate(){const n=document.querySelectorAll('.sf-item[aria-pressed="true"]').length;const el=document.getElementById('sf-n');if(!el)return;el.textContent=n;el.classList.remove('pop');void el.offsetWidth;el.classList.add('pop');
+  const M=['Tick what sounds familiar.','Fixed on day one.','Both fixed on day one.','That’s a switch, not an upgrade.','That’s a switch, not an upgrade.','You’re paying for three products. It should be one.','You’re paying for three products. It should be one.','You’re paying for three products. It should be one.','All eight. Let’s talk today.'];
+  document.getElementById('sf-msg').textContent=M[n];document.querySelector('.sf-side').classList.toggle('hot',n>=3);}
+document.addEventListener('click',e=>{const it=e.target.closest('.sf-item');if(it){it.setAttribute('aria-pressed',it.getAttribute('aria-pressed')==='true'?'false':'true');sfUpdate();return;}
+  const pb=e.target.closest('[data-swplan]');if(pb){SW.plan=pb.dataset.swplan;swSave();swRender();return;}
+  const cb=e.target.closest('[data-switch-call]');if(cb){const pains=[...document.querySelectorAll('.sf-item[aria-pressed="true"]')].map(b=>b.dataset.pain);const t=document.getElementById('sw-today').textContent,u=document.getElementById('sw-us').textContent;openModal('switching');const ms=document.getElementById('msub');if(ms)ms.dataset.interest='Switch from website+ERP | Students: '+SW.n+' | Today: '+t+' vs Sckools '+SW.plan+': '+u+(pains.length?' | Familiar: '+pains.join('; '):'');return;}
+  if(e.target.closest('[data-cur]'))setTimeout(swRender,0);});
+document.addEventListener('input',e=>{const t=e.target;if(!t.id||!t.id.startsWith('sw-'))return;if(t.id==='sw-n')SW.n=+t.value||100;else if(t.id==='sw-web')SW.web=+t.value||0;else if(t.id==='sw-erp')SW.erp=+t.value||0;else if(t.id==='sw-x')SW.x=+t.value||0;swSave();swRender();});
+function swInit(){if(!document.getElementById('sw-n'))return;if(SW.web!=null){document.getElementById('sw-web').value=SW.web;document.getElementById('sw-erp').value=SW.erp;document.getElementById('sw-x').value=SW.x;}swRender();}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',swInit);else swInit();
 function openModal(i){const m=document.getElementById('modal');m.classList.remove('done');m.classList.add('open');document.getElementById('msub').dataset.interest=i||'';document.getElementById('msub').textContent=i?`Ask about ${i}. A real person calls within one working day and shows you exactly that, on your own school.`:'A real person calls within one working day and shows you Sckools on your own school, live.';m.querySelector('input').focus();}
 function closeModal(){document.getElementById('modal').classList.remove('open');}
 
