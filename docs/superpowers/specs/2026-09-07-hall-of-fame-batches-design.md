@@ -13,17 +13,21 @@ grouping is the website's `Course` list, so a Pro school running real classes in
 
 1. **Year is a dimension.** Every podium belongs to a `batchYear`. Admin picks a batch (chips + "New batch", which
    asks for the year and pre-fills the current academic year). Nothing is ever replaced across years.
-2. **Groups are what a podium is for.** `HallOfFameGroup.kind`:
-   `COURSE` (a website course — every plan, today's behaviour), `GRADES` (real Management grades; sections clubbed by
-   default, or one group per section — Pro only, gated on `MANAGEMENT`), `CUSTOM` (a free label, every plan).
-   Groups are year-independent; a group with no entries in a year simply does not show for that year.
+2. **A podium belongs to a class, named by the admin.** (Revised 2026-09-08 after the first cut: the admin screen
+   showed "groups" with course / class / custom kinds and the user asked for something simpler.) The screen is
+   just *Add class → name*; classes are year-independent and a class made for an earlier batch is reused. The
+   API keeps `HallOfFameGroup.kind` (`COURSE` / `GRADES` / `CUSTOM`) so migrated course podiums keep working and a
+   later screen can offer Management classes; new rows from the admin screen are `CUSTOM`. A class with no
+   entries in a year simply does not show for that year.
 3. **The site lands on the latest batch with entries** unless the school pins one (`landingYear`), shows the last
    `pastBatches` (default 4) as "Batch of" chips, and honours a shareable `?batch=YYYY` deep link.
 4. **Seven layouts** in the studio's Design → Per-section layout group, keyed `sectionVariants.hof.layout`:
    `PODIUM` (default, today's look) · `MEDALS` · `SPOTLIGHT` · `SHELF` · `TIMELINE` · `YEARBOOK` · `SCOREBOARD`.
    All read the same data; layouts carry their own tone (no separate tone knob in v1).
-5. **Pick from students (Pro):** an entry may reference a `studentId`; name is filled from the register when left
-   blank. The roster endpoint that already exists (`/manage/students?classSectionId=`) feeds the picker.
+5. **Pick from students (Pro) — read live.** A place may link a `studentId` (search by name, class or admission
+   number over `/manage/students`). The site prints the student's *current* name and the profile photo they set
+   in the app, resolved at render time (`displayNameOf` / `photoAssetOf`), never copied at save time; an explicit
+   upload on the entry still wins. If the student row is deleted the link nulls and the typed name stands.
 6. **Degrade, never break, before the migration runs.** Every Hall of Fame read (public projection included) treats
    "table/column does not exist" (Prisma P2021/P2022) as "no hall of fame yet". Prod is deployed before its
    migration is planned; the section hides instead of 500-ing the whole school site.
