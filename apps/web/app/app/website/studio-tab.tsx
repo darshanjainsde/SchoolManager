@@ -428,8 +428,11 @@ export default function StudioTab() {
     if (o.join('|') !== normalizeSectionOrder(undefined, ids).join('|')) blob[SECTION_ORDER_KEY] = o;
     setLook({ sectionVariants: blob });
   };
-  const setVariant = (key: SectionKey, patch: { layout?: string; gesture?: string }) =>
+  const setVariant = (key: SectionKey, patch: { layout?: string; gesture?: string }) => {
+    // The preview follows the band being edited, not the group's first band.
+    setFocus(key);
     writeSectionConfig({ v: { ...variants, [key]: { ...(variants[key] ?? {}), ...patch } } });
+  };
   const moveBand = (i: number, by: number) => {
     const next = [...order]; const j = i + by;
     if (j < 0 || j >= next.length) return;
@@ -755,7 +758,13 @@ export default function StudioTab() {
         {SECTION_KEYS.map((key) => {
           const def = SECTION_VARIANT_DEFS[key];
           return (
-            <div key={key} className="border-b border-slate-100 pb-2.5 pt-2.5 first:pt-0 last:border-0 last:pb-0">
+            <div
+              key={key}
+              className="border-b border-slate-100 pb-2.5 pt-2.5 first:pt-0 last:border-0 last:pb-0"
+              // Touching any part of a band's row (title, chips, keyboard focus) scrolls the preview to that band.
+              onPointerDown={() => setFocus(key)}
+              onFocusCapture={() => setFocus(key)}
+            >
               <div className="text-sm font-semibold text-slate-700">{def.label}</div>
               <div className="mt-1.5"><Chips options={def.layouts} value={variants[key]?.layout ?? def.layouts[0].value} onPick={(v) => setVariant(key, { layout: v })} /></div>
               <div className="mt-1.5"><Chips options={[{ value: 'DEFAULT', label: 'Page default' }, { value: 'RISE', label: 'Rise' }, { value: 'SLIDE', label: 'Slide' }, { value: 'ZOOM', label: 'Zoom' }, { value: 'DRAW', label: 'Wipe' }, { value: 'CURTAIN', label: 'Curtain' }, { value: 'FLIP', label: 'Flip' }, { value: 'FADE', label: 'Fade' }]} value={variants[key]?.gesture ?? 'DEFAULT'} onPick={(v) => setVariant(key, { gesture: v })} /></div>
