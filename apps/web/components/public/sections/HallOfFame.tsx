@@ -152,7 +152,8 @@ export default function HallOfFame({ hof, layout, bandClass = '' }: { hof: Publi
           </div>
         )}
 
-        {groups.length > 1 && (
+        {/* Always name the class — a lone chip still tells the visitor whose podium this is. */}
+        {groups.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Class">
             {groups.map((g) => (
               <button

@@ -47,8 +47,9 @@ describe('HallOfFame', () => {
     expect(screen.getByRole('button', { name: '2025-26' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: '2023-24' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('Ved Sharma')).toBeInTheDocument();
-    // Board toppers has no 2025 podium, so it is not offered for 2025.
+    // Board toppers has no 2025 podium, so it is not offered for 2025 — but the one class that has one is still named.
     expect(screen.queryByRole('button', { name: 'Board toppers' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Class 3' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('switching the batch swaps the podium and offers the groups that have one that year', () => {
