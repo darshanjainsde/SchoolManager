@@ -133,15 +133,17 @@ export default function PlatformSettingsPage() {
             </div>
             <div className="sk-card-b">
               <p className="sk-muted">
-                Prices are <b>per year</b>. Schools in India are billed the ₹ INR figure, everyone else the $ USD
-                figure — other countries see the USD price converted live on sckools.com/pricing.
+                Prices are <b>per student, per year</b> — a school pays the plan price multiplied by its student
+                count, billed once a year. Schools in India are billed the ₹ INR figure, everyone else the $ USD
+                figure. The Basic ₹ figure is also the headline on sckools.com: “Upgrade your school from ₹X per
+                student, a year”. Changes reach the site within a minute.
               </p>
               <div className="sk-own-fldgrid">
                 {TIERS.map((t) => (
                   <div key={t.name} className="sk-card" style={{ boxShadow: 'none' }}>
                     <div className="sk-card-b" style={{ gap: 10 }}>
                       <div>
-                        <div style={{ fontWeight: 730, fontSize: 14 }}>{t.name} — per year</div>
+                        <div style={{ fontWeight: 730, fontSize: 14 }}>{t.name} — per student, per year</div>
                         <div className="sk-muted" style={{ fontSize: 11.5 }}>
                           {t.blurb}
                         </div>
@@ -306,7 +308,7 @@ function MoneyField({
             pointerEvents: 'none',
           }}
         >
-          / year
+          / student / yr
         </span>
       </div>
     </div>

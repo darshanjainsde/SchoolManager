@@ -645,6 +645,101 @@ export const PS_CSS = `
   .ps-champ-2 { animation-delay: .18s; }
   .ps-champ-3 { animation-delay: .34s; }
 
+  /* ── Hall of fame layouts (batches x groups x podium) ── */
+  .ps-hof-lab { font-size: 12px; opacity: .75; margin-right: 2px; }
+  .ps-hof-chip { font: inherit; font-size: 13px; font-weight: 700; border-radius: 999px; padding: 6px 14px; cursor: pointer;
+    border: 1px solid currentColor; background: transparent; color: inherit; opacity: .85; transition: opacity .2s, background .2s, transform .2s; }
+  .ps-hof-chip:hover { opacity: 1; transform: translateY(-1px); }
+  .ps-hof-chip[data-on="true"] { opacity: 1; background: var(--ps2); color: var(--ink); border-color: var(--ps2); }
+  .ps-hof-year[data-on="true"] { background: #e0b04a; border-color: #e0b04a; color: #2b1d05; }
+  .ps-hof-medals .ps-hof-chip, .ps-hof-yearbook .ps-hof-chip { color: var(--ink); border-color: color-mix(in srgb, var(--ink) 30%, transparent); }
+  .ps-hof-medals .ps-hof-chip[data-on="true"], .ps-hof-yearbook .ps-hof-chip[data-on="true"] { background: var(--ps1); color: #fff; border-color: var(--ps1); }
+  .ps-hof-ava { border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-weight: 800; font-family: var(--font-head);
+    color: #fff; background: linear-gradient(135deg, color-mix(in srgb, var(--ps1) 70%, #fff), var(--ps1)); border: 3px solid rgba(255,255,255,.35); flex: 0 0 auto; }
+  .ps-hof-ava-xs { width: 36px; height: 36px; font-size: 13px; border-width: 2px; }
+  .ps-hof-ava-sm { width: 52px; height: 52px; font-size: 17px; }
+  .ps-hof-ava-lg { width: 88px; height: 88px; font-size: 28px; margin: 26px auto 6px; }
+  .ps-hof-ava-xl { width: 112px; height: 112px; font-size: 38px; border-color: #e0b04a; box-shadow: 0 0 0 8px rgba(224,176,74,.22); }
+  .ps-hof-ava-sq { width: 100%; aspect-ratio: 1; border-radius: 0; border: 0; font-size: 34px; }
+  .ps-hof-cls { font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; opacity: .7; margin-top: 2px; }
+
+  /* 2 medal wall */
+  .ps-hof-wall { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 36px; }
+  .ps-hof-mc { position: relative; background: #fff; border: 1px solid color-mix(in srgb, var(--ps1) 14%, #fff); border-radius: 18px;
+    padding: 18px 14px 16px; text-align: center; overflow: hidden; color: var(--ink); box-shadow: 0 12px 28px -18px rgba(20,30,25,.35); }
+  .ps-hof-rib { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 34px; height: 54px;
+    background: linear-gradient(180deg, #d33f5a, #a52642); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); }
+  .ps-hof-md { position: absolute; top: 60px; left: calc(50% + 24px); width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    font-weight: 800; font-size: 13px; color: #3a2600; border: 2px solid #fff; }
+  .ps-hof-md-1 { background: #e0b04a; } .ps-hof-md-2 { background: #b8c4c0; } .ps-hof-md-3 { background: #c98a5b; }
+
+  /* 3 spotlight */
+  .ps-hof-spot { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, .9fr); gap: 16px; margin-top: 36px; align-items: stretch; }
+  .ps-hof-hero { border-radius: 20px; padding: 24px; background: linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,.04));
+    border: 1px solid rgba(255,255,255,.18); display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 20px; align-items: center; }
+  .ps-hof-k { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #e0b04a; font-weight: 800; }
+  .ps-hof-side { display: grid; gap: 10px; align-content: center; }
+  .ps-hof-sc { display: flex; gap: 12px; align-items: center; border-radius: 14px; padding: 12px 14px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
+  .ps-hof-r { margin-left: auto; font-weight: 800; font-size: 13px; opacity: .8; }
+
+  /* 4 trophy shelf */
+  .ps-hof-shelf { margin-top: 40px; display: grid; gap: 22px; }
+  .ps-hof-plaques { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 0 12px; }
+  .ps-hof-plq { position: relative; background: linear-gradient(180deg, #f3e2b6, #cfa858); border: 2px solid #9c7a2e; border-radius: 6px; padding: 16px 12px 12px;
+    text-align: center; color: #3a2a08; box-shadow: inset 0 1px 0 #fff8e0, 0 12px 20px -12px rgba(0,0,0,.6); }
+  .ps-hof-plq::before, .ps-hof-plq::after { content: ''; position: absolute; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: #7a5a18; box-shadow: inset 0 1px 1px rgba(255,255,255,.6); }
+  .ps-hof-plq::before { left: 8px; } .ps-hof-plq::after { right: 8px; }
+  .ps-hof-plq-t { font-size: 30px; line-height: 1; }
+  .ps-hof-plq-nm { color: #3a2a08; font-size: 15px; letter-spacing: .04em; text-transform: uppercase; margin-top: 8px; font-weight: 700; }
+  .ps-hof-plq-ach { color: #5a4212; font-size: 12px; margin-top: 2px; }
+  .ps-hof-plq-yr { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; margin-top: 8px; color: #6a4f18; }
+  .ps-hof-board { height: 16px; border-radius: 3px; background: linear-gradient(180deg, #8a5a34, #5e3a1d); box-shadow: 0 12px 18px -8px rgba(0,0,0,.7); margin-top: -6px; }
+
+  /* 5 batch timeline */
+  .ps-hof-rail { position: relative; margin-top: 44px; padding-top: 22px; }
+  .ps-hof-rail::before { content: ''; position: absolute; left: 0; right: 0; top: 9px; height: 2px; background: rgba(255,255,255,.25); }
+  .ps-hof-years { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .ps-hof-yc { position: relative; border-radius: 16px; padding: 16px 14px 14px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
+  .ps-hof-yc::before { content: ''; position: absolute; top: -19px; left: 50%; width: 12px; height: 12px; border-radius: 50%; background: #e0b04a; transform: translateX(-50%); box-shadow: 0 0 0 4px rgba(224,176,74,.25); }
+  .ps-hof-yc[data-now="true"] { border-color: #e0b04a; }
+  .ps-hof-y { color: #fff; font-size: 24px; font-weight: 700; }
+  .ps-hof-trio { display: grid; gap: 6px; margin-top: 10px; font-size: 13px; }
+  .ps-hof-trio span { display: flex; justify-content: space-between; gap: 8px; }
+  .ps-hof-trio b { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ps-hof-trio b i { font-style: normal; }
+  .ps-hof-trio em { font-style: normal; opacity: .75; white-space: nowrap; }
+
+  /* 6 yearbook */
+  .ps-hof-cork { margin-top: 36px; background: repeating-linear-gradient(45deg, #e7d2b0 0 6px, #e1c9a3 6px 12px); border: 8px solid #8a5a34; border-radius: 6px;
+    padding: 28px 22px 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; box-shadow: inset 0 0 40px rgba(0,0,0,.15); color: #2a2118; }
+  .ps-hof-pol { position: relative; background: #fff; padding: 10px 10px 30px; box-shadow: 0 12px 22px -12px rgba(0,0,0,.6); transform: rotate(var(--rot, 0deg)); }
+  .ps-hof-pol::before { content: ''; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 14px; height: 14px; border-radius: 50%; background: #d33f5a; box-shadow: 0 2px 3px rgba(0,0,0,.4); }
+  .ps-hof-st { position: absolute; right: 8px; top: 8px; font-size: 22px; }
+  .ps-hof-cap { font-family: "Caveat", "Segoe Script", "Bradley Hand", cursive; font-size: 20px; text-align: center; margin-top: 10px; line-height: 1.1; }
+  .ps-hof-cap small { display: block; font-size: 14px; color: #6a5a48; }
+
+  /* 7 scoreboard */
+  .ps-hof-score { margin-top: 36px; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.25); }
+  .ps-hof-sr { display: grid; grid-template-columns: 54px 44px minmax(0, 1fr) 110px 120px; gap: 12px; align-items: center; padding: 12px 16px; border-top: 1px solid rgba(255,255,255,.1); }
+  .ps-hof-sr-h { border-top: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; opacity: .65; padding: 9px 16px; }
+  .ps-hof-rk { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .ps-hof-rk-1 { color: #e0b04a; } .ps-hof-rk-2 { color: #b8c4c0; } .ps-hof-rk-3 { color: #c98a5b; }
+  .ps-hof-pc { font-weight: 800; font-size: 16px; text-align: right; font-variant-numeric: tabular-nums; }
+  .ps-hof-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.14); overflow: hidden; }
+  .ps-hof-bar i { display: block; height: 100%; background: linear-gradient(90deg, #e0b04a, #f6d98a); }
+
+  @media (max-width: 820px) {
+    .ps-hof-wall, .ps-hof-plaques, .ps-hof-cork, .ps-hof-years { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ps-hof-spot { grid-template-columns: 1fr; }
+    .ps-hof-sr { grid-template-columns: 40px 36px minmax(0, 1fr) 72px; }
+    .ps-hof-sr .ps-hof-bar { display: none; }
+  }
+  @media (max-width: 520px) {
+    .ps-hof-wall, .ps-hof-plaques, .ps-hof-cork, .ps-hof-years { grid-template-columns: 1fr; }
+    .ps-hof-hero { grid-template-columns: 1fr; text-align: center; }
+    .ps-hof-hero .ps-hof-ava { margin: 0 auto; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .ps-root { --motion: 0 !important; }
     .reveal { opacity: 1; transform: none; }

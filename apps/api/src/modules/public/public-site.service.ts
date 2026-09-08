@@ -3,7 +3,7 @@ import { withTenant, type FeatureKey } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import { PublicEventsService } from '../community';
-import { mergeSectionVariantContent, pickDesignConfig } from '../cms';
+import { mergeSectionVariantContent, pickDesignConfig, photoAssetIdsOf, projectHallOfFame, readHallOfFame } from '../cms';
 import type { PublicSiteData } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
@@ -20,6 +20,9 @@ export class PublicSiteService {
     if (!ctx || ctx.kind !== 'tenant') throw new NotFoundException('Site not found');
     const schoolId = ctx.schoolId;
     const feat = await this.features.getFeatures(schoolId);
+    // Its own transaction: see readHallOfFame — a missing table must not
+    // poison the projection's transaction below.
+    const hofRead = await readHallOfFame(schoolId);
 
     return withTenant(schoolId, async (tx) => {
       const school = await tx.school.findUnique({ where: { id: schoolId } });
@@ -41,7 +44,7 @@ export class PublicSiteService {
           tx.course.findMany({ take: LIST_CEILING.STRUCTURE,
             where: { schoolId },
             orderBy: { order: 'asc' },
-            include: { fee: true, hallOfFame: { orderBy: { rank: 'asc' } } },
+            include: { fee: true },
           }),
           tx.admissionStep.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
           tx.admissionsSettings.findUnique({ where: { schoolId } }),
@@ -87,7 +90,7 @@ export class PublicSiteService {
         homepage?.aboutImageAssetId,
         ...staff.map((s) => s.photoAssetId),
         ...courses.map((c) => c.imageAssetId),
-        ...courses.flatMap((c) => c.hallOfFame.map((h) => h.photoAssetId)),
+        ...photoAssetIdsOf(hofRead),
       ].filter(Boolean) as string[];
 
       const assets =
@@ -102,6 +105,15 @@ export class PublicSiteService {
         id ? (assets.find((a) => a.id === id)?.url ?? null) : null;
 
       const has = (k: FeatureKey) => feat.has(k);
+      const hallOfFame = projectHallOfFame(hofRead, urlOf);
+      // One release of back-compat: a course's podium at the landing year,
+      // the shape the 2026-07 section read (`year` as text).
+      const legacyPodium = (courseId: string) => {
+        const g = hallOfFame?.groups.find((x) => x.courseId === courseId);
+        return (g?.entries ?? [])
+          .filter((e) => e.batchYear === hallOfFame?.landingYear)
+          .map((e) => ({ rank: e.rank, name: e.name, achievement: e.achievement, year: String(e.batchYear), photoUrl: e.photoUrl }));
+      };
       const showFees = admissionsSettings?.showFeesPublicly ?? true;
 
       const events = has('EVENTS')
@@ -195,14 +207,11 @@ export class PublicSiteService {
             showFees && c.fee
               ? { admissionFee: c.fee.admissionFee, annualFee: c.fee.annualFee, includes: c.fee.includes }
               : null,
-          hallOfFame: c.hallOfFame.map((h) => ({
-            rank: h.rank,
-            name: h.name,
-            achievement: h.achievement,
-            year: h.year,
-            photoUrl: urlOf(h.photoAssetId),
-          })),
+          hallOfFame: legacyPodium(c.id),
         })),
+        hallOfFame: hallOfFame
+          ? { landingYear: hallOfFame.landingYear, years: hallOfFame.years, groups: hallOfFame.groups.map((g) => ({ id: g.id, label: g.label, entries: g.entries })) }
+          : null,
         admissions: {
           steps: admissionSteps.map((s) => ({ title: s.title, description: s.description })),
           showFees,

@@ -10,9 +10,11 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   Length,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -189,13 +191,34 @@ export class UpdateAdmissionsSettingsDto {
   @IsOptional() @IsString() @Length(0, 400) feeNote?: string;
 }
 
+export const HOF_GROUP_KINDS = ['COURSE', 'GRADES', 'CUSTOM'] as const;
+export type HofGroupKind = (typeof HOF_GROUP_KINDS)[number];
+
+/** One Hall of Fame group: what a podium is FOR. See the 2026-09-07 spec. */
+export class HallOfFameGroupDto {
+  @IsOptional() @IsUUID() id?: string;
+  @IsIn(HOF_GROUP_KINDS) kind!: HofGroupKind;
+  @IsOptional() @IsString() @Length(0, 80) label?: string;
+  @IsOptional() @IsUUID() courseId?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(30) @IsUUID('all', { each: true }) gradeIds?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(60) @IsUUID('all', { each: true }) sectionIds?: string[];
+}
+export class SetHallOfFameGroupsDto {
+  @IsArray() @ArrayMaxSize(40) @ValidateNested({ each: true }) @Type(() => HallOfFameGroupDto) groups!: HallOfFameGroupDto[];
+}
 export class HallOfFameEntryDto {
   @IsInt() @Min(1) @Max(3) rank!: number;
-  @IsString() @Length(1, 120) name!: string;
+  /** May be blank when `studentId` is set — the register fills it in. */
+  @IsOptional() @IsString() @Length(0, 120) name?: string;
   @IsOptional() @IsString() @Length(0, 120) achievement?: string;
-  @IsOptional() @IsString() @Length(0, 20) year?: string;
-  @IsOptional() @IsString() photoAssetId?: string;
+  @IsOptional() @IsUUID() photoAssetId?: string;
+  @IsOptional() @IsUUID() studentId?: string;
 }
-export class SetHallOfFameDto {
+export class SetHallOfFamePodiumDto {
   @IsArray() @ArrayMaxSize(3) @ValidateNested({ each: true }) @Type(() => HallOfFameEntryDto) entries!: HallOfFameEntryDto[];
+}
+export class HallOfFameSettingsDto {
+  /** null = land on the latest batch that has entries. */
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1990) @Max(2100) landingYear?: number | null;
+  @IsOptional() @IsInt() @Min(1) @Max(10) pastBatches?: number;
 }

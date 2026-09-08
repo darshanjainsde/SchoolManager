@@ -99,8 +99,8 @@ export const HERO_MEDIA_OPTIONS: StyleOption<HeroMedia>[] = [
    sectionVariants (SchoolProfile Json) = { [sectionKey]: { layout?, gesture? } }.
    Layout changes the arrangement of one band; gesture overrides the page-wide
    motionGesture for that one band. DEFAULT everywhere = today's page. */
-export type SectionKey = 'stats' | 'about' | 'courses' | 'admissions' | 'gallery' | 'staff' | 'contact';
-export const SECTION_KEYS: SectionKey[] = ['stats', 'about', 'courses', 'admissions', 'gallery', 'staff', 'contact'];
+export type SectionKey = 'stats' | 'about' | 'courses' | 'admissions' | 'gallery' | 'hof' | 'staff' | 'contact';
+export const SECTION_KEYS: SectionKey[] = ['stats', 'about', 'courses', 'admissions', 'gallery', 'hof', 'staff', 'contact'];
 
 export interface SectionVariantChoice {
   layout?: string;
@@ -169,6 +169,19 @@ export const SECTION_VARIANT_DEFS: Record<
       { value: 'POLAROID', label: 'Polaroid', hint: 'White-framed prints, each pinned at a slight tilt.' },
     ],
   },
+  hof: {
+    label: 'Hall of fame',
+    hint: 'The toppers band — every layout reads the same batches, groups and podium.',
+    layouts: [
+      { value: 'PODIUM', label: 'Podium', hint: 'Three steps, gold rises first — today’s look.' },
+      { value: 'MEDALS', label: 'Medal wall', hint: 'Portrait cards with a ribbon medal — photo-first and calm.' },
+      { value: 'SPOTLIGHT', label: 'Spotlight', hint: 'One big card for first place; second and third beside it.' },
+      { value: 'SHELF', label: 'Trophy shelf', hint: 'Engraved brass plaques on a shelf — no photos needed.' },
+      { value: 'TIMELINE', label: 'Batch timeline', hint: 'Every batch side by side on a year rail, newest highlighted.' },
+      { value: 'YEARBOOK', label: 'Yearbook', hint: 'Polaroids pinned to a cork board, handwritten captions.' },
+      { value: 'SCOREBOARD', label: 'Scoreboard', hint: 'Leaderboard rows with a score bar — for results with numbers.' },
+    ],
+  },
   staff: {
     label: 'Educators',
     hint: 'The featured-staff band.',
@@ -196,6 +209,7 @@ const SECTION_DEFAULT_LAYOUT: Record<SectionKey, string> = {
   courses: 'GRID',
   admissions: 'JOURNEY',
   gallery: 'GRID',
+  hof: 'PODIUM',
   staff: 'GRID',
   contact: 'SPLIT',
 };

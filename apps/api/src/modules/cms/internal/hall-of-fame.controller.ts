@@ -1,20 +1,17 @@
 import { SitePurgeInterceptor } from './site-purge.interceptor';
-import { Body, Controller, Get, Param, ParseUUIDPipe, Put, UseGuards , UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, ParseUUIDPipe, Put, UseGuards, UseInterceptors } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../../common/auth/roles.guard';
 import { Roles } from '../../../common/auth/roles.decorator';
 import { TenantContextService } from '../../tenancy';
 import { HallOfFameService } from './hall-of-fame.service';
-import { SetHallOfFameDto } from './cms.dto';
+import { HallOfFameSettingsDto, SetHallOfFameGroupsDto, SetHallOfFamePodiumDto } from './cms.dto';
 
 @Controller('site/hall-of-fame')
 // Any write here drops this school's cached pages — see the interceptor.
 @UseInterceptors(SitePurgeInterceptor)
 // SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
-// all. Without RolesGuard beside it every route here was reachable with a
-// STUDENT or PARENT token — and the enquiries ones hand back other families'
-// names and phone numbers. Every caller lives under /app, which is already
-// SCHOOL_ADMIN-only, so this locks out nobody who was legitimately using it.
+// all. RolesGuard beside it is what keeps a STUDENT token out of the editor.
 @UseGuards(SchoolJwtGuard, RolesGuard)
 @Roles('SCHOOL_ADMIN')
 export class HallOfFameController {
@@ -27,13 +24,30 @@ export class HallOfFameController {
     return this.tenant.requireTenant().schoolId;
   }
 
+  /** Groups, every batch's entries, the years that have entries, settings. */
   @Get()
-  list() {
-    return this.hof.list(this.sid());
+  overview() {
+    return this.hof.overview(this.sid());
   }
 
-  @Put(':courseId')
-  setForCourse(@Param('courseId', ParseUUIDPipe) courseId: string, @Body() dto: SetHallOfFameDto) {
-    return this.hof.setForCourse(this.sid(), courseId, dto.entries);
+  /** Replace the ordered set of groups (what podiums are for). */
+  @Put('groups')
+  setGroups(@Body() dto: SetHallOfFameGroupsDto) {
+    return this.hof.setGroups(this.sid(), dto.groups);
+  }
+
+  /** Replace one group's podium for one batch year. */
+  @Put('groups/:groupId/:year')
+  setPodium(
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('year', ParseIntPipe) year: number,
+    @Body() dto: SetHallOfFamePodiumDto,
+  ) {
+    return this.hof.setPodium(this.sid(), groupId, year, dto.entries);
+  }
+
+  @Put('settings')
+  setSettings(@Body() dto: HallOfFameSettingsDto) {
+    return this.hof.setSettings(this.sid(), dto);
   }
 }

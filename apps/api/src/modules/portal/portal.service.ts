@@ -210,7 +210,7 @@ export class PortalService {
     return withTenant(schoolId, (tx) =>
       tx.student.findFirst({
         where: { schoolId, userId },
-        include: { classSection: { select: { id: true, name: true } } },
+        include: { classSection: { select: { id: true, name: true, grade: { select: { name: true } } } } },
       }),
     );
   }
@@ -233,7 +233,11 @@ export class PortalService {
       admissionNo: s.admissionNo,
       code: s.code ?? null,
       rollNo: s.rollNo,
-      className: s.classSection?.name ?? null,
+      // A ClassSection's own `name` is only the section ("A"); the label a
+      // student recognises is grade-qualified ("Class 3-A"), the same shape the
+      // fees and timetable projections use. The family app and the web portal
+      // both print this verbatim under the greeting.
+      className: s.classSection ? `${s.classSection.grade.name}-${s.classSection.name}` : null,
       photoUrl,
     };
   }
