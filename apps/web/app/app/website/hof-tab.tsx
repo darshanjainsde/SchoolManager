@@ -10,11 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { CourseRow } from './courses-tab';
 
 /* ── Contracts (apps/api/src/modules/cms/internal/hall-of-fame.*) ─────────── */
 type GroupKind = 'COURSE' | 'GRADES' | 'CUSTOM';
-interface HofGroup {
+/** A "class" on this screen. The API still knows the kind a row was made with;
+ *  the admin only ever sees and edits the name. New rows are CUSTOM. */
+interface HofClass {
   id: string;
   kind: GroupKind;
   label: string;
@@ -32,28 +33,26 @@ interface HofEntry {
   achievement: string | null;
   photoAssetId: string | null;
   studentId: string | null;
+  displayName: string;
+  photoUrl: string | null;
 }
 interface HofOverview {
-  groups: HofGroup[];
+  groups: HofClass[];
   entries: HofEntry[];
   years: number[];
   currentYear: number;
   settings: { landingYear: number | null; pastBatches: number };
   unavailable: boolean;
 }
-/** /manage/classes — every scalar of ClassSection plus the grade's name. */
-interface ClassRow {
-  id: string;
-  name: string;
-  gradeId: string;
-  grade: { name: string } | null;
-}
-/** /manage/students?classSectionId= — ROSTER_SELECT. */
-interface RosterStudent {
+/** /manage/students (SCHOOL_ADMIN → the full projection). */
+interface StudentRow {
   id: string;
   firstName: string;
   lastName: string;
-  rollNo: string | null;
+  admissionNo?: string | null;
+  rollNo?: string | null;
+  photoAssetId?: string | null;
+  classSection?: { name: string; grade?: { name: string } | null } | null;
 }
 interface MediaAsset {
   id: string;
@@ -63,52 +62,23 @@ interface SiteContent {
   school?: { features?: string[] } | null;
 }
 
-/** A group being edited. `key` is local; `id` is set once the API has it. */
-interface GroupDraft {
-  key: string;
-  id?: string;
-  kind: GroupKind;
-  label: string;
-  courseId: string;
-  gradeIds: string[];
-  sectionIds: string[];
-}
 interface SlotForm {
   name: string;
   achievement: string;
   photoAssetId: string | null;
   photoPreviewUrl: string | null;
   studentId: string | null;
+  /** What the site shows today for this place (from the overview) — the linked profile wins. */
+  currentPhotoUrl: string | null;
+  currentName: string;
 }
-const EMPTY_SLOT: SlotForm = { name: '', achievement: '', photoAssetId: null, photoPreviewUrl: null, studentId: null };
+const EMPTY_SLOT: SlotForm = { name: '', achievement: '', photoAssetId: null, photoPreviewUrl: null, studentId: null, currentPhotoUrl: null, currentName: '' };
 const MEDALS = ['🥇', '🥈', '🥉'];
-const PLACES = ['1st', '2nd', '3rd'];
-const KIND_LABEL: Record<GroupKind, string> = { COURSE: 'Website course', GRADES: 'Class', CUSTOM: 'Custom' };
+const PLACES = ['First', 'Second', 'Third'];
 
-let draftSeq = 0;
-const newKey = () => `d${++draftSeq}`;
-
-function toDrafts(groups: HofGroup[]): GroupDraft[] {
-  return groups.map((g) => ({ key: g.id, id: g.id, kind: g.kind, label: g.label, courseId: g.courseId ?? '', gradeIds: g.gradeIds, sectionIds: g.sectionIds }));
-}
-
-/** The label the API will give a draft when the admin leaves it blank. */
-function autoLabel(d: GroupDraft, courses: CourseRow[], classes: ClassRow[]): string {
-  if (d.kind === 'COURSE') return courses.find((c) => c.id === d.courseId)?.name ?? '';
-  if (d.kind === 'GRADES') {
-    if (d.sectionIds.length) {
-      return d.sectionIds
-        .map((id) => classes.find((c) => c.id === id))
-        .filter((c): c is ClassRow => !!c)
-        .map((c) => `${c.grade?.name ?? ''}-${c.name}`)
-        .join(' · ');
-    }
-    const names = new Map<string, string>();
-    for (const c of classes) if (d.gradeIds.includes(c.gradeId) && c.grade) names.set(c.gradeId, c.grade.name);
-    return d.gradeIds.map((id) => names.get(id) ?? '').filter(Boolean).join(' · ');
-  }
-  return '';
-}
+const classLabel = (s: StudentRow) =>
+  s.classSection ? [s.classSection.grade?.name, s.classSection.name].filter(Boolean).join('-') : '';
+const fullName = (s: StudentRow) => `${s.firstName} ${s.lastName}`.trim();
 
 export default function HallOfFameTab() {
   // Every tenant-scoped query waits for the host (host-guard.test.ts) and the
@@ -117,41 +87,28 @@ export default function HallOfFameTab() {
   const api = useApi({ audience: 'school', hostHeader: host });
   const queryClient = useQueryClient();
 
-  const hofQuery = useQuery({
-    queryKey: ['site-hof'],
-    queryFn: () => api.get<HofOverview>('/site/hall-of-fame'),
-    enabled: !!host,
-  });
-  const coursesQuery = useQuery({
-    queryKey: ['site-courses'],
-    queryFn: () => api.get<CourseRow[]>('/site/courses'),
-    enabled: !!host,
-  });
-  const contentQuery = useQuery({
-    queryKey: ['site-content'],
-    queryFn: () => api.get<SiteContent>('/site/content'),
-    enabled: !!host,
-  });
-  const mediaQuery = useQuery({
-    queryKey: ['site-media-hof'],
-    queryFn: () => api.get<MediaAsset[]>('/site/media?kind=HOF'),
-    enabled: !!host,
-  });
+  const hofQuery = useQuery({ queryKey: ['site-hof'], queryFn: () => api.get<HofOverview>('/site/hall-of-fame'), enabled: !!host });
+  const contentQuery = useQuery({ queryKey: ['site-content'], queryFn: () => api.get<SiteContent>('/site/content'), enabled: !!host });
   const hasManagement = (contentQuery.data?.school?.features ?? []).includes('MANAGEMENT');
-  const classesQuery = useQuery({
-    queryKey: ['manage-classes'],
-    queryFn: () => api.get<ClassRow[]>('/manage/classes'),
+  const studentsQuery = useQuery({
+    queryKey: ['manage-students-all'],
+    queryFn: () => api.get<StudentRow[]>('/manage/students'),
+    enabled: !!host && hasManagement,
+  });
+  const avatarsQuery = useQuery({
+    queryKey: ['site-media-avatar'],
+    queryFn: () => api.get<MediaAsset[]>('/site/media?kind=AVATAR'),
     enabled: !!host && hasManagement,
   });
 
   const hof = hofQuery.data;
-  const courses = coursesQuery.data ?? [];
-  const classes = classesQuery.data ?? [];
-  const photoUrl = (id?: string | null) => (id ? (mediaQuery.data?.find((a) => a.id === id)?.url ?? null) : null);
+  const classes = hof?.groups ?? [];
+  const students = studentsQuery.data ?? [];
+  const avatarUrl = (id?: string | null) => (id ? (avatarsQuery.data?.find((a) => a.id === id)?.url ?? null) : null);
 
   // ── Batch year ──
   const [year, setYear] = useState<number | null>(null);
-  const [newYear, setNewYear] = useState<string>('');
+  const [newYear, setNewYear] = useState('');
   const [addingYear, setAddingYear] = useState(false);
   const activeYear = year ?? hof?.years[0] ?? hof?.currentYear ?? new Date().getFullYear();
   const yearChips = useMemo(() => {
@@ -160,28 +117,27 @@ export default function HallOfFameTab() {
     return [...ys].sort((a, b) => b - a);
   }, [hof?.years, year]);
 
-  // ── Groups (editable copy) ──
-  const [drafts, setDrafts] = useState<GroupDraft[] | null>(null);
-  const groupDrafts = drafts ?? toDrafts(hof?.groups ?? []);
-  const groupsDirty = drafts !== null;
+  // ── Classes ──
+  const [newClass, setNewClass] = useState('');
+  const [renaming, setRenaming] = useState<{ id: string; label: string } | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
-  const savedGroups = hof?.groups ?? [];
-  const activeGroup = savedGroups.find((g) => g.id === activeGroupKey) ?? savedGroups[0];
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
+  const activeClass = classes.find((c) => c.id === activeClassId) ?? classes[0];
+  const batchesOf = (id: string) => new Set((hof?.entries ?? []).filter((e) => e.groupId === id).map((e) => e.batchYear)).size;
 
-  // ── Podium slots for (activeGroup, activeYear) ──
+  // ── Podium slots for (activeClass, activeYear) ──
   const [slots, setSlots] = useState<SlotForm[]>([EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT]);
   useEffect(() => {
-    const entries = (hof?.entries ?? []).filter((e) => e.groupId === activeGroup?.id && e.batchYear === activeYear);
+    const entries = (hof?.entries ?? []).filter((e) => e.groupId === activeClass?.id && e.batchYear === activeYear);
     setSlots(
       [1, 2, 3].map((rank) => {
         const e = entries.find((x) => x.rank === rank);
         return e
-          ? { name: e.name, achievement: e.achievement ?? '', photoAssetId: e.photoAssetId, photoPreviewUrl: null, studentId: e.studentId }
+          ? { name: e.name, achievement: e.achievement ?? '', photoAssetId: e.photoAssetId, photoPreviewUrl: null, studentId: e.studentId, currentPhotoUrl: e.photoUrl, currentName: e.displayName }
           : EMPTY_SLOT;
       }),
     );
-  }, [hof?.entries, activeGroup?.id, activeYear]);
+  }, [hof?.entries, activeClass?.id, activeYear]);
 
   // ── Settings ──
   const [landing, setLanding] = useState<string | null>(null);
@@ -189,36 +145,56 @@ export default function HallOfFameTab() {
   const landingValue = landing ?? (hof?.settings.landingYear == null ? 'latest' : String(hof.settings.landingYear));
   const pastValue = pastBatches ?? String(hof?.settings.pastBatches ?? 4);
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['site-hof'] });
-    void queryClient.invalidateQueries({ queryKey: ['site-media-hof'] });
-  };
   const fail = (what: string) => (err: Error) => toast.error(`${what} failed: ${err.message}`);
+  const applyOverview = (data: HofOverview) => queryClient.setQueryData(['site-hof'], data);
 
-  const saveGroups = useMutation({
-    mutationFn: () =>
+  /** The whole ordered list goes up each time; the API keeps ids it knows and drops the rest. */
+  const putClasses = useMutation({
+    mutationFn: (list: HofClass[]) =>
       api.put<HofOverview>('/site/hall-of-fame/groups', {
-        groups: groupDrafts.map((d) => ({
-          ...(d.id ? { id: d.id } : {}),
-          kind: d.kind,
-          label: d.label.trim() || undefined,
-          ...(d.kind === 'COURSE' ? { courseId: d.courseId } : {}),
-          ...(d.kind === 'GRADES' ? { gradeIds: d.gradeIds, sectionIds: d.sectionIds } : {}),
+        groups: list.map((c) => ({
+          ...(c.id.startsWith('new:') ? {} : { id: c.id }),
+          kind: c.kind,
+          label: c.label.trim() || undefined,
+          ...(c.kind === 'COURSE' ? { courseId: c.courseId } : {}),
+          ...(c.kind === 'GRADES' ? { gradeIds: c.gradeIds, sectionIds: c.sectionIds } : {}),
         })),
       }),
     onSuccess: (data) => {
-      queryClient.setQueryData(['site-hof'], data);
-      setDrafts(null);
+      applyOverview(data);
+      setRenaming(null);
       setConfirmRemove(null);
-      toast.success('Groups saved');
+      setNewClass('');
     },
-    onError: fail('Saving groups'),
+    onError: fail('Saving classes'),
   });
+  const addClass = (label: string) => {
+    const name = label.trim();
+    if (!name) return;
+    if (classes.some((c) => c.label.trim().toLowerCase() === name.toLowerCase())) {
+      toast.error(`“${name}” already exists — pick it below to add this batch's toppers.`);
+      return;
+    }
+    putClasses.mutate([...classes, { id: `new:${Date.now()}`, kind: 'CUSTOM', label: name, order: classes.length, courseId: null, gradeIds: [], sectionIds: [] }]);
+  };
+  const renameClass = (id: string, label: string) => {
+    if (!label.trim()) return;
+    putClasses.mutate(classes.map((c) => (c.id === id ? { ...c, label } : c)));
+  };
+  const removeClass = (id: string) => putClasses.mutate(classes.filter((c) => c.id !== id));
+  const moveClass = (id: string, dir: -1 | 1) => {
+    const list = [...classes];
+    const i = list.findIndex((c) => c.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    putClasses.mutate(list);
+  };
 
   const savePodium = useMutation({
     mutationFn: () => {
-      if (!activeGroup) throw new Error('Pick a group first');
-      return api.put<HofOverview>(`/site/hall-of-fame/groups/${activeGroup.id}/${activeYear}`, {
+      if (!activeClass) throw new Error('Add a class first');
+      return api.put<HofOverview>(`/site/hall-of-fame/groups/${activeClass.id}/${activeYear}`, {
         entries: slots
           .map((s, i) => ({ ...s, rank: i + 1 }))
           .filter((s) => s.name.trim() || s.studentId)
@@ -232,11 +208,10 @@ export default function HallOfFameTab() {
       });
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(['site-hof'], data);
-      invalidate();
+      applyOverview(data);
       toast.success(`Batch of ${activeYear} saved`);
     },
-    onError: fail('Saving the podium'),
+    onError: fail('Saving the toppers'),
   });
 
   const saveSettings = useMutation({
@@ -246,7 +221,7 @@ export default function HallOfFameTab() {
         pastBatches: Math.min(10, Math.max(1, Number(pastValue) || 4)),
       }),
     onSuccess: (data) => {
-      queryClient.setQueryData(['site-hof'], data);
+      applyOverview(data);
       setLanding(null);
       setPastBatches(null);
       toast.success('Settings saved');
@@ -254,51 +229,9 @@ export default function HallOfFameTab() {
     onError: fail('Saving settings'),
   });
 
-  function updateDraft(key: string, patch: Partial<GroupDraft>) {
-    setDrafts((prev) => (prev ?? toDrafts(savedGroups)).map((d) => (d.key === key ? { ...d, ...patch } : d)));
-  }
-  function addDraft(kind: GroupKind) {
-    setDrafts((prev) => [...(prev ?? toDrafts(savedGroups)), { key: newKey(), kind, label: '', courseId: courses[0]?.id ?? '', gradeIds: [], sectionIds: [] }]);
-  }
-  function removeDraft(key: string) {
-    setDrafts((prev) => (prev ?? toDrafts(savedGroups)).filter((d) => d.key !== key));
-    setConfirmRemove(null);
-  }
-  function moveDraft(key: string, dir: -1 | 1) {
-    setDrafts((prev) => {
-      const list = [...(prev ?? toDrafts(savedGroups))];
-      const i = list.findIndex((d) => d.key === key);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= list.length) return list;
-      [list[i], list[j]] = [list[j], list[i]];
-      return list;
-    });
-  }
-  /** One clubbed grade group → one group per section of that grade. */
-  function splitBySection(key: string) {
-    setDrafts((prev) => {
-      const list = prev ?? toDrafts(savedGroups);
-      const i = list.findIndex((d) => d.key === key);
-      if (i < 0) return list;
-      const d = list[i];
-      const secs = classes.filter((c) => d.gradeIds.includes(c.gradeId));
-      if (secs.length < 2) return list;
-      const split = secs.map((c) => ({ key: newKey(), kind: 'GRADES' as const, label: '', courseId: '', gradeIds: [c.gradeId], sectionIds: [c.id] }));
-      return [...list.slice(0, i), ...split, ...list.slice(i + 1)];
-    });
-  }
   function updateSlot(idx: number, patch: Partial<SlotForm>) {
     setSlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
   }
-
-  const podiumCount = (groupId: string) => new Set((hof?.entries ?? []).filter((e) => e.groupId === groupId).map((e) => e.batchYear)).size;
-  const gradeOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const c of classes) if (c.grade && !seen.has(c.gradeId)) seen.set(c.gradeId, c.grade.name);
-    return [...seen].map(([id, name]) => ({ id, name }));
-  }, [classes]);
-  const sectionsOf = (g: HofGroup) =>
-    g.sectionIds.length ? classes.filter((c) => g.sectionIds.includes(c.id)) : classes.filter((c) => g.gradeIds.includes(c.gradeId));
 
   if (!host || hofQuery.isLoading) return <p className="text-sm text-slate-500">Loading the Hall of Fame…</p>;
   if (hofQuery.isError) return <p className="text-sm text-red-600">Could not load the Hall of Fame: {(hofQuery.error as Error).message}</p>;
@@ -310,30 +243,25 @@ export default function HallOfFameTab() {
     );
   }
 
+  const chipCls = (on: boolean) =>
+    `rounded-full border px-3 py-1.5 text-sm font-semibold transition ${on ? 'border-[var(--sk-brand)] bg-[var(--sk-brand-tint)] text-[var(--sk-brand)]' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'}`;
+
   return (
-    <div className="space-y-8 w-full">
+    <div className="space-y-8 w-full max-w-4xl">
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Hall of Fame</h2>
         <p className="text-sm text-slate-500 max-w-2xl">
-          Every batch keeps its place. Pick a batch year, choose what a podium is for — a website course, a real class, or a group you
-          name — then fill the three places. Groups with no podium in a year are simply not shown for that year.
+          Pick a batch year, add a class by name, and fill its three places. Every batch keeps its place on the website; a class you
+          created for an earlier year is ready for the next one.
         </p>
       </div>
 
-      {/* ── Batch year ── */}
+      {/* ── 1 · Batch year ── */}
       <section className="space-y-2">
         <Label>Batch year</Label>
         <div className="flex flex-wrap items-center gap-2">
           {yearChips.map((y) => (
-            <button
-              key={y}
-              type="button"
-              onClick={() => setYear(y)}
-              aria-pressed={y === activeYear}
-              className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                y === activeYear ? 'border-[var(--sk-brand)] bg-[var(--sk-brand-tint)] text-[var(--sk-brand)]' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-              }`}
-            >
+            <button key={y} type="button" onClick={() => setYear(y)} aria-pressed={y === activeYear} className={chipCls(y === activeYear)}>
               {y}
               {y === hof?.currentYear && <span className="ml-1 text-xs font-medium opacity-70">· current</span>}
             </button>
@@ -344,25 +272,16 @@ export default function HallOfFameTab() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const y = Number(newYear);
-                if (!Number.isInteger(y) || y < 1990 || y > (hof?.currentYear ?? 2100) + 1) {
-                  toast.error(`Enter a year between 1990 and ${(hof?.currentYear ?? 2100) + 1}`);
+                const max = (hof?.currentYear ?? 2100) + 1;
+                if (!Number.isInteger(y) || y < 1990 || y > max) {
+                  toast.error(`Enter a year between 1990 and ${max}`);
                   return;
                 }
                 setYear(y);
                 setAddingYear(false);
               }}
             >
-              <Input
-                autoFocus
-                type="number"
-                inputMode="numeric"
-                min={1990}
-                max={(hof?.currentYear ?? 2100) + 1}
-                value={newYear}
-                onChange={(e) => setNewYear(e.target.value)}
-                className="w-28"
-                aria-label="New batch year"
-              />
+              <Input autoFocus type="number" inputMode="numeric" min={1990} max={(hof?.currentYear ?? 2100) + 1} value={newYear} onChange={(e) => setNewYear(e.target.value)} className="w-28" aria-label="New batch year" />
               <Button type="submit" size="sm">Add batch</Button>
               <Button type="button" size="sm" variant="ghost" onClick={() => setAddingYear(false)}>Cancel</Button>
             </form>
@@ -372,7 +291,8 @@ export default function HallOfFameTab() {
               size="sm"
               variant="outline"
               onClick={() => {
-                setNewYear(String(yearChips.includes(hof?.currentYear ?? 0) ? (hof?.currentYear ?? 0) + 1 : hof?.currentYear ?? new Date().getFullYear()));
+                const cur = hof?.currentYear ?? new Date().getFullYear();
+                setNewYear(String(yearChips.includes(cur) ? cur + 1 : cur));
                 setAddingYear(true);
               }}
             >
@@ -380,170 +300,126 @@ export default function HallOfFameTab() {
             </Button>
           )}
         </div>
-        <p className="text-xs text-slate-400">A batch is created the moment you save its first podium.</p>
       </section>
 
-      {/* ── Groups ── */}
+      {/* ── 2 · Classes ── */}
       <section className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-2">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <Label>What each podium is for</Label>
-            <p className="text-xs text-slate-400">Order here is the order of the tabs on your website.</p>
+            <Label>Classes</Label>
+            <p className="text-xs text-slate-400">Shown as tabs on the website, in this order.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" disabled={courses.length === 0} onClick={() => addDraft('COURSE')}>+ Website course</Button>
-            {hasManagement && (
-              <Button type="button" size="sm" variant="outline" disabled={gradeOptions.length === 0} onClick={() => addDraft('GRADES')}>+ Class</Button>
-            )}
-            <Button type="button" size="sm" variant="outline" onClick={() => addDraft('CUSTOM')}>+ Custom group</Button>
-          </div>
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              addClass(newClass);
+            }}
+          >
+            <Input value={newClass} onChange={(e) => setNewClass(e.target.value)} placeholder="Class name, e.g. Class 10" className="w-56" aria-label="New class name" />
+            <Button type="submit" size="sm" disabled={!newClass.trim() || putClasses.isPending}>Add class</Button>
+          </form>
         </div>
 
-        {groupDrafts.length === 0 ? (
-          <p className="text-sm text-slate-500 rounded-xl border border-dashed border-slate-200 p-4">
-            No groups yet. Add a website course, a class{hasManagement ? '' : ' (with the Management module)'}, or a custom group such as “Board toppers”.
-          </p>
+        {classes.length === 0 ? (
+          <p className="text-sm text-slate-500 rounded-xl border border-dashed border-slate-200 p-4">No classes yet — add one above, then fill its toppers for this batch.</p>
         ) : (
           <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-            {groupDrafts.map((d, idx) => {
-              const saved = savedGroups.find((g) => g.id === d.id);
-              const podiums = saved ? podiumCount(saved.id) : 0;
+            {classes.map((c, idx) => {
+              const n = batchesOf(c.id);
+              const isRenaming = renaming?.id === c.id;
               return (
-                <li key={d.key} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start">
-                  <div className="flex items-center gap-1 sm:pt-1.5">
-                    <button type="button" className="text-slate-400 hover:text-slate-700 disabled:opacity-30" aria-label="Move up" disabled={idx === 0} onClick={() => moveDraft(d.key, -1)}>↑</button>
-                    <button type="button" className="text-slate-400 hover:text-slate-700 disabled:opacity-30" aria-label="Move down" disabled={idx === groupDrafts.length - 1} onClick={() => moveDraft(d.key, 1)}>↓</button>
+                <li key={c.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5" data-active={c.id === activeClass?.id}>
+                  <div className="flex items-center gap-1">
+                    <button type="button" className="px-1 text-slate-400 hover:text-slate-700 disabled:opacity-30" aria-label={`Move ${c.label} up`} disabled={idx === 0 || putClasses.isPending} onClick={() => moveClass(c.id, -1)}>↑</button>
+                    <button type="button" className="px-1 text-slate-400 hover:text-slate-700 disabled:opacity-30" aria-label={`Move ${c.label} down`} disabled={idx === classes.length - 1 || putClasses.isPending} onClick={() => moveClass(c.id, 1)}>↓</button>
                   </div>
-                  <div className="flex-1 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-                    <div>
-                      <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">{KIND_LABEL[d.kind]}</span>
-                      <Input
-                        className="mt-1.5"
-                        value={d.label}
-                        placeholder={autoLabel(d, courses, classes) || (d.kind === 'CUSTOM' ? 'Group name (required)' : 'Name (optional)')}
-                        onChange={(e) => updateDraft(d.key, { label: e.target.value })}
-                        aria-label="Group name"
-                      />
+                  {isRenaming ? (
+                    <form
+                      className="flex flex-1 items-center gap-2 min-w-[14rem]"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        renameClass(c.id, renaming.label);
+                      }}
+                    >
+                      <Input autoFocus value={renaming.label} onChange={(e) => setRenaming({ id: c.id, label: e.target.value })} aria-label="Class name" />
+                      <Button type="submit" size="sm" disabled={putClasses.isPending}>Save</Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setRenaming(null)}>Cancel</Button>
+                    </form>
+                  ) : (
+                    <button type="button" className="flex-1 text-left font-semibold text-slate-800 hover:text-[var(--sk-brand)] min-w-[10rem]" onClick={() => setActiveClassId(c.id)}>
+                      {c.label}
+                    </button>
+                  )}
+                  <span className="text-xs text-slate-400 whitespace-nowrap">{n === 0 ? 'no batches yet' : `${n} ${n === 1 ? 'batch' : 'batches'}`}</span>
+                  {!isRenaming && (
+                    <div className="flex items-center gap-1">
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setRenaming({ id: c.id, label: c.label })}>Rename</Button>
+                      {confirmRemove === c.id ? (
+                        <Button type="button" size="sm" variant="destructive" disabled={putClasses.isPending} onClick={() => removeClass(c.id)}>
+                          {n > 0 ? `Delete ${n} ${n === 1 ? 'batch' : 'batches'}` : 'Confirm'}
+                        </Button>
+                      ) : (
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmRemove(c.id)}>Remove</Button>
+                      )}
                     </div>
-                    <div className="space-y-1.5">
-                      {d.kind === 'COURSE' && (
-                        <Select value={d.courseId} onChange={(e) => updateDraft(d.key, { courseId: e.target.value })} aria-label="Course">
-                          {courses.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </Select>
-                      )}
-                      {d.kind === 'GRADES' && d.sectionIds.length === 0 && (
-                        <>
-                          <div className="flex flex-wrap gap-1.5">
-                            {gradeOptions.map((g) => {
-                              const on = d.gradeIds.includes(g.id);
-                              return (
-                                <button
-                                  key={g.id}
-                                  type="button"
-                                  aria-pressed={on}
-                                  onClick={() => updateDraft(d.key, { gradeIds: on ? d.gradeIds.filter((x) => x !== g.id) : [...d.gradeIds, g.id] })}
-                                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${on ? 'border-[var(--sk-brand)] bg-[var(--sk-brand-tint)] text-[var(--sk-brand)]' : 'border-slate-200 text-slate-600'}`}
-                                >
-                                  {g.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <p className="text-xs text-slate-400">
-                            Sections are clubbed — one podium for the whole class.
-                            {d.gradeIds.length === 1 && classes.filter((c) => c.gradeId === d.gradeIds[0]).length > 1 && (
-                              <>
-                                {' '}
-                                <button type="button" className="font-semibold text-[var(--sk-brand)] hover:underline" onClick={() => splitBySection(d.key)}>
-                                  Split by section
-                                </button>
-                              </>
-                            )}
-                          </p>
-                        </>
-                      )}
-                      {d.kind === 'GRADES' && d.sectionIds.length > 0 && (
-                        <p className="text-xs text-slate-500">
-                          One section: <b>{autoLabel(d, courses, classes)}</b>
-                        </p>
-                      )}
-                      {d.kind === 'CUSTOM' && <p className="text-xs text-slate-400">Any group you like — “Board toppers”, “House champions”.</p>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 sm:pt-1">
-                    {saved && podiums > 0 && <span className="text-xs text-slate-400 whitespace-nowrap">{podiums} {podiums === 1 ? 'batch' : 'batches'}</span>}
-                    {confirmRemove === d.key ? (
-                      <Button type="button" size="sm" variant="destructive" onClick={() => removeDraft(d.key)}>
-                        {podiums > 0 ? `Remove & delete ${podiums} ${podiums === 1 ? 'podium' : 'podiums'}` : 'Confirm remove'}
-                      </Button>
-                    ) : (
-                      <Button type="button" size="sm" variant="ghost" onClick={() => (podiums > 0 || saved ? setConfirmRemove(d.key) : removeDraft(d.key))}>
-                        Remove
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </li>
               );
             })}
           </ul>
         )}
-        {groupsDirty && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" onClick={() => saveGroups.mutate()} disabled={saveGroups.isPending}>
-              {saveGroups.isPending ? 'Saving…' : 'Save groups'}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => { setDrafts(null); setConfirmRemove(null); }}>Discard changes</Button>
-            <span className="text-xs text-slate-400">Save the groups before filling podiums.</span>
-          </div>
-        )}
       </section>
 
-      {/* ── Podium for (group, year) ── */}
-      {savedGroups.length > 0 && activeGroup && (
+      {/* ── 3 · Toppers for (class, year) ── */}
+      {activeClass && (
         <section className="space-y-3">
           <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1 min-w-[16rem]">
-              <Label htmlFor="hof-group">Podium for</Label>
-              <Select id="hof-group" value={activeGroup.id} onChange={(e) => setActiveGroupKey(e.target.value)}>
-                {savedGroups.map((g) => (
-                  <option key={g.id} value={g.id}>{g.label}</option>
+            <div className="space-y-1 min-w-[14rem]">
+              <Label htmlFor="hof-class">Toppers of</Label>
+              <Select id="hof-class" value={activeClass.id} onChange={(e) => setActiveClassId(e.target.value)}>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
               </Select>
             </div>
-            <div className="text-sm text-slate-600 pb-2">Batch of <b>{activeYear}</b></div>
+            <div className="pb-2 text-sm text-slate-600">
+              Batch of <b>{activeYear}</b>
+            </div>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-4">
+          <div className="grid gap-4 sm:grid-cols-3">
             {slots.map((slot, i) => (
               <HofSlot
-                key={`${activeGroup.id}-${activeYear}-${i}`}
+                key={`${activeClass.id}-${activeYear}-${i}`}
                 medal={MEDALS[i]}
-                placeLabel={PLACES[i]}
+                place={PLACES[i]}
                 slot={slot}
-                existingPhotoUrl={photoUrl(slot.photoAssetId)}
                 onChange={(patch) => updateSlot(i, patch)}
                 api={api}
-                onUploaded={() => void queryClient.invalidateQueries({ queryKey: ['site-media-hof'] })}
-                sections={hasManagement && activeGroup.kind === 'GRADES' ? sectionsOf(activeGroup) : hasManagement ? classes : []}
+                students={hasManagement ? students : []}
+                studentsLoading={hasManagement && studentsQuery.isLoading}
+                avatarUrl={avatarUrl}
               />
             ))}
           </div>
-          <Button type="button" onClick={() => savePodium.mutate()} disabled={savePodium.isPending}>
-            {savePodium.isPending ? 'Saving…' : `Save Batch of ${activeYear}`}
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" onClick={() => savePodium.mutate()} disabled={savePodium.isPending}>
+              {savePodium.isPending ? 'Saving…' : `Save Batch of ${activeYear}`}
+            </Button>
+            {hasManagement && <span className="text-xs text-slate-400">A linked student's name and photo follow their profile — what they set in the app is what the website shows.</span>}
+          </div>
         </section>
       )}
 
-      {/* ── What the website opens on ── */}
+      {/* ── 4 · On the website ── */}
       <section className="space-y-3 max-w-xl">
         <Label>On the website</Label>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label htmlFor="hof-landing" className="text-xs text-slate-500">Open on</Label>
             <Select id="hof-landing" value={landingValue} onChange={(e) => setLanding(e.target.value)}>
-              <option value="latest">Latest batch with entries</option>
+              <option value="latest">Latest batch with toppers</option>
               {(hof?.years ?? []).map((y) => (
                 <option key={y} value={String(y)}>Batch of {y}</option>
               ))}
@@ -554,11 +430,11 @@ export default function HallOfFameTab() {
             <Input id="hof-past" type="number" inputMode="numeric" min={1} max={10} value={pastValue} onChange={(e) => setPastBatches(e.target.value)} />
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button type="button" variant="outline" onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending || (landing === null && pastBatches === null)}>
             {saveSettings.isPending ? 'Saving…' : 'Save settings'}
           </Button>
-          <span className="text-xs text-slate-400">The layout (podium, medal wall, spotlight…) is chosen in the Design tab under Per-section layout.</span>
+          <span className="text-xs text-slate-400">The look (podium, medal wall, spotlight…) is picked in the Design tab under Per-section layout.</span>
         </div>
       </section>
     </div>
@@ -567,35 +443,36 @@ export default function HallOfFameTab() {
 
 function HofSlot({
   medal,
-  placeLabel,
+  place,
   slot,
-  existingPhotoUrl,
   onChange,
   api,
-  onUploaded,
-  sections,
+  students,
+  studentsLoading,
+  avatarUrl,
 }: {
   medal: string;
-  placeLabel: string;
+  place: string;
   slot: SlotForm;
-  existingPhotoUrl: string | null;
   onChange: (patch: Partial<SlotForm>) => void;
   api: ReturnType<typeof useApi>;
-  onUploaded: () => void;
-  /** Sections the picker may search (empty = no picker: BASIC/STANDARD, or a group without classes). */
-  sections: ClassRow[];
+  /** Empty when the school has no register (no Management module). */
+  students: StudentRow[];
+  studentsLoading: boolean;
+  avatarUrl: (id?: string | null) => string | null;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [picking, setPicking] = useState(false);
-  const [sectionId, setSectionId] = useState('');
-  const preview = slot.photoPreviewUrl ?? existingPhotoUrl;
-  const host = useHost();
-  const rosterQuery = useQuery({
-    queryKey: ['manage-students', sectionId],
-    queryFn: () => api.get<RosterStudent[]>(`/manage/students?classSectionId=${encodeURIComponent(sectionId)}`),
-    enabled: !!host && picking && !!sectionId,
-  });
+  const [q, setQ] = useState('');
+  const linked = slot.studentId ? students.find((s) => s.id === slot.studentId) : undefined;
+  const preview = slot.photoPreviewUrl ?? (slot.photoAssetId ? slot.currentPhotoUrl : null) ?? (linked ? avatarUrl(linked.photoAssetId) : null) ?? slot.currentPhotoUrl;
+  const matches = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return [];
+    return students
+      .filter((s) => `${fullName(s)} ${s.admissionNo ?? ''} ${classLabel(s)}`.toLowerCase().includes(needle))
+      .slice(0, 8);
+  }, [q, students]);
 
   async function upload(file: File) {
     setUploading(true);
@@ -604,7 +481,6 @@ function HofSlot({
       fd.append('file', file);
       const asset = await api.request<MediaAsset>('/site/media?kind=HOF', { method: 'POST', body: fd });
       onChange({ photoAssetId: asset.id, photoPreviewUrl: asset.url });
-      onUploaded();
       toast.success('Photo uploaded');
     } catch (err) {
       toast.error(`Photo upload failed: ${(err as Error).message}`);
@@ -613,21 +489,79 @@ function HofSlot({
     }
   }
 
+  const shownName = slot.studentId ? (linked ? fullName(linked) : slot.currentName || slot.name) : slot.name;
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <span className="text-xl" aria-hidden="true">{medal}</span> {placeLabel} place
+          <span className="text-xl" aria-hidden="true">{medal}</span> {place} place
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center gap-3">
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt={slot.name || placeLabel} className="h-14 w-14 rounded-full object-cover border border-slate-200" loading="lazy" decoding="async" />
+            <img src={preview} alt={shownName || place} className="h-14 w-14 rounded-full object-cover border border-slate-200" loading="lazy" decoding="async" />
           ) : (
             <div className="h-14 w-14 rounded-full bg-slate-100 grid place-items-center text-slate-400 text-lg" aria-hidden="true">🎓</div>
           )}
+          <div className="min-w-0 flex-1">
+            {slot.studentId ? (
+              <>
+                <div className="truncate text-sm font-semibold text-slate-800">{shownName || 'Linked student'}</div>
+                <div className="text-xs text-slate-500">
+                  {linked ? classLabel(linked) || 'From the register' : 'From the register'} ·{' '}
+                  <button type="button" className="font-semibold text-[var(--sk-brand)] hover:underline" onClick={() => onChange({ studentId: null, name: shownName })}>
+                    Unlink
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="text-xs text-slate-400">No student linked — the name below is shown as typed.</div>
+            )}
+          </div>
+        </div>
+
+        {students.length > 0 && !slot.studentId && (
+          <div className="space-y-1.5">
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search students by name, class or admission no." aria-label={`${place} place — search students`} />
+            {q.trim() && (
+              <ul className="max-h-48 overflow-auto rounded-lg border border-slate-200 bg-white text-sm">
+                {matches.length === 0 && <li className="px-3 py-2 text-slate-400">No match</li>}
+                {matches.map((s) => (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-slate-50"
+                      onClick={() => {
+                        onChange({ studentId: s.id, name: fullName(s), photoAssetId: null, photoPreviewUrl: null });
+                        setQ('');
+                      }}
+                    >
+                      {avatarUrl(s.photoAssetId) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={avatarUrl(s.photoAssetId) ?? ''} alt="" className="h-6 w-6 rounded-full object-cover" />
+                      ) : (
+                        <span className="h-6 w-6 rounded-full bg-slate-100 grid place-items-center text-[10px] text-slate-500" aria-hidden="true">🎓</span>
+                      )}
+                      <span className="font-medium text-slate-800">{fullName(s)}</span>
+                      <span className="ml-auto text-xs text-slate-400">{[classLabel(s), s.rollNo ? `Roll ${s.rollNo}` : null].filter(Boolean).join(' · ')}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {studentsLoading && <p className="text-xs text-slate-400">Loading the student list…</p>}
+
+        {!slot.studentId && (
+          <Input value={slot.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="Student name" aria-label={`${place} place name`} />
+        )}
+        <Input value={slot.achievement} onChange={(e) => onChange({ achievement: e.target.value })} placeholder="Achievement (e.g. 98.2%)" aria-label={`${place} place achievement`} />
+
+        <div className="flex items-center gap-2">
           <input
             ref={fileRef}
             type="file"
@@ -641,44 +575,14 @@ function HofSlot({
           />
           <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
             <Upload className="h-4 w-4 mr-1" />
-            {uploading ? 'Uploading…' : 'Photo'}
+            {uploading ? 'Uploading…' : slot.studentId ? 'Use a different photo' : 'Photo'}
           </Button>
+          {slot.photoAssetId && (
+            <button type="button" className="text-xs text-slate-500 hover:underline" onClick={() => onChange({ photoAssetId: null, photoPreviewUrl: null })}>
+              {slot.studentId ? 'Back to profile photo' : 'Remove photo'}
+            </button>
+          )}
         </div>
-        <Input value={slot.name} onChange={(e) => onChange({ name: e.target.value, studentId: null })} placeholder="Student name" aria-label={`${placeLabel} place name`} />
-        <Input value={slot.achievement} onChange={(e) => onChange({ achievement: e.target.value })} placeholder="Achievement (e.g. 98.2%)" aria-label={`${placeLabel} place achievement`} />
-        {sections.length > 0 && (
-          <div className="space-y-1.5">
-            {!picking ? (
-              <button type="button" className="text-xs font-semibold text-[var(--sk-brand)] hover:underline" onClick={() => { setPicking(true); setSectionId(sections[0]?.id ?? ''); }}>
-                🔍 Pick from students
-              </button>
-            ) : (
-              <>
-                <Select value={sectionId} onChange={(e) => setSectionId(e.target.value)} aria-label="Section">
-                  {sections.map((c) => (
-                    <option key={c.id} value={c.id}>{c.grade?.name ? `${c.grade.name}-${c.name}` : c.name}</option>
-                  ))}
-                </Select>
-                <Select
-                  value={slot.studentId ?? ''}
-                  onChange={(e) => {
-                    const st = rosterQuery.data?.find((s) => s.id === e.target.value);
-                    if (st) onChange({ studentId: st.id, name: `${st.firstName} ${st.lastName}`.trim() });
-                  }}
-                  aria-label="Student"
-                  disabled={!rosterQuery.data}
-                >
-                  <option value="">{rosterQuery.isLoading ? 'Loading…' : rosterQuery.data?.length ? 'Choose a student' : 'No students in this section'}</option>
-                  {(rosterQuery.data ?? []).map((s) => (
-                    <option key={s.id} value={s.id}>{s.firstName} {s.lastName}{s.rollNo ? ` · Roll ${s.rollNo}` : ''}</option>
-                  ))}
-                </Select>
-                <button type="button" className="text-xs text-slate-400 hover:underline" onClick={() => setPicking(false)}>Type the name instead</button>
-              </>
-            )}
-          </div>
-        )}
-        {slot.studentId && <p className="text-xs text-slate-400">Linked to the register — the photo follows the student’s profile if none is uploaded here.</p>}
         <p className="text-xs text-slate-400">Leave the name empty to clear this place.</p>
       </CardContent>
     </Card>

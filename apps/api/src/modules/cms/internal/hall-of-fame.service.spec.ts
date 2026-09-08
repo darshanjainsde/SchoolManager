@@ -56,14 +56,24 @@ beforeEach(() => {
 describe('overview', () => {
   it('reports the years that have entries, newest first, and the current batch year', async () => {
     txMock.hallOfFameEntry.findMany.mockResolvedValue([
-      { id: 'e1', groupId: GROUP, batchYear: 2024, rank: 1, name: 'A', achievement: null, photoAssetId: null, studentId: null },
-      { id: 'e2', groupId: GROUP, batchYear: 2026, rank: 1, name: 'B', achievement: null, photoAssetId: null, studentId: null },
+      { id: 'e1', groupId: GROUP, batchYear: 2024, rank: 1, name: 'A', achievement: null, photoAssetId: null, studentId: null, student: null },
+      { id: 'e2', groupId: GROUP, batchYear: 2026, rank: 1, name: 'B', achievement: null, photoAssetId: null, studentId: null, student: null },
     ]);
     const o = await svc.overview(SCHOOL);
     expect(o.years).toEqual([2026, 2024]);
     expect(o.currentYear).toBe(2026);
     expect(o.settings).toEqual({ landingYear: null, pastBatches: 4 });
     expect(o.unavailable).toBe(false);
+  });
+
+  it('resolves each entry to what the site will show: the linked profile name and photo', async () => {
+    txMock.hallOfFameEntry.findMany.mockResolvedValue([
+      { id: 'e1', groupId: GROUP, batchYear: 2026, rank: 1, name: 'Typed', achievement: null, photoAssetId: null, studentId: STUDENT, student: { firstName: 'Ved', lastName: 'Sharma', photoAssetId: ASSET } },
+    ]);
+    txMock.mediaAsset.findMany.mockResolvedValue([{ id: ASSET, url: 'https://cdn/avatar' }]);
+    const o = await svc.overview(SCHOOL);
+    expect(txMock.mediaAsset.findMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: { in: [ASSET] } }, select: { id: true, url: true } });
+    expect(o.entries[0]).toMatchObject({ displayName: 'Ved Sharma', photoUrl: 'https://cdn/avatar' });
   });
 
   it('degrades to an empty, flagged overview while the migration has not run', async () => {
@@ -157,12 +167,12 @@ describe('setPodium', () => {
     await expect(svc.setPodium(SCHOOL, GROUP, 2026, [{ rank: 1, name: 'A' }])).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('fills the name and photo from the register when a student is picked', async () => {
-    txMock.student.findMany.mockResolvedValue([{ id: STUDENT, firstName: 'Ved', lastName: 'Sharma', photoAssetId: ASSET }]);
+  it('links the student and fills the name, but never copies the profile photo (it is read live)', async () => {
+    txMock.student.findMany.mockResolvedValue([{ id: STUDENT, firstName: 'Ved', lastName: 'Sharma' }]);
     await svc.setPodium(SCHOOL, GROUP, 2026, [{ rank: 1, studentId: STUDENT, achievement: ' 99% ' }]);
     expect(txMock.hallOfFameEntry.deleteMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, groupId: GROUP, batchYear: 2026 } });
     expect(txMock.hallOfFameEntry.createMany).toHaveBeenCalledWith({
-      data: [{ schoolId: SCHOOL, groupId: GROUP, batchYear: 2026, rank: 1, name: 'Ved Sharma', achievement: '99%', photoAssetId: ASSET, studentId: STUDENT }],
+      data: [{ schoolId: SCHOOL, groupId: GROUP, batchYear: 2026, rank: 1, name: 'Ved Sharma', achievement: '99%', photoAssetId: null, studentId: STUDENT }],
     });
   });
 

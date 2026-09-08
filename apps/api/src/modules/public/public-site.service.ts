@@ -3,7 +3,7 @@ import { withTenant, type FeatureKey } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import { PublicEventsService } from '../community';
-import { mergeSectionVariantContent, pickDesignConfig, projectHallOfFame, readHallOfFame } from '../cms';
+import { mergeSectionVariantContent, pickDesignConfig, photoAssetIdsOf, projectHallOfFame, readHallOfFame } from '../cms';
 import type { PublicSiteData } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
@@ -90,7 +90,7 @@ export class PublicSiteService {
         homepage?.aboutImageAssetId,
         ...staff.map((s) => s.photoAssetId),
         ...courses.map((c) => c.imageAssetId),
-        ...(hofRead?.entries.map((h) => h.photoAssetId) ?? []),
+        ...photoAssetIdsOf(hofRead),
       ].filter(Boolean) as string[];
 
       const assets =

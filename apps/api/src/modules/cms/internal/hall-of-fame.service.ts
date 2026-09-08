@@ -3,9 +3,15 @@ import { withTenant, type TenantTx } from '@skoolos/db';
 import { FeatureResolverService } from '../../features';
 import { isSchemaMissing } from '../../../common/errors/prisma-errors';
 import type { HallOfFameEntryDto, HallOfFameGroupDto, HallOfFameSettingsDto } from './cms.dto';
-import { readHallOfFameIn, yearsOf, DEFAULT_PAST_BATCHES, type HallOfFameRead } from './hall-of-fame.read';
+import { readHallOfFameIn, yearsOf, displayNameOf, photoAssetOf, photoAssetIdsOf, DEFAULT_PAST_BATCHES, type HallOfFameRead } from './hall-of-fame.read';
 
-export interface HallOfFameOverview extends HallOfFameRead {
+export interface HallOfFameOverview extends Omit<HallOfFameRead, 'entries'> {
+  entries: (HallOfFameRead['entries'][number] & {
+    /** What the site will print — the linked student's current name when there is one. */
+    displayName: string;
+    /** Resolved: an explicit upload, else the linked student's profile photo. */
+    photoUrl: string | null;
+  })[];
   years: number[];
   /** The batch the "New batch" button pre-fills: the current academic year's start year. */
   currentYear: number;
@@ -30,8 +36,19 @@ export class HallOfFameService {
     // second (Postgres aborts the whole transaction on the first failed statement).
     const currentYear = await withTenant(schoolId, (tx) => currentBatchYear(tx, schoolId));
     try {
-      const read = await withTenant(schoolId, (tx) => readHallOfFameIn(tx, schoolId));
-      return { ...read, years: yearsOf(read.entries), currentYear, unavailable: false };
+      const { read, urls } = await withTenant(schoolId, async (tx) => {
+        const r = await readHallOfFameIn(tx, schoolId);
+        const ids = photoAssetIdsOf(r);
+        const assets = ids.length ? await tx.mediaAsset.findMany({ where: { schoolId, id: { in: ids } }, select: { id: true, url: true } }) : [];
+        return { read: r, urls: new Map(assets.map((a) => [a.id, a.url])) };
+      });
+      return {
+        ...read,
+        entries: read.entries.map((e) => ({ ...e, displayName: displayNameOf(e), photoUrl: urls.get(photoAssetOf(e) ?? '') ?? null })),
+        years: yearsOf(read.entries),
+        currentYear,
+        unavailable: false,
+      };
     } catch (e) {
       if (!isSchemaMissing(e)) throw e;
       return {
@@ -131,7 +148,7 @@ export class HallOfFameService {
       const assetIds = [...new Set(entries.flatMap((e) => (e.photoAssetId ? [e.photoAssetId] : [])))];
       const [students, assets] = await Promise.all([
         studentIds.length
-          ? tx.student.findMany({ where: { schoolId, id: { in: studentIds } }, select: { id: true, firstName: true, lastName: true, photoAssetId: true } })
+          ? tx.student.findMany({ where: { schoolId, id: { in: studentIds } }, select: { id: true, firstName: true, lastName: true } })
           : [],
         assetIds.length ? tx.mediaAsset.findMany({ where: { schoolId, id: { in: assetIds } }, select: { id: true } }) : [],
       ]);
@@ -152,7 +169,9 @@ export class HallOfFameService {
             rank: e.rank,
             name,
             achievement: (e.achievement ?? '').trim() || null,
-            photoAssetId: e.photoAssetId ?? student?.photoAssetId ?? null,
+            // Only an explicit upload is stored; a linked student's profile photo is
+            // read live at render time, so what they set in the app is what shows.
+            photoAssetId: e.photoAssetId ?? null,
             studentId: student?.id ?? null,
           },
         ];

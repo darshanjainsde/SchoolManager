@@ -1,4 +1,4 @@
-import { landingYearOf, projectHallOfFame, yearsOf, type HallOfFameRead } from './hall-of-fame.read';
+import { displayNameOf, landingYearOf, photoAssetIdsOf, photoAssetOf, projectHallOfFame, yearsOf, type HallOfFameRead } from './hall-of-fame.read';
 
 const G1 = 'g1';
 const G2 = 'g2';
@@ -11,6 +11,7 @@ const entry = (groupId: string, batchYear: number, rank: number, name = `${group
   achievement: null,
   photoAssetId: rank === 1 ? 'asset-1' : null,
   studentId: null,
+  student: null,
 });
 const read = (over: Partial<HallOfFameRead> = {}): HallOfFameRead => ({
   groups: [
@@ -55,5 +56,31 @@ describe('hall of fame projection', () => {
     expect(p?.groups[0].entries[1].photoUrl).toBeNull();
     expect(projectHallOfFame(null, urlOf)).toBeNull();
     expect(projectHallOfFame(read({ entries: [] }), urlOf)).toBeNull();
+  });
+});
+
+describe('a linked student is read live', () => {
+  const linked = { ...entry(G1, 2025, 1, 'Typed Name'), photoAssetId: null, studentId: 'st-1', student: { firstName: 'Ved', lastName: 'Sharma', photoAssetId: 'avatar-9' } };
+
+  it('prints the register name and shows the profile photo the student set', () => {
+    expect(displayNameOf(linked)).toBe('Ved Sharma');
+    expect(photoAssetOf(linked)).toBe('avatar-9');
+    const p = projectHallOfFame(read({ entries: [linked] }), urlOf);
+    expect(p?.groups[0].entries[0]).toMatchObject({ name: 'Ved Sharma', photoUrl: 'https://cdn/avatar-9' });
+  });
+
+  it('an explicit upload on the entry still wins over the profile photo', () => {
+    expect(photoAssetOf({ ...linked, photoAssetId: 'upload-1' })).toBe('upload-1');
+  });
+
+  it('falls back to the typed name and no photo once the student row is gone', () => {
+    const gone = { ...linked, student: null };
+    expect(displayNameOf(gone)).toBe('Typed Name');
+    expect(photoAssetOf(gone)).toBeNull();
+  });
+
+  it('collects every asset id the projection may need', () => {
+    expect(photoAssetIdsOf(read({ entries: [linked, entry(G1, 2024, 1)] }))).toEqual(['avatar-9', 'asset-1']);
+    expect(photoAssetIdsOf(null)).toEqual([]);
   });
 });

@@ -6,7 +6,18 @@ import { LIST_CEILING } from '../../../common/lists/list-ceiling';
  *  and the public projection, so the two can never disagree on a year. */
 export interface HallOfFameRead {
   groups: { id: string; kind: 'COURSE' | 'GRADES' | 'CUSTOM'; label: string; order: number; courseId: string | null; gradeIds: string[]; sectionIds: string[] }[];
-  entries: { id: string; groupId: string; batchYear: number; rank: number; name: string; achievement: string | null; photoAssetId: string | null; studentId: string | null }[];
+  entries: {
+    id: string;
+    groupId: string;
+    batchYear: number;
+    rank: number;
+    name: string;
+    achievement: string | null;
+    photoAssetId: string | null;
+    studentId: string | null;
+    /** The linked register row, read live: the profile a student sets in the app wins over what was typed. */
+    student: { firstName: string; lastName: string; photoAssetId: string | null } | null;
+  }[];
   settings: { landingYear: number | null; pastBatches: number };
 }
 
@@ -38,7 +49,17 @@ export async function readHallOfFameIn(tx: TenantTx, schoolId: string): Promise<
       take: LIST_CEILING.ACTIVITY,
       where: { schoolId },
       orderBy: [{ batchYear: 'desc' }, { rank: 'asc' }],
-      select: { id: true, groupId: true, batchYear: true, rank: true, name: true, achievement: true, photoAssetId: true, studentId: true },
+      select: {
+        id: true,
+        groupId: true,
+        batchYear: true,
+        rank: true,
+        name: true,
+        achievement: true,
+        photoAssetId: true,
+        studentId: true,
+        student: { select: { firstName: true, lastName: true, photoAssetId: true } },
+      },
     }),
     tx.hallOfFameSettings.findUnique({ where: { schoolId }, select: { landingYear: true, pastBatches: true } }),
   ]);
@@ -47,6 +68,22 @@ export async function readHallOfFameIn(tx: TenantTx, schoolId: string): Promise<
     entries,
     settings: { landingYear: settings?.landingYear ?? null, pastBatches: settings?.pastBatches ?? DEFAULT_PAST_BATCHES },
   };
+}
+
+/** What the site prints: a linked student's current name, else what was typed. */
+export function displayNameOf(e: { name: string; student: { firstName: string; lastName: string } | null }): string {
+  const live = e.student ? `${e.student.firstName} ${e.student.lastName}`.trim() : '';
+  return live || e.name;
+}
+
+/** The photo the site shows: an explicit upload on the entry, else the linked student's profile photo. */
+export function photoAssetOf(e: { photoAssetId: string | null; student: { photoAssetId: string | null } | null }): string | null {
+  return e.photoAssetId ?? e.student?.photoAssetId ?? null;
+}
+
+/** Every asset id a read may need resolved to a URL. */
+export function photoAssetIdsOf(read: HallOfFameRead | null): string[] {
+  return read ? read.entries.map(photoAssetOf).filter((id): id is string => !!id) : [];
 }
 
 /** Years that have at least one entry, newest first. */
@@ -97,7 +134,7 @@ export function projectHallOfFame(
       entries: read.entries
         .filter((e) => e.groupId === g.id && inWindow.has(e.batchYear))
         .sort((a, b) => b.batchYear - a.batchYear || a.rank - b.rank)
-        .map((e) => ({ batchYear: e.batchYear, rank: e.rank, name: e.name, achievement: e.achievement, photoUrl: urlOf(e.photoAssetId) })),
+        .map((e) => ({ batchYear: e.batchYear, rank: e.rank, name: displayNameOf(e), achievement: e.achievement, photoUrl: urlOf(photoAssetOf(e)) })),
     }))
     .filter((g) => g.entries.length > 0);
   if (groups.length === 0) return null;
