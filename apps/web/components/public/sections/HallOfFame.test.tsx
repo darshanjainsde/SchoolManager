@@ -110,3 +110,12 @@ describe('batches read as academic sessions', () => {
     expect(window.location.search).toBe('?batch=2024');
   });
 });
+
+describe('the band takes part in the page like every other band', () => {
+  it('carries data-sec so Deck, Snap and the scroll-driven feels include it, and the per-band class', () => {
+    const { container } = render(<HallOfFame hof={HOF} bandClass="ps-v-hof-podium ps-sg-rise" />);
+    const sec = container.querySelector('section#hall-of-fame');
+    expect(sec?.getAttribute('data-sec')).toBe('hof');
+    expect(sec?.className).toContain('ps-sg-rise');
+  });
+});

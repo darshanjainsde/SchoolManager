@@ -61,7 +61,13 @@ function Avatar({ entry, className }: { entry: PublicHallOfFameEntry; className:
  * podium, spotlight, shelf, timeline and scoreboard sit on the brand
  * gradient; the medal wall on paper; the yearbook on its cork board.
  */
-export default function HallOfFame({ hof, layout }: { hof: PublicHallOfFame; layout?: string | null }) {
+/**
+ * `bandClass` is the per-band layout/gesture class PublicSite computes for every
+ * home band (secCls); `data-sec="hof"` is what the scroll feels (Deck, Snap,
+ * Zoom/Reveal/Tilt) key on — a band without it is the one band that does not
+ * stack, snap or animate like its neighbours.
+ */
+export default function HallOfFame({ hof, layout, bandClass = '' }: { hof: PublicHallOfFame; layout?: string | null; bandClass?: string }) {
   const lay: HofLayout = (HOF_LAYOUTS as readonly string[]).includes(layout ?? '') ? (layout as HofLayout) : 'PODIUM';
   const [year, setYear] = useState(hof.landingYear);
   const [groupId, setGroupId] = useState<string | undefined>(groupsForYear(hof, hof.landingYear)[0]?.id);
@@ -114,7 +120,8 @@ export default function HallOfFame({ hof, layout }: { hof: PublicHallOfFame; lay
   return (
     <section
       id="hall-of-fame"
-      className={`ps-hof ps-hof-${lay.toLowerCase()} ${dark ? 'text-white' : ''}`}
+      data-sec="hof"
+      className={`ps-hof ps-hof-${lay.toLowerCase()} ${dark ? 'text-white' : ''} ${bandClass}`.trim()}
       style={sectionStyle}
       data-layout={lay}
     >

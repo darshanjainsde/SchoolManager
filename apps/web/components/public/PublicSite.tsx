@@ -391,7 +391,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
       </div>
     ),
 
-    hof: hasHof && data.hallOfFame && <HallOfFame hof={data.hallOfFame} layout={variants.hof?.layout} />,
+    hof: hasHof && data.hallOfFame && <HallOfFame hof={data.hallOfFame} layout={variants.hof?.layout} bandClass={secCls('hof')} />,
 
     events: hasEvents && show.events && <EventsSection events={data.events} timezone={data.school.timezone} />,
 
