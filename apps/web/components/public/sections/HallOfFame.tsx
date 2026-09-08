@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { PublicHallOfFame, PublicHallOfFameEntry, PublicHallOfFameGroup } from '@/lib/public-api';
+import { batchLabel } from '@/lib/batch-label';
 
 /** The layouts a school can pick in the studio (site-variants.ts lists the same values). */
 export const HOF_LAYOUTS = ['PODIUM', 'MEDALS', 'SPOTLIGHT', 'SHELF', 'TIMELINE', 'YEARBOOK', 'SCOREBOARD'] as const;
@@ -138,7 +139,7 @@ export default function HallOfFame({ hof, layout }: { hof: PublicHallOfFame; lay
                 data-on={y === year}
                 aria-pressed={y === year}
               >
-                {y}
+                {batchLabel(y)}
               </button>
             ))}
           </div>
@@ -183,7 +184,7 @@ export default function HallOfFame({ hof, layout }: { hof: PublicHallOfFame; lay
 type PodiumProps = { podium: Map<number, PublicHallOfFameEntry>; year: number };
 
 function caption(entry: PublicHallOfFameEntry, year: number) {
-  return [entry.achievement, String(year)].filter(Boolean).join(' · ');
+  return [entry.achievement, batchLabel(year)].filter(Boolean).join(' · ');
 }
 
 /* 1 · Podium — today's look, unchanged. */
@@ -270,7 +271,7 @@ function Spotlight({ podium, year }: PodiumProps) {
         <div className="ps-hof-hero">
           <Avatar entry={first} className="ps-hof-ava-xl" />
           <div>
-            <div className="ps-hof-k">Topper · Batch of {year}</div>
+            <div className="ps-hof-k">Topper · Batch of {batchLabel(year)}</div>
             <div className="ps-head font-bold text-2xl md:text-3xl text-white mt-1">{first.name}</div>
             {first.achievement && <div className="text-sm text-white/80 mt-1">{first.achievement}</div>}
           </div>
@@ -309,7 +310,7 @@ function Shelf({ podium, year }: PodiumProps) {
               </div>
               <div className="ps-head ps-hof-plq-nm">{entry.name}</div>
               {entry.achievement && <div className="ps-hof-plq-ach">{entry.achievement}</div>}
-              <div className="ps-hof-plq-yr">Batch of {year}</div>
+              <div className="ps-hof-plq-yr">Batch of {batchLabel(year)}</div>
             </div>
           );
         })}
@@ -329,7 +330,7 @@ function Timeline({ hof, group }: { hof: PublicHallOfFame; group: PublicHallOfFa
           const p = podiumOf(group, y);
           return (
             <div key={y} className="ps-hof-yc" data-now={i === 0}>
-              <div className="ps-head ps-hof-y">{y}</div>
+              <div className="ps-head ps-hof-y">{batchLabel(y)}</div>
               <div className="ps-hof-cls">{group.label}</div>
               <div className="ps-hof-trio">
                 {[1, 2, 3].map((rank) => {
@@ -383,7 +384,7 @@ function Yearbook({ podium, year }: PodiumProps) {
 /* 7 · Scoreboard — leaderboard rows with a score bar. */
 function Scoreboard({ podium, year, group }: PodiumProps & { group: PublicHallOfFameGroup }) {
   return (
-    <div className="ps-hof-score reveal in" role="table" aria-label={`${group.label} · Batch of ${year}`}>
+    <div className="ps-hof-score reveal in" role="table" aria-label={`${group.label} · Batch of ${batchLabel(year)}`}>
       <div className="ps-hof-sr ps-hof-sr-h" role="row">
         <span role="columnheader">Rank</span>
         <span aria-hidden="true" />
@@ -406,7 +407,7 @@ function Scoreboard({ podium, year, group }: PodiumProps & { group: PublicHallOf
             <div className="min-w-0" role="cell">
               <div className="font-semibold text-white truncate">{e.name}</div>
               <div className="ps-hof-cls">
-                {group.label} · Batch of {year}
+                {group.label} · Batch of {batchLabel(year)}
               </div>
             </div>
             <div className="ps-hof-pc" role="cell">

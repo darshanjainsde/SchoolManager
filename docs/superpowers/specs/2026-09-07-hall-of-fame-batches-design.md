@@ -11,8 +11,12 @@ grouping is the website's `Course` list, so a Pro school running real classes in
 
 ## Decisions (user-approved)
 
-1. **Year is a dimension.** Every podium belongs to a `batchYear`. Admin picks a batch (chips + "New batch", which
-   asks for the year and pre-fills the current academic year). Nothing is ever replaced across years.
+1. **A batch is an academic session.** Every podium belongs to a `batchYear` — the session's START year, stored as
+   an integer and printed the way CBSE schools name it (`batchLabel`: 2025 → "2025-26"; the session runs 1 April
+   to 31 March, so the class that sat its boards in March 2026 is the 2025-26 batch). Admin chips list every
+   session with toppers plus the current one; "Another batch…" opens any session from next year back to 1990
+   without creating or touching anything — a session with toppers is simply shown, never re-created. Deep links
+   keep the start year (`?batch=2025`).
 2. **A podium belongs to a class, named by the admin.** (Revised 2026-09-08 after the first cut: the admin screen
    showed "groups" with course / class / custom kinds and the user asked for something simpler.) The screen is
    just *Add class → name*; classes are year-independent and a class made for an earlier batch is reused. The

@@ -44,8 +44,8 @@ describe('HallOfFame', () => {
 
   it('opens on the landing batch and lists a chip per batch', () => {
     render(<HallOfFame hof={HOF} />);
-    expect(screen.getByRole('button', { name: '2025' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: '2023' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: '2025-26' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '2023-24' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('Ved Sharma')).toBeInTheDocument();
     // Board toppers has no 2025 podium, so it is not offered for 2025.
     expect(screen.queryByRole('button', { name: 'Board toppers' })).toBeNull();
@@ -53,7 +53,7 @@ describe('HallOfFame', () => {
 
   it('switching the batch swaps the podium and offers the groups that have one that year', () => {
     render(<HallOfFame hof={HOF} />);
-    fireEvent.click(screen.getByRole('button', { name: '2024' }));
+    fireEvent.click(screen.getByRole('button', { name: '2024-25' }));
     expect(screen.getByText('Anaya Iyer')).toBeInTheDocument();
     expect(screen.queryByText('Ved Sharma')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Board toppers' }));
@@ -65,7 +65,7 @@ describe('HallOfFame', () => {
     window.history.replaceState(null, '', '/?batch=2023');
     render(<HallOfFame hof={HOF} />);
     expect(screen.getByText('Reyansh Nair')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '2023' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '2023-24' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('ignores a ?batch= that has no entries', () => {
@@ -98,5 +98,15 @@ describe('HallOfFame', () => {
     render(<HallOfFame hof={HOF} layout="SCOREBOARD" />);
     expect(screen.getByText('99%')).toBeInTheDocument();
     expect(screen.getByText('98.5%')).toBeInTheDocument();
+  });
+});
+
+describe('batches read as academic sessions', () => {
+  it('labels chips and captions the CBSE way (2025-26) while the link keeps the start year', () => {
+    render(<HallOfFame hof={HOF} />);
+    expect(screen.getByRole('button', { name: '2025-26' })).toBeInTheDocument();
+    expect(screen.getByText('99% · 2025-26')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '2024-25' }));
+    expect(window.location.search).toBe('?batch=2024');
   });
 });

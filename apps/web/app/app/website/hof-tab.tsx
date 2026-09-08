@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { batchLabel, batchYearOptions } from '@/lib/batch-label';
 
 /* ── Contracts (apps/api/src/modules/cms/internal/hall-of-fame.*) ─────────── */
 type GroupKind = 'COURSE' | 'GRADES' | 'CUSTOM';
@@ -209,7 +210,7 @@ export default function HallOfFameTab() {
     },
     onSuccess: (data) => {
       applyOverview(data);
-      toast.success(`Batch of ${activeYear} saved`);
+      toast.success(`Batch of ${batchLabel(activeYear)} saved`);
     },
     onError: fail('Saving the toppers'),
   });
@@ -251,18 +252,18 @@ export default function HallOfFameTab() {
       <div>
         <h2 className="text-lg font-semibold text-slate-800">Hall of Fame</h2>
         <p className="text-sm text-slate-500 max-w-2xl">
-          Pick a batch year, add a class by name, and fill its three places. Every batch keeps its place on the website; a class you
-          created for an earlier year is ready for the next one.
+          Pick a batch, add a class by name, and fill its three places. Every batch keeps its place on the website; a class you
+          created for an earlier batch is ready for the next one.
         </p>
       </div>
 
-      {/* ── 1 · Batch year ── */}
+      {/* ── 1 · Batch (academic session) ── */}
       <section className="space-y-2">
-        <Label>Batch year</Label>
+        <Label>Batch</Label>
         <div className="flex flex-wrap items-center gap-2">
           {yearChips.map((y) => (
             <button key={y} type="button" onClick={() => setYear(y)} aria-pressed={y === activeYear} className={chipCls(y === activeYear)}>
-              {y}
+              {batchLabel(y)}
               {y === hof?.currentYear && <span className="ml-1 text-xs font-medium opacity-70">· current</span>}
             </button>
           ))}
@@ -272,17 +273,25 @@ export default function HallOfFameTab() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const y = Number(newYear);
-                const max = (hof?.currentYear ?? 2100) + 1;
-                if (!Number.isInteger(y) || y < 1990 || y > max) {
-                  toast.error(`Enter a year between 1990 and ${max}`);
-                  return;
-                }
+                if (!Number.isInteger(y)) return;
+                // An existing batch is never re-created — opening it is enough.
                 setYear(y);
                 setAddingYear(false);
               }}
             >
-              <Input autoFocus type="number" inputMode="numeric" min={1990} max={(hof?.currentYear ?? 2100) + 1} value={newYear} onChange={(e) => setNewYear(e.target.value)} className="w-28" aria-label="New batch year" />
-              <Button type="submit" size="sm">Add batch</Button>
+              <Select autoFocus value={newYear} onChange={(e) => setNewYear(e.target.value)} aria-label="Batch to open" className="w-48">
+                {batchYearOptions(hof?.currentYear ?? new Date().getFullYear()).map((y) => {
+                  const exists = (hof?.years ?? []).includes(y);
+                  return (
+                    <option key={y} value={String(y)}>
+                      {batchLabel(y)}
+                      {y === hof?.currentYear ? ' · current' : ''}
+                      {exists ? ' · has toppers' : ''}
+                    </option>
+                  );
+                })}
+              </Select>
+              <Button type="submit" size="sm">Open batch</Button>
               <Button type="button" size="sm" variant="ghost" onClick={() => setAddingYear(false)}>Cancel</Button>
             </form>
           ) : (
@@ -292,14 +301,18 @@ export default function HallOfFameTab() {
               variant="outline"
               onClick={() => {
                 const cur = hof?.currentYear ?? new Date().getFullYear();
-                setNewYear(String(yearChips.includes(cur) ? cur + 1 : cur));
+                const first = batchYearOptions(cur).find((y) => !(hof?.years ?? []).includes(y) && y <= cur) ?? cur;
+                setNewYear(String(first));
                 setAddingYear(true);
               }}
             >
-              + New batch…
+              + Another batch…
             </Button>
           )}
         </div>
+        <p className="text-xs text-slate-400">
+          A batch is the academic session, April to March — the Class of March 2026 is “2025-26”. Sessions that already have toppers are kept; opening one only shows it.
+        </p>
       </section>
 
       {/* ── 2 · Classes ── */}
@@ -384,7 +397,7 @@ export default function HallOfFameTab() {
               </Select>
             </div>
             <div className="pb-2 text-sm text-slate-600">
-              Batch of <b>{activeYear}</b>
+              Batch of <b>{batchLabel(activeYear)}</b>
             </div>
           </div>
 
@@ -405,7 +418,7 @@ export default function HallOfFameTab() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button type="button" onClick={() => savePodium.mutate()} disabled={savePodium.isPending}>
-              {savePodium.isPending ? 'Saving…' : `Save Batch of ${activeYear}`}
+              {savePodium.isPending ? 'Saving…' : `Save Batch of ${batchLabel(activeYear)}`}
             </Button>
             {hasManagement && <span className="text-xs text-slate-400">A linked student's name and photo follow their profile — what they set in the app is what the website shows.</span>}
           </div>
@@ -421,7 +434,7 @@ export default function HallOfFameTab() {
             <Select id="hof-landing" value={landingValue} onChange={(e) => setLanding(e.target.value)}>
               <option value="latest">Latest batch with toppers</option>
               {(hof?.years ?? []).map((y) => (
-                <option key={y} value={String(y)}>Batch of {y}</option>
+                <option key={y} value={String(y)}>Batch of {batchLabel(y)}</option>
               ))}
             </Select>
           </div>
