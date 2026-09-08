@@ -163,6 +163,9 @@ jobs:
           pnpm --filter @skoolos/db exec tsx prisma/seed.ts
 
       - name: Confirm the target is current
+        # An inspection only reports — pending migrations are its answer, not a failure.
+        # Without this guard every `inspect_only` dispatch with work pending mailed a red run.
+        if: ${{ github.event.inputs.inspect_only != 'true' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
