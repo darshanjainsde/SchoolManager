@@ -40,7 +40,13 @@ export class PublicSiteService {
           tx.statItem.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
           tx.socialLink.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
           tx.mediaAsset.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, kind: 'GALLERY' }, orderBy: { order: 'asc' } }),
-          tx.featuredStaff.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
+          // A teacher who has left never keeps a card on the Educators band, even
+          // though FeaturedStaff keeps their name and photo (Active Roster).
+          tx.featuredStaff.findMany({
+            take: LIST_CEILING.STRUCTURE,
+            where: { schoolId, OR: [{ teacherId: null }, { teacher: { status: 'ACTIVE' } }] },
+            orderBy: { order: 'asc' },
+          }),
           tx.course.findMany({ take: LIST_CEILING.STRUCTURE,
             where: { schoolId },
             orderBy: { order: 'asc' },
