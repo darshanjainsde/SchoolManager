@@ -19,9 +19,16 @@ import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { ApiError } from '../../common/errors/api-error';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
-import { StudentsService } from './students.service';
+import { StudentsService, type StudentListStatus } from './students.service';
 import { StudentReportService } from './student-report.service';
-import { CreateLoginDto, CreateStudentDto, UpdateStudentDto } from './management.dto';
+import { StudentLifecycleService } from './student-lifecycle.service';
+import {
+  CreateLoginDto,
+  CreateStudentDto,
+  LeaveStudentDto,
+  ReadmitStudentDto,
+  UpdateStudentDto,
+} from './management.dto';
 
 @Controller('manage/students')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
@@ -31,6 +38,7 @@ export class StudentsController {
   constructor(
     private readonly students: StudentsService,
     private readonly studentReport: StudentReportService,
+    private readonly lifecycle: StudentLifecycleService,
     private readonly tenant: TenantContextService,
   ) {}
 
@@ -61,6 +69,7 @@ export class StudentsController {
     @CurrentUser() u: SchoolJwtPayload,
     @Query('classSectionId', new ParseUUIDPipe({ optional: true }))
     classSectionId?: string,
+    @Query('status') status?: string,
   ) {
     if (u.role !== 'SCHOOL_ADMIN') {
       if (!classSectionId) {
@@ -71,9 +80,36 @@ export class StudentsController {
           'classSectionId',
         );
       }
-      return this.students.list(this.sid(), { classSectionId, projection: 'roster' });
+      // Teachers only ever see the active roster of one section.
+      return this.students.list(this.sid(), { classSectionId, projection: 'roster', status: 'active' });
     }
-    return this.students.list(this.sid(), { classSectionId, projection: 'full' });
+    const st: StudentListStatus = status === 'left' || status === 'all' ? status : 'active';
+    return this.students.list(this.sid(), { classSectionId, projection: 'full', status: st });
+  }
+
+  /** "Mark as left": the record and its history stay; the child leaves every roster. */
+  @Post(':id/leave')
+  leave(
+    @CurrentUser() u: SchoolJwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: LeaveStudentDto,
+  ) {
+    return this.lifecycle.leave(this.sid(), u.sub, id, dto);
+  }
+
+  @Post(':id/readmit')
+  readmit(
+    @CurrentUser() u: SchoolJwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReadmitStudentDto,
+  ) {
+    return this.lifecycle.readmit(this.sid(), u.sub, id, dto);
+  }
+
+  /** What the office should know before marking a child as left. */
+  @Get(':id/clearance')
+  clearance(@Param('id', ParseUUIDPipe) id: string) {
+    return this.lifecycle.clearance(this.sid(), id);
   }
 
   @Post()

@@ -11,6 +11,13 @@ const txMock = {
   pressIssue: {
     findFirst: jest.fn(),
   },
+  // What a hard delete would erase — studentHistoryCounts() reads these.
+  attendance: { count: jest.fn() },
+  result: { count: jest.fn() },
+  diaryRecipient: { count: jest.fn() },
+  diaryAck: { count: jest.fn() },
+  libraryIssue: { count: jest.fn() },
+  messageThread: { count: jest.fn() },
   user: {
     create: jest.fn(),
     findUnique: jest.fn(),
@@ -124,6 +131,13 @@ describe('StudentsService.list', () => {
       classSection: { select: { name: true, grade: { select: { name: true } } } },
     });
     expect(args.where).toEqual({ schoolId: SCHOOL, status: 'ACTIVE' });
+  });
+
+  it('"left" lists the three leaving states; "all" drops the filter', async () => {
+    await svc.list(SCHOOL, { status: 'left' });
+    expect(txMock.student.findMany.mock.calls[0][0].where).toEqual({ schoolId: SCHOOL, status: { in: ['ALUMNI', 'TRANSFERRED', 'LEFT'] } });
+    await svc.list(SCHOOL, { status: 'all' });
+    expect(txMock.student.findMany.mock.calls[1][0].where).toEqual({ schoolId: SCHOOL });
   });
 });
 
@@ -436,9 +450,11 @@ describe('StudentsController.list', () => {
   const students = { list: jest.fn().mockResolvedValue([]) };
   const tenant = { requireTenant: () => ({ schoolId: SCHOOL }) };
   const studentReport = { report: jest.fn() };
+  const lifecycle = { leave: jest.fn(), readmit: jest.fn(), clearance: jest.fn() };
   const controller = new StudentsController(
     students as unknown as StudentsService,
     studentReport as unknown as import('./student-report.service').StudentReportService,
+    lifecycle as unknown as import('./student-lifecycle.service').StudentLifecycleService,
     tenant as unknown as TenantContextService,
   );
 
@@ -465,6 +481,7 @@ describe('StudentsController.list', () => {
     expect(students.list).toHaveBeenCalledWith(SCHOOL, {
       classSectionId: CLASS_SECTION,
       projection: 'roster',
+      status: 'active',
     });
   });
 
@@ -474,6 +491,7 @@ describe('StudentsController.list', () => {
     expect(students.list).toHaveBeenCalledWith(SCHOOL, {
       classSectionId: undefined,
       projection: 'full',
+      status: 'active',
     });
   });
 });
@@ -501,8 +519,27 @@ describe('StudentsService.remove — the register outlives the student row', () 
     expect(txMock.student.delete).not.toHaveBeenCalled();
   });
 
+  function noHistory() {
+    for (const t of [txMock.attendance, txMock.result, txMock.diaryRecipient, txMock.diaryAck, txMock.libraryIssue, txMock.messageThread]) {
+      t.count.mockResolvedValue(0);
+    }
+  }
+
+  it('refuses with HAS_HISTORY when the child has attendance — Attendance cascades on delete', async () => {
+    txMock.pressIssue.findFirst.mockResolvedValue(null);
+    noHistory();
+    txMock.attendance.count.mockResolvedValue(3);
+
+    await expect(svc.remove(SCHOOL, 'stu-1')).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'HAS_HISTORY' },
+    });
+    expect(txMock.student.delete).not.toHaveBeenCalled();
+  });
+
   it('deletes a child with no register history', async () => {
     txMock.pressIssue.findFirst.mockResolvedValue(null);
+    noHistory();
     txMock.student.delete.mockResolvedValue({});
 
     await svc.remove(SCHOOL, 'stu-1');

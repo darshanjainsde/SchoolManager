@@ -12,6 +12,7 @@ import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
+import { studentHistoryCounts } from './internal/student-transitions';
 import type { CreateLoginDto, CreateStudentDto, UpdateStudentDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
@@ -147,10 +148,32 @@ export class StudentsService {
         if (p2002Target(e).includes('code')) {
           throw new ConflictException('That student code was just taken — please try again');
         }
-        throw new ConflictException('A student with that admission number already exists');
+        throw new ConflictException(await this.admissionClashMessage(schoolId, dto.admissionNo));
       }
       throw e;
     }
+  }
+
+  /**
+   * (schoolId, admissionNo) is unique across the whole register — alumni and
+   * left children included. When the office reuses a number, the error names
+   * who holds it, so "already exists" never sends them hunting.
+   */
+  private async admissionClashMessage(schoolId: string, admissionNo: string | undefined): Promise<string> {
+    const generic = 'A student with that admission number already exists';
+    if (!admissionNo) return generic;
+    const holder = await withTenant(schoolId, (tx) =>
+      tx.student.findFirst({
+        where: { schoolId, admissionNo },
+        select: { firstName: true, lastName: true, status: true, alumniBatch: true },
+      }),
+    );
+    if (!holder) return generic;
+    const tag =
+      holder.status === 'ACTIVE'
+        ? 'active'
+        : `${holder.status.toLowerCase()}${holder.alumniBatch ? ` · ${holder.alumniBatch}` : ''}`;
+    return `Admission number ${admissionNo} belongs to ${holder.firstName} ${holder.lastName} (${tag})`;
   }
 
   async update(schoolId: string, id: string, dto: UpdateStudentDto) {
@@ -171,8 +194,7 @@ export class StudentsService {
       );
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('Student not found');
-      if (isP2002(e))
-        throw new ConflictException('A student with that admission number already exists');
+      if (isP2002(e)) throw new ConflictException(await this.admissionClashMessage(schoolId, dto.admissionNo));
       throw e;
     }
   }
@@ -189,8 +211,15 @@ export class StudentsService {
         });
         if (inRegister) {
           throw new ConflictException(
-            'This student has documents in the Press register, which is permanent. Mark them inactive instead of deleting.',
+            'This student has documents in the Press register, which is permanent. Mark them as left instead of deleting.',
           );
+        }
+        // Attendance and Result cascade on delete, so "Remove" used to wipe a
+        // child's whole record silently. Delete is for a wrong entry only;
+        // anyone with history is marked as left (Active Roster, Track A).
+        const history = await studentHistoryCounts(tx, id);
+        if (history.hasHistory) {
+          throw new ApiError('HAS_HISTORY', 'This student has history. Mark them as left instead.', 409);
         }
         await tx.student.delete({ where: { id } });
       });
