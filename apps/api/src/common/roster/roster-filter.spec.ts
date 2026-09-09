@@ -39,7 +39,9 @@ interface Site {
 
 function findManySites(src: string): Site[] {
   const out: Site[] = [];
-  const re = /student\.findMany\(/g;
+  // `count` too: a roster denominator ("recipientCount", "N students") that
+  // still counts a child who has left is the same defect in a smaller font.
+  const re = /student\.(findMany|count)\(/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(src))) {
     let depth = 1;

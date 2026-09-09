@@ -397,5 +397,6 @@ Every person carries a `status` and an `isActive` mirror (`isActive === (status 
 - Public site: `FeaturedStaff` rows linked to a `LEFT` teacher are never projected onto the Educators band.
 - Mobile: a refresh refused with "User no longer active" marks that child `closed` on the family shelf
   (`family-store.ts#markClosed`), the app falls over to the next open sibling, and the spine reads "No
-  longer enrolled at {School}" with one Remove action. A student code that resolves to no school reads
-  "This code is not enrolled at any school. Ask the school office."
+  longer enrolled at {School}" with one Remove action. A student code the school has marked as left resolves
+  to no school, and the gate answers its usual neutral "check your details" — it never says why, by
+  design (`login.test.tsx` protects that).

@@ -135,7 +135,7 @@ export class DiaryService {
 
       const names = await this.teacherNames(tx, entries.map((e) => e.authorTeacherId));
       const editable = date === istTodayISO();
-      const rosterCount = await tx.student.count({ where: { schoolId, classSectionId } });
+      const rosterCount = await tx.student.count({ where: activeStudentsWhere(schoolId, { classSectionId }) });
 
       return {
         date,
@@ -210,7 +210,7 @@ export class DiaryService {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
       const rosterCount = await tx.student.count({
-        where: { schoolId, classSectionId: dto.classSectionId },
+        where: activeStudentsWhere(schoolId, { classSectionId: dto.classSectionId }),
       });
       // An admin with no Teacher row still has to be attributable; there is no
       // Teacher.id to store, so refuse rather than write an unattributed line.
@@ -427,7 +427,7 @@ export class DiaryService {
           entry.audience === 'SELECTED'
             ? entry.recipients.length
             : await tx.student.count({
-                where: { schoolId, classSectionId: entry.classSectionId },
+                where: activeStudentsWhere(schoolId, { classSectionId: entry.classSectionId }),
               }),
         createdAt: entry.createdAt.toISOString(),
         editable: true,

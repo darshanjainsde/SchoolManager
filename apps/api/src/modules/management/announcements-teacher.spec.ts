@@ -377,7 +377,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
       // Whole-school recipient resolution has no classSectionId filter —
       // the school-wide counterpart to resolveSectionRecipients.
       expect(txMock.student.findMany).toHaveBeenCalledWith({
-        where: { schoolId: SCHOOL, userId: { not: null } },
+        where: { schoolId: SCHOOL, status: 'ACTIVE', userId: { not: null } },
         select: { userId: true },
       });
       expect(notifications.notify).toHaveBeenCalledWith('ANNOUNCEMENT', [
@@ -431,7 +431,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
       // The school-wide query shape (no classSectionId) must never be used
       // for a class-targeted announcement.
       expect(txMock.student.findMany).toHaveBeenCalledWith({
-        where: { schoolId: SCHOOL, classSectionId: CLASS_A, userId: { not: null } },
+        where: { schoolId: SCHOOL, status: 'ACTIVE', classSectionId: CLASS_A, userId: { not: null } },
         select: { userId: true },
       });
       expect(notifications.notify).toHaveBeenCalledWith('ANNOUNCEMENT', [

@@ -111,7 +111,7 @@ describe('NotificationOutboxService', () => {
 
     expect(result).toEqual({ processed: 1, sent: 1, failed: 0, purged: 0 });
     expect(dbMock.student.findMany).toHaveBeenCalledWith({
-      where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION, userId: { not: null } },
+      where: { schoolId: SCHOOL, status: 'ACTIVE', classSectionId: CLASS_SECTION, userId: { not: null } },
       select: { userId: true },
     });
     expect(push.send).toHaveBeenCalledWith(

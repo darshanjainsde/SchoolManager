@@ -109,7 +109,7 @@ Guard: `internal/roster-filter.spec.ts` reads each file above and asserts every 
 ### 2.6 Login, the gate and the app
 
 - Any leaving status: `User.isActive=false`; `/auth/login` answers the existing "Invalid credentials"; `/auth/refresh` answers "User no longer active".
-- `school-resolve` no longer returns a school for a left child's code (`status: 'ACTIVE'` only). The app gate copy for an empty result becomes: "This code is not enrolled at any school. Ask the school office."
+- `school-resolve` no longer returns a school for a left child's code (`status: 'ACTIVE'` only). The app gate keeps its neutral "check your details" message for an identifier that resolves nowhere — deliberately, so the gate never says whether a code exists (an existing guard test protects this; the first draft of this spec had it wrong).
 - Mobile family shelf: when a child's refresh fails with 401 "User no longer active", `family-store` marks that child `closed: true`. The shelf card shows "No longer enrolled at {school}" with a Remove button and does not try to refresh again. Siblings are untouched. An alumni child's card says "Passed out · Class of {batch}" and, when the school has the Alumni wing, "Look for the alumni link in your email".
 
 ### 2.7 Teacher: remove from this school
