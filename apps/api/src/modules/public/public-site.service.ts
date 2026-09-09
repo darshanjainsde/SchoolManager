@@ -3,7 +3,7 @@ import { withTenant, type FeatureKey } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import { PublicEventsService } from '../community';
-import { mergeSectionVariantContent, pickDesignConfig, photoAssetIdsOf, projectHallOfFame, readHallOfFame } from '../cms';
+import { mergeSectionVariantContent, normalizeCelebrationsConfig, pickDesignConfig, photoAssetIdsOf, projectHallOfFame, readHallOfFame } from '../cms';
 import type { PublicSiteData } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
@@ -197,6 +197,20 @@ export class PublicSiteService {
               showBirthdays: homepage.showBirthdays,
             }
           : null,
+        celebrations: (() => {
+          const c = normalizeCelebrationsConfig(rawProfile?.celebrationsConfig);
+          return {
+            enabled: !!homepage?.showBirthdays && (c.audience === 'PUBLIC' || c.audience === 'BOTH'),
+            placement: c.placement,
+            audience: c.audience,
+            teaser: c.teaser,
+            page: c.page,
+            nameFormat: c.nameFormat,
+            showClass: c.showClass,
+            wishLine: c.wishLine,
+            window: c.window,
+          };
+        })(),
         stats: stats.map((s) => ({ label: s.label, value: s.value })),
         socialLinks: has('SOCIAL') ? socials.map((s) => ({ platform: s.platform, url: s.url })) : [],
         gallery: has('GALLERY') ? galleryAssets.map((g) => ({ url: g.url, caption: g.caption })) : [],
