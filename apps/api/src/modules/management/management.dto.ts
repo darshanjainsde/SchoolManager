@@ -434,9 +434,8 @@ export class UpdateStudentDto {
   @IsUUID()
   photoAssetId?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` is NOT editable here: it mirrors `status`, and both are written
+  // only by StudentLifecycleService (leave / readmit). Track A, 2026-09.
 
   // ── Admission-register facts (statutory TC, Annexure-I). All optional. ──
   @IsOptional() @IsString() @Length(0, 120) fatherName?: string;
@@ -1109,3 +1108,28 @@ export class PreviewSeatingDto {
 }
 
 export class SaveSeatingDto extends PreviewSeatingDto {}
+
+// ── Person lifecycle (Active Roster, Track A) ────────────────────────────────
+
+export class LeaveStudentDto {
+  @IsIn(['ALUMNI', 'TRANSFERRED', 'LEFT'])
+  status!: 'ALUMNI' | 'TRANSFERRED' | 'LEFT';
+
+  @IsDateString()
+  leftOn!: string;
+
+  @IsOptional() @IsString() @Length(0, 120)
+  reason?: string;
+
+  @IsOptional() @IsString() @Length(0, 2000)
+  note?: string;
+
+  /** ALUMNI only; defaults to the current academic year's name. */
+  @IsOptional() @IsString() @Length(0, 40)
+  alumniBatch?: string;
+}
+
+export class ReadmitStudentDto {
+  @IsOptional() @IsUUID()
+  classSectionId?: string;
+}

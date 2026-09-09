@@ -201,6 +201,17 @@ export type ErrorCode =
   | 'CONCESSION_BASIS'
   /** No fee structure has been set up for the year being billed — pair with 409. */
   | 'FEE_SETUP_INCOMPLETE'
+  // ─── Person lifecycle (Active Roster) ──────────────────────────────────────
+  /** A leave transition on a student who is not ACTIVE — pair with 409. */
+  | 'NOT_ACTIVE'
+  /** Re-admit / reactivate on someone who is already ACTIVE — 409. */
+  | 'ALREADY_ACTIVE'
+  /** Delete refused: the student has attendance, results, diary, library or
+   *  message rows. The office marks them as left instead. Pair with 409. */
+  | 'HAS_HISTORY'
+  /** Onboarding a teacher whose email already belongs to a LEFT row at THIS
+   *  school — reactivate that row instead of making a duplicate. 409. */
+  | 'ALREADY_HERE_INACTIVE'
   | 'INTERNAL';
 
 export interface ApiErrorBody {
