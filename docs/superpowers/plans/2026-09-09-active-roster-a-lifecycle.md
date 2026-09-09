@@ -1264,9 +1264,9 @@ and make `onPress` of a closed spine a no-op (it must not switch sessions). `sch
 
 Shelf test: render with one closed child and assert `getByText('No longer enrolled at Raffles')` and `getByText('Remove from shelf')`.
 
-- [ ] **Step 5: login.tsx empty-resolve copy**
+- [ ] **Step 5: login.tsx — no copy change (dropped)**
 
-Where the gate shows its "no school found" message, use: `This code is not enrolled at any school. Ask the school office.`
+The gate deliberately answers the same neutral "check your details" whether an identifier is unknown or the password is wrong, and `login.test.tsx` guards it ("shows a neutral error when the identifier resolves nowhere"). Leave it. A code the school marked as left resolves nowhere and gets that same message; the family learns why from the shelf card (Step 4), not from the gate.
 
 - [ ] **Step 6: Run mobile tests**
 
