@@ -230,6 +230,26 @@ enum ClassNoteVisibility {
   SUBJECT_TEACHERS
 }
 
+/// Where a student stands with the school (Active Roster, 2026-09). ACTIVE is
+/// the only enrolled state: every register, diary page, result sheet and push
+/// list reads ACTIVE students only (common/roster/active-students.ts). The
+/// three leaving states keep the record and its history; `Student.isActive`
+/// mirrors `status === ACTIVE` and is written only by lifecycle code.
+enum StudentStatus {
+  ACTIVE
+  ALUMNI
+  TRANSFERRED
+  LEFT
+}
+
+/// Teachers and staff: here, or gone. LEFT frees the person to be onboarded
+/// by another school (the one-school guard in TeachersService.createLogin
+/// only blocks on ACTIVE rows).
+enum StaffStatus {
+  ACTIVE
+  LEFT
+}
+
 // ── Tenancy & access ─────────────────────────────────────
 model School {
   id                  String              @id @default(uuid()) @db.Uuid
@@ -968,6 +988,13 @@ model Teacher {
   primarySubjectId String?          @db.Uuid
   bio              String?
   isActive         Boolean          @default(true)
+  /// Lifecycle (Active Roster). `isActive` above mirrors `status === ACTIVE`.
+  status            StaffStatus @default(ACTIVE)
+  leftOn            DateTime?   @db.Date
+  leftReason        String?
+  leftNote          String?
+  statusChangedAt   DateTime?
+  statusChangedById String?     @db.Uuid
   school           School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   teacherSubjects  TeacherSubject[]
   classSections    ClassSection[]   @relation("ClassTeacher")
@@ -978,6 +1005,7 @@ model Teacher {
 
   @@index([schoolId])
   @@index([userId])
+  @@index([schoolId, status])
 }
 
 model TeacherSubject {
@@ -1028,6 +1056,22 @@ model Student {
   photoAssetId        String?            @db.Uuid
   userId              String?            @unique @db.Uuid
   isActive            Boolean            @default(true)
+  // ── Lifecycle (Active Roster, 2026-09). `isActive` mirrors `status === ACTIVE`
+  //    and both are written together, only by the lifecycle service. A child who
+  //    leaves keeps this row and every attendance/result/diary row under it;
+  //    `classSectionId` stays as "last class" — rosters filter on status.
+  status              StudentStatus      @default(ACTIVE)
+  leftOn              DateTime?          @db.Date
+  leftReason          String?
+  leftNote            String?
+  /// The session they passed out of, e.g. "2025-26". Set on ALUMNI only.
+  alumniBatch         String?
+  statusChangedAt     DateTime?
+  statusChangedById   String?            @db.Uuid
+  // ── Website consent (Birthdays). Off the wall with one switch; a photo needs
+  //    an explicit yes from the family, recorded here by the office.
+  showOnWebsite       Boolean            @default(true)
+  photoConsent        Boolean            @default(false)
   createdAt           DateTime           @default(now())
   school              School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSection        ClassSection?      @relation(fields: [classSectionId], references: [id], onDelete: SetNull)
@@ -1051,6 +1095,7 @@ model Student {
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
   @@index([schoolId, classSectionId])
+  @@index([schoolId, status])
 }
 
 model Period {
@@ -1141,10 +1186,18 @@ model Staff {
   /// Student.photoAssetId / Teacher.photoAssetId (Phase 5·0d).
   photoAssetId String?   @db.Uuid
   isActive     Boolean   @default(true)
+  /// Lifecycle (Active Roster). `isActive` above mirrors `status === ACTIVE`.
+  status            StaffStatus @default(ACTIVE)
+  leftOn            DateTime?   @db.Date
+  leftReason        String?
+  leftNote          String?
+  statusChangedAt   DateTime?
+  statusChangedById String?     @db.Uuid
   createdAt    DateTime  @default(now())
   school       School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
+  @@index([schoolId, status])
 }
 
 model StaffAttendance {
