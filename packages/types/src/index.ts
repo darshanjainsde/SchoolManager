@@ -620,6 +620,9 @@ export const NOTIFICATION_KINDS = [
   // carries the result day. Same reasoning as LIBRARY: never muteable with
   // announcements.
   'RESULTS_DUE',
+  // Year-end: "Aarav is in Class 6A for 2026-27" to a family, and a teacher's
+  // new classes. Sent once, after the session has started.
+  'SESSION',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

@@ -250,6 +250,25 @@ enum StaffStatus {
   LEFT
 }
 
+/// Year-end (Active Roster, Track C). A plan is a draft the office edits over
+/// days; STARTED is applied once, in one transaction; SCHEDULED starts itself
+/// on the cron. One plan per school in DRAFT or SCHEDULED at a time.
+enum SessionPlanStatus {
+  DRAFT
+  SCHEDULED
+  STARTED
+  CANCELLED
+}
+
+/// What happens to one child when the session starts. PASS_OUT goes through
+/// the Homecoming wing (alumni), LEAVE through Track A's applyStudentLeave.
+enum SessionDecisionKind {
+  PROMOTE
+  STAY
+  PASS_OUT
+  LEAVE
+}
+
 // ── Tenancy & access ─────────────────────────────────────
 model School {
   id                  String              @id @default(uuid()) @db.Uuid
@@ -372,6 +391,8 @@ model School {
   pressCounters          PressCounter[]
   reportWindows          ReportWindow[]
   reportRemarks          ReportRemark[]
+  sessionPlans           SessionPlan[]
+  sessionDecisions       SessionDecision[]
 }
 
 model Domain {
@@ -921,6 +942,8 @@ model AcademicYear {
   feeTerms         FeeTerm[]
   feePlans         FeePlan[]
   reportWindows    ReportWindow[]
+  plansFrom        SessionPlan[]     @relation("PlanFrom")
+  plansTo          SessionPlan[]     @relation("PlanTo")
 
   @@unique([schoolId, name])
   @@index([schoolId])
@@ -1099,6 +1122,7 @@ model Student {
   reportRemarks       ReportRemark[]
 
   hallOfFameEntries   HallOfFameEntry[]
+  sessionDecisions    SessionDecision[]
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
   @@index([schoolId, classSectionId])
@@ -3927,4 +3951,64 @@ model PrintOrderEvent {
   order  PrintOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, orderId, at])
+}
+
+// ── Sessions (year end) — Active Roster, Track C ─────────────────
+/// The office's year-end draft: from one AcademicYear to the next, with the
+/// pass mark that FLAGS (never decides), which exams count, how each section
+/// maps forward, and the switches Start honours. `version` guards concurrent
+/// saves from two office tabs. Spec §4/§5.
+model SessionPlan {
+  id            String            @id @default(uuid()) @db.Uuid
+  schoolId      String            @db.Uuid
+  fromYearId    String            @db.Uuid
+  toYearId      String            @db.Uuid
+  status        SessionPlanStatus @default(DRAFT)
+  passMarkPct   Int               @default(33)
+  countExamIds  String[]          @default([]) @db.Uuid
+  /// { [fromSectionId]: toSectionId | "PASS_OUT" }
+  sectionMap    Json              @default("{}")
+  /// KEEP | ALPHABETICAL | ADMISSION_NO
+  rollPolicy    String            @default("KEEP")
+  copyTimetable Boolean           @default(true)
+  carryLeave    Boolean           @default(true)
+  scheduledFor  DateTime?
+  startedAt     DateTime?
+  startedById   String?           @db.Uuid
+  version       Int               @default(1)
+  createdById   String            @db.Uuid
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  school        School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fromYear      AcademicYear      @relation("PlanFrom", fields: [fromYearId], references: [id], onDelete: Cascade)
+  toYear        AcademicYear      @relation("PlanTo", fields: [toYearId], references: [id], onDelete: Cascade)
+  decisions     SessionDecision[]
+
+  @@index([schoolId, status])
+}
+
+/// One row per child in a plan. Nothing about the child changes until Start;
+/// `appliedAt` is the receipt. Section ids are plain UUIDs on purpose — a
+/// section deleted mid-draft must not take the decision row with it; Start
+/// re-validates every target section.
+model SessionDecision {
+  id            String              @id @default(uuid()) @db.Uuid
+  schoolId      String              @db.Uuid
+  planId        String              @db.Uuid
+  studentId     String              @db.Uuid
+  decision      SessionDecisionKind
+  toSectionId   String?             @db.Uuid
+  fromSectionId String?             @db.Uuid
+  leaveStatus   StudentStatus?
+  leaveReason   String?
+  note          String?
+  decidedById   String              @db.Uuid
+  appliedAt     DateTime?
+  updatedAt     DateTime            @updatedAt
+  school        School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  plan          SessionPlan         @relation(fields: [planId], references: [id], onDelete: Cascade)
+  student       Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, studentId])
+  @@index([schoolId, planId])
 }
