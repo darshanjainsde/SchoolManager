@@ -80,10 +80,15 @@ export default function Login() {
       };
 
       let s: Session | null = stored ? await attempt(stored) : null;
+      let nowhere = false;
       if (!s) {
         // The cache was absent or wrong — ask the platform which school(s)
         // this identifier belongs to and try each in turn.
         const hosts = (await api.resolveSchool(id)).filter((h) => !tried.includes(h));
+        // A student code that resolves to NO school is a child the school has
+        // marked as left (the resolver only answers for active students), or a
+        // code that never existed. Either way the office is the next step.
+        nowhere = hosts.length === 0 && tried.length === 0 && /^[A-Za-z]{3}-\d{5,}$/.test(id);
         for (const host of hosts) {
           s = await attempt(host);
           if (s) break;
@@ -92,6 +97,8 @@ export default function Login() {
 
       if (s) {
         await finish(s);
+      } else if (nowhere) {
+        setError('This code is not enrolled at any school. Ask the school office.');
       } else {
         // Neutral, whether the identifier is unknown everywhere or the
         // password was wrong at the right school.

@@ -106,3 +106,33 @@ describe('family-store (Phase 5·2 — the shelf)', () => {
     expect(accentFor('raffles.sckools.com')).toMatch(/^#[0-9A-F]{6}$/i);
   });
 });
+
+describe("markClosed — the school closed a child's login", () => {
+  beforeEach(wipe);
+
+  it('flags the child, keeps the spine, and falls over to the next open sibling', async () => {
+    await family.add(child('Aarav Mehta'));
+    await family.add(child('Meera Iyer'));
+    await family.setActive('raffles.sckools.com::Aarav Mehta');
+
+    const next = await family.markClosed('raffles.sckools.com::Aarav Mehta');
+
+    const list = await family.list();
+    expect(list.find((c) => c.displayName === 'Aarav Mehta')?.closed).toBe(true);
+    expect(list.find((c) => c.displayName === 'Meera Iyer')?.closed).toBeUndefined();
+    expect(next?.displayName).toBe('Meera Iyer');
+    expect(await family.activeKey()).toBe('raffles.sckools.com::Meera Iyer');
+    expect((await session.get())?.displayName).toBe('Meera Iyer');
+  });
+
+  it('signs out when the closed child was the only one, and is a no-op for an unknown key', async () => {
+    await family.add(child('Aarav Mehta'));
+    await session.set(child('Aarav Mehta')); // what api.login does before add()
+    expect(await family.markClosed('nope::nobody')).toBeNull();
+    expect((await session.get())?.displayName).toBe('Aarav Mehta');
+
+    await family.markClosed('raffles.sckools.com::Aarav Mehta');
+    expect(await session.get()).toBeNull();
+    expect((await family.list())[0].closed).toBe(true);
+  });
+});

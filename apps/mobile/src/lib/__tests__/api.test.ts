@@ -1,5 +1,6 @@
 import { api, ApiError } from '../api';
 import { session } from '../session';
+import { family } from '../family-store';
 
 jest.mock('expo-secure-store', () => {
   const store: Record<string, string> = {};
@@ -286,4 +287,19 @@ describe('api.logout()', () => {
 
     await expect(api.logout()).resolves.toBeUndefined();
   });
+});
+
+it('a refresh refused with "no longer active" closes the child on the shelf instead of just expiring', async () => {
+  await family.add({
+    accessToken: 'at1', refreshToken: 'rt1', role: 'STUDENT',
+    schoolHost: 'raffles.sckools.com', displayName: 'Aarav Mehta',
+  });
+  mockFetch
+    .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) })
+    .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ message: 'User no longer active' }) });
+
+  await expect(api.request('/portal/diary')).rejects.toMatchObject({ status: 401, message: 'This login has been closed by the school.' });
+  const [aarav] = await family.list();
+  expect(aarav.closed).toBe(true);
+  expect(await session.get()).toBeNull();
 });
