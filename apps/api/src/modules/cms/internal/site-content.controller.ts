@@ -5,7 +5,7 @@ import { RolesGuard } from '../../../common/auth/roles.guard';
 import { Roles } from '../../../common/auth/roles.decorator';
 import { TenantContextService } from '../../tenancy';
 import { SiteContentService } from './site-content.service';
-import { UpdateProfileDto, UpdateHomepageDto, SetStatsDto, SetSocialDto } from './cms.dto';
+import { UpdateProfileDto, UpdateHomepageDto, SetStatsDto, SetSocialDto, UpdateCelebrationsDto } from './cms.dto';
 
 @Controller('site')
 // Any write here drops this school's cached pages — see the interceptor.
@@ -40,6 +40,22 @@ export class SiteContentController {
   @Put('homepage')
   homepage(@Body() dto: UpdateHomepageDto) {
     return this.content.updateHomepage(this.sid(), dto);
+  }
+
+  // ── Birthdays & celebrations (Track B) ──
+  @Get('celebrations')
+  getCelebrations() {
+    return this.content.getCelebrations(this.sid());
+  }
+
+  @Put('celebrations')
+  updateCelebrations(@Body() dto: UpdateCelebrationsDto) {
+    return this.content.updateCelebrations(this.sid(), dto);
+  }
+
+  @Get('celebrations/preview')
+  celebrationsPreview() {
+    return this.content.celebrationsPreview(this.sid());
   }
 
   @Put('stats')

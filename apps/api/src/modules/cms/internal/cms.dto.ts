@@ -223,3 +223,21 @@ export class HallOfFameSettingsDto {
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(1990) @Max(2100) landingYear?: number | null;
   @IsOptional() @IsInt() @Min(1) @Max(10) pastBatches?: number;
 }
+
+// ── Birthdays & celebrations (Active Roster, Track B) ────────────────────────
+// Every field optional: the service merges the patch over the stored config
+// and normalises the result (cms/internal/celebrations-config.ts).
+export class UpdateCelebrationsDto {
+  @IsOptional() @IsIn(['STUDENTS', 'MANUAL']) source?: string;
+  @IsOptional() @IsIn(['TODAY', 'WEEK', 'MONTH']) window?: string;
+  @IsOptional() @IsIn(['FIRST', 'FIRST_INITIAL', 'FULL']) nameFormat?: string;
+  @IsOptional() @IsBoolean() showClass?: boolean;
+  @IsOptional() @IsBoolean() showPhotos?: boolean;
+  @IsOptional() @IsIn(['FAMILIES', 'PUBLIC', 'BOTH']) audience?: string;
+  @IsOptional() @IsIn(['TEASER_AND_PAGE', 'PAGE_ONLY']) placement?: string;
+  @IsOptional() @IsIn(['CAKE_BADGE', 'RIBBON']) teaser?: string;
+  @IsOptional() @IsIn(['PARTY_WALL', 'MONTH_PLANNER', 'NOTICE_BOARD']) page?: string;
+  @IsOptional() @IsString() @Length(0, 160) wishLine?: string;
+  @IsOptional() @IsBoolean() consentConfirmed?: boolean;
+  @IsOptional() @IsArray() @ArrayMaxSize(500) manual?: unknown[];
+}

@@ -212,6 +212,8 @@ export type ErrorCode =
   /** Onboarding a teacher whose email already belongs to a LEFT row at THIS
    *  school — reactivate that row instead of making a duplicate. 409. */
   | 'ALREADY_HERE_INACTIVE'
+  /** Turning the birthday wall public without the parental-consent confirmation. 400. */
+  | 'CONSENT_REQUIRED'
   | 'INTERNAL';
 
 export interface ApiErrorBody {
