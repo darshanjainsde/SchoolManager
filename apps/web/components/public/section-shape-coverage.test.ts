@@ -27,6 +27,8 @@ const BELOW_THE_FOLD = [
   // absent from this list while it was being built, which is how it came to
   // carry eight hardcoded `rounded-full` pills that no shape could reach.
   'sections/AlumniSection.tsx',
+  // Birthdays: three rooms below the fold (Track B), all drawn on .ps-panel.
+  'sections/BirthdaysSection.tsx',
 ];
 
 function source(rel: string): string {

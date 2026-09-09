@@ -24,6 +24,7 @@ function site(profile: Partial<NonNullable<PublicSiteData['profile']>> = {}): Pu
     school: { name: 'Raffles', slug: 'raffles', tier: 'PRO', features: [], timezone: 'Asia/Kolkata' },
     profile: { brandColorPrimary: '#123456', brandColorSecondary: '#abcdef', ...profile } as PublicSiteData['profile'],
     homepage: null,
+    celebrations: null,
     stats: [],
     socialLinks: [],
     gallery: [],

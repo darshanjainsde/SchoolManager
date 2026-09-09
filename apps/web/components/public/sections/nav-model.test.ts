@@ -22,7 +22,7 @@ const ALL_ON: NavFlags = {
   hasAdmissions: true,
   hasHof: true,
   hasGallery: true,
-  hasEvents: true, hasAlumni: true,
+  hasEvents: true, hasAlumni: true, hasBirthdays: true,
   hasBlog: true,
   hasContact: true,
   hasEnquiry: true,
@@ -34,7 +34,7 @@ const NONE_ON: NavFlags = {
   hasAdmissions: false,
   hasHof: false,
   hasGallery: false,
-  hasEvents: false, hasAlumni: false,
+  hasEvents: false, hasAlumni: false, hasBirthdays: false,
   hasBlog: false,
   hasContact: false,
   hasEnquiry: false,
@@ -147,9 +147,9 @@ describe('a group is only worth the slot it costs', () => {
   });
 
   it('collapses a one-child group to that child, named for the page it opens', () => {
-    // Alumni also lives in "Our school", so it is off here — otherwise the
-    // group has two children and this test would be asserting nothing.
-    const nodes = model({ hasAbout: false, hasHof: false, hasAlumni: false });
+    // Alumni and Birthdays also live in "Our school", so they are off here —
+    // otherwise the group has two children and this test would be asserting nothing.
+    const nodes = model({ hasAbout: false, hasHof: false, hasAlumni: false, hasBirthdays: false });
     expect(labels(nodes)).not.toContain('Our school');
     expect(labels(nodes)).toContain('Gallery');
   });

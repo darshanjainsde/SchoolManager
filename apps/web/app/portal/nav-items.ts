@@ -10,6 +10,7 @@ import {
   NotebookPen,
   Library,
   Wallet,
+  Cake,
 } from 'lucide-react';
 
 /**
@@ -43,5 +44,6 @@ export const NAV_ITEMS: {
   { href: '/portal/messages', label: 'Messages', icon: MessageSquare },
   { href: '/portal/library', label: 'Library', icon: Library, requiredFeature: 'LIBRARY' },
   { href: '/portal/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' },
+  { href: '/portal/birthdays', label: 'Birthdays', icon: Cake },
   { href: '/portal/profile', label: 'Profile', icon: User },
 ];

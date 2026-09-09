@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { optimised } from '@/lib/img';
 import { Fragment, useEffect, type ReactNode } from 'react';
-import type { PublicSiteData } from '@/lib/public-api';
+import type { BirthdaysResult, PublicSiteData } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
 import HeroSection, { heroImagesOf, heroIsPhotoLayout } from './sections/HeroSection';
 import SiteNav from './sections/SiteNav';
@@ -15,6 +15,8 @@ import GallerySection from './sections/GallerySection';
 import EventsSection from './sections/EventsSection';
 import ConnectSection from './sections/ConnectSection';
 import AlumniSection from './sections/AlumniSection';
+import BirthdaysSection from './sections/BirthdaysSection';
+import BirthdayTeaser from './sections/BirthdayTeaser';
 import { SUBPAGES } from './subpages';
 import { PS_CSS } from './ps-css';
 import { themeRootProps } from './site-theme';
@@ -34,7 +36,7 @@ import {
   type SectionKey,
 } from './site-variants';
 
-export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'alumni' | 'contact' | 'page';
+export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'alumni' | 'birthdays' | 'contact' | 'page';
 
 interface Props {
   data: PublicSiteData;
@@ -42,6 +44,8 @@ interface Props {
   view?: SiteView;
   /** The admin-built page rendered when view = 'page'. */
   page?: { slug: string; title: string; blocks: unknown };
+  /** The birthday wall rows (Track B): the home teaser and the /birthdays view read them. */
+  birthdays?: BirthdaysResult | null;
 }
 
 
@@ -55,7 +59,7 @@ function parseStatValue(val: string): { numeric: boolean; num: number; suffix: s
 }
 
 
-export default function PublicSite({ data, view = 'home', page }: Props) {
+export default function PublicSite({ data, view = 'home', page, birthdays = null }: Props) {
   const onAcademicsPage = view === 'academics';
   // Section anchors live on the homepage; from other pages they need the "/" prefix.
   const base = view !== 'home' ? '/' : '';
@@ -105,6 +109,10 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
   const hasEnquiry = data.school.features.includes('ENQUIRY');
   const hasEvents = data.school.features.includes('EVENTS');
   const hasAlumni = data.school.features.includes('ALUMNI');
+  // Birthdays: the homepage switch AND an audience that includes the public host.
+  const hasBirthdays = !!data.celebrations?.enabled;
+  const celebrations = data.celebrations;
+  const showTeaser = view === 'home' && hasBirthdays && !!birthdays && celebrations?.placement === 'TEASER_AND_PAGE';
   const hasBlog = data.school.features.includes('BLOG');
   const hasAcademics = data.courses.length > 0;
   const hasAdmissions = admissionsHasContent(data.admissions, data.courses);
@@ -470,6 +478,11 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
           themeRootProps; removing these removes every trace). */}
       {fest && <FestiveLayer fest={fest} />}
       {fest && <FestiveRibbon fest={fest} />}
+      {/* Birthdays: the corner badge sits beside the festive layer — same containing
+          block, so a scroll-feel transform lower down can never trap it. */}
+      {showTeaser && celebrations?.teaser === 'CAKE_BADGE' && birthdays && (
+        <BirthdayTeaser style="CAKE_BADGE" data={birthdays} href="/birthdays" />
+      )}
 
       {/* The hero photo is the LCP element and is painted from a CSS
           background, which the browser cannot discover until the stylesheet
@@ -483,7 +496,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
       {/* ── NAV (style selected by the school admin) ── */}
       <SiteNav
         data={data}
-        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBlog, hasContact, hasEnquiry }}
+        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBirthdays, hasBlog, hasContact, hasEnquiry }}
         base={base}
         view={view}
         onAcademicsPage={onAcademicsPage}
@@ -555,6 +568,9 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
             <ConnectSection events={data.events} timezone={data.school.timezone} schoolName={schoolName} />
           )}
           {view === 'alumni' && <AlumniSection schoolName={schoolName} />}
+          {view === 'birthdays' && birthdays && celebrations && (
+            <BirthdaysSection data={birthdays} style={celebrations.page} wishLine={celebrations.wishLine} schoolName={schoolName} onOwnPage />
+          )}
           {view === 'contact' && (
             <ContactSection
               profile={data.profile}
@@ -582,6 +598,9 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
         <>
       {/* ── HERO (layout selected by the school admin) ── */}
       <div data-sec="hero">
+        {showTeaser && celebrations?.teaser === 'RIBBON' && birthdays && (
+          <BirthdayTeaser style="RIBBON" data={birthdays} href="/birthdays" />
+        )}
         <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
       </div>
 
@@ -607,7 +626,7 @@ export default function PublicSite({ data, view = 'home', page }: Props) {
       {/* ── FOOTER (extracted; answers to footerConfig) ── */}
       <FooterSection
         data={data}
-        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBlog, hasContact, hasEnquiry }}
+        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBirthdays, hasBlog, hasContact, hasEnquiry }}
         base={base}
         year={new Date().getFullYear()}
       />
