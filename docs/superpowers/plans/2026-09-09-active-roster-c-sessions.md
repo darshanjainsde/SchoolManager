@@ -12,7 +12,9 @@
 
 ## Global Constraints
 
-- Requires Track A merged (`StudentStatus`, `applyStudentLeave`, `closeLogin`, `activeStudentsWhere`).
+- Requires Track A merged (`StudentStatus`, `applyStudentLeave`, `closeLogin`, `activeStudentsWhere`). Same branch, ship and kit rules as Track A's Global Constraints.
+- **Alumni are made by the Homecoming wing, not by this track.** PASS_OUT calls the existing `AlumniService.graduateBatch` (exported from `modules/alumni`) when the school has the ALUMNI feature, and emails a claim link minted by `AlumniAuthService.mintClaimToken`. No alumni mode in the student portal or the family app.
+- Every list query carries `take: LIST_CEILING.*`; every new error code joins the `ErrorCode` union; `SessionPlan` reads degrade with `isSchemaMissing` (the overview returns `plan: null`) until the migration lands.
 - New tables get RLS (`tenant_iso`) in their migration; `packages/db/src/rls-coverage.spec.ts` must stay green.
 - Only one plan per school in DRAFT or SCHEDULED at a time.
 - Start is one transaction; login closures and notifications happen after commit.
@@ -707,7 +709,13 @@ describe('start', () => {
     expect(txMock.timetableSlot.create).toHaveBeenCalledTimes(1);
     expect(leavePolicy.closeYear).toHaveBeenCalledWith(SCHOOL, 'y1', 'y2');
     expect(txMock.sessionPlan.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'STARTED' }) }));
-    expect(platformMock.user.update).not.toHaveBeenCalled(); // alumni keep their login
+    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'u2' }, data: { isActive: false } }); // the alumnus's child login closes
+    expect(alumni.graduateBatchIn).toHaveBeenCalledWith(expect.anything(), SCHOOL, { classSectionIds: ['f5b'], batchYear: 2026 });
+  });
+  it('skips graduation when the school has no Alumni wing', async () => {
+    features.getFeatures.mockResolvedValue(new Set(['MANAGEMENT']));
+    await svc.start(SCHOOL, ACTOR, { when: 'NOW', version: 4 });
+    expect(alumni.graduateBatchIn).not.toHaveBeenCalled();
   });
   it('ON_START_DATE schedules instead of applying', async () => {
     const r = await svc.start(SCHOOL, ACTOR, { when: 'ON_START_DATE', version: 4 });
@@ -718,7 +726,7 @@ describe('start', () => {
 });
 ```
 
-(`leavePolicy` is a mock `{ closeYear: jest.fn() }` passed to the constructor; `LeavePolicyService.closeYear` runs its own `withTenant`, which in the spec resolves to the same `txMock`.)
+(`leavePolicy` is a mock `{ closeYear: jest.fn() }`, `alumni` is `{ graduateBatchIn: jest.fn().mockResolvedValue({ created: 1 }) }`, `features` is `{ getFeatures: jest.fn().mockResolvedValue(new Set(['MANAGEMENT', 'ALUMNI'])) }`, all passed to the constructor; `LeavePolicyService.closeYear` runs its own `withTenant`, which in the spec resolves to the same `txMock`.)
 
 - [ ] **Step 2: Implement review, start, applyPlan**
 
@@ -795,6 +803,14 @@ private async applyPlan(schoolId: string, actorUserId: string, planId: string): 
       const d = decBy.get(s.id)!;
       if (d.decision === 'PROMOTE' || d.decision === 'STAY') (byTarget.get(d.toSectionId!) ?? byTarget.set(d.toSectionId!, []).get(d.toSectionId!)!).push(s);
     }
+    // Alumni first, while the leaving sections still read as the active roster
+    // graduateBatch expects (it filters isActive: true and reads classSectionId).
+    const passOutSections = Array.from(new Set(students.filter((s) => decBy.get(s.id)!.decision === 'PASS_OUT').map((s) => s.classSectionId!)));
+    if (passOutSections.length && (await this.features.getFeatures(schoolId)).has('ALUMNI')) {
+      await this.alumni.graduateBatchIn(tx, schoolId, { classSectionIds: passOutSections, batchYear: plan.fromYear.endDate.getUTCFullYear() });
+      o.alumniDoor = true;
+    }
+
     for (const [target, group] of byTarget) {
       const rolls = assignRollNumbers(plan.rollPolicy as 'KEEP' | 'ALPHABETICAL' | 'ADMISSION_NO', group);
       for (const s of group) {
@@ -806,8 +822,8 @@ private async applyPlan(schoolId: string, actorUserId: string, planId: string): 
     for (const s of students) {
       const d = decBy.get(s.id)!;
       if (d.decision === 'PASS_OUT') {
-        await applyStudentLeave(tx, { schoolId, actorUserId, studentId: s.id, status: 'ALUMNI', leftOn: plan.fromYear.endDate, alumniBatch: plan.fromYear.name });
-        o.alumni++; o.alumniStudentIds.push(s.id);
+        const r = await applyStudentLeave(tx, { schoolId, actorUserId, studentId: s.id, status: 'ALUMNI', leftOn: plan.fromYear.endDate, alumniBatch: plan.fromYear.name });
+        o.alumni++; o.alumniStudentIds.push(s.id); if (r.userId) o.closeUserIds.push(r.userId);
       } else if (d.decision === 'LEAVE') {
         const r = await applyStudentLeave(tx, { schoolId, actorUserId, studentId: s.id, status: (d.leaveStatus ?? 'LEFT') as 'TRANSFERRED' | 'LEFT', leftOn: plan.fromYear.endDate, reason: d.leaveReason, note: d.note });
         o.left++; if (r.userId) o.closeUserIds.push(r.userId);
@@ -838,6 +854,7 @@ private async applyPlan(schoolId: string, actorUserId: string, planId: string): 
 
   const planRow = await withTenant(schoolId, (tx) => tx.sessionPlan.findUnique({ where: { id: planId }, select: { fromYearId: true, toYearId: true, carryLeave: true } }));
   if (planRow?.carryLeave) await this.leavePolicy.closeYear(schoolId, planRow.fromYearId, planRow.toYearId);
+  // Every leaver's login closes — alumni included (spec D9 revised); the alumni door is the claim link sent in afterStart.
   for (const userId of outcome.closeUserIds) await closeLogin(userId);
   await this.audit.record({ schoolId, actorUserId, action: 'session.start', entity: 'SessionPlan', entityId: planId, meta: { moved: outcome.moved, alumni: outcome.alumni, left: outcome.left, slotsCopied: outcome.slotsCopied, slotsSkipped: outcome.slotsSkipped } });
   return outcome;
@@ -848,6 +865,8 @@ private async timezone(schoolId: string): Promise<string> {
   return s?.timezone ?? 'Asia/Kolkata';
 }
 ```
+
+`graduateBatchIn(tx, schoolId, dto)` is the transaction-taking half of `AlumniService.graduateBatch` — split the existing method so the public `graduateBatch` wraps `withTenant` around `graduateBatchIn`, behaviour unchanged (its spec stays green). Export nothing new from `modules/alumni/index.ts` beyond what is there; `AlumniService` is already exported. Inject `AlumniService` and `FeatureResolverService` (from `../features`) into `SessionsService`; add `AlumniModule` to `ManagementModule` imports if it is not already importable (check `alumni.module.ts` exports `AlumniService`). `StartOutcome` gains `alumniDoor: boolean` (default false).
 
 `startOfDayInZone(date: Date, tz: string): Date` goes in `internal/session-maths.ts`: build `YYYY-MM-DD` from the date's UTC parts, then find the instant at which that calendar day starts in `tz` (iterate: take `Date.UTC(y, m-1, d)`, compute the zone offset with `Intl.DateTimeFormat(…, { timeZoneName: 'shortOffset' })` or `formatToParts` hour/minute delta, subtract it). Add a spec case: `startOfDayInZone(new Date('2026-04-01T00:00:00Z'), 'Asia/Kolkata')` → `2026-03-31T18:30:00.000Z`.
 
@@ -872,20 +891,21 @@ git commit -m "feat(api): session review and Start (seats, alumni, year flip, ti
 
 **Interfaces:**
 - Produces:
-  - `MailService.sendAlumniWelcome(to, schoolName, loginName, signInUrl, schoolId): Promise<boolean>`
+  - `MailService.sendAlumniWelcome(to, schoolName, claimUrl, schoolId): Promise<boolean>`
   - `MailService.sendSessionStarted(to, schoolName, childName, className, sessionName, schoolId): Promise<boolean>`
-  - `private afterStart(schoolId, planId, outcome: StartOutcome): Promise<void>` — inbox rows (`emitNotifications`, kind `SESSION`) for families and teachers; emails to alumni with an address; pushes through the existing outbox as ANNOUNCEMENT payloads.
+  - `private afterStart(schoolId, planId, outcome: StartOutcome): Promise<void>` — inbox rows (`emitNotifications`, kind `SESSION`) for families and teachers; a claim-link email to every new alumnus with an address (only when `outcome.alumniDoor`); pushes through the existing outbox as ANNOUNCEMENT payloads.
+- Consumes: `AlumniAuthService.mintClaimToken(schoolId, alumniId)` (exported from `modules/alumni`); the claim URL format `https://<host>/alumni#claim=<token>` that `AlumniSection.tsx` reads.
 
 - [ ] **Step 1: Failing mail test**
 
 ```ts
-it('sendAlumniWelcome renders the subject, sign-in name and CTA', async () => {
-  const sent = await mail.sendAlumniWelcome('a@x.in', 'Raffles Public School', 'RAF-00042', 'https://raffles.sckools.com/login', SCHOOL);
+it('sendAlumniWelcome renders the subject and the claim link', async () => {
+  const sent = await mail.sendAlumniWelcome('a@x.in', 'Raffles Public School', 'https://raffles.sckools.com/alumni#claim=abc', SCHOOL);
   expect(sent).toBe(true);
   const call = transporter.sendMail.mock.calls[0][0];
   expect(call.subject).toBe('Your journey at Raffles Public School is complete');
-  expect(call.text).toMatch(/RAF-00042/);
-  expect(call.text).toMatch(/Sign in/);
+  expect(call.text).toMatch(/alumni#claim=abc/);
+  expect(call.text).toMatch(/Open your alumni door/);
 });
 ```
 
@@ -894,13 +914,12 @@ it('sendAlumniWelcome renders the subject, sign-in name and CTA', async () => {
 - [ ] **Step 2: Implement the templates**
 
 ```ts
-async sendAlumniWelcome(to: string, schoolName: string, loginName: string, signInUrl: string, schoolId: string | null = null): Promise<boolean> {
+async sendAlumniWelcome(to: string, schoolName: string, claimUrl: string, schoolId: string | null = null): Promise<boolean> {
   return this.sendLetter(to, schoolId, `Your journey at ${schoolName} is complete`, {
     title: 'Congratulations on passing out',
-    intro: `Your time at ${schoolName} is complete. Your Sckools login stays with you as an alumni account, so your results and records are always a sign-in away.`,
-    rows: [{ label: 'Sign-in name', value: loginName }],
-    cta: { label: 'Sign in', url: signInUrl },
-    note: 'Your password is unchanged. If you never set one, use "Forgot password" on the sign-in page with your sign-in name.',
+    intro: `Your time at ${schoolName} is complete, and the school would like to stay in touch. This link is your alumni sign-in: it opens your alumni page and keeps you signed in on that device for 90 days.`,
+    cta: { label: 'Open your alumni door', url: claimUrl },
+    note: 'The link works once. If it has been used or has expired, ask the school office for a new one — there is no password to remember.',
   });
 }
 
@@ -932,16 +951,27 @@ private async afterStart(schoolId: string, planId: string, o: StartOutcome): Pro
     }
   });
 
-  // Alumni emails: only students with an address (D12). Failures are logged, never thrown — Start already committed.
-  const alumni = await withTenant(schoolId, (tx) => tx.student.findMany({ where: { id: { in: o.alumniStudentIds }, email: { not: null } }, select: { email: true, code: true, firstName: true } }));
-  const signInUrl = `https://${school.slug}.${this.env.PLATFORM_HOST}/login`;
-  for (const a of alumni) {
-    if (!a.email) continue;
-    try { await this.mail.sendAlumniWelcome(a.email, school.name, a.code ?? a.firstName, signInUrl, schoolId); }
-    catch (e) { this.logger.warn(`alumni mail to ${a.email} failed: ${(e as Error).message}`); }
+  // Alumni door: a claim link per new alumnus with an address (D12), only when the
+  // wing is on. Failures are logged, never thrown — Start already committed.
+  if (o.alumniDoor && o.alumniStudentIds.length) {
+    const rows = await withTenant(schoolId, (tx) =>
+      tx.alumni.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, studentId: { in: o.alumniStudentIds }, email: { not: null } }, select: { id: true, email: true } }),
+    );
+    for (const a of rows) {
+      if (!a.email) continue;
+      try {
+        const { token } = await this.alumniAuth.mintClaimToken(schoolId, a.id);
+        const claimUrl = `https://${school.slug}.${this.env.PLATFORM_HOST}/alumni#claim=${token}`;
+        await this.mail.sendAlumniWelcome(a.email, school.name, claimUrl, schoolId);
+      } catch (e) {
+        this.logger.warn(`alumni claim mail to ${a.email} failed: ${(e as Error).message}`);
+      }
+    }
   }
 }
 ```
+
+Inject `AlumniAuthService` (exported from `modules/alumni`). The claim link is the credential (single use, then a 90-day device session) — there is no password to send.
 
 Inject `MailService` and a `Logger`; read `PLATFORM_HOST` via `loadEnv()` as `school-resolve.service.ts` does. Push notifications to families ride the existing outbox: write one `NotificationOutbox` row of kind `ANNOUNCEMENT` per moved family with the same title (mirror how `AnnouncementsService` writes its outbox row; copy that call shape exactly).
 
@@ -1122,7 +1152,11 @@ const STEPS = ['Next session', 'Classes', 'Decide students', 'Roll numbers', 'Co
 `CopyRestStep`: two checkboxes → `PATCH { copyTimetable, carryLeave }`; a link to `/app/settings` (holidays).
 `ReviewStep`: `GET /manage/sessions/plan/review` → counts grid, warnings list (undecided, unplaced, sections without class teacher, alumni without email, library books out), radio "Start now" / "Start on {toYear.startDate}", the Start button disabled while `counts.undecided > 0`; on click `POST /manage/sessions/plan/start { when, version }`; on 409 `PLAN_CHANGED` toast "The plan changed. Reloading." and refetch; "Cancel this plan" → `POST /manage/sessions/plan/cancel` after `window.confirm`.
 
-Nav: in `layout.tsx` add `{ href: '/app/sessions', label: 'Sessions', icon: CalendarRange, requiredFeature: 'MANAGEMENT' }` after Classes; import `CalendarRange` from lucide-react.
+Nav: the sidebar is `apps/web/app/app/nav-model.ts` (grouped). Add `{ href: '/app/sessions', label: 'Sessions', icon: CalendarRange, requiredFeature: 'MANAGEMENT' }` to the **People** group's `items` after Classes; import `CalendarRange` from lucide-react; extend `nav-model.test.ts` if it snapshots the model.
+
+Step header: add a `.sk-steps` class to `sk-theme.css` by copying the `.sk-eh-steps` recipe (same padding, `> button` layout, the `.n` number badge, `aria-selected` styling, `overflow-x: auto`) with a comment "shared step header — Exam Hall and Sessions", and use it with the same markup the Exam Hall page uses (`role="tablist"`, buttons with `role="tab"`, `aria-selected`, `<span className="n">`). Do not hand-roll a second stepper.
+
+Review step extras: when the site features include `FEES`, a link "Set up fees for {toYear.name}" to `/app/fees`; when they do not include `ALUMNI` and `counts.passOut > 0`, a `.sk-notice` line "Turn on the Alumni wing to give the Class of {year} their alumni door."
 
 - [ ] **Step 3: Run and commit**
 
@@ -1234,38 +1268,32 @@ git commit -m "feat(web): session picker for new admissions, past-sessions toggl
 
 ---
 
-### Task 12: Alumni home (portal + app), behaviour spec, preflight
+### Task 12: Final audit, behaviour spec, preflight, staging
 
 **Files:**
-- Modify: `apps/web/app/portal/page.tsx` (and the portal shell nav component that lists Diary/Timetable/…)
-- Modify: `apps/mobile/src/app/(family)/(tabs)/home/index.tsx`, `apps/mobile/src/app/(family)/(tabs)/_layout.tsx`
 - Modify: `.claude/skills/sckools-behavior-spec/…`
-- Test: `apps/web/app/portal/page.test.tsx` (extend or create), `apps/mobile/src/app/(family)/(tabs)/home/index.test.tsx` (extend)
+- Modify: whatever the audit finds (console `sk-theme.css`, the sessions page files, `students/page.tsx`)
 
-**Interfaces:**
-- Consumes: `GET /portal/profile` → `status`, `alumniBatch` (Track A).
+- [ ] **Step 1: Rehearse on staging with the Raffles tenant**
 
-- [ ] **Step 1: Failing tests**
+Push the branch to staging (`git push origin HEAD:staging`), then as `admin@raffles.test` / `password`: open a plan for the next session, copy the classes, decide two sections (one with a Stay in grade and a Leaving row, one final-grade section with Pass out), set roll numbers to alphabetical, review, Start now. Check: the students page shows the moved seats and the alumni chips, the Alumni page shows the new batch (the tenant has the ALUMNI override on staging; turn it on from the owner console if not), the register prints, a family login of a moved child shows the new class, the closed logins refuse, the alumni claim email reached the mail sink the staging API uses. Then open a second plan and cancel it.
 
-Web: render the portal home with a profile `{ status: 'ALUMNI', alumniBatch: '2025-26', firstName: 'Aarav' }` and assert `Alumni · Class of 2025-26` is shown, the "Results" and "Attendance" links exist, and "Diary" / "Timetable" links do not. Mobile: same assertions on the family home (`getByText('Alumni · Class of 2025-26')`, `queryByText('Diary')` null).
+- [ ] **Step 2: Render-and-look audit**
 
-- [ ] **Step 2: Implement**
-
-Web portal home: when `profile.status === 'ALUMNI'` render an `AlumniHome` block (heading `Alumni · Class of {alumniBatch}`, a line "Your results and records stay here.", cards for Results, Attendance record, Notifications) and pass `alumni` to the shell so its nav hides Diary, Timetable, Assignments, Messages, Library. When `status` is TRANSFERRED or LEFT the API login is already closed; no branch needed.
-
-Mobile family home: when the profile is ALUMNI, show the same header and only the Results, Attendance and Notifications entries; the tabs layout hides the Attendance-marking and Diary tabs for that session. Guard against the existing `useFocusEffect` refetch tests: mock `/portal/profile` in the home test's `api.request` mock (see the ledger entry `rn-header-widget-breaks-screen-tests`).
+Every Sessions screen at desktop and ~360px: the six-step header scrolls sideways on a phone without clipping the active step; the decide table scrolls inside `.sk-tblwrap`; decision buttons wrap to two rows, never overflow; pills use `data-tone`; disabled Start has a flat fill and a dark label; the empty plan state reads as a real card; the register prints on A4 (`print.css` precedent in `exam-hall`). Fix what is off.
 
 - [ ] **Step 3: Behaviour spec**
 
-Sessions section (new): "One open SessionPlan per school. Rows show attendance % and results % from the closing year; the pass mark only flags. Start is one transaction (`sessions.service.ts applyPlan`): seats move, PASS_OUT → ALUMNI with `alumniBatch` = closing year, LEAVE → the chosen status with the login closed after commit, the current year flips, the timetable copies for ACTIVE teachers only, leave carries forward via `closeYear`, pending register-change requests on closing sections are rejected. Scheduled plans start from `/internal/cron/session-start`. Alumni keep a read-only login (portal and app show the Alumni home). New admissions in next-year sections are untouched by Start."
+Sessions section (new): "One open SessionPlan per school. Rows show attendance % and results % from the closing year; the pass mark only flags. Start is one transaction (`sessions.service.ts applyPlan`): alumni graduate first through `AlumniService.graduateBatchIn` when ALUMNI is on, seats move, PASS_OUT → ALUMNI with `alumniBatch` = closing year, LEAVE → the chosen status, every leaver's login closes after commit, the current year flips, the timetable copies for ACTIVE teachers only, leave carries forward via `closeYear`, pending register-change requests on closing sections are rejected. Scheduled plans start from `/internal/cron/session-start`. New alumni with an email get a Homecoming claim link. New admissions in next-year sections are untouched by Start."
 
 - [ ] **Step 4: Preflight and commit**
 
 Run: `pnpm preflight` → all green.
 
 ```bash
-git add apps/web/app/portal apps/mobile/src/app/\(family\) .claude/skills/sckools-behavior-spec
-git commit -m "feat: alumni home in portal and app; sessions invariants in the behaviour spec"
+git add .claude/skills/sckools-behavior-spec apps/web/app/sk-theme.css apps/web/app/app/sessions
+git commit -m "feat(sessions): audit fixes; sessions invariants in the behaviour spec"
+git push origin HEAD:staging
 ```
 
-Report: what shipped; that migrations `20260910090000_person_lifecycle`, `20260911090000_celebrations`, `20260912090000_session_plans` are pending on staging; that the cron entry needs the CRON secret configured on the staging API project; and that the first real run should be rehearsed on the Raffles sample tenant on staging (open a plan, decide two classes, Start now, check the register, the family app and the alumni email).
+Report: what shipped; that migrations `20260910090000_person_lifecycle`, `20260911090000_celebrations`, `20260912090000_session_plans` apply on the staging push and must be run on production by the user before the PR to main; that the cron entry needs the CRON secret configured on the API project; and what the Raffles rehearsal showed.

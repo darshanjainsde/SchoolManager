@@ -16,9 +16,13 @@ Plans: `docs/superpowers/plans/2026-09-09-active-roster-a-lifecycle.md`, `…-b-
 
 ## 0. Hard boundaries
 
-- Branch `feat/active-roster`, cut from `main` at db0a76e, in the worktree `/Users/darshanjain/Worktrees/SchoolManager-roster`. Do not work in `/Users/darshanjain/Documents/SchoolManager/SchoolManager` (595 commits behind, iCloud " 2" duplicates).
-- Stage files by path. Never `git add -A`. Never push; the user gates every push. Run `pnpm preflight` before asking to push.
-- Never touch the production Supabase project. Staging first (`test.sckools.com`). Migrations run on staging by the user.
+- **Revised 2026-09-09 after syncing.** `origin/main` and `origin/staging` were fast-forwarded to the same commit (78969b3). Branch `feat/active-roster` is cut from `origin/staging` in the worktree `/Users/darshanjain/Worktrees/SchoolManager-roster`. Do not work in `/Users/darshanjain/Documents/SchoolManager/SchoolManager` (stale branch, iCloud " 2" duplicates). Never diff against a local `main`/`staging` ref; fetch and compare with `origin/*` (repo `CLAUDE.md` rule 3).
+- Ship order: `git push origin HEAD:staging` → verify on `raffles.test.sckools.com` (every login's password is `password`) → PR from `staging` to `main`. Staging applies migrations on push. **Production migrations are additive here (new columns with defaults, new tables), so the user runs them on production BEFORE the merge to main deploys** — old code ignores new columns; new code on an unmigrated database does not.
+- Stage files by path. Never `git add -A`. The user gates every push. Run `pnpm preflight` before asking to push.
+- Never touch the production Supabase project. Never seed production.
+- Follow the repo's standing rules: `CLAUDE.md`, `.claude/skills/sckools-ui-taste/SKILL.md` before any UI, `docs/superpowers/LIBRARY-TRAPS.md`, the mistake ledger. Every list query carries `take: LIST_CEILING.*`; every new `ApiError` code joins the `ErrorCode` union in `common/errors/api-error.ts`; new tables get the `tenant_iso` RLS policy; reads of new tables degrade with `isSchemaMissing` until the migration lands.
+- Backend stays lightweight and stateless: no in-memory plan state, no long-lived jobs. Percentages are computed on read; Start is one transaction; the scheduled start is a cron hit that re-reads status.
+- Existing wings this design plugs into instead of duplicating: **Homecoming** (`modules/alumni`: `Alumni` records, `graduateBatch`, claim-link login), **Press** (`modules/press`: Transfer Certificates gated on fee dues), **Fees** (ledger balance), **Exam Hall** (the console's three-step plan UI is the pattern for the Sessions steps).
 - Every roster or recipient query that lists students goes through `activeStudentsWhere()` (§2.5). A guard test enforces it.
 - Copy is plain English for an Indian school office. Buttons say what happens. No emoji inside text nodes that tests assert on.
 - Motion respects `animationLevel = NONE` and `prefers-reduced-motion`. Particle positions are constant tables, never `Math.random()` at render.
@@ -35,7 +39,7 @@ Plans: `docs/superpowers/plans/2026-09-09-active-roster-a-lifecycle.md`, `…-b-
 | D6 | Year-end tool ships in track C. Multi-select "Mark as left" ships in track A so a school is never stuck. |
 | D7 | First designs: teasers **Cake badge** and **Ribbon**; pages **Party Wall**, **Month Planner**, **Notice Board**. |
 | D8 | `/birthdays` is `noindex` by default. |
-| D9 | Alumni keep their login in a read-only alumni mode. Transferred and Left logins close. |
+| D9 | **Revised after sync:** every leaving student's STUDENT login closes, alumni included. Alumni get the Homecoming door instead (an `Alumni` record made by the existing `graduateBatch`, and a claim link emailed as their credential) when the school has the ALUMNI feature. Children's logins are for children; the alumni wing is the adult door, and it already exists. |
 | D10 | The pass mark (default 33%) only flags a child for review. It never decides. |
 | D11 | Start now and Start on the session start date are both offered. |
 | D12 | Alumni emails go to students with an email on record. The office gets a printable list of the rest. |
@@ -58,10 +62,10 @@ Staff:    same as Teacher
 
 1. `Student.status`, `leftOn`, `leftReason`, `leftNote`, `alumniBatch` (ALUMNI only; defaults to the current academic year's name), `statusChangedAt = now()`, `statusChangedById = actor`, `isActive = false`.
 2. `classSectionId` is **kept** (last class, for history). Rosters filter on status, not on the seat.
-3. Login: for TRANSFERRED and LEFT, `User.isActive = false` and every open refresh token revoked (platform client, same as `TeachersService.release`). For ALUMNI the login stays open (D9).
+3. Login: for every leaving status, `User.isActive = false` and every open refresh token revoked (platform client, same as `TeachersService.release`). Alumni are handed to Homecoming (§4.7), never kept on a child's login (D9, revised).
 4. `AuditService.record({ action: 'student.leave', entity: 'Student', entityId, meta: { status, leftOn, reason } })`.
 
-Before confirming, the console shows `GET /manage/students/:id/clearance` → `{ libraryIssuesOut, finesDueRupees, unsignedRemarks }`. Warn, never block.
+Before confirming, the console shows `GET /manage/students/:id/clearance` → `{ libraryIssuesOut, finesDueRupees, feeDuesRupees, unsignedRemarks, hasHistory }`. `feeDuesRupees` reads the fee ledger through the fees module's exported query service (the same balance the Press uses to gate a TC); 0 when FEES is off. Warn, never block. When PRESS is on, the dialog links to "Order a Transfer Certificate" in the Print Store after marking.
 
 Bulk: the Students page multi-select sends one request per student (sequential, with a progress count). No bulk endpoint.
 
@@ -104,10 +108,9 @@ Guard: `internal/roster-filter.spec.ts` reads each file above and asserts every 
 
 ### 2.6 Login, the gate and the app
 
-- Transferred/Left: `User.isActive=false`; `/auth/login` answers the existing "Invalid credentials"; `/auth/refresh` answers "User no longer active".
-- `school-resolve` no longer returns a school for a Left child's code. The app gate copy for an empty result becomes: "This code is not enrolled at any school. Ask the school office."
-- Mobile family shelf: when a child's refresh fails with 401 "User no longer active", `family-store` marks that child `closed: true`. The shelf card shows "No longer enrolled at {school}" with a Remove button and does not try to refresh again. Siblings are untouched.
-- Alumni: the portal `/portal/profile` returns `status` and `alumniBatch`. The web portal home and the app family home show an **Alumni** home: results, attendance record, notifications. Diary, timetable, assignments and messages are hidden. (Track C ships these screens; track A ships the `status` field on the profile.)
+- Any leaving status: `User.isActive=false`; `/auth/login` answers the existing "Invalid credentials"; `/auth/refresh` answers "User no longer active".
+- `school-resolve` no longer returns a school for a left child's code (`status: 'ACTIVE'` only). The app gate copy for an empty result becomes: "This code is not enrolled at any school. Ask the school office."
+- Mobile family shelf: when a child's refresh fails with 401 "User no longer active", `family-store` marks that child `closed: true`. The shelf card shows "No longer enrolled at {school}" with a Remove button and does not try to refresh again. Siblings are untouched. An alumni child's card says "Passed out · Class of {batch}" and, when the school has the Alumni wing, "Look for the alumni link in your email".
 
 ### 2.7 Teacher: remove from this school
 
@@ -173,9 +176,10 @@ Per student: `Student.showOnWebsite` (default true) and `Student.photoConsent` (
 - `GET /portal/birthdays?window=` (STUDENT jwt). 404 unless `showBirthdays` and audience is FAMILIES or BOTH.
 - Public site projection adds `celebrations: { enabled, placement, audience, teaser, page, nameFormat, showClass, wishLine, window }` (no rows; the page fetches rows).
 - Homepage teaser (`placement = TEASER_AND_PAGE`, audience PUBLIC/BOTH): Cake badge (corner pill) or Ribbon (strip under the nav). Click → `/birthdays`.
-- `/birthdays` page: `<PublicSite view="birthdays">` → `BirthdaysSection` with the chosen page style. `metadata.robots = { index: false, follow: false }`.
-- Nav key `birthdays` under "Our school", `has: flags.hasBirthdays`.
-- Portal: `/portal/birthdays` renders the same section for signed-in families. The app card is track-2 work, not here.
+- `/birthdays` page lives under the host route like every school page: `apps/web/app/s/[host]/birthdays/page.tsx` with `revalidate = 60`, `generateStaticParams` returning `[]`, `loadSchoolSite(host)`, and `<PublicSite view="birthdays" birthdays={rows}>`. The path is added to both school-path lists in `apps/web/middleware.ts` (the rewrite list and the cacheable list). `metadata.robots = { index: false, follow: false }`.
+- Nav key `birthdays` under "Our school", `has: flags.hasBirthdays`, beside the existing `alumni` key.
+- Portal: `/portal/birthdays` renders the same section for signed-in families (the portal already has `nav-items.ts`; add the entry only when the API answers 200). The app card is track-2 work, not here.
+- Public styling uses `.ps-*` only, `var(--ps-radius)` for corners, brand through `--ps1/--ps2/--ink/--paper`; `BirthdaysSection` is registered in `section-shape-coverage.test.ts`.
 
 ### 3.4 Privacy
 
@@ -229,7 +233,7 @@ One `withTenant` transaction:
 7. Pending `RegisterChangeRequest` rows on closing sections → `REJECTED`.
 8. Each `SessionDecision` gets `fromSectionId` (snapshot) and `appliedAt`. Plan `status = STARTED`, `startedAt`, `startedById`. Audit `session.start` with the counts.
 
-After commit: notifications and emails (§8). Login closures for LEAVE rows happen after commit through the platform client, as in `TeachersService.release`.
+Order inside the transaction: alumni graduation (§4.7 step 2) first, then seats, then leaves, then the year flip, then copies. After commit: login closures for every PASS_OUT and LEAVE row through the platform client (as in `TeachersService.release`), then notifications and emails (§8). Fee terms and plans are per year and are not copied: the review screen links to "Set up fees for {toYear}" when FEES is on.
 
 ### 4.5 Review payload
 
@@ -239,11 +243,16 @@ After commit: notifications and emails (§8). Login closures for LEAVE rows happ
 
 `when = 'ON_START_DATE'` sets `status = SCHEDULED`, `scheduledFor = toYear.startDate at 00:00 in School.timezone`. `GET|POST /internal/cron/session-start` (CronSecretGuard) runs `SessionsService.startDue()`: every SCHEDULED plan with `scheduledFor <= now()` is started; idempotent because `start` re-checks status inside the transaction. Vercel cron `"30 18 * * *"` (00:00 IST).
 
-### 4.7 Alumni
+### 4.7 Alumni (revised: the Homecoming door)
 
-Status ALUMNI keeps the login. Email (`MailService.sendAlumniWelcome`) to `Student.email` when present: subject "Your journey at {school} is complete", rows Sign-in name = code, CTA "Sign in" (or a set-password link when no login exists yet — created through `LoginInviteService`). The review screen shows `alumniWithoutEmail` and the register has a "Print alumni letters" filter.
+PASS_OUT does two things inside Start:
 
-Portal (`GET /portal/profile`) returns `status` and `alumniBatch`. The web portal home and the app family home render the Alumni home when `status = 'ALUMNI'`: results, attendance history, notifications; nothing else.
+1. The student leave transition with `status = ALUMNI`, `alumniBatch = fromYear.name`, `leftOn = fromYear.endDate`. The student login closes after commit like every other leave.
+2. When the school has the ALUMNI feature: `AlumniService.graduateBatch(schoolId, { classSectionIds: <the closing sections with at least one PASS_OUT>, batchYear })` where `batchYear = fromYear.endDate.getUTCFullYear()`. It is the existing forward engine, idempotent on `(schoolId, studentId)`, and it runs **before** the students' seats or statuses change so it reads them as the active roster it expects. Without the feature, step 2 is skipped and the review screen says "Turn on the Alumni wing to give the Class of {year} their alumni door."
+
+The journey-complete email, after commit, per new alumnus with an email on record (D12): `AlumniAuthService.mintClaimToken(schoolId, alumniId)` → `MailService.sendAlumniWelcome(to, schoolName, claimUrl, schoolId)` where `claimUrl = https://<school host>/alumni#claim=<token>` (the format `AlumniSection` already reads). Subject "Your journey at {school} is complete". Body: congratulations, "your alumni link is your sign-in; it works once and opens a 90-day session; ask the office for a new one any time". Failures are logged, never thrown. Alumni without an email appear in the review count and in the register's "no email" filter; the office sends their links from the Alumni page as it does today.
+
+No alumni mode in the student portal or the family app. The alumni wing is the adult door.
 
 ### 4.8 New admissions around year end
 
@@ -362,21 +371,24 @@ Migrations: `20260910090000_person_lifecycle` (A), `20260911090000_celebrations`
 | `GET /manage/classes?academicYearId=` | ADMIN, TEACHER | C |
 | `GET /manage/sessions`, `POST /manage/sessions/plan`, `GET/PATCH /manage/sessions/plan`, `POST …/plan/structure/copy`, `GET …/plan/students?sectionId=`, `PUT …/plan/decisions`, `GET …/plan/review`, `POST …/plan/start`, `POST …/plan/cancel`, `GET /manage/sessions/:yearId/register` | ADMIN | C |
 | `GET\|POST /internal/cron/session-start` | cron secret | C |
-| `GET /portal/profile` adds `status`, `alumniBatch` | STUDENT | A |
+| (removed after sync) portal alumni mode — Homecoming is the alumni door | — | — |
 
 ## 7. Screens
 
-- **Students** (`/app/students`): status tabs Active · Alumni & left · All; status chip and leave date on rows; row menu Mark as left… / Re-admit / Delete (only when no history); multi-select bar with Mark as left; Session select in the Add/Edit form when a next session exists; "Show past sessions" toggle on the class filter.
+Console screens use the `.sk-*` kit exactly as the neighbouring page does: `.sk-tabs/.sk-tab` for the status tabs, `.sk-pill[data-tone]` for status chips, `.sk-notice` (amber) for clearance warnings, `.sk-switch` for toggles, `.sk-card` + `.sk-card-h`, `.sk-tbl` inside `.sk-tblwrap`, the local `DialogShell` recipe (extracted once to `components/ui/dialog-shell.tsx` and reused by the students and staff-attendance pages that each carry a copy), and a `.sk-steps` class copied from the Exam Hall's `.sk-eh-steps` recipe for the six-step header. No literal hex; `var(--sk-*)` only. Every new screen is looked at rendered, at desktop and at ~360px, before it is called done.
+
+- **Students** (`/app/students`): status tabs Active · Alumni & left · All; status chip and leave date on rows; row actions Mark as left… / Re-admit / Delete (Delete only when the clearance says no history); multi-select bar with Mark as left; Session select in the Add/Edit form when a next session exists; "Show past sessions" toggle on the class filter; TC link to the Print Store when PRESS is on.
 - **Teachers / Staff**: "Remove from this school…" opens the impact sheet (§2.7) with the handover controls; Reactivate on inactive rows.
 - **Website → Homepage**: Birthdays checkbox + placement radio. **Website → Celebrations** tab: source, window, show, audience (with the consent confirmation), teaser style, page style, wish line, this-week preview with hide switches, missing-DOB notice.
-- **Sessions** (`/app/sessions`, nav item with `CalendarRange` icon, MANAGEMENT): current session card, the six-step plan, the register for started sessions.
-- **Public**: teaser on the homepage, `/birthdays` page. **Portal**: `/portal/birthdays`; Alumni home.
-- **Mobile**: shelf card "No longer enrolled"; family home Alumni state.
+- **Sessions** (`/app/sessions`, in the People group of `app/app/nav-model.ts` after Classes, icon `CalendarRange`, MANAGEMENT): current session card, the six-step plan, the register for started sessions.
+- **Public**: teaser on the homepage, `/birthdays` page under the host route. **Portal**: `/portal/birthdays`.
+- **Mobile**: shelf card "No longer enrolled" / "Passed out".
+- **Final audit** (its own task at the end of each track): open every new screen on staging at desktop and phone width, check hover, disabled, selected, empty, loading and error states, and fix what is off before the PR to main.
 
 ## 8. Notifications and email
 
 - Start: `emitNotifications(kind 'SESSION')` per moved student's user: "{first name} is in Class 6A for 2026-27". Per teacher with a class-teacher or timetable assignment: "Your classes for 2026-27: 6A (class teacher), 7B, 8C". Push through the existing outbox using kind `ANNOUNCEMENT` payloads (no new outbox kind).
-- `MailService.sendAlumniWelcome(to, schoolName, loginName, signInUrl, schoolId)` and `MailService.sendSessionStarted(to, schoolName, childName, className, sessionName, schoolId)`.
+- `MailService.sendAlumniWelcome(to, schoolName, claimUrl, schoolId)` (§4.7) and `MailService.sendSessionStarted(to, schoolName, childName, className, sessionName, schoolId)`.
 
 ## 9. Tests and guards
 
@@ -391,4 +403,4 @@ A (11 tasks) → B (7 tasks) → C (12 tasks). B and C can run in parallel after
 
 ## 11. Not in this project
 
-Teacher self-service "I have left" request and owner-console force release; staff date of birth and staff birthdays; the app's birthday card and the child's own birthday screen; leaving-certificate print; alumni wall page; the remaining teaser and page designs (Balloons, Desk calendar, Bunting, Sky Lanterns, Cake & Candles, Ruled Register).
+Teacher self-service "I have left" request and owner-console force release; staff date of birth and staff birthdays; the app's birthday card and the child's own birthday screen; copying fee plans between years; the remaining teaser and page designs (Balloons, Desk calendar, Bunting, Sky Lanterns, Cake & Candles, Ruled Register). Transfer Certificates and the alumni wall already exist (Press, Homecoming) and are linked to, not rebuilt.

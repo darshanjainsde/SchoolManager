@@ -811,35 +811,45 @@ Ribbon CSS: brand background, 28px tall, the track duplicated once and animated 
 - Teaser: when `view === 'home' && hasBirthdays && data.celebrations!.placement === 'TEASER_AND_PAGE' && birthdays` render `<BirthdayTeaser style={data.celebrations!.teaser} data={birthdays} href="/birthdays" />` — the RIBBON directly under `SiteNav`, the CAKE_BADGE at the end of the page body (it is fixed-position). When a festive theme is active and the teaser is CAKE_BADGE, keep it; when it is the ribbon, keep it too (no particle layer of its own).
 - View branch: `{view === 'birthdays' && birthdays && <BirthdaysSection data={birthdays} style={data.celebrations!.page} wishLine={data.celebrations!.wishLine} schoolName={schoolName} onOwnPage />}`.
 
-`nav-model.ts`: add `hasBirthdays: boolean` to the flags type, `birthdays: { href: '/birthdays', has: flags.hasBirthdays, label: 'Birthdays' }` in the table, and `...(flags.hasBirthdays ? [{ key: 'birthdays', label: 'Birthdays', href: '/birthdays' }] : [])` in the "Our school" group after Hall of Fame. Update `nav-model.test.ts` fixtures with `hasBirthdays: false`.
+`nav-model.ts`: add `hasBirthdays: boolean` to the flags type, `birthdays: { href: '/birthdays', has: flags.hasBirthdays, label: 'Birthdays' }` in the table right after the existing `alumni` entry, and `...(flags.hasBirthdays ? [{ key: 'birthdays', label: 'Birthdays', href: '/birthdays' }] : [])` in the "Our school" group after Hall of Fame. Both `flags={{ … }}` call sites in `PublicSite.tsx` (there are two: nav and footer) gain `hasBirthdays`. Update `nav-model.test.ts` fixtures with `hasBirthdays: false`.
 
-- [ ] **Step 6: Routes**
+Styling: `.ps-*` only; brand through `--ps1`/`--ps2`/`--ink`/`--paper`; corners `var(--ps-radius)`; text on cream never lighter than `text-slate-500`; disabled states get a flat fill. Look at each style rendered at desktop and ~360px (extract `PS_CSS` into a static page as the taste skill describes).
 
-`apps/web/app/birthdays/page.tsx`:
+- [ ] **Step 6: Routes (host route, like every school page)**
+
+`apps/web/app/s/[host]/birthdays/page.tsx` — copy the shape of `apps/web/app/s/[host]/gallery/page.tsx` exactly:
 
 ```tsx
-import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { fetchPublicSite, fetchPublicBirthdays } from '@/lib/public-api';
+import { notFound } from 'next/navigation';
 import PublicSite from '@/components/public/PublicSite';
-import { isPlatformHost } from '@/lib/hosts';
-import { getRequestHost } from '@/lib/request';
+import { loadSchoolSite } from '@/lib/school-view';
+import { fetchPublicBirthdays } from '@/lib/public-api';
 
+// Literal, not an imported constant: Next requires segment config to be
+// statically analysable and rejects the build otherwise.
+export const revalidate = 60;
+export function generateStaticParams(): { host: string }[] {
+  return [];
+}
 // Children's names are not search results (D8).
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-export default async function BirthdaysPage() {
-  const host = await getRequestHost();
-  if (isPlatformHost(host)) notFound();
-  const data = await fetchPublicSite(host);
-  if (!data || !data.celebrations?.enabled) notFound();
-  const birthdays = await fetchPublicBirthdays(host, data.celebrations.window);
+export default async function SchoolBirthdays({ params }: { params: Promise<{ host: string }> }) {
+  const { host } = await params;
+  const data = await loadSchoolSite(host);
+  if (!data.celebrations?.enabled) notFound();
+  const birthdays = await fetchPublicBirthdays(decodeURIComponent(host), data.celebrations.window);
   if (!birthdays) notFound();
   return <PublicSite data={data} view="birthdays" birthdays={birthdays} />;
 }
 ```
 
-Home page (`apps/web/app/page.tsx`): when `data.celebrations?.enabled && placement === 'TEASER_AND_PAGE'`, also `await fetchPublicBirthdays(host, 'WEEK')` and pass `birthdays` to `<PublicSite>`.
+`apps/web/middleware.ts`: add `'/birthdays'` to BOTH school-path lists (the rewrite list near line 70 and the cacheable list near line 109) and to the `matcher` array next to `'/gallery'`. Add the path to `apps/web/app/public-cache.test.ts` if that test enumerates the cacheable school paths.
+
+Home page (`apps/web/app/s/[host]/page.tsx`): when `data.celebrations?.enabled && data.celebrations.placement === 'TEASER_AND_PAGE'`, also `await fetchPublicBirthdays(decodeURIComponent(host), 'WEEK')` and pass `birthdays` to `<PublicSite>`.
+
+Register `BirthdaysSection` in `apps/web/components/public/section-shape-coverage.test.ts` (every corner uses `var(--ps-radius)` / `var(--ps-radius-sm)`; no hand-written `rounded-*`).
 
 `apps/web/app/portal/birthdays/page.tsx`: a client page under the portal shell that calls `useApi().get('/portal/birthdays')`, reads the site config through the existing portal site-data hook (or `fetchPublicSite` on the server part of the page), and renders `<BirthdaysSection … onOwnPage />`. Link it from the portal home as "Birthdays" when the API answers 200.
 
@@ -921,15 +931,18 @@ git commit -m "feat(web): Celebrations tab, placement radio, per-student wall an
 
 Public site section: "Birthdays render only when `HomepageContent.showBirthdays` and the audience allows the viewer (public host: PUBLIC/BOTH; portal: FAMILIES/BOTH). Rows carry day and month only (`public-birthdays.service.ts`). Photos need `photoConsent`. Today is computed in `School.timezone`; 29 Feb shows on 28 Feb in a non-leap year. `/birthdays` is noindex."
 
-- [ ] **Step 2: Preflight**
+- [ ] **Step 2: Render-and-look audit**
+
+On staging (`raffles.test.sckools.com`) with the Raffles admin: turn Birthdays on, try both teasers and all three page styles, at desktop and ~360px; check the empty-today state, a child without a photo, the ribbon paused on hover, the page with the festive overlay on, and the Celebrations tab with the consent block open. Fix what is off before the gate.
+
+- [ ] **Step 3: Preflight, commit, push to staging**
 
 Run: `pnpm preflight` → all green.
-
-- [ ] **Step 3: Commit**
 
 ```bash
 git add .claude/skills/sckools-behavior-spec
 git commit -m "docs(spec): birthdays invariants"
+git push origin HEAD:staging
 ```
 
-Report: what shipped, that migration `20260911090000_celebrations` is pending on staging, and that the remaining designs (Balloons, Desk calendar, Bunting; Sky Lanterns, Cake & Candles, Ruled Register) are backlog.
+Report: what shipped, that migration `20260911090000_celebrations` applies on the staging push and must be run on production by the user before the PR to main, and that the remaining designs (Balloons, Desk calendar, Bunting; Sky Lanterns, Cake & Candles, Ruled Register) are backlog.

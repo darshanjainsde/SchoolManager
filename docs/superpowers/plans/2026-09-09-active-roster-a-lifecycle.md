@@ -12,7 +12,9 @@
 
 ## Global Constraints
 
-- Work only in `/Users/darshanjain/Worktrees/SchoolManager-roster` on branch `feat/active-roster`. Stage files by path; never `git add -A`; never push.
+- Work only in `/Users/darshanjain/Worktrees/SchoolManager-roster` on branch `feat/active-roster` (cut from `origin/staging` at 78969b3). Stage files by path; never `git add -A`; never push. Ship: `git push origin HEAD:staging` after `pnpm preflight`, verify on `raffles.test.sckools.com`, then a PR from `staging` to `main` after the user has run the production migration.
+- Read `CLAUDE.md`, `.claude/skills/sckools-ui-taste/SKILL.md` and `docs/superpowers/LIBRARY-TRAPS.md` in the worktree before the first edit. Every list query carries `take: LIST_CEILING.ROSTER` (people) or `LIST_CEILING.STRUCTURE` (sections, grades) from `apps/api/src/common/lists/list-ceiling.ts`. Every new `ApiError` code is added to the `ErrorCode` union in `apps/api/src/common/errors/api-error.ts` with a one-line comment, as the Homecoming codes are.
+- **Every** leaving status closes the student login (spec D9 revised). Alumni are handed to the Homecoming wing in Track C.
 - `isActive` is written only by lifecycle code and always equals `status === 'ACTIVE'`.
 - Every student roster/recipient query carries `status` via `activeStudentsWhere()`; `common/roster/roster-filter.spec.ts` must stay green.
 - No new feature key. Every new manage route stays behind `SchoolJwtGuard, RequireFeatureGuard('MANAGEMENT'), RolesGuard('SCHOOL_ADMIN')`.
@@ -452,11 +454,11 @@ describe('leave', () => {
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'student.leave', entityId: STUDENT }));
   });
 
-  it('ALUMNI keeps the login open and fills the batch from the current year', async () => {
+  it('ALUMNI closes the login too and fills the batch from the current year', async () => {
     const { svc } = service();
     await svc.leave(SCHOOL, ACTOR, STUDENT, { status: 'ALUMNI', leftOn: '2026-03-31' });
     expect(txMock.student.update.mock.calls[0][0].data).toMatchObject({ status: 'ALUMNI', alumniBatch: '2025-26', isActive: false });
-    expect(platformMock.user.update).not.toHaveBeenCalled();
+    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { isActive: false } });
   });
 
   it('refuses when the student is not ACTIVE', async () => {
@@ -490,10 +492,12 @@ describe('clearance', () => {
     txMock.result.count.mockResolvedValue(0);
     txMock.messageThread.count.mockResolvedValue(0);
     const c = await svc.clearance(SCHOOL, STUDENT);
-    expect(c).toEqual({ libraryIssuesOut: 2, finesDueRupees: 150, unsignedRemarks: 1, hasHistory: true });
+    expect(c).toEqual({ libraryIssuesOut: 2, finesDueRupees: 150, feeDuesRupees: 0, unsignedRemarks: 1, hasHistory: true });
   });
 });
 ```
+
+(`feeDuesRupees` comes from the fees module's exported query service — open `apps/api/src/modules/fees/fee-query.service.ts`, find the method the Press's `certificate.service.ts` mirrors for `ledgerBalanceMinor`, and call that; the spec above passes a `fees` mock returning 0. Balances in the ledger are in minor units; divide by 100 and round.)
 
 - [ ] **Step 2: Run it to see it fail**
 
@@ -663,6 +667,8 @@ import type { LeaveStudentDto, ReadmitStudentDto } from './management.dto';
 export interface StudentClearance {
   libraryIssuesOut: number;
   finesDueRupees: number;
+  /** Fee ledger balance in rupees (0 when FEES is off) — the same balance the Press reads before a TC. */
+  feeDuesRupees: number;
   unsignedRemarks: number;
   hasHistory: boolean;
 }
@@ -679,8 +685,9 @@ export class StudentLifecycleService {
     const { userId, status } = await withTenant(schoolId, (tx) =>
       applyStudentLeave(tx, { schoolId, actorUserId, studentId, status: dto.status, leftOn, reason: dto.reason, note: dto.note, alumniBatch: dto.alumniBatch }),
     );
-    // Alumni keep their login (D9). Everyone else is signed out for good.
-    if (userId && status !== 'ALUMNI') await closeLogin(userId);
+    // A child's login ends with their time at the school. Alumni get the
+    // Homecoming door instead (Track C) — never a child's account kept open.
+    if (userId) await closeLogin(userId);
     await this.audit.record({ schoolId, actorUserId, action: 'student.leave', entity: 'Student', entityId: studentId, meta: { status, leftOn: dto.leftOn, reason: dto.reason ?? null } });
     return { id: studentId, status, leftOn: dto.leftOn };
   }
@@ -1133,54 +1140,49 @@ git commit -m "feat(api): teacher release with handover, staff release, reactiva
 
 ---
 
-### Task 7: Public site, portal profile
+### Task 7: Public site drops left teachers
 
 **Files:**
-- Modify: `apps/api/src/modules/public/public-site.service.ts` (~line 36, `featuredStaff.findMany`)
-- Modify: `apps/api/src/modules/portal/portal.service.ts` (`profile()`), `apps/api/src/modules/portal/portal.dto.ts` (`Profile`)
-- Test: `apps/api/src/modules/portal/portal.service.spec.ts`, `apps/api/src/modules/public/public-site.service.spec.ts` (create the case if the file exists; otherwise add a focused spec)
+- Modify: `apps/api/src/modules/public/public-site.service.ts` (the `featuredStaff.findMany` in `getSite`)
+- Test: `apps/api/src/modules/public/public-site.service.spec.ts` (add the case; create the file with the txMock scaffold if it does not exist)
 
 **Interfaces:**
-- Produces: `Profile.status: 'ACTIVE'|'ALUMNI'|'TRANSFERRED'|'LEFT'`, `Profile.alumniBatch: string | null`.
+- Produces: the public `staff` projection never includes a FeaturedStaff row whose linked teacher has `status = LEFT`.
 
-- [ ] **Step 1: Failing portal spec case**
+- [ ] **Step 1: Failing spec case**
 
 ```ts
-it('profile carries status and alumniBatch', async () => {
-  txMock.student.findFirst.mockResolvedValue({ id: 's1', firstName: 'A', lastName: 'M', status: 'ALUMNI', alumniBatch: '2025-26', photoAssetId: null, classSection: null });
-  const p = await svc.profile('u1');
-  expect(p).toMatchObject({ status: 'ALUMNI', alumniBatch: '2025-26' });
+it('featured staff linked to a LEFT teacher are not queried', async () => {
+  txMock.featuredStaff.findMany.mockResolvedValue([]);
+  await svc.getSite();
+  expect(txMock.featuredStaff.findMany.mock.calls[0][0].where).toEqual({ schoolId: SCHOOL, OR: [{ teacherId: null }, { teacher: { status: 'ACTIVE' } }] });
 });
 ```
 
 - [ ] **Step 2: Run to see it fail**
 
-Run: `pnpm --filter @skoolos/api test -- modules/portal/portal.service.spec.ts -t "status and alumniBatch"`
-Expected: FAIL (fields absent).
+Run: `pnpm --filter @skoolos/api test -- modules/public/public-site`
+Expected: FAIL (the where is `{ schoolId }`).
 
 - [ ] **Step 3: Implement**
 
-In `portal.dto.ts` add to `Profile`: `status: 'ACTIVE' | 'ALUMNI' | 'TRANSFERRED' | 'LEFT'; alumniBatch: string | null;`. In `portal.service.profile()` return `status: s.status, alumniBatch: s.alumniBatch`.
-
-In `public-site.service.ts` change the featured-staff query to:
-
 ```ts
 tx.featuredStaff.findMany({
+  take: LIST_CEILING.STRUCTURE,
   where: { schoolId, OR: [{ teacherId: null }, { teacher: { status: 'ACTIVE' } }] },
   orderBy: { order: 'asc' },
 }),
 ```
 
-- [ ] **Step 4: Run**
+(Keep whatever `take` the query already has if one is present.)
 
-Run: `pnpm --filter @skoolos/api test -- modules/portal modules/public`
-Expected: PASS.
+- [ ] **Step 4: Run and commit**
 
-- [ ] **Step 5: Commit**
+Run: `pnpm --filter @skoolos/api test -- modules/public` → PASS.
 
 ```bash
-git add apps/api/src/modules/public/public-site.service.ts apps/api/src/modules/portal/portal.service.ts apps/api/src/modules/portal/portal.dto.ts apps/api/src/modules/portal/portal.service.spec.ts
-git commit -m "feat(api): drop left teachers from Educators; portal profile carries status"
+git add apps/api/src/modules/public/public-site.service.ts apps/api/src/modules/public/public-site.service.spec.ts
+git commit -m "fix(api): the Educators band never shows a teacher who has left"
 ```
 
 ---
@@ -1283,9 +1285,12 @@ git commit -m "feat(mobile): shelf shows a closed child instead of breaking"
 ### Task 9: Console — Students page tabs, Mark as left, Re-admit, delete guard, multi-select
 
 **Files:**
+- Create: `apps/web/components/ui/dialog-shell.tsx` (the `DialogShell` currently duplicated in `students/page.tsx` and `staff-attendance/page.tsx`, moved once; both pages import it)
 - Create: `apps/web/app/app/students/leave-dialog.tsx`
-- Modify: `apps/web/app/app/students/page.tsx`
+- Modify: `apps/web/app/app/students/page.tsx`, `apps/web/app/app/staff-attendance/page.tsx` (import the shared shell)
 - Test: `apps/web/app/app/students/leave-dialog.test.tsx`, `apps/web/app/app/students/page.test.tsx` (create)
+
+**Kit rules for this task (from `sckools-ui-taste`):** tabs are `.sk-tabs > .sk-tab[aria-selected]`; status chips are `.sk-pill` with `data-tone="good" | "amber" | "muted"` exactly as `app/app/alumni/page.tsx` tones them; the clearance warning is `.sk-notice`; buttons are `.sk-btn` with the brand fill recipe the alumni page uses for its primary (`background: var(--sk-brand)`, `color: '#fff'`); disabled gets its own flat fill, never `opacity`. Dialog markup goes through `DialogShell`. Look at the page rendered at desktop and ~360px before committing.
 
 **Interfaces:**
 - Consumes: `GET /manage/students?status=`, `GET /manage/students/:id/clearance`, `POST /manage/students/:id/leave`, `POST /manage/students/:id/readmit`, `DELETE` 409.
@@ -1432,7 +1437,8 @@ In `apps/web/app/app/students/page.tsx`:
 4. Row: after the name, when `s.status !== 'ACTIVE'` render `<span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{statusLabel(s)}</span>` where `statusLabel` returns `Alumni · 2025-26`, `Transferred · 31 Mar 2026`, or `Left · 31 Mar 2026`.
 5. Row actions: for ACTIVE rows replace the Delete button with "Mark as left…" (opens `LeaveDialog` with `[student]`); keep Delete only when a lazily loaded clearance says `hasHistory === false` — simplest: always show a "Delete" item that, on 409 `HAS_HISTORY`, toasts the server message and opens the LeaveDialog. For non-ACTIVE rows show "Re-admit" → `api.post('/manage/students/${id}/readmit', { classSectionId })` via a small inline class select.
 6. Multi-select: a checkbox column (ACTIVE tab only) and a sticky bar "N selected · Mark as left" opening `LeaveDialog` with the selection.
-7. `deleteMutation.onError`: if the message contains `HAS_HISTORY` or `history`, `toast.error('This student has history. Mark them as left instead.')` and `setLeaveTargets([student])`.
+7. `deleteMutation.onError`: if the error `code` is `HAS_HISTORY` (branch on `code`, never on message text — `api-error.ts` rule), `toast.error('This student has history. Mark them as left instead.')` and `setLeaveTargets([student])`.
+8. After a successful leave, when the site features include `PRESS`, the success toast carries an action "Order a Transfer Certificate" linking to `/app/press` (the Print Store already gates a TC on dues).
 
 - [ ] **Step 4: Page test (create `page.test.tsx`)**
 
@@ -1521,16 +1527,21 @@ git commit -m "feat(web): remove-from-school handover sheet, reactivate, for tea
 
 Under Students: "A student's `status` decides every roster. ACTIVE only on registers, diary, exams, notifications, birthdays. Delete is refused with HAS_HISTORY once any attendance/result/diary/library/message row exists; the console offers Mark as left. Alumni keep their login; Transferred and Left logins are closed and sessions revoked (`student-lifecycle.service.ts`). Re-admit reactivates the same record and sends a fresh invite." Under Teachers: "Remove from this school runs the handover (class teacher seats, timetable slots, pending leave, featured staff) then closes the login (`teachers.service.ts release()`). Reactivate reopens the same row." Under Public site: "Featured staff linked to a LEFT teacher never render."
 
-- [ ] **Step 2: Run the full gate**
+- [ ] **Step 2: Render-and-look audit**
+
+Start the web app against staging or a local API (`pnpm --filter @skoolos/web dev`), open `/app/students`, `/app/teachers`, `/app/staff` as the Raffles admin, and check each new state at desktop and ~360px: the three tabs, a row with a status chip, the Mark as left dialog with a clearance warning, the multi-select bar, Re-admit, the Remove-from-school sheet with every impact line, Reactivate, hover and disabled states. Fix what is off (spacing, wrapping, contrast) before the gate.
+
+- [ ] **Step 3: Run the full gate**
 
 Run: `pnpm preflight`
 Expected: every step green. Fix anything red before continuing; do not skip steps.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit and push to staging**
 
 ```bash
 git add .claude/skills/sckools-behavior-spec
 git commit -m "docs(spec): lifecycle invariants for students, teachers, public site"
+git push origin HEAD:staging
 ```
 
-Then stop and report: what shipped, what preflight said, and that the branch is ready for the user's push to staging (migration `20260910090000_person_lifecycle` must run there first).
+Then report: what shipped, what preflight said, the staging URL to test on, and that migration `20260910090000_person_lifecycle` applies on the staging push and must be run on production by the user before the PR to main.
