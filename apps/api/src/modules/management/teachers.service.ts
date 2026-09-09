@@ -6,7 +6,9 @@ import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
-import { closeLogin, reopenLogin } from './internal/close-login';
+import { closeLoginIn, reopenLoginIn } from './internal/close-login';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import { AuditService } from '../../common/audit/audit.service';
 import type { CreateLoginDto, CreateTeacherDto, ReleaseTeacherDto, UpdateTeacherDto } from './management.dto';
 import type { LoginInviteResult } from './students.service';
@@ -47,7 +49,7 @@ export class TeachersService {
           firstName: true, lastName: true,
           email: true, phone: true,
           photoAssetId: true, primarySubjectId: true,
-          bio: true, isActive: true,
+          bio: true, isActive: true, status: true, leftOn: true,
         },
       }),
     );
@@ -186,56 +188,108 @@ export class TeachersService {
   async release(schoolId: string, actorUserId: string, id: string, dto: ReleaseTeacherDto): Promise<{ released: true }> {
     const leftOn = new Date(dto.leftOn);
     const h = dto.handover ?? {};
-    const userId = await withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { schoolId, id }, select: { userId: true, status: true } });
-      if (!teacher) throw new NotFoundException('Teacher not found');
-      if (teacher.status !== 'ACTIVE') throw new ApiError('NOT_ACTIVE', 'This teacher is not active', 409, 'status');
+    // Handover ids are client-supplied: real UUIDs, never the leaving teacher.
+    for (const [sectionId, to] of Object.entries(h.classSections ?? {})) {
+      if (!UUID_RE.test(sectionId) || (to !== null && (typeof to !== 'string' || !UUID_RE.test(to)))) {
+        throw new ApiError('VALIDATION', 'Handover must map class ids to teacher ids', 400, 'handover.classSections');
+      }
+      if (to === id) throw new ApiError('VALIDATION', 'A class cannot be handed to the teacher who is leaving', 400, 'handover.classSections');
+    }
+    if (h.timetableTeacherId === id) {
+      throw new ApiError('VALIDATION', 'Periods cannot be handed to the teacher who is leaving', 400, 'handover.timetableTeacherId');
+    }
 
-      // Class-teacher seats: named replacements first (each checked against
-      // the school — FK checks bypass RLS), then everything else is emptied.
-      for (const [sectionId, to] of Object.entries(h.classSections ?? {})) {
-        if (to) {
-          const ok = await tx.teacher.findFirst({ where: { schoolId, id: to, status: 'ACTIVE' }, select: { id: true } });
-          if (!ok) throw new ApiError('VALIDATION', 'Replacement class teacher not found', 400, 'handover.classSections');
+    try {
+      await withTenant(schoolId, async (tx) => {
+        const teacher = await tx.teacher.findFirst({ where: { schoolId, id }, select: { userId: true, status: true } });
+        if (!teacher) throw new NotFoundException('Teacher not found');
+        if (teacher.status !== 'ACTIVE') throw new ApiError('NOT_ACTIVE', 'This teacher is not active', 409, 'status');
+
+        // Class-teacher seats: named replacements first (each checked against
+        // the school — FK checks bypass RLS), then everything else is emptied.
+        for (const [sectionId, to] of Object.entries(h.classSections ?? {})) {
+          if (to) {
+            const ok = await tx.teacher.findFirst({ where: { schoolId, id: to, status: 'ACTIVE' }, select: { id: true } });
+            if (!ok) throw new ApiError('VALIDATION', 'Replacement class teacher not found', 400, 'handover.classSections');
+          }
+          await tx.classSection.updateMany({ where: { schoolId, id: sectionId, classTeacherId: id }, data: { classTeacherId: to } });
         }
-        await tx.classSection.updateMany({ where: { schoolId, id: sectionId, classTeacherId: id }, data: { classTeacherId: to } });
-      }
-      await tx.classSection.updateMany({ where: { schoolId, classTeacherId: id }, data: { classTeacherId: null } });
+        await tx.classSection.updateMany({ where: { schoolId, classTeacherId: id }, data: { classTeacherId: null } });
 
-      // Open timetable periods: handed to one teacher, or ended on the leaving
-      // date so the timetable shows them as unassigned.
-      if (h.timetableTeacherId) {
-        const ok = await tx.teacher.findFirst({ where: { schoolId, id: h.timetableTeacherId, status: 'ACTIVE' }, select: { id: true } });
-        if (!ok) throw new ApiError('VALIDATION', 'Timetable teacher not found', 400, 'handover.timetableTeacherId');
-        await tx.timetableSlot.updateMany({ where: { schoolId, teacherId: id, effectiveTo: null }, data: { teacherId: h.timetableTeacherId } });
-      } else {
-        await tx.timetableSlot.updateMany({ where: { schoolId, teacherId: id, effectiveTo: null }, data: { effectiveTo: leftOn } });
-      }
+        // Open timetable periods: handed to one teacher, or ended on the leaving
+        // date so the timetable shows them as unassigned.
+        if (h.timetableTeacherId) {
+          const to = h.timetableTeacherId;
+          const ok = await tx.teacher.findFirst({ where: { schoolId, id: to, status: 'ACTIVE' }, select: { id: true, firstName: true, lastName: true } });
+          if (!ok) throw new ApiError('VALIDATION', 'Timetable teacher not found', 400, 'handover.timetableTeacherId');
+          // `teacher_slot` is unique on (teacher, day, period, year, effectiveFrom):
+          // a replacement who already teaches at one of these times cannot take
+          // them. Say so, with a count, instead of letting the unique index 500.
+          const [mine, theirs] = await Promise.all([
+            tx.timetableSlot.findMany({
+              take: LIST_CEILING.STRUCTURE,
+              where: { schoolId, teacherId: id, effectiveTo: null },
+              select: { dayOfWeek: true, periodId: true, academicYearId: true, effectiveFrom: true },
+            }),
+            tx.timetableSlot.findMany({
+              take: LIST_CEILING.STRUCTURE,
+              where: { schoolId, teacherId: to, effectiveTo: null },
+              select: { dayOfWeek: true, periodId: true, academicYearId: true, effectiveFrom: true },
+            }),
+          ]);
+          const slotKey = (s: { dayOfWeek: number; periodId: string; academicYearId: string; effectiveFrom: Date }) =>
+            `${s.dayOfWeek}|${s.periodId}|${s.academicYearId}|${s.effectiveFrom.toISOString()}`;
+          const taken = new Set(theirs.map(slotKey));
+          const clashes = mine.filter((s) => taken.has(slotKey(s))).length;
+          if (clashes > 0) {
+            throw new ApiError(
+              'TEACHER_CONFLICT',
+              `${ok.firstName} ${ok.lastName} already teaches at the same time as ${clashes} of these ${clashes === 1 ? 'period' : 'periods'} — hand them to someone else, or mark them as unassigned`,
+              409,
+              'handover.timetableTeacherId',
+            );
+          }
+          await tx.timetableSlot.updateMany({ where: { schoolId, teacherId: id, effectiveTo: null }, data: { teacherId: to } });
+        } else {
+          await tx.timetableSlot.updateMany({ where: { schoolId, teacherId: id, effectiveTo: null }, data: { effectiveTo: leftOn } });
+        }
 
-      await tx.leaveApplication.updateMany({
-        where: { schoolId, teacherId: id, status: 'PENDING' },
-        data: { status: 'REJECTED', reviewedAt: new Date(), reviewedById: actorUserId },
+        await tx.leaveApplication.updateMany({
+          where: { schoolId, teacherId: id, status: 'PENDING' },
+          data: { status: 'REJECTED', reviewedAt: new Date(), reviewedById: actorUserId },
+        });
+
+        // The public Educators band never shows a teacher who has LEFT. "Keep
+        // them on the website" turns the card into an ordinary manual one —
+        // name and photo are already on the FeaturedStaff row — by unlinking it.
+        if (h.keepFeatured) {
+          await tx.featuredStaff.updateMany({ where: { schoolId, teacherId: id }, data: { teacherId: null } });
+        } else {
+          await tx.featuredStaff.deleteMany({ where: { schoolId, teacherId: id } });
+        }
+
+        await tx.teacher.update({
+          where: { id },
+          data: {
+            status: 'LEFT',
+            isActive: false,
+            leftOn,
+            leftReason: dto.reason?.trim() || null,
+            leftNote: dto.note?.trim() || null,
+            statusChangedAt: new Date(),
+            statusChangedById: actorUserId,
+          },
+        });
+        // Same transaction as the row: the login closes with it, or neither happens.
+        if (teacher.userId) await closeLoginIn(tx, schoolId, teacher.userId);
       });
+    } catch (e) {
+      if (isP2002(e)) {
+        throw new ApiError('TEACHER_CONFLICT', 'That teacher already teaches at one of these times — hand the periods to someone else, or mark them as unassigned', 409, 'handover.timetableTeacherId');
+      }
+      throw e;
+    }
 
-      // The public Educators band must not keep showing somebody who left.
-      if (!h.keepFeatured) await tx.featuredStaff.deleteMany({ where: { schoolId, teacherId: id } });
-
-      await tx.teacher.update({
-        where: { id },
-        data: {
-          status: 'LEFT',
-          isActive: false,
-          leftOn,
-          leftReason: dto.reason?.trim() || null,
-          leftNote: dto.note?.trim() || null,
-          statusChangedAt: new Date(),
-          statusChangedById: actorUserId,
-        },
-      });
-      return teacher.userId;
-    });
-
-    if (userId) await closeLogin(userId);
     await this.audit.record({
       schoolId,
       actorUserId,
@@ -247,12 +301,45 @@ export class TeachersService {
     return { released: true };
   }
 
-  /** Back on the roll — the same row, the same login reopened. */
+  /**
+   * One school per teacher (Phase 5·1): the same identity (email) must not
+   * hold an ACTIVE teaching post with a login at another school. Cross-tenant
+   * by nature, so this runs on the platform client — the tenant-scoped `tx`
+   * cannot see other schools by design. Released teachers (isActive=false)
+   * don't block; neither do rows never linked to a login.
+   */
+  private async assertNotActiveElsewhere(schoolId: string, email: string): Promise<void> {
+    const platform = getPlatformPrisma();
+    const elsewhere = await platform.teacher.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        isActive: true,
+        userId: { not: null },
+        schoolId: { not: schoolId },
+      },
+      select: { school: { select: { name: true } } },
+    });
+    if (elsewhere) {
+      throw new ApiError(
+        'ALREADY_AT_SCHOOL',
+        `This teacher is active at ${elsewhere.school.name} — that school's office must release them before onboarding here`,
+        409,
+        'email',
+      );
+    }
+  }
+
+  /** Back on the roll — the same row, the same login reopened, in one transaction. */
   async reactivate(schoolId: string, actorUserId: string, id: string): Promise<{ id: string; status: 'ACTIVE' }> {
-    const userId = await withTenant(schoolId, async (tx) => {
-      const t = await tx.teacher.findFirst({ where: { schoolId, id }, select: { userId: true, status: true } });
-      if (!t) throw new NotFoundException('Teacher not found');
-      if (t.status === 'ACTIVE') throw new ApiError('ALREADY_ACTIVE', 'This teacher is already active', 409, 'status');
+    const t = await withTenant(schoolId, (tx) =>
+      tx.teacher.findFirst({ where: { schoolId, id }, select: { userId: true, status: true, email: true } }),
+    );
+    if (!t) throw new NotFoundException('Teacher not found');
+    if (t.status === 'ACTIVE') throw new ApiError('ALREADY_ACTIVE', 'This teacher is already active', 409, 'status');
+    // Released here, onboarded elsewhere since: the other school holds them now.
+    if (t.email) await this.assertNotActiveElsewhere(schoolId, t.email.toLowerCase());
+
+    await withTenant(schoolId, async (tx) => {
       await tx.teacher.update({
         where: { id },
         data: {
@@ -265,9 +352,8 @@ export class TeachersService {
           statusChangedById: actorUserId,
         },
       });
-      return t.userId;
+      if (t.userId) await reopenLoginIn(tx, schoolId, t.userId);
     });
-    if (userId) await reopenLogin(userId);
     await this.audit.record({ schoolId, actorUserId, action: 'teacher.reactivate', entity: 'Teacher', entityId: id, meta: null });
     return { id, status: 'ACTIVE' };
   }
@@ -306,30 +392,8 @@ export class TeachersService {
         );
       }
 
-      // One school per teacher (Phase 5·1): the same identity (email) must
-      // not hold an ACTIVE teaching post with a login at another school.
-      // Cross-tenant by nature, so this runs on the platform client — the
-      // tenant-scoped `tx` cannot see other schools by design. Released
-      // teachers (isActive=false) don't block; neither do rows never linked
-      // to a login.
-      const platform = getPlatformPrisma();
-      const elsewhere = await platform.teacher.findFirst({
-        where: {
-          email: { equals: email, mode: 'insensitive' },
-          isActive: true,
-          userId: { not: null },
-          schoolId: { not: schoolId },
-        },
-        select: { school: { select: { name: true } } },
-      });
-      if (elsewhere) {
-        throw new ApiError(
-          'ALREADY_AT_SCHOOL',
-          `This teacher is active at ${elsewhere.school.name} — that school's office must release them before onboarding here`,
-          409,
-          'email',
-        );
-      }
+      // One school per teacher (Phase 5·1) — see assertNotActiveElsewhere.
+      await this.assertNotActiveElsewhere(schoolId, email);
 
       const placeholder = randomBytes(32).toString('base64url');
       const passwordHash = await this.passwords.hash(placeholder);

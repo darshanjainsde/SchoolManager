@@ -112,12 +112,17 @@ async function doRefresh(s: Session): Promise<Session | null> {
  * the app falls over to the next open sibling (family.markClosed); otherwise it
  * is an ordinary expiry and the gate asks for a sign-in again.
  */
-async function refreshRefused(): Promise<never> {
+async function refreshRefused(s: Session): Promise<never> {
   const closed = /no longer active/i.test(lastRefreshRefusal ?? '');
   if (closed) {
-    const key = await family.activeKey();
-    if (key) await family.markClosed(key);
-    else await session.clear();
+    // Keyed by the session that was refused, not by whoever is active now.
+    const child = await family.markClosedFor(s);
+    // A child not on the shelf (a teacher, or a pre-shelf session) has no
+    // card to keep — just sign out. A shelf child either fell over to a
+    // sibling inside markClosedFor or cleared the session there.
+    const shelved = (await family.list()).some((c) => c.closed && c.schoolHost === s.schoolHost && c.displayName === s.displayName);
+    if (!shelved) await session.clear();
+    void child;
     throw new ApiError(401, 'This login has been closed by the school.');
   }
   await session.clear();
@@ -139,7 +144,7 @@ export const api = {
     let res = await rawFetch(path, s, opts);
     if (res.status === 401 && s) {
       const refreshed = await tryRefresh(s);
-      if (!refreshed) return refreshRefused();
+      if (!refreshed) return refreshRefused(s);
       s = refreshed;
       res = await rawFetch(path, s, opts);
     }
@@ -163,7 +168,7 @@ export const api = {
     let res = await rawUpload(path, s, form);
     if (res.status === 401 && s) {
       const refreshed = await tryRefresh(s);
-      if (!refreshed) return refreshRefused();
+      if (!refreshed) return refreshRefused(s);
       s = refreshed;
       res = await rawUpload(path, s, form);
     }

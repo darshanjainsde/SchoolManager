@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
 import { AuditService } from '../../common/audit/audit.service';
 import { LoginInviteService } from './internal/login-invite.service';
-import { closeLogin, reopenLogin } from './internal/close-login';
+import { closeLoginIn, reopenLoginIn } from './internal/close-login';
 import { applyStudentLeave, applyStudentReadmit, studentHistoryCounts } from './internal/student-transitions';
 import type { LeaveStudentDto, ReadmitStudentDto } from './management.dto';
 
@@ -40,8 +40,8 @@ export class StudentLifecycleService {
 
   async leave(schoolId: string, actorUserId: string, studentId: string, dto: LeaveStudentDto) {
     const leftOn = new Date(dto.leftOn);
-    const { userId, status } = await withTenant(schoolId, (tx) =>
-      applyStudentLeave(tx, {
+    const { status } = await withTenant(schoolId, async (tx) => {
+      const r = await applyStudentLeave(tx, {
         schoolId,
         actorUserId,
         studentId,
@@ -50,11 +50,13 @@ export class StudentLifecycleService {
         reason: dto.reason,
         note: dto.note,
         alumniBatch: dto.alumniBatch,
-      }),
-    );
-    // A child's login ends with their time at the school. Alumni get the
-    // Homecoming door instead (Track C) — never a child's account kept open.
-    if (userId) await closeLogin(userId);
+      });
+      // A child's login ends with their time at the school — in the same
+      // transaction as the row, so the two can never disagree. Alumni get the
+      // Homecoming door instead (Track C); never a child's account kept open.
+      if (r.userId) await closeLoginIn(tx, schoolId, r.userId);
+      return r;
+    });
     await this.audit.record({
       schoolId,
       actorUserId,
@@ -67,11 +69,12 @@ export class StudentLifecycleService {
   }
 
   async readmit(schoolId: string, actorUserId: string, studentId: string, dto: ReadmitStudentDto) {
-    const { userId, code } = await withTenant(schoolId, (tx) =>
-      applyStudentReadmit(tx, { schoolId, actorUserId, studentId, classSectionId: dto.classSectionId }),
-    );
+    const { userId, code } = await withTenant(schoolId, async (tx) => {
+      const r = await applyStudentReadmit(tx, { schoolId, actorUserId, studentId, classSectionId: dto.classSectionId });
+      if (r.userId) await reopenLoginIn(tx, schoolId, r.userId);
+      return r;
+    });
     if (userId) {
-      await reopenLogin(userId);
       // Sessions were revoked on leaving; a fresh set-password link is the only way back in.
       await this.invites.sendInvite(userId, code ?? '');
     }

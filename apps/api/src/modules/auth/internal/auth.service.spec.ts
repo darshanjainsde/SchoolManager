@@ -19,8 +19,13 @@ const prismaMock = {
 };
 
 const txMock = {
+  user: {
+    findUnique: jest.fn(),
+  },
   refreshToken: {
     create: jest.fn().mockResolvedValue({ id: 'refresh-row-1' }),
+    findUnique: jest.fn(),
+    updateMany: jest.fn(),
   },
 };
 
@@ -323,5 +328,44 @@ describe('AuthService.refresh — tenant binding', () => {
     await expect(svc.refresh(tokenFor(SCHOOL_A))).rejects.not.toThrow(
       'Refresh token belongs to another school',
     );
+  });
+});
+
+/**
+ * ACTIVE ROSTER. Closing a login (a child marked as left, a teacher removed)
+ * also revokes every refresh token. The refresh path must therefore say
+ * "User no longer active" BEFORE it looks at the token row — otherwise the
+ * revoked token reads as "reuse detected" and the app can never tell "the
+ * school closed this" from "somebody replayed a token".
+ */
+describe('AuthService.refresh — a closed login is refused as such', () => {
+  const jwt = new JwtService({});
+  const passwords = { verify: jest.fn() };
+  const svc = new AuthService(jwt, passwords as unknown as PasswordService);
+  const SCHOOL_A = '11111111-1111-1111-1111-111111111111';
+  const token = () =>
+    jwt.sign(
+      { sub: 'user-1', jti: 'j1', fam: 'f1', schoolId: SCHOOL_A },
+      { secret: process.env.JWT_SCHOOL_REFRESH_SECRET, audience: 'school-refresh' },
+    );
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('says "User no longer active" even though the token row is revoked', async () => {
+    txMock.user.findUnique.mockResolvedValue({ id: 'user-1', isActive: false });
+    txMock.refreshToken.findUnique.mockResolvedValue({ tokenHash: 'x', familyId: 'f1', revokedAt: new Date(), userId: 'user-1' });
+
+    await expect(svc.refresh(token(), SCHOOL_A)).rejects.toThrow('User no longer active');
+    // Nothing else was revoked or rotated on the way out.
+    expect(txMock.refreshToken.updateMany).not.toHaveBeenCalled();
+    expect(txMock.refreshToken.create).not.toHaveBeenCalled();
+  });
+
+  it('an open login with a revoked token is still reuse detection', async () => {
+    txMock.user.findUnique.mockResolvedValue({ id: 'user-1', isActive: true });
+    txMock.refreshToken.findUnique.mockResolvedValue({ tokenHash: 'x', familyId: 'f1', revokedAt: new Date(), userId: 'user-1' });
+    txMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(svc.refresh(token(), SCHOOL_A)).rejects.toThrow('Refresh token reuse detected');
   });
 });

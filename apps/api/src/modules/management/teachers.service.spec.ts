@@ -9,15 +9,17 @@ const txMock = {
   user: {
     create: jest.fn(),
     findUnique: jest.fn(),
+    updateMany: jest.fn(),
   },
+  refreshToken: { updateMany: jest.fn() },
   mediaAsset: {
     findFirst: jest.fn(),
   },
   // What release() hands over.
   classSection: { findMany: jest.fn(), updateMany: jest.fn() },
-  timetableSlot: { count: jest.fn(), updateMany: jest.fn() },
+  timetableSlot: { count: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
   leaveApplication: { count: jest.fn(), updateMany: jest.fn() },
-  featuredStaff: { count: jest.fn(), deleteMany: jest.fn() },
+  featuredStaff: { count: jest.fn(), deleteMany: jest.fn(), updateMany: jest.fn() },
   libraryIssue: { count: jest.fn() },
   messageThread: { count: jest.fn() },
 };
@@ -35,6 +37,9 @@ const platformMock = {
 jest.mock('@skoolos/db', () => ({
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
   getPlatformPrisma: () => platformMock,
+  // prisma-errors.ts does `instanceof Prisma.PrismaClientKnownRequestError`; without the
+  // real class here isP2002() throws a TypeError instead of classifying the error.
+  Prisma: jest.requireActual('@prisma/client').Prisma,
   // TeachersService transitively imports the tenancy barrel (via '../auth'),
   // whose users.controller reads these enum members at decoration time.
   UserRole: {
@@ -410,6 +415,10 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
     txMock.timetableSlot.updateMany.mockResolvedValue({ count: 0 });
     txMock.leaveApplication.updateMany.mockResolvedValue({ count: 0 });
     txMock.featuredStaff.deleteMany.mockResolvedValue({ count: 0 });
+    txMock.featuredStaff.updateMany.mockResolvedValue({ count: 0 });
+    txMock.timetableSlot.findMany.mockResolvedValue([]);
+    txMock.user.updateMany.mockResolvedValue({ count: 1 });
+    txMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('refuses to onboard an email that already belongs to a LEFT row at this school', async () => {
@@ -457,31 +466,55 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
     expect(txMock.leaveApplication.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { schoolId: SCHOOL, teacherId: TEACHER_ID, status: 'PENDING' } }));
     expect(txMock.featuredStaff.deleteMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, teacherId: TEACHER_ID } });
     expect(auditMock.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'teacher.release', entityId: TEACHER_ID }));
-    expect(platformMock.user.update).toHaveBeenCalledWith({
-      where: { id: 'user-9' },
-      data: { isActive: false },
-    });
-    expect(platformMock.refreshToken.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'user-9', revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
-    });
   });
 
   it('release hands periods and a class-teacher seat to named teachers, and can keep the website card', async () => {
     mockTeacherRow({ userId: null, status: 'ACTIVE' });
     txMock.teacher.findFirst.mockImplementation(async ({ where }: { where?: Record<string, unknown> }) =>
-      where?.id === 'T2' || where?.id === 'T9' ? { id: where.id } : { userId: null, status: 'ACTIVE' },
+      where?.id === '22222222-2222-4222-8222-222222222222' || where?.id === '99999999-9999-4999-8999-999999999999' ? { id: where.id, firstName: 'R', lastName: 'D' } : { userId: null, status: 'ACTIVE' },
     );
 
     await svc.release(SCHOOL, ACTOR, TEACHER_ID, {
       leftOn: '2026-03-31',
-      handover: { classSections: { 'sec-5a': 'T2', 'sec-6b': null }, timetableTeacherId: 'T9', keepFeatured: true },
+      handover: { classSections: { '55555555-5555-4555-8555-555555555555': '22222222-2222-4222-8222-222222222222', '66666666-6666-4666-8666-666666666666': null }, timetableTeacherId: '99999999-9999-4999-8999-999999999999', keepFeatured: true },
     });
 
-    expect(txMock.classSection.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: 'sec-5a', classTeacherId: TEACHER_ID }, data: { classTeacherId: 'T2' } });
-    expect(txMock.classSection.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: 'sec-6b', classTeacherId: TEACHER_ID }, data: { classTeacherId: null } });
-    expect(txMock.timetableSlot.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, teacherId: TEACHER_ID, effectiveTo: null }, data: { teacherId: 'T9' } });
+    expect(txMock.classSection.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: '55555555-5555-4555-8555-555555555555', classTeacherId: TEACHER_ID }, data: { classTeacherId: '22222222-2222-4222-8222-222222222222' } });
+    expect(txMock.classSection.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: '66666666-6666-4666-8666-666666666666', classTeacherId: TEACHER_ID }, data: { classTeacherId: null } });
+    expect(txMock.timetableSlot.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, teacherId: TEACHER_ID, effectiveTo: null }, data: { teacherId: '99999999-9999-4999-8999-999999999999' } });
     expect(txMock.featuredStaff.deleteMany).not.toHaveBeenCalled();
+    // "Keep them on the website": the card stays as an ordinary manual one, unlinked from the LEFT row.
+    expect(txMock.featuredStaff.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, teacherId: TEACHER_ID }, data: { teacherId: null } });
+  });
+
+  it('release refuses to hand periods to a colleague who already teaches at one of those times', async () => {
+    mockTeacherRow({ userId: null, status: 'ACTIVE' });
+    txMock.teacher.findFirst.mockImplementation(async ({ where }: { where?: Record<string, unknown> }) =>
+      where?.id === '99999999-9999-4999-8999-999999999999' ? { id: '99999999-9999-4999-8999-999999999999', firstName: 'Rohan', lastName: 'Das' } : { userId: null, status: 'ACTIVE' },
+    );
+    const mon3 = { dayOfWeek: 1, periodId: 'p3', academicYearId: 'y1', effectiveFrom: new Date('2026-04-01') };
+    txMock.timetableSlot.findMany.mockImplementation(async ({ where }: { where: { teacherId: string } }) =>
+      where.teacherId === TEACHER_ID ? [mon3, { ...mon3, dayOfWeek: 2 }] : [mon3],
+    );
+    await expect(
+      svc.release(SCHOOL, ACTOR, TEACHER_ID, { leftOn: '2026-03-31', handover: { timetableTeacherId: '99999999-9999-4999-8999-999999999999' } }),
+    ).rejects.toMatchObject({ status: 409, response: { code: 'TEACHER_CONFLICT', field: 'handover.timetableTeacherId' } });
+    expect(txMock.timetableSlot.updateMany).not.toHaveBeenCalled();
+    expect(txMock.teacher.update).not.toHaveBeenCalled();
+  });
+
+  it('release refuses a handover to the leaving teacher, or with ids that are not uuids', async () => {
+    mockTeacherRow({ userId: null, status: 'ACTIVE' });
+    await expect(svc.release(SCHOOL, ACTOR, TEACHER_ID, { leftOn: '2026-03-31', handover: { timetableTeacherId: TEACHER_ID } })).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
+    await expect(svc.release(SCHOOL, ACTOR, TEACHER_ID, { leftOn: '2026-03-31', handover: { classSections: { 'sec-5a': 'T2' } } })).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
+    expect(txMock.teacher.update).not.toHaveBeenCalled();
+  });
+
+  it('reactivate refuses when the identity is meanwhile ACTIVE with a login at another school', async () => {
+    mockTeacherRow({ userId: 'user-9', status: 'LEFT', email: 'p.iyer@x.com' });
+    platformMock.teacher.findFirst.mockResolvedValue({ school: { name: 'Green Valley School' } });
+    await expect(svc.reactivate(SCHOOL, ACTOR, TEACHER_ID)).rejects.toMatchObject({ status: 409, response: { code: 'ALREADY_AT_SCHOOL' } });
+    expect(txMock.teacher.update).not.toHaveBeenCalled();
   });
 
   it('release refuses a teacher who is not ACTIVE', async () => {
@@ -495,7 +528,7 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
     const out = await svc.reactivate(SCHOOL, ACTOR, TEACHER_ID);
     expect(out).toEqual({ id: TEACHER_ID, status: 'ACTIVE' });
     expect(txMock.teacher.update).toHaveBeenCalledWith({ where: { id: TEACHER_ID }, data: expect.objectContaining({ status: 'ACTIVE', isActive: true, leftOn: null, leftReason: null }) });
-    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'user-9' }, data: { isActive: true } });
+    expect(txMock.user.updateMany).toHaveBeenCalledWith({ where: { id: 'user-9', schoolId: SCHOOL }, data: { isActive: true } });
   });
 
   it('release of a login-less teacher touches no auth state', async () => {
@@ -503,7 +536,7 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
 
     await svc.release(SCHOOL, ACTOR, TEACHER_ID, { leftOn: '2026-03-31' });
 
-    expect(platformMock.user.update).not.toHaveBeenCalled();
-    expect(platformMock.refreshToken.updateMany).not.toHaveBeenCalled();
+    expect(txMock.user.updateMany).not.toHaveBeenCalled();
+    expect(txMock.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 });

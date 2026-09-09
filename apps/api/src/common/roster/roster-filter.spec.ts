@@ -27,6 +27,7 @@ const FILES = [
   'common/notifications/recipients.ts',
   'common/notifications/notification-inbox.ts',
   'modules/auth/internal/school-resolve.service.ts',
+  'common/lists/relation-counts.ts',
 ];
 
 interface Site {
@@ -41,7 +42,7 @@ function findManySites(src: string): Site[] {
   const out: Site[] = [];
   // `count` too: a roster denominator ("recipientCount", "N students") that
   // still counts a child who has left is the same defect in a smaller font.
-  const re = /student\.(findMany|count)\(/g;
+  const re = /student\.(findMany|count|groupBy)\(/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(src))) {
     let depth = 1;

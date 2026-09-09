@@ -5,7 +5,7 @@ import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
-import { closeLogin, reopenLogin } from './internal/close-login';
+import { closeLoginIn, reopenLoginIn } from './internal/close-login';
 import { AuditService } from '../../common/audit/audit.service';
 import type { CreateLoginDto, CreateStaffDto, ReleaseStaffDto, UpdateStaffDto } from './management.dto';
 import type { LoginInviteResult } from './students.service';
@@ -85,9 +85,10 @@ export class StaffService {
           statusChangedById: actorUserId,
         },
       });
+      if (s.userId) await closeLoginIn(tx, schoolId, s.userId);
       return s.userId;
     });
-    if (userId) await closeLogin(userId);
+    void userId;
     await this.audit.record({
       schoolId,
       actorUserId,
@@ -108,9 +109,10 @@ export class StaffService {
         where: { id },
         data: { status: 'ACTIVE', isActive: true, leftOn: null, leftReason: null, leftNote: null, statusChangedAt: new Date(), statusChangedById: actorUserId },
       });
+      if (s.userId) await reopenLoginIn(tx, schoolId, s.userId);
       return s.userId;
     });
-    if (userId) await reopenLogin(userId);
+    void userId;
     await this.audit.record({ schoolId, actorUserId, action: 'staff.reactivate', entity: 'Staff', entityId: id, meta: null });
     return { id, status: 'ACTIVE' };
   }

@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 
 const txMock = {
+  refreshToken: { updateMany: jest.fn() },
   staff: {
     findMany: jest.fn(),
     findFirst: jest.fn(),
@@ -11,6 +12,7 @@ const txMock = {
   user: {
     create: jest.fn(),
     findUnique: jest.fn(),
+    updateMany: jest.fn(),
   },
 };
 
@@ -289,8 +291,8 @@ describe('StaffService.release / reactivate (Active Roster)', () => {
       where: { id: STAFF_ID },
       data: expect.objectContaining({ status: 'LEFT', isActive: false, leftReason: 'Retired', statusChangedById: ACTOR }),
     });
-    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'user-3' }, data: { isActive: false } });
-    expect(platformMock.refreshToken.updateMany).toHaveBeenCalledWith({ where: { userId: 'user-3', revokedAt: null }, data: { revokedAt: expect.any(Date) } });
+    expect(txMock.user.updateMany).toHaveBeenCalledWith({ where: { id: 'user-3', schoolId: SCHOOL }, data: { isActive: false } });
+    expect(txMock.refreshToken.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, userId: 'user-3', revokedAt: null }, data: { revokedAt: expect.any(Date) } });
     expect(auditMock.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'staff.release', entityId: STAFF_ID }));
   });
 
@@ -307,6 +309,6 @@ describe('StaffService.release / reactivate (Active Roster)', () => {
     const out = await svc.reactivate(SCHOOL, ACTOR, STAFF_ID);
     expect(out).toEqual({ id: STAFF_ID, status: 'ACTIVE' });
     expect(txMock.staff.update).toHaveBeenCalledWith({ where: { id: STAFF_ID }, data: expect.objectContaining({ status: 'ACTIVE', isActive: true, leftOn: null }) });
-    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'user-3' }, data: { isActive: true } });
+    expect(txMock.user.updateMany).toHaveBeenCalledWith({ where: { id: 'user-3', schoolId: SCHOOL }, data: { isActive: true } });
   });
 });

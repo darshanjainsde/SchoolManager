@@ -2,6 +2,8 @@ import 'reflect-metadata';
 
 const txMock = {
   student: { findFirst: jest.fn(), update: jest.fn() },
+  user: { updateMany: jest.fn() },
+  refreshToken: { updateMany: jest.fn() },
   classSection: { findFirst: jest.fn() },
   academicYear: { findFirst: jest.fn() },
   attendance: { count: jest.fn() },
@@ -52,9 +54,9 @@ describe('leave', () => {
     const data = txMock.student.update.mock.calls[0][0].data;
     expect(data).toMatchObject({ status: 'TRANSFERRED', isActive: false, leftReason: 'Moved city', statusChangedById: ACTOR, alumniBatch: null });
     expect(data.leftOn).toEqual(new Date('2026-03-31'));
-    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { isActive: false } });
-    expect(platformMock.refreshToken.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: 'u1', revokedAt: null } }),
+    expect(txMock.user.updateMany).toHaveBeenCalledWith({ where: { id: 'u1', schoolId: SCHOOL }, data: { isActive: false } });
+    expect(txMock.refreshToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { schoolId: SCHOOL, userId: 'u1', revokedAt: null } }),
     );
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'student.leave', entityId: STUDENT }));
   });
@@ -63,14 +65,14 @@ describe('leave', () => {
     const { svc } = service();
     await svc.leave(SCHOOL, ACTOR, STUDENT, { status: 'ALUMNI', leftOn: '2026-03-31' });
     expect(txMock.student.update.mock.calls[0][0].data).toMatchObject({ status: 'ALUMNI', alumniBatch: '2025-26', isActive: false });
-    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { isActive: false } });
+    expect(txMock.user.updateMany).toHaveBeenCalledWith({ where: { id: 'u1', schoolId: SCHOOL }, data: { isActive: false } });
   });
 
   it('a student with no login just changes status', async () => {
     const { svc } = service();
     txMock.student.findFirst.mockResolvedValue({ id: STUDENT, userId: null, status: 'ACTIVE', code: null });
     await svc.leave(SCHOOL, ACTOR, STUDENT, { status: 'LEFT', leftOn: '2026-03-31' });
-    expect(platformMock.user.update).not.toHaveBeenCalled();
+    expect(txMock.user.updateMany).not.toHaveBeenCalled();
   });
 
   it('refuses when the student is not ACTIVE', async () => {
@@ -91,7 +93,7 @@ describe('readmit', () => {
     expect(txMock.student.update.mock.calls[0][0].data).toMatchObject({
       status: 'ACTIVE', isActive: true, leftOn: null, leftReason: null, leftNote: null, alumniBatch: null, classSectionId: SECTION,
     });
-    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'u1' }, data: { isActive: true } });
+    expect(txMock.user.updateMany).toHaveBeenCalledWith({ where: { id: 'u1', schoolId: SCHOOL }, data: { isActive: true } });
     expect(invites.sendInvite).toHaveBeenCalledWith('u1', 'RAF-00042');
   });
 

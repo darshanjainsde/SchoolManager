@@ -290,10 +290,12 @@ describe('api.logout()', () => {
 });
 
 it('a refresh refused with "no longer active" closes the child on the shelf instead of just expiring', async () => {
-  await family.add({
-    accessToken: 'at1', refreshToken: 'rt1', role: 'STUDENT',
+  const aaravSession = {
+    accessToken: 'at1', refreshToken: 'rt1', role: 'STUDENT' as const,
     schoolHost: 'raffles.sckools.com', displayName: 'Aarav Mehta',
-  });
+  };
+  await session.set(aaravSession); // what api.login does
+  await family.add(aaravSession);
   mockFetch
     .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) })
     .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ message: 'User no longer active' }) });

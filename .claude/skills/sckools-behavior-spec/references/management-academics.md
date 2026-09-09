@@ -373,7 +373,10 @@ Every person carries a `status` and an `isActive` mirror (`isActive === (status 
   and every attendance/result/diary/library row under it, keeps `classSectionId` as "last class", sets
   `leftOn`/`leftReason`/`leftNote` (`alumniBatch` defaults to the current year's name for `ALUMNI`),
   **closes the login and revokes every session for every leaving status, alumni included** (the alumni
-  door is the Homecoming wing). 409 `NOT_ACTIVE` when already left. Audit `student.leave`.
+  door is the Homecoming wing) — in the SAME tenant transaction as the row (`internal/close-login.ts`),
+  so the row and its login can never disagree. `AuthService.refresh()` checks the account BEFORE the
+  token row, so a closed login is refused as "User no longer active" (the app keys its shelf card on
+  it), never as "reuse detected". 409 `NOT_ACTIVE` when already left. Audit `student.leave`.
 - `POST /manage/students/:id/readmit` `{ classSectionId? }` — same row back to `ACTIVE`, left fields
   cleared, login reopened and a fresh set-password invite sent (old sessions were revoked). The class id is
   checked against the school (FK checks bypass RLS). 409 `ALREADY_ACTIVE`.
@@ -387,9 +390,12 @@ Every person carries a `status` and an `isActive` mirror (`isActive === (status 
   2025-26)".
 - Teachers: `GET /manage/teachers/:id/release-impact` lists what they hold; `POST /:id/release`
   `{ leftOn, reason?, note?, handover?: { classSections, timetableTeacherId, keepFeatured } }` hands over
-  class-teacher seats (named replacement or emptied), open timetable slots (reassigned or ended on
-  `leftOn`), rejects pending leave, drops the website card unless `keepFeatured`, then marks `LEFT` and
-  closes the login. `POST /:id/reactivate` reopens the same row. `createLogin` answers 409
+  class-teacher seats (named replacement or emptied), open timetable slots (reassigned — 409
+  `TEACHER_CONFLICT` when the replacement already teaches at one of those times — or ended on `leftOn`),
+  rejects pending leave, drops the website card unless `keepFeatured` (which UNLINKS it into a manual card,
+  since the band never shows a LEFT teacher), then marks `LEFT` and closes the login. Handover ids must
+  be uuids and never the leaving teacher. `POST /:id/reactivate` reopens the same row and runs the
+  one-school guard (409 `ALREADY_AT_SCHOOL` if they were onboarded elsewhere meanwhile). `createLogin` answers 409
   `ALREADY_HERE_INACTIVE` when the email belongs to a LEFT row at **this** school (reactivate, don't
   duplicate) and the existing 409 `ALREADY_AT_SCHOOL` when it is ACTIVE elsewhere.
 - Staff: `POST /manage/staff/:id/release` `{ leftOn, reason?, note? }` and `/:id/reactivate`; the

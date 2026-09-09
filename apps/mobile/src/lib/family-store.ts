@@ -145,6 +145,20 @@ export const family = {
    */
   async markClosed(key: string): Promise<ChildProfile | null> {
     const state = await load();
+    return this.markClosedIn(state, key);
+  },
+
+  /**
+   * The same, keyed by the SESSION whose refresh was refused — never by
+   * "whoever is active now": two requests racing on one dead token could
+   * otherwise close a healthy sibling after the first had already fallen over.
+   */
+  async markClosedFor(s: Session): Promise<ChildProfile | null> {
+    const state = await load();
+    return this.markClosedIn(state, keyFor(s));
+  },
+
+  async markClosedIn(state: FamilyState, key: string): Promise<ChildProfile | null> {
     const child = state.children.find((c) => c.key === key);
     if (!child) return null;
     child.closed = true;

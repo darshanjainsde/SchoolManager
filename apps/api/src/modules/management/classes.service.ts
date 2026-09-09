@@ -42,7 +42,7 @@ export class ClassesService {
             classTeacher: { select: { firstName: true, lastName: true } },
           },
         }),
-        studentCountsBySection(tx, schoolId),
+        studentCountsBySection(tx, schoolId, { activeOnly: true }),
       ]);
       return sections.map((s) => ({ ...s, _count: { students: roll.get(s.id) ?? 0 } }));
     });

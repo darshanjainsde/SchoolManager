@@ -61,7 +61,7 @@ export async function studentCountsBySection(
 ): Promise<Map<string, number>> {
   const rows = await tx.student.groupBy({
     by: ['classSectionId'],
-    where: { schoolId, ...(opts.activeOnly ? { isActive: true } : {}) },
+    where: { schoolId, ...(opts.activeOnly ? { status: 'ACTIVE' as const } : {}) },
     _count: { _all: true },
   });
   return toMap(rows as Tally<'classSectionId'>, 'classSectionId');

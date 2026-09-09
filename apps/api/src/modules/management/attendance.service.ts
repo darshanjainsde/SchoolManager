@@ -126,7 +126,7 @@ export class AttendanceService {
             select: AttendanceService.CLASS_SELECT,
             orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
           }),
-          studentCountsBySection(tx, schoolId),
+          studentCountsBySection(tx, schoolId, { activeOnly: true }),
         ]);
         return sections.map((c) => AttendanceService.toMyClassSection(c, roll));
       }
@@ -194,7 +194,7 @@ export class AttendanceService {
           })
         : [];
 
-      const roll = await studentCountsBySection(tx, schoolId);
+      const roll = await studentCountsBySection(tx, schoolId, { activeOnly: true });
       return [
         ...owned.map((c) => AttendanceService.toMyClassSection(c, roll, false)),
         ...covered.map((c) => AttendanceService.toMyClassSection(c, roll, true)),

@@ -47,8 +47,6 @@ const ALLOWED: Record<string, string> = {
   'modules/admin-credentials/internal/account.service.ts': 'operator credential management',
   'modules/admin-credentials/internal/admin-credentials.service.ts': 'operator credential management',
   'modules/management/internal/login-invite.service.ts': 'creates the User row a login will use',
-  'modules/management/internal/close-login.ts':
-    'closes or reopens a User login after a tenant commit — platform-wide identity state (Active Roster)',
 
   // ── Owner/platform console: cross-tenant BY PURPOSE ───────────────────────
   'modules/owner/internal/owner-auth.service.ts': 'operator console',
