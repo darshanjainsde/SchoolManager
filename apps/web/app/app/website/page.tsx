@@ -10,6 +10,7 @@ import CoursesTab from './courses-tab';
 import AdmissionsTab from './admissions-tab';
 import HallOfFameTab from './hof-tab';
 import StudioTab from './studio-tab';
+import CelebrationsTab from './celebrations-tab';
 
 /**
  * Website console shell: the tab bar, plus the one shared settings form the
@@ -26,6 +27,7 @@ type Tab =
   | 'courses'
   | 'admissions'
   | 'hof'
+  | 'celebrations'
   | 'gallery'
   | 'staff';
 
@@ -42,6 +44,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'courses', label: 'Courses' },
   { id: 'admissions', label: 'Admissions' },
   { id: 'hof', label: 'Hall of Fame' },
+  { id: 'celebrations', label: 'Celebrations' },
   { id: 'gallery', label: 'Gallery' },
   { id: 'staff', label: 'Staff' },
 ];
@@ -90,12 +93,13 @@ export default function WebsitePage() {
           changes no lifecycle. Reduced motion simply shows the new tab. */}
       <div className="sk-wfade" key={activeTab}>
       {activeTab === 'studio' && <StudioTab />}
-      {activeTab === 'homepage' && <HomepageTab form={form} onGoToDesign={() => setActiveTab('studio')} />}
+      {activeTab === 'homepage' && <HomepageTab form={form} onGoToDesign={() => setActiveTab('studio')} onGoToCelebrations={() => setActiveTab('celebrations')} />}
       {activeTab === 'about' && <AboutTab form={form} />}
       {activeTab === 'contact' && <ContactTab form={form} />}
       {activeTab === 'courses' && <CoursesTab />}
       {activeTab === 'admissions' && <AdmissionsTab />}
       {activeTab === 'hof' && <HallOfFameTab />}
+      {activeTab === 'celebrations' && <CelebrationsTab onGoToHomepage={() => setActiveTab('homepage')} />}
       {activeTab === 'gallery' && <GalleryTab />}
       {activeTab === 'staff' && <StaffTab />}
       </div>

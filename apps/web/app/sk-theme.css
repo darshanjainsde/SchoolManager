@@ -3335,3 +3335,58 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .skosx { color-scheme: dark; } }
 html[data-theme='dark'] .skosx { color-scheme: dark; }
 html[data-theme='light'] .skosx { color-scheme: light; }
+
+/* ── WEBSITE · CELEBRATIONS TAB ──────────────────────────────────────────
+   The birthday wall's settings (Active Roster, Track B). Two columns from
+   tablet width — the choices on the left, "this week on the site" on the
+   right, so every choice is checked against real names, not imagined ones.
+   One column on a phone. Style pickers carry a small drawn thumbnail because
+   "Notice Board" means nothing until you have seen the cork. Every value
+   resolves through an existing token, so both schemes follow. */
+.sk-cel-grid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+@media (min-width: 900px) { .sk-cel-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } }
+.sk-cel-sec { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--sk-line); }
+.sk-cel-sec:first-of-type { border-top: 0; padding-top: 0; }
+.sk-cel-hint { font-size: 12px; color: var(--sk-ink-3); line-height: 1.45; }
+.sk-cel-hint a { color: var(--sk-brand); font-weight: 650; text-decoration: none; }
+.sk-cel-hint a:hover { text-decoration: underline; }
+.sk-cel-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sk-cel-styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(136px, 100%), 1fr)); gap: 8px; }
+.sk-cel-style {
+  display: flex; flex-direction: column; gap: 7px; padding: 8px; text-align: left; cursor: pointer;
+  border: 1.5px solid var(--sk-line-2); border-radius: var(--sk-r-sm); background: var(--sk-card); color: var(--sk-ink);
+  font: inherit; transition: border-color 0.12s ease, background 0.12s ease;
+}
+.sk-cel-style[aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); }
+.sk-cel-style:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+.sk-cel-style b { font-size: 13px; font-weight: 700; }
+.sk-cel-style small { font-size: 11.5px; color: var(--sk-ink-3); line-height: 1.35; }
+.sk-cel-thumb { display: block; width: 100%; height: auto; border-radius: 8px; }
+.sk-cel-switchrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.sk-cel-switchrow > span { font-size: 13.5px; min-width: 0; }
+.sk-cel-switchrow small { display: block; font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-cel-consent {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--sk-r-sm);
+  background: var(--sk-amber-tint); color: var(--sk-amber-ink); font-size: 13px; font-weight: 650; cursor: pointer;
+}
+.sk-cel-consent input { margin-top: 3px; flex: none; }
+.sk-cel-consent small { display: block; font-weight: 400; opacity: 0.85; font-size: 11.5px; margin-top: 2px; }
+.sk-cel-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--sk-line); }
+.sk-cel-row:first-of-type { border-top: 0; }
+.sk-cel-date { width: 44px; text-align: center; border-radius: 10px; background: var(--sk-bg-2); padding: 5px 0; line-height: 1.1; }
+.sk-cel-date b { display: block; font-size: 16px; font-weight: 750; }
+.sk-cel-date small { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sk-ink-3); }
+.sk-cel-row .nm { font-weight: 650; font-size: 13.5px; }
+.sk-cel-row .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-cel-toggles { display: flex; gap: 14px; }
+.sk-cel-toggle { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 650; color: var(--sk-ink-3); }
+.sk-cel-example { font-size: 13.5px; padding: 10px 12px; border-radius: var(--sk-r-sm); background: var(--sk-bg-2); line-height: 1.5; }
+.sk-cel-example i { font-style: normal; padding: 1px 6px; border-radius: 6px; background: var(--sk-card); border: 1px dashed var(--sk-line-2); font-size: 12px; }
+.sk-cel-mrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-top: 1px solid var(--sk-line); }
+.sk-cel-mrow:first-of-type { border-top: 0; }
+.sk-cel-mrow .name { flex: 1 1 9em; min-width: 0; }
+.sk-cel-mrow .day { width: 4.5em; }
+.sk-cel-mrow .month { width: 6.5em; }
+.sk-cel-mrow .cls { flex: 1 1 5em; min-width: 0; }
+.sk-cel-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--sk-line); }
+@media (prefers-reduced-motion: reduce) { .sk-cel-style { transition: none; } }

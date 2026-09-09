@@ -7,8 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Trash2 } from 'lucide-react';
 import type { SiteForm } from './site-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { useApi } from '@/lib/use-api';
+import { useHost } from '@/components/use-host';
 
-export default function HomepageTab({ form, onGoToDesign }: { form: SiteForm; onGoToDesign: () => void }) {
+export default function HomepageTab({ form, onGoToDesign, onGoToCelebrations }: { form: SiteForm; onGoToDesign: () => void; onGoToCelebrations: () => void }) {
   const {
     data,
     headline,
@@ -101,6 +105,7 @@ export default function HomepageTab({ form, onGoToDesign }: { form: SiteForm; on
                 </span>
               </label>
             ))}
+            {data?.homepage.showBirthdays && <BirthdaysPlacement onGoToCelebrations={onGoToCelebrations} />}
           </div>
 
           {/* Stats editor */}
@@ -151,5 +156,58 @@ export default function HomepageTab({ form, onGoToDesign }: { form: SiteForm; on
           </Button>
         </CardFooter>
       </Card>
+  );
+}
+
+type Placement = 'TEASER_AND_PAGE' | 'PAGE_ONLY';
+const PLACEMENTS: { value: Placement; label: string }[] = [
+  { value: 'TEASER_AND_PAGE', label: 'Homepage teaser + page' },
+  { value: 'PAGE_ONLY', label: 'Page only (menu link)' },
+];
+
+/**
+ * Under the Birthdays tick: the one design choice that belongs with the
+ * section list — whether the homepage carries a teaser at all. Everything
+ * else about the wall (who sees it, the look, the wish line) is a tab of its
+ * own, and this points there instead of half-duplicating it.
+ */
+function BirthdaysPlacement({ onGoToCelebrations }: { onGoToCelebrations: () => void }) {
+  const host = useHost();
+  const api = useApi({ hostHeader: host });
+  const queryClient = useQueryClient();
+  const cfg = useQuery<{ placement: Placement }>({
+    queryKey: ['site-celebrations', host],
+    queryFn: () => api.get('/site/celebrations'),
+    enabled: !!host,
+  });
+  const set = useMutation({
+    mutationFn: (placement: Placement) => api.put('/site/celebrations', { placement }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['site-celebrations', host] });
+      toast.success('Saved');
+    },
+    onError: (err: Error) => toast.error(`Could not save: ${err.message}`),
+  });
+  const placement = cfg.data?.placement ?? 'TEASER_AND_PAGE';
+  return (
+    <div className="ml-7 space-y-1.5 pb-1">
+      {PLACEMENTS.map((o) => (
+        <label key={o.value} className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+          <input
+            type="radio"
+            name="birthdays-placement"
+            value={o.value}
+            checked={placement === o.value}
+            disabled={set.isPending || !cfg.data}
+            onChange={() => set.mutate(o.value)}
+            className="accent-emerald-700"
+          />
+          {o.label}
+        </label>
+      ))}
+      <button type="button" onClick={onGoToCelebrations} className="text-xs font-semibold text-teal-700 hover:underline">
+        Who can see it, the look, the wish line → Celebrations tab
+      </button>
+    </div>
   );
 }

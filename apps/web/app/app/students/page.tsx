@@ -62,6 +62,9 @@ interface Student {
   status: StudentStatus;
   leftOn: string | null;
   alumniBatch: string | null;
+  dob: string | null;
+  showOnWebsite: boolean;
+  photoConsent: boolean;
 }
 
 interface MediaAsset {
@@ -250,6 +253,10 @@ interface StudentFormData {
   guardianName: string;
   guardianPhone: string;
   email: string;
+  /** YYYY-MM-DD, or '' for none. Birthdays on the website need it. */
+  dob: string;
+  showOnWebsite: boolean;
+  photoConsent: boolean;
 }
 
 interface StudentFormProps {
@@ -259,9 +266,11 @@ interface StudentFormProps {
   onSave: (data: StudentFormData) => void;
   isSaving: boolean;
   onCancel: () => void;
+  /** The website-birthday switches: only once a student exists (create has no such fields). */
+  websiteOptions?: boolean;
 }
 
-function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel }: StudentFormProps) {
+function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel, websiteOptions = false }: StudentFormProps) {
   const [firstName, setFirstName] = useState(initial.firstName ?? '');
   const [lastName, setLastName] = useState(initial.lastName ?? '');
   const [admissionNo, setAdmissionNo] = useState(initial.admissionNo ?? '');
@@ -270,6 +279,9 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
   const [guardianName, setGuardianName] = useState(initial.guardianName ?? '');
   const [guardianPhone, setGuardianPhone] = useState(initial.guardianPhone ?? '');
   const [email, setEmail] = useState(initial.email ?? '');
+  const [dob, setDob] = useState(initial.dob ?? '');
+  const [showOnWebsite, setShowOnWebsite] = useState(initial.showOnWebsite ?? true);
+  const [photoConsent, setPhotoConsent] = useState(initial.photoConsent ?? false);
 
   const canSave = firstName.trim() && lastName.trim() && admissionNo.trim();
 
@@ -329,6 +341,7 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
           </Field>
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Field label="Class (optional)" htmlFor="sf-class">
           <select
             id="sf-class"
@@ -346,6 +359,18 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
             ))}
           </select>
         </Field>
+        <Field label="Date of birth (optional)" htmlFor="sf-dob">
+          <input
+            id="sf-dob"
+            type="date"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
+            value={dob}
+            onChange={(e) => setDob(e.target.value)}
+          />
+        </Field>
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Field label="Guardian name (optional)" htmlFor="sf-guardian-name">
@@ -385,6 +410,20 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
           />
         </Field>
 
+        {websiteOptions && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span className="sk-lab">Website birthdays</span>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, cursor: 'pointer' }}>
+              <input type="checkbox" checked={showOnWebsite} onChange={(e) => setShowOnWebsite(e.target.checked)} />
+              Show on the birthday wall
+            </label>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, cursor: 'pointer' }}>
+              <input type="checkbox" checked={photoConsent} onChange={(e) => setPhotoConsent(e.target.checked)} />
+              Parents have given photo consent
+            </label>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
             className="sk-btn sk-press"
@@ -399,6 +438,9 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
                 guardianName: guardianName.trim(),
                 guardianPhone: guardianPhone.trim(),
                 email: email.trim(),
+                dob,
+                showOnWebsite,
+                photoConsent,
               })
             }
             disabled={isSaving || !canSave}
@@ -554,6 +596,7 @@ export default function StudentsPage() {
         guardianName: data.guardianName || undefined,
         guardianPhone: data.guardianPhone || undefined,
         email: data.email || undefined,
+        dob: data.dob || undefined,
       };
       return api.post<Student>('/manage/students', body);
     },
@@ -581,7 +624,7 @@ export default function StudentsPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: StudentFormData }) => {
-      const body: Record<string, string | undefined> = {
+      const body: Record<string, string | boolean | undefined> = {
         firstName: data.firstName,
         lastName: data.lastName,
         admissionNo: data.admissionNo,
@@ -590,6 +633,9 @@ export default function StudentsPage() {
         guardianName: data.guardianName || undefined,
         guardianPhone: data.guardianPhone || undefined,
         email: data.email || undefined,
+        dob: data.dob || undefined,
+        showOnWebsite: data.showOnWebsite,
+        photoConsent: data.photoConsent,
       };
       return api.put<Student>(`/manage/students/${id}`, body);
     },
@@ -861,7 +907,11 @@ export default function StudentsPage() {
               guardianName: editingStudent.guardianName ?? '',
               guardianPhone: editingStudent.guardianPhone ?? '',
               email: editingStudent.email ?? '',
+              dob: editingStudent.dob ? editingStudent.dob.slice(0, 10) : '',
+              showOnWebsite: editingStudent.showOnWebsite ?? true,
+              photoConsent: editingStudent.photoConsent ?? false,
             }}
+            websiteOptions
             classes={classesQuery.data ?? []}
             onSave={(data) => updateMutation.mutate({ id: editId, data })}
             isSaving={updateMutation.isPending}
