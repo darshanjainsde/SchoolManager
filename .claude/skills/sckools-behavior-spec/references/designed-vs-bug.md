@@ -151,3 +151,16 @@ No design rationale covers any of these. Escalate immediately:
 | "Removed teacher still shows on the website" | Only if the office ticked **Keep them on the website**; by default the featured card is removed and the projection also drops cards linked to a LEFT teacher | A LEFT teacher rendered on the Educators band with the box unticked |
 | "Onboarding a teacher says they already have a record here" | 409 `ALREADY_HERE_INACTIVE`: the email belongs to a LEFT row at this school — Reactivate it, don't add a duplicate | The same 409 for an email that belongs to **nobody** here |
 | "The app shows 'No longer enrolled' for my child" | The school marked the child as left; the spine stays so the family knows why the diary stopped, with one Remove action | That card for a child the school did **not** mark, or a sibling's diary also going dark |
+
+## Birthdays on the website (Active Roster, Track B)
+
+| Reported as | Designed — why | That WOULD be a bug |
+|---|---|---|
+| "The wall is empty / 38 children never appear" | Only ACTIVE students **with a date of birth** are on the wall; the Celebrations tab counts the ones without one and points to the student form | A child with a `dob` and `showOnWebsite` missing from the window |
+| "I turned the audience to Public and it would not save" | 400 `CONSENT_REQUIRED` until the consent box is ticked in the same save — "families only" never becomes "everyone" by an unticked default | Save refused with the box ticked, or a PUBLIC wall live with `consentConfirmed=false` |
+| "The wall shows initials, not the child's photo" | A photo needs **both** the school's Photos switch and that child's `photoConsent` | A photo shown for a child without consent |
+| "A birthday on 29 Feb is missing" | It shows on 28 Feb in a non-leap year | Missing in a leap year, or shown twice |
+| "The page shows an age / the year" | Never designed: rows carry day and month only | Any year, age or student id in `/public/birthdays` |
+| "The homepage has no badge / ribbon" | Placement is Page only, nobody is in the window, or the section is off in Homepage → Sections | Placement TEASER_AND_PAGE with names in the window and nothing on the homepage |
+| "Portal families see it but the website does not" | Audience FAMILIES: the wall is behind sign-in on purpose | 404 on `/me/birthdays` with audience FAMILIES or BOTH |
+| "I can't pick Active students as the source" | Needs the `MANAGEMENT` plan; the tab disables the chip and keeps the typed list | Chip disabled for a school that has MANAGEMENT |

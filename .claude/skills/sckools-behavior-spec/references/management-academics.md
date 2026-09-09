@@ -359,6 +359,10 @@ platform client; every downstream lookup is then explicitly scoped by the exam's
 
 ## 15. Person lifecycle — the Active Roster (students, teachers, staff)
 
+Student also carries `dob` (date input on the console form, optional), `showOnWebsite` (default true) and
+`photoConsent` (default false) — the birthday wall's per-child switches (portals-and-sites §5). Only the
+update DTO accepts the two booleans; create leaves them at their defaults.
+
 Every person carries a `status` and an `isActive` mirror (`isActive === (status === 'ACTIVE')`), written
 **only** by lifecycle code: `student-lifecycle.service.ts` (`leave` / `readmit`), `teachers.service.ts`
 (`release` / `reactivate`), `staff.service.ts` (same). The update DTOs no longer accept `isActive`.

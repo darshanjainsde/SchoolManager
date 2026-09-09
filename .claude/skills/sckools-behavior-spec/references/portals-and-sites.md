@@ -20,8 +20,16 @@ Nav is filtered by the `features[]` array from `GET /auth/me`. **Until features 
 | `/app/events` | `EVENTS` |
 | `/app/announcements` | — |
 
-`/app/website` is a tabbed CMS: Homepage, About, Branding, Theme, Design, Courses, Admissions,
-Gallery, Hall of Fame, Staff, Contact.
+`/app/website` is a tabbed CMS: Studio (design), Homepage, About, Contact & address, Courses, Admissions,
+Hall of Fame, Celebrations, Gallery, Staff.
+
+**Celebrations tab** (Active Roster, Track B): the birthday wall's whole config is one `GET|PUT /site/celebrations`
+(`SchoolProfile.celebrationsConfig`, normalised by `celebrations-config.ts`). Turning the audience to PUBLIC/BOTH
+without `consentConfirmed` is refused 400 `CONSENT_REQUIRED` — the tab shows the consent tick and keeps Save
+disabled until it is ticked. `GET /site/celebrations/preview` is this week from records with the per-child
+`showOnWebsite` / `photoConsent` switches (they PUT `/manage/students/:id`) and the count of ACTIVE children
+with no `dob`. A school without `MANAGEMENT` cannot pick the Active-students source; it keeps a typed list
+(`manual`, max 500, no year). The section itself is switched on in Homepage → Sections (`showBirthdays`).
 
 ## 2. Teacher portal — `/teacher` (tenant host, `TEACHER`)
 
@@ -34,7 +42,8 @@ Class pickers offer **only the teacher's own classes** (commit `d4a6292`).
 
 ## 3. Student portal — `/portal` (tenant host, `STUDENT`)
 
-`Home` · `Timetable` · `Attendance` · `Results` · `Announcements` · `Profile`.
+`Home` · `Timetable` · `Attendance` · `Results` · `Announcements` · `Birthdays` (only while the school's wall
+audience is FAMILIES/BOTH and the section is on — `GET /me/birthdays` 404s otherwise) · `Profile`.
 
 Used by both student and guardian on one shared login — keep copy role-neutral.
 
@@ -74,13 +83,23 @@ Also: dark mode (system/light/dark), real server-side logout, Expo push registra
 ## 5. Public school site (tenant host)
 
 `GET /public/site` returns everything in one payload. Pages: `/` (homepage), `/academics`, `/admissions`,
-`/gallery`, `/connect` (events), `/contact`, `/blog`.
+`/gallery`, `/connect` (events), `/contact`, `/blog`, `/birthdays` (noindex, revalidate 60).
 
 **Only a `LIVE` school serves a public site** — `SETUP` and `SUSPENDED` return **404**, while the admin
 can still log in and build it.
 
 Homepage sections are individually toggleable (`showAdmissions`, `showGallery`, `showEvents`,
-`showContact`). Full detail always lives on the dedicated pages regardless of toggles.
+`showContact`, `showBirthdays`). Full detail always lives on the dedicated pages regardless of toggles.
+
+**Birthdays** (`public-birthdays.service.ts`): `GET /public/birthdays` answers only when `showBirthdays` is on AND
+the configured audience allows the public host (PUBLIC/BOTH); the portal's `GET /me/birthdays` needs
+FAMILIES/BOTH. Rows carry **day and month only** — never a year, an age, a date string or a student id
+(`key` is a hash). Only `ACTIVE` students with a `dob` and `showOnWebsite`; a photo rides only on
+`photoConsent` AND `showPhotos`, everyone else gets an initials coin. "Today" is the school's
+`timezone`; 29 Feb shows on 28 Feb in a non-leap year. Homepage teaser (CAKE_BADGE / RIBBON) only when
+placement is TEASER_AND_PAGE and somebody is in the window; page looks PARTY_WALL / MONTH_PLANNER /
+NOTICE_BOARD. Motion freezes under `animationLevel` NONE and `prefers-reduced-motion`. The Our-school menu
+gains a Birthdays leaf when `celebrations.enabled`.
 
 The Educators band projects `FeaturedStaff` rows whose linked teacher is still `ACTIVE` (or never linked);
 a teacher removed from the school never keeps a card unless the office ticked "Keep them on the website"
