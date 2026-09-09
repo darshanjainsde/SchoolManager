@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { withTenant, type AttendanceStatus } from '@skoolos/db';
-import { activeStudentsWhere, LEFT_STATUSES } from '../../common/roster/active-students';
+import { activeStudentsWhere } from '../../common/roster/active-students';
 import type { ClassDayStatus, MyClassSection } from '@skoolos/types';
 import { AuditService } from '../../common/audit/audit.service';
 import { ApiError } from '../../common/errors/api-error';

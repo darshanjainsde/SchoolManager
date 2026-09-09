@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
-import { activeStudentsWhere, LEFT_STATUSES } from '../../common/roster/active-students';
+import { activeStudentsWhere } from '../../common/roster/active-students';
 import type { AttendanceRatesResult, NotifyLowAttendanceResult } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { formatDateIST } from '../../common/notifications/format';

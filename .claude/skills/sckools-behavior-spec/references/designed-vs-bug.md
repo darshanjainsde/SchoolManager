@@ -139,3 +139,15 @@ No design rationale covers any of these. Escalate immediately:
 9. A `500` where a documented `4xx` exists (`REGISTER_LOCKED`, `TEACHER_CONFLICT`, `CLASS_NOT_OWNED`,
    `LEAVE_NOT_PENDING`, `REGISTER_CHANGE_OPEN`, `REGISTER_CHANGE_DECIDED`).
 10. Any date rule pivoting on UTC midnight instead of IST (except the exam-reminder cron).
+
+## People who leave (Active Roster)
+
+| Reported as | Designed — why | That WOULD be a bug |
+|---|---|---|
+| "I can't delete a student" | Once a child has attendance, results, diary, library or messages the API refuses with 409 `HAS_HISTORY`; the console opens **Mark as left** instead. `students.service.ts#remove` | Delete refused for a child with **no** history, or a delete that **succeeds** and takes the attendance with it |
+| "A child who left is missing from the register / diary / result sheet" | Every roster lists `ACTIVE` students only (`activeStudentsWhere`). Their row and history are on the Students page under **Alumni & left** | A left child still on a register, or an active child missing from one |
+| "The alumnus can't log in with the student code any more" | Every leaving status closes the child's login; alumni use the Homecoming door (a claim link), not a child's account | A **TRANSFERRED/LEFT** child who can still refresh a session |
+| "Re-admitted child was asked to set a password again" | Sessions were revoked on leaving, so re-admit sends a fresh invite | Re-admit without the login reopening at all |
+| "Removed teacher still shows on the website" | Only if the office ticked **Keep them on the website**; by default the featured card is removed and the projection also drops cards linked to a LEFT teacher | A LEFT teacher rendered on the Educators band with the box unticked |
+| "Onboarding a teacher says they already have a record here" | 409 `ALREADY_HERE_INACTIVE`: the email belongs to a LEFT row at this school — Reactivate it, don't add a duplicate | The same 409 for an email that belongs to **nobody** here |
+| "The app shows 'No longer enrolled' for my child" | The school marked the child as left; the spine stays so the family knows why the diary stopped, with one Remove action | That card for a child the school did **not** mark, or a sibling's diary also going dark |

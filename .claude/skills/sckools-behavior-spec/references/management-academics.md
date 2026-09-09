@@ -356,3 +356,46 @@ platform client; every downstream lookup is then explicitly scoped by the exam's
 - **Hard cap of 200 exams per run** (the function has `maxDuration: 60`). Hitting the cap logs a loud
   warning rather than silently dropping reminders.
 - Concurrency 10; one school's failure is logged and never aborts the run for the rest.
+
+## 15. Person lifecycle — the Active Roster (students, teachers, staff)
+
+Every person carries a `status` and an `isActive` mirror (`isActive === (status === 'ACTIVE')`), written
+**only** by lifecycle code: `student-lifecycle.service.ts` (`leave` / `readmit`), `teachers.service.ts`
+(`release` / `reactivate`), `staff.service.ts` (same). The update DTOs no longer accept `isActive`.
+
+- Students: `ACTIVE` · `ALUMNI` · `TRANSFERRED` · `LEFT`. Teachers and staff: `ACTIVE` · `LEFT`.
+- **Every roster and recipient query lists `ACTIVE` students only** through
+  `common/roster/active-students.ts#activeStudentsWhere` — attendance, the attendance bar, diary,
+  result sheets, push and inbox recipients, and the student-code school lookup. A source-reading guard
+  (`common/roster/roster-filter.spec.ts`) fails the suite when a listed file's `student.findMany` forgets.
+  `GET /manage/students?status=active|left|all` (default `active`; teachers always get `active`).
+- `POST /manage/students/:id/leave` `{ status, leftOn, reason?, note?, alumniBatch? }` — keeps the row
+  and every attendance/result/diary/library row under it, keeps `classSectionId` as "last class", sets
+  `leftOn`/`leftReason`/`leftNote` (`alumniBatch` defaults to the current year's name for `ALUMNI`),
+  **closes the login and revokes every session for every leaving status, alumni included** (the alumni
+  door is the Homecoming wing). 409 `NOT_ACTIVE` when already left. Audit `student.leave`.
+- `POST /manage/students/:id/readmit` `{ classSectionId? }` — same row back to `ACTIVE`, left fields
+  cleared, login reopened and a fresh set-password invite sent (old sessions were revoked). The class id is
+  checked against the school (FK checks bypass RLS). 409 `ALREADY_ACTIVE`.
+- `GET /manage/students/:id/clearance` — `{ libraryIssuesOut, finesDueRupees, feeDuesRupees,
+  unsignedRemarks, hasHistory }`. **Warns, never blocks.** `feeDuesRupees` is DEBIT − CREDIT over the fee
+  ledger, the same balance the Press reads before a TC.
+- `DELETE /manage/students/:id` — refused with 409 `HAS_HISTORY` once the child has any attendance,
+  result, diary, library or message row (Attendance and Result cascade on delete, so this used to wipe a
+  record silently). Delete is for a wrong entry only; the console falls through to "Mark as left".
+- An admission-number clash names the holder: "Admission number 0421 belongs to Aarav Mehta (alumni ·
+  2025-26)".
+- Teachers: `GET /manage/teachers/:id/release-impact` lists what they hold; `POST /:id/release`
+  `{ leftOn, reason?, note?, handover?: { classSections, timetableTeacherId, keepFeatured } }` hands over
+  class-teacher seats (named replacement or emptied), open timetable slots (reassigned or ended on
+  `leftOn`), rejects pending leave, drops the website card unless `keepFeatured`, then marks `LEFT` and
+  closes the login. `POST /:id/reactivate` reopens the same row. `createLogin` answers 409
+  `ALREADY_HERE_INACTIVE` when the email belongs to a LEFT row at **this** school (reactivate, don't
+  duplicate) and the existing 409 `ALREADY_AT_SCHOOL` when it is ACTIVE elsewhere.
+- Staff: `POST /manage/staff/:id/release` `{ leftOn, reason?, note? }` and `/:id/reactivate`; the
+  librarian guard reads `isActive`, so a released librarian loses `/library` at once.
+- Public site: `FeaturedStaff` rows linked to a `LEFT` teacher are never projected onto the Educators band.
+- Mobile: a refresh refused with "User no longer active" marks that child `closed` on the family shelf
+  (`family-store.ts#markClosed`), the app falls over to the next open sibling, and the spine reads "No
+  longer enrolled at {School}" with one Remove action. A student code that resolves to no school reads
+  "This code is not enrolled at any school. Ask the school office."

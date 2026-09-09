@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
-import { activeStudentsWhere, LEFT_STATUSES } from '../../common/roster/active-students';
+import { activeStudentsWhere } from '../../common/roster/active-students';
 import type {
   DiaryEntryRow,
   DiaryPageResult,

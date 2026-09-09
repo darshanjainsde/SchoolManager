@@ -82,6 +82,10 @@ can still log in and build it.
 Homepage sections are individually toggleable (`showAdmissions`, `showGallery`, `showEvents`,
 `showContact`). Full detail always lives on the dedicated pages regardless of toggles.
 
+The Educators band projects `FeaturedStaff` rows whose linked teacher is still `ACTIVE` (or never linked);
+a teacher removed from the school never keeps a card unless the office ticked "Keep them on the website"
+(`public-site.service.ts`, Active Roster).
+
 Theming (`SchoolProfile`): brand colours, heading font, `heroLayout` / `heroTextAlign` /
 `heroOverlayStyle` / `heroOverlayOpacity` / `heroHeight`, `headlineAccent`, `navStyle` / `navColor` /
 `navTextColor`, nav CTA and login button labels/visibility, `animationLevel`, `themePreset`.
