@@ -138,7 +138,7 @@ describe('AttendanceService', () => {
       await flushBackgroundWork();
 
       expect(txMock.student.findMany).toHaveBeenNthCalledWith(2, {
-        where: { schoolId: SCHOOL, id: { in: ['s-1'] }, userId: { not: null } },
+        where: { schoolId: SCHOOL, status: 'ACTIVE', id: { in: ['s-1'] }, userId: { not: null } },
         select: { userId: true, firstName: true, lastName: true },
       });
       // Exactly the fields sendAbsenceNotice reads — nothing renders "undefined".

@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
+import { activeStudentsWhere, LEFT_STATUSES } from '../../common/roster/active-students';
 import type { RosterStudent } from '@skoolos/types';
 import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
@@ -53,9 +54,17 @@ export const ROSTER_SELECT = {
 
 export type { RosterStudent };
 
+/**
+ * Which slice of the roll to list. `active` (default) is the school as it is
+ * today; `left` is everyone who passed out, transferred or left; `all` is the
+ * whole register. Teachers only ever get `active`.
+ */
+export type StudentListStatus = 'active' | 'left' | 'all';
+
 interface ListFilters {
   classSectionId?: string;
   projection?: StudentProjection;
+  status?: StudentListStatus;
 }
 
 @Injectable()
@@ -66,10 +75,13 @@ export class StudentsService {
   ) {}
 
   async list(schoolId: string, filters: ListFilters = {}) {
-    const where = {
-      schoolId,
-      ...(filters.classSectionId ? { classSectionId: filters.classSectionId } : {}),
-    };
+    const extra = filters.classSectionId ? { classSectionId: filters.classSectionId } : {};
+    const where =
+      filters.status === 'all'
+        ? { schoolId, ...extra }
+        : filters.status === 'left'
+          ? { schoolId, status: { in: [...LEFT_STATUSES] }, ...extra }
+          : activeStudentsWhere(schoolId, extra);
     const orderBy = [{ admissionNo: 'asc' as const }];
 
     if (filters.projection === 'roster') {

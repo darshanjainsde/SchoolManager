@@ -120,7 +120,7 @@ describe('ExamsService', () => {
       await flushBackgroundWork();
 
       expect(txMock.student.findMany).toHaveBeenCalledWith({
-        where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION, userId: { not: null } },
+        where: { schoolId: SCHOOL, status: 'ACTIVE', classSectionId: CLASS_SECTION, userId: { not: null } },
         select: { userId: true },
       });
       // The payload must carry exactly what the mail composer reads — the

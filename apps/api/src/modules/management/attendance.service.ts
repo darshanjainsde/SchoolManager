@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { withTenant, type AttendanceStatus } from '@skoolos/db';
+import { activeStudentsWhere, LEFT_STATUSES } from '../../common/roster/active-students';
 import type { ClassDayStatus, MyClassSection } from '@skoolos/types';
 import { AuditService } from '../../common/audit/audit.service';
 import { ApiError } from '../../common/errors/api-error';
@@ -61,7 +62,7 @@ export class AttendanceService {
       // read would silently drop children from the register. Bounded by class
       // size, which does not grow with the platform.
       const students = await tx.student.findMany({
-        where: { schoolId, classSectionId },
+        where: activeStudentsWhere(schoolId, { classSectionId }),
         orderBy: [{ admissionNo: 'asc' }],
         select: { id: true },
       });
@@ -388,7 +389,7 @@ export class AttendanceService {
       // Deliberately uncapped: every submitted mark is validated against this
       // roster, so a partial read would reject marks for real pupils.
       const roster = await tx.student.findMany({
-        where: { schoolId, classSectionId: dto.classSectionId },
+        where: activeStudentsWhere(schoolId, { classSectionId: dto.classSectionId }),
         select: { id: true },
       });
       const rosterIds = new Set(roster.map((s) => s.id));

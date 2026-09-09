@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
+import { activeStudentsWhere, LEFT_STATUSES } from '../../common/roster/active-students';
 import type {
   DiaryEntryRow,
   DiaryPageResult,
@@ -224,7 +225,7 @@ export class DiaryService {
       let named: { id: string; firstName: string; lastName: string }[] = [];
       if (studentIds.length > 0) {
         named = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
-          where: { schoolId, id: { in: studentIds }, classSectionId: dto.classSectionId },
+          where: activeStudentsWhere(schoolId, { id: { in: studentIds }, classSectionId: dto.classSectionId }),
           select: { id: true, firstName: true, lastName: true },
         });
         if (named.length !== studentIds.length) {
@@ -327,11 +328,10 @@ export class DiaryService {
     studentIds: string[] | null,
   ): Promise<string[]> {
     const students = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
-      where: {
-        schoolId,
+      where: activeStudentsWhere(schoolId, {
         userId: { not: null },
         ...(studentIds ? { id: { in: studentIds } } : { classSectionId }),
-      },
+      }),
       select: { userId: true },
     });
     return students.map((s) => s.userId).filter((id): id is string => Boolean(id));

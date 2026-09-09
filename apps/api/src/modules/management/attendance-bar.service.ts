@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
+import { activeStudentsWhere, LEFT_STATUSES } from '../../common/roster/active-students';
 import type { AttendanceRatesResult, NotifyLowAttendanceResult } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { formatDateIST } from '../../common/notifications/format';
@@ -101,7 +102,7 @@ export class AttendanceBarService {
       const students = await // Deliberately uncapped — see attendance.service: a partial roster loses
       // children from the register rather than merely shortening a list.
       tx.student.findMany({
-        where: { schoolId, classSectionId },
+        where: activeStudentsWhere(schoolId, { classSectionId }),
         orderBy: [{ rollNo: 'asc' }, { admissionNo: 'asc' }],
         select: { id: true, firstName: true, lastName: true, rollNo: true },
       });
@@ -235,7 +236,7 @@ export class AttendanceBarService {
 
       // The in-app bell, in the same transaction as the receipt.
       const withLogins = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
-        where: { schoolId, id: { in: studentIds }, userId: { not: null } },
+        where: activeStudentsWhere(schoolId, { id: { in: studentIds }, userId: { not: null } }),
         select: { id: true, userId: true },
       });
       const percentById = new Map(targets.map((t) => [t.studentId, t.percent]));

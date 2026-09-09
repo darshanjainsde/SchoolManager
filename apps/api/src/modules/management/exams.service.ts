@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, withTenant } from '@skoolos/db';
+import { activeStudentsWhere, LEFT_STATUSES } from '../../common/roster/active-students';
 import {
   assertNotificationOutboxKind,
   type Exam,
@@ -479,7 +480,7 @@ export class ExamsService {
       }
 
       const roster = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
-        where: { schoolId, classSectionId: exam.classSectionId },
+        where: activeStudentsWhere(schoolId, { classSectionId: exam.classSectionId }),
         select: { id: true },
       });
       const rosterIds = new Set(roster.map((s) => s.id));

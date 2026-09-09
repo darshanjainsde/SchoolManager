@@ -110,6 +110,7 @@ describe('StudentsService.list', () => {
 
     expect(txMock.student.findMany.mock.calls[0][0].where).toEqual({
       schoolId: SCHOOL,
+      status: 'ACTIVE',
       classSectionId: CLASS_SECTION,
     });
   });
@@ -122,7 +123,7 @@ describe('StudentsService.list', () => {
     expect(args.include).toEqual({
       classSection: { select: { name: true, grade: { select: { name: true } } } },
     });
-    expect(args.where).toEqual({ schoolId: SCHOOL });
+    expect(args.where).toEqual({ schoolId: SCHOOL, status: 'ACTIVE' });
   });
 });
 
