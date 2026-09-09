@@ -36,6 +36,7 @@ export interface SiteHomepage {
   showGallery?: boolean;
   showEvents?: boolean;
   showContact?: boolean;
+  showBirthdays?: boolean;
 }
 
 export const HOMEPAGE_SECTIONS = [
@@ -43,6 +44,7 @@ export const HOMEPAGE_SECTIONS = [
   { key: 'showGallery', label: 'Gallery', detail: 'Photo grid · full page at /gallery' },
   { key: 'showEvents', label: 'Connect (events)', detail: 'Network events calendar · full page at /connect' },
   { key: 'showContact', label: 'Contact & enquiry', detail: 'Contact card and enquiry form · full page at /contact' },
+  { key: 'showBirthdays', label: 'Birthdays', detail: 'Who has a birthday · full page at /birthdays' },
 ] as const;
 
 export interface StatRow {

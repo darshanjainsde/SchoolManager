@@ -28,7 +28,7 @@ function brandedData(overrides?: Partial<PublicSiteData['profile']>): PublicSite
       heroUrl: null, heroImages: [], aboutText: null,
       principalName: null, principalMessage: null, principalPhotoUrl: null,
       aboutImageUrl: null,
-      showAdmissions: true, showGallery: true, showEvents: true, showContact: true,
+      showAdmissions: true, showGallery: true, showEvents: true, showContact: true, showBirthdays: false,
     },
     stats: [], socialLinks: [], gallery: [], staff: [], courses: [],
     admissions: { steps: [], showFees: false, feeNote: null },

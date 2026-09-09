@@ -194,6 +194,7 @@ export class PublicSiteService {
               showGallery: homepage.showGallery,
               showEvents: homepage.showEvents,
               showContact: homepage.showContact,
+              showBirthdays: homepage.showBirthdays,
             }
           : null,
         stats: stats.map((s) => ({ label: s.label, value: s.value })),

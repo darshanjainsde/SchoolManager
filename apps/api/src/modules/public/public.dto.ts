@@ -118,6 +118,7 @@ export interface PublicSiteData {
     showGallery: boolean;
     showEvents: boolean;
     showContact: boolean;
+    showBirthdays: boolean;
   } | null;
   stats: { label: string; value: string }[];
   socialLinks: { platform: string; url: string }[];

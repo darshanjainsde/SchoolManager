@@ -133,6 +133,7 @@ export class UpdateHomepageDto {
   @IsOptional() @IsBoolean() showGallery?: boolean;
   @IsOptional() @IsBoolean() showEvents?: boolean;
   @IsOptional() @IsBoolean() showContact?: boolean;
+  @IsOptional() @IsBoolean() showBirthdays?: boolean;
 }
 
 export class StatItemDto {

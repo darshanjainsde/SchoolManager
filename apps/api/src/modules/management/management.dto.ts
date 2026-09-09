@@ -431,6 +431,10 @@ export class UpdateStudentDto {
   // `isActive` is NOT editable here: it mirrors `status`, and both are written
   // only by StudentLifecycleService (leave / readmit). Track A, 2026-09.
 
+  // Birthdays (Track B): off the wall with one switch; a photo needs the family's yes.
+  @IsOptional() @IsBoolean() showOnWebsite?: boolean;
+  @IsOptional() @IsBoolean() photoConsent?: boolean;
+
   // ── Admission-register facts (statutory TC, Annexure-I). All optional. ──
   @IsOptional() @IsString() @Length(0, 120) fatherName?: string;
   @IsOptional() @IsString() @Length(0, 120) motherName?: string;

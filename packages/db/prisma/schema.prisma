@@ -623,6 +623,10 @@ model SchoolProfile {
   customHtmlBlock     String?
   blogLayout          String  @default("HERO_GRID")
   blogHeroLimit       Int     @default(1)
+  /// Birthdays & celebrations settings: source, window, name format, audience,
+  /// teaser and page style, wish line, manual list. Normalised on write and
+  /// on read by cms/internal/celebrations-config.ts; null = every default.
+  celebrationsConfig  Json?
   phone               String?
   email               String?
   addressLine1        String?
@@ -668,6 +672,9 @@ model HomepageContent {
   showGallery           Boolean  @default(true)
   showEvents            Boolean  @default(true)
   showContact           Boolean  @default(true)
+  /// Birthdays on the homepage (Active Roster, Track B). Off by default: a
+  /// new band must not appear on every live site the day it deploys.
+  showBirthdays         Boolean  @default(false)
   school                School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 }
 
