@@ -1,11 +1,42 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
+import { useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send, UserMinus, Undo2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
+import { ApiError } from '@/lib/api';
 import { useHost } from '@/components/use-host';
+import DialogShell from '@/components/ui/dialog-shell';
+import LeaveDialog from './leave-dialog';
+
+/** The three slices of the roll the page can show (Active Roster). */
+type StatusTab = 'active' | 'left' | 'all';
+const STATUS_TABS: { id: StatusTab; label: string }[] = [
+  { id: 'active', label: 'Active' },
+  { id: 'left', label: 'Alumni & left' },
+  { id: 'all', label: 'All' },
+];
+
+type StudentStatus = 'ACTIVE' | 'ALUMNI' | 'TRANSFERRED' | 'LEFT';
+
+/** "Alumni · 2025-26", "Transferred · 31 Mar 2026", "Left · 31 Mar 2026". */
+function statusLabel(s: { status: StudentStatus; leftOn: string | null; alumniBatch: string | null }): string {
+  const when = s.leftOn
+    ? new Date(s.leftOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+  if (s.status === 'ALUMNI') return `Alumni${s.alumniBatch ? ` · ${s.alumniBatch}` : when ? ` · ${when}` : ''}`;
+  if (s.status === 'TRANSFERRED') return `Transferred${when ? ` · ${when}` : ''}`;
+  return `Left${when ? ` · ${when}` : ''}`;
+}
+
+/** The API answers a designed refusal with a `code` in the body; clients branch on it, never on the message. */
+function errorCode(err: unknown): string | undefined {
+  if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+    return (err.body as { code?: string }).code;
+  }
+  return undefined;
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +59,9 @@ interface Student {
   photoAssetId: string | null;
   classSection: { name: string; grade: { name: string } } | null;
   userId: string | null;
+  status: StudentStatus;
+  leftOn: string | null;
+  alumniBatch: string | null;
 }
 
 interface MediaAsset {
@@ -83,84 +117,6 @@ function ringBlur(e: FocusEvent<HTMLElement>) {
 }
 
 // ── Dialog shell (Escape-to-close + basic focus trap) ────────────────────────
-
-function DialogShell({
-  onClose,
-  labelledBy,
-  maxWidth = 420,
-  children,
-}: {
-  onClose: () => void;
-  labelledBy: string;
-  maxWidth?: number;
-  children: ReactNode;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    const focusable = el?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
-    focusable?.[0]?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key === 'Tab' && el) {
-        const items = Array.from(
-          el.querySelectorAll<HTMLElement>(
-            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-          ),
-        );
-        if (items.length === 0) return;
-        const first = items[0];
-        const last = items[items.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [onClose]);
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 50,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(15, 30, 24, 0.5)',
-        padding: 16,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={containerRef}
-        className="sk-card"
-        style={{ width: '100%', maxWidth }}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
 
 // ── Invite-sent confirmation modal ───────────────────────────────────────────
 // Never shows a password — the recipient sets their own via the emailed link.
@@ -534,8 +490,23 @@ export default function StudentsPage() {
     null,
   );
   const [promptStudent, setPromptStudent] = useState<Student | null>(null);
+  // Active Roster: which slice of the roll, the multi-select on it, and the
+  // children a "Mark as left" dialog is open for.
+  const [statusTab, setStatusTab] = useState<StatusTab>('active');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [leaveTargets, setLeaveTargets] = useState<Student[] | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────────────
+  // The school's feature set (shared with the sidebar's query): PRESS means a
+  // Transfer Certificate is one click away after marking a child as left.
+  const meQuery = useQuery({
+    queryKey: ['me', host],
+    queryFn: () => api.get<{ features?: string[] }>('/auth/me'),
+    enabled: !!host,
+    staleTime: 5 * 60_000,
+  });
+  const hasPress = (meQuery.data?.features ?? []).includes('PRESS');
+
   const classesQuery = useQuery({
     queryKey: ['mng-classes'],
     queryFn: () => api.get<SchoolClass[]>('/manage/classes'),
@@ -545,10 +516,11 @@ export default function StudentsPage() {
   });
 
   const studentsQuery = useQuery({
-    queryKey: ['mng-students', classFilter],
+    queryKey: ['mng-students', classFilter, statusTab],
     queryFn: () => {
-      const qs = classFilter ? `?classSectionId=${encodeURIComponent(classFilter)}` : '';
-      return api.get<Student[]>(`/manage/students${qs}`);
+      const params = new URLSearchParams({ status: statusTab });
+      if (classFilter) params.set('classSectionId', classFilter);
+      return api.get<Student[]>(`/manage/students?${params.toString()}`);
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -644,8 +616,42 @@ export default function StudentsPage() {
       void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
       toast.success('Student removed');
     },
-    onError: (err: Error) => toast.error(`Failed to delete student: ${err.message}`),
+    onError: (err: Error, id) => {
+      // Delete is for a wrong entry only. A child with attendance, results,
+      // diary, library or messages is marked as left instead — the API
+      // refuses (HAS_HISTORY) and the dialog opens in Delete's place.
+      if (errorCode(err) === 'HAS_HISTORY') {
+        toast.error('This student has history. Mark them as left instead.');
+        const target = (studentsQuery.data ?? []).find((s) => s.id === id);
+        if (target) setLeaveTargets([target]);
+        return;
+      }
+      toast.error(`Failed to delete student: ${err.message}`);
+    },
   });
+
+  const readmitMutation = useMutation({
+    mutationFn: (id: string) => api.post<{ id: string; status: 'ACTIVE' }>(`/manage/students/${id}/readmit`, {}),
+    onSuccess: (_r, id) => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
+      // Back on the roll with no class yet: land the office on the edit form
+      // so the seat is the next thing they set, on the Active tab.
+      setStatusTab('active');
+      setShowAdd(false);
+      setEditId(id);
+      toast.success('Re-admitted — set their class');
+    },
+    onError: (err: Error) => toast.error(`Could not re-admit: ${err.message}`),
+  });
+
+  function toggleSelected(id: string, on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
 
   const createLoginMutation = useMutation({
     mutationFn: ({ studentId, email }: { studentId: string; email: string }) =>
@@ -672,9 +678,12 @@ export default function StudentsPage() {
   // Derive the initial values for the edit form from current student data
   const editingStudent = editId ? (studentsQuery.data ?? []).find((s) => s.id === editId) : null;
 
-  // Safe-delete: confirm before firing the destructive mutation.
+  // Safe-delete: confirm before firing the destructive mutation. The API
+  // refuses once the child has history, and the leave dialog takes over.
   function confirmDeleteStudent(student: Student) {
-    const ok = window.confirm(`Remove ${student.firstName} ${student.lastName}? This can’t be undone.`);
+    const ok = window.confirm(
+      `Delete ${student.firstName} ${student.lastName}? This is for a wrong entry only and can’t be undone. A child who has left the school should be marked as left instead.`,
+    );
     if (ok) deleteMutation.mutate(student.id);
   }
 
@@ -709,10 +718,28 @@ export default function StudentsPage() {
   });
   const unassignedCount = students.filter((s) => !s.classSectionId).length;
   const loginCount = students.filter((s) => s.userId).length;
+  // Only active children can be marked as left, and only the ones on screen.
+  const selectable = statusTab === 'active';
+  const selectedShown = selectable ? students.filter((s) => selected.has(s.id)) : [];
+  const allShownSelected = selectable && students.length > 0 && students.every((s) => selected.has(s.id));
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      {/* Mark as left — one child from a row, or the whole selection */}
+      {leaveTargets && leaveTargets.length > 0 && (
+        <LeaveDialog
+          students={leaveTargets}
+          hasPress={hasPress}
+          onDone={() => {
+            setLeaveTargets(null);
+            setSelected(new Set());
+            void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
+          }}
+          onCancel={() => setLeaveTargets(null)}
+        />
+      )}
+
       {/* Invite-sent confirmation modal */}
       {inviteResult && (
         <InviteSentModal
@@ -758,6 +785,26 @@ export default function StudentsPage() {
           )}
         </button>
       </header>
+
+      {/* Which slice of the roll: the school as it is today, everyone who has
+          left, or the whole register. The same recipe as the Alumni Office tabs. */}
+      <nav className="sk-tabs" style={{ marginBottom: 18, padding: 0 }} aria-label="Roll">
+        {STATUS_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className="sk-tab"
+            aria-current={statusTab === t.id ? 'page' : undefined}
+            data-active={statusTab === t.id ? 'true' : undefined}
+            onClick={() => {
+              setStatusTab(t.id);
+              setSelected(new Set());
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
 
       {students.length > 0 && (
         <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
@@ -865,11 +912,33 @@ export default function StudentsPage() {
       {!studentsQuery.isLoading && students.length === 0 && (
         <p className="sk-state">
           {allStudents.length === 0
-            ? 'No students yet. Add the first one above.'
+            ? statusTab === 'left'
+              ? 'Nobody has left yet. When a child passes out or moves school, mark them as left and they will be kept here.'
+              : 'No students yet. Add the first one above.'
             : search.trim()
               ? `Nobody matches “${search.trim()}”.`
               : 'No students in that class.'}
         </p>
+      )}
+
+      {/* The selection bar: how many, and the one thing you do with them. */}
+      {selectedShown.length > 0 && (
+        <div className="sk-toolbar" role="region" aria-label="Selected students" style={{ marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 650 }}>
+            {selectedShown.length} selected
+          </span>
+          <button
+            type="button"
+            className="sk-btn sk-press"
+            data-variant="primary"
+            onClick={() => setLeaveTargets(selectedShown)}
+          >
+            <UserMinus className="h-4 w-4" /> Mark as left
+          </button>
+          <button type="button" className="sk-btn sk-press" onClick={() => setSelected(new Set())}>
+            Clear
+          </button>
+        </div>
       )}
 
       {/* Students table */}
@@ -879,6 +948,18 @@ export default function StudentsPage() {
             <table className="sk-tbl">
               <thead>
                 <tr>
+                  {selectable && (
+                    <th style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select every student shown"
+                        checked={allShownSelected}
+                        onChange={(e) =>
+                          setSelected(e.target.checked ? new Set(students.map((s) => s.id)) : new Set())
+                        }
+                      />
+                    </th>
+                  )}
                   <th>Roll</th>
                   <th>Name</th>
                   <th>Admission no.</th>
@@ -901,6 +982,16 @@ export default function StudentsPage() {
                   // Reduced motion collapses this to the settled row, which is
                   // the same information minus the pointer.
                   <tr key={student.id} className={student.id === justAddedId ? 'sk-pinin sk-in' : undefined}>
+                    {selectable && (
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${student.firstName} ${student.lastName}`}
+                          checked={selected.has(student.id)}
+                          onChange={(e) => toggleSelected(student.id, e.target.checked)}
+                        />
+                      </td>
+                    )}
                     {/* Roll and admission numbers are read down the column, so
                         they take the register's monospace face. */}
                     <td className="num">{student.rollNo ?? '—'}</td>
@@ -916,6 +1007,12 @@ export default function StudentsPage() {
                         <Link href={`/app/students/${student.id}`} className="sk-seelink" style={{ color: 'var(--sk-ink)', fontWeight: 650 }}>
                           {student.firstName} {student.lastName}
                         </Link>
+                        {/* Where they stand, when it is not "here". */}
+                        {student.status !== 'ACTIVE' && (
+                          <span className="sk-pill" data-tone={student.status === 'ALUMNI' ? 'info' : 'neutral'}>
+                            {statusLabel(student)}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="num">{student.admissionNo}</td>
@@ -983,17 +1080,43 @@ export default function StudentsPage() {
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button
-                          className="sk-btn sk-press"
-                          data-icon
-                          data-tone="bad"
-                          aria-label={`Delete ${student.firstName} ${student.lastName}`}
-                          title="Delete"
-                          disabled={deleteMutation.isPending}
-                          onClick={() => confirmDeleteStudent(student)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {student.status === 'ACTIVE' ? (
+                          <>
+                            {/* The ordinary way a child leaves the roll. */}
+                            <button
+                              className="sk-btn sk-press"
+                              data-icon
+                              aria-label={`Mark ${student.firstName} ${student.lastName} as left`}
+                              title="Mark as left"
+                              onClick={() => setLeaveTargets([student])}
+                            >
+                              <UserMinus className="h-4 w-4" />
+                            </button>
+                            {/* For a wrong entry only — the API refuses once there is history. */}
+                            <button
+                              className="sk-btn sk-press"
+                              data-icon
+                              data-tone="bad"
+                              aria-label={`Delete ${student.firstName} ${student.lastName}`}
+                              title="Delete (wrong entry only)"
+                              disabled={deleteMutation.isPending}
+                              onClick={() => confirmDeleteStudent(student)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="sk-btn sk-press"
+                            data-icon
+                            aria-label={`Re-admit ${student.firstName} ${student.lastName}`}
+                            title="Re-admit"
+                            disabled={readmitMutation.isPending}
+                            onClick={() => readmitMutation.mutate(student.id)}
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </span>
                     </td>
                   </tr>
