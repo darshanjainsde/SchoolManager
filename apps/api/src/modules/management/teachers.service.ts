@@ -6,9 +6,21 @@ import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
-import type { CreateLoginDto, CreateTeacherDto, UpdateTeacherDto } from './management.dto';
+import { closeLogin, reopenLogin } from './internal/close-login';
+import { AuditService } from '../../common/audit/audit.service';
+import type { CreateLoginDto, CreateTeacherDto, ReleaseTeacherDto, UpdateTeacherDto } from './management.dto';
 import type { LoginInviteResult } from './students.service';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+
+/** What a teacher still holds at the school — the handover sheet reads this. */
+export interface ReleaseImpact {
+  classTeacherOf: { id: string; label: string }[];
+  timetableSlots: number;
+  pendingLeave: number;
+  featuredOnWebsite: boolean;
+  libraryIssuesOut: number;
+  openThreads: number;
+}
 
 export type { TeacherProfile };
 
@@ -17,6 +29,7 @@ export class TeachersService {
   constructor(
     private readonly passwords: PasswordService,
     private readonly invites: LoginInviteService,
+    private readonly audit: AuditService,
   ) {}
 
   async list(schoolId: string) {
@@ -130,34 +143,133 @@ export class TeachersService {
   }
 
   /**
-   * "Remove from this school" (Phase 5·1) — the clean off-board that FREES a
-   * teacher to be onboarded elsewhere. Deactivates rather than deletes (a
-   * hard delete fails on references and erases history): Teacher.isActive
-   * false + their login disabled and every session revoked. The one-school
-   * guard in `createLogin` only blocks on ACTIVE rows, so after this the new
-   * school onboards them normally.
+   * What a teacher still holds — shown before the office confirms "Remove
+   * from this school", so every seat and period is handed over on purpose.
    */
-  async release(schoolId: string, id: string): Promise<{ released: true }> {
+  async releaseImpact(schoolId: string, id: string): Promise<ReleaseImpact> {
+    return withTenant(schoolId, async (tx) => {
+      const t = await tx.teacher.findFirst({ where: { schoolId, id }, select: { id: true } });
+      if (!t) throw new NotFoundException('Teacher not found');
+      const [sections, slots, leave, featured, issues, threads] = await Promise.all([
+        tx.classSection.findMany({
+          take: LIST_CEILING.STRUCTURE,
+          where: { schoolId, classTeacherId: id },
+          select: { id: true, name: true, grade: { select: { name: true } } },
+          orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
+        }),
+        tx.timetableSlot.count({ where: { schoolId, teacherId: id, effectiveTo: null } }),
+        tx.leaveApplication.count({ where: { schoolId, teacherId: id, status: 'PENDING' } }),
+        tx.featuredStaff.count({ where: { schoolId, teacherId: id } }),
+        tx.libraryIssue.count({ where: { schoolId, teacherId: id, returnedOn: null } }),
+        tx.messageThread.count({ where: { schoolId, teacherId: id } }),
+      ]);
+      return {
+        classTeacherOf: sections.map((s) => ({ id: s.id, label: `${s.grade.name} ${s.name}` })),
+        timetableSlots: slots,
+        pendingLeave: leave,
+        featuredOnWebsite: featured > 0,
+        libraryIssuesOut: issues,
+        openThreads: threads,
+      };
+    });
+  }
+
+  /**
+   * "Remove from this school" (Phase 5·1, handover added in Track A) — the
+   * clean off-board that FREES a teacher to be onboarded elsewhere.
+   * Deactivates rather than deletes (a hard delete fails on references and
+   * erases history): hands over what they held, marks the row LEFT with its
+   * `isActive` mirror, then closes the login and revokes every session. The
+   * one-school guard in `createLogin` only blocks on ACTIVE rows, so after
+   * this the new school onboards them normally.
+   */
+  async release(schoolId: string, actorUserId: string, id: string, dto: ReleaseTeacherDto): Promise<{ released: true }> {
+    const leftOn = new Date(dto.leftOn);
+    const h = dto.handover ?? {};
     const userId = await withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { id }, select: { userId: true } });
+      const teacher = await tx.teacher.findFirst({ where: { schoolId, id }, select: { userId: true, status: true } });
       if (!teacher) throw new NotFoundException('Teacher not found');
-      await tx.teacher.update({ where: { id }, data: { isActive: false } });
+      if (teacher.status !== 'ACTIVE') throw new ApiError('NOT_ACTIVE', 'This teacher is not active', 409, 'status');
+
+      // Class-teacher seats: named replacements first (each checked against
+      // the school — FK checks bypass RLS), then everything else is emptied.
+      for (const [sectionId, to] of Object.entries(h.classSections ?? {})) {
+        if (to) {
+          const ok = await tx.teacher.findFirst({ where: { schoolId, id: to, status: 'ACTIVE' }, select: { id: true } });
+          if (!ok) throw new ApiError('VALIDATION', 'Replacement class teacher not found', 400, 'handover.classSections');
+        }
+        await tx.classSection.updateMany({ where: { schoolId, id: sectionId, classTeacherId: id }, data: { classTeacherId: to } });
+      }
+      await tx.classSection.updateMany({ where: { schoolId, classTeacherId: id }, data: { classTeacherId: null } });
+
+      // Open timetable periods: handed to one teacher, or ended on the leaving
+      // date so the timetable shows them as unassigned.
+      if (h.timetableTeacherId) {
+        const ok = await tx.teacher.findFirst({ where: { schoolId, id: h.timetableTeacherId, status: 'ACTIVE' }, select: { id: true } });
+        if (!ok) throw new ApiError('VALIDATION', 'Timetable teacher not found', 400, 'handover.timetableTeacherId');
+        await tx.timetableSlot.updateMany({ where: { schoolId, teacherId: id, effectiveTo: null }, data: { teacherId: h.timetableTeacherId } });
+      } else {
+        await tx.timetableSlot.updateMany({ where: { schoolId, teacherId: id, effectiveTo: null }, data: { effectiveTo: leftOn } });
+      }
+
+      await tx.leaveApplication.updateMany({
+        where: { schoolId, teacherId: id, status: 'PENDING' },
+        data: { status: 'REJECTED', reviewedAt: new Date(), reviewedById: actorUserId },
+      });
+
+      // The public Educators band must not keep showing somebody who left.
+      if (!h.keepFeatured) await tx.featuredStaff.deleteMany({ where: { schoolId, teacherId: id } });
+
+      await tx.teacher.update({
+        where: { id },
+        data: {
+          status: 'LEFT',
+          isActive: false,
+          leftOn,
+          leftReason: dto.reason?.trim() || null,
+          leftNote: dto.note?.trim() || null,
+          statusChangedAt: new Date(),
+          statusChangedById: actorUserId,
+        },
+      });
       return teacher.userId;
     });
 
-    if (userId) {
-      // Login shutdown is cross-cutting auth state — platform client, same
-      // revoke-all pattern as a password reset.
-      const platform = getPlatformPrisma();
-      await platform.$transaction([
-        platform.user.update({ where: { id: userId }, data: { isActive: false } }),
-        platform.refreshToken.updateMany({
-          where: { userId, revokedAt: null },
-          data: { revokedAt: new Date() },
-        }),
-      ]);
-    }
+    if (userId) await closeLogin(userId);
+    await this.audit.record({
+      schoolId,
+      actorUserId,
+      action: 'teacher.release',
+      entity: 'Teacher',
+      entityId: id,
+      meta: { leftOn: dto.leftOn, reason: dto.reason ?? null },
+    });
     return { released: true };
+  }
+
+  /** Back on the roll — the same row, the same login reopened. */
+  async reactivate(schoolId: string, actorUserId: string, id: string): Promise<{ id: string; status: 'ACTIVE' }> {
+    const userId = await withTenant(schoolId, async (tx) => {
+      const t = await tx.teacher.findFirst({ where: { schoolId, id }, select: { userId: true, status: true } });
+      if (!t) throw new NotFoundException('Teacher not found');
+      if (t.status === 'ACTIVE') throw new ApiError('ALREADY_ACTIVE', 'This teacher is already active', 409, 'status');
+      await tx.teacher.update({
+        where: { id },
+        data: {
+          status: 'ACTIVE',
+          isActive: true,
+          leftOn: null,
+          leftReason: null,
+          leftNote: null,
+          statusChangedAt: new Date(),
+          statusChangedById: actorUserId,
+        },
+      });
+      return t.userId;
+    });
+    if (userId) await reopenLogin(userId);
+    await this.audit.record({ schoolId, actorUserId, action: 'teacher.reactivate', entity: 'Teacher', entityId: id, meta: null });
+    return { id, status: 'ACTIVE' };
   }
 
   /**
@@ -177,6 +289,21 @@ export class TeachersService {
       const email = (dto.email?.trim() || teacher.email?.trim() || '').toLowerCase();
       if (!email) {
         throw new ApiError('EMAIL_REQUIRED', 'An email address is required to send the invite', 400, 'email');
+      }
+
+      // Same identity, same school, marked as left: that row is the person.
+      // Reactivating it keeps their history; a second row would not.
+      const hereInactive = await tx.teacher.findFirst({
+        where: { schoolId, email: { equals: email, mode: 'insensitive' }, status: 'LEFT', id: { not: teacherId } },
+        select: { firstName: true, lastName: true },
+      });
+      if (hereInactive) {
+        throw new ApiError(
+          'ALREADY_HERE_INACTIVE',
+          `${hereInactive.firstName} ${hereInactive.lastName} already has a record at this school that was marked as left — reactivate it instead of adding a duplicate`,
+          409,
+          'email',
+        );
       }
 
       // One school per teacher (Phase 5·1): the same identity (email) must

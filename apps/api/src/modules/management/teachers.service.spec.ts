@@ -13,6 +13,13 @@ const txMock = {
   mediaAsset: {
     findFirst: jest.fn(),
   },
+  // What release() hands over.
+  classSection: { findMany: jest.fn(), updateMany: jest.fn() },
+  timetableSlot: { count: jest.fn(), updateMany: jest.fn() },
+  leaveApplication: { count: jest.fn(), updateMany: jest.fn() },
+  featuredStaff: { count: jest.fn(), deleteMany: jest.fn() },
+  libraryIssue: { count: jest.fn() },
+  messageThread: { count: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -49,6 +56,16 @@ import type { LoginInviteService } from './internal/login-invite.service';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const TEACHER_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+const ACTOR = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const auditMock = { record: jest.fn().mockResolvedValue(undefined) };
+
+/** createLogin() looks the teacher up, then asks for a LEFT row with the same
+ *  email at this school. One mock serves both: the LEFT lookup answers null. */
+function mockTeacherRow(row: Record<string, unknown> | null) {
+  txMock.teacher.findFirst.mockImplementation(async ({ where }: { where?: Record<string, unknown> }) =>
+    where?.status === 'LEFT' ? null : row,
+  );
+}
 
 describe('TeachersService.createLogin', () => {
   const passwords = { hash: jest.fn() };
@@ -56,6 +73,7 @@ describe('TeachersService.createLogin', () => {
   const svc = new TeachersService(
     passwords as unknown as PasswordService,
     invites as unknown as LoginInviteService,
+    auditMock as never,
   );
 
   beforeEach(() => {
@@ -67,7 +85,7 @@ describe('TeachersService.createLogin', () => {
     invites.sendInvite.mockResolvedValue(true);
     // One-school guard default: this identity teaches nowhere else.
     platformMock.teacher.findFirst.mockResolvedValue(null);
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       email: null,
       userId: null,
@@ -120,7 +138,7 @@ describe('TeachersService.createLogin', () => {
   });
 
   it('falls back to the teacher\'s existing Teacher.email when the body omits one', async () => {
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       email: 'onfile@example.com',
       userId: null,
@@ -151,7 +169,7 @@ describe('TeachersService.createLogin', () => {
   });
 
   it('rejects a teacher that already has a login', async () => {
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       email: 'jane.doe@example.com',
       userId: 'user-existing',
@@ -180,6 +198,7 @@ describe('TeachersService.resendInvite', () => {
   const svc = new TeachersService(
     passwords as unknown as PasswordService,
     invites as unknown as LoginInviteService,
+    auditMock as never,
   );
 
   beforeEach(() => {
@@ -188,7 +207,7 @@ describe('TeachersService.resendInvite', () => {
       fn(txMock),
     );
     invites.sendInvite.mockResolvedValue(true);
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       email: 'jane.doe@example.com',
       userId: 'user-1',
@@ -214,7 +233,7 @@ describe('TeachersService.resendInvite', () => {
   });
 
   it('rejects a teacher with no login to resend', async () => {
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       email: 'jane.doe@example.com',
       userId: null,
@@ -233,6 +252,7 @@ describe('TeachersService.me', () => {
   const svc = new TeachersService(
     passwords as unknown as PasswordService,
     invites as unknown as LoginInviteService,
+    auditMock as never,
   );
   const USER_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 
@@ -244,7 +264,7 @@ describe('TeachersService.me', () => {
   });
 
   it("returns the caller's own Teacher row, resolved from userId (never an id in the URL)", async () => {
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       firstName: 'Priya',
       lastName: 'Rao',
@@ -275,7 +295,7 @@ describe('TeachersService.me', () => {
   });
 
   it('resolves photoAssetId → MediaAsset.url into photoUrl (self-uploaded avatar, POST /me/photo)', async () => {
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       firstName: 'Priya',
       lastName: 'Rao',
@@ -297,7 +317,7 @@ describe('TeachersService.me', () => {
   });
 
   it('returns photoUrl: null (not a crash) when the referenced MediaAsset row is gone', async () => {
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       firstName: 'Priya',
       lastName: 'Rao',
@@ -315,7 +335,7 @@ describe('TeachersService.me', () => {
   });
 
   it('sorts subjects alphabetically and classTeacherOf by grade order, not DB/insertion order', async () => {
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       firstName: 'Priya',
       lastName: 'Rao',
@@ -342,13 +362,13 @@ describe('TeachersService.me', () => {
   });
 
   it('throws a readable 404 when the TEACHER-role caller has no Teacher row', async () => {
-    txMock.teacher.findFirst.mockResolvedValue(null);
+    mockTeacherRow(null);
 
     await expect(svc.me(SCHOOL, USER_ID)).rejects.toThrow('No teacher profile found for this login');
   });
 
   it('returns empty arrays, not undefined, for a teacher with no subjects and no class-teacher section', async () => {
-    txMock.teacher.findFirst.mockResolvedValue({
+    mockTeacherRow({
       id: TEACHER_ID,
       firstName: 'Priya',
       lastName: 'Rao',
@@ -371,6 +391,7 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
   const svc = new TeachersService(
     passwords as unknown as PasswordService,
     invites as unknown as LoginInviteService,
+    auditMock as never,
   );
   const TEACHER_ID = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 
@@ -379,12 +400,27 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
     withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
     passwords.hash.mockResolvedValue('argon2-placeholder-hash');
     invites.sendInvite.mockResolvedValue(true);
-    txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID, email: 'p.iyer@x.com', userId: null });
+    mockTeacherRow({ id: TEACHER_ID, email: 'p.iyer@x.com', userId: null });
     txMock.teacher.update.mockResolvedValue({});
     txMock.user.create.mockResolvedValue({ id: 'user-9' });
     platformMock.teacher.findFirst.mockResolvedValue(null);
     platformMock.user.update.mockResolvedValue({});
     platformMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+    txMock.classSection.updateMany.mockResolvedValue({ count: 0 });
+    txMock.timetableSlot.updateMany.mockResolvedValue({ count: 0 });
+    txMock.leaveApplication.updateMany.mockResolvedValue({ count: 0 });
+    txMock.featuredStaff.deleteMany.mockResolvedValue({ count: 0 });
+  });
+
+  it('refuses to onboard an email that already belongs to a LEFT row at this school', async () => {
+    txMock.teacher.findFirst.mockImplementation(async ({ where }: { where?: Record<string, unknown> }) =>
+      where?.status === 'LEFT' ? { firstName: 'Priya', lastName: 'Iyer' } : { id: TEACHER_ID, email: 'p.iyer@x.com', userId: null },
+    );
+    await expect(svc.createLogin(SCHOOL, TEACHER_ID, { email: 'p.iyer@x.com' })).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'ALREADY_HERE_INACTIVE' },
+    });
+    expect(txMock.user.create).not.toHaveBeenCalled();
   });
 
   it('blocks onboarding when the identity is ACTIVE with a login at another school', async () => {
@@ -406,16 +442,21 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
     );
   });
 
-  it('release deactivates the teacher, disables the login and revokes every session', async () => {
-    txMock.teacher.findFirst.mockResolvedValue({ userId: 'user-9' });
+  it('release marks LEFT, mirrors isActive=false, ends open periods, disables the login and revokes every session', async () => {
+    mockTeacherRow({ userId: 'user-9', status: 'ACTIVE' });
 
-    const out = await svc.release(SCHOOL, TEACHER_ID);
+    const out = await svc.release(SCHOOL, ACTOR, TEACHER_ID, { leftOn: '2026-03-31', reason: 'Resigned' });
 
     expect(out).toEqual({ released: true });
     expect(txMock.teacher.update).toHaveBeenCalledWith({
       where: { id: TEACHER_ID },
-      data: { isActive: false },
+      data: expect.objectContaining({ status: 'LEFT', isActive: false, leftReason: 'Resigned', leftOn: new Date('2026-03-31'), statusChangedById: ACTOR }),
     });
+    expect(txMock.classSection.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, classTeacherId: TEACHER_ID }, data: { classTeacherId: null } });
+    expect(txMock.timetableSlot.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, teacherId: TEACHER_ID, effectiveTo: null }, data: { effectiveTo: new Date('2026-03-31') } });
+    expect(txMock.leaveApplication.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { schoolId: SCHOOL, teacherId: TEACHER_ID, status: 'PENDING' } }));
+    expect(txMock.featuredStaff.deleteMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, teacherId: TEACHER_ID } });
+    expect(auditMock.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'teacher.release', entityId: TEACHER_ID }));
     expect(platformMock.user.update).toHaveBeenCalledWith({
       where: { id: 'user-9' },
       data: { isActive: false },
@@ -426,10 +467,41 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
     });
   });
 
-  it('release of a login-less teacher touches no auth state', async () => {
-    txMock.teacher.findFirst.mockResolvedValue({ userId: null });
+  it('release hands periods and a class-teacher seat to named teachers, and can keep the website card', async () => {
+    mockTeacherRow({ userId: null, status: 'ACTIVE' });
+    txMock.teacher.findFirst.mockImplementation(async ({ where }: { where?: Record<string, unknown> }) =>
+      where?.id === 'T2' || where?.id === 'T9' ? { id: where.id } : { userId: null, status: 'ACTIVE' },
+    );
 
-    await svc.release(SCHOOL, TEACHER_ID);
+    await svc.release(SCHOOL, ACTOR, TEACHER_ID, {
+      leftOn: '2026-03-31',
+      handover: { classSections: { 'sec-5a': 'T2', 'sec-6b': null }, timetableTeacherId: 'T9', keepFeatured: true },
+    });
+
+    expect(txMock.classSection.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: 'sec-5a', classTeacherId: TEACHER_ID }, data: { classTeacherId: 'T2' } });
+    expect(txMock.classSection.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, id: 'sec-6b', classTeacherId: TEACHER_ID }, data: { classTeacherId: null } });
+    expect(txMock.timetableSlot.updateMany).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, teacherId: TEACHER_ID, effectiveTo: null }, data: { teacherId: 'T9' } });
+    expect(txMock.featuredStaff.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('release refuses a teacher who is not ACTIVE', async () => {
+    mockTeacherRow({ userId: 'user-9', status: 'LEFT' });
+    await expect(svc.release(SCHOOL, ACTOR, TEACHER_ID, { leftOn: '2026-03-31' })).rejects.toMatchObject({ response: { code: 'NOT_ACTIVE' } });
+    expect(txMock.teacher.update).not.toHaveBeenCalled();
+  });
+
+  it('reactivate sets ACTIVE, clears the left fields and reopens the login', async () => {
+    mockTeacherRow({ userId: 'user-9', status: 'LEFT' });
+    const out = await svc.reactivate(SCHOOL, ACTOR, TEACHER_ID);
+    expect(out).toEqual({ id: TEACHER_ID, status: 'ACTIVE' });
+    expect(txMock.teacher.update).toHaveBeenCalledWith({ where: { id: TEACHER_ID }, data: expect.objectContaining({ status: 'ACTIVE', isActive: true, leftOn: null, leftReason: null }) });
+    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'user-9' }, data: { isActive: true } });
+  });
+
+  it('release of a login-less teacher touches no auth state', async () => {
+    mockTeacherRow({ userId: null, status: 'ACTIVE' });
+
+    await svc.release(SCHOOL, ACTOR, TEACHER_ID, { leftOn: '2026-03-31' });
 
     expect(platformMock.user.update).not.toHaveBeenCalled();
     expect(platformMock.refreshToken.updateMany).not.toHaveBeenCalled();

@@ -5,7 +5,9 @@ import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
-import type { CreateLoginDto, CreateStaffDto, UpdateStaffDto } from './management.dto';
+import { closeLogin, reopenLogin } from './internal/close-login';
+import { AuditService } from '../../common/audit/audit.service';
+import type { CreateLoginDto, CreateStaffDto, ReleaseStaffDto, UpdateStaffDto } from './management.dto';
 import type { LoginInviteResult } from './students.service';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
@@ -14,6 +16,7 @@ export class StaffService {
   constructor(
     private readonly passwords: PasswordService,
     private readonly invites: LoginInviteService,
+    private readonly audit: AuditService,
   ) {}
 
   async list(schoolId: string) {
@@ -58,6 +61,58 @@ export class StaffService {
       if (isP2003(e)) throw new ConflictException('Cannot delete: other records still reference this staff member');
       throw e;
     }
+  }
+
+  /**
+   * "Remove from this school" — the row stays (history), marked LEFT with its
+   * `isActive` mirror, and the login closes. A released librarian loses
+   * /library at once because the librarian guard reads `isActive`.
+   */
+  async release(schoolId: string, actorUserId: string, id: string, dto: ReleaseStaffDto): Promise<{ released: true }> {
+    const userId = await withTenant(schoolId, async (tx) => {
+      const s = await tx.staff.findFirst({ where: { schoolId, id }, select: { userId: true, status: true } });
+      if (!s) throw new NotFoundException('Staff member not found');
+      if (s.status !== 'ACTIVE') throw new ApiError('NOT_ACTIVE', 'This staff member is not active', 409, 'status');
+      await tx.staff.update({
+        where: { id },
+        data: {
+          status: 'LEFT',
+          isActive: false,
+          leftOn: new Date(dto.leftOn),
+          leftReason: dto.reason?.trim() || null,
+          leftNote: dto.note?.trim() || null,
+          statusChangedAt: new Date(),
+          statusChangedById: actorUserId,
+        },
+      });
+      return s.userId;
+    });
+    if (userId) await closeLogin(userId);
+    await this.audit.record({
+      schoolId,
+      actorUserId,
+      action: 'staff.release',
+      entity: 'Staff',
+      entityId: id,
+      meta: { leftOn: dto.leftOn, reason: dto.reason ?? null },
+    });
+    return { released: true };
+  }
+
+  async reactivate(schoolId: string, actorUserId: string, id: string): Promise<{ id: string; status: 'ACTIVE' }> {
+    const userId = await withTenant(schoolId, async (tx) => {
+      const s = await tx.staff.findFirst({ where: { schoolId, id }, select: { userId: true, status: true } });
+      if (!s) throw new NotFoundException('Staff member not found');
+      if (s.status === 'ACTIVE') throw new ApiError('ALREADY_ACTIVE', 'This staff member is already active', 409, 'status');
+      await tx.staff.update({
+        where: { id },
+        data: { status: 'ACTIVE', isActive: true, leftOn: null, leftReason: null, leftNote: null, statusChangedAt: new Date(), statusChangedById: actorUserId },
+      });
+      return s.userId;
+    });
+    if (userId) await reopenLogin(userId);
+    await this.audit.record({ schoolId, actorUserId, action: 'staff.reactivate', entity: 'Staff', entityId: id, meta: null });
+    return { id, status: 'ACTIVE' };
   }
 
   /**

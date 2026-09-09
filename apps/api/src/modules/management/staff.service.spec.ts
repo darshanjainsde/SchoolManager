@@ -16,7 +16,14 @@ const txMock = {
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
 
+const platformMock = {
+  user: { update: jest.fn() },
+  refreshToken: { updateMany: jest.fn() },
+  $transaction: jest.fn((ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
+};
+
 jest.mock('@skoolos/db', () => ({
+  getPlatformPrisma: () => platformMock,
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
   // StaffService transitively imports the tenancy barrel (via '../auth'),
   // whose users.controller reads these enum members at decoration time.
@@ -39,6 +46,8 @@ import type { PasswordService } from '../auth';
 import type { LoginInviteService } from './internal/login-invite.service';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const ACTOR = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const auditMock = { record: jest.fn().mockResolvedValue(undefined) };
 const STAFF_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 
 describe('StaffService.list / create', () => {
@@ -47,6 +56,7 @@ describe('StaffService.list / create', () => {
   const svc = new StaffService(
     passwords as unknown as PasswordService,
     invites as unknown as LoginInviteService,
+    auditMock as never,
   );
 
   beforeEach(() => {
@@ -92,6 +102,7 @@ describe('StaffService.createLogin', () => {
   const svc = new StaffService(
     passwords as unknown as PasswordService,
     invites as unknown as LoginInviteService,
+    auditMock as never,
   );
 
   beforeEach(() => {
@@ -204,6 +215,7 @@ describe('StaffService.resendInvite', () => {
   const svc = new StaffService(
     passwords as unknown as PasswordService,
     invites as unknown as LoginInviteService,
+    auditMock as never,
   );
 
   beforeEach(() => {
@@ -248,5 +260,53 @@ describe('StaffService.resendInvite', () => {
       'Staff member has no login to resend an invite for',
     );
     expect(invites.sendInvite).not.toHaveBeenCalled();
+  });
+});
+
+describe('StaffService.release / reactivate (Active Roster)', () => {
+  const passwords = { hash: jest.fn() };
+  const invites = { sendInvite: jest.fn() };
+  const svc = new StaffService(
+    passwords as unknown as PasswordService,
+    invites as unknown as LoginInviteService,
+    auditMock as never,
+  );
+  const STAFF_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    txMock.staff.update.mockResolvedValue({});
+    platformMock.user.update.mockResolvedValue({});
+    platformMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('release marks LEFT with the isActive mirror, closes the login, audits', async () => {
+    txMock.staff.findFirst.mockResolvedValue({ userId: 'user-3', status: 'ACTIVE' });
+    const out = await svc.release(SCHOOL, ACTOR, STAFF_ID, { leftOn: '2026-03-31', reason: 'Retired' });
+    expect(out).toEqual({ released: true });
+    expect(txMock.staff.update).toHaveBeenCalledWith({
+      where: { id: STAFF_ID },
+      data: expect.objectContaining({ status: 'LEFT', isActive: false, leftReason: 'Retired', statusChangedById: ACTOR }),
+    });
+    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'user-3' }, data: { isActive: false } });
+    expect(platformMock.refreshToken.updateMany).toHaveBeenCalledWith({ where: { userId: 'user-3', revokedAt: null }, data: { revokedAt: expect.any(Date) } });
+    expect(auditMock.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'staff.release', entityId: STAFF_ID }));
+  });
+
+  it('release refuses when not ACTIVE; reactivate refuses when already ACTIVE', async () => {
+    txMock.staff.findFirst.mockResolvedValue({ userId: null, status: 'LEFT' });
+    await expect(svc.release(SCHOOL, ACTOR, STAFF_ID, { leftOn: '2026-03-31' })).rejects.toMatchObject({ response: { code: 'NOT_ACTIVE' } });
+    txMock.staff.findFirst.mockResolvedValue({ userId: null, status: 'ACTIVE' });
+    await expect(svc.reactivate(SCHOOL, ACTOR, STAFF_ID)).rejects.toMatchObject({ response: { code: 'ALREADY_ACTIVE' } });
+    expect(txMock.staff.update).not.toHaveBeenCalled();
+  });
+
+  it('reactivate reopens the same row and login', async () => {
+    txMock.staff.findFirst.mockResolvedValue({ userId: 'user-3', status: 'LEFT' });
+    const out = await svc.reactivate(SCHOOL, ACTOR, STAFF_ID);
+    expect(out).toEqual({ id: STAFF_ID, status: 'ACTIVE' });
+    expect(txMock.staff.update).toHaveBeenCalledWith({ where: { id: STAFF_ID }, data: expect.objectContaining({ status: 'ACTIVE', isActive: true, leftOn: null }) });
+    expect(platformMock.user.update).toHaveBeenCalledWith({ where: { id: 'user-3' }, data: { isActive: true } });
   });
 });

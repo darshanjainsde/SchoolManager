@@ -7,6 +7,7 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
@@ -15,6 +16,7 @@ import {
   Matches,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -193,9 +195,7 @@ export class CreateTeacherDto {
   @IsString()
   bio?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` mirrors `status` and is written only by release / reactivate.
 }
 
 export class UpdateTeacherDto {
@@ -229,9 +229,7 @@ export class UpdateTeacherDto {
   @IsString()
   bio?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` mirrors `status` and is written only by release / reactivate.
 }
 
 // ── Staff (non-teaching) ────────────────────────────────────────────────────
@@ -266,9 +264,7 @@ export class CreateStaffDto {
   @IsString()
   phone?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` mirrors `status` and is written only by release / reactivate.
 }
 
 export class UpdateStaffDto {
@@ -294,9 +290,7 @@ export class UpdateStaffDto {
   @IsString()
   phone?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` mirrors `status` and is written only by release / reactivate.
 }
 
 // ── ClassSection ─────────────────────────────────────────────────────────────
@@ -1132,4 +1126,43 @@ export class LeaveStudentDto {
 export class ReadmitStudentDto {
   @IsOptional() @IsUUID()
   classSectionId?: string;
+}
+
+export class TeacherHandoverDto {
+  /** Class-teacher seats: sectionId → replacement teacher id, or null to leave the seat empty. */
+  @IsOptional() @IsObject()
+  classSections?: Record<string, string | null>;
+
+  /** Open timetable slots go to this teacher; null/absent ends them (shown as unassigned). */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID()
+  timetableTeacherId?: string | null;
+
+  /** Keep them on the website's Educators section (default: removed). */
+  @IsOptional() @IsBoolean()
+  keepFeatured?: boolean;
+}
+
+export class ReleaseTeacherDto {
+  @IsDateString()
+  leftOn!: string;
+
+  @IsOptional() @IsString() @Length(0, 120)
+  reason?: string;
+
+  @IsOptional() @IsString() @Length(0, 2000)
+  note?: string;
+
+  @IsOptional() @ValidateNested() @Type(() => TeacherHandoverDto)
+  handover?: TeacherHandoverDto;
+}
+
+export class ReleaseStaffDto {
+  @IsDateString()
+  leftOn!: string;
+
+  @IsOptional() @IsString() @Length(0, 120)
+  reason?: string;
+
+  @IsOptional() @IsString() @Length(0, 2000)
+  note?: string;
 }
