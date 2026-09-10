@@ -43,7 +43,7 @@ describe('SportsMeService', () => {
     txMock.sportsEntry.findMany
       .mockResolvedValueOnce([
         { eventId: 'e1', std: 9, section: 'A', event: { id: 'e1', sportKey: 'badminton', sportName: 'Badminton', kind: 'MATCH', groupKey: 'sen', category: 'Girls', structure: 'CLASS', tournamentId: 't1', tournament } },
-        { eventId: 'e2', std: 9, section: 'A', event: { id: 'e2', sportKey: 'football', sportName: 'Football', kind: 'MATCH', groupKey: 'sen', category: 'Girls', structure: 'DRAW', tournamentId: 't1', tournament } },
+        { eventId: 'e2', std: 9, section: 'A', event: { id: 'e2', sportKey: 'football', sportName: 'Football', kind: 'MATCH', groupKey: 'sen', category: 'Girls', structure: 'DRAW', teamBasis: 'SECTIONS', tournamentId: 't1', tournament } },
         { eventId: 'e3', std: 9, section: 'A', event: { id: 'e3', sportKey: 'ath-100m', sportName: '100 m sprint', kind: 'MEASURED', groupKey: 'sen', category: 'Girls', structure: 'HEATS', tournamentId: 't1', tournament } },
       ])
       .mockResolvedValueOnce([{ studentId: ME, std: 9, section: 'A', student: { firstName: 'Meera', lastName: 'I' } }, { studentId: 'o1', std: 9, section: 'B', student: { firstName: 'Zoya', lastName: 'R' } }]);
@@ -63,7 +63,7 @@ describe('SportsMeService', () => {
     expect(t.events.map((e) => [e.sportName, e.side, e.groupLabel, e.matches.length, e.heats.length])).toEqual([['Badminton', `s:${ME}`, 'Senior', 1, 0], ['Football', 'c:9-A', 'Senior', 1, 0], ['100 m sprint', `s:${ME}`, 'Senior', 0, 1]]);
     expect(t.events[0].matches[0]).toMatchObject({ roundName: 'Final', venue: 'Court 1', atMin: 600, scoreA: [21] });
     expect(t.events[2].heats[0]).toMatchObject({ lane: 3, mark: 13.2, rank: 2, venue: 'Court 1', done: true });
-    expect(t.sideNames).toEqual({ [`s:${ME}`]: 'Meera I', 'c:9-A': '9 A', 's:o1': 'Zoya R', 'c:9-B': '9 B' });
+    expect(t.sideNames).toEqual({ [`s:${ME}`]: 'Meera I', 'c:9-A': '9 A', 's:o1': 'Zoya R', 'c:9-B': '9 B', 'k:9': 'Class 9', 'h:h1': 'Red' });
     expect(records.mine).toHaveBeenCalledWith(SCHOOL, ME);
   });
 

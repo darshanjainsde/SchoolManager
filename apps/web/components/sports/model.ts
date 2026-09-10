@@ -18,6 +18,8 @@ export function peopleOf(event: EventDetail, side: string | null): string[] {
   const p = parseSide(side);
   if (!p) return [];
   if (p.kind === 'student') return [p.studentId];
+  if (p.kind === 'class') return event.entries.filter((e) => e.std === p.std).map((e) => e.studentId);
+  if (p.kind === 'house') return event.entries.filter((e) => e.houseId === p.houseId).map((e) => e.studentId);
   return event.entries.filter((e) => e.std === p.std && e.section.trim().toUpperCase() === p.section).map((e) => e.studentId);
 }
 

@@ -202,18 +202,22 @@ export class SportsResultsService {
   /** side → houseId for the students among the sides (sections have no house). */
   private async houseLookup(tx: TenantTx, schoolId: string, sides: (string | null)[]): Promise<(side: string) => string | null> {
     const ids = sides.map((s) => (s ? parseSide(s) : null)).flatMap((p) => (p?.kind === 'student' ? [p.studentId] : []));
-    if (!ids.length) return () => null;
-    const rows = await tx.student.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, id: { in: ids } }, select: { id: true, houseId: true } });
+    if (!ids.length && !sides.some((s) => s?.startsWith('h:'))) return () => null;
+    const rows = ids.length ? await tx.student.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, id: { in: ids } }, select: { id: true, houseId: true } }) : [];
     const byId = new Map(rows.map((r) => [r.id, r.houseId]));
     return (side: string) => {
       const p = parseSide(side);
+      if (p?.kind === 'house') return p.houseId; // a house team's points go to the house itself
       return p?.kind === 'student' ? byId.get(p.studentId) ?? null : null;
     };
   }
 
   /** The logins behind two sides — the two students, or every entered child of the two sections — and a name per side. */
   private async peopleOf(tx: TenantTx, schoolId: string, eventId: string, sides: (string | null)[]): Promise<{ userIds: string[]; names: Map<string, string> }> {
-    const entries = await tx.sportsEntry.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, eventId }, select: { studentId: true, std: true, section: true, student: { select: { firstName: true, lastName: true, userId: true } } } });
+    const [entries, houses] = await Promise.all([
+      tx.sportsEntry.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, eventId }, select: { studentId: true, std: true, section: true, student: { select: { firstName: true, lastName: true, userId: true, houseId: true } } } }),
+      sides.some((s) => s?.startsWith('h:')) ? tx.house.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, select: { id: true, name: true } }) : Promise.resolve([] as { id: string; name: string }[]),
+    ]);
     const userIds = new Set<string>();
     const names = new Map<string, string>();
     for (const side of sides) {
@@ -225,9 +229,15 @@ export class SportsResultsService {
           names.set(side!, `${e.student.firstName} ${e.student.lastName}`.trim());
           if (e.student.userId) userIds.add(e.student.userId);
         }
-      } else {
+      } else if (p.kind === 'section') {
         names.set(side!, `${p.std} ${p.section}`);
         for (const e of entries) if (e.std === p.std && e.section.trim().toUpperCase() === p.section && e.student.userId) userIds.add(e.student.userId);
+      } else if (p.kind === 'class') {
+        names.set(side!, `Class ${p.std}`);
+        for (const e of entries) if (e.std === p.std && e.student.userId) userIds.add(e.student.userId);
+      } else {
+        names.set(side!, houses.find((h) => h.id === p.houseId)?.name ?? 'House');
+        for (const e of entries) if (e.student.houseId === p.houseId && e.student.userId) userIds.add(e.student.userId);
       }
     }
     return { userIds: [...userIds], names };

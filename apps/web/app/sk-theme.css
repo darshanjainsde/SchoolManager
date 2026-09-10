@@ -3566,3 +3566,19 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-sp-stds .sk-chip { padding: 4px 8px; font-size: 12px; min-width: 2.2em; justify-content: center; }
 .sk-sp-pointsrow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .sk-sp-pointsrow .sk-input { width: 4.5em; min-width: 0; text-align: center; font-family: var(--sk-mono); }
+/* wizard v2: the defaults bar, the events table, the players grid */
+.sk-sp-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px 18px; padding: 12px 14px; border: 1px dashed var(--sk-line-2); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); }
+.sk-sp-evtable td.nm { font-weight: 700; white-space: nowrap; }
+.sk-sp-evtable td .sk-muted { font-size: 12px; }
+.sk-sp-evtable tr[data-bad="true"] td { background: var(--sk-bad-tint); }
+.sk-sp-vbadge { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 6px; background: var(--sk-brand-tint); color: var(--sk-brand-2); margin-left: 4px; }
+.sk-sp-vbadge[data-tone="warn"] { background: var(--sk-amber-tint); color: var(--sk-amber-ink); }
+.sk-sp-vbadge[data-tone="bad"] { background: var(--sk-bad-tint); color: var(--sk-bad); }
+.sk-sp-vbadge[data-tone="good"] { background: var(--sk-good-tint); color: var(--sk-good); }
+.sk-sp-matrix th { text-align: center; }
+.sk-sp-matrix th:first-child, .sk-sp-matrix td:first-child { text-align: left; }
+.sk-sp-matrix td { text-align: center; }
+.sk-sp-matrix tr.cls td { background: var(--sk-bg-2); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--sk-ink-3); font-weight: 700; text-align: left; }
+.sk-sp-matrix input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--sk-brand); }
+.sk-sp-problem { display: flex; gap: 8px; align-items: flex-start; padding: 9px 12px; border-radius: var(--sk-r-sm); background: var(--sk-amber-tint); color: var(--sk-amber-ink); font-size: 13px; }
+.sk-sp-problem[data-ok="true"] { background: var(--sk-good-tint); color: var(--sk-good); }

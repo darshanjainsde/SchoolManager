@@ -1,4 +1,4 @@
-import { SPORTS, SPORT_GROUPS, SCORING_PRESETS, customSport, resolveSport, sportByKey, sportsByGroup, sidesAreSections, isCustomSportKey } from './catalogue';
+import { SPORTS, SPORT_GROUPS, SCORING_PRESETS, VENUE_TYPES, customSport, inferVenueType, resolveSport, sportByKey, sportsByGroup, sidesAreSections, isCustomSportKey, venueTypeOf, venuesForSport } from './catalogue';
 
 describe('sports catalogue — every sport is complete and consistent', () => {
   it('keys are unique, kebab-case, and every sport sits in a known group', () => {
@@ -84,5 +84,35 @@ describe('sports catalogue — every sport is complete and consistent', () => {
     expect(customSport('   ', 'time')).toBeNull();
     expect(customSport('X', 'nope')).toBeNull();
     for (const p of SCORING_PRESETS) expect(p.kind === 'MATCH' ? p.scoring.type !== 'MARK' : p.scoring.type === 'MARK').toBe(true);
+  });
+});
+
+describe('venues', () => {
+  it('every sport has a venue type; a name gives away its type', () => {
+    for (const s of SPORTS) expect(VENUE_TYPES).toContain(venueTypeOf(s));
+    expect(venueTypeOf(sportByKey('badminton')!)).toBe('court');
+    expect(venueTypeOf(sportByKey('table-tennis')!)).toBe('table');
+    expect(venueTypeOf(sportByKey('ath-long-jump')!)).toBe('field');
+    expect(venueTypeOf(sportByKey('chess')!)).toBe('board');
+    expect(['Court 1', 'Football ground', 'TT table', 'Main hall', 'Track', 'Pool', 'Chess board', 'Judo mat', 'Boxing ring', 'Air rifle range', 'Quadrangle'].map(inferVenueType))
+      .toEqual(['court', 'field', 'table', 'hall', 'track', 'pool', 'board', 'mat', 'ring', 'range', 'hall']);
+  });
+  it('binds by name first, then by type, then by fallback, else none — never every venue', () => {
+    const venues = [
+      { name: 'Court 1', type: 'court' as const }, { name: 'Badminton court 3', type: 'court' as const }, { name: 'Field', type: 'field' as const }, { name: 'Main hall', type: 'hall' as const },
+    ];
+    expect(venuesForSport(sportByKey('badminton')!, venues)).toMatchObject({ how: 'named', list: [{ name: 'Badminton court 3' }] });
+    expect(venuesForSport(sportByKey('tennis')!, venues)).toMatchObject({ how: 'type', list: [{ name: 'Court 1' }] }); // the badminton court is not a tennis court
+    expect(venuesForSport(sportByKey('football')!, venues)).toMatchObject({ how: 'type', list: [{ name: 'Field' }] });
+    expect(venuesForSport(sportByKey('chess')!, venues)).toMatchObject({ how: 'fallback', list: [{ name: 'Main hall' }], want: 'board' });
+    expect(venuesForSport(sportByKey('swim-50-free')!, venues)).toMatchObject({ how: 'none', list: [], want: 'pool' });
+    expect(venuesForSport(sportByKey('table-tennis')!, [{ name: 'Court 1', type: 'court' as const }])).toMatchObject({ how: 'none' });
+  });
+  it('a custom sport can carry its venue type in the key', () => {
+    const tug = customSport('Tug of war', 'points', 8, 'field')!;
+    expect(tug.key).toBe('custom:points:8:field:tug-of-war');
+    expect(tug.venue).toBe('Field');
+    expect(resolveSport(tug.key, 'Tug of war')).toMatchObject({ venue: 'Field', teamSize: 8 });
+    expect(resolveSport('custom:points:8:tug-of-war')!.venue).toBe('Hall');
   });
 });

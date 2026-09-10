@@ -502,6 +502,20 @@ meetYear − N + 1; needs a date of birth); placing points (default 10-7-5-3-2-1
 `publishNeedsAdmin`. A tournament keeps the grouping it was created with. The class number comes from the grade name
 ("9", "Class 9", "Grade IX", "STD-10"; Nursery/LKG/UKG have none) with `Grade.order` as the fallback.
 
+**The wizard (v2, 2026-09-11)** — four steps, one POST. **The meet**: name, days, day window, the **rest gap** a child
+gets between two of their own slots (default 15 min), and the venues. A venue's TYPE is read from its name (court,
+table, field, track, pool, hall, board, mat, ring, range; anything else is a hall) and the office can cycle it.
+**Sports & events**: a defaults bar (group · which categories to run · how match sports play) then pressing a sport
+CREATES one line per default category with everything filled in — no per-event form. **Venues bind from the sport**:
+a venue NAMED after it ("Badminton court 3") and only that; else every venue of the sport's type not named after
+another sport; else the fallback type (a board game in a hall); else NONE, and the line is flagged — never every
+venue. Edit opens one line for the exception (group, structure, minutes, lanes, its own venues). **Players**: one grid
+per group × category — a row per child, a column per event, "Enter class N" fills a column, All/None fills a row, a
+child in more than three events is badged. **Team sports** say what a team is: SECTIONS (9 A v 9 B), CLASSES (9 v 10)
+or HOUSES, suggested from the entrants (sections only when every class of the group has two or more), with the count
+each basis would give on its chip and a one-press fix when the chosen basis makes fewer than two teams. **Review**
+lists every line and every remaining problem in words; Create stays off until the list is empty.
+
 **Create** (`POST /sports/tournaments`, CREATE): name, first/last day (≤ 14 days), day window (default 09:00–16:00,
 ≥ 1 h), venues (unique names), events — each a sport, group, category (Boys/Girls/Mixed), structure CLASS (a blind
 draw per class, lone entrant walks over, then a band final of the class champions; one class present → a plain draw)
@@ -513,6 +527,14 @@ of the draw, a bye's winner already placed in round 2), balanced heats by lane c
 venue schedule: each match takes the earliest free venue, a round never starts before the previous round ends, a slot
 that would overrun the day rolls to the next day's start (`atMin` = dayIdx × 1440 + minute). The reply says how many
 days the plan needs; more than the meet has is a warning, not a refusal. The draw is repeatable from the meet name.
+
+**Scheduling is person-aware**: the meet keeps ONE diary of when each child is next free, so a slot is placed only
+when its venue is free AND nobody in it is still busy, plus the rest gap — a child in the 100 m and the badminton draw
+is never on the track and a court at the same minute, and events interleave instead of running end to end. Team sides
+carry every entered child of that section, class or house into the diary. `SportsEvent.teamBasis` and
+`SportsTournament.restMin` (migration `20260915_000000_sports_team_basis`) hold the two new choices; a class-rounds
+event whose classes ALL walk over has its band final built at creation rather than waiting for a champion that will
+never be played for.
 
 **Board** (`GET /sports/tournaments/:id`): one payload — venues, events with scoring, entries, matches, heats with
 lane marks, `sideNames` — and the web derives the day board, brackets, heat sheets and the clash list with the shared

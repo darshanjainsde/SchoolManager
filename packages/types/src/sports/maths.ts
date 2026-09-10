@@ -10,11 +10,43 @@ import type { GamesScoring, MarkScoring, Scoring, SingleScoring } from './catalo
 export type SideKey = string;
 export const sideOfStudent = (studentId: string): SideKey => `s:${studentId}`;
 export const sideOfSection = (std: number, section: string): SideKey => `c:${std}-${section.trim().toUpperCase()}`;
-export function parseSide(key: SideKey): { kind: 'student'; studentId: string } | { kind: 'section'; std: number; section: string } | null {
+export const sideOfClass = (std: number): SideKey => `k:${std}`;
+export const sideOfHouse = (houseId: string): SideKey => `h:${houseId}`;
+export type ParsedSide =
+  | { kind: 'student'; studentId: string }
+  | { kind: 'section'; std: number; section: string }
+  | { kind: 'class'; std: number }
+  | { kind: 'house'; houseId: string };
+export function parseSide(key: SideKey): ParsedSide | null {
   if (key.startsWith('s:')) return { kind: 'student', studentId: key.slice(2) };
+  if (key.startsWith('h:')) return { kind: 'house', houseId: key.slice(2) };
+  const k = /^k:(\d+)$/.exec(key);
+  if (k) return { kind: 'class', std: Number(k[1]) };
   const m = /^c:(\d+)-(.+)$/.exec(key);
   if (m) return { kind: 'section', std: Number(m[1]), section: m[2] };
   return null;
+}
+
+/** What a team is in a team sport: the sections of a class (9 A v 9 B), whole classes (9 v 10), or the houses. */
+export type TeamBasis = 'SECTIONS' | 'CLASSES' | 'HOUSES';
+export const TEAM_BASES: readonly TeamBasis[] = ['SECTIONS', 'CLASSES', 'HOUSES'];
+export interface EntryLike { studentId: string; std: number; section: string; houseId?: string | null }
+/** The side an entered child plays for: themselves in an individual sport, else their section, class or house. */
+export function sideOfEntry(e: EntryLike, teamSport: boolean, basis: TeamBasis): SideKey | null {
+  if (!teamSport) return sideOfStudent(e.studentId);
+  if (basis === 'SECTIONS') return sideOfSection(e.std, e.section);
+  if (basis === 'CLASSES') return sideOfClass(e.std);
+  return e.houseId ? sideOfHouse(e.houseId) : null;
+}
+/**
+ * The team basis a group of entrants suggests: sections when every class in
+ * the group has two or more, else classes (a lone section has nobody to play).
+ */
+export function suggestTeamBasis(entries: { std: number; section: string }[]): TeamBasis {
+  const byStd = new Map<number, Set<string>>();
+  for (const e of entries) byStd.set(e.std, (byStd.get(e.std) ?? new Set()).add(e.section.trim().toUpperCase()));
+  if (byStd.size === 0) return 'SECTIONS';
+  return [...byStd.values()].every((s) => s.size >= 2) ? 'SECTIONS' : 'CLASSES';
 }
 
 // ── scores → winner ───────────────────────────────────────────
@@ -286,22 +318,37 @@ export function fitInDay(atMin: number, slotMin: number, w: DayWindow): number {
  * finished so nobody plays twice at once. `cursor` (venueId → next free
  * minute) is shared across events on the same venues and is advanced in place.
  */
-export function planRounds(rounds: number[], venueIds: string[], slotMin: number, cursor: Map<string, number>, w: DayWindow): Slot[][] {
+/**
+ * Every child's diary — when each person is next free — shared across every
+ * event of a meet, plus the rest a child gets between two of their own slots.
+ */
+export interface Diary { free: Map<string, number>; restMin: number }
+export const newDiary = (restMin = 15): Diary => ({ free: new Map(), restMin });
+
+/** A round is a count of matches, or the people in each match when the planner should keep their diaries clear. */
+export type RoundSpec = number | string[][];
+
+export function planRounds(rounds: RoundSpec[], venueIds: string[], slotMin: number, cursor: Map<string, number>, w: DayWindow, diary?: Diary): Slot[][] {
   if (venueIds.length === 0) throw new Error('NEED_VENUE');
   const out: Slot[][] = [];
   let floor = 0;
-  for (const count of rounds) {
+  for (const round of rounds) {
+    const items: string[][] = typeof round === 'number' ? Array.from({ length: round }, () => []) : round;
     const slots: Slot[] = [];
     let roundEnd = floor;
-    for (let i = 0; i < count; i++) {
+    for (const people of items) {
+      // nobody in this slot may still be busy, and each gets their rest first
+      let notBefore = floor;
+      if (diary) for (const p of people) { const f = diary.free.get(p); if (f != null) notBefore = Math.max(notBefore, f + diary.restMin); }
       let best: string | null = null;
       let bestAt = Infinity;
       for (const v of venueIds) {
-        const at = fitInDay(Math.max(cursor.get(v) ?? 0, floor), slotMin, w);
+        const at = fitInDay(Math.max(cursor.get(v) ?? 0, notBefore), slotMin, w);
         if (at < bestAt) { bestAt = at; best = v; }
       }
       slots.push({ venueId: best!, atMin: bestAt });
       cursor.set(best!, bestAt + slotMin);
+      if (diary) for (const p of people) diary.free.set(p, bestAt + slotMin);
       roundEnd = Math.max(roundEnd, bestAt + slotMin);
     }
     out.push(slots);

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
-import { groupLabel, resolveSport, sideOfSection, sideOfStudent, sidesAreSections, type Scoring } from '@skoolos/types';
+import { groupLabel, resolveSport, sideOfClass, sideOfEntry, sideOfSection, sideOfStudent, sidesAreSections, type Scoring, type TeamBasis } from '@skoolos/types';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 import { SportsHousesService } from './sports-houses.service';
 import { SportsRecordsService } from './sports-records.service';
@@ -31,13 +31,13 @@ export class SportsMeService {
       const settings = this.settings.view(await this.settings.ensure(tx, schoolId));
       const entries = await tx.sportsEntry.findMany({
         take: LIST_CEILING.ACTIVITY, where: { schoolId, studentId: me.id, event: { tournament: { published: true } } },
-        select: { eventId: true, std: true, section: true, event: { select: { id: true, sportKey: true, sportName: true, kind: true, groupKey: true, category: true, structure: true, tournamentId: true, tournament: { select: { id: true, name: true, startsOn: true, endsOn: true, status: true, dayStartMin: true } } } } },
+        select: { eventId: true, std: true, section: true, event: { select: { id: true, sportKey: true, sportName: true, kind: true, groupKey: true, category: true, structure: true, teamBasis: true, tournamentId: true, tournament: { select: { id: true, name: true, startsOn: true, endsOn: true, status: true, dayStartMin: true } } } } },
       });
       const eventIds = entries.map((e) => e.eventId);
       const tournamentIds = [...new Set(entries.map((e) => e.event.tournamentId))];
       const sides = entries.map((e) => {
         const sport = resolveSport(e.event.sportKey, e.event.sportName);
-        return sport && sidesAreSections(sport) ? sideOfSection(e.std, e.section) : sideOfStudent(me.id);
+        return sideOfEntry({ studentId: me.id, std: e.std, section: e.section, houseId: me.houseId }, !!sport && sidesAreSections(sport), e.event.teamBasis as TeamBasis) ?? sideOfStudent(me.id);
       });
       const [matches, marks, venues, others, house] = await Promise.all([
         eventIds.length ? tx.sportsMatch.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, eventId: { in: eventIds }, OR: [{ aSide: { in: sides } }, { bSide: { in: sides } }] }, orderBy: [{ roundIdx: 'asc' }, { pos: 'asc' }] }) : [],
@@ -51,7 +51,9 @@ export class SportsMeService {
       for (const o of others) {
         sideNames[sideOfStudent(o.studentId)] = `${o.student.firstName} ${o.student.lastName}`.trim();
         sideNames[sideOfSection(o.std, o.section)] = `${o.std} ${o.section}`;
+        sideNames[sideOfClass(o.std)] = `Class ${o.std}`;
       }
+      if (house) sideNames[`h:${house.id}`] = house.name;
       const byTournament = new Map<string, MyTournament>();
       entries.forEach((e, i) => {
         const t = e.event.tournament;

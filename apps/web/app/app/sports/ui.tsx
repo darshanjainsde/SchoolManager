@@ -8,7 +8,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import type { Band, Scoring, SportsPerm } from '@skoolos/types';
+import type { Band, Scoring, SportsPerm, TeamBasis } from '@skoolos/types';
 
 export { Card, CardBody, CardHead, EmptyRow, ListRow, Pill, StatCard, apiErrorCode, useDebounced } from '@/app/app/library/ui';
 
@@ -26,12 +26,12 @@ export interface MatchRow {
 export interface HeatRow { id: string; kind: 'HEAT' | 'FINAL'; idx: number; venueId: string | null; atMin: number | null; done: boolean; marks: { studentId: string; side: string; lane: number; mark: number | null; rank: number | null }[] }
 export interface EventDetail {
   id: string; sportKey: string; sportName: string; kind: 'MATCH' | 'MEASURED' | 'JUDGED'; scoring: Scoring; teamSize: number; groupKey: string; groupLabel: string; category: string;
-  structure: string; slotMin: number; lanes: number; venueIds: string[]; order: number;
+  structure: string; teamBasis: TeamBasis; slotMin: number; lanes: number; venueIds: string[]; order: number;
   entries: { studentId: string; side: string; std: number; section: string; houseId: string | null }[];
   matches: MatchRow[]; heats: HeatRow[];
 }
 export interface TournamentDetail {
-  id: string; name: string; startsOn: string; endsOn: string; grouping: 'BANDS' | 'AGE'; dayStartMin: number; dayEndMin: number; status: 'DRAFT' | 'LIVE' | 'DONE'; published: boolean; version: number;
+  id: string; name: string; startsOn: string; endsOn: string; grouping: 'BANDS' | 'AGE'; dayStartMin: number; dayEndMin: number; restMin: number; status: 'DRAFT' | 'LIVE' | 'DONE'; published: boolean; version: number;
   venues: { id: string; name: string; order: number }[]; events: EventDetail[]; sideNames: Record<string, string>; bands: Band[];
 }
 export interface RecordView {

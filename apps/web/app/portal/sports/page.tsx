@@ -91,7 +91,7 @@ export default function PortalSportsPage() {
         <Section key={t.id} title={t.name} sub={`${t.startsOn}${t.endsOn !== t.startsOn ? ` – ${t.endsOn}` : ''}${t.status === 'DONE' ? ' · finished' : ''}`}>
           {t.events.map((e) => (
             <div key={e.eventId} className="border-t border-[var(--sk-line)] py-2 first:border-t-0">
-              <div className="text-sm font-semibold text-[var(--sk-ink)]">{e.sportName} <span className="font-normal text-[var(--sk-ink-3)]">{e.groupLabel} {e.category}{e.side.startsWith('c:') ? ` · ${t.sideNames[e.side] ?? ''} team` : ''}</span></div>
+              <div className="text-sm font-semibold text-[var(--sk-ink)]">{e.sportName} <span className="font-normal text-[var(--sk-ink-3)]">{e.groupLabel} {e.category}{/^[ckh]:/.test(e.side) ? ` · ${t.sideNames[e.side] ?? ''} team` : ''}</span></div>
               {e.matches.filter((m) => m.winner || m.scoreA.length).map((m) => {
                 const won = m.winner === e.side;
                 return <div key={m.id} className="mt-1 flex items-center gap-2 text-xs text-[var(--sk-ink-2)]"><span className={`rounded-full px-2 py-0.5 font-bold ${m.winner ? (won ? 'bg-[var(--sk-good-tint)] text-[var(--sk-good)]' : 'bg-[var(--sk-bad-tint)] text-[var(--sk-bad)]') : 'bg-[var(--sk-amber-tint)] text-[var(--sk-amber-ink)]'}`}>{m.winner ? (won ? 'W' : 'L') : 'live'}</span><span>{m.roundName}{m.groupLabel !== 'Final' ? ` (${m.groupLabel})` : ''} v {nameOf(t, m.aSide === e.side ? m.bSide : m.aSide)} {scoreline(e, m)}</span></div>;

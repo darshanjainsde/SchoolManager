@@ -56,6 +56,10 @@ export class EventInDto {
   @IsOptional() @IsString() @MaxLength(40) customName?: string;
   @IsOptional() @IsString() @MaxLength(20) presetKey?: string;
   @IsOptional() @IsInt() @Min(1) @Max(20) teamSize?: number;
+  /** Custom sports: where it is played, so venues bind. */
+  @IsOptional() @IsIn(['court', 'table', 'field', 'track', 'pool', 'hall', 'board', 'mat', 'ring', 'range']) customVenue?: string;
+  /** Team sports: what a side is. Omitted = suggested from the entrants' classes. */
+  @IsOptional() @IsIn(['SECTIONS', 'CLASSES', 'HOUSES']) teamBasis?: 'SECTIONS' | 'CLASSES' | 'HOUSES';
   @IsString() @IsNotEmpty() @MaxLength(20) groupKey!: string;
   @IsIn(['Boys', 'Girls', 'Mixed']) category!: 'Boys' | 'Girls' | 'Mixed';
   @IsIn(['CLASS', 'DRAW']) structure!: 'CLASS' | 'DRAW';
@@ -72,6 +76,8 @@ export class CreateTournamentDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/) endsOn!: string;
   @IsOptional() @IsInt() @Min(0) @Max(1439) dayStartMin?: number;
   @IsOptional() @IsInt() @Min(1) @Max(1440) dayEndMin?: number;
+  /** Minutes between two slots of the same child. */
+  @IsOptional() @IsInt() @Min(0) @Max(120) restMin?: number;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => VenueInDto) venues!: VenueInDto[];
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(60) @ValidateNested({ each: true }) @Type(() => EventInDto) events!: EventInDto[];
 }

@@ -1,6 +1,6 @@
 import { sportByKey } from './catalogue';
 import {
-  cursorFrom, stdOfGrade, validateBands,
+  cursorFrom, stdOfGrade, validateBands, sideOfClass, sideOfHouse, sideOfEntry, suggestTeamBasis, newDiary,
   ageGroupFor, bandFor, beatsRecord, bracketSize, buildDraw, drawPlacings, findClashes, finalists, fitInDay, formatMark, hhmm,
   judgeScores, nextSlot, parseMark, parseSide, placingPoints, planClassStage, planHeats, planRounds, rankMarks, roundName,
   seedPositions, shiftSlots, shuffle, sideOfSection, sideOfStudent,
@@ -15,10 +15,23 @@ const jump = sportByKey('ath-long-jump')!.scoring;
 if (sprint.type !== 'MARK' || jump.type !== 'MARK') throw new Error('catalogue changed');
 
 describe('side keys', () => {
-  it('round-trip a student and a section', () => {
+  it('round-trip a student, a section, a class and a house', () => {
     expect(parseSide(sideOfStudent('u1'))).toEqual({ kind: 'student', studentId: 'u1' });
     expect(parseSide(sideOfSection(9, ' a '))).toEqual({ kind: 'section', std: 9, section: 'A' });
+    expect(parseSide(sideOfClass(9))).toEqual({ kind: 'class', std: 9 });
+    expect(parseSide(sideOfHouse('h1'))).toEqual({ kind: 'house', houseId: 'h1' });
     expect(parseSide('nonsense')).toBeNull();
+  });
+  it('a child\'s side follows the team basis; the suggested basis is sections only when every class has two', () => {
+    const e = { studentId: 'u1', std: 9, section: 'b', houseId: 'h1' };
+    expect(sideOfEntry(e, false, 'SECTIONS')).toBe('s:u1');
+    expect(sideOfEntry(e, true, 'SECTIONS')).toBe('c:9-B');
+    expect(sideOfEntry(e, true, 'CLASSES')).toBe('k:9');
+    expect(sideOfEntry(e, true, 'HOUSES')).toBe('h:h1');
+    expect(sideOfEntry({ ...e, houseId: null }, true, 'HOUSES')).toBeNull();
+    expect(suggestTeamBasis([{ std: 9, section: 'A' }, { std: 9, section: 'B' }, { std: 10, section: 'A' }, { std: 10, section: 'b' }])).toBe('SECTIONS');
+    expect(suggestTeamBasis([{ std: 9, section: 'A' }, { std: 9, section: 'B' }, { std: 11, section: 'A' }])).toBe('CLASSES');
+    expect(suggestTeamBasis([])).toBe('SECTIONS');
   });
 });
 
@@ -211,6 +224,18 @@ describe('day board time', () => {
     expect(slots[2][0].atMin).toBeGreaterThanOrEqual(615);
     expect(cursor.get('c1')).toBeGreaterThan(600);
   });
+  it('with a diary, a child is never booked twice at once and gets a rest gap between their own slots', () => {
+    const cursor = new Map<string, number>();
+    const diary = newDiary(15);
+    planRounds([[['aarav', 'chirag', 'hiten']]], ['track'], 5, cursor, w, diary);
+    const semis = planRounds([[['aarav', 'rohan'], ['hiten', 'kabir']]], ['c1', 'c2'], 25, cursor, w, diary);
+    expect(semis[0][0]).toEqual({ venueId: 'c1', atMin: 560 }); // heat ends 545, plus the 15-minute rest
+    expect(semis[0][1]).toEqual({ venueId: 'c2', atMin: 560 });
+    expect(diary.free.get('aarav')).toBe(585);
+    const noDiary = planRounds([2], ['c3'], 25, new Map(), w);
+    expect(noDiary[0].map((s) => s.atMin)).toEqual([540, 565]);
+  });
+
   it('a shared cursor lets a second event queue behind the first on the same courts', () => {
     const cursor = new Map<string, number>();
     planRounds([2], ['c1'], 60, cursor, w);

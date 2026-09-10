@@ -4,11 +4,11 @@ import type { EventDetail, TournamentDetail } from '@/app/app/sports/ui';
 
 const ev = (over: Partial<EventDetail>): EventDetail => ({
   id: 'e1', sportKey: 'badminton', sportName: 'Badminton', kind: 'MATCH', scoring: { type: 'GAMES', label: 'Games', bestOf: 3, to: 21, winBy: 2, cap: 30 }, teamSize: 1, groupKey: 'sen', groupLabel: 'Senior', category: 'Boys',
-  structure: 'CLASS', slotMin: 25, lanes: 6, venueIds: ['v1'], order: 0, entries: [], matches: [], heats: [], ...over,
+  structure: 'CLASS', teamBasis: 'SECTIONS', slotMin: 25, lanes: 6, venueIds: ['v1'], order: 0, entries: [], matches: [], heats: [], ...over,
 });
 const m = (over: Record<string, unknown>) => ({ id: 'm', stage: 'CLASS', groupLabel: 'Class 9', roundIdx: 0, roundName: 'Final', pos: 0, aSide: 's:a', bSide: 's:b', scoreA: [], scoreB: [], winner: null, bye: false, walkover: false, venueId: 'v1', atMin: 600, version: 1, savedAt: null, ...over });
 const t = (events: EventDetail[]): TournamentDetail => ({
-  id: 't', name: 'Meet', startsOn: '2026-09-15', endsOn: '2026-09-15', grouping: 'BANDS', dayStartMin: 540, dayEndMin: 960, status: 'LIVE', published: true, version: 1,
+  id: 't', name: 'Meet', startsOn: '2026-09-15', endsOn: '2026-09-15', grouping: 'BANDS', dayStartMin: 540, dayEndMin: 960, restMin: 15, status: 'LIVE', published: true, version: 1,
   venues: [{ id: 'v1', name: 'Court 1', order: 0 }], events, sideNames: { 's:a': 'Aarav', 's:b': 'Bela', 'c:9-A': '9 A' }, bands: [],
 });
 
@@ -17,6 +17,8 @@ describe('tournament view model', () => {
     const e = ev({ entries: [{ studentId: 'x', side: 'c:9-A', std: 9, section: 'A', houseId: null }, { studentId: 'y', side: 'c:9-B', std: 9, section: 'b', houseId: null }] });
     expect(peopleOf(e, 's:a')).toEqual(['a']);
     expect(peopleOf(e, 'c:9-A')).toEqual(['x']);
+    expect(peopleOf(e, 'k:9')).toEqual(['x', 'y']);
+    expect(peopleOf({ ...e, entries: [{ ...e.entries[0], houseId: 'h1' }] }, 'h:h1')).toEqual(['x']);
     expect(peopleOf(e, null)).toEqual([]);
   });
 

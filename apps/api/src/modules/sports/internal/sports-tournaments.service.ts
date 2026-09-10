@@ -2,13 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, withTenant, type TenantTx } from '@skoolos/db';
 import {
   AGE_GROUPS, ageGroupFor, assertNotificationKind, assertNotificationOutboxKind, bandFor, buildDraw, cursorFrom, customSport, dayOf, finalists,
-  groupLabel as groupLabelOf, hhmm, parseSide, resolveSport, shuffle, sidesAreSections, sportByKey, stdOfGrade,
-  type Band, type DayWindow, type Scoring, type Sport,
+  groupLabel as groupLabelOf, hhmm, newDiary, parseSide, resolveSport, shuffle, sideOfEntry, sidesAreSections, sportByKey, stdOfGrade, suggestTeamBasis,
+  type Band, type DayWindow, type Scoring, type Sport, type TeamBasis, type VenueType,
 } from '@skoolos/types';
 import { ApiError } from '../../../common/errors/api-error';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 import { activeStudentsWhere } from '../../../common/roster/active-students';
-import { buildEventPlan, classLabel, drawToMatches, scheduleHeats, scheduleMatches, seedOf, type EntryIn, type MatchPlan } from './sports-build';
+import { buildEventPlan, classLabel, drawToMatches, peopleOfSide, scheduleHeats, scheduleMatches, seedOf, type EntryIn, type MatchPlan } from './sports-build';
 import { SportsSettingsService } from './sports-settings.service';
 import type { CreateTournamentDto, EventInDto, MoveSlotDto, ShiftDto } from './sports.dto';
 
@@ -22,12 +22,12 @@ export interface MatchRow {
 export interface HeatRow { id: string; kind: string; idx: number; venueId: string | null; atMin: number | null; done: boolean; marks: { studentId: string; side: string; lane: number; mark: number | null; rank: number | null }[] }
 export interface EventDetail {
   id: string; sportKey: string; sportName: string; kind: string; scoring: Scoring; teamSize: number; groupKey: string; groupLabel: string; category: string;
-  structure: string; slotMin: number; lanes: number; venueIds: string[]; order: number;
+  structure: string; teamBasis: TeamBasis; slotMin: number; lanes: number; venueIds: string[]; order: number;
   entries: { studentId: string; side: string; std: number; section: string; houseId: string | null }[];
   matches: MatchRow[]; heats: HeatRow[];
 }
 export interface TournamentDetail {
-  id: string; name: string; startsOn: string; endsOn: string; grouping: string; dayStartMin: number; dayEndMin: number; status: string; published: boolean; version: number;
+  id: string; name: string; startsOn: string; endsOn: string; grouping: string; dayStartMin: number; dayEndMin: number; restMin: number; status: string; published: boolean; version: number;
   venues: { id: string; name: string; order: number }[]; events: EventDetail[]; sideNames: Record<string, string>; bands: Band[];
 }
 
@@ -91,7 +91,7 @@ export class SportsTournamentsService {
     const venueNames = dto.venues.map((v) => v.name.trim());
     if (new Set(venueNames.map((n) => n.toLowerCase())).size !== venueNames.length) throw new ApiError('VALIDATION', 'Two venues have the same name.', 400, 'venues');
     const sports: Sport[] = dto.events.map((ev, i) => {
-      const sport = ev.sportKey === 'custom' ? customSport(ev.customName ?? '', ev.presetKey ?? '', ev.teamSize ?? 1) : sportByKey(ev.sportKey);
+      const sport = ev.sportKey === 'custom' ? customSport(ev.customName ?? '', ev.presetKey ?? '', ev.teamSize ?? 1, ev.customVenue as VenueType | undefined) : sportByKey(ev.sportKey);
       if (!sport) throw new ApiError('UNKNOWN_SPORT', `Event ${i + 1}: that sport is not in the catalogue.`, 400, `events.${i}.sportKey`);
       if (ev.venueIdx.some((v) => v >= venueNames.length)) throw new ApiError('VALIDATION', `Event ${i + 1} points at a venue that is not in the list.`, 400, `events.${i}.venueIdx`);
       return sport;
@@ -104,7 +104,7 @@ export class SportsTournamentsService {
       const students = await tx.student.findMany({
         take: LIST_CEILING.ROSTER,
         where: activeStudentsWhere(schoolId, { id: { in: ids } }),
-        select: { id: true, firstName: true, lastName: true, dob: true, classSection: { select: { name: true, grade: { select: { name: true, order: true } } } } },
+        select: { id: true, firstName: true, lastName: true, dob: true, houseId: true, classSection: { select: { name: true, grade: { select: { name: true, order: true } } } } },
       });
       const byId = new Map(students.map((s) => [s.id, s]));
       const missing = ids.filter((id) => !byId.has(id)).length;
@@ -113,40 +113,45 @@ export class SportsTournamentsService {
       for (const s of students) {
         const std = s.classSection ? stdOfGrade(s.classSection.grade) : null;
         if (std == null || !s.classSection) throw new ApiError('VALIDATION', `${s.firstName} ${s.lastName} is in "${s.classSection?.grade.name ?? 'no class'}", which has no class number.`, 400, 'events');
-        placed.set(s.id, { studentId: s.id, std, section: s.classSection.name, name: `${s.firstName} ${s.lastName}`.trim(), dob: s.dob });
+        placed.set(s.id, { studentId: s.id, std, section: s.classSection.name, houseId: s.houseId, name: `${s.firstName} ${s.lastName}`.trim(), dob: s.dob });
       }
       dto.events.forEach((ev, i) => this.checkGroup(ev, i, settings.grouping, settings.bands, meetYear, placed));
       // Plan every event (pure) before the first write, so a bad event costs no rows.
       const plans = dto.events.map((ev, i) => {
         const sport = sports[i];
         const entries = [...new Set(ev.studentIds)].map((id) => placed.get(id)!);
+        const basis: TeamBasis = sidesAreSections(sport) ? ev.teamBasis ?? suggestTeamBasis(entries) : 'SECTIONS';
+        if (basis === 'HOUSES' && entries.every((e) => !e.houseId)) throw new ApiError('SPORTS_NEED_TWO', `${sport.name}: none of the entered children is in a house yet. Put them in houses first, or pick sections or classes as the teams.`, 400, `events.${i}.teamBasis`);
         try {
-          return { entries, plan: buildEventPlan(sport, ev.structure, entries, seedOf(`${dto.name.trim()}:${i}`)) };
+          return { entries, basis, plan: buildEventPlan(sport, ev.structure, entries, seedOf(`${dto.name.trim()}:${i}`), basis) };
         } catch {
-          throw new ApiError('SPORTS_NEED_TWO', `${sport.name} (${groupLabelOf(settings.grouping, settings.bands, ev.groupKey)} ${ev.category}) needs at least two ${sidesAreSections(sport) ? 'sections' : 'players'}.`, 400, `events.${i}.studentIds`);
+          const what = !sidesAreSections(sport) ? 'players' : basis === 'CLASSES' ? 'classes' : basis === 'HOUSES' ? 'houses' : 'sections (or pick classes as the teams)';
+          throw new ApiError('SPORTS_NEED_TWO', `${sport.name} (${groupLabelOf(settings.grouping, settings.bands, ev.groupKey)} ${ev.category}) needs at least two ${what}.`, 400, `events.${i}.studentIds`);
         }
       });
 
       const t = await tx.sportsTournament.create({
-        data: { schoolId, name: dto.name.trim(), startsOn: dateOf(dto.startsOn), endsOn: dateOf(dto.endsOn), grouping: settings.grouping, dayStartMin, dayEndMin, createdById: actorId },
+        data: { schoolId, name: dto.name.trim(), startsOn: dateOf(dto.startsOn), endsOn: dateOf(dto.endsOn), grouping: settings.grouping, dayStartMin, dayEndMin, restMin: dto.restMin ?? 15, createdById: actorId },
         select: { id: true },
       });
       await tx.sportsVenue.createMany({ data: venueNames.map((name, order) => ({ schoolId, tournamentId: t.id, name, order })) });
       const venueRows = await tx.sportsVenue.findMany({ where: { schoolId, tournamentId: t.id }, orderBy: { order: 'asc' }, select: { id: true } });
       const w: DayWindow = { dayStartMin, dayEndMin, days };
       const cursor = new Map(venueRows.map((v) => [v.id, dayStartMin]));
+      // one diary for the whole meet: a child in two events is never in two places at once
+      const diary = newDiary(dto.restMin ?? 15);
       let maxEnd = 0;
       for (const [i, ev] of dto.events.entries()) {
         const sport = sports[i];
-        const { entries, plan } = plans[i];
+        const { entries, plan, basis } = plans[i];
         const venueIds = ev.venueIdx.map((idx) => venueRows[idx].id);
         const slotMin = ev.slotMin ?? sport.slotMin;
         const lanes = ev.lanes ?? sport.lanes ?? 6;
-        if (plan.matches.length) scheduleMatches(plan.matches, venueIds, slotMin, cursor, w);
-        if (plan.heats.length) scheduleHeats(plan.heats, venueIds, slotMin, cursor, w);
+        if (plan.matches.length) scheduleMatches(plan.matches, venueIds, slotMin, cursor, w, diary, (side) => peopleOfSide(side, sport, entries, basis));
+        if (plan.heats.length) scheduleHeats(plan.heats, venueIds, slotMin, cursor, w, diary);
         const structure = sport.kind === 'MEASURED' ? 'HEATS' : sport.kind === 'JUDGED' ? 'PANEL' : plan.walkovers.length || plan.matches.some((m) => m.stage === 'CLASS') ? 'CLASS' : 'DRAW';
         const event = await tx.sportsEvent.create({
-          data: { schoolId, tournamentId: t.id, sportKey: sport.key, sportName: sport.name, kind: sport.kind, groupKey: ev.groupKey, category: ev.category, structure, slotMin, lanes, venueIds, order: i },
+          data: { schoolId, tournamentId: t.id, sportKey: sport.key, sportName: sport.name, kind: sport.kind, groupKey: ev.groupKey, category: ev.category, structure, teamBasis: basis, slotMin, lanes, venueIds, order: i },
           select: { id: true },
         });
         await tx.sportsEntry.createMany({ data: entries.map((e) => ({ schoolId, eventId: event.id, studentId: e.studentId, std: e.std, section: e.section })) });
@@ -194,7 +199,7 @@ export class SportsTournamentsService {
         tx.sportsEvent.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, tournamentId: id }, orderBy: { order: 'asc' } }),
       ]);
       const eventIds = events.map((e) => e.id);
-      const [entries, matches, heats] = await Promise.all([
+      const [entries, matches, heats, houses] = await Promise.all([
         tx.sportsEntry.findMany({
           take: LIST_CEILING.ROSTER, where: { schoolId, eventId: { in: eventIds } },
           select: { eventId: true, studentId: true, std: true, section: true, student: { select: { firstName: true, lastName: true, houseId: true } } },
@@ -204,20 +209,23 @@ export class SportsTournamentsService {
           take: LIST_CEILING.ACTIVITY, where: { schoolId, eventId: { in: eventIds } }, orderBy: [{ kind: 'desc' }, { idx: 'asc' }],
           select: { id: true, eventId: true, kind: true, idx: true, venueId: true, atMin: true, done: true, marks: { select: { studentId: true, lane: true, mark: true, rank: true }, orderBy: { lane: 'asc' } } },
         }),
+        tx.house.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, select: { id: true, name: true } }),
       ]);
       const sideNames: Record<string, string> = {};
       for (const e of entries) {
         sideNames[`s:${e.studentId}`] = `${e.student.firstName} ${e.student.lastName}`.trim();
         sideNames[`c:${e.std}-${e.section.trim().toUpperCase()}`] = `${e.std} ${e.section}`;
+        sideNames[`k:${e.std}`] = `Class ${e.std}`;
       }
+      for (const h of houses) sideNames[`h:${h.id}`] = h.name;
       const detail: EventDetail[] = events.map((ev) => {
         const sport = resolveSport(ev.sportKey, ev.sportName);
         return {
           id: ev.id, sportKey: ev.sportKey, sportName: ev.sportName, kind: ev.kind, scoring: sport?.scoring ?? { type: 'SINGLE', label: 'Points', decider: 'Decider' }, teamSize: sport?.teamSize ?? 1,
-          groupKey: ev.groupKey, groupLabel: groupLabelOf(t.grouping === 'AGE' ? 'AGE' : 'BANDS', settings.bands, ev.groupKey), category: ev.category, structure: ev.structure,
+          groupKey: ev.groupKey, groupLabel: groupLabelOf(t.grouping === 'AGE' ? 'AGE' : 'BANDS', settings.bands, ev.groupKey), category: ev.category, structure: ev.structure, teamBasis: ev.teamBasis as TeamBasis,
           slotMin: ev.slotMin, lanes: ev.lanes, venueIds: ev.venueIds, order: ev.order,
           entries: entries.filter((e) => e.eventId === ev.id).map((e) => ({
-            studentId: e.studentId, side: sport && sidesAreSections(sport) ? `c:${e.std}-${e.section.trim().toUpperCase()}` : `s:${e.studentId}`, std: e.std, section: e.section, houseId: e.student.houseId,
+            studentId: e.studentId, side: sideOfEntry({ studentId: e.studentId, std: e.std, section: e.section, houseId: e.student.houseId }, !!sport && sidesAreSections(sport), ev.teamBasis as TeamBasis) ?? `s:${e.studentId}`, std: e.std, section: e.section, houseId: e.student.houseId,
           })),
           matches: matches.filter((m) => m.eventId === ev.id).map((m) => ({
             id: m.id, stage: m.stage, groupLabel: m.groupLabel, roundIdx: m.roundIdx, roundName: m.roundName, pos: m.pos, aSide: m.aSide, bSide: m.bSide, scoreA: m.scoreA, scoreB: m.scoreB,
@@ -230,7 +238,7 @@ export class SportsTournamentsService {
         };
       });
       return {
-        id: t.id, name: t.name, startsOn: iso(t.startsOn), endsOn: iso(t.endsOn), grouping: t.grouping, dayStartMin: t.dayStartMin, dayEndMin: t.dayEndMin, status: t.status, published: t.published, version: t.version,
+        id: t.id, name: t.name, startsOn: iso(t.startsOn), endsOn: iso(t.endsOn), grouping: t.grouping, dayStartMin: t.dayStartMin, dayEndMin: t.dayEndMin, restMin: t.restMin, status: t.status, published: t.published, version: t.version,
         venues, events: detail, sideNames, bands: settings.bands,
       };
     });
@@ -252,8 +260,8 @@ export class SportsTournamentsService {
       const [school, venues, events, entries, matches, heats] = await Promise.all([
         tx.school.findUnique({ where: { id: schoolId }, select: { name: true } }),
         tx.sportsVenue.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, tournamentId: id }, select: { id: true, name: true } }),
-        tx.sportsEvent.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, tournamentId: id }, select: { id: true, sportName: true, groupKey: true, category: true, kind: true, sportKey: true } }),
-        tx.sportsEntry.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, event: { tournamentId: id } }, select: { eventId: true, studentId: true, std: true, section: true, student: { select: { userId: true, firstName: true } } } }),
+        tx.sportsEvent.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, tournamentId: id }, select: { id: true, sportName: true, groupKey: true, category: true, kind: true, sportKey: true, teamBasis: true } }),
+        tx.sportsEntry.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, event: { tournamentId: id } }, select: { eventId: true, studentId: true, std: true, section: true, student: { select: { userId: true, firstName: true, houseId: true } } } }),
         tx.sportsMatch.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, event: { tournamentId: id }, bye: false, atMin: { not: null } }, select: { eventId: true, aSide: true, bSide: true, roundName: true, groupLabel: true, venueId: true, atMin: true } }),
         tx.sportsHeat.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, event: { tournamentId: id }, atMin: { not: null } }, select: { eventId: true, kind: true, idx: true, venueId: true, atMin: true, marks: { select: { studentId: true } } } }),
       ]);
@@ -279,7 +287,7 @@ export class SportsTournamentsService {
           if (!side) continue;
           const p = parseSide(side);
           if (p?.kind === 'student') consider(p.studentId, m.atMin, line);
-          else if (p?.kind === 'section' && sport) for (const e of entries) if (e.eventId === ev.id && e.std === p.std && e.section.trim().toUpperCase() === p.section) consider(e.studentId, m.atMin, line);
+          else if (p && sport) for (const e of entries) if (e.eventId === ev.id && sideOfEntry({ studentId: e.studentId, std: e.std, section: e.section, houseId: e.student.houseId }, true, ev.teamBasis as TeamBasis) === side) consider(e.studentId, m.atMin, line);
         }
       }
       for (const h of heats) {
@@ -363,11 +371,11 @@ export class SportsTournamentsService {
    * exists, or a class still playing, means nothing happens.
    */
   async ensureFinal(tx: TenantTx, schoolId: string, eventId: string): Promise<boolean> {
-    const ev = await tx.sportsEvent.findFirst({ where: { id: eventId, schoolId }, select: { id: true, tournamentId: true, structure: true, kind: true, slotMin: true, venueIds: true, sportKey: true, sportName: true } });
+    const ev = await tx.sportsEvent.findFirst({ where: { id: eventId, schoolId }, select: { id: true, tournamentId: true, structure: true, kind: true, slotMin: true, venueIds: true, sportKey: true, sportName: true, teamBasis: true } });
     if (!ev || ev.kind !== 'MATCH' || ev.structure !== 'CLASS') return false;
     const [matches, entries] = await Promise.all([
       tx.sportsMatch.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, eventId }, select: { stage: true, groupLabel: true, roundIdx: true, winner: true } }),
-      tx.sportsEntry.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, eventId }, select: { studentId: true, std: true, section: true } }),
+      tx.sportsEntry.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, eventId }, select: { studentId: true, std: true, section: true, student: { select: { houseId: true } } } }),
     ]);
     if (matches.some((m) => m.stage === 'FINAL')) return false;
     const sport = resolveSport(ev.sportKey, ev.sportName);
@@ -377,7 +385,7 @@ export class SportsTournamentsService {
     for (const std of stds) {
       const inClass = matches.filter((m) => m.stage === 'CLASS' && m.groupLabel === classLabel(std));
       if (inClass.length === 0) {
-        const sides = new Set(entries.filter((e) => e.std === std).map((e) => (sidesAreSections(sport) ? `c:${e.std}-${e.section.trim().toUpperCase()}` : `s:${e.studentId}`)));
+        const sides = new Set(entries.filter((e) => e.std === std).map((e) => sideOfEntry({ studentId: e.studentId, std: e.std, section: e.section, houseId: e.student.houseId }, sidesAreSections(sport), ev.teamBasis as TeamBasis)).filter((x): x is string => !!x));
         if (sides.size !== 1) return false;
         champions.push({ std, side: [...sides][0] });
         continue;

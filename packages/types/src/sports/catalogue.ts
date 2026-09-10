@@ -902,16 +902,16 @@ export const SCORING_PRESETS: readonly ScoringPreset[] = [
  * column is needed. Measured and judged presets are individual only (a mark
  * belongs to one student), so `teamSize` is forced to 1 for them.
  */
-export function customSport(name: string, presetKey: string, teamSize = 1): Sport | null {
+export function customSport(name: string, presetKey: string, teamSize = 1, venueType?: VenueType): Sport | null {
   const preset = SCORING_PRESETS.find((p) => p.key === presetKey);
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   if (!preset || !slug) return null;
   if (preset.kind !== 'MATCH') teamSize = 1;
   teamSize = Math.min(Math.max(1, Math.floor(teamSize)), 20);
   return {
-    key: `${CUSTOM_PREFIX}${preset.key}:${teamSize}:${slug}`, name: name.trim(), group: teamSize > 1 ? 'Team' : 'Fitness', kind: preset.kind, teamSize,
+    key: `${CUSTOM_PREFIX}${preset.key}:${teamSize}:${venueType ? `${venueType}:` : ''}${slug}`, name: name.trim(), group: teamSize > 1 ? 'Team' : 'Fitness', kind: preset.kind, teamSize,
     scoring: preset.scoring, slotMin: preset.slotMin, ...(preset.lanes ? { lanes: preset.lanes } : {}),
-    venue: 'Venue', categories: ALL, olympic: false,
+    venue: venueType ? VENUE_TYPE_LABEL[venueType] : 'Hall', categories: ALL, olympic: false,
     rules: { summary: `${name.trim()} — a sport this school added. Scored as: ${preset.label.toLowerCase()}.`, sections: [] },
   };
 }
@@ -925,9 +925,10 @@ export function sportByKey(key: string): Sport | undefined { return BY_KEY.get(k
 export function resolveSport(key: string, name?: string): Sport | undefined {
   const known = BY_KEY.get(key);
   if (known) return known;
-  const m = /^custom:([a-z0-9-]+):(\d+):([a-z0-9-]+)$/.exec(key);
+  const m = /^custom:([a-z0-9-]+):(\d+):(?:([a-z]+):)?([a-z0-9-]+)$/.exec(key);
   if (!m) return undefined;
-  return customSport(name?.trim() || m[3].replace(/-/g, ' '), m[1], Number(m[2])) ?? undefined;
+  const vt = m[3] && (VENUE_TYPES as readonly string[]).includes(m[3]) ? (m[3] as VenueType) : undefined;
+  return customSport(name?.trim() || m[4].replace(/-/g, ' '), m[1], Number(m[2]), vt) ?? undefined;
 }
 export function isCustomSportKey(key: string): boolean { return key.startsWith(CUSTOM_PREFIX); }
 
@@ -937,3 +938,60 @@ export function sportsByGroup(): { group: SportGroup; sports: Sport[] }[] {
 
 /** A sport's sides are sections when it is a team sport, students otherwise. */
 export function sidesAreSections(sport: Pick<Sport, 'teamSize'>): boolean { return sport.teamSize > 1; }
+
+// ── venues ────────────────────────────────────────────────────
+/** The kinds of place a school names when it sets up a meet. A venue's type is read from its name and can be changed. */
+export const VENUE_TYPES = ['court', 'table', 'field', 'track', 'pool', 'hall', 'board', 'mat', 'ring', 'range'] as const;
+export type VenueType = (typeof VENUE_TYPES)[number];
+export const VENUE_TYPE_LABEL: Record<VenueType, string> = { court: 'Court', table: 'Table', field: 'Field', track: 'Track', pool: 'Pool', hall: 'Hall', board: 'Board', mat: 'Mat', ring: 'Ring', range: 'Range' };
+
+const VENUE_WORD_TYPE: Record<string, VenueType> = {
+  Court: 'court', Table: 'table', Field: 'field', Ground: 'field', Pit: 'field', Circle: 'field', Runway: 'field', Course: 'field', Rink: 'field',
+  Track: 'track', Pool: 'pool', Hall: 'hall', Platform: 'hall', Piste: 'hall', Board: 'board', Mat: 'mat', Ring: 'ring', Range: 'range', Venue: 'hall',
+};
+/** Where a sport with no venue of its own type can still run. */
+export const VENUE_FALLBACK: Partial<Record<VenueType, VenueType>> = { board: 'hall', mat: 'hall', ring: 'hall', table: 'hall', range: 'field' };
+
+/** The type of place a sport is played on. */
+export function venueTypeOf(sport: Pick<Sport, 'venue'>): VenueType {
+  return VENUE_WORD_TYPE[sport.venue] ?? 'hall';
+}
+
+const NAME_TYPE: [RegExp, VenueType][] = [
+  [/\bcourts?\b/i, 'court'], [/\btables?\b/i, 'table'], [/\b(field|ground|pitch|lawn|oval)\b/i, 'field'], [/\btrack\b/i, 'track'], [/\bpool\b/i, 'pool'],
+  [/\b(hall|auditorium|gym|gymnasium|indoor)\b/i, 'hall'], [/\bboards?\b/i, 'board'], [/\b(mat|dojo|mats)\b/i, 'mat'], [/\bring\b/i, 'ring'], [/\brange\b/i, 'range'],
+];
+/** "Court 1" → court, "Football ground" → field, "TT table" → table; anything else is a hall. */
+export function inferVenueType(name: string): VenueType {
+  for (const [re, t] of NAME_TYPE) if (re.test(name)) return t;
+  return 'hall';
+}
+
+/** The sport a venue is named after ("Badminton court 3" → badminton), if any. */
+export function sportNamedIn(venueName: string): Sport | undefined {
+  const n = venueName.toLowerCase();
+  return SPORTS.find((s) => {
+    const first = s.name.toLowerCase().split(/[\s(]/)[0];
+    return first.length >= 4 && /[a-z]/.test(first) && n.includes(first);
+  });
+}
+
+export interface VenueLike { name: string; type: VenueType }
+export interface VenueMatch<V extends VenueLike> { list: V[]; how: 'named' | 'type' | 'fallback' | 'none'; want: VenueType }
+/**
+ * Which of a meet's venues an event should take by default:
+ *   1. venues NAMED after the sport ("Badminton court 3"), and only those;
+ *   2. else every venue of the sport's type that is not named after another sport;
+ *   3. else the fallback type (a board game in the hall);
+ *   4. else none — never every venue.
+ */
+export function venuesForSport<V extends VenueLike>(sport: Pick<Sport, 'key' | 'name' | 'venue'>, venues: V[]): VenueMatch<V> {
+  const want = venueTypeOf(sport);
+  const named = venues.filter((v) => sportNamedIn(v.name)?.key === sport.key);
+  if (named.length) return { list: named, how: 'named', want };
+  const generic = venues.filter((v) => v.type === want && !sportNamedIn(v.name));
+  if (generic.length) return { list: generic, how: 'type', want };
+  const fb = VENUE_FALLBACK[want];
+  const fallback = fb ? venues.filter((v) => v.type === fb && !sportNamedIn(v.name)) : [];
+  return { list: fallback, how: fallback.length ? 'fallback' : 'none', want };
+}
