@@ -422,7 +422,8 @@ section map: same-named section one grade up, else the first of that grade, top 
 
 **Decide rows** (`GET plan/students?sectionId=<closing section>|UNPLACED`) show attendance % (present+late
 over marked days of the closing year) and results % (published results of the counted exams; all of the
-class's exams when `countExamIds` is empty), computed on read, never stored. `review` = results below
+class's exams when none of that class's ids are in `countExamIds` — the list is plan-wide and holds ids from
+several classes, each class reads only its own), computed on read, never stored. `review` = results below
 `passMarkPct` — **a flag, never a decision (D10)**. `joinedSincePlan` = admitted after the plan opened.
 Decisions are saved per class (`PUT plan/decisions`, all rows): PROMOTE/STAY need a `toSectionId` in the
 next year (400 `BAD_TARGET`), LEAVE needs `leaveStatus`; unknown or non-ACTIVE students are refused 404.
@@ -431,14 +432,19 @@ Every save bumps `plan.version`; a PATCH to the plan does too.
 **Start** (`POST plan/start { when, version }`): 409 `PLAN_CHANGED` when the version moved; 400
 `UNDECIDED_STUDENTS` while any child in a closing section has no row; 400 `BAD_TARGET` if a chosen section
 was deleted meanwhile. `when: ON_START_DATE` sets SCHEDULED with `scheduledFor` = midnight of the next
-year's first day in the school's timezone; `/internal/cron/session-start` (18:30 UTC) applies due plans as
-the person who scheduled them. `when: NOW` is **one transaction** (`applyPlan`): the passing-out classes
-graduate through the Homecoming wing first (`AlumniService.graduateBatchIn`, only with the `ALUMNI`
-feature), seats move with roll numbers by `rollPolicy` (KEEP / ALPHABETICAL / ADMISSION_NO), PASS_OUT →
-`applyStudentLeave(ALUMNI, alumniBatch = closing year name)`, LEAVE → the chosen status, **every leaver's
-login closes in the same transaction**, the current year flips, the timetable copies per classroom (5 B's
-periods become next year's 5 B; only slots of ACTIVE teachers), pending register-change requests on closing
-sections are REJECTED, the plan becomes STARTED. After commit, best-effort: leave carry-forward
+year's first day in the school's timezone; `/internal/cron/session-start` (18:35 UTC) applies due plans as
+the person who scheduled them. `when: NOW` is **one transaction** (`applyPlan`), **batched, never per child**
+(a few dozen statements whatever the school size): the plan is CLAIMED first (a conditional update to
+STARTED — a second click or the cron finds nothing open, 409 `NO_PLAN`), the passing-out CHILDREN (only
+those, never a same-class child who stays) graduate through the Homecoming wing first
+(`AlumniService.graduateBatchIn(tx, …, studentIds)`, only with the `ALUMNI` feature), seats move one
+statement per destination class with roll numbers by `rollPolicy` (KEEP / ALPHABETICAL / ADMISSION_NO),
+PASS_OUT → ALUMNI with `alumniBatch` = closing year name, LEAVE → the chosen status (the same fields Track A's
+`applyStudentLeave` writes), **every leaver's login closes in the same transaction**, the current year
+flips, the timetable copies per classroom (5 B's periods become next year's 5 B; only slots of ACTIVE
+teachers; a period the class or the teacher already has in the new year is skipped, never doubled;
+`effectiveFrom` = the earlier of today and the session's first day, so an early Start shows the timetable at
+once), pending register-change requests on closing sections are REJECTED. After commit, best-effort: leave carry-forward
 (`LeavePolicyService.closeYear`), `SESSION` inbox rows for every moved family and every teacher with a
 copied class, then in the background the "child is in 6 A" mail per family with an address and the alumni
 claim-link mail (`/alumni#claim=<token>`) per new alumnus with an email. Children with no class (unplaced)

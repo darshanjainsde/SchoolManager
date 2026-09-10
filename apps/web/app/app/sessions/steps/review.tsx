@@ -110,7 +110,17 @@ export default function ReviewStep({ plan, features, onCancel, onStarted }: { pl
       )}
       <div className="sk-cel-actions">
         {!scheduled && (
-          <button type="button" className="sk-btn sk-press" data-variant="primary" disabled={r.counts.undecided > 0 || start.isPending} onClick={() => start.mutate()}>
+          <button
+            type="button"
+            className="sk-btn sk-press"
+            data-variant="primary"
+            disabled={r.counts.undecided > 0 || start.isPending}
+            onClick={() => {
+              const what = `${r.counts.promote + r.counts.stay} children move, ${r.counts.passOut} pass out, ${r.counts.leave} leave.`;
+              const ask = when === 'NOW' ? `Start ${plan.toYear.name} now? ${what} This runs once and cannot be undone.` : `Schedule ${plan.toYear.name} to start on ${fmtDate(plan.toYear.startDate)}? ${what}`;
+              if (window.confirm(ask)) start.mutate();
+            }}
+          >
             {start.isPending ? 'Starting…' : when === 'NOW' ? `Start ${plan.toYear.name}` : 'Schedule the start'}
           </button>
         )}

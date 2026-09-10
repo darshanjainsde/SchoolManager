@@ -64,7 +64,7 @@ export interface Target {
 export interface RowsResponse {
   section: { id: string; label: string; gradeId: string } | null;
   targets: Target[];
-  exams: { id: string; title: string; maxMarks: number; scheduledAt: string }[];
+  exams: { id: string; title: string; maxMarks: number; scheduledAt: string; counted: boolean }[];
   rows: SessionStudentRow[];
 }
 
@@ -87,6 +87,7 @@ export interface RegisterRow {
   studentId: string;
   name: string;
   admissionNo: string;
+  email: string | null;
   fromSection: string | null;
   toSection: string | null;
   decision: DecisionKind;

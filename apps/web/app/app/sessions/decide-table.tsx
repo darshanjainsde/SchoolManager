@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
@@ -21,19 +21,18 @@ const DECISIONS: { value: DecisionKind; label: string }[] = [
   { value: 'LEAVE', label: 'Leaving' },
 ];
 
+function seedOne(r: SessionStudentRow): Draft {
+  return {
+    decision: r.decision ?? r.defaultDecision,
+    toSectionId: r.toSectionId,
+    leaveStatus: r.leaveStatus ?? 'TRANSFERRED',
+    leaveReason: r.leaveReason ?? '',
+    note: r.note ?? '',
+  };
+}
+
 function seed(rows: SessionStudentRow[]): Map<string, Draft> {
-  return new Map(
-    rows.map((r) => [
-      r.studentId,
-      {
-        decision: r.decision ?? r.defaultDecision,
-        toSectionId: r.toSectionId,
-        leaveStatus: r.leaveStatus ?? 'TRANSFERRED',
-        leaveReason: r.leaveReason ?? '',
-        note: r.note ?? '',
-      },
-    ]),
-  );
+  return new Map(rows.map((r) => [r.studentId, seedOne(r)]));
 }
 
 /** The wire shape: only the keys the API needs for each decision. */
@@ -72,25 +71,36 @@ export default function DecideTable({
   const host = useHost();
   const api = useApi({ hostHeader: host });
   const [drafts, setDrafts] = useState<Map<string, Draft>>(() => seed(rows));
+  // Rows can be refetched under the office's hands (a pass-mark change, a
+  // newly admitted child): keep every edit, seed only the newcomers.
+  useEffect(() => {
+    setDrafts((m) => {
+      const next = new Map(m);
+      for (const r of rows) if (!next.has(r.studentId)) next.set(r.studentId, seedOne(r));
+      return next;
+    });
+  }, [rows]);
+  const draftOf = (r: SessionStudentRow): Draft => drafts.get(r.studentId) ?? seedOne(r);
   const [onlyReview, setOnlyReview] = useState(false);
   const [onlyLowAttendance, setOnlyLowAttendance] = useState(false);
 
   const edit = (id: string, patch: Partial<Draft>) =>
     setDrafts((m) => {
       const next = new Map(m);
-      next.set(id, { ...next.get(id)!, ...patch });
+      const base = next.get(id) ?? seedOne(rows.find((r) => r.studentId === id)!);
+      next.set(id, { ...base, ...patch });
       return next;
     });
 
   const pick = (r: SessionStudentRow, decision: DecisionKind) => {
-    const d = drafts.get(r.studentId)!;
-    const toSectionId =
-      decision === 'STAY' ? (r.stayToSectionId ?? d.toSectionId) : decision === 'PROMOTE' ? (r.toSectionId ?? d.toSectionId ?? targets[0]?.id ?? null) : null;
+    const d = draftOf(r);
+    // No guessed class: a final-grade child pressed to Promote has nowhere to go until the office picks.
+    const toSectionId = decision === 'STAY' ? (r.stayToSectionId ?? d.toSectionId) : decision === 'PROMOTE' ? (r.toSectionId ?? d.toSectionId) : null;
     edit(r.studentId, { decision, toSectionId });
   };
 
   const save = useMutation({
-    mutationFn: () => api.put<{ saved: number; version: number }>('/manage/sessions/plan/decisions', { rows: rows.map((r) => toWire(r.studentId, drafts.get(r.studentId)!)) }),
+    mutationFn: () => api.put<{ saved: number; version: number }>('/manage/sessions/plan/decisions', { rows: rows.map((r) => toWire(r.studentId, draftOf(r))) }),
     onSuccess: (r) => {
       toast.success(`${r.saved} decisions saved`);
       onSaved(r.version);
@@ -103,7 +113,7 @@ export default function DecideTable({
     [rows, onlyReview, onlyLowAttendance],
   );
   const missingTarget = rows.filter((r) => {
-    const d = drafts.get(r.studentId)!;
+    const d = draftOf(r);
     return (d.decision === 'PROMOTE' || d.decision === 'STAY') && !d.toSectionId;
   }).length;
 
@@ -141,7 +151,7 @@ export default function DecideTable({
               </tr>
             )}
             {visible.map((r) => {
-              const d = drafts.get(r.studentId)!;
+              const d = draftOf(r);
               return (
                 <tr key={r.studentId} aria-label={r.name}>
                   <td className="sk-num">{r.rollNo ?? '—'}</td>

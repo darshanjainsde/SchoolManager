@@ -12,13 +12,25 @@ const DECISION_LABEL: Record<string, string> = { PROMOTE: 'Promoted', STAY: 'Sta
 export default function Register({ year, onBack }: { year: YearRow; onBack: () => void }) {
   const host = useHost();
   const api = useApi({ hostHeader: host });
-  const [filter, setFilter] = useState<'ALL' | 'PASS_OUT' | 'LEAVE'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'PASS_OUT' | 'NO_EMAIL' | 'LEAVE'>('ALL');
   const rows = useQuery<RegisterRow[]>({
     queryKey: ['session-register', host, year.id],
     queryFn: () => api.get(`/manage/sessions/${year.id}/register`),
     enabled: !!host,
   });
-  const list = (rows.data ?? []).filter((r) => filter === 'ALL' || r.decision === filter);
+  const list = (rows.data ?? []).filter((r) =>
+    filter === 'ALL' ? true : filter === 'NO_EMAIL' ? r.decision === 'PASS_OUT' && !r.email : r.decision === filter,
+  );
+  // Print only the register: the shell is hidden for the length of the print.
+  const print = () => {
+    document.body.classList.add('ses-printing');
+    const done = () => {
+      document.body.classList.remove('ses-printing');
+      window.removeEventListener('afterprint', done);
+    };
+    window.addEventListener('afterprint', done);
+    window.print();
+  };
   return (
     <div className="sk-card sk-ses-register">
       <div className="sk-card-h">
@@ -32,12 +44,12 @@ export default function Register({ year, onBack }: { year: YearRow; onBack: () =
           <button type="button" className="sk-btn sk-press" onClick={onBack}>
             ← Sessions
           </button>
-          {(['ALL', 'PASS_OUT', 'LEAVE'] as const).map((f) => (
+          {(['ALL', 'PASS_OUT', 'NO_EMAIL', 'LEAVE'] as const).map((f) => (
             <button key={f} type="button" className="sk-chip sk-press" aria-pressed={filter === f} onClick={() => setFilter(f)}>
-              {f === 'ALL' ? 'Everyone' : f === 'PASS_OUT' ? 'Passed out' : 'Left'}
+              {f === 'ALL' ? 'Everyone' : f === 'PASS_OUT' ? 'Passed out' : f === 'NO_EMAIL' ? 'Passed out · no email' : 'Left'}
             </button>
           ))}
-          <button type="button" className="sk-btn sk-press" style={{ marginLeft: 'auto' }} onClick={() => window.print()}>
+          <button type="button" className="sk-btn sk-press" style={{ marginLeft: 'auto' }} onClick={print}>
             <Printer className="h-4 w-4" /> Print
           </button>
         </div>
@@ -47,6 +59,7 @@ export default function Register({ year, onBack }: { year: YearRow; onBack: () =
               <tr>
                 <th>Admission no.</th>
                 <th>Student</th>
+                <th>Email</th>
                 <th>From</th>
                 <th>Decision</th>
                 <th>To</th>
@@ -57,7 +70,7 @@ export default function Register({ year, onBack }: { year: YearRow; onBack: () =
             <tbody>
               {rows.data && list.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="sk-muted" data-wrap="true">
+                  <td colSpan={8} className="sk-muted" data-wrap="true">
                     Nothing here.
                   </td>
                 </tr>
@@ -66,6 +79,7 @@ export default function Register({ year, onBack }: { year: YearRow; onBack: () =
                 <tr key={r.studentId}>
                   <td className="sk-num">{r.admissionNo}</td>
                   <td>{r.name}</td>
+                  <td>{r.email ?? '—'}</td>
                   <td>{r.fromSection ?? '—'}</td>
                   <td>
                     {DECISION_LABEL[r.decision] ?? r.decision}

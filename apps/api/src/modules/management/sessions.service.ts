@@ -1,23 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { getPlatformPrisma, withTenant, type Prisma, type TenantTx } from '@skoolos/db';
+import { Prisma, getPlatformPrisma, withTenant, type TenantTx } from '@skoolos/db';
 import { loadEnv } from '@skoolos/config';
+import { assertNotificationKind } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isSchemaMissing } from '../../common/errors/prisma-errors';
 import { AuditService } from '../../common/audit/audit.service';
 import { MailService } from '../../common/mail/mail.service';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { activeStudentsWhere } from '../../common/roster/active-students';
-import { emitNotifications } from '../../common/notifications/notification-inbox';
 import { runInBackground } from '../../common/notifications/run-in-background';
 import { AlumniAuthService, AlumniService } from '../alumni';
 import { FeatureResolverService } from '../features';
 import { LeavePolicyService } from './leave-policy.service';
-import { applyStudentLeave } from './internal/student-transitions';
-import { closeLoginIn } from './internal/close-login';
 import {
   PASS_OUT,
   assignRollNumbers,
-  attendancePct,
   defaultSectionMap,
   gradeLadder,
   resultsPct,
@@ -39,17 +36,24 @@ import type {
  * A plan is a DRAFT the office edits over days: open the next year, copy the
  * classes, decide every child, review, start. Nothing about a child changes
  * until Start, and Start is ONE transaction: seats move, the passing-out
- * classes graduate through the Homecoming wing, leavers go through Track A's
- * applyStudentLeave, the current year flips, the timetable copies, pending
- * register requests close, and every leaver's login closes — all or nothing.
- * Leave carry-forward, the inbox rows and the emails run after commit and
- * are best-effort by design (a mail outage must not undo a promotion).
+ * children graduate through the Homecoming wing, leavers close, the current
+ * year flips, the timetable copies, pending register requests close, and every
+ * leaver's login closes — all or nothing. Leave carry-forward, the inbox rows
+ * and the emails run after commit and are best-effort by design.
+ *
+ * The transaction is BATCHED, never per child: `withTenant` gives ten seconds,
+ * and a 600-child school walked one statement at a time is two thousand round
+ * trips through the pooler. Every write below is one statement per group —
+ * per destination class, per leave status, one for the logins, one for the
+ * timetable — so the whole year end is a few dozen statements whatever the
+ * size of the school.
  *
  * Stateless: attendance % and results % are computed on read; the only state
  * is the plan and its decision rows.
  */
 
 const OPEN = ['DRAFT', 'SCHEDULED'] as const;
+const CHUNK = 300;
 type PlanKind = Prisma.SessionPlanGetPayload<{ include: { fromYear: true; toYear: true } }>;
 
 export interface StartOutcome {
@@ -64,7 +68,7 @@ export interface StartOutcome {
   familyUserIds: { userId: string; firstName: string; className: string }[];
   sessionName: string;
   schoolName: string;
-  schoolSlug: string;
+  schoolHost: string;
   carryLeave: boolean;
   fromYearId: string;
   toYearId: string;
@@ -74,12 +78,19 @@ export interface RegisterRow {
   studentId: string;
   name: string;
   admissionNo: string;
+  email: string | null;
   fromSection: string | null;
   toSection: string | null;
   decision: string;
   leaveStatus: string | null;
   decidedBy: string | null;
   appliedAt: string | null;
+}
+
+function chunks<T>(xs: T[], n = CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
+  return out;
 }
 
 function groupBy<T extends { studentId: string }>(xs: T[]): Map<string, T[]> {
@@ -128,18 +139,17 @@ export class SessionsService {
   async overview(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
       const [years, sections, counts] = await Promise.all([
-        tx.academicYear.findMany({
-          take: LIST_CEILING.STRUCTURE,
-          where: { schoolId },
-          orderBy: { startDate: 'asc' },
-          include: { _count: { select: { classSections: true } } },
-        }),
+        tx.academicYear.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { startDate: 'asc' } }),
         tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, select: { id: true, academicYearId: true } }),
         tx.student.groupBy({ by: ['classSectionId'], where: activeStudentsWhere(schoolId), _count: { _all: true } }),
       ]);
       const bySection = new Map(counts.map((c) => [c.classSectionId, c._count._all]));
-      const perYear = new Map<string, number>();
-      for (const s of sections) perYear.set(s.academicYearId, (perYear.get(s.academicYearId) ?? 0) + (bySection.get(s.id) ?? 0));
+      const studentsPerYear = new Map<string, number>();
+      const sectionsPerYear = new Map<string, number>();
+      for (const s of sections) {
+        sectionsPerYear.set(s.academicYearId, (sectionsPerYear.get(s.academicYearId) ?? 0) + 1);
+        studentsPerYear.set(s.academicYearId, (studentsPerYear.get(s.academicYearId) ?? 0) + (bySection.get(s.id) ?? 0));
+      }
 
       // Degrades until the session_plans migration lands (Global Constraints).
       let plan: PlanKind | null = null;
@@ -155,8 +165,8 @@ export class SessionsService {
           startDate: y.startDate,
           endDate: y.endDate,
           isCurrent: y.isCurrent,
-          sections: y._count.classSections,
-          students: perYear.get(y.id) ?? 0,
+          sections: sectionsPerYear.get(y.id) ?? 0,
+          students: studentsPerYear.get(y.id) ?? 0,
         })),
         plan,
       };
@@ -201,19 +211,33 @@ export class SessionsService {
   }
 
   async updatePlan(schoolId: string, dto: UpdateSessionPlanDto) {
-    if (dto.sectionMap) {
-      for (const [k, v] of Object.entries(dto.sectionMap)) {
-        if (typeof v !== 'string' || !k) throw new ApiError('VALIDATION', 'Section map values must be a section id or PASS_OUT', 400, 'sectionMap');
-      }
-    }
     return withTenant(schoolId, async (tx) => {
       const plan = await this.editablePlan(tx, schoolId);
-      const { sectionMap, ...rest } = dto;
-      return tx.sessionPlan.update({
-        where: { id: plan.id },
-        data: { ...rest, ...(sectionMap ? { sectionMap: sectionMap as Prisma.InputJsonValue } : {}), version: { increment: 1 } },
-        include: { fromYear: true, toYear: true },
-      });
+      const data: Prisma.SessionPlanUpdateInput = { version: { increment: 1 } };
+      if (dto.passMarkPct !== undefined) data.passMarkPct = dto.passMarkPct;
+      if (dto.countExamIds !== undefined) data.countExamIds = dto.countExamIds;
+      if (dto.rollPolicy !== undefined) data.rollPolicy = dto.rollPolicy;
+      if (dto.copyTimetable !== undefined) data.copyTimetable = dto.copyTimetable;
+      if (dto.carryLeave !== undefined) data.carryLeave = dto.carryLeave;
+      if (dto.sectionMap !== undefined) {
+        // Keys are closing sections, values are next-year sections or PASS_OUT — nothing else is stored.
+        const entries = Object.entries(dto.sectionMap);
+        if (entries.length > LIST_CEILING.STRUCTURE) throw new ApiError('VALIDATION', 'Too many classes in the map', 400, 'sectionMap');
+        const sections = await tx.classSection.findMany({
+          take: LIST_CEILING.STRUCTURE,
+          where: { schoolId, academicYearId: { in: [plan.fromYearId, plan.toYearId] } },
+          select: { id: true, academicYearId: true },
+        });
+        const closing = new Set(sections.filter((s) => s.academicYearId === plan.fromYearId).map((s) => s.id));
+        const next = new Set(sections.filter((s) => s.academicYearId === plan.toYearId).map((s) => s.id));
+        for (const [k, v] of entries) {
+          if (!closing.has(k) || typeof v !== 'string' || (v !== PASS_OUT && !next.has(v))) {
+            throw new ApiError('VALIDATION', 'The class map must send each closing class to a next-year class or PASS_OUT', 400, 'sectionMap');
+          }
+        }
+        data.sectionMap = dto.sectionMap as Prisma.InputJsonValue;
+      }
+      return tx.sessionPlan.update({ where: { id: plan.id }, data, include: { fromYear: true, toYear: true } });
     });
   }
 
@@ -262,6 +286,7 @@ export class SessionsService {
             classTeacherId: f.classTeacher?.status === 'ACTIVE' ? f.classTeacherId : null,
           },
         });
+        have.add(`${f.gradeId}|${f.name.toLowerCase()}`);
         created++;
       }
       const to = await tx.classSection.findMany({
@@ -322,14 +347,18 @@ export class SessionsService {
             orderBy: { scheduledAt: 'asc' },
           })
         : [];
-      const countIds = plan.countExamIds.length ? new Set(plan.countExamIds) : null;
-      const examIds = examsRaw.map((e) => e.id);
+      // `countExamIds` is one list for the whole plan, so it holds exam ids
+      // from several classes: for THIS class only its own exams matter, and
+      // "none of mine chosen" means all of them count.
+      const mine = new Set(examsRaw.map((e) => e.id));
+      const chosen = plan.countExamIds.filter((id) => mine.has(id));
+      const examIds = chosen.length ? chosen : [...mine];
       const [marks, results, decisions] = await Promise.all([
         ids.length
-          ? tx.attendance.findMany({
-              take: LIST_CEILING.ROSTER,
+          ? tx.attendance.groupBy({
+              by: ['studentId', 'status'],
               where: { schoolId, studentId: { in: ids }, date: { gte: plan.fromYear.startDate, lte: plan.fromYear.endDate } },
-              select: { studentId: true, status: true },
+              _count: { _all: true },
             })
           : [],
         ids.length && examIds.length
@@ -343,19 +372,26 @@ export class SessionsService {
           ? tx.sessionDecision.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, planId: plan.id, studentId: { in: ids } } })
           : [],
       ]);
-      const marksBy = groupBy(marks.map((m) => ({ studentId: m.studentId, status: m.status as 'PRESENT' | 'ABSENT' | 'LATE' })));
-      const resultsBy = groupBy(results.filter((r) => !countIds || countIds.has(r.examId)));
+      const attendance = new Map<string, { present: number; total: number }>();
+      for (const m of marks) {
+        const a = attendance.get(m.studentId) ?? { present: 0, total: 0 };
+        a.total += m._count._all;
+        if (m.status !== 'ABSENT') a.present += m._count._all;
+        attendance.set(m.studentId, a);
+      }
+      const resultsBy = groupBy(results);
       const decBy = new Map(decisions.map((d) => [d.studentId, d]));
 
       const rows: SessionStudentRow[] = students.map((s) => {
         const d = decBy.get(s.id);
+        const a = attendance.get(s.id);
         const rp = resultsPct((resultsBy.get(s.id) ?? []).map((r) => ({ marks: r.marks, maxMarks: r.exam.maxMarks })));
         return {
           studentId: s.id,
           rollNo: s.rollNo,
           name: `${s.firstName} ${s.lastName}`.trim(),
           admissionNo: s.admissionNo,
-          attendancePct: attendancePct(marksBy.get(s.id) ?? []),
+          attendancePct: a && a.total > 0 ? Math.round((a.present / a.total) * 100) : null,
           resultsPct: rp,
           review: rp !== null && rp < plan.passMarkPct,
           joinedSincePlan: s.createdAt > plan.createdAt,
@@ -371,7 +407,7 @@ export class SessionsService {
       return {
         section: section ? { id: section.id, label: `${section.grade.name} ${section.name}`, gradeId: section.gradeId } : null,
         targets,
-        exams: examsRaw.map((e) => ({ id: e.id, title: e.title, maxMarks: e.maxMarks, scheduledAt: e.scheduledAt })),
+        exams: examsRaw.map((e) => ({ id: e.id, title: e.title, maxMarks: e.maxMarks, scheduledAt: e.scheduledAt, counted: examIds.includes(e.id) })),
         rows,
       };
     });
@@ -474,22 +510,27 @@ export class SessionsService {
   }
 
   async start(schoolId: string, actorUserId: string, dto: StartSessionDto) {
-    const gate = await withTenant(schoolId, async (tx) => {
-      const plan = await this.openPlan(tx, schoolId);
-      if (!plan) throw new ApiError('NO_PLAN', 'No open plan', 404);
-      if (plan.version !== dto.version) {
-        throw new ApiError('PLAN_CHANGED', 'The plan changed since you opened this page. Reload and review again.', 409);
-      }
-      return plan;
-    });
     if (dto.when === 'ON_START_DATE') {
+      const gate = await withTenant(schoolId, async (tx) => {
+        const plan = await this.openPlan(tx, schoolId);
+        if (!plan) throw new ApiError('NO_PLAN', 'No open plan', 404);
+        if (plan.version !== dto.version) {
+          throw new ApiError('PLAN_CHANGED', 'The plan changed since you opened this page. Reload and review again.', 409);
+        }
+        return plan;
+      });
       const scheduledFor = startOfDayInZone(gate.toYear.startDate, await this.timezone(schoolId));
       await withTenant(schoolId, (tx) => tx.sessionPlan.update({ where: { id: gate.id }, data: { status: 'SCHEDULED', scheduledFor } }));
       await this.audit.record({ schoolId, actorUserId, action: 'session.schedule', entity: 'SessionPlan', entityId: gate.id, meta: { scheduledFor } });
       return { scheduled: true as const, scheduledFor: scheduledFor.toISOString() };
     }
-    const outcome = await this.applyPlan(schoolId, actorUserId, gate.id);
-    await this.afterStart(schoolId, outcome);
+    const planId = await withTenant(schoolId, async (tx) => {
+      const plan = await this.openPlan(tx, schoolId);
+      if (!plan) throw new ApiError('NO_PLAN', 'No open plan', 404);
+      return plan.id;
+    });
+    const outcome = await this.applyPlan(schoolId, actorUserId, planId, dto.version);
+    await this.afterStartSafely(schoolId, outcome);
     return {
       started: true as const,
       startedAt: new Date().toISOString(),
@@ -501,16 +542,33 @@ export class SessionsService {
     };
   }
 
-  /** The one transaction. Reused by the scheduled start (startDue). */
-  private async applyPlan(schoolId: string, actorUserId: string, planId: string): Promise<StartOutcome> {
+  /**
+   * The one transaction. Reused by the scheduled start (startDue). The plan is
+   * CLAIMED first (one conditional update), so two clicks, or the cron and a
+   * click, cannot both apply it: the second finds nothing open and stops.
+   */
+  private async applyPlan(schoolId: string, actorUserId: string, planId: string, expectedVersion?: number): Promise<StartOutcome> {
     const hasAlumniWing = (await this.features.getFeatures(schoolId)).has('ALUMNI');
+    const now = new Date();
     const outcome = await withTenant(schoolId, async (tx) => {
       const plan = await tx.sessionPlan.findFirst({
         where: { id: planId, schoolId, status: { in: [...OPEN] } },
         include: { fromYear: true, toYear: true },
       });
       if (!plan) throw new ApiError('NO_PLAN', 'This plan has already been started or cancelled', 409);
-      const school = await tx.school.findUnique({ where: { id: schoolId }, select: { name: true, slug: true } });
+      if (expectedVersion !== undefined && plan.version !== expectedVersion) {
+        throw new ApiError('PLAN_CHANGED', 'The plan changed since you opened this page. Reload and review again.', 409);
+      }
+      const claimed = await tx.sessionPlan.updateMany({
+        where: { id: plan.id, schoolId, status: { in: [...OPEN] } },
+        data: { status: 'STARTED', startedAt: now, startedById: actorUserId },
+      });
+      if (claimed.count !== 1) throw new ApiError('NO_PLAN', 'This plan has already been started or cancelled', 409);
+
+      const school = await tx.school.findUnique({
+        where: { id: schoolId },
+        select: { name: true, slug: true, domains: { take: 1, select: { hostname: true } } },
+      });
 
       const sections = await tx.classSection.findMany({
         take: LIST_CEILING.STRUCTURE,
@@ -533,8 +591,6 @@ export class SessionsService {
       if (undecided.length) {
         throw new ApiError('UNDECIDED_STUDENTS', `${undecided.length} students have no decision yet`, 400);
       }
-      // A target section deleted since the decision was saved must not seat a
-      // child in a class that no longer exists.
       for (const s of students) {
         const d = decBy.get(s.id)!;
         if ((d.decision === 'PROMOTE' || d.decision === 'STAY') && (!d.toSectionId || !nextIds.has(d.toSectionId))) {
@@ -545,21 +601,26 @@ export class SessionsService {
       const o: StartOutcome = {
         moved: 0, alumni: 0, left: 0, slotsCopied: 0, slotsSkipped: 0, alumniDoor: false,
         alumniStudentIds: [], teacherUserIds: [], familyUserIds: [],
-        sessionName: plan.toYear.name, schoolName: school?.name ?? '', schoolSlug: school?.slug ?? '',
+        sessionName: plan.toYear.name, schoolName: school?.name ?? '',
+        schoolHost: school?.domains[0]?.hostname ?? `${school?.slug ?? ''}.${this.env.PLATFORM_HOST}`,
         carryLeave: plan.carryLeave, fromYearId: plan.fromYearId, toYearId: plan.toYearId,
       };
 
-      // Alumni first, while the passing-out classes still read as the active
-      // roster the Homecoming wing filters on.
-      const passOutSections = Array.from(
-        new Set(students.filter((s) => decBy.get(s.id)!.decision === 'PASS_OUT').map((s) => s.classSectionId!)),
-      );
-      if (passOutSections.length && hasAlumniWing) {
-        await this.alumni.graduateBatchIn(tx, schoolId, { classSectionIds: passOutSections, batchYear: plan.fromYear.endDate.getUTCFullYear() });
+      const passingOut = students.filter((s) => decBy.get(s.id)!.decision === 'PASS_OUT');
+      const leaving = students.filter((s) => decBy.get(s.id)!.decision === 'LEAVE');
+
+      // Alumni first, while the passing-out children still read as the active
+      // roster the Homecoming wing filters on — and ONLY those children.
+      if (passingOut.length && hasAlumniWing) {
+        await this.alumni.graduateBatchIn(
+          tx, schoolId,
+          { classSectionIds: Array.from(new Set(passingOut.map((s) => s.classSectionId!))), batchYear: plan.fromYear.endDate.getUTCFullYear() },
+          passingOut.map((s) => s.id),
+        );
         o.alumniDoor = true;
       }
 
-      // Seats: per destination class, roll numbers by the plan's policy.
+      // Seats: one statement per destination class (or per chunk when renumbering).
       const byTarget = new Map<string, typeof students>();
       for (const s of students) {
         const d = decBy.get(s.id)!;
@@ -570,72 +631,120 @@ export class SessionsService {
         }
       }
       for (const [target, group] of byTarget) {
-        const rolls = assignRollNumbers(plan.rollPolicy as RollPolicy, group);
+        if (plan.rollPolicy === 'KEEP') {
+          await tx.student.updateMany({ where: { schoolId, id: { in: group.map((s) => s.id) } }, data: { classSectionId: target } });
+        } else {
+          const rolls = assignRollNumbers(plan.rollPolicy as RollPolicy, group);
+          for (const part of chunks(group)) {
+            await tx.$executeRaw`
+              UPDATE "Student" AS s
+              SET "classSectionId" = v.section::uuid, "rollNo" = v.roll
+              FROM (VALUES ${Prisma.join(part.map((s) => Prisma.sql`(${s.id}::uuid, ${target}::uuid, ${rolls.get(s.id) ?? null})`))}) AS v(id, section, roll)
+              WHERE s.id = v.id AND s."schoolId" = ${schoolId}::uuid`;
+          }
+        }
+        o.moved += group.length;
         for (const s of group) {
-          await tx.student.update({ where: { id: s.id }, data: { classSectionId: target, rollNo: rolls.get(s.id) ?? null } });
-          o.moved++;
           if (s.userId) o.familyUserIds.push({ userId: s.userId, firstName: s.firstName, className: nextLabel.get(target) ?? '' });
         }
       }
 
-      // Leavers: Track A's transition, plus the login closing in the same transaction (D9).
+      // Leavers: the same fields Track A's applyStudentLeave writes, one statement per group.
       const leftOn = plan.fromYear.endDate;
-      for (const s of students) {
-        const d = decBy.get(s.id)!;
-        if (d.decision === 'PASS_OUT') {
-          const r = await applyStudentLeave(tx, { schoolId, actorUserId, studentId: s.id, status: 'ALUMNI', leftOn, alumniBatch: plan.fromYear.name });
-          o.alumni++;
-          o.alumniStudentIds.push(s.id);
-          if (r.userId) await closeLoginIn(tx, schoolId, r.userId);
-        } else if (d.decision === 'LEAVE') {
-          const r = await applyStudentLeave(tx, {
-            schoolId, actorUserId, studentId: s.id, status: (d.leaveStatus ?? 'LEFT') as 'TRANSFERRED' | 'LEFT', leftOn,
-            reason: d.leaveReason, note: d.note,
-          });
-          o.left++;
-          if (r.userId) await closeLoginIn(tx, schoolId, r.userId);
-        }
-        await tx.sessionDecision.update({
-          where: { planId_studentId: { planId: plan.id, studentId: s.id } },
-          data: { fromSectionId: s.classSectionId, appliedAt: new Date() },
+      const leaveBase = { isActive: false, leftOn, statusChangedAt: now, statusChangedById: actorUserId };
+      if (passingOut.length) {
+        await tx.student.updateMany({
+          where: { schoolId, id: { in: passingOut.map((s) => s.id) }, status: 'ACTIVE' },
+          data: { ...leaveBase, status: 'ALUMNI', alumniBatch: plan.fromYear.name, leftReason: null, leftNote: null },
         });
+        o.alumni = passingOut.length;
+        o.alumniStudentIds = passingOut.map((s) => s.id);
+      }
+      for (const status of ['TRANSFERRED', 'LEFT'] as const) {
+        const group = leaving.filter((s) => (decBy.get(s.id)!.leaveStatus ?? 'LEFT') === status);
+        if (!group.length) continue;
+        await tx.student.updateMany({
+          where: { schoolId, id: { in: group.map((s) => s.id) }, status: 'ACTIVE' },
+          data: { ...leaveBase, status, alumniBatch: null, leftReason: null, leftNote: null },
+        });
+        const withText = group.filter((s) => decBy.get(s.id)!.leaveReason || decBy.get(s.id)!.note);
+        for (const part of chunks(withText)) {
+          await tx.$executeRaw`
+            UPDATE "Student" AS s
+            SET "leftReason" = v.reason, "leftNote" = v.note
+            FROM (VALUES ${Prisma.join(part.map((s) => Prisma.sql`(${s.id}::uuid, ${decBy.get(s.id)!.leaveReason ?? null}, ${decBy.get(s.id)!.note ?? null})`))}) AS v(id, reason, note)
+            WHERE s.id = v.id AND s."schoolId" = ${schoolId}::uuid`;
+        }
+        o.left += group.length;
+      }
+      // Every leaver's login closes in the same transaction (D9).
+      const closeUserIds = [...passingOut, ...leaving].map((s) => s.userId).filter((u): u is string => !!u);
+      if (closeUserIds.length) {
+        await tx.user.updateMany({ where: { schoolId, id: { in: closeUserIds } }, data: { isActive: false } });
+        await tx.refreshToken.updateMany({ where: { schoolId, userId: { in: closeUserIds }, revokedAt: null }, data: { revokedAt: now } });
+      }
+      // The receipt on every decision: one statement per closing class.
+      for (const c of closing) {
+        const ids = students.filter((s) => s.classSectionId === c.id).map((s) => s.id);
+        if (ids.length) {
+          await tx.sessionDecision.updateMany({ where: { schoolId, planId: plan.id, studentId: { in: ids } }, data: { fromSectionId: c.id, appliedAt: now } });
+        }
       }
 
       await tx.academicYear.update({ where: { id: plan.fromYearId }, data: { isCurrent: false } });
       await tx.academicYear.update({ where: { id: plan.toYearId }, data: { isCurrent: true } });
 
       if (plan.copyTimetable) {
+        // The timetable follows the CLASSROOM: 5 B's periods become next year's 5 B.
+        // Visible from today if the session starts early, else from its first day.
+        const effectiveFrom = new Date(Math.min(plan.toYear.startDate.getTime(), now.getTime()));
         const key = (s: { gradeId: string; name: string }) => `${s.gradeId}|${s.name.toLowerCase()}`;
         const nextByKey = new Map(next.map((n) => [key(n), n.id]));
         const closingById = new Map(closing.map((c) => [c.id, c]));
-        const slots = await tx.timetableSlot.findMany({
-          take: LIST_CEILING.ROSTER,
-          where: { schoolId, academicYearId: plan.fromYearId, effectiveTo: null },
-          select: { classSectionId: true, dayOfWeek: true, periodId: true, subjectId: true, teacherId: true, teacher: { select: { status: true, userId: true } } },
-        });
+        const [slots, taken] = await Promise.all([
+          tx.timetableSlot.findMany({
+            take: LIST_CEILING.ROSTER,
+            where: { schoolId, academicYearId: plan.fromYearId, effectiveTo: null },
+            select: { classSectionId: true, dayOfWeek: true, periodId: true, subjectId: true, teacherId: true, teacher: { select: { status: true, userId: true } } },
+          }),
+          tx.timetableSlot.findMany({
+            take: LIST_CEILING.ROSTER,
+            where: { schoolId, academicYearId: plan.toYearId, effectiveTo: null },
+            select: { classSectionId: true, dayOfWeek: true, periodId: true, teacherId: true },
+          }),
+        ]);
+        // Anything the office already placed in the new year wins; a period a
+        // class or a teacher already has is skipped, never doubled.
+        const classTaken = new Set(taken.map((t) => `${t.classSectionId}|${t.dayOfWeek}|${t.periodId}`));
+        const teacherTaken = new Set(taken.map((t) => `${t.teacherId}|${t.dayOfWeek}|${t.periodId}`));
+        const rows: Prisma.TimetableSlotCreateManyInput[] = [];
         for (const sl of slots) {
           const from = closingById.get(sl.classSectionId);
           const target = from ? nextByKey.get(key(from)) : undefined;
-          if (!target || sl.teacher.status !== 'ACTIVE') {
+          const ck = target ? `${target}|${sl.dayOfWeek}|${sl.periodId}` : '';
+          const tk = `${sl.teacherId}|${sl.dayOfWeek}|${sl.periodId}`;
+          if (!target || sl.teacher.status !== 'ACTIVE' || classTaken.has(ck) || teacherTaken.has(tk)) {
             o.slotsSkipped++;
             continue;
           }
-          await tx.timetableSlot.create({
-            data: {
-              schoolId, classSectionId: target, dayOfWeek: sl.dayOfWeek, periodId: sl.periodId, subjectId: sl.subjectId,
-              teacherId: sl.teacherId, academicYearId: plan.toYearId, effectiveFrom: plan.toYear.startDate,
-            },
+          classTaken.add(ck);
+          teacherTaken.add(tk);
+          rows.push({
+            schoolId, classSectionId: target, dayOfWeek: sl.dayOfWeek, periodId: sl.periodId, subjectId: sl.subjectId,
+            teacherId: sl.teacherId, academicYearId: plan.toYearId, effectiveFrom,
           });
-          o.slotsCopied++;
           if (sl.teacher.userId) o.teacherUserIds.push(sl.teacher.userId);
+        }
+        for (const part of chunks(rows)) {
+          const r = await tx.timetableSlot.createMany({ data: part, skipDuplicates: true });
+          o.slotsCopied += r.count;
         }
       }
 
       await tx.registerChangeRequest.updateMany({
         where: { schoolId, classSectionId: { in: closing.map((c) => c.id) }, status: 'PENDING' },
-        data: { status: 'REJECTED', reviewedAt: new Date(), reviewedByUserId: actorUserId },
+        data: { status: 'REJECTED', reviewedAt: now, reviewedByUserId: actorUserId },
       });
-      await tx.sessionPlan.update({ where: { id: plan.id }, data: { status: 'STARTED', startedAt: new Date(), startedById: actorUserId } });
       return o;
     });
 
@@ -654,33 +763,49 @@ export class SessionsService {
     return outcome;
   }
 
+  /** The year end has committed; nothing after it may turn the admin's screen red. */
+  private async afterStartSafely(schoolId: string, o: StartOutcome): Promise<void> {
+    try {
+      await this.afterStart(schoolId, o);
+    } catch (e) {
+      this.logger.error(`after-start notifications for ${schoolId} failed: ${(e as Error).message}`);
+    }
+  }
+
   /**
    * After commit: the bell for every moved family and every teacher with a
-   * copied class (one transaction, cheap), then the emails in the background —
-   * "your child is in 6 A" to families, and the alumni door (a claim link, the
+   * copied class (one statement), then the emails in the background — "your
+   * child is in 6 A" to families, and the alumni door (a claim link, the
    * credential itself) to every new alumnus with an address.
    */
   private async afterStart(schoolId: string, o: StartOutcome): Promise<void> {
     const session = o.sessionName;
-    await withTenant(schoolId, async (tx) => {
-      for (const f of o.familyUserIds) {
-        await emitNotifications(tx, {
-          schoolId, userIds: [f.userId], kind: 'SESSION',
-          title: `${f.firstName} is in ${f.className} for ${session}`,
-          body: 'The new class, timetable and diary are ready.',
-          linkType: 'home', linkId: null,
-        });
-      }
-      const teachers = Array.from(new Set(o.teacherUserIds));
-      if (teachers.length) {
-        await emitNotifications(tx, {
-          schoolId, userIds: teachers, kind: 'SESSION',
-          title: `Session ${session} has started`,
-          body: 'Your classes and timetable for the new session are ready.',
-          linkType: 'today', linkId: null,
-        });
-      }
-    });
+    assertNotificationKind('SESSION');
+    const rows: Prisma.NotificationCreateManyInput[] = [];
+    const seenFamily = new Set<string>();
+    for (const f of o.familyUserIds) {
+      if (seenFamily.has(f.userId)) continue;
+      seenFamily.add(f.userId);
+      rows.push({
+        schoolId, userId: f.userId, kind: 'SESSION',
+        title: `${f.firstName} is in ${f.className} for ${session}`,
+        body: 'The new class, timetable and diary are ready.',
+        linkType: 'home', linkId: null,
+      });
+    }
+    for (const userId of new Set(o.teacherUserIds)) {
+      rows.push({
+        schoolId, userId, kind: 'SESSION',
+        title: `Session ${session} has started`,
+        body: 'Your classes and timetable for the new session are ready.',
+        linkType: 'today', linkId: null,
+      });
+    }
+    if (rows.length) {
+      await withTenant(schoolId, async (tx) => {
+        for (const part of chunks(rows, 1000)) await tx.notification.createMany({ data: part });
+      });
+    }
 
     runInBackground(
       async () => {
@@ -710,7 +835,7 @@ export class SessionsService {
             if (!a.email) continue;
             try {
               const { token } = await this.alumniAuth.mintClaimToken(schoolId, a.id);
-              const claimUrl = `https://${o.schoolSlug}.${this.env.PLATFORM_HOST}/alumni#claim=${token}`;
+              const claimUrl = `https://${o.schoolHost}/alumni#claim=${token}`;
               await this.mail.sendAlumniWelcome(a.email, o.schoolName, claimUrl, schoolId);
             } catch (e) {
               this.logger.warn(`alumni claim mail for ${a.id} failed: ${(e as Error).message}`);
@@ -738,7 +863,7 @@ export class SessionsService {
         tx.sessionDecision.findMany({
           take: LIST_CEILING.ROSTER,
           where: { schoolId, planId: plan.id },
-          include: { student: { select: { firstName: true, lastName: true, admissionNo: true } } },
+          include: { student: { select: { firstName: true, lastName: true, admissionNo: true, email: true } } },
           orderBy: { updatedAt: 'asc' },
         }),
         tx.classSection.findMany({
@@ -757,6 +882,7 @@ export class SessionsService {
         studentId: r.studentId,
         name: `${r.student.firstName} ${r.student.lastName}`.trim(),
         admissionNo: r.student.admissionNo,
+        email: r.student.email ?? null,
         fromSection: r.fromSectionId ? (label.get(r.fromSectionId) ?? null) : null,
         toSection: r.toSectionId ? (label.get(r.toSectionId) ?? null) : null,
         decision: r.decision,
@@ -778,7 +904,7 @@ export class SessionsService {
     for (const p of due) {
       try {
         const outcome = await this.applyPlan(p.schoolId, p.createdById, p.id);
-        await this.afterStart(p.schoolId, outcome);
+        await this.afterStartSafely(p.schoolId, outcome);
         started.push(p.id);
       } catch (e) {
         this.logger.error(`scheduled session start for plan ${p.id} failed: ${(e as Error).message}`);

@@ -55,7 +55,19 @@ export default function DecideStep({ plan, onNext }: { plan: PlanView; onNext: (
 
   const data = rowsQuery.data;
   const finalGrade = !!data && data.rows.length > 0 && data.rows.every((r) => r.defaultDecision === 'PASS_OUT');
-  const counted = new Set(plan.countExamIds);
+  // The plan keeps one list of counted exam ids across every class; this
+  // class's chips edit only its own ids in that list, and at least one stays.
+  const toggleExam = (examId: string) => {
+    if (!data) return;
+    const mine = new Set(data.exams.map((e) => e.id));
+    const chosen = new Set(data.exams.filter((e) => e.counted).map((e) => e.id));
+    if (chosen.has(examId)) {
+      if (chosen.size === 1) return;
+      chosen.delete(examId);
+    } else chosen.add(examId);
+    const others = plan.countExamIds.filter((id) => !mine.has(id));
+    settings.mutate({ countExamIds: chosen.size === mine.size ? others : [...others, ...chosen] });
+  };
 
   return (
     <div className="sk-card-b">
@@ -96,22 +108,11 @@ export default function DecideStep({ plan, onNext }: { plan: PlanView; onNext: (
       {data && data.exams.length > 0 && (
         <details className="sk-ses-exams">
           <summary className="sk-cel-hint">
-            Exams that count: {plan.countExamIds.length === 0 ? 'all published exams of this class' : `${plan.countExamIds.length} chosen`}
+            Exams that count: {data.exams.every((e) => e.counted) ? 'all published exams of this class' : `${data.exams.filter((e) => e.counted).length} of ${data.exams.length}`}
           </summary>
           <div className="sk-cel-chips" style={{ marginTop: 8 }}>
             {data.exams.map((e) => (
-              <button
-                key={e.id}
-                type="button"
-                className="sk-chip sk-press"
-                aria-pressed={counted.size === 0 || counted.has(e.id)}
-                onClick={() => {
-                  const next = new Set(counted.size === 0 ? data.exams.map((x) => x.id) : counted);
-                  if (next.has(e.id)) next.delete(e.id);
-                  else next.add(e.id);
-                  settings.mutate({ countExamIds: next.size === data.exams.length ? [] : [...next] });
-                }}
-              >
+              <button key={e.id} type="button" className="sk-chip sk-press" aria-pressed={e.counted} disabled={settings.isPending} onClick={() => toggleExam(e.id)}>
                 {e.title}
               </button>
             ))}
@@ -130,7 +131,7 @@ export default function DecideStep({ plan, onNext }: { plan: PlanView; onNext: (
             </div>
           )}
           <DecideTable
-            key={`${current}-${plan.version}`}
+            key={current ?? 'none'}
             rows={data.rows}
             targets={data.targets}
             passMarkPct={plan.passMarkPct}

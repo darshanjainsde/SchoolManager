@@ -93,7 +93,7 @@ export class AlumniService {
    * before those children are marked ALUMNI, while they still read as the
    * active roster this filters on. Behaviour is exactly graduateBatch's.
    */
-  async graduateBatchIn(tx: TenantTx, schoolId: string, dto: GraduateBatchDto) {
+  async graduateBatchIn(tx: TenantTx, schoolId: string, dto: GraduateBatchDto, studentIds?: string[]) {
     if (dto.classSectionIds.length === 0) {
       throw new ApiError('NOTHING_TO_GRADUATE', 'Choose at least one class section.', 400);
     }
@@ -112,7 +112,9 @@ export class AlumniService {
       );
 
       const students = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
-        where: { schoolId, classSectionId: { in: dto.classSectionIds }, isActive: true },
+        // `studentIds` (the Sessions Start): only the children who are passing
+        // out — a final-grade child who stays in grade must not become an alumnus.
+        where: { schoolId, classSectionId: { in: dto.classSectionIds }, isActive: true, ...(studentIds ? { id: { in: studentIds } } : {}) },
         select: {
           id: true, admissionNo: true, firstName: true, lastName: true, email: true,
           guardianPhone: true, photoAssetId: true, classSectionId: true,
