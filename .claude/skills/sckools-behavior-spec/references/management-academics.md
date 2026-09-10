@@ -555,3 +555,19 @@ strict at the sport's precision (12.30 does not beat 12.30).
 
 **Notifications**: kind `SPORTS` (bell), outbox kind `SPORTS_NOTICE` (push); student deep link `/portal/sports`,
 teacher none. No SMS.
+
+**The Book of Records on the website** (`GET /site/records`, `PUT /site/records`, `GET /site/records/lines` in cms;
+`GET /public/records` on the school host; `SchoolProfile.recordsConfig`): the Website builder's Records tab holds the
+switch, the consent tick (children's names go public — switching on without it is 400 `CONSENT_REQUIRED`; without the
+SPORTS feature 400), the name format (first + initial default / first / full, applied server-side — no ids, classes or
+dates of birth ever leave), the page room (Medal cabinet default · Scoreboard · Register · Progression), whether the
+all-time top five shows, which groups show, and which lines the homepage picks (newest N of 4/6/8 · pinned lines in the
+office's order · every record). The homepage BAND's look is a Studio band (`sectionVariants.records.layout`: Podium
+tiles default · Stadium board · Trophy cabinet · Honours strip, which sits under the menu like the birthday ribbon)
+and it moves in the band order like every other band. Data is the desk's, never typed twice: `SportsBookService`
+(exported by the sports module) builds a line per sport × group × category from STANDING/BROKEN records (VOID never)
+plus every mark from a ranked heat — one entry per person, ties share a rank, the record marked apart from the
+"all-time bests" in every room. `/public/records` is 404 unless the feature, the switch and consent all hold; cached a
+minute in shared caches and served stale for an hour while refreshing. The homepage shows only lines WITH a record;
+the page shows every line (a line with marks but no record says so). Nav gets "Records" under Our school; `/records`
+is host-routed and cache-headed like `/birthdays`.

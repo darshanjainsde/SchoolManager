@@ -295,3 +295,5 @@ Run this suite **twice** — once with `classNoteVisibility: ALL_TEACHERS`, once
 12. Student portal `/portal/sports`: Up next names the final and court; the semi shows W with the scoreline; the sprint shows 1st · 13.10 s; the house chip is Red.
 13. Rules: every group lists its sports; Badminton shows the court drawing with labels inside the frame at 390 px; search "kho" finds Kho-Kho.
 14. Cross-tenant: another school's tournament id on `/sports/tournaments/:id` → 404; `/me/sports` never lists it.
+15. Website → Records: switch on without the consent tick → the API's consent message; tick, choose Scoreboard, "Lines I pick", pin the 100 m line, Save → `/records` on the school site shows the Scoreboard room and the homepage band shows the 100 m record; Studio → Per-section layout → Book of Records → Honours strip → the strip sits under the menu; Editorial shape → the cabinet cards go square.
+16. Void the standing 100 m record on the desk → within a minute the site shows the previous holder (or "no record yet"); switch the book off → `/records` is 404 and the nav entry is gone.

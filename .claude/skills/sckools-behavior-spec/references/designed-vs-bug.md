@@ -204,3 +204,8 @@ No design rationale covers any of these. Escalate immediately:
 | "The final heat has five runners on four lanes" | A tie at the cut brings everyone on that mark | More runners than lanes without a tie |
 | "Students cannot see the draft" | A draft is never visible to students; publish makes it LIVE | A published LIVE meet missing from `/me/sports` for an entered child |
 | "The student saw a tournament from another school" | Never designed: every read is tenant-scoped (RLS) | Any cross-school row |
+| "The records do not show on the website" | Three things must hold: the SPORTS feature, the Records switch in Website → Records, and the consent tick; a draft-only book (no verified record) shows a page but no homepage band | All three hold and `/public/records` is 404, or a verified record is missing from the page after a minute |
+| "A child's full name is on the website" | The office chose Full name in Website → Records; the default is first name + initial | A surname shown while the format is first + initial, or a class / date of birth shown at all |
+| "The homepage shows only four records" | Designed: the homepage scope is the newest 4/6/8, pinned lines, or all — the page always shows everything | A pinned line with a record missing from the band |
+| "The top five lists a child who never held the record" | Designed: the all-time bests are every ranked heat plus the book, labelled apart from the record | A record row missing from the top five, or a VOID record listed |
+| "The records band did not change shape with the site" | Never designed: every room and band draws on `.ps-panel` and the shape control | A rounded panel on an Editorial site |

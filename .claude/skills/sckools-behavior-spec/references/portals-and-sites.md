@@ -218,3 +218,12 @@ as follow-up, deliberately not pretended-at.
 
 `img-src` allows any `https:` because school logos/photos live on operator-supplied hosts.
 `frame-src` allows Google Maps for contact pages.
+
+## Public school site — the Book of Records (Sports wing)
+
+`/records` (host-routed like `/birthdays`; `app/s/[host]/records/page.tsx`): four rooms chosen in Website → Records
+— Medal cabinet, Scoreboard, Register, Progression — plus sport chips, the verified record marked apart from the
+all-time bests, "no record yet" lines, and "The book opens at the first meet." for an empty book. Homepage band: a Studio
+band `records` (Podium tiles · Stadium board · Trophy cabinet · Honours strip under the menu), only lines with a record,
+linking to `/records`. Everything wears the school's colours, heading font and section shape. Names arrive from the
+API already in the school's chosen format.
