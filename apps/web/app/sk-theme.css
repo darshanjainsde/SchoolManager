@@ -3390,3 +3390,43 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-cel-mrow .cls { flex: 1 1 5em; min-width: 0; }
 .sk-cel-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--sk-line); }
 @media (prefers-reduced-motion: reduce) { .sk-cel-style { transition: none; } }
+
+/* ── SESSIONS (year end) ──────────────────────────────────────────────────
+   Six steps in one card. `.sk-steps` is the Exam Hall step header, shared
+   now (Exam Hall and Sessions) — the same recipe, so the two never drift. */
+.sk-steps { display: flex; border-top: 1px solid var(--sk-line); border-bottom: 1px solid var(--sk-line); background: var(--sk-bg-2); overflow-x: auto; margin-top: 12px; }
+.sk-steps > button {
+  flex: 1; min-width: 158px; display: flex; align-items: center; gap: 9px;
+  padding: 13px 15px; border: 0; border-right: 1px solid var(--sk-line);
+  background: transparent; cursor: pointer; font: inherit; font-size: 13.5px;
+  font-weight: 650; color: var(--sk-ink-3); text-align: left; white-space: nowrap;
+}
+.sk-steps > button:last-child { border-right: 0; }
+.sk-steps > button > .n {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font-family: var(--sk-mono); font-size: 11px;
+  border: 1px solid var(--sk-line-2); color: var(--sk-ink-3);
+}
+.sk-steps > button[aria-selected="true"] { background: var(--sk-card); color: var(--sk-ink); }
+.sk-steps > button[aria-selected="true"] > .n { background: var(--sk-brand); border-color: var(--sk-brand); color: #fff; }
+.sk-steps > button:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: -2px; }
+.sk-ses-stephead { padding: 14px 16px 0; }
+.sk-ses-yearsgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+.sk-ses-yearcard[data-current] { border-color: var(--sk-brand); }
+.sk-ses-yearcard .sk-card-b { gap: 6px; }
+.sk-ses-yearcard b { font-family: var(--sk-serif); font-size: 18px; }
+.sk-ses-yearhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sk-ses-years { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sk-ses-year { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); min-width: 0; }
+.sk-ses-year b { font-family: var(--sk-serif); font-size: 18px; }
+.sk-ses-arrow { font-size: 20px; color: var(--sk-ink-3); }
+.sk-ses-copyrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sk-ses-pickrow { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+.sk-ses-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sk-ses-decide { display: flex; flex-direction: column; gap: 10px; }
+.sk-ses-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sk-ses-buttons { display: flex; gap: 4px; flex-wrap: wrap; max-width: 24em; }
+.sk-ses-buttons .sk-chip { padding: 5px 10px; font-size: 12px; }
+.sk-ses-leave { display: flex; gap: 6px; flex-wrap: wrap; }
+.sk-ses-leave .sk-input { min-width: 0; }
+.sk-tbl td[data-tone="warn"] { color: var(--sk-amber-ink); font-weight: 700; }

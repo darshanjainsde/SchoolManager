@@ -1,0 +1,14 @@
+/* The promotion register on A4: the table, nothing else. Same rules as
+   exam-hall/print.css — literal ink, hairline borders, no shadows. */
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; color: #111 !important; }
+  .sk-side, .sk-topbar, .sk-mobile-topbar, .sk-pagehead, .sk-noprint { display: none !important; }
+  .sk-main { padding: 0 !important; max-width: none !important; }
+  .sk-ses-register { border: 0 !important; box-shadow: none !important; }
+  .sk-ses-register .sk-card-h h3 { font-size: 16pt; }
+  .sk-ses-register .sk-tblwrap { max-height: none !important; overflow: visible !important; border: 0; }
+  .sk-ses-register .sk-tbl { font-size: 9.5pt; }
+  .sk-ses-register .sk-tbl th { position: static; background: #fff; color: #333; border-bottom: 1px solid #333; }
+  .sk-ses-register .sk-tbl td { border-top: 1px solid #ccc; padding: 4pt 6pt; white-space: normal; }
+}
