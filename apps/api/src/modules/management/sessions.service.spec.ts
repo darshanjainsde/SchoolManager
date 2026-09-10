@@ -37,7 +37,7 @@ jest.mock('../../common/notifications/run-in-background', () => ({
   },
 }));
 
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@skoolos/db';
 import { SessionsService } from './sessions.service';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
