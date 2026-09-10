@@ -11,7 +11,7 @@ const txMock = {
   exam: { findMany: jest.fn() },
   attendance: { groupBy: jest.fn() },
   result: { findMany: jest.fn() },
-  timetableSlot: { findMany: jest.fn(), createMany: jest.fn() },
+  timetableSlot: { findMany: jest.fn(), createMany: jest.fn(), updateMany: jest.fn() },
   registerChangeRequest: { updateMany: jest.fn() },
   school: { findUnique: jest.fn() },
   user: { findMany: jest.fn(), updateMany: jest.fn() },
@@ -497,8 +497,14 @@ describe('copyTimetableNow — adjust before Start', () => {
       ),
     );
     txMock.timetableSlot.createMany.mockImplementation(({ data }: { data: unknown[] }) => Promise.resolve({ count: data.length }));
+    txMock.timetableSlot.updateMany.mockResolvedValue({ count: 0 });
     const r = await service().copyTimetableNow(SCHOOL, ACTOR);
     expect(r).toEqual({ copied: 1, skipped: 1, nextYearClasses: 1 });
+    // Any next-year slot stamped after the session's first IST day is pulled back to it.
+    expect(txMock.timetableSlot.updateMany).toHaveBeenCalledWith({
+      where: { schoolId: SCHOOL, academicYearId: 'y2', effectiveTo: null, effectiveFrom: { gt: new Date('2026-03-31T18:30:00.000Z') } },
+      data: { effectiveFrom: new Date('2026-03-31T18:30:00.000Z') },
+    });
     // Effective from the START OF THE IST DAY (2026-04-01 00:00 IST), so a reader asking
     // "as of 2026-04-01" — which resolves to that same instant — sees it on day one.
     expect(txMock.timetableSlot.createMany.mock.calls[0][0].data[0]).toMatchObject({ classSectionId: 't5b', dayOfWeek: 1, effectiveFrom: new Date('2026-03-31T18:30:00.000Z') });

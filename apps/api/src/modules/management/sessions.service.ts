@@ -806,7 +806,15 @@ export class SessionsService {
       });
       const closing = sections.filter((s) => s.academicYearId === plan.fromYearId);
       const next = sections.filter((s) => s.academicYearId === plan.toYearId);
-      const out = await this.copyTimetableIn(tx, schoolId, plan.fromYearId, plan.toYearId, closing, next, startOfIstDay(plan.toYear.startDate));
+      const dayStart = startOfIstDay(plan.toYear.startDate);
+      // Repair: a next-year slot stamped AFTER the session's first IST day would be
+      // invisible on that day (an earlier copy stamped UTC midnight). Before Start,
+      // nothing in the next year should start later than the session itself.
+      await tx.timetableSlot.updateMany({
+        where: { schoolId, academicYearId: plan.toYearId, effectiveTo: null, effectiveFrom: { gt: dayStart } },
+        data: { effectiveFrom: dayStart },
+      });
+      const out = await this.copyTimetableIn(tx, schoolId, plan.fromYearId, plan.toYearId, closing, next, dayStart);
       return { copied: out.copied, skipped: out.skipped, nextYearClasses: next.length };
     });
     await this.audit.record({ schoolId, actorUserId, action: 'session.timetable.copy', entity: 'SessionPlan', entityId: schoolId, meta: r });
