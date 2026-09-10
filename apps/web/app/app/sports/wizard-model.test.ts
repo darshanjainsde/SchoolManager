@@ -48,7 +48,7 @@ describe('wizard model', () => {
   });
 
   it('a team has a basis: suggested from the entrants, sides counted under it', () => {
-    let s = toggleSport({ ...base(), defaults: { groupKey: 'sen', categories: ['Boys'], structure: 'CLASS' } }, football);
+    const s = toggleSport({ ...base(), defaults: { groupKey: 'sen', categories: ['Boys'], structure: 'CLASS' } }, football);
     const ev = { ...s.events[0], studentIds: ['a', 'b', 'c', 'd'] };
     expect(basisOf(ev, roster)).toBe('CLASSES'); // 10 and 11 have one section each
     expect(singleSectionClasses(ev, roster)).toEqual([10, 11]);
