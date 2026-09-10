@@ -50,6 +50,6 @@ describe('student nav honesty', () => {
     // school below PRO, and it would look like a data bug. Library and Fees
     // are the only two a school can genuinely be without.
     const gated = NAV_ITEMS.filter((i) => i.requiredFeature).map((i) => i.href);
-    expect(gated).toEqual(['/portal/library', '/portal/fees']);
+    expect(gated).toEqual(['/portal/library', '/portal/sports', '/portal/fees']);
   });
 });
