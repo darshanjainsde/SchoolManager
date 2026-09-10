@@ -575,7 +575,7 @@ export interface TeacherReplyInput {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**
@@ -623,6 +623,8 @@ export const NOTIFICATION_KINDS = [
   // Year-end: "Aarav is in Class 6A for 2026-27" to a family, and a teacher's
   // new classes. Sent once, after the session has started.
   'SESSION',
+  // The sports desk: your next match, a result, a record you set.
+  'SPORTS',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

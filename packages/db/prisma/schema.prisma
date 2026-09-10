@@ -194,6 +194,9 @@ enum StaffRole {
   /// so the web login can pick the door. Adding roles here never changes what
   /// a login can do.
   LIBRARIAN
+  /// Runs the sports desk (/sports) — the same door pattern as LIBRARIAN.
+  /// What they may do there is `Staff.sportsPerms`, set by the admin.
+  SPORTS
   OTHER
 }
 
@@ -393,6 +396,18 @@ model School {
   reportRemarks          ReportRemark[]
   sessionPlans           SessionPlan[]
   sessionDecisions       SessionDecision[]
+  sportsSettings         SportsSettings?
+  houses                 House[]
+  housePoints            HousePoint[]
+  sportsTournaments      SportsTournament[]
+  sportsVenues           SportsVenue[]
+  sportsEvents           SportsEvent[]
+  sportsEntries          SportsEntry[]
+  sportsMatches          SportsMatch[]
+  sportsHeats            SportsHeat[]
+  sportsMarks            SportsMark[]
+  sportsRecords          SportsRecord[]
+  sportsRecordAttempts   SportsRecordAttempt[]
 }
 
 model Domain {
@@ -1123,6 +1138,10 @@ model Student {
 
   hallOfFameEntries   HallOfFameEntry[]
   sessionDecisions    SessionDecision[]
+  /// The house a child plays for (Sports wing). Null until the office assigns one.
+  houseId             String?            @db.Uuid
+  house               House?             @relation(fields: [houseId], references: [id], onDelete: SetNull)
+  sportsEntries       SportsEntry[]
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
   @@index([schoolId, classSectionId])
@@ -1210,6 +1229,8 @@ model Staff {
   firstName    String
   lastName     String
   role         StaffRole @default(OTHER)
+  /// SPORTS only: ENTER · VERIFY · CREATE · PUBLISH · HOUSES · SETTINGS (sports-perms.ts).
+  sportsPerms         String[]  @default([])
   email        String?
   phone        String?
   userId       String?   @db.Uuid
@@ -4011,4 +4032,240 @@ model SessionDecision {
 
   @@unique([planId, studentId])
   @@index([schoolId, planId])
+}
+
+// ── Sports wing ────────────────────────────────────────────────
+/// One row per school, created on first read with the defaults. `grouping`
+/// BANDS = bands of classes (`bands` JSON: [{id,label,stds}]); AGE = official
+/// age groups from the date of birth. Points are the house table.
+model SportsSettings {
+  schoolId          String   @id @db.Uuid
+  grouping          String   @default("BANDS")
+  bands             Json     @default("[{\"id\":\"sub\",\"label\":\"Sub-junior\",\"stds\":[1,2,3,4,5,6]},{\"id\":\"jun\",\"label\":\"Junior\",\"stds\":[7,8]},{\"id\":\"sen\",\"label\":\"Senior\",\"stds\":[9,10,11,12]}]")
+  pointsPlacing     Int[]    @default([10, 7, 5, 3, 2, 1])
+  pointsMatchWin    Int      @default(5)
+  pointsClassWin    Int      @default(3)
+  publishNeedsAdmin Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  school            School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+model House {
+  id        String       @id @default(uuid()) @db.Uuid
+  schoolId  String       @db.Uuid
+  name      String
+  color     String       @default("#4F46E5")
+  order     Int          @default(0)
+  createdAt DateTime     @default(now())
+  school    School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  students  Student[]
+  points    HousePoint[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+/// Points are rows, never a running total, so a correction is a row too.
+model HousePoint {
+  id        String   @id @default(uuid()) @db.Uuid
+  schoolId  String   @db.Uuid
+  houseId   String   @db.Uuid
+  points    Int
+  reason    String
+  eventId   String?  @db.Uuid
+  createdAt DateTime @default(now())
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  house     House    @relation(fields: [houseId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, houseId])
+}
+
+enum SportsTournamentStatus {
+  DRAFT
+  LIVE
+  DONE
+}
+
+/// Several sports on shared venues and days. `grouping` is fixed at creation.
+model SportsTournament {
+  id          String                 @id @default(uuid()) @db.Uuid
+  schoolId    String                 @db.Uuid
+  name        String
+  startsOn    DateTime               @db.Date
+  endsOn      DateTime               @db.Date
+  grouping    String
+  dayStartMin Int                    @default(540)
+  status      SportsTournamentStatus @default(DRAFT)
+  published   Boolean                @default(false)
+  version     Int                    @default(1)
+  createdById String                 @db.Uuid
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  school      School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  venues      SportsVenue[]
+  events      SportsEvent[]
+
+  @@index([schoolId, status])
+}
+
+model SportsVenue {
+  id           String           @id @default(uuid()) @db.Uuid
+  schoolId     String           @db.Uuid
+  tournamentId String           @db.Uuid
+  name         String
+  order        Int              @default(0)
+  school       School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  tournament   SportsTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, tournamentId])
+}
+
+/// One sport × one group × one category inside a tournament.
+model SportsEvent {
+  id           String           @id @default(uuid()) @db.Uuid
+  schoolId     String           @db.Uuid
+  tournamentId String           @db.Uuid
+  sportKey     String
+  sportName    String
+  kind         String
+  groupKey     String
+  category     String
+  entry        String           @default("ALL")
+  structure    String
+  slotMin      Int
+  lanes        Int              @default(6)
+  venueIds     String[]         @default([]) @db.Uuid
+  order        Int              @default(0)
+  school       School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  tournament   SportsTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  entries      SportsEntry[]
+  matches      SportsMatch[]
+  heats        SportsHeat[]
+
+  @@index([schoolId, tournamentId])
+}
+
+model SportsEntry {
+  id        String      @id @default(uuid()) @db.Uuid
+  schoolId  String      @db.Uuid
+  eventId   String      @db.Uuid
+  studentId String      @db.Uuid
+  std       Int
+  section   String
+  school    School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  event     SportsEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  student   Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, studentId])
+  @@index([schoolId, eventId])
+}
+
+/// A knockout slot. Student ids are plain (no FK): a result is history and
+/// must outlive a roster change. `version` guards two desks saving the same
+/// match; `savedById`/`savedAt` say who won that race.
+model SportsMatch {
+  id         String      @id @default(uuid()) @db.Uuid
+  schoolId   String      @db.Uuid
+  eventId    String      @db.Uuid
+  stage      String
+  groupLabel String
+  roundIdx   Int
+  roundName  String
+  pos        Int
+  aStudentId String?     @db.Uuid
+  bStudentId String?     @db.Uuid
+  scoreA     Int[]       @default([])
+  scoreB     Int[]       @default([])
+  winnerId   String?     @db.Uuid
+  bye        Boolean     @default(false)
+  walkover   Boolean     @default(false)
+  venueId    String?     @db.Uuid
+  atMin      Int?
+  version    Int         @default(1)
+  savedById  String?     @db.Uuid
+  savedAt    DateTime?
+  school     School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  event      SportsEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, eventId])
+}
+
+model SportsHeat {
+  id       String       @id @default(uuid()) @db.Uuid
+  schoolId String       @db.Uuid
+  eventId  String       @db.Uuid
+  kind     String
+  idx      Int
+  venueId  String?      @db.Uuid
+  atMin    Int?
+  done     Boolean      @default(false)
+  school   School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  event    SportsEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  marks    SportsMark[]
+
+  @@index([schoolId, eventId])
+}
+
+model SportsMark {
+  id        String     @id @default(uuid()) @db.Uuid
+  schoolId  String     @db.Uuid
+  heatId    String     @db.Uuid
+  studentId String     @db.Uuid
+  lane      Int
+  mark      Float?
+  rank      Int?
+  school    School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  heat      SportsHeat @relation(fields: [heatId], references: [id], onDelete: Cascade)
+
+  @@unique([heatId, studentId])
+  @@index([schoolId, studentId])
+}
+
+/// A record line is sportKey × groupKey × category. STANDING is the current
+/// holder; BROKEN rows are the history (with `untilYear`); VOID rows were
+/// withdrawn by an admin with a note.
+model SportsRecord {
+  id              String    @id @default(uuid()) @db.Uuid
+  schoolId        String    @db.Uuid
+  sportKey        String
+  groupKey        String
+  category        String
+  value           Float
+  unit            String
+  holderName      String
+  holderStudentId String?   @db.Uuid
+  setOn           DateTime? @db.Date
+  sinceYear       Int
+  untilYear       Int?
+  status          String    @default("STANDING")
+  source          String    @default("MEET")
+  note            String?
+  verifiedById    String?   @db.Uuid
+  createdAt       DateTime  @default(now())
+  school          School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, sportKey, groupKey, category])
+}
+
+model SportsRecordAttempt {
+  id          String    @id @default(uuid()) @db.Uuid
+  schoolId    String    @db.Uuid
+  sportKey    String
+  sportName   String
+  groupKey    String
+  category    String
+  studentId   String    @db.Uuid
+  value       Float
+  unit        String
+  source      String
+  witnessed   Boolean   @default(false)
+  status      String    @default("PENDING")
+  enteredById String    @db.Uuid
+  decidedById String?   @db.Uuid
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  school      School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
 }
