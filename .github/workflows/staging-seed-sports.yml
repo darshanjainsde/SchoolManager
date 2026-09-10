@@ -1,0 +1,44 @@
+name: staging-seed-sports
+
+# Seeds the Sports wing (classes tidied, houses, records, two meets, the
+# website switch) on ONE staging school, with that school's existing students.
+# Same shape as db-migrate: the database credential lives in the GitHub
+# environment and never passes through a chat window. Staging only — the job
+# refuses any other environment, and the script refuses a production-looking
+# URL as well.
+
+on:
+  workflow_dispatch:
+    inputs:
+      school:
+        description: School slug to seed (staging only)
+        required: true
+        type: string
+        default: raffles
+
+concurrency:
+  group: db-migrate-staging
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+      - name: Generate the client
+        run: pnpm --filter @skoolos/db exec prisma generate
+      - name: Seed the Sports wing on ${{ github.event.inputs.school }}
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          SEED_SCHOOL_SLUG: ${{ github.event.inputs.school }}
+        run: pnpm --filter @skoolos/api exec tsx scripts/seed-sports-raffles.ts
