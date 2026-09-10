@@ -67,7 +67,7 @@ export default function ReviewStep({ plan, features, onCancel, onStarted }: { pl
   const scheduled = r.status === 'SCHEDULED';
   return (
     <div className="sk-card-b">
-      <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))' }}>
+      <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 120px), 1fr))' }}>
         <Kpi label="Promoted" n={r.counts.promote} />
         <Kpi label="Stay in grade" n={r.counts.stay} />
         <Kpi label="Pass out" n={r.counts.passOut} hint={features.includes('ALUMNI') ? 'become alumni · Homecoming' : 'become alumni'} />
@@ -115,7 +115,7 @@ export default function ReviewStep({ plan, features, onCancel, onStarted }: { pl
           </button>
         )}
         {features.includes('FEES') && (
-          <Link href="/app/fees" className="sk-btn sk-press">
+          <Link href="/app/fees" className="sk-btn sk-press" style={{ textDecoration: 'none' }}>
             Set up fees for {plan.toYear.name}
           </Link>
         )}

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CalendarRange } from 'lucide-react';
@@ -39,6 +39,12 @@ export default function SessionsPage() {
   const [creating, setCreating] = useState(false);
   const [step, setStep] = useState<number | null>(null);
   const [registerYear, setRegisterYear] = useState<YearRow | null>(null);
+  // On a phone the six steps scroll sideways; the active one must be in view.
+  const stepsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const active = stepsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    active?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
+  }, [step]);
 
   const plan = overview.data?.plan ?? null;
   const years = overview.data?.years ?? [];
@@ -156,7 +162,7 @@ export default function SessionsPage() {
               {plan.status === 'SCHEDULED' ? `Scheduled · ${fmtDate(plan.scheduledFor ?? plan.toYear.startDate)}` : 'Draft'}
             </span>
           </div>
-          <div className="sk-steps" role="tablist" aria-label="New session steps">
+          <div className="sk-steps" role="tablist" aria-label="New session steps" ref={stepsRef}>
             {STEPS.map((label, i) => (
               <button key={label} type="button" role="tab" aria-selected={step === i} onClick={() => setStep(i)}>
                 <span className="n">{i + 1}</span>

@@ -23,10 +23,13 @@ export default function DecideStep({ plan, onNext }: { plan: PlanView; onNext: (
   });
   const sections = useMemo(() => [...(closing.data ?? []).map((c) => ({ id: c.id, label: classLabel(c) })), { id: 'UNPLACED', label: 'No class (unplaced)' }], [closing.data]);
   const [sectionId, setSectionId] = useState<string | null>(null);
-  const current = sectionId ?? sections[0]?.id ?? null;
+  // Default to the first CLOSING class once the list has loaded — never to
+  // "Unplaced", which is always in the list and would otherwise win the race.
+  const firstClass = closing.data?.[0]?.id ?? (closing.data ? 'UNPLACED' : null);
+  const current = sectionId ?? firstClass;
   useEffect(() => {
-    if (!sectionId && sections[0]) setSectionId(sections[0].id);
-  }, [sectionId, sections]);
+    if (!sectionId && firstClass) setSectionId(firstClass);
+  }, [sectionId, firstClass]);
 
   const rowsQuery = useQuery<RowsResponse>({
     queryKey: ['session-rows', host, current, plan.version],

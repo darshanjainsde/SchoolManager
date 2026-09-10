@@ -3425,7 +3425,7 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-ses-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .sk-ses-decide { display: flex; flex-direction: column; gap: 10px; }
 .sk-ses-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sk-ses-buttons { display: flex; gap: 4px; flex-wrap: wrap; max-width: 24em; }
+.sk-ses-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
 .sk-ses-buttons .sk-chip { padding: 5px 10px; font-size: 12px; }
 .sk-ses-leave { display: flex; gap: 6px; flex-wrap: wrap; }
 .sk-ses-leave .sk-input { min-width: 0; }
