@@ -13,11 +13,14 @@ const LINE = 'var(--sk-line-2)';
 const BRAND = 'var(--sk-brand)';
 
 function Court({ p }: { p: Plan }) {
-  const m = Math.max(p.w, p.h) * 0.06;
+  // Room for the labels that sit outside the lines: wider at the sides, where a
+  // centred label on the edge would otherwise run off the drawing.
   const fs = Math.max(p.w, p.h) / 34;
+  const mx = Math.max(p.w * 0.14, fs * 5);
+  const my = Math.max(p.h * 0.1, fs * 2.2);
   return (
     <div className="sk-sp-diagram">
-      <svg viewBox={`${-m} ${-m} ${p.w + 2 * m} ${p.h + 2 * m}`} width={Math.min(560, 40 * p.w)} role="img" aria-label={p.cap}>
+      <svg viewBox={`${-mx} ${-my} ${p.w + 2 * mx} ${p.h + 2 * my}`} width={Math.min(560, 40 * p.w)} role="img" aria-label={p.cap}>
         {p.fills?.map((f, i) => <path key={`f${i}`} d={f.d} fill={f.fill} stroke="none" />)}
         <rect x={0} y={0} width={p.w} height={p.h} fill="var(--sk-card)" stroke={INK} strokeWidth={fs / 5} />
         {p.segs?.map((s, i) => <line key={i} x1={s[0]} y1={s[1]} x2={s[2]} y2={s[3]} stroke={INK} strokeWidth={fs / 6} />)}
@@ -87,7 +90,7 @@ const PLANS: Record<DiagramKey, Plan> = {
   kabaddi: {
     w: 13, h: 10, cap: 'Kabaddi court 13 × 10 m (boys): mid line, baulk line 3.75 m from it, bonus line 1 m beyond, 1 m lobbies down each side.',
     segs: [[6.5, 0, 6.5, 10], [2.75, 1, 2.75, 9], [10.25, 1, 10.25, 9], [1.75, 1, 1.75, 9], [11.25, 1, 11.25, 9], [0, 1, 13, 1], [0, 9, 13, 9]],
-    labels: [[6.5, -0.3, 'Mid line'], [2.75, 9.8, 'Baulk'], [1.75, 0.7, 'Bonus'], [6.5, 9.7, 'Lobby'], [4.6, 5.2, 'Raider crosses here']],
+    labels: [[6.5, -0.3, 'Mid line'], [2.75, 9.75, 'Baulk'], [1.75, 0.7, 'Bonus'], [9.5, 9.75, 'Lobby'], [4.6, 5.2, 'Raider crosses here']],
   },
   khokho: {
     w: 27, h: 16, cap: 'Kho-Kho field 27 × 16 m: two poles 23.5 m apart joined by the central lane, eight cross lanes, a free zone beyond each pole.',

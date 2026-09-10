@@ -476,3 +476,82 @@ from/to class labels and who decided. Empty for a year never closed through a pl
 **Console**: Sessions tab (People group, MANAGEMENT); the Students page offers a Session select in the Add
 form while a plan is open, groups the class filter by session and hides past sessions behind a toggle
 (`GET /manage/students?academicYearId=` keeps unplaced children).
+
+## 17. Sports wing — the desk, tournaments, results, the Book of Records, houses
+
+`/sports/*` (`modules/sports`, feature `SPORTS`, in NO tier — override-only). **Two doors, one desk**: the admin runs
+it from `/app/sports` (console tab, sidebar intact); a STAFF login with the job `Staff.role = SPORTS` lands on
+`/sports` (`homeForRole`) and gets the identical sections minus Teachers. `SportsDeskGuard` passes SCHOOL_ADMIN with
+every permission; STAFF only with the SPORTS job, active, and their `Staff.sportsPerms` (empty = the defaults ENTER,
+VERIFY, CREATE, HOUSES); a route tagged `@SportsPerm` also needs that right (403 `SPORTS_PERM`; any other staff 403
+`NOT_SPORTS_DESK`). One indexed read per request, never cached. `/sports/admin/coaches` (admin only) lists SPORTS-job
+staff and sets their rights; the job itself is set on the Staff page like Librarian, offered only when the school has
+the feature. Students and teachers read `/me/sports`.
+
+**Catalogue** (`packages/types/src/sports/catalogue.ts`, ships with the app): 45 sports in eight groups, each with a
+kind — MATCH (two sides, a scoreline: GAMES best-of-N to a target with win-by and cap, or SINGLE one number with a named
+decider) · MEASURED (a mark: time/distance/height/points, lower- or higher-is-better, precision) · JUDGED — plus slot
+minutes, lanes, venue word, categories and the rules book (summary, sections, diagram key). Team sports (`teamSize > 1`)
+draw **sections** as sides (`c:<std>-<section>`), individual sports draw students (`s:<studentId>`); sides are text
+keys, never FKs, so a result outlives a roster change. A school's own sport is `custom:<preset>:<teamSize>:<slug>`
+(measured/judged presets are individual only).
+
+**Settings** (`/sports/settings`, one row per school, created on first read): grouping BANDS (1–6 bands of classes,
+no class in two bands, 400 `SPORTS_BAD_BANDS`) or AGE (School Games rule: "under N" = born on or after 1 January of
+meetYear − N + 1; needs a date of birth); placing points (default 10-7-5-3-2-1), match win (5), class title (3);
+`publishNeedsAdmin`. A tournament keeps the grouping it was created with. The class number comes from the grade name
+("9", "Class 9", "Grade IX", "STD-10"; Nursery/LKG/UKG have none) with `Grade.order` as the fallback.
+
+**Create** (`POST /sports/tournaments`, CREATE): name, first/last day (≤ 14 days), day window (default 09:00–16:00,
+≥ 1 h), venues (unique names), events — each a sport, group, category (Boys/Girls/Mixed), structure CLASS (a blind
+draw per class, lone entrant walks over, then a band final of the class champions; one class present → a plain draw)
+or DRAW, venue indexes, entrants, optional slot minutes and lanes. **Everything is checked before the first write**:
+entrants must be on the active roll, in a numbered class, and in the event's group (400 with the child's name); a
+match event needs two sides (400 `SPORTS_NEED_TWO`). Then **one transaction** writes the tournament (DRAFT), venues,
+events (with `structure` as it degenerated: CLASS/DRAW/HEATS/PANEL), entries, draws (standard seeding, byes to the top
+of the draw, a bye's winner already placed in round 2), balanced heats by lane count (one heat = the final), and a
+venue schedule: each match takes the earliest free venue, a round never starts before the previous round ends, a slot
+that would overrun the day rolls to the next day's start (`atMin` = dayIdx × 1440 + minute). The reply says how many
+days the plan needs; more than the meet has is a warning, not a refusal. The draw is repeatable from the meet name.
+
+**Board** (`GET /sports/tournaments/:id`): one payload — venues, events with scoring, entries, matches, heats with
+lane marks, `sideNames` — and the web derives the day board, brackets, heat sheets and the clash list with the shared
+maths; while LIVE the page refetches every 15 s. **Clashes** = a student in two slots at once, or a venue holding two.
+**Publish** (PUBLISH; 403 `SPORTS_PERM` when settings reserve it for the admin): DRAFT → LIVE, `published`, one
+`SPORTS` bell + one `SPORTS_NOTICE` push per entered child with a login naming their earliest slot; a re-publish tells
+nobody twice. **Finish** (CREATE) LIVE → DONE; **delete** DRAFT only (409 `TOURNAMENT_STATE`); **rain delay**
+(`POST :id/shift`) moves every unplayed scheduled slot from a minute by a delta in one statement per table; a single
+slot moves with `PATCH :id/matches/:m/slot` / `heats/:h/slot` (venue must belong to the meet).
+
+**Results** (`POST /sports/matches/:id/score`, ENTER, LIVE only — 409 `TOURNAMENT_STATE` on a draft or a finished
+meet): the body carries the match `version` the desk loaded; a stale version or a lost race on the conditional update
+is 409 `MATCH_CHANGED` and the desk reloads — **never a silent overwrite**. A bye has no score (409 `MATCH_LOCKED`);
+both sides must be known. Scores are judged by the sport: GAMES — each listed game complete except the last, win by
+the margin, the cap ends a game, a game after the match is decided is `EXTRA_GAME`; SINGLE — one number a side, a tie
+needs the decider as the second number (`TIE_DECIDER`); illegal scores 400 `BAD_SCORE` with the sport's rule in the
+message. An incomplete sheet saves as it stands with no winner. A winner moves into the next slot at once; changing a
+decided result is refused once the winner has played on (409 `MATCH_LOCKED`), otherwise the next slot is replaced.
+Walkover names the side that turned up and clears the sheet. When the last class champion is known the **band final
+builds itself** (placed after the last booked slot on the event's venues); when every heat is ranked the **final heat
+builds itself** with the best `lanes` marks (a tie at the cut comes along). **Marks** (`POST /sports/heats/:id/marks`):
+lane rows keep their lanes; `done` ranks the heat (ties share a rank, no mark ranks last), sends every mark that beats
+the book to the record queue, tells each runner their time and place, and pays final placings.
+
+**House points are a ledger** (`HousePoint` rows, never a total): a match win pays the winner's house, a class title
+pays the champion's house, a band-stage loss pays joint third the moment the semi is saved, the final pays 1st/2nd, a
+final heat pays placings; a re-scored match or re-ranked heat writes the per-house **difference** ("… (correction)")
+so the table is always the sum of its rows. A section side has no house and pays nothing. Manual rows need a non-zero
+number and a reason; a house with points cannot be deleted (409 `HOUSE_IN_USE`); names are unique (409 `HOUSE_EXISTS`).
+
+**Book of Records** (`/sports/records`): a line is sport × group × category; STANDING is the holder, BROKEN rows are
+history (`untilYear`), VOID rows were withdrawn with a note. **Nothing becomes a record on its own**: a meet mark that
+beats the book, or a claim from practice/trial (`POST records/attempts`, ENTER), is a PENDING attempt until someone
+with VERIFY approves it — the standing record becomes BROKEN, the attempt becomes the record (holder = the child's
+name today), the child gets a bell + push + the reward letter by mail in the background, an audit row is written; an
+attempt already decided is 409 `ATTEMPT_DECIDED`; an attempt overtaken by a better approval is rejected, never applied
+backwards. Typing in the old register (`POST records`, VERIFY): with `untilYear` it is history; without, it must beat
+the standing record (400 with both values) and retires it. Void restores the most recent broken holder. Comparison is
+strict at the sport's precision (12.30 does not beat 12.30).
+
+**Notifications**: kind `SPORTS` (bell), outbox kind `SPORTS_NOTICE` (push); student deep link `/portal/sports`,
+teacher none. No SMS.

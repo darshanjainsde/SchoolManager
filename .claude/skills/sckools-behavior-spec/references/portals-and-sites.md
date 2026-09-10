@@ -32,6 +32,13 @@ disabled until it is ticked. `GET /site/celebrations/preview` is this week from 
 with no `dob`. A school without `MANAGEMENT` cannot pick the Active-students source; it keeps a typed list
 (`manual`, max 500, no year). The section itself is switched on in Homepage → Sections (`showBirthdays`).
 
+**Sports** (`/app/sports`, feature `SPORTS`): Tournaments (wizard: the meet → sports → events → players → review;
+the live board with day board / events & results / clashes), Records (verify queue, the book, history, old register,
+claims), Houses (table, add, assign, award, ledger), Rules (the catalogue's rules book with diagrams), Settings
+(grouping, points, who may publish), Teachers (admin only: each sports teacher's rights). A STAFF login with the
+SPORTS job cannot enter `/app`; `/sports` is its own door with the same sections minus Teachers (an admin landing
+there is sent to `/app/sports<section>`).
+
 ## 2. Teacher portal — `/teacher` (tenant host, `TEACHER`)
 
 `Today` · `Timetable` · `Attendance` · `Tests` · `Results` · `Announcements` · `Requests` · `Holidays`,
@@ -48,6 +55,11 @@ audience is FAMILIES/BOTH and the section is on — the nav probes `GET /me/birt
 404) · `Profile`.
 
 Used by both student and guardian on one shared login — keep copy role-neutral.
+
+**Sports** (`/portal/sports`, feature `SPORTS`; `GET /me/sports`): "Up next" (the earliest unplayed match with both
+sides known, or open heat, across live meets), each meet's events with W/L scorelines and heat times with places, the
+child's house, records held and claims waiting. A teacher on the same route sees the published meets and the house
+table. A plan without the feature shows a plain "not part of your plan" line, never an error.
 
 ## 4. Mobile app (Expo, `apps/mobile`)
 

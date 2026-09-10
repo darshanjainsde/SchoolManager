@@ -114,7 +114,7 @@ export default function TournamentView({ base, id }: { base: string; id: string 
         </CardBody>
       </Card>
 
-      <div className="sk-seg" role="tablist" aria-label="Tournament views">
+      <div className="sk-seg sk-sp-views" role="tablist" aria-label="Tournament views">
         <button type="button" role="tab" aria-pressed={view === 'board'} aria-selected={view === 'board'} onClick={() => setView('board')}>Day board</button>
         <button type="button" role="tab" aria-pressed={view === 'events'} aria-selected={view === 'events'} onClick={() => setView('events')}>Events & results</button>
         <button type="button" role="tab" aria-pressed={view === 'clashes'} aria-selected={view === 'clashes'} onClick={() => setView('clashes')}>Clashes{clashes.length ? ` (${clashes.length})` : ''}</button>

@@ -278,3 +278,20 @@ Run this suite **twice** — once with `classNoteVisibility: ALL_TEACHERS`, once
 7. W1, W3 (public-site status gate)
 8. `pnpm preflight` — **mandatory before any push**; local gate ≠ cloud gate is why green tests still
    break deploys.
+
+## Sports wing (staging: raffles.test.sckools.com; feature `SPORTS` must be overridden on for the school)
+
+1. Admin → Staff: set a staff member's job to **Sports teacher** (offered only with the feature), create the login; sign in as them → lands on `/sports` with Tournaments · Records · Houses · Rules · Settings (no Teachers). An office login typing `/sports` bounces to `/staff`.
+2. Admin → Sports → Teachers: untick everything but Enter → Save; as the teacher, New tournament is hidden and `POST /sports/tournaments` answers 403 `SPORTS_PERM`.
+3. Settings: put class 8 in two bands → the red line and Save disabled; Age groups → the wizard's Players step lists by date of birth and names a child without one.
+4. Wizard: name, 2 days, Court 1 + Track, pick Badminton (Senior Boys, class rounds), 100 m (Junior Girls, lanes 4, 7 runners), Football (one draw, 3 sections); Review shows sides; Create → the board has every match/heat on a court with a time, byes have none, a warning if days are short.
+5. Board: rain delay 30 → every unplayed slot after now moves; the Clashes view is empty; drag-free check: `PATCH …/slot` to Court 1 at the same time as another → clash listed.
+6. Publish as the teacher with PUBLISH off in Settings → 403; as admin → LIVE, the entered child's phone/web bell says the first slot; publish again → nobody told twice.
+7. Two desks: open the same semi on two browsers; save 21-15 21-19 on one; on the other save anything → "Someone else saved this match first", board reloads with the result; the winner sits in the final; the house table shows +5 for the winner's house.
+8. Final of class 9 and class 10 saved → the band final appears with both champions and a time after the last booked slot; re-score the class 9 final with the other winner while the band final is unplayed → the band final's side swaps and the ledger shows the correction rows.
+9. Heats: type 13.42, 13.10, blank; Save & rank → ranks 2, 1, — ; every heat ranked → the final heat appears with the best 4; a mark below the book's standing record → Records shows it "Waiting for a signature"; approve → the book updates, the child hears; approve again → 409.
+10. Records: type in a past record with an end year → History shows it under the standing holder; a standing entry that does not beat the book is refused with both values; void the standing record → the previous holder stands again.
+11. Houses: add Red/Blue, assign class 9 to Red; delete a house with points → 409; award −5 with a reason → the ledger shows the minus.
+12. Student portal `/portal/sports`: Up next names the final and court; the semi shows W with the scoreline; the sprint shows 1st · 13.10 s; the house chip is Red.
+13. Rules: every group lists its sports; Badminton shows the court drawing with labels inside the frame at 390 px; search "kho" finds Kho-Kho.
+14. Cross-tenant: another school's tournament id on `/sports/tournaments/:id` → 404; `/me/sports` never lists it.

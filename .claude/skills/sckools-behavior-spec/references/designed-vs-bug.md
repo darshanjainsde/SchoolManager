@@ -181,3 +181,26 @@ No design rationale covers any of these. Escalate immediately:
 | "The library books stopped the session from starting" | Never designed: the library panel is information and two optional actions; Start ignores it | Start refused because of open loans |
 | "Setting the last due date fined a child who was already late" | Only loans due AFTER the chosen day move; an overdue book keeps its own due date and fine clock | An already-overdue loan's `dueOn` changed by the click, or a day before today accepted |
 | "The next year's timetable already exists before Start" | The office opened Preview and adjust on step 5, which copies now; Start keeps it and copies nothing twice | A period doubled after Start |
+
+## Sports wing
+
+| Reported as | Designed behaviour | It IS a bug when |
+| --- | --- | --- |
+| "The office staff login cannot open /sports" | Only the SPORTS job (and the admin) may; other staff get 403 `NOT_SPORTS_DESK` and are sent to their own portal | A SPORTS-job, active staff row refused, or an OFFICE row let in |
+| "The sports teacher cannot publish" | Settings may reserve publishing for the admin, or the teacher's rights (Admin → Sports → Teachers) lack PUBLISH — 403 `SPORTS_PERM` | An admin refused, or a teacher with PUBLISH refused while `publishNeedsAdmin` is off |
+| "A student in class 7 could not be entered in the Senior event" | Bands decide the group by class (or age by date of birth); the wizard lists only eligible children and the API refuses the rest by name | An eligible child refused, or an ineligible one accepted |
+| "Class 10 had one entrant and no matches" | A lone entrant is that class's champion by walkover and meets the other champions in the band final | A lone entrant dropped, or a one-player draw created |
+| "The final is missing from the bracket" | The band final (and the final heat) appears on its own once every class champion (every heat) is in | A final missing after every class has a champion, or built twice |
+| "Two matches are at 09:00 on the same court" | Never designed: the scheduler gives each match the earliest free venue and never starts a round before the last one ends; the Clashes view lists any overlap | A venue with two overlapping slots, or a child in two places, after creation |
+| "The plan needs three days but the meet has one" | Designed: the reply warns; the extra days are on the board as day 2, 3 … so the office adds a day or a venue | Slots dropped silently |
+| "My score was replaced by the other teacher's" | Never designed: a save carries the version it loaded; the second desk gets 409 `MATCH_CHANGED` and reloads | A stale save accepted |
+| "21-20 was refused" | A game is won by two (capped at 30); 21-20 is a game in progress and saves as it stands, with no winner | A complete legal game refused, or 31-29 accepted |
+| "A football draw at 1-1 could not be saved as finished" | A knockout cannot end level: enter the decider (penalties) as the second number | A decider refused when the first numbers are level |
+| "I cannot change last round's result" | Once the winner has played the next round the earlier result is locked (409 `MATCH_LOCKED`); clear the later result first | A result locked while the next slot is unplayed |
+| "The house table changed after a correction" | Designed: a re-scored match writes the difference as correction rows; the table is the sum of its ledger | A total edited in place, or a correction that does not net to the new result |
+| "9 A beat 9 B and Red house got no points" | A section side has no house; team sports pay no house points | An individual winner's house not paid |
+| "The record was not updated when she ran 12.10" | A mark queues an attempt; a record changes only when someone with VERIFY approves it | An approved attempt not standing, or a mark below the standing record queued |
+| "12.30 did not beat the record of 12.30" | Records are beaten strictly at the sport's precision | 12.29 not queued |
+| "The final heat has five runners on four lanes" | A tie at the cut brings everyone on that mark | More runners than lanes without a tie |
+| "Students cannot see the draft" | A draft is never visible to students; publish makes it LIVE | A published LIVE meet missing from `/me/sports` for an entered child |
+| "The student saw a tournament from another school" | Never designed: every read is tenant-scoped (RLS) | Any cross-school row |
