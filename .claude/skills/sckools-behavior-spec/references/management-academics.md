@@ -410,3 +410,43 @@ Every person carries a `status` and an `isActive` mirror (`isActive === (status 
   longer enrolled at {School}" with one Remove action. A student code the school has marked as left resolves
   to no school, and the gate answers its usual neutral "check your details" — it never says why, by
   design (`login.test.tsx` protects that).
+
+## 16. Sessions — the year end (Active Roster, Track C)
+
+`/manage/sessions` (`sessions.service.ts`). **One open plan per school** (DRAFT or SCHEDULED; 409 `PLAN_OPEN`).
+Opening a plan needs a current year (400 `NO_CURRENT_YEAR`) and creates the next `AcademicYear` with
+`isCurrent=false`. The six steps: next session · classes (`POST plan/structure/copy` copies every closing
+section into the next year — same grade, same name, class teacher only if still ACTIVE — and proposes the
+section map: same-named section one grade up, else the first of that grade, top grade → `PASS_OUT`; refused
+400 `GRADE_ORDER` when two grades share an `order`) · decide students · roll numbers · copy the rest · review.
+
+**Decide rows** (`GET plan/students?sectionId=<closing section>|UNPLACED`) show attendance % (present+late
+over marked days of the closing year) and results % (published results of the counted exams; all of the
+class's exams when `countExamIds` is empty), computed on read, never stored. `review` = results below
+`passMarkPct` — **a flag, never a decision (D10)**. `joinedSincePlan` = admitted after the plan opened.
+Decisions are saved per class (`PUT plan/decisions`, all rows): PROMOTE/STAY need a `toSectionId` in the
+next year (400 `BAD_TARGET`), LEAVE needs `leaveStatus`; unknown or non-ACTIVE students are refused 404.
+Every save bumps `plan.version`; a PATCH to the plan does too.
+
+**Start** (`POST plan/start { when, version }`): 409 `PLAN_CHANGED` when the version moved; 400
+`UNDECIDED_STUDENTS` while any child in a closing section has no row; 400 `BAD_TARGET` if a chosen section
+was deleted meanwhile. `when: ON_START_DATE` sets SCHEDULED with `scheduledFor` = midnight of the next
+year's first day in the school's timezone; `/internal/cron/session-start` (18:30 UTC) applies due plans as
+the person who scheduled them. `when: NOW` is **one transaction** (`applyPlan`): the passing-out classes
+graduate through the Homecoming wing first (`AlumniService.graduateBatchIn`, only with the `ALUMNI`
+feature), seats move with roll numbers by `rollPolicy` (KEEP / ALPHABETICAL / ADMISSION_NO), PASS_OUT →
+`applyStudentLeave(ALUMNI, alumniBatch = closing year name)`, LEAVE → the chosen status, **every leaver's
+login closes in the same transaction**, the current year flips, the timetable copies per classroom (5 B's
+periods become next year's 5 B; only slots of ACTIVE teachers), pending register-change requests on closing
+sections are REJECTED, the plan becomes STARTED. After commit, best-effort: leave carry-forward
+(`LeavePolicyService.closeYear`), `SESSION` inbox rows for every moved family and every teacher with a
+copied class, then in the background the "child is in 6 A" mail per family with an address and the alumni
+claim-link mail (`/alumni#claim=<token>`) per new alumnus with an email. Children with no class (unplaced)
+and new admissions already seated in next-year sections are untouched by Start.
+
+**Register** (`GET :yearId/register`): every decision of the STARTED plan that closed that year, with the
+from/to class labels and who decided. Empty for a year never closed through a plan.
+
+**Console**: Sessions tab (People group, MANAGEMENT); the Students page offers a Session select in the Add
+form while a plan is open, groups the class filter by session and hides past sessions behind a toggle
+(`GET /manage/students?academicYearId=` keeps unplaced children).

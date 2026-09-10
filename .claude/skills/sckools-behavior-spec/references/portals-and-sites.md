@@ -12,6 +12,7 @@ Nav is filtered by the `features[]` array from `GET /auth/me`. **Until features 
 | `/app/blog` Blog | `BLOG` |
 | `/app/enquiries` Enquiries | `ENQUIRY` |
 | `/app/classes` (+ `/structure`) | `MANAGEMENT` |
+| `/app/sessions` Sessions (year end) | `MANAGEMENT` |
 | `/app/teachers`, `/app/staff`, `/app/students` | `MANAGEMENT` |
 | `/app/staff-attendance` | `MANAGEMENT` |
 | `/app/timetable`, `/app/availability` | `MANAGEMENT` |

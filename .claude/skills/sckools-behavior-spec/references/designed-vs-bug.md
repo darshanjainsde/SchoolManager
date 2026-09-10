@@ -164,3 +164,16 @@ No design rationale covers any of these. Escalate immediately:
 | "The homepage has no badge / ribbon" | Placement is Page only, nobody is in the window, or the section is off in Homepage → Sections | Placement TEASER_AND_PAGE with names in the window and nothing on the homepage |
 | "Portal families see it but the website does not" | Audience FAMILIES: the wall is behind sign-in on purpose | 404 on `/me/birthdays` with audience FAMILIES or BOTH |
 | "I can't pick Active students as the source" | Needs the `MANAGEMENT` plan; the tab disables the chip and keeps the typed list | Chip disabled for a school that has MANAGEMENT |
+
+## Sessions — the year end (Active Roster, Track C)
+
+| Reported as | Designed — why | That WOULD be a bug |
+|---|---|---|
+| "I decided everyone but nobody moved" | Nothing changes until **Start** on step 6; decisions are a draft | A seat that moved before Start |
+| "Start says the plan changed" | 409 `PLAN_CHANGED`: someone saved a decision or setting after the review loaded — reload, review again | The same 409 with no save in between |
+| "Start is greyed out" | Children in closing classes without a decision (`counts.undecided`) — the review lists them | Start disabled with `undecided = 0` |
+| "A child below the pass mark was promoted" | The pass mark only **flags** (amber Review); the office decides | A child moved to a class other than the one chosen |
+| "The timetable copied to the wrong class" | It follows the classroom: 5 B's periods become next year's 5 B, not the promoted children's 6 B | 5 B's periods on next year's 6 B, or a LEFT teacher's periods copied |
+| "The passed-out children still show as students" | They are ALUMNI on the Students page under Alumni & left, with `alumniBatch` = the closing year; the Alumni page has them only when the ALUMNI wing is on | An ALUMNI child still on a register, or with a working login |
+| "New admissions vanished from Students" | The default list is the running year's register; the child sits in a next-year class — tick Show past sessions / pick the session, or they are in the next year already | An ACTIVE child in a current-year class missing from the default list |
+| "The scheduled start did not run" | It fires at the school's midnight via the cron (18:30 UTC); until then the plan is SCHEDULED and locked | A SCHEDULED plan with `scheduledFor` in the past and status still SCHEDULED after the cron ran |
