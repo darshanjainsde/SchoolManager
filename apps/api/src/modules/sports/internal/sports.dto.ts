@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested,
+  ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
 
 // ── Settings ──────────────────────────────────────────────
@@ -86,6 +86,64 @@ export class ShiftDto {
   @IsOptional() @IsUUID() eventId?: string;
   /** Only slots at or after this minute move (default: everything unplayed). */
   @IsOptional() @IsInt() @Min(0) fromMin?: number;
+}
+
+// ── Results ───────────────────────────────────────────────
+
+export class ScoreDto {
+  @IsArray() @ArrayMaxSize(9) @IsInt({ each: true }) @Min(0, { each: true }) @Max(999, { each: true }) scoreA!: number[];
+  @IsArray() @ArrayMaxSize(9) @IsInt({ each: true }) @Min(0, { each: true }) @Max(999, { each: true }) scoreB!: number[];
+  /** The version the desk loaded; a stale one is refused with MATCH_CHANGED. */
+  @IsInt() @Min(1) version!: number;
+  /** The side that turned up when the other did not. */
+  @IsOptional() @IsIn(['A', 'B']) walkover?: 'A' | 'B';
+}
+
+export class MarkInDto {
+  @IsUUID() studentId!: string;
+  /** null = did not finish / no mark. */
+  @ValidateIf((o) => o.mark !== null) @IsNumber() @Min(0) @Max(1_000_000) mark!: number | null;
+}
+
+export class MarksDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(64) @ValidateNested({ each: true }) @Type(() => MarkInDto) marks!: MarkInDto[];
+  /** Done ranks the heat, checks records and (for a heat) may build the final. */
+  @IsBoolean() done!: boolean;
+}
+
+// ── Records ───────────────────────────────────────────────
+
+export class SubmitAttemptDto {
+  @IsString() @IsNotEmpty() @MaxLength(80) sportKey!: string;
+  @IsString() @IsNotEmpty() @MaxLength(20) groupKey!: string;
+  @IsIn(['Boys', 'Girls', 'Mixed']) category!: 'Boys' | 'Girls' | 'Mixed';
+  @IsUUID() studentId!: string;
+  @IsNumber() @Min(0) @Max(1_000_000) value!: number;
+  @IsIn(['PRACTICE', 'TRIAL']) source!: 'PRACTICE' | 'TRIAL';
+  @IsBoolean() witnessed!: boolean;
+}
+
+export class DecideAttemptDto {
+  @IsBoolean() approve!: boolean;
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+}
+
+export class AddRecordDto {
+  @IsString() @IsNotEmpty() @MaxLength(80) sportKey!: string;
+  @IsString() @IsNotEmpty() @MaxLength(20) groupKey!: string;
+  @IsIn(['Boys', 'Girls', 'Mixed']) category!: 'Boys' | 'Girls' | 'Mixed';
+  @IsNumber() @Min(0) @Max(1_000_000) value!: number;
+  @IsString() @IsNotEmpty() @MaxLength(80) holderName!: string;
+  @IsOptional() @IsUUID() holderStudentId?: string;
+  @IsInt() @Min(1900) @Max(2100) sinceYear!: number;
+  /** Set for a past record (history); leave empty for the standing one. */
+  @IsOptional() @IsInt() @Min(1900) @Max(2100) untilYear?: number;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) setOn?: string;
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+}
+
+export class VoidRecordDto {
+  @IsString() @IsNotEmpty() @MaxLength(200) note!: string;
 }
 
 // ── Teachers (admin) ──────────────────────────────────────
