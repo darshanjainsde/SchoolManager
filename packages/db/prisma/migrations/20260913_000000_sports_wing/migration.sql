@@ -82,8 +82,8 @@ CREATE INDEX "SportsEntry_schoolId_eventId_idx" ON "SportsEntry"("schoolId", "ev
 
 CREATE TABLE "SportsMatch" (
   "id" UUID NOT NULL, "schoolId" UUID NOT NULL, "eventId" UUID NOT NULL, "stage" TEXT NOT NULL, "groupLabel" TEXT NOT NULL, "roundIdx" INTEGER NOT NULL,
-  "roundName" TEXT NOT NULL, "pos" INTEGER NOT NULL, "aStudentId" UUID, "bStudentId" UUID, "scoreA" INTEGER[] NOT NULL DEFAULT ARRAY[]::INTEGER[],
-  "scoreB" INTEGER[] NOT NULL DEFAULT ARRAY[]::INTEGER[], "winnerId" UUID, "bye" BOOLEAN NOT NULL DEFAULT false, "walkover" BOOLEAN NOT NULL DEFAULT false,
+  "roundName" TEXT NOT NULL, "pos" INTEGER NOT NULL, "aSide" TEXT, "bSide" TEXT, "scoreA" INTEGER[] NOT NULL DEFAULT ARRAY[]::INTEGER[],
+  "scoreB" INTEGER[] NOT NULL DEFAULT ARRAY[]::INTEGER[], "winner" TEXT, "bye" BOOLEAN NOT NULL DEFAULT false, "walkover" BOOLEAN NOT NULL DEFAULT false,
   "venueId" UUID, "atMin" INTEGER, "version" INTEGER NOT NULL DEFAULT 1, "savedById" UUID, "savedAt" TIMESTAMP(3),
   CONSTRAINT "SportsMatch_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "SportsMatch_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE CASCADE ON UPDATE CASCADE,

@@ -4161,8 +4161,9 @@ model SportsEntry {
   @@index([schoolId, eventId])
 }
 
-/// A knockout slot. Student ids are plain (no FK): a result is history and
-/// must outlive a roster change. `version` guards two desks saving the same
+/// A knockout slot. Sides are keys, not FKs — `s:<studentId>` for an
+/// individual, `c:<std>-<section>` for a section team — so a result is
+/// history and outlives a roster change. `version` guards two desks saving the same
 /// match; `savedById`/`savedAt` say who won that race.
 model SportsMatch {
   id         String      @id @default(uuid()) @db.Uuid
@@ -4173,11 +4174,11 @@ model SportsMatch {
   roundIdx   Int
   roundName  String
   pos        Int
-  aStudentId String?     @db.Uuid
-  bStudentId String?     @db.Uuid
+  aSide      String?
+  bSide      String?
   scoreA     Int[]       @default([])
   scoreB     Int[]       @default([])
-  winnerId   String?     @db.Uuid
+  winner     String?
   bye        Boolean     @default(false)
   walkover   Boolean     @default(false)
   venueId    String?     @db.Uuid
