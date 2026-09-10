@@ -12,6 +12,7 @@ import { runInBackground } from '../../common/notifications/run-in-background';
 import { AlumniAuthService, AlumniService } from '../alumni';
 import { FeatureResolverService } from '../features';
 import { LeavePolicyService } from './leave-policy.service';
+import { startOfIstDay } from './internal/timetable-date';
 import {
   PASS_OUT,
   assignRollNumbers,
@@ -700,7 +701,10 @@ export class SessionsService {
 
       if (plan.copyTimetable) {
         // Visible from today if the session starts early, else from its first day.
-        const effectiveFrom = new Date(Math.min(plan.toYear.startDate.getTime(), now.getTime()));
+        // Stamped at the START OF THE IST DAY, the way assign() stamps a slot:
+        // the timetable is read "as of" IST midnight, and a UTC-midnight stamp
+        // (5½ hours later) would hide the whole first day.
+        const effectiveFrom = new Date(Math.min(startOfIstDay(plan.toYear.startDate).getTime(), startOfIstDay(now).getTime()));
         const r = await this.copyTimetableIn(tx, schoolId, plan.fromYearId, plan.toYearId, closing, next, effectiveFrom);
         o.slotsCopied = r.copied;
         o.slotsSkipped = r.skipped;
@@ -802,7 +806,7 @@ export class SessionsService {
       });
       const closing = sections.filter((s) => s.academicYearId === plan.fromYearId);
       const next = sections.filter((s) => s.academicYearId === plan.toYearId);
-      const out = await this.copyTimetableIn(tx, schoolId, plan.fromYearId, plan.toYearId, closing, next, plan.toYear.startDate);
+      const out = await this.copyTimetableIn(tx, schoolId, plan.fromYearId, plan.toYearId, closing, next, startOfIstDay(plan.toYear.startDate));
       return { copied: out.copied, skipped: out.skipped, nextYearClasses: next.length };
     });
     await this.audit.record({ schoolId, actorUserId, action: 'session.timetable.copy', entity: 'SessionPlan', entityId: schoolId, meta: r });

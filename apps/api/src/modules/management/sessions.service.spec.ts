@@ -499,7 +499,9 @@ describe('copyTimetableNow — adjust before Start', () => {
     txMock.timetableSlot.createMany.mockImplementation(({ data }: { data: unknown[] }) => Promise.resolve({ count: data.length }));
     const r = await service().copyTimetableNow(SCHOOL, ACTOR);
     expect(r).toEqual({ copied: 1, skipped: 1, nextYearClasses: 1 });
-    expect(txMock.timetableSlot.createMany.mock.calls[0][0].data[0]).toMatchObject({ classSectionId: 't5b', dayOfWeek: 1, effectiveFrom: new Date('2026-04-01') });
+    // Effective from the START OF THE IST DAY (2026-04-01 00:00 IST), so a reader asking
+    // "as of 2026-04-01" — which resolves to that same instant — sees it on day one.
+    expect(txMock.timetableSlot.createMany.mock.calls[0][0].data[0]).toMatchObject({ classSectionId: 't5b', dayOfWeek: 1, effectiveFrom: new Date('2026-03-31T18:30:00.000Z') });
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'session.timetable.copy' }));
   });
 });
