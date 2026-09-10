@@ -266,6 +266,8 @@ export type ErrorCode =
   | 'UNKNOWN_SPORT'
   /** An event needs at least one venue to be scheduled. 400. */
   | 'NEED_VENUE'
+  /** No active staff row with the SPORTS job by that id. 404. */
+  | 'COACH_NOT_FOUND'
   | 'INTERNAL';
 
 export interface ApiErrorBody {
