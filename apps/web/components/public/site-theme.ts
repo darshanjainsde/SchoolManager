@@ -129,6 +129,7 @@ export function navFlagsFor(data: PublicSiteData, opts: { hasAbout: boolean; has
     hasEvents: data.school.features.includes('EVENTS'),
     hasAlumni: data.school.features.includes('ALUMNI'),
     hasBirthdays: !!data.celebrations?.enabled,
+    hasRecords: !!data.records?.enabled,
     hasBlog: data.school.features.includes('BLOG'),
     hasContact: !!(data.profile?.phone || data.profile?.email || data.profile?.addressLine1),
     hasEnquiry: data.school.features.includes('ENQUIRY'),

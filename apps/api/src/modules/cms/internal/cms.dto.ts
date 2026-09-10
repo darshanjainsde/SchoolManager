@@ -241,3 +241,18 @@ export class UpdateCelebrationsDto {
   @IsOptional() @IsBoolean() consentConfirmed?: boolean;
   @IsOptional() @IsArray() @ArrayMaxSize(500) manual?: unknown[];
 }
+
+// ── The Book of Records on the website (Sports wing) ─────────────────────────
+// Every field optional: the service merges the patch over the stored config
+// and normalises the result (cms/internal/records-config.ts).
+export class UpdateRecordsSiteDto {
+  @IsOptional() @IsBoolean() enabled?: boolean;
+  @IsOptional() @IsBoolean() consentConfirmed?: boolean;
+  @IsOptional() @IsIn(['FIRST', 'FIRST_INITIAL', 'FULL']) nameFormat?: string;
+  @IsOptional() @IsIn(['SCOREBOARD', 'REGISTER', 'CABINET', 'PROGRESSION']) pageLayout?: string;
+  @IsOptional() @IsIn(['RECENT', 'PINNED', 'ALL']) homeScope?: string;
+  @IsOptional() @IsIn([4, 6, 8]) homeCount?: number;
+  @IsOptional() @IsArray() @ArrayMaxSize(200) pinned?: unknown[];
+  @IsOptional() @IsBoolean() showTopFive?: boolean;
+  @IsOptional() @IsArray() @ArrayMaxSize(12) groups?: unknown[];
+}

@@ -133,6 +133,8 @@ export interface PublicSiteData {
     wishLine: string;
     window: 'TODAY' | 'WEEK' | 'MONTH';
   } | null;
+  /** The Book of Records (Sports wing): the page exists and how it is laid out. Lines come from /public/records. */
+  records: { enabled: true; pageLayout: 'SCOREBOARD' | 'REGISTER' | 'CABINET' | 'PROGRESSION'; showTopFive: boolean } | null;
   stats: { label: string; value: string }[];
   socialLinks: { platform: string; url: string }[];
   gallery: { url: string; caption: string | null }[];

@@ -663,6 +663,9 @@ model SchoolProfile {
   /// teaser and page style, wish line, manual list. Normalised on write and
   /// on read by cms/internal/celebrations-config.ts; null = every default.
   celebrationsConfig  Json?
+  /// The Book of Records on the website: switch, consent, name format, page
+  /// layout, homepage scope. Normalised on read by cms/internal/records-config.ts.
+  recordsConfig       Json?
   phone               String?
   email               String?
   addressLine1        String?

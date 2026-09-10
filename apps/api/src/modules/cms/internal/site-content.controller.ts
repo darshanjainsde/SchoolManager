@@ -5,7 +5,7 @@ import { RolesGuard } from '../../../common/auth/roles.guard';
 import { Roles } from '../../../common/auth/roles.decorator';
 import { TenantContextService } from '../../tenancy';
 import { SiteContentService } from './site-content.service';
-import { UpdateProfileDto, UpdateHomepageDto, SetStatsDto, SetSocialDto, UpdateCelebrationsDto } from './cms.dto';
+import { UpdateProfileDto, UpdateHomepageDto, SetStatsDto, SetSocialDto, UpdateCelebrationsDto, UpdateRecordsSiteDto } from './cms.dto';
 
 @Controller('site')
 // Any write here drops this school's cached pages — see the interceptor.
@@ -56,6 +56,22 @@ export class SiteContentController {
   @Get('celebrations/preview')
   celebrationsPreview() {
     return this.content.celebrationsPreview(this.sid());
+  }
+
+  // ── The Book of Records on the website (Sports wing) ──
+  @Get('records')
+  getRecordsSite() {
+    return this.content.getRecordsSite(this.sid());
+  }
+
+  @Put('records')
+  updateRecordsSite(@Body() dto: UpdateRecordsSiteDto) {
+    return this.content.updateRecordsSite(this.sid(), dto);
+  }
+
+  @Get('records/lines')
+  recordsLines() {
+    return this.content.recordsLines(this.sid());
   }
 
   @Put('stats')

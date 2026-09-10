@@ -29,6 +29,9 @@ const BELOW_THE_FOLD = [
   'sections/AlumniSection.tsx',
   // Birthdays: three rooms below the fold (Track B), all drawn on .ps-panel.
   'sections/BirthdaysSection.tsx',
+  // The Book of Records: four rooms and four homepage bands, all on .ps-panel.
+  'sections/RecordsSection.tsx',
+  'sections/RecordsTeaser.tsx',
 ];
 
 function source(rel: string): string {

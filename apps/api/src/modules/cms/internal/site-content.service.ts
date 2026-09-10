@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, withTenant } from '@skoolos/db';
-import type { UpdateProfileDto, UpdateHomepageDto, StatItemDto, SocialLinkDto, UpdateCelebrationsDto } from './cms.dto';
+import type { UpdateProfileDto, UpdateHomepageDto, StatItemDto, SocialLinkDto, UpdateCelebrationsDto, UpdateRecordsSiteDto } from './cms.dto';
 import { sanitizeCustomCssMap, sanitizeHtmlBlock } from './custom-code';
 import { normalizeCelebrationsConfig, type CelebrationsConfig } from './celebrations-config';
+import { normalizeRecordsConfig, type RecordsSiteConfig } from './records-config';
+import { SportsBookService, type LineIndexRow } from '../../sports';
 import { activeStudentsWhere } from '../../../common/roster/active-students';
 import { ApiError } from '../../../common/errors/api-error';
 import { addDays, effectiveDayMonth, inWindow, todayInZone } from '../../../common/dates/birthdays';
@@ -22,7 +24,7 @@ const PROFILE_JSON_KEYS = [
 
 @Injectable()
 export class SiteContentService {
-  constructor(private readonly features: FeatureResolverService) {}
+  constructor(private readonly features: FeatureResolverService, private readonly book: SportsBookService) {}
 
   async getContent(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
@@ -116,6 +118,43 @@ export class SiteContentService {
       tx.homepageContent.upsert({ where: { schoolId }, update: data, create: { schoolId, ...data } }),
     );
     return this.getContent(schoolId);
+  }
+
+  // ── The Book of Records on the website (Sports wing) ───────────────────────
+
+  async getRecordsSite(schoolId: string): Promise<RecordsSiteConfig> {
+    const p = await withTenant(schoolId, (tx) => tx.schoolProfile.findUnique({ where: { schoolId }, select: { recordsConfig: true } }));
+    return normalizeRecordsConfig(p?.recordsConfig);
+  }
+
+  /**
+   * Patch over the stored config. Switching the book on needs the SPORTS
+   * feature and the consent tick in the same request — children's names go
+   * on a public page, so "on" is never the result of an unticked default.
+   */
+  async updateRecordsSite(schoolId: string, dto: UpdateRecordsSiteDto): Promise<RecordsSiteConfig> {
+    const current = await this.getRecordsSite(schoolId);
+    const wantsOn = dto.enabled ?? current.enabled;
+    if (wantsOn && !(await this.features.getFeatures(schoolId)).has('SPORTS')) {
+      throw new ApiError('VALIDATION', 'The Book of Records needs the Sports wing on this school', 400, 'enabled');
+    }
+    if (wantsOn && !(dto.consentConfirmed ?? current.consentConfirmed)) {
+      throw new ApiError('CONSENT_REQUIRED', 'Confirm that the school may name its record holders on the public website', 400, 'consentConfirmed');
+    }
+    const next = normalizeRecordsConfig({ ...current, ...dto });
+    await withTenant(schoolId, (tx) =>
+      tx.schoolProfile.upsert({
+        where: { schoolId },
+        update: { recordsConfig: next as unknown as Prisma.InputJsonValue },
+        create: { schoolId, recordsConfig: next as unknown as Prisma.InputJsonValue },
+      }),
+    );
+    return next;
+  }
+
+  /** Every line the school has, so the office can pin the ones the homepage shows. */
+  recordsLines(schoolId: string): Promise<LineIndexRow[]> {
+    return this.book.lineIndex(schoolId);
   }
 
   // ── Birthdays & celebrations (Active Roster, Track B) ──────────────────────

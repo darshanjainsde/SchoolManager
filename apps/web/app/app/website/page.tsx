@@ -11,6 +11,7 @@ import AdmissionsTab from './admissions-tab';
 import HallOfFameTab from './hof-tab';
 import StudioTab from './studio-tab';
 import CelebrationsTab from './celebrations-tab';
+import RecordsTab from './records-tab';
 
 /**
  * Website console shell: the tab bar, plus the one shared settings form the
@@ -28,6 +29,7 @@ type Tab =
   | 'admissions'
   | 'hof'
   | 'celebrations'
+  | 'records'
   | 'gallery'
   | 'staff';
 
@@ -45,6 +47,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'admissions', label: 'Admissions' },
   { id: 'hof', label: 'Hall of Fame' },
   { id: 'celebrations', label: 'Celebrations' },
+  { id: 'records', label: 'Records' },
   { id: 'gallery', label: 'Gallery' },
   { id: 'staff', label: 'Staff' },
 ];
@@ -100,6 +103,7 @@ export default function WebsitePage() {
       {activeTab === 'admissions' && <AdmissionsTab />}
       {activeTab === 'hof' && <HallOfFameTab />}
       {activeTab === 'celebrations' && <CelebrationsTab onGoToHomepage={() => setActiveTab('homepage')} />}
+      {activeTab === 'records' && <RecordsTab onGoToStudio={() => setActiveTab('studio')} />}
       {activeTab === 'gallery' && <GalleryTab />}
       {activeTab === 'staff' && <StaffTab />}
       </div>

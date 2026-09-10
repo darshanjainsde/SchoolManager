@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { optimised } from '@/lib/img';
 import { Fragment, useEffect, type ReactNode } from 'react';
-import type { BirthdaysResult, PublicSiteData } from '@/lib/public-api';
+import type { BirthdaysResult, PublicSiteData, RecordsBook } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
 import HeroSection, { heroImagesOf, heroIsPhotoLayout } from './sections/HeroSection';
 import SiteNav from './sections/SiteNav';
@@ -17,6 +17,8 @@ import ConnectSection from './sections/ConnectSection';
 import AlumniSection from './sections/AlumniSection';
 import BirthdaysSection from './sections/BirthdaysSection';
 import BirthdayTeaser from './sections/BirthdayTeaser';
+import RecordsSection from './sections/RecordsSection';
+import RecordsTeaser, { type RecordsHomeLayout } from './sections/RecordsTeaser';
 import { SUBPAGES } from './subpages';
 import { PS_CSS } from './ps-css';
 import { themeRootProps } from './site-theme';
@@ -36,7 +38,7 @@ import {
   type SectionKey,
 } from './site-variants';
 
-export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'alumni' | 'birthdays' | 'contact' | 'page';
+export type SiteView = 'home' | 'academics' | 'admissions' | 'gallery' | 'events' | 'alumni' | 'birthdays' | 'records' | 'contact' | 'page';
 
 interface Props {
   data: PublicSiteData;
@@ -46,6 +48,8 @@ interface Props {
   page?: { slug: string; title: string; blocks: unknown };
   /** The birthday wall rows (Track B): the home teaser and the /birthdays view read them. */
   birthdays?: BirthdaysResult | null;
+  /** The Book of Records: the homepage band (when the school shows one) and the /records page. */
+  records?: RecordsBook | null;
 }
 
 
@@ -59,7 +63,7 @@ function parseStatValue(val: string): { numeric: boolean; num: number; suffix: s
 }
 
 
-export default function PublicSite({ data, view = 'home', page, birthdays = null }: Props) {
+export default function PublicSite({ data, view = 'home', page, birthdays = null, records = null }: Props) {
   const onAcademicsPage = view === 'academics';
   // Section anchors live on the homepage; from other pages they need the "/" prefix.
   const base = view !== 'home' ? '/' : '';
@@ -113,6 +117,10 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
   const hasBirthdays = !!data.celebrations?.enabled;
   const celebrations = data.celebrations;
   const showTeaser = view === 'home' && hasBirthdays && !!birthdays && celebrations?.placement === 'TEASER_AND_PAGE';
+  // The Book of Records: the school's switch, with consent, on a plan with the Sports wing.
+  const hasRecords = !!data.records?.enabled;
+  const recordsLayout = sectionLayoutOf(variants, 'records') as RecordsHomeLayout;
+  const showRecordsBand = view === 'home' && hasRecords && !!records && records.home.length > 0;
   const hasBlog = data.school.features.includes('BLOG');
   const hasAcademics = data.courses.length > 0;
   const hasAdmissions = admissionsHasContent(data.admissions, data.courses);
@@ -401,6 +409,9 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
 
     hof: hasHof && data.hallOfFame && <HallOfFame hof={data.hallOfFame} layout={variants.hof?.layout} bandClass={secCls('hof')} />,
 
+    // The strip lives under the menu, not in the band order (see the hero block).
+    records: showRecordsBand && recordsLayout !== 'STRIP' && records && <RecordsTeaser book={records} layout={recordsLayout} bandClass={secCls('records')} />,
+
     events: hasEvents && show.events && <EventsSection events={data.events} timezone={data.school.timezone} />,
 
     staff: data.staff.length > 0 && (
@@ -496,7 +507,7 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
       {/* ── NAV (style selected by the school admin) ── */}
       <SiteNav
         data={data}
-        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBirthdays, hasBlog, hasContact, hasEnquiry }}
+        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBirthdays, hasRecords, hasBlog, hasContact, hasEnquiry }}
         base={base}
         view={view}
         onAcademicsPage={onAcademicsPage}
@@ -568,6 +579,9 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
             <ConnectSection events={data.events} timezone={data.school.timezone} schoolName={schoolName} />
           )}
           {view === 'alumni' && <AlumniSection schoolName={schoolName} />}
+          {view === 'records' && records && data.records && (
+            <RecordsSection book={records} layout={data.records.pageLayout} showTopFive={data.records.showTopFive} schoolName={schoolName} onOwnPage />
+          )}
           {view === 'birthdays' && birthdays && celebrations && (
             <BirthdaysSection data={birthdays} style={celebrations.page} wishLine={celebrations.wishLine} schoolName={schoolName} onOwnPage />
           )}
@@ -601,6 +615,7 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
         {showTeaser && celebrations?.teaser === 'RIBBON' && birthdays && (
           <BirthdayTeaser style="RIBBON" data={birthdays} href="/birthdays" />
         )}
+        {showRecordsBand && recordsLayout === 'STRIP' && records && <RecordsTeaser book={records} layout="STRIP" />}
         <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
       </div>
 
@@ -626,7 +641,7 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
       {/* ── FOOTER (extracted; answers to footerConfig) ── */}
       <FooterSection
         data={data}
-        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBirthdays, hasBlog, hasContact, hasEnquiry }}
+        flags={{ hasAbout, hasAcademics, hasAdmissions, hasHof, hasGallery, hasEvents, hasAlumni, hasBirthdays, hasRecords, hasBlog, hasContact, hasEnquiry }}
         base={base}
         year={new Date().getFullYear()}
       />

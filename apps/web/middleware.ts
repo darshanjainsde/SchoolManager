@@ -67,7 +67,7 @@ function wwwRedirect(req: NextRequest): NextResponse | null {
  * an entry.
  */
 const HOST_ROUTED_EXACT = new Set([
-  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/birthdays',
+  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/birthdays', '/records',
 ]);
 /** Admin-built pages live at a frozen slug under /p/. */
 const HOST_ROUTED_PREFIX = ['/p/'];
@@ -106,7 +106,7 @@ function isInternalSiteRoute(pathname: string): boolean {
  * /app, /portal, /teacher, /staff, /library, /platform, /owner, /account.
  */
 const CACHEABLE_TENANT_EXACT = new Set([
-  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/birthdays',
+  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/birthdays', '/records',
 ]);
 const CACHEABLE_TENANT_PREFIX = ['/blog', '/p/', '/overview/'];
 /** Marketing pages on the platform apex — the same reasoning, no tenant involved. */
@@ -273,6 +273,7 @@ export const config = {
     '/admissions',
     '/gallery',
     '/birthdays',
+    '/records',
     '/contact',
     '/connect',
     '/s/:path*',

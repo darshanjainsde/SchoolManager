@@ -25,6 +25,7 @@ function site(profile: Partial<NonNullable<PublicSiteData['profile']>> = {}): Pu
     profile: { brandColorPrimary: '#123456', brandColorSecondary: '#abcdef', ...profile } as PublicSiteData['profile'],
     homepage: null,
     celebrations: null,
+  records: null,
     stats: [],
     socialLinks: [],
     gallery: [],

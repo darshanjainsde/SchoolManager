@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AGE_GROUPS, DEFAULT_BANDS, validateBands, type Band } from '@skoolos/types';
@@ -96,6 +97,16 @@ export default function SettingsTab({ base: _base }: { base: string }) {
           <p className="sk-muted">Off: a sports teacher with the Publish right may publish. Either way, a draft is never visible to students.</p>
         </CardBody>
       </Card>
+
+      {isAdmin ? (
+        <Card>
+          <CardHead><h3>On the website</h3><p>The Book of Records can show on the school site: a homepage band and a full page at /records, straight from this desk.</p></CardHead>
+          <CardBody>
+            <p className="sk-muted">Switch it on, choose the names format, the room and which lines the homepage shows in Website builder → Records. The band’s look is picked in Studio like every other band.</p>
+            <div><Link className="sk-btn" href="/app/website">Open the website builder</Link></div>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <div className="sk-sp-actions">
         {editable ? <button type="button" className="sk-btn sk-press" data-variant="primary" disabled={!!problem || save.isPending} onClick={() => save.mutate(draft)}>{save.isPending ? 'Saving…' : 'Save settings'}</button> : <Pill tone="muted">{isAdmin ? '' : 'Read-only — the Sports settings right is not on your desk.'}</Pill>}

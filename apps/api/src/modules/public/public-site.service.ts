@@ -6,6 +6,7 @@ import { PublicEventsService } from '../community';
 import { mergeSectionVariantContent, normalizeCelebrationsConfig, pickDesignConfig, photoAssetIdsOf, projectHallOfFame, readHallOfFame } from '../cms';
 import type { PublicSiteData } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { normalizeRecordsConfig } from '../cms/internal/records-config';
 
 @Injectable()
 export class PublicSiteService {
@@ -213,6 +214,12 @@ export class PublicSiteService {
             wishLine: c.wishLine,
             window: c.window,
           };
+        })(),
+        records: (() => {
+          const r = normalizeRecordsConfig(rawProfile?.recordsConfig);
+          // The site only needs to know the page exists and how it is laid out; the book itself is /public/records.
+          if (!(r.enabled && r.consentConfirmed && has('SPORTS'))) return null;
+          return { enabled: true as const, pageLayout: r.pageLayout, showTopFive: r.showTopFive };
         })(),
         stats: stats.map((s) => ({ label: s.label, value: s.value })),
         socialLinks: has('SOCIAL') ? socials.map((s) => ({ platform: s.platform, url: s.url })) : [],

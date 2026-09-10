@@ -83,6 +83,8 @@ export interface PublicSiteData {
     wishLine: string;
     window: 'TODAY' | 'WEEK' | 'MONTH';
   } | null;
+  /** The Book of Records (Sports wing): the page exists and how it is laid out; lines come from fetchPublicRecords. */
+  records: { enabled: true; pageLayout: 'SCOREBOARD' | 'REGISTER' | 'CABINET' | 'PROGRESSION'; showTopFive: boolean } | null;
   stats: { label: string; value: string }[];
   socialLinks: { platform: string; url: string }[];
   gallery: { url: string; caption: string | null }[];
@@ -280,6 +282,43 @@ export async function fetchPublicBirthdays(host: string, window?: string): Promi
     });
     if (!res.ok) return null;
     return res.json() as Promise<BirthdaysResult>;
+  } catch {
+    return null;
+  }
+}
+
+// ── The Book of Records (Sports wing) ────────────────────────────────────────
+
+export interface RecordHolder { name: string; text: string; value: number; year: number }
+export interface RecordLine {
+  key: string;
+  sportKey: string; sportName: string; groupKey: string; groupLabel: string; category: string;
+  unit: string; lowerIsBetter: boolean;
+  record: (RecordHolder & { setOn: string | null }) | null;
+  history: (RecordHolder & { untilYear: number | null })[];
+  top: (RecordHolder & { rank: number })[];
+}
+export interface RecordsBook {
+  generatedAt: string;
+  nameFormat: 'FIRST' | 'FIRST_INITIAL' | 'FULL';
+  pageLayout: 'SCOREBOARD' | 'REGISTER' | 'CABINET' | 'PROGRESSION';
+  showTopFive: boolean;
+  lines: RecordLine[];
+  /** Line keys the homepage band shows, in order. */
+  home: string[];
+}
+
+/** The book for a school host; null when the school has not switched it on (the API answers 404). */
+export async function fetchPublicRecords(host: string): Promise<RecordsBook | null> {
+  const raw = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001';
+  const base = raw.replace('localhost', '127.0.0.1');
+  try {
+    const res = await fetch(`${base}/public/records`, {
+      headers: { 'X-Forwarded-Host': host, 'X-Skoolos-Host': host },
+      next: { revalidate: 60, tags: [`site:${host}`] },
+    });
+    if (!res.ok) return null;
+    return res.json() as Promise<RecordsBook>;
   } catch {
     return null;
   }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { FeaturesModule } from '../../features';
 import { TenancyModule } from '../../tenancy';
+import { SportsBookService } from './sports-book.service';
 import { SportsCoachesService } from './sports-coaches.service';
 import { SportsDeskGuard } from './sports-desk.guard';
 import { SportsHousesService } from './sports-houses.service';
@@ -20,6 +21,8 @@ import { SportsAdminController, SportsController, SportsMeController } from './s
 @Module({
   imports: [FeaturesModule, TenancyModule],
   controllers: [SportsController, SportsAdminController, SportsMeController],
-  providers: [SportsDeskGuard, SportsSettingsService, SportsHousesService, SportsTournamentsService, SportsResultsService, SportsRecordsService, SportsCoachesService, SportsMeService],
+  providers: [SportsDeskGuard, SportsSettingsService, SportsHousesService, SportsTournamentsService, SportsResultsService, SportsRecordsService, SportsCoachesService, SportsMeService, SportsBookService],
+  // The Book of Records as the website and the builder read it (public + cms modules).
+  exports: [SportsBookService],
 })
 export class SportsModule {}

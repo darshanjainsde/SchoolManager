@@ -74,6 +74,7 @@ export function pageTable(
     gallery: { href: '/gallery', has: flags.hasGallery, label: 'Gallery' },
     alumni: { href: '/alumni', has: flags.hasAlumni, label: 'Alumni' },
     birthdays: { href: '/birthdays', has: flags.hasBirthdays, label: 'Birthdays' },
+    records: { href: '/records', has: flags.hasRecords, label: 'Records' },
     academics: { href: '/academics', has: flags.hasAcademics, label: 'Academics' },
     admissions: { href: '/admissions', has: flags.hasAdmissions, label: 'Admissions' },
     connect: { href: '/connect', has: flags.hasEvents, label: 'Connect' },
@@ -175,6 +176,8 @@ export function navModel(input: NavModelInput): NavNode[] {
     ...(flags.hasAlumni ? [{ key: 'alumni', label: 'Alumni', href: '/alumni' }] : []),
     // Birthdays: the school's own children — the same group as About and Alumni.
     ...(flags.hasBirthdays ? [{ key: 'birthdays', label: 'Birthdays', href: '/birthdays' }] : []),
+    // The Book of Records: the school's own children again, one band over from the Hall of Fame.
+    ...(flags.hasRecords ? [{ key: 'records', label: 'Records', href: '/records' }] : []),
   ];
 
   const news: NavLeaf[] = [

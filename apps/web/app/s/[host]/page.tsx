@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { fetchPublicBirthdays, fetchPublicSite } from '@/lib/public-api';
+import { fetchPublicBirthdays, fetchPublicRecords, fetchPublicSite } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';
 import { schoolMetadata } from '@/lib/school-metadata';
 
@@ -63,5 +63,7 @@ export default async function SchoolHomePage({ params }: Params) {
     data.celebrations?.enabled && data.celebrations.placement === 'TEASER_AND_PAGE'
       ? await fetchPublicBirthdays(decodeURIComponent(host), data.celebrations.window)
       : null;
-  return <PublicSite data={data} birthdays={birthdays} />;
+  // The records band needs the book; fetched only when the school shows one.
+  const records = data.records?.enabled ? await fetchPublicRecords(decodeURIComponent(host)) : null;
+  return <PublicSite data={data} birthdays={birthdays} records={records} />;
 }
