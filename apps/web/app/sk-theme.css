@@ -3432,7 +3432,7 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-ses-buttons { display: flex; gap: 4px; flex-wrap: nowrap; }
 .sk-ses-buttons .sk-chip { padding: 5px 10px; font-size: 12px; white-space: nowrap; }
 .sk-ses-goto { width: 13em; }
-.sk-ses-goto .sk-input { width: 100%; min-width: 0; }
+.sk-ses-goto .sk-input { width: 100%; min-width: 0; box-sizing: border-box; }
 .sk-ses-leave { display: grid; grid-template-columns: 1fr; gap: 4px; width: 13em; }
 .sk-ses-leave .sk-input { min-width: 0; width: 100%; }
 .sk-tbl td[data-tone="warn"] { color: var(--sk-amber-ink); font-weight: 700; }

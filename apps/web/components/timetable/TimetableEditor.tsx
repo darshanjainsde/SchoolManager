@@ -491,7 +491,7 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
               {weekRangeLabel(viewedMonday)}
               {isCurrentWeek && (
                 <span className="sk-pill" data-tone="info">
-                  This week
+                  {anchorDate ? 'First week' : 'This week'}
                 </span>
               )}
               {isPastWeek && (
@@ -513,7 +513,7 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
               onClick={() => setWeekOffset(0)}
               disabled={isCurrentWeek}
             >
-              Today
+              {anchorDate ? 'First week' : 'Today'}
             </button>
           </div>
 
