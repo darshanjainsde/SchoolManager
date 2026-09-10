@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { FeatureResolverService } from '../features';
 import { SportsBookService, type BookLine } from '../sports';
-import { formatPublicName, normalizeRecordsConfig, type RecordsSiteConfig } from '../cms/internal/records-config';
+import { formatPublicName, normalizeRecordsConfig, type RecordsSiteConfig } from '../cms';
 
 export interface PublicRecordsBook {
   generatedAt: string;

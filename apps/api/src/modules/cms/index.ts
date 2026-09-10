@@ -9,3 +9,9 @@ export {
   type CelebrationsAudience,
   type CelebrationsWindow,
 } from './internal/celebrations-config';
+export {
+  normalizeRecordsConfig,
+  formatPublicName,
+  DEFAULT_RECORDS_SITE,
+  type RecordsSiteConfig,
+} from './internal/records-config';

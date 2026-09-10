@@ -7,7 +7,7 @@ jest.mock('@skoolos/db', () => ({
 }));
 
 import { PublicRecordsService, homeKeys } from './public-records.service';
-import { DEFAULT_RECORDS_SITE } from '../cms/internal/records-config';
+import { DEFAULT_RECORDS_SITE } from '../cms';
 import type { BookLine } from '../sports';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';

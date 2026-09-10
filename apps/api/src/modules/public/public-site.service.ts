@@ -6,7 +6,7 @@ import { PublicEventsService } from '../community';
 import { mergeSectionVariantContent, normalizeCelebrationsConfig, pickDesignConfig, photoAssetIdsOf, projectHallOfFame, readHallOfFame } from '../cms';
 import type { PublicSiteData } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
-import { normalizeRecordsConfig } from '../cms/internal/records-config';
+import { normalizeRecordsConfig } from '../cms';
 
 @Injectable()
 export class PublicSiteService {
