@@ -214,6 +214,27 @@ export type ErrorCode =
   | 'ALREADY_HERE_INACTIVE'
   /** Turning the birthday wall public without the parental-consent confirmation. 400. */
   | 'CONSENT_REQUIRED'
+  // ── Sessions / year end (Active Roster, Track C) ──
+  /** A DRAFT or SCHEDULED plan already exists — finish or cancel it. 409. */
+  | 'PLAN_OPEN'
+  /** No academic year is marked current, so there is nothing to close. 400. */
+  | 'NO_CURRENT_YEAR'
+  /** The next year's name is already taken. 409. */
+  | 'YEAR_EXISTS'
+  /** The next session resolves to the closing year itself. 400. */
+  | 'SAME_YEAR'
+  /** No open (editable) plan. 404. */
+  | 'NO_PLAN'
+  /** A SCHEDULED plan cannot be edited until the schedule is cancelled. 409. */
+  | 'PLAN_LOCKED'
+  /** Two grades share an order, so promotion is ambiguous. 400. */
+  | 'GRADE_ORDER'
+  /** A PROMOTE/STAY target is not a section of the next year. 400. */
+  | 'BAD_TARGET'
+  /** The plan's version moved since the review was loaded. 409. */
+  | 'PLAN_CHANGED'
+  /** Start refused: some children in the closing classes have no decision. 400. */
+  | 'UNDECIDED_STUDENTS'
   | 'INTERNAL';
 
 export interface ApiErrorBody {

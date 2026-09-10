@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
@@ -36,8 +37,8 @@ export class ClassesController {
   // tests screens. Every mutation stays admin-only.
   @Roles('SCHOOL_ADMIN', 'TEACHER')
   @Get()
-  list() {
-    return this.classes.list(this.sid());
+  list(@Query('academicYearId', new ParseUUIDPipe({ optional: true })) academicYearId?: string) {
+    return this.classes.list(this.sid(), academicYearId);
   }
 
   @Post()

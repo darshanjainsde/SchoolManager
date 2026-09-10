@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { withTenant, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
 import { defaultPrivacy, matchClaimToRoll, toGraduationRows, type MatchScore } from './homecoming-rules';
 import type {
@@ -84,10 +84,20 @@ export class AlumniService {
    * be the reason `studentId` is unique rather than merely indexed.
    */
   async graduateBatch(schoolId: string, dto: GraduateBatchDto) {
+    return withTenant(schoolId, (tx) => this.graduateBatchIn(tx, schoolId, dto));
+  }
+
+  /**
+   * The transaction-taking half, so the Sessions "Start" (Active Roster,
+   * Track C) can graduate the passing-out classes INSIDE its own transaction —
+   * before those children are marked ALUMNI, while they still read as the
+   * active roster this filters on. Behaviour is exactly graduateBatch's.
+   */
+  async graduateBatchIn(tx: TenantTx, schoolId: string, dto: GraduateBatchDto) {
     if (dto.classSectionIds.length === 0) {
       throw new ApiError('NOTHING_TO_GRADUATE', 'Choose at least one class section.', 400);
     }
-    return withTenant(schoolId, async (tx) => {
+    {
       // schoolId in the WHERE as well as RLS: the policy is the backstop, an
       // explicit scope is the intent. Every other service here does the same.
       const sections = await tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
@@ -179,7 +189,7 @@ export class AlumniService {
          *  for you?" rather than silently messaging a parent. */
         guardianPhonesOnFile: rows.filter((r) => r.guardianPhoneForInvite).length,
       };
-    });
+    }
   }
 
   // ─── Roll Call ─────────────────────────────────────────────────────────────

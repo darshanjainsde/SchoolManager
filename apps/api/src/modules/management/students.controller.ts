@@ -70,6 +70,7 @@ export class StudentsController {
     @Query('classSectionId', new ParseUUIDPipe({ optional: true }))
     classSectionId?: string,
     @Query('status') status?: string,
+    @Query('academicYearId', new ParseUUIDPipe({ optional: true })) academicYearId?: string,
   ) {
     if (u.role !== 'SCHOOL_ADMIN') {
       if (!classSectionId) {
@@ -84,7 +85,7 @@ export class StudentsController {
       return this.students.list(this.sid(), { classSectionId, projection: 'roster', status: 'active' });
     }
     const st: StudentListStatus = status === 'left' || status === 'all' ? status : 'active';
-    return this.students.list(this.sid(), { classSectionId, projection: 'full', status: st });
+    return this.students.list(this.sid(), { classSectionId, academicYearId, projection: 'full', status: st });
   }
 
   /** "Mark as left": the record and its history stay; the child leaves every roster. */

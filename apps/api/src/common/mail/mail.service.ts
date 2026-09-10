@@ -171,6 +171,30 @@ export class MailService {
     });
   }
 
+  /**
+   * The alumni door (Active Roster, Track C): sent once to every child who
+   * passed out, when the school has the Homecoming wing. The claim link IS the
+   * credential — single use, then a 90-day device session — so there is no
+   * password in this mail and nothing to remember.
+   */
+  async sendAlumniWelcome(to: string, schoolName: string, claimUrl: string, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `Your journey at ${schoolName} is complete`, {
+      title: 'Congratulations on passing out',
+      intro: `Your time at ${schoolName} is complete, and the school would like to stay in touch. This link is your alumni sign-in: it opens your alumni page and keeps you signed in on that device for 90 days.`,
+      cta: { label: 'Open your alumni door', url: claimUrl },
+      note: 'The link works once. If it has been used or has expired, ask the school office for a new one — there is no password to remember.',
+    });
+  }
+
+  /** New session started: which class the child is in now. One per family with an address. */
+  async sendSessionStarted(to: string, schoolName: string, childName: string, className: string, sessionName: string, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `${childName} is in ${className} for ${sessionName}`, {
+      title: `New session ${sessionName}`,
+      intro: `${schoolName} has started the ${sessionName} session. ${childName} is now in ${className}.`,
+      note: 'Open the Sckools app to see the new class, timetable and diary.',
+    });
+  }
+
   // ── School notifications ────────────────────────────────
 
   async sendTestScheduled(to: string, info: TestScheduledInfo, schoolId: string | null = null): Promise<boolean> {

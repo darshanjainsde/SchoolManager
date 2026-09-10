@@ -1,4 +1,4 @@
-import { nextSessionDefaults, gradeLadder, defaultSectionMap, attendancePct, resultsPct, assignRollNumbers } from './session-maths';
+import { nextSessionDefaults, gradeLadder, defaultSectionMap, attendancePct, resultsPct, assignRollNumbers, startOfDayInZone } from './session-maths';
 
 describe('session maths', () => {
   it('next session name and dates', () => {
@@ -33,6 +33,12 @@ describe('session maths', () => {
     expect(resultsPct([{ marks: 40, maxMarks: 50 }, { marks: 25, maxMarks: 50 }])).toBe(65);
     expect(resultsPct([])).toBeNull();
     expect(resultsPct([{ marks: 0, maxMarks: 0 }])).toBeNull();
+  });
+
+  it('start of day in the school zone', () => {
+    expect(startOfDayInZone(new Date('2026-04-01T00:00:00Z'), 'Asia/Kolkata').toISOString()).toBe('2026-03-31T18:30:00.000Z');
+    expect(startOfDayInZone(new Date('2026-04-01T00:00:00Z'), 'UTC').toISOString()).toBe('2026-04-01T00:00:00.000Z');
+    expect(startOfDayInZone(new Date('2026-07-01T00:00:00Z'), 'America/New_York').toISOString()).toBe('2026-07-01T04:00:00.000Z');
   });
 
   it('roll numbers', () => {

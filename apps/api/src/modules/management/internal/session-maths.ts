@@ -80,3 +80,24 @@ export function assignRollNumbers(
   );
   return new Map(sorted.map((s, i) => [s.id, String(i + 1)]));
 }
+
+/** The zone's offset from UTC, in minutes, at one instant (DST-safe: read off Intl, never a constant). */
+function zoneOffsetMinutes(at: Date, tz: string): number {
+  const f = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const p = Object.fromEntries(f.formatToParts(at).map((x) => [x.type, x.value]));
+  const asUtc = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute), Number(p.second));
+  return Math.round((asUtc - at.getTime()) / 60_000);
+}
+
+/**
+ * The instant a calendar day begins in `tz`, taking the day from the date's
+ * UTC parts (an AcademicYear.startDate is stored as midnight UTC of that day).
+ * 2026-04-01 in Asia/Kolkata → 2026-03-31T18:30Z — the scheduled Start fires
+ * at the school's midnight, not London's.
+ */
+export function startOfDayInZone(date: Date, tz: string): Date {
+  const guess = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  return new Date(guess - zoneOffsetMinutes(new Date(guess), tz) * 60_000);
+}

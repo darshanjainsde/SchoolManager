@@ -12,6 +12,10 @@ import { ClassesService } from './classes.service';
 import { ClassesController } from './classes.controller';
 import { StudentsService } from './students.service';
 import { StudentLifecycleService } from './student-lifecycle.service';
+import { SessionsService } from './sessions.service';
+import { SessionsController } from './sessions.controller';
+import { SessionsCronController } from './sessions-cron.controller';
+import { AlumniModule } from '../alumni';
 import { StudentsController } from './students.controller';
 import { TimetableService } from './timetable.service';
 import { TimetableController } from './timetable.controller';
@@ -69,9 +73,11 @@ import { SeatingService } from './seating.service';
 import { SeatingController } from './seating.controller';
 
 @Module({
-  imports: [AuthModule, FeaturesModule, TenancyModule, PressModule, FeesModule],
-  providers: [EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService],
+  imports: [AuthModule, FeaturesModule, TenancyModule, PressModule, FeesModule, AlumniModule],
+  providers: [EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, SessionsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService],
   controllers: [
+    SessionsController,
+    SessionsCronController,
     CatalogController,
     RoomsController,
     SeatingController,

@@ -64,6 +64,8 @@ export type StudentListStatus = 'active' | 'left' | 'all';
 
 interface ListFilters {
   classSectionId?: string;
+  /** Only children seated in this academic year's sections (Sessions tab, past-year view). */
+  academicYearId?: string;
   projection?: StudentProjection;
   status?: StudentListStatus;
 }
@@ -76,7 +78,10 @@ export class StudentsService {
   ) {}
 
   async list(schoolId: string, filters: ListFilters = {}) {
-    const extra = filters.classSectionId ? { classSectionId: filters.classSectionId } : {};
+    const extra = {
+      ...(filters.classSectionId ? { classSectionId: filters.classSectionId } : {}),
+      ...(filters.academicYearId ? { classSection: { academicYearId: filters.academicYearId } } : {}),
+    };
     const where =
       filters.status === 'all'
         ? { schoolId, ...extra }

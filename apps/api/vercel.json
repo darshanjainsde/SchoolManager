@@ -29,6 +29,10 @@
     {
       "path": "/internal/cron/library-due-soon",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/internal/cron/session-start",
+      "schedule": "30 18 * * *"
     }
   ]
 }

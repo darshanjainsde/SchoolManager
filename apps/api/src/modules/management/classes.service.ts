@@ -24,22 +24,25 @@ interface RefOptions {
  */
 type ClassSectionAdminRow = ClassSectionSummary & {
   classTeacher: { firstName: string; lastName: string } | null;
+  academicYear: { id: string; name: string; isCurrent: boolean };
   _count: { students: number };
 };
 
 @Injectable()
 export class ClassesService {
-  async list(schoolId: string): Promise<ClassSectionAdminRow[]> {
+  /** Every section, or one academic year's (the Sessions tab and the year picker read the past). */
+  async list(schoolId: string, academicYearId?: string): Promise<ClassSectionAdminRow[]> {
     return withTenant(schoolId, async (tx) => {
       // The roll count is counted separately, not via `include: { _count }` —
       // see relation-counts.ts. The response shape is unchanged.
       const [sections, roll] = await Promise.all([
         tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE,
-          where: { schoolId },
+          where: { schoolId, ...(academicYearId ? { academicYearId } : {}) },
           orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
           include: {
             grade: { select: { name: true } },
             classTeacher: { select: { firstName: true, lastName: true } },
+            academicYear: { select: { id: true, name: true, isCurrent: true } },
           },
         }),
         studentCountsBySection(tx, schoolId, { activeOnly: true }),
