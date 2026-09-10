@@ -348,6 +348,31 @@ export const AGE_GROUPS = [
   { id: 'u19', label: 'Under 19', under: 19 },
 ] as const;
 
+export const DEFAULT_BANDS: Band[] = [
+  { id: 'sub', label: 'Sub-junior', stds: [1, 2, 3, 4, 5, 6] },
+  { id: 'jun', label: 'Junior', stds: [7, 8] },
+  { id: 'sen', label: 'Senior', stds: [9, 10, 11, 12] },
+];
+
+/** Bands must be 1–6, each with a slug id, a label and at least one class; no class may sit in two bands. Returns the problem, or null. */
+export function validateBands(bands: unknown): string | null {
+  if (!Array.isArray(bands) || bands.length === 0 || bands.length > 6) return 'Give between one and six bands.';
+  const ids = new Set<string>();
+  const seen = new Set<number>();
+  for (const b of bands as Partial<Band>[]) {
+    if (!b || typeof b.id !== 'string' || !/^[a-z0-9-]{1,20}$/.test(b.id) || ids.has(b.id)) return 'Each band needs a unique short id.';
+    ids.add(b.id);
+    if (typeof b.label !== 'string' || !b.label.trim() || b.label.length > 40) return 'Each band needs a name.';
+    if (!Array.isArray(b.stds) || b.stds.length === 0) return `Band "${b.label}" needs at least one class.`;
+    for (const s of b.stds) {
+      if (!Number.isInteger(s) || (s as number) < 1 || (s as number) > 12) return `Band "${b.label}" has a class outside 1–12.`;
+      if (seen.has(s as number)) return `Class ${s} is in two bands.`;
+      seen.add(s as number);
+    }
+  }
+  return null;
+}
+
 export const bandFor = (bands: Band[], std: number) => bands.find((b) => b.stds.includes(std)) ?? null;
 
 /** School Games rule: "under N" means born on or after 1 January of (meetYear − N + 1); age counts as on 31 December of the meet year. */

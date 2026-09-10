@@ -603,6 +603,7 @@ export function assertNotificationOutboxKind(
 /** The in-app notification kinds surfaced by the bell. */
 export * from './sports/catalogue';
 export * from './sports/maths';
+export * from './sports/perms';
 
 export const NOTIFICATION_KINDS = [
   'MESSAGE',

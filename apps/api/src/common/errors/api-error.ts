@@ -235,6 +235,37 @@ export type ErrorCode =
   | 'PLAN_CHANGED'
   /** Start refused: some children in the closing classes have no decision. 400. */
   | 'UNDECIDED_STUDENTS'
+  // ── Sports wing ──
+  /** Not the sports teacher (Staff.role SPORTS) nor a school admin. 403. */
+  | 'NOT_SPORTS_DESK'
+  /** The sports teacher's permission list does not include this action. 403. */
+  | 'SPORTS_PERM'
+  /** Bands overlap, are empty or malformed. 400. */
+  | 'SPORTS_BAD_BANDS'
+  | 'HOUSE_EXISTS'
+  /** Points have been awarded to the house; keep it or correct the points. 409. */
+  | 'HOUSE_IN_USE'
+  | 'HOUSE_NOT_FOUND'
+  | 'TOURNAMENT_NOT_FOUND'
+  /** The tournament is not in the state the action needs (e.g. scoring a DRAFT). 409. */
+  | 'TOURNAMENT_STATE'
+  | 'EVENT_NOT_FOUND'
+  | 'MATCH_NOT_FOUND'
+  /** Someone else saved this match first — reload and enter again. 409. */
+  | 'MATCH_CHANGED'
+  /** The winner already played the next round; that result must be cleared first. 409. */
+  | 'MATCH_LOCKED'
+  /** The scoresheet is not a legal score for this sport. 400. */
+  | 'BAD_SCORE'
+  /** Fewer than two sides in a draw, or no entrant in a heat. 400. */
+  | 'SPORTS_NEED_TWO'
+  | 'HEAT_NOT_FOUND'
+  | 'RECORD_NOT_FOUND'
+  /** The record attempt was already approved or rejected. 409. */
+  | 'ATTEMPT_DECIDED'
+  | 'UNKNOWN_SPORT'
+  /** An event needs at least one venue to be scheduled. 400. */
+  | 'NEED_VENUE'
   | 'INTERNAL';
 
 export interface ApiErrorBody {

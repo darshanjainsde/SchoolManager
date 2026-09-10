@@ -235,13 +235,13 @@ export class UpdateTeacherDto {
 // ── Staff (non-teaching) ────────────────────────────────────────────────────
 
 /**
- * Mirrors the `StaffRole` enum in schema.prisma. LIBRARIAN is the one value
- * that also decides a DOOR: a staff member with that job signs in as ordinary
+ * Mirrors the `StaffRole` enum in schema.prisma. LIBRARIAN and SPORTS are the
+ * two values that also decide a DOOR (/library, /sports): a staff member with that job signs in as ordinary
  * STAFF and lands on /library (homeForRole reads `staffRole` from /auth/me).
  * The login role stays STAFF — the job title, not the account type, is what
  * makes a librarian.
  */
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'OTHER'] as const;
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'OTHER'] as const;
 export type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 export class CreateStaffDto {
