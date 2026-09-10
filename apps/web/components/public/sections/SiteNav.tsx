@@ -254,10 +254,17 @@ function LoginLink({ data, fullWidth }: { data: PublicSiteData; fullWidth?: bool
   );
 }
 
-/** The nav's action pair — secondary Login then the primary CTA. */
-function NavActions({ data, enquireHref, ink }: { data: PublicSiteData; enquireHref: string; ink: string }) {
+/**
+ * The nav's action pair — secondary Login then the primary CTA.
+ *
+ * `className="hidden sm:flex"` on a phone bar: two buttons plus the burger
+ * left the school's NAME two letters wide ("R…"). The drawer already carries
+ * both actions full-width, so below `sm` the bar keeps only the crest, the
+ * name and the burger, and the name gets the width.
+ */
+function NavActions({ data, enquireHref, ink, className = '' }: { data: PublicSiteData; enquireHref: string; ink: string; className?: string }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className={`flex items-center gap-1.5 ${className}`}>
       <LoginLink data={data} />
       <Cta data={data} enquireHref={enquireHref} ink={ink} />
     </div>
@@ -271,6 +278,7 @@ function HamburgerButton({
   onClick,
   buttonRef,
   responsive = true,
+  className = '',
 }: {
   open: boolean;
   onClick: () => void;
@@ -278,6 +286,7 @@ function HamburgerButton({
   /** true → only below lg (breakpoint bars); false → whenever the caller shows
    * it (the priority bar shows it exactly when links overflow, at any width). */
   responsive?: boolean;
+  className?: string;
 }) {
   return (
     <button
@@ -287,7 +296,7 @@ function HamburgerButton({
       aria-label={open ? 'Close menu' : 'Open menu'}
       aria-expanded={open}
       aria-controls="ps-mobile-menu"
-      className={`ps-nav-link ${responsive ? 'lg:hidden ' : ''}inline-flex h-11 w-11 flex-none items-center justify-center rounded-lg hover:bg-black/5 transition`}
+      className={`ps-nav-link ${responsive ? 'lg:hidden ' : ''}${className ? `${className} ` : ''}inline-flex h-11 w-11 flex-none items-center justify-center rounded-lg hover:bg-black/5 transition`}
     >
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
         {open ? (
@@ -473,8 +482,12 @@ export default function SiteNav({
 
   // If the bar widens until nothing overflows, close the drawer — otherwise a
   // stale open state would keep body scroll locked behind an invisible panel.
+  // On a phone the drawer stays: it is where Login and the CTA live there,
+  // whether or not any link overflowed.
   useEffect(() => {
-    if (mobileOpen && isPriorityBar && !hasOverflow) setMobileOpen(false);
+    if (!(mobileOpen && isPriorityBar && !hasOverflow)) return;
+    const phone = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && !window.matchMedia('(min-width: 640px)').matches;
+    if (!phone) setMobileOpen(false);
   }, [mobileOpen, isPriorityBar, hasOverflow]);
 
   // Admin-picked bar colour. `onDark` flips link/name colours via ps-nav-ondark.
@@ -536,7 +549,7 @@ export default function SiteNav({
             {/* flex-none: the actions are the fixed cost of the bar. Whatever
                 width is left over belongs to the name, which truncates. */}
             <div className="flex flex-none items-center gap-1.5">
-              <NavActions data={data} enquireHref={enquireHref} ink={ink} />
+              <NavActions data={data} enquireHref={enquireHref} ink={ink} className="hidden sm:flex" />
               <HamburgerButton open={mobileOpen} onClick={() => setMobileOpen((o) => !o)} buttonRef={menuButtonRef} />
             </div>
           </div>
@@ -587,7 +600,7 @@ export default function SiteNav({
             {/* flex-none: the actions are the fixed cost of the bar. Whatever
                 width is left over belongs to the name, which truncates. */}
             <div className="flex flex-none items-center gap-1.5">
-              <NavActions data={data} enquireHref={enquireHref} ink={ink} />
+              <NavActions data={data} enquireHref={enquireHref} ink={ink} className="hidden sm:flex" />
               <HamburgerButton open={mobileOpen} onClick={() => setMobileOpen((o) => !o)} buttonRef={menuButtonRef} />
             </div>
           </div>
@@ -647,18 +660,19 @@ export default function SiteNav({
             <NavItems nodes={primaryNodes} />
           </nav>
           <div className="flex items-center gap-1.5 flex-none">
-            <NavActions data={data} enquireHref={enquireHref} ink={ink} />
-            {hasOverflow && (
-              <HamburgerButton
-                open={mobileOpen}
-                onClick={() => setMobileOpen((o) => !o)}
-                buttonRef={menuButtonRef}
-                responsive={false}
-              />
-            )}
+            <NavActions data={data} enquireHref={enquireHref} ink={ink} className="hidden sm:flex" />
+            {/* The burger shows when links overflow (any width) — and on a phone
+                regardless, because the actions live in the drawer there. */}
+            <HamburgerButton
+              open={mobileOpen}
+              onClick={() => setMobileOpen((o) => !o)}
+              buttonRef={menuButtonRef}
+              responsive={false}
+              className={hasOverflow ? '' : 'sm:hidden'}
+            />
           </div>
         </div>
-        {mobileOpen && hasOverflow && (
+        {mobileOpen && (
           <MobileMenu
             data={data}
             nodes={overflowNodes}

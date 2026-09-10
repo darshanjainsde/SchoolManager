@@ -226,3 +226,19 @@ describe('the sign-in control stays visible whatever the school picks', () => {
     }
   });
 });
+
+describe('on a phone the bar keeps the name, and the actions live in the drawer', () => {
+  it.each(['CLASSIC', 'CENTER', 'PILL'] as const)('%s: Login and the CTA are hidden below sm in the bar, and both sit full-width in the opened drawer', async (navStyle) => {
+    const user = userEvent.setup({ delay: null });
+    renderNav(navStyle);
+    // The bar's copy of the pair is hidden on phones (Tailwind: hidden until sm).
+    // CENTER also has a desktop copy inside its `hidden lg:grid` nav, so look
+    // for the one whose hiding wrapper is the phone rule.
+    const barCopies = screen.getAllByRole('link', { name: 'Login' }).filter((l) => l.closest('.hidden')?.className.includes('sm:flex'));
+    expect(barCopies).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const logins = screen.getAllByRole('link', { name: 'Login' });
+    expect(logins.length).toBeGreaterThanOrEqual(2);
+    expect(logins[logins.length - 1].className).toContain('w-full');
+  });
+});
