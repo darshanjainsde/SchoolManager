@@ -43,7 +43,8 @@ Class pickers offer **only the teacher's own classes** (commit `d4a6292`).
 ## 3. Student portal — `/portal` (tenant host, `STUDENT`)
 
 `Home` · `Timetable` · `Attendance` · `Results` · `Announcements` · `Birthdays` (only while the school's wall
-audience is FAMILIES/BOTH and the section is on — `GET /me/birthdays` 404s otherwise) · `Profile`.
+audience is FAMILIES/BOTH and the section is on — the nav probes `GET /me/birthdays` and hides the entry on
+404) · `Profile`.
 
 Used by both student and guardian on one shared login — keep copy role-neutral.
 
@@ -93,7 +94,11 @@ Homepage sections are individually toggleable (`showAdmissions`, `showGallery`, 
 
 **Birthdays** (`public-birthdays.service.ts`): `GET /public/birthdays` answers only when `showBirthdays` is on AND
 the configured audience allows the public host (PUBLIC/BOTH); the portal's `GET /me/birthdays` needs
-FAMILIES/BOTH. Rows carry **day and month only** — never a year, an age, a date string or a student id
+FAMILIES/BOTH. `?window=` may NARROW the configured window (TODAY ⊂ WEEK ⊂ MONTH), never widen it. Without
+`MANAGEMENT` a STUDENTS source is served as the typed list, and the API refuses to save `source: STUDENTS`
+(400). The public projection carries `celebrations: null` when the wall is not public. Caches: the API answers
+`max-age=60, s-maxage=60, stale-while-revalidate=<to midnight>`; the `/birthdays` page gets `s-maxage=60,
+must-revalidate` at the edge (no stale window), so a hidden child is gone within a minute. Rows carry **day and month only** — never a year, an age, a date string or a student id
 (`key` is a hash). Only `ACTIVE` students with a `dob` and `showOnWebsite`; a photo rides only on
 `photoConsent` AND `showPhotos`, everyone else gets an initials coin. "Today" is the school's
 `timezone`; 29 Feb shows on 28 Feb in a non-leap year. Homepage teaser (CAKE_BADGE / RIBBON) only when

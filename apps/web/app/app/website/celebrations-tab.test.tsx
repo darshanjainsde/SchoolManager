@@ -132,6 +132,21 @@ describe('Celebrations tab', () => {
     );
   });
 
+  it('refuses a day that does not exist in its month, and re-picking the saved chip is not a change', async () => {
+    mockApi({ features: [], config: { ...DEFAULTS, source: 'MANUAL', manual: [{ name: 'Zoya', day: 31, month: 4, classLabel: null }] } });
+    const user = userEvent.setup({ delay: null });
+    mount();
+    await screen.findByRole('heading', { name: 'Your list' });
+    await user.click(screen.getByRole('button', { name: 'This week' }));
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'This month' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('real day for its month');
+    await user.clear(screen.getByLabelText('Day 1'));
+    await user.type(screen.getByLabelText('Day 1'), '30');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
   it('says when the homepage section is off, and previews the wish line with the school as a token, not a guess', async () => {
     mockApi({ showBirthdays: false });
     mount();

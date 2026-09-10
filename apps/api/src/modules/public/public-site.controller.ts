@@ -37,7 +37,10 @@ export class PublicSiteController {
     const ctx = this.tenant.get();
     if (!ctx || ctx.kind !== 'tenant') throw new NotFoundException('Not found');
     const r = await this.birthdaysSvc.forAudience(ctx.schoolId, 'PUBLIC', window);
-    res.setHeader('Cache-Control', `public, max-age=${r.maxAge}`);
+    // A minute in any shared cache, then serve stale while refreshing until the
+    // school's midnight: a child the office just hid is gone within the minute
+    // the console promises, and the wall still never re-renders for every visit.
+    res.setHeader('Cache-Control', `public, max-age=60, s-maxage=60, stale-while-revalidate=${r.maxAge}`);
     return r;
   }
 }

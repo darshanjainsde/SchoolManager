@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { FeatureResolverService } from '../features';
 import { createHash } from 'node:crypto';
 import { withTenant } from '@skoolos/db';
 import { normalizeCelebrationsConfig, type CelebrationsConfig } from '../cms';
@@ -54,8 +55,13 @@ function hash(s: string): string {
  * PUBLIC/BOTH, a signed-in family gets FAMILIES/BOTH. Photos ride only on a
  * per-child consent (D4).
  */
+/** TODAY ⊂ WEEK ⊂ MONTH: a caller may ask for less than the office configured, never more. */
+const WINDOW_RANK: Record<BirthdayWindow, number> = { TODAY: 0, WEEK: 1, MONTH: 2 };
+
 @Injectable()
 export class PublicBirthdaysService {
+  constructor(private readonly features: FeatureResolverService) {}
+
   async forAudience(
     schoolId: string,
     audience: 'PUBLIC' | 'FAMILIES',
@@ -72,11 +78,13 @@ export class PublicBirthdaysService {
       const cfg = normalizeCelebrationsConfig(profile?.celebrationsConfig);
       if (!(cfg.audience === 'BOTH' || cfg.audience === audience)) throw new NotFoundException('Not found');
 
-      const window = isWindow(windowParam) ? windowParam : cfg.window;
+      const window = isWindow(windowParam) && WINDOW_RANK[windowParam] <= WINDOW_RANK[cfg.window] ? windowParam : cfg.window;
       const today = todayInZone(school.timezone, now);
       const { start, end } = windowBounds(window, today);
 
-      const rows = cfg.source === 'MANUAL' ? manualRows(cfg, start, end) : await studentRows(tx, schoolId, cfg, start, end, today.y);
+      // D5: pulling from records needs the Management plan; without it the wall is the typed list.
+      const source = cfg.source === 'STUDENTS' && !(await this.features.getFeatures(schoolId)).has('MANAGEMENT') ? 'MANUAL' : cfg.source;
+      const rows = source === 'MANUAL' ? manualRows(cfg, start, end, today.y) : await studentRows(tx, schoolId, cfg, start, end, today.y);
 
       const isToday = (r: BirthdayRow) => r.month === today.m && r.day === today.d;
       const sorted = rows.sort(
@@ -100,17 +108,22 @@ function isWindow(v: string | undefined): v is BirthdayWindow {
   return v === 'TODAY' || v === 'WEEK' || v === 'MONTH';
 }
 
-function manualRows(cfg: CelebrationsConfig, start: { y: number; m: number; d: number }, end: { y: number; m: number; d: number }): BirthdayRow[] {
+function manualRows(cfg: CelebrationsConfig, start: { y: number; m: number; d: number }, end: { y: number; m: number; d: number }, year: number): BirthdayRow[] {
   return cfg.manual
-    .filter((m) => inWindow(new Date(Date.UTC(2000, m.month - 1, m.day)), start, end))
-    .map((m) => ({
-      day: m.day,
-      month: m.month,
-      name: m.name,
-      classLabel: cfg.showClass ? m.classLabel : null,
-      photoUrl: null,
-      key: hash(`${m.name}|${m.month}|${m.day}`),
-    }));
+    .map((m, i) => ({ m, i, dob: new Date(Date.UTC(2000, m.month - 1, m.day)) }))
+    .filter(({ dob }) => inWindow(dob, start, end))
+    .map(({ m, i, dob }) => {
+      // 29 Feb is celebrated on 28 Feb in a non-leap year, same as a child on record.
+      const eff = effectiveDayMonth(dob, year);
+      return {
+        day: eff.d,
+        month: eff.m,
+        name: m.name,
+        classLabel: cfg.showClass ? m.classLabel : null,
+        photoUrl: null,
+        key: hash(`${i}|${m.name}|${m.month}|${m.day}`),
+      };
+    });
 }
 
 type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
@@ -126,6 +139,8 @@ async function studentRows(
   const students = await tx.student.findMany({
     take: LIST_CEILING.ROSTER,
     where: activeStudentsWhere(schoolId, { showOnWebsite: true, dob: { not: null } }),
+    // A stable order, so the ceiling (if ever hit) drops the same children every time.
+    orderBy: { id: 'asc' },
     select: {
       id: true,
       firstName: true,

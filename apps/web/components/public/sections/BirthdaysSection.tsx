@@ -172,11 +172,14 @@ function MonthPlanner({ data, nextLine }: { data: BirthdaysResult; nextLine: str
               {w.toUpperCase()}
             </div>
           ))}
-          {cells.map((day, i) =>
+          {/* Weeks are ARIA rows (display: contents keeps the CSS grid intact). */}
+          {Array.from({ length: Math.ceil(cells.length / 7) }, (_, w) => cells.slice(w * 7, w * 7 + 7)).map((week, w) => (
+          <div key={`w${w}`} role="row" style={{ display: 'contents' }}>
+          {week.map((day, i) =>
             day === null ? (
-              <div key={`b${i}`} className="ps-bd-day ps-bd-blank" aria-hidden="true" />
+              <div key={`b${w}-${i}`} className="ps-bd-day ps-bd-blank" aria-hidden="true" />
             ) : (
-              <div key={day} className={`ps-bd-day${day === d ? ' ps-bd-today-cell' : ''}`} role="gridcell" aria-label={`${day} ${MONTHS[m - 1]}${byDay.has(day) ? `, ${byDay.get(day)!.length} birthdays` : ''}`}>
+              <div key={day} className={`ps-bd-day${day === d ? ' ps-bd-today-cell' : ''}`} role="gridcell" aria-label={`${day} ${MONTHS[m - 1]}${byDay.has(day) ? `, ${byDay.get(day)!.length} ${byDay.get(day)!.length === 1 ? 'birthday' : 'birthdays'}` : ''}`}>
                 <span className="ps-bd-mono">{day}</span>
                 {byDay.has(day) && (
                   <span className="ps-bd-dots">
@@ -188,6 +191,8 @@ function MonthPlanner({ data, nextLine }: { data: BirthdaysResult; nextLine: str
               </div>
             ),
           )}
+          </div>
+          ))}
         </div>
         <div className="ps-bd-list">
           <h3 className="ps-bd-mono ps-bd-list-h">Today · {DOW[(new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7]} {d}</h3>

@@ -45,8 +45,31 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   // Feature-gated entries (Library) hide once features load and say the plan
   // lacks them — and show until then, so a slow fetch never blanks a tab the
   // school does have.
+  // Probed entries (Birthdays) show only once their endpoint has answered
+  // 200: the wall is a per-school switch, so a link to a page that says
+  // "not switched on" is noise, not navigation.
+  const probes = NAV_ITEMS.filter((i) => i.probe).map((i) => i.probe!);
+  const probed = useQuery({
+    queryKey: ['portal-nav-probes', probes],
+    enabled: status === 'authed' && audience === 'school' && !!host && probes.length > 0,
+    queryFn: async () => {
+      const ok = new Set<string>();
+      for (const p of probes) {
+        try {
+          await probeApi.get(p);
+          ok.add(p);
+        } catch {
+          /* 404: not switched on for this school */
+        }
+      }
+      return [...ok];
+    },
+    staleTime: 5 * 60_000,
+  });
   const navItems = NAV_ITEMS.filter(
-    (i) => !i.requiredFeature || !me.data?.features || me.data.features.includes(i.requiredFeature),
+    (i) =>
+      (!i.requiredFeature || !me.data?.features || me.data.features.includes(i.requiredFeature)) &&
+      (!i.probe || (probed.data ?? []).includes(i.probe)),
   );
 
   useEffect(() => {

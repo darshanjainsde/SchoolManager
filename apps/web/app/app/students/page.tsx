@@ -897,6 +897,9 @@ export default function StudentsPage() {
       {editId && editingStudent && (
         <div style={{ marginBottom: 18 }}>
           <StudentForm
+            // Keyed on the child: the form seeds its fields once, so without this
+            // clicking Edit on a second row kept showing the first child's values.
+            key={editId}
             title="Edit student"
             initial={{
               firstName: editingStudent.firstName,

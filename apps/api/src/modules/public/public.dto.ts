@@ -132,7 +132,7 @@ export interface PublicSiteData {
     showClass: boolean;
     wishLine: string;
     window: 'TODAY' | 'WEEK' | 'MONTH';
-  };
+  } | null;
   stats: { label: string; value: string }[];
   socialLinks: { platform: string; url: string }[];
   gallery: { url: string; caption: string | null }[];

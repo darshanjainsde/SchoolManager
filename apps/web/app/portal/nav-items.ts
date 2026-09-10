@@ -22,7 +22,8 @@ import {
  * reason; the student portal simply had not needed it until now.
  *
  * `requiredFeature` hides an entry when /auth/me says the school's plan
- * lacks the feature.
+ * lacks the feature. `probe` hides it unless that endpoint answers 200 —
+ * the birthday wall is a per-school switch, not a plan feature.
  *
  * Hidden, never disabled — matching how /app/layout.tsx already treats a
  * feature a school does not have.
@@ -33,6 +34,7 @@ export const NAV_ITEMS: {
   icon: typeof LayoutDashboard;
   /** Hidden when `/auth/me` reports the school's plan lacks this feature. */
   requiredFeature?: string;
+  probe?: string;
 }[] = [
   { href: '/portal', label: 'Home', icon: LayoutDashboard },
   { href: '/portal/timetable', label: 'Timetable', icon: CalendarDays },
@@ -44,6 +46,6 @@ export const NAV_ITEMS: {
   { href: '/portal/messages', label: 'Messages', icon: MessageSquare },
   { href: '/portal/library', label: 'Library', icon: Library, requiredFeature: 'LIBRARY' },
   { href: '/portal/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' },
-  { href: '/portal/birthdays', label: 'Birthdays', icon: Cake },
+  { href: '/portal/birthdays', label: 'Birthdays', icon: Cake, probe: '/me/birthdays' },
   { href: '/portal/profile', label: 'Profile', icon: User },
 ];

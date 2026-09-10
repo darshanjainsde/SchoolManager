@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ExternalLink, Plus, Trash2 } from 'lucide-react';
@@ -36,6 +36,11 @@ import {
  */
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Mirrors the API's manualEntry(): 29 Feb is allowed, 31 Apr is not. */
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+function validManual(m: ManualCelebration): boolean {
+  return !!m.name.trim() && Number.isInteger(m.month) && m.month >= 1 && m.month <= 12 && Number.isInteger(m.day) && m.day >= 1 && m.day <= DAYS_IN_MONTH[m.month - 1];
+}
 const WISH_MAX = 160;
 const MANUAL_MAX = 500;
 
@@ -252,7 +257,8 @@ export default function CelebrationsTab({ onGoToHomepage }: { onGoToHomepage: ()
   const [draft, setDraft] = useState<CelebrationsConfig | null>(null);
   const saved = cfgQuery.data;
   const config = draft ?? saved;
-  const dirty = draft !== null;
+  // Dirty means DIFFERENT from what is saved — re-picking the chip you already had is not a change.
+  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(saved);
 
   const save = useMutation({
     mutationFn: (next: CelebrationsConfig) => api.put<CelebrationsConfig>('/site/celebrations', next),
@@ -267,11 +273,24 @@ export default function CelebrationsTab({ onGoToHomepage }: { onGoToHomepage: ()
     },
   });
 
+  // Optimistic: the switch moves the moment it is pressed; a refusal snaps it back.
+  const previewKey = ['site-celebrations-preview', host];
   const flip = useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: { showOnWebsite?: boolean; photoConsent?: boolean } }) =>
       api.put(`/manage/students/${id}`, patch),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['site-celebrations-preview', host] }),
-    onError: (err: Error) => toast.error(`Could not update the student: ${err.message}`),
+    onMutate: async ({ id, patch }) => {
+      await queryClient.cancelQueries({ queryKey: previewKey });
+      const before = queryClient.getQueryData<Preview>(previewKey);
+      if (before) {
+        queryClient.setQueryData<Preview>(previewKey, { ...before, week: before.week.map((r) => (r.studentId === id ? { ...r, ...patch } : r)) });
+      }
+      return { before };
+    },
+    onError: (err: Error, _vars, ctx) => {
+      if (ctx?.before) queryClient.setQueryData(previewKey, ctx.before);
+      toast.error(`Could not update the student: ${err.message}`);
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: previewKey }),
   });
 
   if (cfgQuery.isError) {
@@ -294,8 +313,8 @@ export default function CelebrationsTab({ onGoToHomepage }: { onGoToHomepage: ()
   const problems: string[] = [];
   if (wantsPublic && !config.consentConfirmed) problems.push('Tick the consent box before birthdays can go on the public website.');
   if (config.wishLine.length > WISH_MAX) problems.push(`The wish line is ${config.wishLine.length - WISH_MAX} characters too long.`);
-  if (source === 'MANUAL' && config.manual.some((m) => !m.name.trim() || m.day < 1 || m.day > 31 || m.month < 1 || m.month > 12)) {
-    problems.push('Every name on your list needs a name, a day and a month.');
+  if (source === 'MANUAL' && config.manual.some((m) => !validManual(m))) {
+    problems.push('Every name on your list needs a name and a real day for its month.');
   }
 
   const preview = previewQuery.data;
@@ -475,7 +494,7 @@ export default function CelebrationsTab({ onGoToHomepage }: { onGoToHomepage: ()
                         <Switch
                           checked={r.photoConsent}
                           label={`Allow ${r.name}'s photo on the wall`}
-                          disabled={flip.isPending}
+                          disabled={flip.isPending && flip.variables?.id === r.studentId}
                           onChange={(v) => flip.mutate({ id: r.studentId, patch: { photoConsent: v } })}
                         />
                       </div>
@@ -484,7 +503,7 @@ export default function CelebrationsTab({ onGoToHomepage }: { onGoToHomepage: ()
                         <Switch
                           checked={r.showOnWebsite}
                           label={`Show ${r.name} on the wall`}
-                          disabled={flip.isPending}
+                          disabled={flip.isPending && flip.variables?.id === r.studentId}
                           onChange={(v) => flip.mutate({ id: r.studentId, patch: { showOnWebsite: v } })}
                         />
                       </div>
@@ -514,7 +533,16 @@ export default function CelebrationsTab({ onGoToHomepage }: { onGoToHomepage: ()
 
 /** The typed list: name, day, month, class. No year — it is never shown, so it is never asked. */
 function ManualList({ rows, onChange }: { rows: ManualCelebration[]; onChange: (rows: ManualCelebration[]) => void }) {
+  // Keys that follow a row through adds and removes (index keys move focus to
+  // the wrong child the moment a row above is deleted).
+  const keys = useRef<string[]>([]);
+  while (keys.current.length < rows.length) keys.current.push(`m${keys.current.length}-${Math.random().toString(36).slice(2, 8)}`);
+  keys.current.length = rows.length;
   const edit = (i: number, patch: Partial<ManualCelebration>) => onChange(rows.map((r, ri) => (ri === i ? { ...r, ...patch } : r)));
+  const remove = (i: number) => {
+    keys.current.splice(i, 1);
+    onChange(rows.filter((_, ri) => ri !== i));
+  };
   const add = () => {
     const now = new Date();
     onChange([...rows, { name: '', day: now.getDate(), month: now.getMonth() + 1, classLabel: null }]);
@@ -532,7 +560,7 @@ function ManualList({ rows, onChange }: { rows: ManualCelebration[]; onChange: (
         {rows.length === 0 && <p className="sk-muted">Nobody yet — add the first name below.</p>}
         <div>
           {rows.map((r, i) => (
-            <div className="sk-cel-mrow" key={i}>
+            <div className="sk-cel-mrow" key={keys.current[i]}>
               <input className="sk-input name" aria-label={`Name ${i + 1}`} value={r.name} placeholder="Aarav M." onChange={(e) => edit(i, { name: e.target.value })} />
               <input
                 className="sk-input day"
@@ -551,7 +579,7 @@ function ManualList({ rows, onChange }: { rows: ManualCelebration[]; onChange: (
                 ))}
               </select>
               <input className="sk-input cls" aria-label={`Class ${i + 1}`} value={r.classLabel ?? ''} placeholder="Class" onChange={(e) => edit(i, { classLabel: e.target.value || null })} />
-              <button type="button" className="sk-btn sk-press" data-icon aria-label={`Remove ${r.name || `row ${i + 1}`}`} onClick={() => onChange(rows.filter((_, ri) => ri !== i))}>
+              <button type="button" className="sk-btn sk-press" data-icon aria-label={`Remove ${r.name || `row ${i + 1}`}`} onClick={() => remove(i)}>
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>

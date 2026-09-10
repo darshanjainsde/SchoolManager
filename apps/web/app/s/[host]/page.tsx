@@ -61,7 +61,7 @@ export default async function SchoolHomePage({ params }: Params) {
   // shows one, so a school with Birthdays off costs nothing extra.
   const birthdays =
     data.celebrations?.enabled && data.celebrations.placement === 'TEASER_AND_PAGE'
-      ? await fetchPublicBirthdays(decodeURIComponent(host), 'WEEK')
+      ? await fetchPublicBirthdays(decodeURIComponent(host), data.celebrations.window)
       : null;
   return <PublicSite data={data} birthdays={birthdays} />;
 }

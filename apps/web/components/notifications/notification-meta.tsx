@@ -9,6 +9,7 @@ import {
   Megaphone,
   MessageSquare,
   NotebookPen,
+  Sparkles,
   TrendingDown,
   type LucideIcon,
 } from 'lucide-react';
@@ -29,6 +30,8 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   ATTENDANCE: TrendingDown,
   LIBRARY: Library,
   RESULTS_DUE: GraduationCap,
+  // Year-end: "Aarav is in 6 A for 2026-27" / a teacher's new classes.
+  SESSION: Sparkles,
 };
 
 /** Fallback for a kind the client doesn't know yet (server added one later). */
@@ -74,6 +77,9 @@ export function routeForNotification(
       // only thing the librarian is asking them to act on.
       case 'LIBRARY':
         return '/teacher/library';
+      // The new session's classes and timetable are what Today shows.
+      case 'SESSION':
+        return '/teacher';
       default:
         return null;
     }
@@ -97,6 +103,9 @@ export function routeForNotification(
       return '/portal/attendance';
     case 'LIBRARY':
       return '/portal/library';
+    // The new class is on the home screen.
+    case 'SESSION':
+      return '/portal';
     // A student has no requests screen — the decision is a teacher-side route.
     case 'REQUEST_DECISION':
       return null;

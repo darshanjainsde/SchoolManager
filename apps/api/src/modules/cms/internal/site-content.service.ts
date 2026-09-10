@@ -5,7 +5,8 @@ import { sanitizeCustomCssMap, sanitizeHtmlBlock } from './custom-code';
 import { normalizeCelebrationsConfig, type CelebrationsConfig } from './celebrations-config';
 import { activeStudentsWhere } from '../../../common/roster/active-students';
 import { ApiError } from '../../../common/errors/api-error';
-import { addDays, inWindow, todayInZone } from '../../../common/dates/birthdays';
+import { addDays, effectiveDayMonth, inWindow, todayInZone } from '../../../common/dates/birthdays';
+import { FeatureResolverService } from '../../features';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 import { assertTenantOwned } from '../../../common/tenancy/assert-tenant-owned';
 
@@ -21,6 +22,8 @@ const PROFILE_JSON_KEYS = [
 
 @Injectable()
 export class SiteContentService {
+  constructor(private readonly features: FeatureResolverService) {}
+
   async getContent(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
       const [profile, homepage, stats, socialLinks] = await Promise.all([
@@ -132,6 +135,10 @@ export class SiteContentService {
    */
   async updateCelebrations(schoolId: string, dto: UpdateCelebrationsDto): Promise<CelebrationsConfig> {
     const current = await this.getCelebrations(schoolId);
+    // D5: the records source is a Management-plan feature; other tiers keep a typed list.
+    if (dto.source === 'STUDENTS' && !(await this.features.getFeatures(schoolId)).has('MANAGEMENT')) {
+      throw new ApiError('VALIDATION', 'Pulling birthdays from student records needs the Management plan', 400, 'source');
+    }
     const wantsPublic = dto.audience === 'PUBLIC' || dto.audience === 'BOTH';
     const consent = dto.consentConfirmed ?? current.consentConfirmed;
     if (wantsPublic && !consent) {
@@ -182,8 +189,8 @@ export class SiteContentService {
           studentId: s.id,
           name: `${s.firstName} ${s.lastName}`.trim(),
           classLabel: s.classSection ? `${s.classSection.grade.name} ${s.classSection.name}` : null,
-          day: s.dob!.getUTCDate(),
-          month: s.dob!.getUTCMonth() + 1,
+          day: effectiveDayMonth(s.dob!, today.y).d,
+          month: effectiveDayMonth(s.dob!, today.y).m,
           showOnWebsite: s.showOnWebsite,
           photoConsent: s.photoConsent,
           hasPhoto: !!s.photoAssetId,

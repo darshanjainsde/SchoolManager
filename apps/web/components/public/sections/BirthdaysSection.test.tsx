@@ -40,8 +40,9 @@ describe('BirthdaysSection — the wall in three rooms', () => {
 
   it('the planner outlines today and puts a dot on each birthday', () => {
     render(<BirthdaysSection data={data} style="MONTH_PLANNER" wishLine="x" schoolName="Raffles" onOwnPage />);
-    expect(screen.getByRole('gridcell', { name: '9 Sep, 1 birthdays' })).toHaveClass('ps-bd-today-cell');
-    expect(screen.getByRole('gridcell', { name: '11 Sep, 1 birthdays' })).toBeInTheDocument();
+    expect(screen.getByRole('gridcell', { name: '9 Sep, 1 birthday' })).toHaveClass('ps-bd-today-cell');
+    expect(screen.getByRole('gridcell', { name: '11 Sep, 1 birthday' })).toBeInTheDocument();
+    expect(screen.getAllByRole('row').length).toBeGreaterThanOrEqual(5);
     expect(screen.getByText('September 2026')).toBeInTheDocument();
   });
 

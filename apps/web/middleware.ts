@@ -233,7 +233,12 @@ export function middleware(req: NextRequest) {
   // including while the refresh happens. GET only: a POST must never be
   // answered from a cache.
   if (req.method === 'GET' && cacheableFor(pathname, bareHost)) {
-    res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=600');
+    // The birthday wall gets no stale window: a child the office just hid
+    // must be gone within the minute the console promises, not ten.
+    res.headers.set(
+      'Cache-Control',
+      pathname === '/birthdays' ? 'public, s-maxage=60, must-revalidate' : 'public, s-maxage=60, stale-while-revalidate=600',
+    );
   }
   return res;
 }

@@ -199,8 +199,11 @@ export class PublicSiteService {
           : null,
         celebrations: (() => {
           const c = normalizeCelebrationsConfig(rawProfile?.celebrationsConfig);
+          const enabled = !!homepage?.showBirthdays && (c.audience === 'PUBLIC' || c.audience === 'BOTH');
+          // Nothing about a wall that is not public leaves the school.
+          if (!enabled) return null;
           return {
-            enabled: !!homepage?.showBirthdays && (c.audience === 'PUBLIC' || c.audience === 'BOTH'),
+            enabled,
             placement: c.placement,
             audience: c.audience,
             teaser: c.teaser,
