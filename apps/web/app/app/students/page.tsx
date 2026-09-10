@@ -44,6 +44,14 @@ interface SchoolClass {
   id: string;
   name: string;
   grade: { name: string };
+  /** Which session the class belongs to (Sessions, Track C). Older rows may lack it. */
+  academicYear?: { id: string; name: string; isCurrent: boolean };
+}
+
+interface SessionYear {
+  id: string;
+  name: string;
+  isCurrent: boolean;
 }
 
 interface Student {
@@ -268,9 +276,11 @@ interface StudentFormProps {
   onCancel: () => void;
   /** The website-birthday switches: only once a student exists (create has no such fields). */
   websiteOptions?: boolean;
+  /** The sessions a child can be admitted into (the current one, and the next while a plan is open). */
+  years?: SessionYear[];
 }
 
-function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel, websiteOptions = false }: StudentFormProps) {
+function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel, websiteOptions = false, years }: StudentFormProps) {
   const [firstName, setFirstName] = useState(initial.firstName ?? '');
   const [lastName, setLastName] = useState(initial.lastName ?? '');
   const [admissionNo, setAdmissionNo] = useState(initial.admissionNo ?? '');
@@ -282,6 +292,12 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel,
   const [dob, setDob] = useState(initial.dob ?? '');
   const [showOnWebsite, setShowOnWebsite] = useState(initial.showOnWebsite ?? true);
   const [photoConsent, setPhotoConsent] = useState(initial.photoConsent ?? false);
+  // Session: the current year unless the child is being admitted for the next one.
+  const currentYear = years?.find((y) => y.isCurrent) ?? null;
+  const initialYear = initial.classSectionId ? (classes.find((c) => c.id === initial.classSectionId)?.academicYear?.id ?? currentYear?.id) : currentYear?.id;
+  const [yearId, setYearId] = useState(initialYear ?? '');
+  const nextYear = years?.find((y) => !y.isCurrent) ?? null;
+  const classesForYear = years && yearId ? classes.filter((c) => !c.academicYear || c.academicYear.id === yearId) : classes;
 
   const canSave = firstName.trim() && lastName.trim() && admissionNo.trim();
 
@@ -291,6 +307,35 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel,
         <h3>{title}</h3>
       </div>
       <div className="sk-card-b">
+        {years && years.length > 1 && (
+          <>
+            {nextYear && currentYear && yearId === currentYear.id && (
+              <div className="sk-notice">
+                <p className="nt">Admitting for {nextYear.name}?</p>
+                <p className="nd">Switch the session below so the child lands in a {nextYear.name} class and is not moved again when the year turns.</p>
+              </div>
+            )}
+            <Field label="Session" htmlFor="sf-year">
+              <select
+                id="sf-year"
+                style={fieldStyle}
+                onFocus={ringFocus}
+                onBlur={ringBlur}
+                value={yearId}
+                onChange={(e) => {
+                  setYearId(e.target.value);
+                  setClassSectionId('');
+                }}
+              >
+                {years.map((y) => (
+                  <option key={y.id} value={y.id}>
+                    {y.name}{y.isCurrent ? ' (current)' : ' (next)'}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Field label="First name" htmlFor="sf-first">
             <input
@@ -352,7 +397,7 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel,
             onChange={(e) => setClassSectionId(e.target.value)}
           >
             <option value="">— Unassigned —</option>
-            {classes.map((c) => (
+            {classesForYear.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.grade.name} — {c.name}
               </option>
@@ -524,6 +569,7 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState('');
+  const [showPast, setShowPast] = useState(false);
   const [search, setSearch] = useState('');
   // Id of the student added in this session, so their row can be seen landing
   // in the register rather than just being there on the next render.
@@ -557,11 +603,28 @@ export default function StudentsPage() {
     enabled: !!host,
   });
 
+  // Sessions (Track C): which years a child can be admitted into, and which are past.
+  const sessionsQuery = useQuery({
+    queryKey: ['sessions', host],
+    queryFn: () => api.get<{ years?: SessionYear[]; plan?: { toYearId: string } | null }>('/manage/sessions'),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
+  });
+  const years = sessionsQuery.data?.years ?? [];
+  const currentYear = years.find((y) => y.isCurrent) ?? null;
+  const openYears = years.filter((y) => y.isCurrent || sessionsQuery.data?.plan?.toYearId === y.id);
+  const openYearIds = new Set(openYears.map((y) => y.id));
+  const hasPastYears = years.some((y) => !openYearIds.has(y.id));
+  const classesShown = (classesQuery.data ?? []).filter((c) => showPast || !c.academicYear || openYearIds.has(c.academicYear.id));
+
   const studentsQuery = useQuery({
-    queryKey: ['mng-students', classFilter, statusTab],
+    queryKey: ['mng-students', classFilter, statusTab, showPast ? 'past' : (currentYear?.id ?? 'all')],
     queryFn: () => {
       const params = new URLSearchParams({ status: statusTab });
       if (classFilter) params.set('classSectionId', classFilter);
+      // Past sessions stay out of the default list — the register of the year that is running.
+      else if (!showPast && statusTab === 'active' && currentYear) params.set('academicYearId', currentYear.id);
       return api.get<Student[]>(`/manage/students?${params.toString()}`);
     },
     staleTime: 30_000,
@@ -886,6 +949,7 @@ export default function StudentsPage() {
           <StudentForm
             title="Add student"
             classes={classesQuery.data ?? []}
+            years={openYears.length > 1 ? openYears : undefined}
             onSave={(data) => addMutation.mutate(data)}
             isSaving={addMutation.isPending}
             onCancel={() => setShowAdd(false)}
@@ -944,12 +1008,24 @@ export default function StudentsPage() {
           aria-label="Filter by class"
         >
           <option value="">All classes</option>
-          {(classesQuery.data ?? []).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.grade.name} — {c.name}
-            </option>
+          {Array.from(new Map(classesShown.map((c) => [c.academicYear?.id ?? '', c.academicYear?.name ?? ''])).entries()).map(([yid, yname]) => (
+            <optgroup key={yid || 'none'} label={yname || 'Classes'}>
+              {classesShown
+                .filter((c) => (c.academicYear?.id ?? '') === yid)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.grade.name} — {c.name}
+                  </option>
+                ))}
+            </optgroup>
           ))}
         </select>
+        {hasPastYears && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={showPast} onChange={(e) => { setShowPast(e.target.checked); setClassFilter(''); }} />
+            Show past sessions
+          </label>
+        )}
         {search.trim() ? (
           <span className="count">
             {students.length} of {allStudents.length}

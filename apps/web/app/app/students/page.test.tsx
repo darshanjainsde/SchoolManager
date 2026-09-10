@@ -317,3 +317,45 @@ describe('the roll has an Active tab, an Alumni & left tab, and All', () => {
     expect(await screen.findByRole('dialog', { name: 'Mark 2 students as left' })).toBeInTheDocument();
   });
 });
+
+describe('Sessions on the Students page', () => {
+  it('offers a Session select in the Add form while a next session is open, filters classes by it, and groups the class filter by session', async () => {
+    const userEvent = (await import('@testing-library/user-event')).default;
+    const api = mockApi({
+      get: vi.fn((url: string) => {
+        if (url.startsWith('/manage/sessions')) {
+          return Promise.resolve({
+            years: [{ id: 'y1', name: '2025-26', isCurrent: true }, { id: 'y2', name: '2026-27', isCurrent: false }],
+            plan: { id: 'p1', status: 'DRAFT', toYearId: 'y2' },
+          });
+        }
+        if (url.startsWith('/manage/classes')) {
+          return Promise.resolve([
+            { id: 'f5b', name: 'B', grade: { name: '5' }, academicYear: { id: 'y1', name: '2025-26', isCurrent: true } },
+            { id: 't6b', name: 'B', grade: { name: '6' }, academicYear: { id: 'y2', name: '2026-27', isCurrent: false } },
+          ]);
+        }
+        if (url.startsWith('/auth/me')) return Promise.resolve({ features: ['MANAGEMENT'] });
+        return Promise.resolve([]);
+      }),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+    const user = userEvent.setup({ delay: null });
+    renderWithProviders(<StudentsPage />);
+    await user.click(await screen.findByRole('button', { name: /Add student/ }));
+    expect(await screen.findByText(/Admitting for 2026-27\?/)).toBeInTheDocument();
+    // Current session: only this year's classes in the form's class select.
+    const { within } = await import('@testing-library/react');
+    const classSelect = () => within(screen.getByLabelText('Class (optional)'));
+    expect(classSelect().getByRole('option', { name: '5 — B' })).toBeInTheDocument();
+    expect(classSelect().queryByRole('option', { name: '6 — B' })).toBeNull();
+    await user.selectOptions(screen.getByLabelText('Session'), 'y2');
+    expect(classSelect().getByRole('option', { name: '6 — B' })).toBeInTheDocument();
+    expect(screen.queryByText(/Admitting for 2026-27\?/)).toBeNull();
+    // The class filter groups by session name.
+    expect(screen.getByRole('group', { name: '2025-26' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '2026-27' })).toBeInTheDocument();
+    // The default list is the running year's register.
+    expect(api.get).toHaveBeenCalledWith(expect.stringContaining('academicYearId=y1'));
+  });
+});

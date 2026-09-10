@@ -80,7 +80,8 @@ export class StudentsService {
   async list(schoolId: string, filters: ListFilters = {}) {
     const extra = {
       ...(filters.classSectionId ? { classSectionId: filters.classSectionId } : {}),
-      ...(filters.academicYearId ? { classSection: { academicYearId: filters.academicYearId } } : {}),
+      // A year filter keeps the unplaced (no class yet) — they belong to every year until seated.
+      ...(filters.academicYearId ? { OR: [{ classSection: { academicYearId: filters.academicYearId } }, { classSectionId: null }] } : {}),
     };
     const where =
       filters.status === 'all'
