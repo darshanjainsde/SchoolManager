@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, getPlatformPrisma, withTenant, type TenantTx } from '@skoolos/db';
 import { loadEnv } from '@skoolos/config';
-import { assertNotificationKind } from '@skoolos/types';
+import { assertNotificationKind, assertNotificationOutboxKind } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isSchemaMissing } from '../../common/errors/prisma-errors';
 import { AuditService } from '../../common/audit/audit.service';
@@ -65,7 +65,9 @@ export interface StartOutcome {
   alumniDoor: boolean;
   alumniStudentIds: string[];
   teacherUserIds: string[];
-  familyUserIds: { userId: string; firstName: string; className: string }[];
+  familyUserIds: { userId: string; firstName: string; className: string; stay: boolean }[];
+  /** Leavers with an address on record: the passed-out / left letters after commit. */
+  leaverMails: { email: string; firstName: string; kind: 'ALUMNI' | 'TRANSFERRED' | 'LEFT' }[];
   sessionName: string;
   schoolName: string;
   schoolHost: string;
@@ -583,7 +585,7 @@ export class SessionsService {
       const students = await tx.student.findMany({
         take: LIST_CEILING.ROSTER,
         where: activeStudentsWhere(schoolId, { classSectionId: { in: closing.map((c) => c.id) } }),
-        select: { id: true, userId: true, firstName: true, lastName: true, admissionNo: true, rollNo: true, classSectionId: true },
+        select: { id: true, userId: true, email: true, firstName: true, lastName: true, admissionNo: true, rollNo: true, classSectionId: true },
       });
       const decisions = await tx.sessionDecision.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, planId: plan.id } });
       const decBy = new Map(decisions.map((d) => [d.studentId, d]));
@@ -600,7 +602,7 @@ export class SessionsService {
 
       const o: StartOutcome = {
         moved: 0, alumni: 0, left: 0, slotsCopied: 0, slotsSkipped: 0, alumniDoor: false,
-        alumniStudentIds: [], teacherUserIds: [], familyUserIds: [],
+        alumniStudentIds: [], teacherUserIds: [], familyUserIds: [], leaverMails: [],
         sessionName: plan.toYear.name, schoolName: school?.name ?? '',
         schoolHost: school?.domains[0]?.hostname ?? `${school?.slug ?? ''}.${this.env.PLATFORM_HOST}`,
         carryLeave: plan.carryLeave, fromYearId: plan.fromYearId, toYearId: plan.toYearId,
@@ -645,7 +647,7 @@ export class SessionsService {
         }
         o.moved += group.length;
         for (const s of group) {
-          if (s.userId) o.familyUserIds.push({ userId: s.userId, firstName: s.firstName, className: nextLabel.get(target) ?? '' });
+          if (s.userId) o.familyUserIds.push({ userId: s.userId, firstName: s.firstName, className: nextLabel.get(target) ?? '', stay: decBy.get(s.id)!.decision === 'STAY' });
         }
       }
 
@@ -659,6 +661,7 @@ export class SessionsService {
         });
         o.alumni = passingOut.length;
         o.alumniStudentIds = passingOut.map((s) => s.id);
+        for (const s of passingOut) if (s.email) o.leaverMails.push({ email: s.email, firstName: s.firstName, kind: 'ALUMNI' });
       }
       for (const status of ['TRANSFERRED', 'LEFT'] as const) {
         const group = leaving.filter((s) => (decBy.get(s.id)!.leaveStatus ?? 'LEFT') === status);
@@ -676,6 +679,7 @@ export class SessionsService {
             WHERE s.id = v.id AND s."schoolId" = ${schoolId}::uuid`;
         }
         o.left += group.length;
+        for (const s of group) if (s.email) o.leaverMails.push({ email: s.email, firstName: s.firstName, kind: status });
       }
       // Every leaver's login closes in the same transaction (D9).
       const closeUserIds = [...passingOut, ...leaving].map((s) => s.userId).filter((u): u is string => !!u);
@@ -695,50 +699,12 @@ export class SessionsService {
       await tx.academicYear.update({ where: { id: plan.toYearId }, data: { isCurrent: true } });
 
       if (plan.copyTimetable) {
-        // The timetable follows the CLASSROOM: 5 B's periods become next year's 5 B.
         // Visible from today if the session starts early, else from its first day.
         const effectiveFrom = new Date(Math.min(plan.toYear.startDate.getTime(), now.getTime()));
-        const key = (s: { gradeId: string; name: string }) => `${s.gradeId}|${s.name.toLowerCase()}`;
-        const nextByKey = new Map(next.map((n) => [key(n), n.id]));
-        const closingById = new Map(closing.map((c) => [c.id, c]));
-        const [slots, taken] = await Promise.all([
-          tx.timetableSlot.findMany({
-            take: LIST_CEILING.ROSTER,
-            where: { schoolId, academicYearId: plan.fromYearId, effectiveTo: null },
-            select: { classSectionId: true, dayOfWeek: true, periodId: true, subjectId: true, teacherId: true, teacher: { select: { status: true, userId: true } } },
-          }),
-          tx.timetableSlot.findMany({
-            take: LIST_CEILING.ROSTER,
-            where: { schoolId, academicYearId: plan.toYearId, effectiveTo: null },
-            select: { classSectionId: true, dayOfWeek: true, periodId: true, teacherId: true },
-          }),
-        ]);
-        // Anything the office already placed in the new year wins; a period a
-        // class or a teacher already has is skipped, never doubled.
-        const classTaken = new Set(taken.map((t) => `${t.classSectionId}|${t.dayOfWeek}|${t.periodId}`));
-        const teacherTaken = new Set(taken.map((t) => `${t.teacherId}|${t.dayOfWeek}|${t.periodId}`));
-        const rows: Prisma.TimetableSlotCreateManyInput[] = [];
-        for (const sl of slots) {
-          const from = closingById.get(sl.classSectionId);
-          const target = from ? nextByKey.get(key(from)) : undefined;
-          const ck = target ? `${target}|${sl.dayOfWeek}|${sl.periodId}` : '';
-          const tk = `${sl.teacherId}|${sl.dayOfWeek}|${sl.periodId}`;
-          if (!target || sl.teacher.status !== 'ACTIVE' || classTaken.has(ck) || teacherTaken.has(tk)) {
-            o.slotsSkipped++;
-            continue;
-          }
-          classTaken.add(ck);
-          teacherTaken.add(tk);
-          rows.push({
-            schoolId, classSectionId: target, dayOfWeek: sl.dayOfWeek, periodId: sl.periodId, subjectId: sl.subjectId,
-            teacherId: sl.teacherId, academicYearId: plan.toYearId, effectiveFrom,
-          });
-          if (sl.teacher.userId) o.teacherUserIds.push(sl.teacher.userId);
-        }
-        for (const part of chunks(rows)) {
-          const r = await tx.timetableSlot.createMany({ data: part, skipDuplicates: true });
-          o.slotsCopied += r.count;
-        }
+        const r = await this.copyTimetableIn(tx, schoolId, plan.fromYearId, plan.toYearId, closing, next, effectiveFrom);
+        o.slotsCopied = r.copied;
+        o.slotsSkipped = r.skipped;
+        o.teacherUserIds = r.teacherUserIds;
       }
 
       await tx.registerChangeRequest.updateMany({
@@ -763,6 +729,138 @@ export class SessionsService {
     return outcome;
   }
 
+  /**
+   * The timetable follows the CLASSROOM: 5 B's periods become next year's
+   * 5 B. Only slots of ACTIVE teachers; a period the class or the teacher
+   * already has in the new year is skipped, never doubled — so running this
+   * before Start (the office adjusting the copy) and again at Start is safe.
+   */
+  private async copyTimetableIn(
+    tx: TenantTx,
+    schoolId: string,
+    fromYearId: string,
+    toYearId: string,
+    closing: { id: string; gradeId: string; name: string }[],
+    next: { id: string; gradeId: string; name: string }[],
+    effectiveFrom: Date,
+  ): Promise<{ copied: number; skipped: number; teacherUserIds: string[] }> {
+    const key = (s: { gradeId: string; name: string }) => `${s.gradeId}|${s.name.toLowerCase()}`;
+    const nextByKey = new Map(next.map((n) => [key(n), n.id]));
+    const closingById = new Map(closing.map((c) => [c.id, c]));
+    const [slots, taken] = await Promise.all([
+      tx.timetableSlot.findMany({
+        take: LIST_CEILING.ROSTER,
+        where: { schoolId, academicYearId: fromYearId, effectiveTo: null },
+        select: { classSectionId: true, dayOfWeek: true, periodId: true, subjectId: true, teacherId: true, teacher: { select: { status: true, userId: true } } },
+      }),
+      tx.timetableSlot.findMany({
+        take: LIST_CEILING.ROSTER,
+        where: { schoolId, academicYearId: toYearId, effectiveTo: null },
+        select: { classSectionId: true, dayOfWeek: true, periodId: true, teacherId: true },
+      }),
+    ]);
+    const classTaken = new Set(taken.map((t) => `${t.classSectionId}|${t.dayOfWeek}|${t.periodId}`));
+    const teacherTaken = new Set(taken.map((t) => `${t.teacherId}|${t.dayOfWeek}|${t.periodId}`));
+    const rows: Prisma.TimetableSlotCreateManyInput[] = [];
+    const teacherUserIds: string[] = [];
+    let skipped = 0;
+    for (const sl of slots) {
+      const from = closingById.get(sl.classSectionId);
+      const target = from ? nextByKey.get(key(from)) : undefined;
+      const ck = target ? `${target}|${sl.dayOfWeek}|${sl.periodId}` : '';
+      const tk = `${sl.teacherId}|${sl.dayOfWeek}|${sl.periodId}`;
+      if (!target || sl.teacher.status !== 'ACTIVE' || classTaken.has(ck) || teacherTaken.has(tk)) {
+        skipped++;
+        continue;
+      }
+      classTaken.add(ck);
+      teacherTaken.add(tk);
+      rows.push({ schoolId, classSectionId: target, dayOfWeek: sl.dayOfWeek, periodId: sl.periodId, subjectId: sl.subjectId, teacherId: sl.teacherId, academicYearId: toYearId, effectiveFrom });
+      if (sl.teacher.userId) teacherUserIds.push(sl.teacher.userId);
+    }
+    let copied = 0;
+    for (const part of chunks(rows)) {
+      const r = await tx.timetableSlot.createMany({ data: part, skipDuplicates: true });
+      copied += r.count;
+    }
+    return { copied, skipped, teacherUserIds };
+  }
+
+  /**
+   * Step 5's "preview and adjust": copy the timetable into the next year NOW,
+   * effective from the session's first day, so the office can move periods
+   * around in the ordinary timetable editor before Start. Start copies again
+   * and skips what is already there.
+   */
+  async copyTimetableNow(schoolId: string, actorUserId: string) {
+    const r = await withTenant(schoolId, async (tx) => {
+      const plan = await this.editablePlan(tx, schoolId);
+      const sections = await tx.classSection.findMany({
+        take: LIST_CEILING.STRUCTURE,
+        where: { schoolId, academicYearId: { in: [plan.fromYearId, plan.toYearId] } },
+        select: { id: true, gradeId: true, name: true, academicYearId: true },
+      });
+      const closing = sections.filter((s) => s.academicYearId === plan.fromYearId);
+      const next = sections.filter((s) => s.academicYearId === plan.toYearId);
+      const out = await this.copyTimetableIn(tx, schoolId, plan.fromYearId, plan.toYearId, closing, next, plan.toYear.startDate);
+      return { copied: out.copied, skipped: out.skipped, nextYearClasses: next.length };
+    });
+    await this.audit.record({ schoolId, actorUserId, action: 'session.timetable.copy', entity: 'SessionPlan', entityId: schoolId, meta: r });
+    return r;
+  }
+
+  /**
+   * The master button on the Decide step: every child in a closing class who
+   * has no decision yet gets the class map's default — promoted into the
+   * mapped class, or passing out from the top grade. One statement per class;
+   * existing decisions are never touched (skipDuplicates on the unique key).
+   */
+  async applyDefaults(schoolId: string, actorUserId: string) {
+    return withTenant(schoolId, async (tx) => {
+      const plan = await this.editablePlan(tx, schoolId);
+      const map = (plan.sectionMap ?? {}) as SectionMap;
+      const sections = await tx.classSection.findMany({
+        take: LIST_CEILING.STRUCTURE,
+        where: { schoolId, academicYearId: { in: [plan.fromYearId, plan.toYearId] } },
+        select: { id: true, name: true, academicYearId: true, grade: { select: { name: true } } },
+      });
+      const closing = sections.filter((s) => s.academicYearId === plan.fromYearId);
+      const nextIds = new Set(sections.filter((s) => s.academicYearId === plan.toYearId).map((s) => s.id));
+      const [students, decided] = await Promise.all([
+        tx.student.findMany({
+          take: LIST_CEILING.ROSTER,
+          where: activeStudentsWhere(schoolId, { classSectionId: { in: closing.map((c) => c.id) } }),
+          select: { id: true, classSectionId: true },
+        }),
+        tx.sessionDecision.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, planId: plan.id }, select: { studentId: true } }),
+      ]);
+      const already = new Set(decided.map((d) => d.studentId));
+      const unmapped: string[] = [];
+      let decidedNow = 0;
+      for (const c of closing) {
+        const target = map[c.id];
+        const pending = students.filter((s) => s.classSectionId === c.id && !already.has(s.id));
+        if (!pending.length) continue;
+        if (!target || (target !== PASS_OUT && !nextIds.has(target))) {
+          unmapped.push(`${c.grade.name} ${c.name}`);
+          continue;
+        }
+        const r = await tx.sessionDecision.createMany({
+          data: pending.map((s) => ({
+            schoolId, planId: plan.id, studentId: s.id,
+            decision: target === PASS_OUT ? ('PASS_OUT' as const) : ('PROMOTE' as const),
+            toSectionId: target === PASS_OUT ? null : target,
+            decidedById: actorUserId,
+          })),
+          skipDuplicates: true,
+        });
+        decidedNow += r.count;
+      }
+      const updated = await tx.sessionPlan.update({ where: { id: plan.id }, data: { version: { increment: 1 } }, select: { version: true } });
+      return { decided: decidedNow, alreadyDecided: already.size, unmapped, version: updated.version };
+    });
+  }
+
   /** The year end has committed; nothing after it may turn the admin's screen red. */
   private async afterStartSafely(schoolId: string, o: StartOutcome): Promise<void> {
     try {
@@ -781,17 +879,19 @@ export class SessionsService {
   private async afterStart(schoolId: string, o: StartOutcome): Promise<void> {
     const session = o.sessionName;
     assertNotificationKind('SESSION');
+    assertNotificationOutboxKind('SESSION_STARTED');
     const rows: Prisma.NotificationCreateManyInput[] = [];
     const seenFamily = new Set<string>();
+    const pushes: Prisma.NotificationOutboxCreateManyInput[] = [];
     for (const f of o.familyUserIds) {
       if (seenFamily.has(f.userId)) continue;
       seenFamily.add(f.userId);
-      rows.push({
-        schoolId, userId: f.userId, kind: 'SESSION',
-        title: `${f.firstName} is in ${f.className} for ${session}`,
-        body: 'The new class, timetable and diary are ready.',
-        linkType: 'home', linkId: null,
-      });
+      // A child who stays in grade is told so plainly — "is in 5 B again" is
+      // the sentence a parent reads twice; "continues in" is the one they need.
+      const title = f.stay ? `${f.firstName} continues in ${f.className} for ${session}` : `${f.firstName} is in ${f.className} for ${session}`;
+      const body = 'The new class, timetable and diary are ready.';
+      rows.push({ schoolId, userId: f.userId, kind: 'SESSION', title, body, linkType: 'home', linkId: null });
+      pushes.push({ schoolId, kind: 'SESSION_STARTED', targetUserId: f.userId, payload: { schoolName: o.schoolName, title, body } as unknown as Prisma.InputJsonValue });
     }
     for (const userId of new Set(o.teacherUserIds)) {
       rows.push({
@@ -804,6 +904,8 @@ export class SessionsService {
     if (rows.length) {
       await withTenant(schoolId, async (tx) => {
         for (const part of chunks(rows, 1000)) await tx.notification.createMany({ data: part });
+        // Push rides the guaranteed outbox (drained by cron), one row per family.
+        for (const part of chunks(pushes, 1000)) await tx.notificationOutbox.createMany({ data: part });
       });
     }
 
@@ -821,6 +923,16 @@ export class SessionsService {
           for (const f of o.familyUserIds) {
             const to = email.get(f.userId);
             if (to) await this.mail.sendSessionStarted(to, o.schoolName, f.firstName, f.className, session, schoolId);
+          }
+        }
+        // Leavers: their login is closed, so the letter is the only channel.
+        // A new alumnus with the Homecoming wing gets the claim link instead
+        // (below); everyone else gets the plain passed-out / left letter.
+        for (const l of o.leaverMails) {
+          if (l.kind === 'ALUMNI') {
+            if (!o.alumniDoor) await this.mail.sendPassedOut(l.email, o.schoolName, l.firstName, o.sessionName, schoolId);
+          } else {
+            await this.mail.sendLeft(l.email, o.schoolName, l.firstName, l.kind, o.sessionName, schoolId);
           }
         }
         if (o.alumniDoor && o.alumniStudentIds.length) {

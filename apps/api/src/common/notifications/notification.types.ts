@@ -141,6 +141,19 @@ export interface LibraryNoticeOutboxPayload {
   body: string;
 }
 
+/**
+ * Payload STORED in a `NotificationOutbox` row for kind `SESSION_STARTED`
+ * (the year end, Active Roster Track C): one row per family whose child moved
+ * or stayed, targeting that family's user via `targetUserId`. Composed at
+ * write time by `SessionsService.afterStart`; renders through the EXISTING
+ * 'ANNOUNCEMENT' template like LIBRARY_NOTICE.
+ */
+export interface SessionStartedOutboxPayload {
+  schoolName: string;
+  title: string;
+  body: string;
+}
+
 export interface MessageReceivedOutboxPayload {
   schoolName: string;
   /** Display name of whoever sent the message (the OTHER party to the recipient). */

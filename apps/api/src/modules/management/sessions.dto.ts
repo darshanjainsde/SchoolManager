@@ -49,6 +49,11 @@ export class PutDecisionsDto {
   @IsArray() @ArrayMaxSize(500) @ValidateNested({ each: true }) @Type(() => DecisionRowDto) rows!: DecisionRowDto[];
 }
 
+export class CapDueDatesDto {
+  /** YYYY-MM-DD; every open student loan due after this day is brought forward to it. */
+  @IsDateString() lastDueOn!: string;
+}
+
 export class StartSessionDto {
   @IsIn(['NOW', 'ON_START_DATE']) when!: 'NOW' | 'ON_START_DATE';
   /** The plan version the review was loaded with — a stale review may not start the session. */

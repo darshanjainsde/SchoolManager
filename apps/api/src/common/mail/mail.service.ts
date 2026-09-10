@@ -186,6 +186,25 @@ export class MailService {
     });
   }
 
+  /** Passed out without the Homecoming wing: the plain letter, no door to open. */
+  async sendPassedOut(to: string, schoolName: string, childName: string, sessionName: string, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `${childName} has passed out of ${schoolName}`, {
+      title: 'Congratulations on passing out',
+      intro: `${childName}'s journey at ${schoolName} is complete with the ${sessionName} session. The school keeps the record; the office can issue the transfer certificate and mark sheets whenever they are needed.`,
+      note: 'The student login has been closed. For certificates, write to the school office.',
+    });
+  }
+
+  /** Left or transferred at the year end: the record is kept, the login is closed. */
+  async sendLeft(to: string, schoolName: string, childName: string, status: 'TRANSFERRED' | 'LEFT', sessionName: string, schoolId: string | null = null): Promise<boolean> {
+    const what = status === 'TRANSFERRED' ? 'transferred from' : 'left';
+    return this.sendLetter(to, schoolId, `${childName} has ${what} ${schoolName}`, {
+      title: status === 'TRANSFERRED' ? 'Transfer recorded' : 'Leaving recorded',
+      intro: `${schoolName} has recorded that ${childName} ${what} the school at the end of the ${sessionName} session.`,
+      note: 'The student login has been closed. The office can issue the transfer certificate on request.',
+    });
+  }
+
   /** New session started: which class the child is in now. One per family with an address. */
   async sendSessionStarted(to: string, schoolName: string, childName: string, className: string, sessionName: string, schoolId: string | null = null): Promise<boolean> {
     return this.sendLetter(to, schoolId, `${childName} is in ${className} for ${sessionName}`, {

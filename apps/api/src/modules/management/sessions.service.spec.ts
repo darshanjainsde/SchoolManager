@@ -5,7 +5,7 @@ const txMock = {
   classSection: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
   student: { groupBy: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn(), count: jest.fn() },
   sessionPlan: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
-  sessionDecision: { findMany: jest.fn(), upsert: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+  sessionDecision: { findMany: jest.fn(), upsert: jest.fn(), update: jest.fn(), updateMany: jest.fn(), createMany: jest.fn() },
   $executeRaw: jest.fn(),
   grade: { findMany: jest.fn() },
   exam: { findMany: jest.fn() },
@@ -17,6 +17,7 @@ const txMock = {
   user: { findMany: jest.fn(), updateMany: jest.fn() },
   refreshToken: { updateMany: jest.fn() },
   notification: { createMany: jest.fn() },
+  notificationOutbox: { createMany: jest.fn() },
   alumni: { findMany: jest.fn() },
   libraryIssue: { count: jest.fn() },
 };
@@ -48,7 +49,7 @@ const leavePolicy = { closeYear: jest.fn().mockResolvedValue({ carried: 1 }) };
 const alumni = { graduateBatchIn: jest.fn().mockResolvedValue({ created: 1 }) };
 const alumniAuth = { mintClaimToken: jest.fn().mockResolvedValue({ token: 'tok123', expiresAt: new Date() }) };
 const features = { getFeatures: jest.fn().mockResolvedValue(new Set(['MANAGEMENT', 'ALUMNI'])) };
-const mail = { sendAlumniWelcome: jest.fn().mockResolvedValue(true), sendSessionStarted: jest.fn().mockResolvedValue(true) };
+const mail = { sendAlumniWelcome: jest.fn().mockResolvedValue(true), sendSessionStarted: jest.fn().mockResolvedValue(true), sendPassedOut: jest.fn().mockResolvedValue(true), sendLeft: jest.fn().mockResolvedValue(true) };
 
 function service() {
   return new SessionsService(audit as never, leavePolicy as never, alumni as never, alumniAuth as never, features as never, mail as never);
@@ -216,9 +217,9 @@ describe('start', () => {
     fromYear: { name: '2025-26', endDate: new Date('2026-03-31'), startDate: new Date('2025-04-01') },
     toYear: { name: '2026-27', startDate: new Date('2026-04-01') },
   };
-  const S1 = { id: 's1', userId: 'u1', firstName: 'Aarav', lastName: 'M', admissionNo: '1', rollNo: '1', classSectionId: 'f5b' };
-  const S2 = { id: 's2', userId: 'u2', firstName: 'Dev', lastName: 'S', admissionNo: '2', rollNo: '2', classSectionId: 'f5b' };
-  const S3 = { id: 's3', userId: null, firstName: 'Zoya', lastName: 'K', admissionNo: '3', rollNo: '3', classSectionId: 'f5b' };
+  const S1 = { id: 's1', userId: 'u1', email: null, firstName: 'Aarav', lastName: 'M', admissionNo: '1', rollNo: '1', classSectionId: 'f5b' };
+  const S2 = { id: 's2', userId: 'u2', email: 'dev@x.in', firstName: 'Dev', lastName: 'S', admissionNo: '2', rollNo: '2', classSectionId: 'f5b' };
+  const S3 = { id: 's3', userId: null, email: 'zoya@x.in', firstName: 'Zoya', lastName: 'K', admissionNo: '3', rollNo: '3', classSectionId: 'f5b' };
   beforeEach(() => {
     txMock.sessionPlan.findFirst.mockResolvedValue(plan);
     txMock.sessionPlan.updateMany.mockResolvedValue({ count: 1 });
@@ -296,6 +297,12 @@ describe('start', () => {
       expect.objectContaining({ userId: 'u1', kind: 'SESSION', title: 'Aarav is in 6 B for 2026-27' }),
       expect.objectContaining({ userId: 'tu1', kind: 'SESSION' }),
     ]);
+    // Push: one outbox row per family, rendered through the announcement template by the drain.
+    expect(txMock.notificationOutbox.createMany.mock.calls[0][0].data).toEqual([
+      expect.objectContaining({ kind: 'SESSION_STARTED', targetUserId: 'u1', payload: expect.objectContaining({ title: 'Aarav is in 6 B for 2026-27' }) }),
+    ]);
+    // The alumnus got the door, so no plain passed-out letter on top.
+    expect(mail.sendPassedOut).not.toHaveBeenCalled();
     // The mails, after commit: the family's new class and the alumnus's door on the school's own host.
     expect(mail.sendSessionStarted).toHaveBeenCalledWith('family@x.in', 'Raffles', 'Aarav', '6 B', '2026-27', SCHOOL);
     expect(alumniAuth.mintClaimToken).toHaveBeenCalledWith(SCHOOL, 'al2');
@@ -366,6 +373,22 @@ describe('start', () => {
     expect(alumni.graduateBatchIn).not.toHaveBeenCalled();
     expect(mail.sendAlumniWelcome).not.toHaveBeenCalled();
     expect(txMock.student.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'ALUMNI' }) }));
+    // Without the wing, the passed-out letter is the only word the child gets.
+    expect(mail.sendPassedOut).toHaveBeenCalledWith('dev@x.in', 'Raffles', 'Dev', '2026-27', SCHOOL);
+  });
+
+  it('a child who stays in grade is told "continues in", and a leaver with an address gets the left letter', async () => {
+    txMock.student.findMany.mockResolvedValue([S1, S2, S3]);
+    txMock.sessionDecision.findMany.mockResolvedValue([
+      { studentId: 's1', decision: 'STAY', toSectionId: 't5b' },
+      { studentId: 's2', decision: 'LEAVE', toSectionId: null, leaveStatus: 'TRANSFERRED', leaveReason: null, note: null },
+      { studentId: 's3', decision: 'LEAVE', toSectionId: null, leaveStatus: 'LEFT', leaveReason: null, note: null },
+    ]);
+    await service().start(SCHOOL, ACTOR, { when: 'NOW', version: 4 });
+    await Promise.all(background);
+    expect(txMock.notification.createMany.mock.calls[0][0].data[0]).toMatchObject({ userId: 'u1', title: 'Aarav continues in 5 B for 2026-27' });
+    expect(mail.sendLeft).toHaveBeenCalledWith('dev@x.in', 'Raffles', 'Dev', 'TRANSFERRED', '2026-27', SCHOOL);
+    expect(mail.sendLeft).toHaveBeenCalledWith('zoya@x.in', 'Raffles', 'Zoya', 'LEFT', '2026-27', SCHOOL);
   });
 
   it('refuses when a promoted child points at a class that no longer exists', async () => {
@@ -426,5 +449,57 @@ describe('register and the cron', () => {
     jest.spyOn(svc as never, 'applyPlan' as never).mockRejectedValueOnce(new Error('boom') as never).mockResolvedValueOnce({} as never);
     jest.spyOn(svc as never, 'afterStart' as never).mockResolvedValue(undefined as never);
     expect(await svc.startDue()).toEqual({ started: ['p2'] });
+  });
+});
+
+describe('applyDefaults — the master Promote button', () => {
+  beforeEach(() => {
+    txMock.sessionPlan.findFirst.mockResolvedValue({ id: 'p1', status: 'DRAFT', version: 2, fromYearId: 'y1', toYearId: 'y2', sectionMap: { f5b: 't6b', f10a: 'PASS_OUT' } });
+    txMock.classSection.findMany.mockResolvedValue([
+      { id: 'f5b', name: 'B', academicYearId: 'y1', grade: { name: '5' } },
+      { id: 'f10a', name: 'A', academicYearId: 'y1', grade: { name: '10' } },
+      { id: 'f7c', name: 'C', academicYearId: 'y1', grade: { name: '7' } },
+      { id: 't6b', name: 'B', academicYearId: 'y2', grade: { name: '6' } },
+    ]);
+    txMock.student.findMany.mockResolvedValue([
+      { id: 's1', classSectionId: 'f5b' }, { id: 's2', classSectionId: 'f5b' }, { id: 's3', classSectionId: 'f10a' }, { id: 's4', classSectionId: 'f7c' },
+    ]);
+    txMock.sessionDecision.findMany.mockResolvedValue([{ studentId: 's2' }]);
+    txMock.sessionDecision.createMany.mockImplementation(({ data }: { data: unknown[] }) => Promise.resolve({ count: data.length }));
+    txMock.sessionPlan.update.mockResolvedValue({ version: 3 });
+  });
+
+  it('promotes every undecided child by the class map, passes out the top grade, never touches a decided child, and names the unmapped classes', async () => {
+    const r = await service().applyDefaults(SCHOOL, ACTOR);
+    expect(r).toEqual({ decided: 2, alreadyDecided: 1, unmapped: ['7 C'], version: 3 });
+    const calls = txMock.sessionDecision.createMany.mock.calls.map((c) => c[0]);
+    expect(calls[0].data).toEqual([expect.objectContaining({ studentId: 's1', decision: 'PROMOTE', toSectionId: 't6b', decidedById: ACTOR })]);
+    expect(calls[0].skipDuplicates).toBe(true);
+    expect(calls[1].data).toEqual([expect.objectContaining({ studentId: 's3', decision: 'PASS_OUT', toSectionId: null })]);
+  });
+});
+
+describe('copyTimetableNow — adjust before Start', () => {
+  it('copies into the next year effective from its first day, skipping what the office already placed, and Start later copies nothing twice', async () => {
+    txMock.sessionPlan.findFirst.mockResolvedValue({ id: 'p1', status: 'DRAFT', fromYearId: 'y1', toYearId: 'y2', toYear: { startDate: new Date('2026-04-01') } });
+    txMock.classSection.findMany.mockResolvedValue([
+      { id: 'f5b', gradeId: 'g5', name: 'B', academicYearId: 'y1' },
+      { id: 't5b', gradeId: 'g5', name: 'B', academicYearId: 'y2' },
+    ]);
+    txMock.timetableSlot.findMany.mockImplementation(({ where }: { where: { academicYearId: string } }) =>
+      Promise.resolve(
+        where.academicYearId === 'y1'
+          ? [
+              { classSectionId: 'f5b', dayOfWeek: 1, periodId: 'pd', subjectId: 'sb', teacherId: 'T1', teacher: { status: 'ACTIVE', userId: 'tu1' } },
+              { classSectionId: 'f5b', dayOfWeek: 2, periodId: 'pd', subjectId: 'sb', teacherId: 'T1', teacher: { status: 'ACTIVE', userId: 'tu1' } },
+            ]
+          : [{ classSectionId: 't5b', dayOfWeek: 2, periodId: 'pd', teacherId: 'T1' }],
+      ),
+    );
+    txMock.timetableSlot.createMany.mockImplementation(({ data }: { data: unknown[] }) => Promise.resolve({ count: data.length }));
+    const r = await service().copyTimetableNow(SCHOOL, ACTOR);
+    expect(r).toEqual({ copied: 1, skipped: 1, nextYearClasses: 1 });
+    expect(txMock.timetableSlot.createMany.mock.calls[0][0].data[0]).toMatchObject({ classSectionId: 't5b', dayOfWeek: 1, effectiveFrom: new Date('2026-04-01') });
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'session.timetable.copy' }));
   });
 });

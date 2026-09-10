@@ -47,6 +47,17 @@ export default function DecideStep({ plan, onNext }: { plan: PlanView; onNext: (
     onError: (err: Error) => toast.error(`Could not save: ${err.message}`),
   });
 
+  const applyDefaults = useMutation({
+    mutationFn: () => api.post<{ decided: number; alreadyDecided: number; unmapped: string[]; version: number }>('/manage/sessions/plan/decisions/defaults', {}),
+    onSuccess: (r) => {
+      void queryClient.invalidateQueries({ queryKey: ['sessions', host] });
+      void queryClient.invalidateQueries({ queryKey: ['session-rows', host] });
+      toast.success(`${r.decided} children promoted by the class map${r.alreadyDecided ? ` · ${r.alreadyDecided} already decided were left as they are` : ''}`);
+      if (r.unmapped.length) toast.error(`No class mapped for ${r.unmapped.join(', ')} — set it in step 2, or decide those classes by hand.`);
+    },
+    onError: (err: Error) => toast.error(`Could not promote everyone: ${err.message}`),
+  });
+
   const goNext = () => {
     const i = sections.findIndex((s) => s.id === current);
     if (i >= 0 && i < sections.length - 1) setSectionId(sections[i + 1].id);
@@ -71,6 +82,22 @@ export default function DecideStep({ plan, onNext }: { plan: PlanView; onNext: (
 
   return (
     <div className="sk-card-b">
+      <div className="sk-notice" style={{ marginTop: 0 }}>
+        <p className="nt">Nobody failed and nobody left? Promote everyone at once.</p>
+        <p className="nd">Every child without a decision gets the class map’s default: promoted into the mapped class, or passing out from the top grade. Then visit only the classes with a child who stays or leaves.</p>
+        <button
+          type="button"
+          className="sk-btn sk-press"
+          data-variant="primary"
+          style={{ marginTop: 8 }}
+          disabled={applyDefaults.isPending}
+          onClick={() => {
+            if (window.confirm('Promote every child who has no decision yet, by the class map? Children you have already decided are not touched.')) applyDefaults.mutate();
+          }}
+        >
+          {applyDefaults.isPending ? 'Promoting…' : 'Promote everyone not yet decided'}
+        </button>
+      </div>
       <div className="sk-ses-pickrow">
         <label style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
           <span className="sk-lab">Class</span>

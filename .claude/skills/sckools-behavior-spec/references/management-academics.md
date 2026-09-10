@@ -427,7 +427,10 @@ several classes, each class reads only its own), computed on read, never stored.
 `passMarkPct` — **a flag, never a decision (D10)**. `joinedSincePlan` = admitted after the plan opened.
 Decisions are saved per class (`PUT plan/decisions`, all rows): PROMOTE/STAY need a `toSectionId` in the
 next year (400 `BAD_TARGET`), LEAVE needs `leaveStatus`; unknown or non-ACTIVE students are refused 404.
-Every save bumps `plan.version`; a PATCH to the plan does too.
+Every save bumps `plan.version`; a PATCH to the plan does too. **Promote everyone** (`POST plan/decisions/defaults`)
+gives every undecided child in a mapped closing class the map's default (PROMOTE into the mapped class, PASS_OUT
+from the top grade) in one `createMany` per class with `skipDuplicates` — a decided child is never touched; classes
+without a map entry are named back, not guessed.
 
 **Start** (`POST plan/start { when, version }`): 409 `PLAN_CHANGED` when the version moved; 400
 `UNDECIDED_STUDENTS` while any child in a closing section has no row; 400 `BAD_TARGET` if a chosen section
@@ -449,6 +452,23 @@ once), pending register-change requests on closing sections are REJECTED. After 
 copied class, then in the background the "child is in 6 A" mail per family with an address and the alumni
 claim-link mail (`/alumni#claim=<token>`) per new alumnus with an email. Children with no class (unplaced)
 and new admissions already seated in next-year sections are untouched by Start.
+
+**Timetable before Start** (`POST plan/timetable/copy`): the same classroom-keyed copy Start does, run now into
+the next year effective from its first day, collision-safe and idempotent; the Sessions tab then mounts the shared
+`TimetableEditor` (components/timetable) over the next year's classes anchored on that day. Start copies again and
+skips what exists.
+
+**Library at the year end** (`GET plan/library`, `POST plan/library/remind`, `POST plan/library/last-due`; the
+`LibraryYearEndService` the library wing exports): every open student loan with the fine so far
+(`accruedFineRupees` from the school's rules, computed on read); Remind writes one `LIBRARY` bell row and one
+`LIBRARY_NOTICE` push row per family with a login and mails the ones with an address; the last-due-date click
+brings forward ONLY loans due after the chosen day (never a day before today), so the fine clock starts there
+while already-overdue books keep their own due date. Never a condition of Start.
+
+**After Start, who hears what:** moved families get the bell + push (`SESSION_STARTED` outbox row) + mail — "is in
+6 A" for a promotion, "continues in 5 B" for a stay; teachers with a copied class get the bell. Leavers' logins are
+closed, so the mail is their only channel: the alumni claim link when the ALUMNI wing is on, else the passed-out
+letter; transferred/left children get the left letter. No SMS channel exists on the platform.
 
 **Register** (`GET :yearId/register`): every decision of the STARTED plan that closed that year, with the
 from/to class labels and who decided. Empty for a year never closed through a plan.

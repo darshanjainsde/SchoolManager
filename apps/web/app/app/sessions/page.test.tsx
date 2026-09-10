@@ -88,3 +88,83 @@ describe('SessionsPage', () => {
     expect(screen.queryByRole('button', { name: /^Start 2026-27/ })).toBeNull();
   });
 });
+
+describe('Review: the library and the master button', () => {
+  const REVIEW = {
+    counts: { promote: 10, stay: 0, passOut: 0, leave: 0, newAdmissions: 0, unplaced: 0, undecided: 4 },
+    alumniWithoutEmail: 0, libraryIssuesOut: 3, sectionsWithoutClassTeacher: [], version: 2, status: 'DRAFT',
+    scheduledFor: null, copyTimetable: true, carryLeave: true, rollPolicy: 'KEEP',
+    fromYear: { id: 'y1', name: '2025-26', endDate: '2026-03-31' }, toYear: { id: 'y2', name: '2026-27', startDate: '2026-04-01' },
+  };
+  const LOANS = {
+    today: '2026-03-25', sessionEndOn: '2026-03-31',
+    rules: { finePerDayRupees: 2, graceDays: 3, fineStudents: true },
+    counts: { out: 3, overdue: 1, dueAfterSession: 2, noLogin: 1, accruingRupees: 24 },
+    rows: [
+      { issueId: 'i1', studentId: 's1', name: 'Aarav Mehta', code: 'RAF-1', className: '5 B', hasLogin: true, title: 'Matilda', accessionNo: 'B-1', issuedOn: '2026-03-01', dueOn: '2026-03-10', daysLate: 15, fineRupees: 24, dueAfterSession: false },
+      { issueId: 'i2', studentId: 's2', name: 'Dev Sharma', code: null, className: '6 A', hasLogin: false, title: 'Wonder', accessionNo: 'B-2', issuedOn: '2026-03-20', dueOn: '2026-04-05', daysLate: 0, fineRupees: 0, dueAfterSession: true },
+    ],
+  };
+  function mountReview() {
+    const api = mockApi({
+      '/manage/sessions': { years: [YEAR], plan: { ...PLAN, status: 'SCHEDULED' } },
+      '/auth/me': { features: ['MANAGEMENT'] },
+      '/manage/sessions/plan/review': { ...REVIEW, status: 'SCHEDULED', scheduledFor: '2026-03-31T18:30:00.000Z' },
+      '/manage/sessions/plan/library': LOANS,
+    });
+    api.post = vi.fn((url: string) =>
+      Promise.resolve(
+        url.endsWith('/library/remind') ? { reminded: 2, noLogin: 1 }
+        : url.endsWith('/library/last-due') ? { changed: 2, lastDueOn: '2026-03-31' }
+        : url.endsWith('/decisions/defaults') ? { decided: 4, alreadyDecided: 10, unmapped: [], version: 3 }
+        : {},
+      ),
+    );
+    vi.mocked(useApi).mockReturnValue(api as never);
+    return api;
+  }
+
+  it('shows what is out with the fine so far, reminds every family, and brings the after-session due dates forward to one day', async () => {
+    const api = mountReview();
+    const user = userEvent.setup({ delay: null });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderWithProviders(<SessionsPage />);
+    expect(await screen.findByText('3 library books are still out')).toBeInTheDocument();
+    expect(screen.getByText(/₹24 in fines so far/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'See the list' }));
+    expect(screen.getByText('Matilda')).toBeInTheDocument();
+    expect(screen.getByText('No login')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remind all families' }));
+    expect(api.post).toHaveBeenCalledWith('/manage/sessions/plan/library/remind', {});
+    expect(screen.getByLabelText('Last due date for books due after the session')).toHaveValue('2026-03-31');
+    await user.click(screen.getByRole('button', { name: 'Set for 2 books' }));
+    expect(api.post).toHaveBeenCalledWith('/manage/sessions/plan/library/last-due', { lastDueOn: '2026-03-31' });
+  });
+
+  it('offers to promote the undecided by the class map from the review warning', async () => {
+    const api = mountReview();
+    const user = userEvent.setup({ delay: null });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderWithProviders(<SessionsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Promote the 4 undecided by the class map' }));
+    expect(api.post).toHaveBeenCalledWith('/manage/sessions/plan/decisions/defaults', {});
+  });
+});
+
+describe('Decide: the master button', () => {
+  it('promotes everyone not yet decided, in one click, after a confirmation', async () => {
+    const api = mockApi({
+      '/manage/sessions': { years: [YEAR], plan: PLAN },
+      '/auth/me': { features: ['MANAGEMENT'] },
+      '/manage/classes': [{ id: 'f5b', name: 'B', grade: { name: '5' } }],
+      '/manage/sessions/plan/students': { section: { id: 'f5b', label: '5 B', gradeId: 'g5' }, targets: [], exams: [], rows: [] },
+    });
+    api.post = vi.fn().mockResolvedValue({ decided: 40, alreadyDecided: 0, unmapped: ['7 C'], version: 3 });
+    vi.mocked(useApi).mockReturnValue(api as never);
+    const user = userEvent.setup({ delay: null });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderWithProviders(<SessionsPage />);
+    await user.click(await screen.findByRole('button', { name: 'Promote everyone not yet decided' }));
+    expect(api.post).toHaveBeenCalledWith('/manage/sessions/plan/decisions/defaults', {});
+  });
+});

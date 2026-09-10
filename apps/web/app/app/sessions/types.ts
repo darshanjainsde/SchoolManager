@@ -96,6 +96,30 @@ export interface RegisterRow {
   appliedAt: string | null;
 }
 
+export interface OpenLoanRow {
+  issueId: string;
+  studentId: string;
+  name: string;
+  code: string | null;
+  className: string | null;
+  hasLogin: boolean;
+  title: string;
+  accessionNo: string;
+  issuedOn: string;
+  dueOn: string;
+  daysLate: number;
+  fineRupees: number;
+  dueAfterSession: boolean;
+}
+
+export interface OpenLoans {
+  today: string;
+  sessionEndOn: string | null;
+  rules: { finePerDayRupees: number; graceDays: number; fineStudents: boolean };
+  counts: { out: number; overdue: number; dueAfterSession: number; noLogin: number; accruingRupees: number };
+  rows: OpenLoanRow[];
+}
+
 export interface ClassRow {
   id: string;
   name: string;

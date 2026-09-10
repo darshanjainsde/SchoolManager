@@ -184,7 +184,7 @@ export default function DecideTable({
                       ))}
                     </div>
                   </td>
-                  <td>
+                  <td className="sk-ses-goto">
                     {(d.decision === 'PROMOTE' || d.decision === 'STAY') && (
                       <select className="sk-input" aria-label={`${r.name} goes to`} value={d.toSectionId ?? ''} onChange={(e) => edit(r.studentId, { toSectionId: e.target.value || null })}>
                         <option value="">— Pick a class —</option>

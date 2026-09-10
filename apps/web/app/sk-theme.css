@@ -3425,8 +3425,20 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-ses-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .sk-ses-decide { display: flex; flex-direction: column; gap: 10px; }
 .sk-ses-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sk-ses-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
-.sk-ses-buttons .sk-chip { padding: 5px 10px; font-size: 12px; }
-.sk-ses-leave { display: flex; gap: 6px; flex-wrap: wrap; }
-.sk-ses-leave .sk-input { min-width: 0; }
+/* One line per child: the four buttons never wrap, and the Goes-to column keeps
+   one width whether it holds a class select or the Leaving pair (which stacks),
+   so picking Leaving cannot push every other row onto two lines. The table
+   scrolls inside .sk-tblwrap on a narrow screen instead. */
+.sk-ses-buttons { display: flex; gap: 4px; flex-wrap: nowrap; }
+.sk-ses-buttons .sk-chip { padding: 5px 10px; font-size: 12px; white-space: nowrap; }
+.sk-ses-goto { width: 13em; }
+.sk-ses-goto .sk-input { width: 100%; min-width: 0; }
+.sk-ses-leave { display: grid; grid-template-columns: 1fr; gap: 4px; width: 13em; }
+.sk-ses-leave .sk-input { min-width: 0; width: 100%; }
 .sk-tbl td[data-tone="warn"] { color: var(--sk-amber-ink); font-weight: 700; }
+.sk-ses-library { border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.sk-ses-libhead { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.sk-ses-libactions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sk-ses-lastdue { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--sk-line); }
+.sk-ses-lastdue-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sk-ses-ttprev { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 4px; border-top: 1px solid var(--sk-line); }

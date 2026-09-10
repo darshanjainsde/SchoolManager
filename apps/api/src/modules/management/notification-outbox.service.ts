@@ -11,6 +11,7 @@ import type {
   LibraryNoticeOutboxPayload,
   NotificationMessage,
   ResultPublishedOutboxPayload,
+  SessionStartedOutboxPayload,
 } from '../../common/notifications/notification.types';
 
 export interface NotificationOutboxDrainResult {
@@ -117,6 +118,14 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
         body: p.body,
         className: 'Library',
       },
+    };
+  }
+  if (kind === 'SESSION_STARTED') {
+    // The year end: "Aarav is in 6 A for 2026-27" to one family (targetUserId).
+    const p = payload as SessionStartedOutboxPayload;
+    return {
+      kind: 'ANNOUNCEMENT',
+      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: null },
     };
   }
   if (kind === 'MESSAGE_RECEIVED') {

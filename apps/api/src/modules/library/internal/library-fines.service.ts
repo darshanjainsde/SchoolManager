@@ -6,7 +6,7 @@ import type { Letter } from '../../../common/mail/letterhead';
 import { runInBackground } from '../../../common/notifications/run-in-background';
 import { emitNotifications } from '../../../common/notifications/notification-inbox';
 import type { LibraryNoticeOutboxPayload } from '../../../common/notifications/notification.types';
-import { istTodayISO } from '../../management';
+import { istTodayISO } from '../../../common/dates/timetable-date';
 import { LibrarySettingsService } from './library-settings.service';
 import { accruedFineRupees, dateOnlyISO, finesApply, type BorrowerKind } from './library-policy';
 import type { RemindFinesDto } from './library.dto';

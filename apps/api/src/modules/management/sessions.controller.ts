@@ -7,8 +7,9 @@ import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { ApiError } from '../../common/errors/api-error';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
+import { LibraryYearEndService } from '../library';
 import { SessionsService } from './sessions.service';
-import { CreateSessionPlanDto, PutDecisionsDto, StartSessionDto, UpdateSessionPlanDto } from './sessions.dto';
+import { CapDueDatesDto, CreateSessionPlanDto, PutDecisionsDto, StartSessionDto, UpdateSessionPlanDto } from './sessions.dto';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -20,6 +21,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export class SessionsController {
   constructor(
     private readonly sessions: SessionsService,
+    private readonly library: LibraryYearEndService,
     private readonly tenant: TenantContextService,
   ) {}
 
@@ -64,6 +66,35 @@ export class SessionsController {
   @Put('plan/decisions')
   decisions(@CurrentUser() u: SchoolJwtPayload, @Body() dto: PutDecisionsDto) {
     return this.sessions.upsertDecisions(this.sid(), u.sub, dto);
+  }
+
+  /** The master button: every undecided child gets the class map's default (promote, or pass out from the top grade). */
+  @Post('plan/decisions/defaults')
+  applyDefaults(@CurrentUser() u: SchoolJwtPayload) {
+    return this.sessions.applyDefaults(this.sid(), u.sub);
+  }
+
+  /** Copy the timetable into the next year now, so the office can adjust it before Start. */
+  @Post('plan/timetable/copy')
+  copyTimetable(@CurrentUser() u: SchoolJwtPayload) {
+    return this.sessions.copyTimetableNow(this.sid(), u.sub);
+  }
+
+  // ── The library at the year end (not a condition of Start) ──
+  @Get('plan/library')
+  async libraryLoans() {
+    const plan = await this.sessions.getPlan(this.sid());
+    return this.library.openLoans(this.sid(), plan?.fromYear.endDate ?? null);
+  }
+
+  @Post('plan/library/remind')
+  remindLibrary(@CurrentUser() u: SchoolJwtPayload) {
+    return this.library.remindOpenLoans(this.sid(), u.sub);
+  }
+
+  @Post('plan/library/last-due')
+  capDueDates(@CurrentUser() u: SchoolJwtPayload, @Body() dto: CapDueDatesDto) {
+    return this.library.capDueDates(this.sid(), u.sub, dto.lastDueOn);
   }
 
   @Get('plan/review')
