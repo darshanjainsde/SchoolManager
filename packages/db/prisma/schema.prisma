@@ -4096,6 +4096,7 @@ model SportsTournament {
   endsOn      DateTime               @db.Date
   grouping    String
   dayStartMin Int                    @default(540)
+  dayEndMin   Int                    @default(960)
   status      SportsTournamentStatus @default(DRAFT)
   published   Boolean                @default(false)
   version     Int                    @default(1)

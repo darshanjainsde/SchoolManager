@@ -896,13 +896,20 @@ export const SCORING_PRESETS: readonly ScoringPreset[] = [
   { key: 'judged', label: 'Judged out of 10', kind: 'JUDGED', scoring: points('Score', 1), slotMin: 45, lanes: 10 },
 ];
 
-/** A school's own sport (e.g. "Tug of war"). Key is `custom:<slug>`; the rules book shows a plain card. */
+/**
+ * A school's own sport (e.g. "Tug of war"). The key carries everything needed
+ * to score it later — `custom:<preset>:<teamSize>:<slug>` — so no extra
+ * column is needed. Measured and judged presets are individual only (a mark
+ * belongs to one student), so `teamSize` is forced to 1 for them.
+ */
 export function customSport(name: string, presetKey: string, teamSize = 1): Sport | null {
   const preset = SCORING_PRESETS.find((p) => p.key === presetKey);
   const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   if (!preset || !slug) return null;
+  if (preset.kind !== 'MATCH') teamSize = 1;
+  teamSize = Math.min(Math.max(1, Math.floor(teamSize)), 20);
   return {
-    key: `${CUSTOM_PREFIX}${slug}`, name: name.trim(), group: teamSize > 1 ? 'Team' : 'Fitness', kind: preset.kind, teamSize,
+    key: `${CUSTOM_PREFIX}${preset.key}:${teamSize}:${slug}`, name: name.trim(), group: teamSize > 1 ? 'Team' : 'Fitness', kind: preset.kind, teamSize,
     scoring: preset.scoring, slotMin: preset.slotMin, ...(preset.lanes ? { lanes: preset.lanes } : {}),
     venue: 'Venue', categories: ALL, olympic: false,
     rules: { summary: `${name.trim()} — a sport this school added. Scored as: ${preset.label.toLowerCase()}.`, sections: [] },
@@ -913,6 +920,15 @@ export function customSport(name: string, presetKey: string, teamSize = 1): Spor
 const BY_KEY = new Map(SPORTS.map((s) => [s.key, s]));
 
 export function sportByKey(key: string): Sport | undefined { return BY_KEY.get(key); }
+
+/** Catalogue sport, or a custom one rebuilt from its key (the stored name wins over the slug). */
+export function resolveSport(key: string, name?: string): Sport | undefined {
+  const known = BY_KEY.get(key);
+  if (known) return known;
+  const m = /^custom:([a-z0-9-]+):(\d+):([a-z0-9-]+)$/.exec(key);
+  if (!m) return undefined;
+  return customSport(name?.trim() || m[3].replace(/-/g, ' '), m[1], Number(m[2])) ?? undefined;
+}
 export function isCustomSportKey(key: string): boolean { return key.startsWith(CUSTOM_PREFIX); }
 
 export function sportsByGroup(): { group: SportGroup; sports: Sport[] }[] {

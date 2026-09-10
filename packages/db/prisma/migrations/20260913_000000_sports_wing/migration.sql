@@ -44,7 +44,7 @@ CREATE INDEX "HousePoint_schoolId_houseId_idx" ON "HousePoint"("schoolId", "hous
 
 CREATE TABLE "SportsTournament" (
   "id" UUID NOT NULL, "schoolId" UUID NOT NULL, "name" TEXT NOT NULL, "startsOn" DATE NOT NULL, "endsOn" DATE NOT NULL, "grouping" TEXT NOT NULL,
-  "dayStartMin" INTEGER NOT NULL DEFAULT 540, "status" "SportsTournamentStatus" NOT NULL DEFAULT 'DRAFT', "published" BOOLEAN NOT NULL DEFAULT false,
+  "dayStartMin" INTEGER NOT NULL DEFAULT 540, "dayEndMin" INTEGER NOT NULL DEFAULT 960, "status" "SportsTournamentStatus" NOT NULL DEFAULT 'DRAFT', "published" BOOLEAN NOT NULL DEFAULT false,
   "version" INTEGER NOT NULL DEFAULT 1, "createdById" UUID NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "SportsTournament_pkey" PRIMARY KEY ("id"),

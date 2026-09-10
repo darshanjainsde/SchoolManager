@@ -1,5 +1,6 @@
 import { sportByKey } from './catalogue';
 import {
+  cursorFrom, stdOfGrade, validateBands,
   ageGroupFor, bandFor, beatsRecord, bracketSize, buildDraw, drawPlacings, findClashes, finalists, fitInDay, formatMark, hhmm,
   judgeScores, nextSlot, parseMark, parseSide, placingPoints, planClassStage, planHeats, planRounds, rankMarks, roundName,
   seedPositions, shiftSlots, shuffle, sideOfSection, sideOfStudent,
@@ -240,6 +241,31 @@ describe('clashes', () => {
     ]));
     expect(clashes.find((c) => c.first === 'm5' || c.second === 'm5')).toBeUndefined();
     expect(clashes.find((c) => c.kind === 'PERSON' && c.who === 'u1')).toBeUndefined(); // m1 ends at 625 exactly when m4 starts
+  });
+});
+
+describe('class numbers and band validation', () => {
+  it('reads the class number out of the names schools actually use', () => {
+    expect(['9', '9th', 'Class 9', 'Grade IX', 'STD-10', 'Std. 12', 'Class XI', '1st', 'Class 10 (Science)'].map((name) => stdOfGrade({ name }))).toEqual([9, 9, 9, 9, 10, 12, 11, 1, 10]);
+    expect(['Nursery', 'LKG', 'UKG', 'Pre-primary'].map((name) => stdOfGrade({ name, order: 1 }))).toEqual([null, null, null, null]);
+    expect(stdOfGrade({ name: 'Seniors', order: 11 })).toBe(11);
+    expect(stdOfGrade({ name: 'Seniors', order: 0 })).toBeNull();
+    expect(stdOfGrade({ name: 'Class 13' })).toBeNull();
+  });
+  it('bands: one to six, unique ids, a label, classes 1–12 and no class twice', () => {
+    expect(validateBands([{ id: 'a', label: 'A', stds: [1, 2] }, { id: 'b', label: 'B', stds: [3] }])).toBeNull();
+    expect(validateBands([])).toMatch(/between one and six/);
+    expect(validateBands([{ id: 'a', label: 'A', stds: [1] }, { id: 'a', label: 'B', stds: [2] }])).toMatch(/unique short id/);
+    expect(validateBands([{ id: 'a', label: '', stds: [1] }])).toMatch(/needs a name/);
+    expect(validateBands([{ id: 'a', label: 'A', stds: [] }])).toMatch(/at least one class/);
+    expect(validateBands([{ id: 'a', label: 'A', stds: [13] }])).toMatch(/outside 1–12/);
+    expect(validateBands([{ id: 'a', label: 'A', stds: [1, 1] }])).toMatch(/in two bands/);
+    expect(validateBands('nope')).not.toBeNull();
+  });
+  it('cursorFrom starts every venue at the day start and moves past what is booked', () => {
+    const w = { dayStartMin: 540, dayEndMin: 960, days: 1 };
+    const c = cursorFrom([{ venueId: 'c1', atMin: 600, slotMin: 25 }, { venueId: 'c1', atMin: 560, slotMin: 25 }, { venueId: 'zz', atMin: 900, slotMin: 25 }, { venueId: null, atMin: null, slotMin: 25 }], ['c1', 'c2'], w);
+    expect([...c.entries()]).toEqual([['c1', 625], ['c2', 540]]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { SPORTS, SPORT_GROUPS, SCORING_PRESETS, customSport, sportByKey, sportsByGroup, sidesAreSections, isCustomSportKey } from './catalogue';
+import { SPORTS, SPORT_GROUPS, SCORING_PRESETS, customSport, resolveSport, sportByKey, sportsByGroup, sidesAreSections, isCustomSportKey } from './catalogue';
 
 describe('sports catalogue — every sport is complete and consistent', () => {
   it('keys are unique, kebab-case, and every sport sits in a known group', () => {
@@ -73,10 +73,14 @@ describe('sports catalogue — every sport is complete and consistent', () => {
 
   it('a custom sport takes a preset, gets a custom: key and a plain rules card; a bad preset or empty name is refused', () => {
     const tug = customSport('Tug of war', 'points', 8);
-    expect(tug).toMatchObject({ key: 'custom:tug-of-war', kind: 'MATCH', teamSize: 8, group: 'Team' });
+    expect(tug).toMatchObject({ key: 'custom:points:8:tug-of-war', kind: 'MATCH', teamSize: 8, group: 'Team' });
     expect(tug!.scoring.type).toBe('SINGLE');
     expect(isCustomSportKey(tug!.key)).toBe(true);
-    expect(customSport('Sack race', 'time')).toMatchObject({ key: 'custom:sack-race', kind: 'MEASURED', lanes: 6 });
+    expect(customSport('Sack race', 'time', 4)).toMatchObject({ key: 'custom:time:1:sack-race', kind: 'MEASURED', lanes: 6, teamSize: 1 });
+    expect(resolveSport('custom:points:8:tug-of-war', 'Tug of War')).toMatchObject({ name: 'Tug of War', teamSize: 8 });
+    expect(resolveSport('custom:points:8:tug-of-war')!.name).toBe('tug of war');
+    expect(resolveSport('custom:nope:1:x')).toBeUndefined();
+    expect(resolveSport('badminton')!.name).toBe('Badminton');
     expect(customSport('   ', 'time')).toBeNull();
     expect(customSport('X', 'nope')).toBeNull();
     for (const p of SCORING_PRESETS) expect(p.kind === 'MATCH' ? p.scoring.type !== 'MARK' : p.scoring.type === 'MARK').toBe(true);

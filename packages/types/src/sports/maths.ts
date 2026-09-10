@@ -387,5 +387,31 @@ export function groupLabel(grouping: 'BANDS' | 'AGE', bands: Band[], key: string
   return bands.find((b) => b.id === key)?.label ?? key;
 }
 
+// ── class numbers ─────────────────────────────────────────────
+const ROMAN: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10, xi: 11, xii: 12 };
+/** "9", "9th", "Class 9", "Grade IX", "STD-10" → the class number; "Nursery"/"LKG"/"UKG" → null; falls back to `order` when it is 1–12. */
+export function stdOfGrade(grade: { name: string; order?: number | null }): number | null {
+  const name = grade.name.trim().toLowerCase();
+  const num = /(?:^|[^0-9])(\d{1,2})(?:[^0-9]|$)/.exec(name);
+  if (num) {
+    const n = Number(num[1]);
+    if (n >= 1 && n <= 12) return n;
+  }
+  const word = name.replace(/^(class|grade|std\.?|standard)\s*[-:]?\s*/i, '').replace(/(st|nd|rd|th)$/, '').trim();
+  if (ROMAN[word]) return ROMAN[word];
+  if (grade.order != null && grade.order >= 1 && grade.order <= 12 && !/nursery|kg|kindergarten|pre/.test(name)) return grade.order;
+  return null;
+}
+
+/** Where each venue is next free, from what is already on the board (used when a final is added to a live meet). */
+export function cursorFrom(bookings: { venueId: string | null; atMin: number | null; slotMin: number }[], venueIds: string[], w: DayWindow): Map<string, number> {
+  const cursor = new Map<string, number>(venueIds.map((v) => [v, w.dayStartMin]));
+  for (const b of bookings) {
+    if (!b.venueId || b.atMin == null || !cursor.has(b.venueId)) continue;
+    cursor.set(b.venueId, Math.max(cursor.get(b.venueId)!, b.atMin + b.slotMin));
+  }
+  return cursor;
+}
+
 export const isSingleScoring = (s: Scoring): s is SingleScoring => s.type === 'SINGLE';
 export const isMarkScoring = (s: Scoring): s is MarkScoring => s.type === 'MARK';
