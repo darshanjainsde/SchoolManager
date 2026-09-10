@@ -1419,9 +1419,12 @@ export const PS_CSS = `
   @keyframes ps-bd-flicker { from { transform: scaleY(1) rotate(-3deg); opacity: .95; } to { transform: scaleY(1.25) rotate(4deg); opacity: 1; } }
   .ps-bd-ribbon { display: flex; align-items: center; gap: .75rem; background: var(--ps1); color: var(--ps1-on, #fff); font-size: .8rem;
     overflow: hidden; height: 30px; text-decoration: none; }
-  .ps-bd-ribbon-lead { flex: none; padding: 0 .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .68rem;
-    background: rgba(0,0,0,.18); height: 100%; display: flex; align-items: center; }
-  .ps-bd-ribbon-track { display: flex; gap: 2rem; white-space: nowrap; animation: ps-bd-ticker 16s linear infinite; }
+  /* The label is opaque and above the names; the names scroll inside .ps-bd-ribbon-view,
+     which clips them — without the viewport the ticker slid under the label. */
+  .ps-bd-ribbon-lead { flex: none; position: relative; z-index: 1; padding: 0 .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .68rem;
+    background-color: var(--ps1); background-image: linear-gradient(rgba(0,0,0,.18), rgba(0,0,0,.18)); height: 100%; display: flex; align-items: center; }
+  .ps-bd-ribbon-view { flex: 1 1 auto; min-width: 0; overflow: hidden; height: 100%; display: flex; align-items: center; }
+  .ps-bd-ribbon-track { display: flex; gap: 2rem; white-space: nowrap; padding-left: .5rem; animation: ps-bd-ticker 16s linear infinite; }
   .ps-bd-ribbon:hover .ps-bd-ribbon-track { animation-play-state: paused; }
   .ps-bd-ribbon-track b { font-weight: 700; } .ps-bd-ribbon-track i { font-style: normal; opacity: .75; margin-left: .3rem; }
   @keyframes ps-bd-ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }

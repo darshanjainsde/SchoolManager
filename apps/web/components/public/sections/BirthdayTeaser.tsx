@@ -21,7 +21,9 @@ export default function BirthdayTeaser({ style, data, href }: { style: Celebrati
     return (
       <Link href={href} className="ps-bd-ribbon" aria-label={`${lead}: ${items.map((r) => r.name).join(', ')}. Open the birthdays page.`}>
         <span className="ps-bd-ribbon-lead">{lead}</span>
-        <span className="ps-bd-ribbon-track" aria-hidden="true">
+        {/* The names scroll inside their own clipped viewport, so they can never run under the label. */}
+        <span className="ps-bd-ribbon-view" aria-hidden="true">
+        <span className="ps-bd-ribbon-track">
           {[0, 1].map((rep) =>
             items.map((r) => (
               <span key={`${rep}-${r.key}`}>
@@ -32,6 +34,7 @@ export default function BirthdayTeaser({ style, data, href }: { style: Celebrati
             )),
           )}
           <span>See all birthdays →</span>
+        </span>
         </span>
       </Link>
     );
