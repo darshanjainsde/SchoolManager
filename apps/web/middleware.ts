@@ -256,6 +256,7 @@ export const config = {
     // object-src, no form-action. `console-segments.test.ts` now fails if a
     // future sibling is forgotten the same way.
     '/library/:path*',
+    '/sports/:path*',
     '/staff/:path*',
     // The alumni portal holds a session too — and the ONE whose credential
     // JavaScript can read: `sk_alumni_session` lives in localStorage and is

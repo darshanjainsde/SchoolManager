@@ -11,6 +11,7 @@ import {
   NotebookPen,
   Sparkles,
   TrendingDown,
+  Trophy,
   type LucideIcon,
 } from 'lucide-react';
 import type { NotificationKind } from '@skoolos/types';
@@ -32,6 +33,8 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   RESULTS_DUE: GraduationCap,
   // Year-end: "Aarav is in 6 A for 2026-27" / a teacher's new classes.
   SESSION: Sparkles,
+  // The sports desk: a fixture, a result, a record.
+  SPORTS: Trophy,
 };
 
 /** Fallback for a kind the client doesn't know yet (server added one later). */
@@ -80,6 +83,9 @@ export function routeForNotification(
       // The new session's classes and timetable are what Today shows.
       case 'SESSION':
         return '/teacher';
+      // A teacher has no sports page of their own yet; the row marks read and stays.
+      case 'SPORTS':
+        return null;
       default:
         return null;
     }
@@ -106,6 +112,9 @@ export function routeForNotification(
     // The new class is on the home screen.
     case 'SESSION':
       return '/portal';
+    // What is next for me, my results, my records.
+    case 'SPORTS':
+      return '/portal/sports';
     // A student has no requests screen — the decision is a teacher-side route.
     case 'REQUEST_DECISION':
       return null;

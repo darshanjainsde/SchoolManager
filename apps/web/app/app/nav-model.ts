@@ -1,4 +1,5 @@
 import {
+  Trophy,
   Armchair,
   BookOpen,
   Briefcase,
@@ -116,6 +117,7 @@ export const NAV_MODEL: NavEntry[] = [
   // in the nav — leafActive's longest-href rule keeps the two tabs distinct.
   { kind: 'item', item: { href: '/app/press/orders', label: 'Print Store', icon: Store, requiredFeature: 'PRESS' } },
   { kind: 'item', item: { href: '/app/library', label: 'Library', icon: BookOpen, requiredFeature: 'LIBRARY' } },
+  { kind: 'item', item: { href: '/app/sports', label: 'Sports', icon: Trophy, requiredFeature: 'SPORTS' } },
   { kind: 'item', item: { href: '/app/announcements', label: 'Announcements', icon: Megaphone } },
   { kind: 'item', item: { href: '/app/alumni', label: 'Alumni', icon: Handshake, requiredFeature: 'ALUMNI' } },
   { kind: 'item', item: { href: '/app/settings', label: 'Settings', icon: Settings, requiredFeature: 'MANAGEMENT' } },

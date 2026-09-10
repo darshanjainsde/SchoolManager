@@ -1,0 +1,77 @@
+/**
+ * Pure view helpers for a tournament payload — bookings for the clash finder,
+ * the day board's rows, the words on a match card. No React; `model.test.ts`.
+ */
+import { findClashes, hhmm, parseSide, type Booking, type Clash, type Scoring } from '@skoolos/types';
+import type { EventDetail, MatchRow, TournamentDetail } from '@/app/app/sports/ui';
+
+export interface Slot {
+  id: string; kind: 'match' | 'heat'; eventId: string; event: EventDetail; venueId: string; atMin: number; slotMin: number;
+  title: string; who: string; state: 'done' | 'open'; people: string[];
+}
+
+export const eventLabel = (e: EventDetail) => `${e.sportName} · ${e.groupLabel} ${e.category}`;
+
+/** Student ids behind a side: the student, or every entered child of the section. */
+export function peopleOf(event: EventDetail, side: string | null): string[] {
+  if (!side) return [];
+  const p = parseSide(side);
+  if (!p) return [];
+  if (p.kind === 'student') return [p.studentId];
+  return event.entries.filter((e) => e.std === p.std && e.section.trim().toUpperCase() === p.section).map((e) => e.studentId);
+}
+
+export function slotsOf(t: TournamentDetail): Slot[] {
+  const out: Slot[] = [];
+  for (const ev of t.events) {
+    for (const m of ev.matches) {
+      if (m.bye || m.atMin == null || !m.venueId) continue;
+      out.push({
+        id: m.id, kind: 'match', eventId: ev.id, event: ev, venueId: m.venueId, atMin: m.atMin, slotMin: ev.slotMin,
+        title: `${ev.sportName} · ${m.roundName}${m.groupLabel !== 'Final' ? ` (${m.groupLabel})` : ''}`,
+        who: `${nameOf(t, m.aSide)} v ${nameOf(t, m.bSide)}`, state: m.winner ? 'done' : 'open',
+        people: [...peopleOf(ev, m.aSide), ...peopleOf(ev, m.bSide)],
+      });
+    }
+    for (const h of ev.heats) {
+      if (h.atMin == null || !h.venueId) continue;
+      out.push({
+        id: h.id, kind: 'heat', eventId: ev.id, event: ev, venueId: h.venueId, atMin: h.atMin, slotMin: ev.slotMin,
+        title: `${ev.sportName} · ${h.kind === 'FINAL' ? 'Final' : `Heat ${h.idx + 1}`}`,
+        who: `${h.marks.length} in lanes`, state: h.done ? 'done' : 'open', people: h.marks.map((k) => k.studentId),
+      });
+    }
+  }
+  return out.sort((a, b) => a.atMin - b.atMin);
+}
+
+export function bookingsOf(slots: Slot[]): Booking[] {
+  return slots.map((s) => ({ id: s.id, people: s.people, venueId: s.venueId, atMin: s.atMin, slotMin: s.slotMin }));
+}
+
+export function clashesOf(t: TournamentDetail): Clash[] {
+  return findClashes(bookingsOf(slotsOf(t)));
+}
+
+export const nameOf = (t: Pick<TournamentDetail, 'sideNames'>, side: string | null) => (side ? t.sideNames[side] ?? side : 'TBD');
+
+/** "21 21" for games; "2" (or "1 (4)" with a decider) for a single number. */
+export function sideScore(scoring: Scoring, mine: number[], theirs: number[]): string {
+  if (!mine.length) return '';
+  if (scoring.type === 'GAMES') return mine.join(' ');
+  return mine.length > 1 ? `${mine[0]} (${mine[1]})` : String(mine[0]);
+}
+
+/** The groups of a match event in bracket order: class rounds by class number, then the final. */
+export function groupsOf(event: EventDetail): { key: string; label: string; matches: MatchRow[] }[] {
+  const map = new Map<string, MatchRow[]>();
+  for (const m of event.matches) {
+    const key = `${m.stage}|${m.groupLabel}`;
+    map.set(key, [...(map.get(key) ?? []), m]);
+  }
+  return [...map.entries()]
+    .map(([key, matches]) => ({ key, label: matches[0].groupLabel, matches, stage: matches[0].stage, std: Number(/\d+/.exec(matches[0].groupLabel)?.[0] ?? 0) }))
+    .sort((a, b) => (a.stage === b.stage ? a.std - b.std : a.stage === 'FINAL' ? 1 : -1));
+}
+
+export const whenOf = (atMin: number | null) => (atMin == null ? 'not scheduled' : hhmm(atMin));
