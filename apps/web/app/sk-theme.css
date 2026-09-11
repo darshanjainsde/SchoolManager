@@ -3582,3 +3582,15 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-sp-matrix input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--sk-brand); }
 .sk-sp-problem { display: flex; gap: 8px; align-items: flex-start; padding: 9px 12px; border-radius: var(--sk-r-sm); background: var(--sk-amber-tint); color: var(--sk-amber-ink); font-size: 13px; }
 .sk-sp-problem[data-ok="true"] { background: var(--sk-good-tint); color: var(--sk-good); }
+.sk-sp-problem .sk-btn { margin: 0 4px; }
+/* An exception opens WHERE its line is: a full-width row under it, not a panel
+   at the foot of a twelve-row table (which is how far the eye had to travel). */
+.sk-sp-editrow > td { padding: 0 !important; background: var(--sk-bg-2); }
+.sk-sp-editbox { margin: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--sk-brand); border-radius: var(--sk-r-sm); background: var(--sk-card); }
+/* The cell that says a line has nowhere to play IS the way to fix it. */
+.sk-sp-novenue { display: inline-flex; align-items: center; gap: 7px; padding: 3px 6px; margin: -3px -6px; border: 0; border-radius: var(--sk-r-sm); background: none; font: inherit; font-size: 13px; color: var(--sk-ink-3); cursor: pointer; text-align: left; }
+.sk-sp-novenue:hover { background: var(--sk-bad-tint); color: var(--sk-bad); }
+.sk-sp-novenue:focus-visible { outline: 2px solid var(--sk-bad); outline-offset: 1px; }
+/* A worded button may carry the bad tone without shrinking to an icon box. */
+.sk-btn[data-tone="bad"]:not([data-icon]) { color: var(--sk-bad); }
+.sk-btn[data-tone="bad"]:not([data-icon]):hover:not(:disabled) { border-color: var(--sk-bad); background: var(--sk-bad-tint); }

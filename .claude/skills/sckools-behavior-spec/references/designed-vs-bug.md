@@ -215,3 +215,4 @@ No design rationale covers any of these. Escalate immediately:
 | "Every child got ticked into six events" | Designed: the grid is per group and category, "Enter class N" fills a column and All fills a row; a child in more than three events is badged | A tick landing in the wrong event's column |
 | "The same child is on the track and a court at once" | Never designed since 2026-09-11: one diary per meet, plus the rest gap | Any overlap for a person after creation |
 | "The final never appeared when every class walked over" | Fixed 2026-09-11: with no class round to play, the band final is built at creation | A class-rounds event with champions but no final |
+| "I cannot find where Edit opened" | It opens as a row directly under the line it edits; the red no-venue cell opens the same editor | An editor rendered away from its line |

@@ -46,6 +46,33 @@ describe('Wizard — the clicks taken out', () => {
     expect(screen.getByText(/2 without a venue/)).toBeInTheDocument();
   });
 
+  it('the no-venue cell opens the editor under its own row and adds the missing venue in one press', async () => {
+    mockApi();
+    const u = userEvent.setup();
+    renderWithProviders(<Wizard base="/app/sports" onClose={() => {}} />);
+    await u.type(screen.getByPlaceholderText('Annual Sports Meet 2026'), 'Meet');
+    await u.click(screen.getByRole('button', { name: '+ Court 1' }));
+    await u.click(screen.getByRole('tab', { name: /Sports & events/ }));
+    await u.click(await screen.findByRole('button', { name: 'Senior' }));
+    await u.click(screen.getByRole('button', { name: 'Girls' })); // Boys only
+    await u.click(screen.getByRole('button', { name: '50 m freestyle' }));
+    const cell = screen.getByRole('button', { name: /no venue add a pool/i });
+    expect(cell).toHaveAttribute('aria-expanded', 'false');
+    await u.click(cell);
+    // the editor is a row of the same table, immediately under its line
+    const editor = screen.getByRole('region', { name: /Edit 50 m freestyle Boys/ });
+    const row = editor.closest('tr')!;
+    expect(row.previousElementSibling?.textContent).toContain('50 m freestyle');
+    expect(within(editor).getByText(/The meet has no pool/)).toBeInTheDocument();
+    await u.click(within(editor).getByRole('button', { name: 'Add a pool' }));
+    expect(screen.queryByRole('button', { name: /no venue/i })).toBeNull();
+    expect(within(screen.getAllByRole('row')[1]).getByText('Pool')).toBeInTheDocument();
+    // and the remove control reads as words, not a clipped icon box
+    expect(within(editor).getByRole('button', { name: 'Remove this line' })).toBeVisible();
+    await u.click(within(editor).getByRole('button', { name: 'Remove this line' }));
+    expect(screen.getByText(/Press a sport above/)).toBeInTheDocument();
+  });
+
   it('a team sport with a single-section class suggests classes, names the problem when sections are forced, and creates with the resolved body', async () => {
     const api = mockApi();
     const u = userEvent.setup();

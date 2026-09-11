@@ -509,7 +509,7 @@ table, field, track, pool, hall, board, mat, ring, range; anything else is a hal
 CREATES one line per default category with everything filled in — no per-event form. **Venues bind from the sport**:
 a venue NAMED after it ("Badminton court 3") and only that; else every venue of the sport's type not named after
 another sport; else the fallback type (a board game in a hall); else NONE, and the line is flagged — never every
-venue. Edit opens one line for the exception (group, structure, minutes, lanes, its own venues). **Players**: one grid
+venue. Edit opens the line's exceptions as a ROW of the same table directly beneath it (group, structure, minutes, lanes, its own venues), never a panel at the foot of the list; the red "no venue" cell is itself the button that opens it, and the editor can add the missing venue in one press (named after the type, so the line binds by itself). **Players**: one grid
 per group × category — a row per child, a column per event, "Enter class N" fills a column, All/None fills a row, a
 child in more than three events is badged. **Team sports** say what a team is: SECTIONS (9 A v 9 B), CLASSES (9 v 10)
 or HOUSES, suggested from the entrants (sections only when every class of the group has two or more), with the count

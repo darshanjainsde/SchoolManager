@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -162,7 +162,6 @@ function SportsStep({ state, groups, patch, patchEvent }: { state: WizardState; 
     if (!picked.has(s.key)) patch(toggleSport(state, s));
     setCustom({ ...custom, name: '' });
   };
-  const editingEv = state.events.find((e) => e.uid === editing) ?? null;
   const bad = state.events.filter((e) => resolved(state, e).venues.idx.length === 0).length;
   return (
     <div className="sk-sp-stack">
@@ -189,45 +188,45 @@ function SportsStep({ state, groups, patch, patchEvent }: { state: WizardState; 
 
       <div className="sk-tblwrap">
         <table className="sk-tbl sk-sp-evtable">
-          <thead><tr><th>Event</th><th>Group · category</th><th>Plays as</th><th>Venues</th><th>Min</th><th></th></tr></thead>
+          <thead><tr><th>Event</th><th>Group · category</th><th>Plays as</th><th>Venues</th><th>Min</th><th /></tr></thead>
           <tbody>
             {state.events.length === 0 ? <tr><td colSpan={6}><span className="sk-muted">Press a sport above — every line it needs is filled in from the defaults.</span></td></tr> : null}
             {state.events.map((ev) => {
               const r = resolved(state, ev);
+              const open = editing === ev.uid;
               return (
-                <tr key={ev.uid} data-bad={r.venues.idx.length === 0}>
-                  <td className="nm">{ev.sport.name} <span className="sk-muted">{ev.sport.kind === 'MEASURED' ? 'heats' : ev.sport.kind === 'JUDGED' ? 'judged' : isTeam(ev) ? 'team' : 'matches'}</span></td>
-                  <td>{groups.find((g) => g.id === r.group)?.label ?? '—'} · {ev.category}</td>
-                  <td>{ev.sport.kind === 'MEASURED' ? `Heats of ${r.lanes}` : ev.sport.kind === 'JUDGED' ? 'One panel round' : r.structure === 'CLASS' ? 'Class rounds → final' : 'One draw'}</td>
-                  <td>{r.venues.idx.map((i) => state.venues[i]?.name).filter(Boolean).join(', ') || <span className="sk-muted">add a {r.venues.want}</span>}<VenueBadge how={r.venues.how} /></td>
-                  <td className="mono">{r.slotMin}</td>
-                  <td><button type="button" className="sk-btn" data-size="sm" aria-pressed={editing === ev.uid} onClick={() => setEditing(editing === ev.uid ? null : ev.uid)}>Edit</button></td>
-                </tr>
+                <Fragment key={ev.uid}>
+                  <tr data-bad={r.venues.idx.length === 0}>
+                    <td className="nm">{ev.sport.name} <span className="sk-muted">{ev.sport.kind === 'MEASURED' ? 'heats' : ev.sport.kind === 'JUDGED' ? 'judged' : isTeam(ev) ? 'team' : 'matches'}</span></td>
+                    <td>{groups.find((g) => g.id === r.group)?.label ?? '—'} · {ev.category}</td>
+                    <td>{ev.sport.kind === 'MEASURED' ? `Heats of ${r.lanes}` : ev.sport.kind === 'JUDGED' ? 'One panel round' : r.structure === 'CLASS' ? 'Class rounds → final' : 'One draw'}</td>
+                    <td>
+                      {r.venues.idx.length ? (
+                        <>{r.venues.idx.map((i) => state.venues[i]?.name).filter(Boolean).join(', ')}<VenueBadge how={r.venues.how} /></>
+                      ) : (
+                        <button type="button" className="sk-sp-novenue" aria-expanded={open} onClick={() => setEditing(open ? null : ev.uid)}>
+                          <span className="sk-sp-vbadge" data-tone="bad">no venue</span>
+                          <span>add a {r.venues.want}</span>
+                        </button>
+                      )}
+                    </td>
+                    <td className="mono">{r.slotMin}</td>
+                    <td><button type="button" className="sk-btn" data-size="sm" aria-pressed={open} aria-label={`Edit ${lineLabel(ev)}`} onClick={() => setEditing(open ? null : ev.uid)}>Edit</button></td>
+                  </tr>
+                  {open ? (
+                    <tr className="sk-sp-editrow">
+                      <td colSpan={6}>
+                        <EventEditor state={state} ev={ev} groups={groups} patch={patch} patchEvent={patchEvent} onDone={() => setEditing(null)} />
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="sk-muted">{state.events.length} event{state.events.length === 1 ? '' : 's'} from {picked.size} sport{picked.size === 1 ? '' : 's'}{bad ? ` · ${bad} without a venue — add one on step 1 or tick a venue with Edit` : ''}</p>
-
-      {editingEv ? (
-        <div className="sk-sp-scorebox" role="region" aria-label={`Edit ${lineLabel(editingEv)}`}>
-          <div className="sk-sp-eventhead"><span className="nm">{lineLabel(editingEv)}</span><Pill tone="muted">exception to the defaults</Pill><span style={{ flex: 1 }} /><button type="button" className="sk-btn" data-size="sm" onClick={() => setEditing(null)}>Done</button></div>
-          <div className="sk-sp-fieldrow">
-            <div className="sk-sp-field"><span className="sk-lab">Group</span><div className="sk-seg">{groups.map((g) => <button key={g.id} type="button" aria-pressed={resolved(state, editingEv).group === g.id} onClick={() => patchEvent(editingEv.uid, { groupKey: g.id, studentIds: [] })}>{g.label}</button>)}</div></div>
-            {editingEv.sport.kind === 'MATCH' ? <div className="sk-sp-field"><span className="sk-lab">Plays as</span><div className="sk-seg"><button type="button" aria-pressed={resolved(state, editingEv).structure === 'CLASS'} onClick={() => patchEvent(editingEv.uid, { structure: 'CLASS' })}>Class rounds → final</button><button type="button" aria-pressed={resolved(state, editingEv).structure === 'DRAW'} onClick={() => patchEvent(editingEv.uid, { structure: 'DRAW' })}>One draw</button></div></div> : null}
-            <label className="sk-sp-field"><span className="sk-lab">Minutes</span><input className="sk-input" type="number" min={5} max={240} value={resolved(state, editingEv).slotMin} style={{ width: '6em' }} onChange={(e) => patchEvent(editingEv.uid, { slotMin: Number(e.target.value) || undefined })} /></label>
-            {editingEv.sport.kind === 'MEASURED' ? <label className="sk-sp-field"><span className="sk-lab">Lanes</span><input className="sk-input" type="number" min={1} max={16} value={resolved(state, editingEv).lanes} style={{ width: '5em' }} onChange={(e) => patchEvent(editingEv.uid, { lanes: Number(e.target.value) || undefined })} /></label> : null}
-          </div>
-          <div className="sk-sp-field"><span className="sk-lab">Venues for this event</span>
-            <div className="sk-sp-chips">
-              {state.venues.map((v, i) => { const on = resolved(state, editingEv).venues.idx.includes(i); return <button key={v.name} type="button" className="sk-chip" aria-pressed={on} onClick={() => { const cur = new Set(resolved(state, editingEv).venues.idx); on ? cur.delete(i) : cur.add(i); patchEvent(editingEv.uid, { venueIdx: [...cur].sort((a, b) => a - b) }); }}>{v.name}</button>; })}
-              {editingEv.venueIdx ? <button type="button" className="sk-btn" data-size="sm" onClick={() => patchEvent(editingEv.uid, { venueIdx: undefined })}>Back to the sport’s own</button> : null}
-            </div>
-          </div>
-          <div className="sk-sp-actions"><button type="button" className="sk-btn" data-size="sm" data-icon="" data-tone="bad" onClick={() => { patch({ events: state.events.filter((e) => e.uid !== editingEv.uid) }); setEditing(null); }}>Remove this line</button></div>
-        </div>
-      ) : null}
+      <p className="sk-muted">{state.events.length} event{state.events.length === 1 ? '' : 's'} from {picked.size} sport{picked.size === 1 ? '' : 's'}{bad ? ` · ${bad} without a venue — press the red cell to add one` : ''}</p>
 
       <div className="sk-sp-group">
         <p className="sk-lab">Your own sport</p>
@@ -238,6 +237,60 @@ function SportsStep({ state, groups, patch, patchEvent }: { state: WizardState; 
           <label className="sk-sp-field"><span className="sk-lab">Played on</span><select className="sk-input" value={custom.venue} onChange={(e) => setCustom({ ...custom, venue: e.target.value as VenueType })}>{VENUE_TYPES.map((t) => <option key={t} value={t}>{VENUE_TYPE_LABEL[t]}</option>)}</select></label>
           <button type="button" className="sk-btn" onClick={addCustom}>Add sport</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One line's exceptions, opened where the line is — never a panel at the foot
+ * of a twelve-row table. A sport with no venue of its own type can add one
+ * here in a press: the venue is named after the type and binds by itself.
+ */
+function EventEditor({ state, ev, groups, patch, patchEvent, onDone }: { state: WizardState; ev: WizardEvent; groups: { id: string; label: string }[]; patch: (p: Partial<WizardState>) => void; patchEvent: (uid: string, p: Partial<WizardEvent>) => void; onDone: () => void }) {
+  const r = resolved(state, ev);
+  const addVenue = () => {
+    const label = VENUE_TYPE_LABEL[r.venues.want];
+    let name = label;
+    for (let n = 2; state.venues.some((v) => v.name.toLowerCase() === name.toLowerCase()); n++) name = `${label} ${n}`;
+    patch({ venues: [...state.venues, { name, type: r.venues.want }] });
+  };
+  const toggleVenue = (i: number) => {
+    const cur = new Set(r.venues.idx);
+    if (cur.has(i)) cur.delete(i); else cur.add(i);
+    patchEvent(ev.uid, { venueIdx: [...cur].sort((a, b) => a - b) });
+  };
+  return (
+    <div className="sk-sp-editbox" role="region" aria-label={`Edit ${lineLabel(ev)}`}>
+      <div className="sk-sp-eventhead">
+        <span className="nm">{lineLabel(ev)}</span>
+        <Pill tone="muted">only this line</Pill>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="sk-btn" data-size="sm" data-variant="primary" onClick={onDone}>Done</button>
+      </div>
+      <div className="sk-sp-fieldrow">
+        <div className="sk-sp-field"><span className="sk-lab">Group</span><div className="sk-seg">{groups.map((g) => <button key={g.id} type="button" aria-pressed={r.group === g.id} onClick={() => patchEvent(ev.uid, { groupKey: g.id, studentIds: [] })}>{g.label}</button>)}</div></div>
+        {ev.sport.kind === 'MATCH' ? (
+          <div className="sk-sp-field"><span className="sk-lab">Plays as</span><div className="sk-seg">
+            <button type="button" aria-pressed={r.structure === 'CLASS'} onClick={() => patchEvent(ev.uid, { structure: 'CLASS' })}>Class rounds → final</button>
+            <button type="button" aria-pressed={r.structure === 'DRAW'} onClick={() => patchEvent(ev.uid, { structure: 'DRAW' })}>One draw</button>
+          </div></div>
+        ) : null}
+        <label className="sk-sp-field"><span className="sk-lab">Minutes</span><input className="sk-input" type="number" min={5} max={240} value={r.slotMin} style={{ width: '6em' }} onChange={(e) => patchEvent(ev.uid, { slotMin: Number(e.target.value) || undefined })} /></label>
+        {ev.sport.kind === 'MEASURED' ? <label className="sk-sp-field"><span className="sk-lab">Lanes</span><input className="sk-input" type="number" min={1} max={16} value={r.lanes} style={{ width: '5em' }} onChange={(e) => patchEvent(ev.uid, { lanes: Number(e.target.value) || undefined })} /></label> : null}
+      </div>
+      <div className="sk-sp-field">
+        <span className="sk-lab">Venues for this line{ev.venueIdx ? '' : ` — bound to every ${r.venues.want} in the meet`}</span>
+        {r.venues.idx.length === 0 ? (
+          <p className="sk-sp-problem"><span>⚠</span><span>{`The meet has no ${r.venues.want}. `}<button type="button" className="sk-btn" data-size="sm" onClick={addVenue}>{`Add a ${r.venues.want}`}</button>{` or tick a venue below — ${ev.sport.name} then runs there.`}</span></p>
+        ) : null}
+        <div className="sk-sp-chips">
+          {state.venues.map((v, i) => <button key={v.name} type="button" className="sk-chip" aria-pressed={r.venues.idx.includes(i)} onClick={() => toggleVenue(i)}>{v.name} <span className="sk-sp-vbadge">{v.type}</span></button>)}
+          {ev.venueIdx ? <button type="button" className="sk-btn" data-size="sm" onClick={() => patchEvent(ev.uid, { venueIdx: undefined })}>Back to the sport’s own</button> : null}
+        </div>
+      </div>
+      <div className="sk-sp-actions">
+        <button type="button" className="sk-btn" data-size="sm" data-tone="bad" onClick={() => { patch({ events: state.events.filter((e) => e.uid !== ev.uid) }); onDone(); }}>Remove this line</button>
       </div>
     </div>
   );
