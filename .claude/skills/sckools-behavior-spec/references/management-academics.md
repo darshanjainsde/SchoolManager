@@ -559,6 +559,19 @@ view shows how full each court is on each day, which events run when, and the da
 rolls an overrunning slot to the next morning, so a one-day meet can hold slots on day 2 — the day strip shows every
 day a slot reached, marks the ones the meet is not booked for, and offers to book them.
 
+**Reading a meet** (rebuilt 2026-09-13). Three views, because a teacher asks
+two different questions and a flat list of every slot in start-time order
+answers neither. **Schedule** (the default) is the meet by SPORT, then by the
+class or round inside it — shut rows carrying their own counts, dates and
+venues, opening to the individual slots; that is "when is the 100 m for class
+9". **Timetable** is one day on a proportional time axis — a column per venue
+that holds something that day (the idle ones are named, not given a column),
+the hours ruled down the side, and every match or heat a block whose height IS
+its length, coloured by sport; a block too short for three lines reads as one.
+**Days** are a strip of chips up to seven and a stepper with a list beyond it —
+a meet whose plan has spilled over fifty days must never render fifty chips.
+The overrun is stated ONCE, above the views, with the button that fixes it.
+
 **Board** (`GET /sports/tournaments/:id`): one payload — venues, events with scoring, entries, matches, heats with
 lane marks, `sideNames` — and the web derives the day board, brackets, heat sheets and the clash list with the shared
 maths; while LIVE the page refetches every 15 s. **Clashes** = a student in two slots at once, or a venue holding two.

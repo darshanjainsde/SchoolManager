@@ -5,15 +5,17 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Bracket } from '@/components/sports/bracket';
-import { DayBoard } from '@/components/sports/day-board';
+import { DayPicker } from '@/components/sports/day-picker';
 import { PlanBoard, type PlanActions } from '@/components/sports/plan-board';
+import { Schedule } from '@/components/sports/schedule';
+import { Timetable } from '@/components/sports/timetable';
 import { HeatSheet } from '@/components/sports/heat-sheet';
 import { ScoreBox } from '@/components/sports/score-box';
-import { clashesOf, daySpanOf, eventLabel, slotsOf, type Slot } from '@/components/sports/model';
+import { clashesOf, dayIndexOf, daySpanOf, eventLabel, slotsOf, type Slot } from '@/components/sports/model';
 import { hhmm } from '@skoolos/types';
-import { Card, CardBody, CardHead, EmptyRow, Pill, STATUS_LABEL, TONE, dayOfMeet, fmtDay, useDesk, type MatchRow, type TournamentDetail } from './ui';
+import { Card, CardBody, CardHead, EmptyRow, Pill, STATUS_LABEL, TONE, fmtDay, useDesk, type MatchRow, type TournamentDetail } from './ui';
 
-type View = 'board' | 'plan' | 'events' | 'clashes';
+type View = 'schedule' | 'day' | 'plan' | 'events' | 'clashes';
 
 type PlanJob =
   | { kind: 'update'; body: { endsOn?: string; dayStartMin?: number; dayEndMin?: number; restMin?: number } }
@@ -40,7 +42,7 @@ export default function TournamentView({ base, id }: { base: string; id: string 
   const { api, host, can, isAdmin, ready } = useDesk();
   const qc = useQueryClient();
   const router = useRouter();
-  const [view, setView] = useState<View>('board');
+  const [view, setView] = useState<View>('schedule');
   const [day, setDay] = useState(0);
   const [eventId, setEventId] = useState<string | null>(null);
   const [selected, setSelected] = useState<MatchRow | null>(null);
@@ -55,7 +57,7 @@ export default function TournamentView({ base, id }: { base: string; id: string 
   const t = q.data;
   const clashes = useMemo(() => (t ? clashesOf(t) : []), [t]);
   const span = t ? daySpanOf(t) : { booked: 1, used: 1, over: false };
-  const days = Math.max(span.booked, span.used);
+  const days = useMemo(() => (t ? dayIndexOf(t) : []), [t]);
   useEffect(() => { if (t && !eventId && t.events[0]) setEventId(t.events[0].id); }, [t, eventId]);
   useEffect(() => {
     // keep the open scoresheet in step with a reload
@@ -123,7 +125,7 @@ export default function TournamentView({ base, id }: { base: string; id: string 
         </CardHead>
         <CardBody>
           <div className="sk-sp-kv">
-            <div><span className="sk-lab">Days</span><b>{fmtDay(t.startsOn)}{days > 1 ? ` – ${fmtDay(t.endsOn)}` : ''}</b></div>
+            <div><span className="sk-lab">Days</span><b>{fmtDay(t.startsOn)}{span.booked > 1 ? ` – ${fmtDay(t.endsOn)}` : ''}</b></div>
             <div><span className="sk-lab">Hours</span><b>{hhmm(t.dayStartMin)}–{hhmm(t.dayEndMin)}</b></div>
             <div><span className="sk-lab">Venues</span><b>{t.venues.map((v) => v.name).join(', ')}</b></div>
             <div><span className="sk-lab">Events</span><b>{t.events.length}</b></div>
@@ -155,34 +157,46 @@ export default function TournamentView({ base, id }: { base: string; id: string 
       </Card>
 
       <div className="sk-seg sk-sp-views" role="tablist" aria-label="Tournament views">
-        <button type="button" role="tab" aria-selected={view === 'board'} onClick={() => setView('board')}>Day board</button>
+        <button type="button" role="tab" aria-selected={view === 'schedule'} onClick={() => setView('schedule')}>Schedule</button>
+        <button type="button" role="tab" aria-selected={view === 'day'} onClick={() => setView('day')}>Timetable</button>
         <button type="button" role="tab" aria-selected={view === 'plan'} onClick={() => setView('plan')}>Days &amp; courts{span.over ? ' ⚠' : ''}</button>
         <button type="button" role="tab" aria-selected={view === 'events'} onClick={() => setView('events')}>Events & results</button>
         <button type="button" role="tab" aria-selected={view === 'clashes'} onClick={() => setView('clashes')}>Clashes{clashes.length ? ` (${clashes.length})` : ''}</button>
       </div>
 
-      {view === 'board' ? (
+      {span.over ? (
+        <div className="sk-notice">
+          <div className="nt">{`The plan runs to ${span.used} days and the meet is booked for ${span.booked}`}</div>
+          <div className="nd">
+            Everything still has a time — it just runs past the last booked day. Book the days, or add a court so the same work fits into fewer.{' '}
+            <button type="button" className="sk-btn" data-size="sm" onClick={() => setView('plan')}>Open days &amp; courts</button>
+          </div>
+        </div>
+      ) : null}
+
+      {view === 'schedule' ? (
         <Card>
           <CardHead>
-            <h3>Day board</h3>
+            <h3>Schedule</h3>
             <span className="sp" />
-            {days > 1 ? (
-              <div className="sk-seg sk-sp-dayseg">{Array.from({ length: days }, (_, i) => (
-                <button key={i} type="button" aria-pressed={day === i} data-beyond={i >= span.booked} title={i >= span.booked ? 'The meet is not booked for this day' : undefined} onClick={() => setDay(i)}>
-                  {fmtDay(dayOfMeet(t.startsOn, i))}{i >= span.booked ? ' ⚠' : ''}
-                </button>
-              ))}</div>
-            ) : <span className="sk-muted">{fmtDay(t.startsOn)}</span>}
+            <span className="sk-muted">By sport, then by class.</span>
           </CardHead>
           <CardBody>
-            {span.over ? (
-              <p className="sk-sp-problem"><span>⚠</span><span>
-                {`The plan needs ${span.used} days and the meet is booked for ${span.booked}. The last ${span.used - span.booked === 1 ? 'day is' : 'days are'} shown above with a warning.`}
-                <button type="button" className="sk-btn" data-size="sm" onClick={() => setView('plan')}>Open days &amp; courts</button>
-              </span></p>
-            ) : null}
-            {slotsOf(t).length === 0 ? <EmptyRow>Nothing scheduled yet.</EmptyRow> : <DayBoard t={t} day={day} clashes={clashes} onOpen={openSlot} />}
-            <p className="sk-muted">Every sport of the meet is on this board. Press a slot to open its event. Green edge: result in. Red edge: a clash — see the Clashes view.</p>
+            <Schedule t={t} onOpen={openSlot} />
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {view === 'day' ? (
+        <Card>
+          <CardHead>
+            <h3>Timetable</h3>
+            <span className="sp" />
+            <DayPicker startsOn={t.startsOn} days={days} day={day} onDay={setDay} />
+          </CardHead>
+          <CardBody>
+            <Timetable t={t} day={day} clashes={clashes} onOpen={openSlot} />
+            <p className="sk-muted">Every sport of the meet is on this day, and a block is as tall as it is long. Press one to open its event; a red edge is a clash.</p>
           </CardBody>
         </Card>
       ) : null}
@@ -191,7 +205,7 @@ export default function TournamentView({ base, id }: { base: string; id: string 
         <Card>
           <CardHead><h3>Days &amp; courts</h3><span className="sp" />{plan.isPending ? <Pill tone="brand">Re-laying the plan…</Pill> : null}</CardHead>
           <CardBody>
-            <PlanBoard t={t} canEdit={ready && can('CREATE') && t.status !== 'DONE'} busy={plan.isPending} act={planActs} onOpenDay={(d) => { setDay(d); setView('board'); }} />
+            <PlanBoard t={t} canEdit={ready && can('CREATE') && t.status !== 'DONE'} busy={plan.isPending} act={planActs} onOpenDay={(d) => { setDay(d); setView('day'); }} />
           </CardBody>
         </Card>
       ) : null}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clashesOf, daySpanOf, groupsOf, loadOf, peopleOf, sideScore, slotsOf } from './model';
+import { clashesOf, dayIndexOf, daySpanOf, groupsOf, loadOf, peopleOf, scheduleOf, sideScore, slotsOf, timetableOf, toneMap } from './model';
 import type { EventDetail, TournamentDetail } from '@/app/app/sports/ui';
 
 const ev = (over: Partial<EventDetail>): EventDetail => ({
@@ -65,5 +65,64 @@ describe('the days a meet reaches, and what each one holds', () => {
     expect(load[1]).toMatchObject({ day: 1, total: 25, endsAt: 565 });
     expect(load[1].byVenue).toEqual({ v2: { min: 25, slots: 1 } });
     expect(loadOf(oneDay({ events: [a, b] }), 1)).toHaveLength(1); // a day past the count is simply not listed
+  });
+});
+
+describe('the meet the way a teacher asks for it', () => {
+  const sprint = (over: Partial<EventDetail> = {}): EventDetail => ev({
+    id: 'e-run', sportKey: 'ath-100m', sportName: '100 m sprint', kind: 'MEASURED', slotMin: 5, venueIds: ['v2'],
+    heats: [
+      { id: 'h1', kind: 'HEAT', groupLabel: 'Class 9', idx: 0, venueId: 'v2', atMin: 540, done: true, marks: [{ studentId: 'a', side: 's:a', lane: 1, mark: 13.1, rank: 1 }] },
+      { id: 'h2', kind: 'HEAT', groupLabel: 'Class 9', idx: 1, venueId: 'v2', atMin: 545, done: false, marks: [{ studentId: 'b', side: 's:b', lane: 1, mark: null, rank: null }] },
+      { id: 'h3', kind: 'HEAT', groupLabel: 'Class 10', idx: 2, venueId: 'v2', atMin: 550, done: false, marks: [{ studentId: 'c', side: 's:c', lane: 1, mark: null, rank: null }] },
+      { id: 'hf', kind: 'FINAL', groupLabel: null, idx: 3, venueId: 'v2', atMin: 1440 + 600, done: false, marks: [{ studentId: 'a', side: 's:a', lane: 1, mark: null, rank: null }] },
+    ],
+    ...over,
+  });
+  const meet = (over: Partial<TournamentDetail> = {}): TournamentDetail => ({
+    ...t([]),
+    venues: [{ id: 'v1', name: 'Court 1', order: 0 }, { id: 'v2', name: 'Track', order: 1 }, { id: 'v3', name: 'Pool', order: 2 }],
+    events: [sprint(), ev({ id: 'e-bad', matches: [m({ id: 'm1', atMin: 600 }), m({ id: 'm2', atMin: 625, groupLabel: 'Final', roundName: 'Final' })] })],
+    ...over,
+  });
+
+  it('groups by sport, then by the class or round inside it, with counts and when it runs', () => {
+    const [run, bad] = scheduleOf(meet());
+    expect(run).toMatchObject({ label: '100 m sprint · Senior Boys', total: 4, done: 1, venueIds: ['v2'] });
+    expect(run.groups.map((g) => [g.label, g.slots.length])).toEqual([['Class 9', 2], ['Class 10', 1], ['Final', 1]]);
+    expect(run.groups[0]).toMatchObject({ fromMin: 540, toMin: 550, done: 1 });
+    expect(run.toMin).toBe(1440 + 605); // the final is on the second day
+    // a match event groups by the class its round belongs to
+    expect(bad.groups.map((g) => g.label)).toEqual(['Class 9', 'Final']);
+    expect(bad.groups[0].slots[0].short).toBe('Final');
+    // one colour per sport, in the order the sports appear
+    expect([...toneMap(meet()).entries()]).toEqual([['ath-100m', 0], ['badminton', 1]]);
+  });
+
+  it('offers every day the meet booked plus every day a slot reached, with what is on each', () => {
+    expect(dayIndexOf(meet())).toEqual([
+      { day: 0, slots: 5, beyond: false },
+      { day: 1, slots: 1, beyond: true },
+    ]);
+  });
+
+  it('lays a day out on a time axis, and leaves out the venues with nothing on them', () => {
+    const tt = timetableOf(meet(), 0);
+    expect(tt.columns.map((c) => [c.name, c.slots.length, c.min])).toEqual([['Court 1', 2, 50], ['Track', 3, 15]]);
+    expect(tt.idle.map((v) => v.name)).toEqual(['Pool']);
+    expect(timetableOf(meet(), 0, true).columns.map((c) => c.name)).toEqual(['Court 1', 'Track', 'Pool']);
+    // the grid holds the day window, and the five-minute heat is still readable
+    expect(tt).toMatchObject({ fromMin: 540, toMin: 960 });
+    expect(tt.hours).toEqual([540, 600, 660, 720, 780, 840, 900, 960]);
+    expect(tt.pxPerMin).toBe(5);
+    expect(Math.round(tt.pxPerMin * 5)).toBeGreaterThanOrEqual(25);
+  });
+
+  it('stretches the grid past the bell when a slot runs over, and shrinks the scale for long slots', () => {
+    const late = meet({ events: [ev({ matches: [m({ id: 'm1', atMin: 930 })] })] }); // 25 min from 15:30, day ends 16:00
+    expect(timetableOf(late, 0)).toMatchObject({ fromMin: 540, toMin: 960 });
+    const over = meet({ events: [ev({ matches: [m({ id: 'm1', atMin: 950 })] })] }); // runs to 16:15
+    expect(timetableOf(over, 0).toMin).toBe(975);
+    expect(timetableOf(over, 0).pxPerMin).toBeCloseTo(1.1, 5); // 25-minute slots need no zoom
   });
 });

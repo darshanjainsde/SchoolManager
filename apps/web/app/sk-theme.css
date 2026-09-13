@@ -95,11 +95,18 @@
   --sk-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sk-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* One hue per sport on the timetable and the schedule. Medium saturation so
+     the same eight read on the warm page and on the dark card. */
+  --sk-t0: #4f46e5; --sk-t1: #0e8ea8; --sk-t2: #12855f; --sk-t3: #c2740b;
+  --sk-t4: #c0392f; --sk-t5: #7c4ddb; --sk-t6: #b8397f; --sk-t7: #5a6b8c;
+
   color: var(--sk-ink);
   font-variant-numeric: tabular-nums;
 }
 @media (prefers-color-scheme: dark) {
   .skosx {
+    --sk-t0: #8b83ff; --sk-t1: #3fc0dc; --sk-t2: #3fc493; --sk-t3: #eaa33a;
+    --sk-t4: #f0756a; --sk-t5: #b191ff; --sk-t6: #ef79b7; --sk-t7: #94a6c4;
     --sk-paper: #141224;
     --sk-ink: #edebfa;
     --sk-ink-2: #b9b6d0;
@@ -3519,17 +3526,6 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-sp-heathead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* day board */
-.sk-sp-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; align-items: start; }
-.sk-sp-venue { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.sk-sp-venue > .h { font-family: var(--sk-serif); font-size: 15px; font-weight: 650; padding: 2px 0 6px; border-bottom: 1px solid var(--sk-line); color: var(--sk-ink); }
-.sk-sp-slotcard { display: flex; flex-direction: column; gap: 2px; padding: 7px 10px; border: 1px solid var(--sk-line); border-left-width: 3px; border-radius: var(--sk-r-sm); background: var(--sk-card); min-width: 0; font-size: 12.5px; }
-.sk-sp-slotcard .t { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); }
-.sk-sp-slotcard .w { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sk-sp-slotcard .who { color: var(--sk-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sk-sp-slotcard[data-state="done"] { border-left-color: var(--sk-good); }
-.sk-sp-slotcard[data-state="open"] { border-left-color: var(--sk-brand); }
-.sk-sp-slotcard[data-state="clash"] { border-left-color: var(--sk-bad); background: var(--sk-bad-tint); }
-.sk-sp-boardbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
 /* rules book */
 .sk-sp-rules { display: grid; grid-template-columns: minmax(min(100%, 200px), 230px) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -3653,3 +3649,83 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-sp-planday .n { font-family: var(--sk-mono); font-size: 10.5px; color: var(--sk-ink-3); }
 .sk-sp-planday .tot b[data-late="true"] { color: var(--sk-bad); }
 .sk-sp-dayseg button[data-beyond="true"] { color: var(--sk-amber-ink); }
+
+/* Schedule — the meet by sport, then by the class inside it. */
+.sk-sp-schedule { display: flex; flex-direction: column; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow: hidden; }
+.sk-sp-sportrow { border-top: 1px solid var(--sk-line); }
+.sk-sp-sportrow > .hd, .sk-sp-grouprow > .hd {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap; width: 100%; padding: 9px 12px;
+  border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; border-left: 3px solid transparent;
+}
+.sk-sp-sportrow > .hd { border-left-color: var(--tone, var(--sk-brand)); }
+.sk-sp-sportrow[data-tone="0"] { --tone: var(--sk-t0); } .sk-sp-sportrow[data-tone="1"] { --tone: var(--sk-t1); }
+.sk-sp-sportrow[data-tone="2"] { --tone: var(--sk-t2); } .sk-sp-sportrow[data-tone="3"] { --tone: var(--sk-t3); }
+.sk-sp-sportrow[data-tone="4"] { --tone: var(--sk-t4); } .sk-sp-sportrow[data-tone="5"] { --tone: var(--sk-t5); }
+.sk-sp-sportrow[data-tone="6"] { --tone: var(--sk-t6); } .sk-sp-sportrow[data-tone="7"] { --tone: var(--sk-t7); }
+.sk-sp-sportrow > .hd:hover, .sk-sp-grouprow > .hd:hover { background: var(--sk-bg-2); }
+.sk-sp-sportrow[data-open="true"] > .hd { background: var(--sk-bg-2); }
+.sk-sp-sportrow .nm { font-weight: 700; font-size: 13.5px; }
+.sk-sp-sportrow .meta, .sk-sp-grouprow .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-sp-sportrow > .hd > .sp, .sk-sp-grouprow > .hd > .sp { flex: 1 1 auto; }
+.sk-sp-sportrow .on, .sk-sp-grouprow .on { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-2); white-space: nowrap; }
+.sk-sp-sportrow svg, .sk-sp-grouprow svg { flex: none; color: var(--sk-ink-3); transition: transform 120ms ease; }
+.sk-sp-sportrow[data-open="true"] > .hd svg, .sk-sp-grouprow[data-open="true"] > .hd svg { transform: rotate(90deg); }
+.sk-sp-sportrow > .body { border-top: 1px solid var(--sk-line); background: var(--sk-bg-2); }
+.sk-sp-grouprow { border-top: 1px solid var(--sk-line); }
+.sk-sp-grouprow:first-child { border-top: 0; }
+.sk-sp-grouprow > .hd { padding-left: 26px; }
+.sk-sp-grouprow .nm { font-weight: 650; font-size: 12.5px; }
+.sk-sp-grouprow .slots { display: flex; flex-direction: column; list-style: none; padding: 0 0 6px 26px; }
+.sk-sp-slotline {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; width: 100%; padding: 5px 12px;
+  border: 0; border-left: 2px solid var(--sk-line-2); background: none; font: inherit; font-size: 12.5px; color: inherit; cursor: pointer; text-align: left;
+}
+.sk-sp-slotline:hover { background: var(--sk-card); border-left-color: var(--sk-brand); }
+.sk-sp-slotline[data-state="done"] { border-left-color: var(--sk-good); }
+.sk-sp-slotline .t { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); white-space: nowrap; }
+.sk-sp-slotline .w { font-weight: 650; }
+.sk-sp-slotline .who { color: var(--sk-ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sk-sp-slotline .v { margin-left: auto; font-size: 11.5px; color: var(--sk-ink-3); white-space: nowrap; }
+
+/* Timetable — one day on a proportional time axis. */
+.sk-sp-daypick { display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
+.sk-sp-daypick .sk-sp-field { min-width: min(100%, 15em); }
+.sk-sp-dayseg button { display: inline-flex; align-items: baseline; gap: 5px; }
+.sk-sp-dayseg .n { font-family: var(--sk-mono); font-size: 10.5px; opacity: 0.7; }
+.sk-sp-tt { display: flex; gap: 0; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow-x: auto; }
+.sk-sp-tt .hours { flex: 0 0 52px; position: sticky; left: 0; z-index: 2; background: var(--sk-card); border-right: 1px solid var(--sk-line); }
+.sk-sp-tt .cols { display: flex; flex: 1 1 auto; min-width: max-content; }
+.sk-sp-tt .col { flex: 1 0 clamp(128px, 18vw, 230px); border-right: 1px solid var(--sk-line); min-width: 0; }
+.sk-sp-tt .col:last-child { border-right: 0; }
+.sk-sp-tt .vh {
+  height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--sk-line); background: var(--sk-bg-2);
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--sk-ink-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; top: 0; z-index: 1;
+}
+/* The 9 o'clock label sits on its own rule, so the track starts below the
+   venue header rather than under it. */
+.sk-sp-tt .track { position: relative; height: var(--tt-h); margin-top: 10px; }
+.sk-sp-tt .hr { position: absolute; left: 0; right: 6px; text-align: right; font-family: var(--sk-mono); font-size: 10.5px; color: var(--sk-ink-3); transform: translateY(-50%); }
+.sk-sp-tt .rule { position: absolute; left: 0; right: 0; height: 1px; background: var(--sk-line); opacity: 0.7; }
+.sk-sp-tt .blk {
+  position: absolute; left: 4px; right: 4px; display: flex; flex-direction: column; gap: 1px; overflow: hidden;
+  padding: 3px 7px; border: 1px solid var(--sk-line); border-left: 3px solid var(--tone, var(--sk-brand));
+  border-radius: var(--sk-r-sm); background: var(--sk-card); font: inherit; font-size: 11.5px; color: inherit; cursor: pointer; text-align: left;
+}
+.sk-sp-tt .blk[data-tone="0"] { --tone: var(--sk-t0); } .sk-sp-tt .blk[data-tone="1"] { --tone: var(--sk-t1); }
+.sk-sp-tt .blk[data-tone="2"] { --tone: var(--sk-t2); } .sk-sp-tt .blk[data-tone="3"] { --tone: var(--sk-t3); }
+.sk-sp-tt .blk[data-tone="4"] { --tone: var(--sk-t4); } .sk-sp-tt .blk[data-tone="5"] { --tone: var(--sk-t5); }
+.sk-sp-tt .blk[data-tone="6"] { --tone: var(--sk-t6); } .sk-sp-tt .blk[data-tone="7"] { --tone: var(--sk-t7); }
+.sk-sp-tt .blk:hover { border-color: var(--sk-brand); border-left-color: var(--tone, var(--sk-brand)); }
+.sk-sp-tt .blk[data-state="done"] { background: var(--sk-good-tint); }
+.sk-sp-tt .blk[data-state="clash"] { background: var(--sk-bad-tint); border-color: var(--sk-bad); }
+.sk-sp-tt .blk .t { font-family: var(--sk-mono); font-size: 10.5px; color: var(--sk-ink-3); }
+.sk-sp-tt .blk .w { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-sp-tt .blk[data-tight="true"] { flex-direction: row; align-items: baseline; gap: 6px; padding: 2px 7px; }
+.sk-sp-tt .blk[data-tight="true"] .t { flex: none; }
+.sk-sp-tt .blk .who { color: var(--sk-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) { .sk-sp-sportrow svg, .sk-sp-grouprow svg { transition: none; } }
+@media (max-width: 640px) {
+  .sk-sp-sportrow .on, .sk-sp-grouprow .on { width: 100%; }
+  .sk-sp-slotline .v { margin-left: 0; }
+}

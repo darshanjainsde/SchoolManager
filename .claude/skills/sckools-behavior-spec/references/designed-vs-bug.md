@@ -202,6 +202,8 @@ No design rationale covers any of these. Escalate immediately:
 | "The record was not updated when she ran 12.10" | A mark queues an attempt; a record changes only when someone with VERIFY approves it | An approved attempt not standing, or a mark below the standing record queued |
 | "12.30 did not beat the record of 12.30" | Records are beaten strictly at the sport's precision | 12.29 not queued |
 | "The final heat has five runners on four lanes" | A tie at the cut brings everyone on that mark | More runners than lanes without a tie |
+| "A venue is missing from the timetable" | A venue with nothing on the day chosen is named under the grid instead of taking a column; "Show all venues" brings it back | A venue with a slot that day having no column |
+| "The heats have no sport name on them" | A block too short for three lines shows the time and the round; the column already names the venue and the sport is the colour | A block tall enough to read losing its title |
 | "A court reads as free all day but the meet is full" | `fitInDay` rolled the overrunning slots onto the next day; the day strip shows every day a slot reached and marks the unbooked ones | A day with slots missing from the strip, or a slot on a booked day not on the board |
 | "The wizard shows no children until I open a class" | Classes arrive shut so a 1,800-child roll fits one screen; a chip enters a whole class without opening it | A class missing from the list, or a chip that enters the wrong class |
 | "It says 2 days needed when I booked 1" | The cost line counts venue time against the day window; it warns and offers the day, it never refuses | The count disagreeing with the slots the API then makes |

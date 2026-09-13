@@ -8,9 +8,16 @@ import type { EventDetail, MatchRow, TournamentDetail } from '@/app/app/sports/u
 export interface Slot {
   id: string; kind: 'match' | 'heat'; eventId: string; event: EventDetail; venueId: string; atMin: number; slotMin: number;
   title: string; who: string; state: 'done' | 'open'; people: string[];
+  /** The class or round this slot belongs to — how a teacher asks for it. */
+  group: string;
+  /** Short label without the sport, for a board that already names the sport. */
+  short: string;
 }
 
 export const eventLabel = (e: EventDetail) => `${e.sportName} · ${e.groupLabel} ${e.category}`;
+
+/** A heat with no class behind it is still one of three rounds. */
+const ROUND_GROUP: Record<string, string> = { HEAT: 'Heats', SEMI: 'Semi-finals', FINAL: 'Final' };
 
 /** Student ids behind a side: the student, or every entered child of the section. */
 export function peopleOf(event: EventDetail, side: string | null): string[] {
@@ -33,6 +40,7 @@ export function slotsOf(t: TournamentDetail): Slot[] {
         title: `${ev.sportName} · ${m.roundName}${m.groupLabel !== 'Final' ? ` (${m.groupLabel})` : ''}`,
         who: `${nameOf(t, m.aSide)} v ${nameOf(t, m.bSide)}`, state: m.winner ? 'done' : 'open',
         people: [...peopleOf(ev, m.aSide), ...peopleOf(ev, m.bSide)],
+        group: m.groupLabel, short: m.roundName,
       });
     }
     for (const h of ev.heats) {
@@ -41,6 +49,7 @@ export function slotsOf(t: TournamentDetail): Slot[] {
         id: h.id, kind: 'heat', eventId: ev.id, event: ev, venueId: h.venueId, atMin: h.atMin, slotMin: ev.slotMin,
         title: `${ev.sportName} · ${h.kind === 'FINAL' ? 'Final' : `Heat ${h.idx + 1}`}`,
         who: `${h.marks.length} in lanes`, state: h.done ? 'done' : 'open', people: h.marks.map((k) => k.studentId),
+        group: h.groupLabel ?? ROUND_GROUP[h.kind], short: h.kind === 'FINAL' ? 'Final' : h.kind === 'SEMI' ? `Semi-final ${h.idx + 1}` : `Heat ${h.idx + 1}`,
       });
     }
   }
@@ -119,4 +128,119 @@ export function loadOf(t: TournamentDetail, days: number): DayLoad[] {
     else d.events.push({ id: s.eventId, label: eventLabel(s.event), slots: 1 });
   }
   return out;
+}
+
+// ── the meet as a teacher asks for it ─────────────────────────
+//
+// Two questions, two shapes. "When is the 100 m for class 9?" is answered by
+// sport → class (`scheduleOf`). "What is on the track on Sunday?" is answered
+// by a day laid on a time axis (`timetableOf`). A flat list of every slot in
+// start-time order answers neither.
+
+/** Every day worth offering: the ones the meet booked, plus any a slot reached. */
+export function dayIndexOf(t: TournamentDetail): { day: number; slots: number; beyond: boolean }[] {
+  const span = daySpanOf(t);
+  const n = Math.max(span.booked, span.used);
+  const counts = new Array<number>(n).fill(0);
+  for (const s of slotsOf(t)) counts[dayOf(s.atMin)] = (counts[dayOf(s.atMin)] ?? 0) + 1;
+  return counts.map((slots, day) => ({ day, slots, beyond: day >= span.booked }));
+}
+
+export interface ScheduleGroup {
+  /** The class ("Class 9") or the round ("Heats", "Final"). */
+  label: string;
+  slots: Slot[];
+  fromMin: number;
+  toMin: number;
+  venueIds: string[];
+  done: number;
+}
+export interface ScheduleLine {
+  event: EventDetail;
+  label: string;
+  total: number;
+  done: number;
+  fromMin: number | null;
+  toMin: number | null;
+  venueIds: string[];
+  groups: ScheduleGroup[];
+  /** Stable index for the sport's colour, shared with the timetable. */
+  tone: number;
+}
+
+/** The whole meet by sport, then by the class or round inside it. */
+export function scheduleOf(t: TournamentDetail): ScheduleLine[] {
+  const byEvent = new Map<string, Slot[]>();
+  for (const s of slotsOf(t)) byEvent.set(s.eventId, [...(byEvent.get(s.eventId) ?? []), s]);
+  const tones = toneMap(t);
+  return t.events.map((event) => {
+    const slots = byEvent.get(event.id) ?? [];
+    const groups = new Map<string, Slot[]>();
+    for (const s of slots) groups.set(s.group, [...(groups.get(s.group) ?? []), s]);
+    return {
+      event,
+      label: eventLabel(event),
+      total: slots.length,
+      done: slots.filter((s) => s.state === 'done').length,
+      fromMin: slots.length ? slots[0].atMin : null,
+      toMin: slots.length ? Math.max(...slots.map((s) => s.atMin + s.slotMin)) : null,
+      venueIds: [...new Set(slots.map((s) => s.venueId))],
+      tone: tones.get(event.sportKey) ?? 0,
+      groups: [...groups.entries()].map(([label, list]) => ({
+        label,
+        slots: list,
+        fromMin: list[0].atMin,
+        toMin: Math.max(...list.map((s) => s.atMin + s.slotMin)),
+        venueIds: [...new Set(list.map((s) => s.venueId))],
+        done: list.filter((s) => s.state === 'done').length,
+      })),
+    };
+  });
+}
+
+/** One colour per sport, in the order the sports appear in the meet. */
+export function toneMap(t: TournamentDetail): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const e of t.events) if (!out.has(e.sportKey)) out.set(e.sportKey, out.size % TONES);
+  return out;
+}
+export const TONES = 8;
+
+export interface TimetableColumn { venueId: string; name: string; slots: Slot[]; min: number }
+export interface Timetable {
+  /** Minute of the day the grid starts and ends — the day window, stretched to hold an overrun. */
+  fromMin: number;
+  toMin: number;
+  /** Hour marks to rule the axis with. */
+  hours: number[];
+  columns: TimetableColumn[];
+  /** Venues with nothing on this day; named, not given a column. */
+  idle: { id: string; name: string }[];
+  /** Pixels per minute, so the shortest slot of the day is still readable. */
+  pxPerMin: number;
+  tones: Map<string, number>;
+}
+
+/** One day of the meet, laid on a proportional time axis. */
+export function timetableOf(t: TournamentDetail, day: number, showEveryVenue = false): Timetable {
+  const mine = slotsOf(t).filter((s) => dayOf(s.atMin) === day);
+  const byVenue = new Map<string, Slot[]>();
+  for (const s of mine) byVenue.set(s.venueId, [...(byVenue.get(s.venueId) ?? []), s]);
+  const columns: TimetableColumn[] = [];
+  const idle: { id: string; name: string }[] = [];
+  for (const v of t.venues) {
+    const slots = byVenue.get(v.id) ?? [];
+    if (slots.length || showEveryVenue) columns.push({ venueId: v.id, name: v.name, slots, min: slots.reduce((a, s) => a + s.slotMin, 0) });
+    if (!slots.length) idle.push({ id: v.id, name: v.name });
+  }
+  const ends = mine.map((s) => minuteOfDay(s.atMin) + s.slotMin);
+  const starts = mine.map((s) => minuteOfDay(s.atMin));
+  const fromMin = Math.min(t.dayStartMin, ...(starts.length ? starts : [t.dayStartMin]));
+  const toMin = Math.max(t.dayEndMin, ...(ends.length ? ends : [t.dayEndMin]));
+  const shortest = mine.length ? Math.min(...mine.map((s) => s.slotMin)) : 30;
+  // A five-minute heat must still be tall enough to read; a long day may scroll.
+  const pxPerMin = Math.min(5, Math.max(1.1, 26 / Math.max(1, shortest)));
+  const hours: number[] = [];
+  for (let m = Math.floor(fromMin / 60) * 60; m <= toMin; m += 60) if (m >= fromMin) hours.push(m);
+  return { fromMin, toMin, hours, columns, idle, pxPerMin, tones: toneMap(t) };
 }
