@@ -105,6 +105,19 @@ export class PinEventDto {
   @ValidateIf((o) => o.dayIdx !== null) @IsInt() @Min(0) @Max(13) dayIdx!: number | null;
 }
 
+/** Move one class's unplayed slots together. */
+export class MoveGroupDto {
+  @IsUUID() eventId!: string;
+  @IsString() @IsNotEmpty() @MaxLength(40) groupLabel!: string;
+  @IsInt() @Min(-720) @Max(720) deltaMin!: number;
+}
+
+/** Hold several events — a whole category — to one day, or free them all. */
+export class HoldDto {
+  @IsArray() @ArrayMaxSize(200) @IsUUID('4', { each: true }) eventIds!: string[];
+  @ValidateIf((o) => o.dayIdx !== null) @IsInt() @Min(0) @Max(13) dayIdx!: number | null;
+}
+
 export class MoveSlotDto {
   @IsOptional() @IsUUID() venueId?: string;
   @IsInt() @Min(0) @Max(1440 * 14) atMin!: number;

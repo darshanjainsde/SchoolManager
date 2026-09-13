@@ -591,3 +591,67 @@ export function capacityOf(input: CapacityInput): { neededMin: number; dayMin: n
   }
   return { neededMin, dayMin, daysNeeded: worstDays, fits: worstDays <= input.days };
 }
+
+// ── may this slot go there? ───────────────────────────────────
+//
+// One rule, two callers. The browser runs it before it asks, so a bad drag is
+// refused under the finger with a sentence instead of a round trip; the API
+// runs it again before it writes, because the browser is not the only client
+// and two teachers on two phones can aim at the same minute. The wording is
+// shared too (`sayProblem`), so the same drop never explains itself two ways.
+
+export interface Placement extends Booking {
+  /** Slots of the same event run in round order: heats before the final. */
+  eventId: string;
+  roundIdx: number;
+  /** A played slot is immovable and cannot be moved onto. */
+  played: boolean;
+}
+
+export type PlaceProblem =
+  | { kind: 'PLAYED' }
+  | { kind: 'VENUE'; otherId: string }
+  | { kind: 'PERSON'; who: string; otherId: string }
+  | { kind: 'ORDER'; otherId: string }
+  | { kind: 'DAY_START'; min: number }
+  | { kind: 'DAY_END'; min: number };
+
+/**
+ * Why `moved` may not sit where it now says, or null when it may. `others` is
+ * every other placement of the meet — unscheduled ones are ignored, and a
+ * caller moving several slots at once passes the whole batch as `moved`.
+ */
+export function whyNot(moved: Placement, others: Placement[], w: Pick<DayWindow, 'dayStartMin' | 'dayEndMin'>): PlaceProblem | null {
+  if (moved.played) return { kind: 'PLAYED' };
+  if (moved.atMin == null) return null;
+  const min = minuteOfDay(moved.atMin);
+  if (min < w.dayStartMin) return { kind: 'DAY_START', min: w.dayStartMin };
+  if (min + moved.slotMin > w.dayEndMin) return { kind: 'DAY_END', min: w.dayEndMin };
+  const mine = new Set(moved.people);
+  for (const o of others) {
+    if (o.id === moved.id || o.atMin == null) continue;
+    if (o.eventId === moved.eventId && o.roundIdx < moved.roundIdx && o.atMin + o.slotMin > moved.atMin) return { kind: 'ORDER', otherId: o.id };
+    if (!overlaps(moved, o)) continue;
+    if (moved.venueId && moved.venueId === o.venueId) return { kind: 'VENUE', otherId: o.id };
+    for (const p of o.people) if (mine.has(p)) return { kind: 'PERSON', who: p, otherId: o.id };
+  }
+  return null;
+}
+
+/** Names for the sentence: whatever the caller can look up. */
+export interface ProblemNames {
+  venue: (id: string) => string;
+  person: (id: string) => string;
+  slot: (id: string) => string;
+  at: (id: string) => string;
+}
+
+/** The one wording of a refusal, so the API and the board never disagree. */
+export function sayProblem(p: PlaceProblem, n: ProblemNames): string {
+  if (p.kind === 'PLAYED') return 'That slot has a result in, so it stays where it happened.';
+  if (p.kind === 'DAY_START') return `The day does not start until ${hhmm(p.min)}.`;
+  if (p.kind === 'DAY_END') return `That would run past ${hhmm(p.min)}, when the day ends.`;
+  if (p.kind === 'VENUE') return `${n.venue(p.otherId)} already has ${n.slot(p.otherId)} at ${n.at(p.otherId)}.`;
+  if (p.kind === 'PERSON') return `${n.person(p.who)} is in ${n.slot(p.otherId)} at the same time.`;
+  return `${n.slot(p.otherId)} has to finish first — it feeds this round.`;
+}

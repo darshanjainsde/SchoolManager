@@ -249,6 +249,10 @@ export type ErrorCode =
   | 'TOURNAMENT_NOT_FOUND'
   /** The tournament is not in the state the action needs (e.g. scoring a DRAFT). 409. */
   | 'TOURNAMENT_STATE'
+  /** The slot may not go there — a played slot, a double-booked court, a child
+      in two places, or a round jumping the one that feeds it. The message says
+      which, in words the office can act on. 409. */
+  | 'SLOT_REFUSED'
   | 'EVENT_NOT_FOUND'
   | 'MATCH_NOT_FOUND'
   /** Someone else saved this match first — reload and enter again. 409. */

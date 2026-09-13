@@ -18,7 +18,7 @@ import { SportsSettingsService } from './sports-settings.service';
 import { SportsTournamentsService } from './sports-tournaments.service';
 import {
   AddRecordDto, AddVenueDto, AssignHouseDto, AwardPointsDto, CreateHouseDto, CreateTournamentDto, DecideAttemptDto, MarksDto, MoveSlotDto, PinEventDto, ScoreDto, SetCoachPermsDto, ShiftDto,
-  SubmitAttemptDto, UpdateHouseDto, UpdateSportsSettingsDto, UpdateTournamentDto, VoidRecordDto,
+  SubmitAttemptDto, UpdateHouseDto, UpdateSportsSettingsDto, UpdateTournamentDto, VoidRecordDto, HoldDto, MoveGroupDto,
 } from './sports.dto';
 
 /**
@@ -137,6 +137,21 @@ export class SportsController {
   @Post('tournaments/:id/refit')
   @SportsPerm('CREATE')
   refit(@Param('id', ParseUUIDPipe) id: string) { return this.tournaments.refit(this.sid(), id); }
+
+  /** "Put class 9 after lunch" — one class's unplayed slots, together. */
+  @Post('tournaments/:id/move-group')
+  @SportsPerm('CREATE')
+  moveGroup(@Param('id', ParseUUIDPipe) id: string, @Body() dto: MoveGroupDto) { return this.tournaments.moveGroup(this.sid(), id, dto); }
+
+  /** "Seniors on Monday only" — a whole category held to a day, or freed. */
+  @Patch('tournaments/:id/events/day')
+  @SportsPerm('CREATE')
+  holdEvents(@Param('id', ParseUUIDPipe) id: string, @Body() dto: HoldDto) { return this.tournaments.holdEvents(this.sid(), id, dto); }
+
+  /** "Court 2 is flooded" — everything unplayed comes off it. */
+  @Post('tournaments/:id/venues/:venueId/clear')
+  @SportsPerm('CREATE')
+  clearVenue(@Param('id', ParseUUIDPipe) id: string, @Param('venueId', ParseUUIDPipe) venueId: string) { return this.tournaments.clearVenue(this.sid(), id, venueId); }
 
   @Post('tournaments/:id/shift')
   @SportsPerm('CREATE')

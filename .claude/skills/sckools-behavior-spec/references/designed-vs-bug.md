@@ -202,6 +202,9 @@ No design rationale covers any of these. Escalate immediately:
 | "The record was not updated when she ran 12.10" | A mark queues an attempt; a record changes only when someone with VERIFY approves it | An approved attempt not standing, or a mark below the standing record queued |
 | "12.30 did not beat the record of 12.30" | Records are beaten strictly at the sport's precision | 12.29 not queued |
 | "The final heat has five runners on four lanes" | A tie at the cut brings everyone on that mark | More runners than lanes without a tie |
+| "It would not let me drag a heat there" | A drop is refused when it double-books a court, puts a child in two places, moves a played slot or jumps a round; the message says which | A refusal naming a conflict that is not there, or a clashing drop being accepted |
+| "I moved a class and nothing happened" | A group move is all-or-nothing — if one slot will not fit, none move and the reason says why | Some of a class moving and some not |
+| "The programme is in a different order than yesterday" | The spine is a switch (sport / category / day) and is not remembered between visits | The switch not changing the order |
 | "A venue is missing from the timetable" | A venue with nothing on the day chosen is named under the grid instead of taking a column; "Show all venues" brings it back | A venue with a slot that day having no column |
 | "The heats have no sport name on them" | A block too short for three lines shows the time and the round; the column already names the venue and the sport is the colour | A block tall enough to read losing its title |
 | "A court reads as free all day but the meet is full" | `fitInDay` rolled the overrunning slots onto the next day; the day strip shows every day a slot reached and marks the unbooked ones | A day with slots missing from the strip, or a slot on a booked day not on the board |

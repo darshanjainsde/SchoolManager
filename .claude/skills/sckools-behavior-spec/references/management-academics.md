@@ -559,10 +559,33 @@ view shows how full each court is on each day, which events run when, and the da
 rolls an overrunning slot to the next morning, so a one-day meet can hold slots on day 2 — the day strip shows every
 day a slot reached, marks the ones the meet is not booked for, and offers to book them.
 
+**Running a meet** (2026-09-13). The plan is not read-only once it is made; five
+things the office says out loud each land on a control. **Drag a block** on the
+Timetable moves one slot (`PATCH …/matches|heats/:id/slot`). **Move…** on a
+class row moves that class's unplayed slots together (`POST …/move-group`,
+eventId + groupLabel + deltaMin). **Runs on…** on a branch holds every event
+under it to one day or frees them (`PATCH …/events/day`, eventIds + dayIdx).
+**Clear** on a venue heading takes everything unplayed off it and re-lays it on
+the others (`POST …/venues/:venueId/clear`; refused when an event has nowhere
+else). **Running late** is the existing rain-delay shift. One step of **undo**
+issues the inverse move.
+
+**A move is refused, not repaired.** `whyNot` in `@skoolos/types` is the single
+rule: never a played slot, never a double-booked venue, never a child in two
+places, never a round before the one that feeds it, never outside the day's
+hours. `sayProblem` is the single wording, so the browser and the API never
+explain the same drop two ways. The browser runs both before it asks — a bad
+drag is refused under the finger with a sentence and no round trip — and the
+API runs them again before it writes, because the browser is not the only
+client (409 `SLOT_REFUSED`). A group move is all-or-nothing: if one slot of the
+class will not fit, none of them move.
+
 **Reading a meet** (rebuilt 2026-09-13). Three views, because a teacher asks
 two different questions and a flat list of every slot in start-time order
-answers neither. **Schedule** (the default) is the meet by SPORT, then by the
-class or round inside it — shut rows carrying their own counts, dates and
+answers neither. **Programme** (the default) hangs the same rows three ways —
+by SPORT, by CATEGORY or by DAY, because the badminton teacher, the office
+printing the programme and the ground staff are each looking for a different
+branch. Inside the spine it is the event, then the class or round — shut rows carrying their own counts, dates and
 venues, opening to the individual slots; that is "when is the 100 m for class
 9". **Timetable** is one day on a proportional time axis — a column per venue
 that holds something that day (the idle ones are named, not given a column),

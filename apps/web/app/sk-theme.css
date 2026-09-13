@@ -3653,23 +3653,26 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 /* Schedule — the meet by sport, then by the class inside it. */
 .sk-sp-schedule { display: flex; flex-direction: column; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow: hidden; }
 .sk-sp-sportrow { border-top: 1px solid var(--sk-line); }
-.sk-sp-sportrow > .hd, .sk-sp-grouprow > .hd {
-  display: flex; align-items: center; gap: 9px; flex-wrap: wrap; width: 100%; padding: 9px 12px;
+.sk-sp-sportrow .hd, .sk-sp-grouprow > .hd {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap; width: 100%; min-width: 0; padding: 9px 12px;
   border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; border-left: 3px solid transparent;
 }
-.sk-sp-sportrow > .hd { border-left-color: var(--tone, var(--sk-brand)); }
+.sk-sp-sportrow .hd { border-left-color: var(--tone, var(--sk-brand)); }
+/* Beside a button it is a flex item, not a full-width block, or the two overlap. */
+.sk-sp-sportrow .hd-row > .hd { width: auto; flex: 1 1 auto; }
 .sk-sp-sportrow[data-tone="0"] { --tone: var(--sk-t0); } .sk-sp-sportrow[data-tone="1"] { --tone: var(--sk-t1); }
 .sk-sp-sportrow[data-tone="2"] { --tone: var(--sk-t2); } .sk-sp-sportrow[data-tone="3"] { --tone: var(--sk-t3); }
 .sk-sp-sportrow[data-tone="4"] { --tone: var(--sk-t4); } .sk-sp-sportrow[data-tone="5"] { --tone: var(--sk-t5); }
 .sk-sp-sportrow[data-tone="6"] { --tone: var(--sk-t6); } .sk-sp-sportrow[data-tone="7"] { --tone: var(--sk-t7); }
-.sk-sp-sportrow > .hd:hover, .sk-sp-grouprow > .hd:hover { background: var(--sk-bg-2); }
-.sk-sp-sportrow[data-open="true"] > .hd { background: var(--sk-bg-2); }
+.sk-sp-sportrow .hd:hover, .sk-sp-grouprow > .hd:hover { background: var(--sk-bg-2); }
+.sk-sp-sportrow[data-open="true"] .hd-row { background: var(--sk-bg-2); }
 .sk-sp-sportrow .nm { font-weight: 700; font-size: 13.5px; }
 .sk-sp-sportrow .meta, .sk-sp-grouprow .meta { font-size: 11.5px; color: var(--sk-ink-3); }
 .sk-sp-sportrow > .hd > .sp, .sk-sp-grouprow > .hd > .sp { flex: 1 1 auto; }
 .sk-sp-sportrow .on, .sk-sp-grouprow .on { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-2); white-space: nowrap; }
+.sk-sp-sportrow .nm, .sk-sp-grouprow .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sk-sp-sportrow svg, .sk-sp-grouprow svg { flex: none; color: var(--sk-ink-3); transition: transform 120ms ease; }
-.sk-sp-sportrow[data-open="true"] > .hd svg, .sk-sp-grouprow[data-open="true"] > .hd svg { transform: rotate(90deg); }
+.sk-sp-sportrow[data-open="true"] .hd svg, .sk-sp-grouprow[data-open="true"] > .hd svg { transform: rotate(90deg); }
 .sk-sp-sportrow > .body { border-top: 1px solid var(--sk-line); background: var(--sk-bg-2); }
 .sk-sp-grouprow { border-top: 1px solid var(--sk-line); }
 .sk-sp-grouprow:first-child { border-top: 0; }
@@ -3728,4 +3731,30 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 @media (max-width: 640px) {
   .sk-sp-sportrow .on, .sk-sp-grouprow .on { width: 100%; }
   .sk-sp-slotline .v { margin-left: 0; }
+}
+
+/* Moving things: the control opens UNDER the row it belongs to, never in a
+   panel at the foot of the list. */
+.sk-sp-sportrow .hd-row { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
+.sk-sp-sportrow .hd-row > .hd { flex: 1 1 auto; }
+.sk-sp-movebox { display: flex; flex-direction: column; gap: 9px; margin: 8px 12px; padding: 12px 14px; border: 1px solid var(--sk-brand); border-radius: var(--sk-r-sm); background: var(--sk-card); }
+.sk-sp-movebox p { font-size: 12.5px; }
+.sk-sp-classrow { border-top: 1px solid var(--sk-line); }
+.sk-sp-classrow > .line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 14px 7px 40px; font-size: 13px; }
+.sk-sp-classrow > .line .nm { font-weight: 650; }
+.sk-sp-classrow > .line .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-sp-classrow > .line .sp { flex: 1 1 auto; }
+.sk-sp-classrow > .line .on { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-2); white-space: nowrap; }
+.sk-sp-classrow .slots { display: flex; flex-direction: column; list-style: none; padding: 0 0 6px 40px; }
+
+/* A block you may move says so, and follows the finger while it is held. */
+.sk-sp-tt .blk[data-move="true"] { cursor: grab; touch-action: none; }
+.sk-sp-tt .blk[data-held="true"] { cursor: grabbing; z-index: 4; box-shadow: 0 8px 22px rgba(33,29,69,.28); opacity: .96; }
+.sk-sp-tt .col[data-aim="true"] { background: var(--sk-brand-tint); }
+.sk-sp-tt .aim { position: absolute; left: 3px; right: 3px; height: 2px; background: var(--sk-brand); border-radius: 2px; }
+.sk-sp-tt .vh .off { margin-left: auto; border: 0; background: none; padding: 0 2px; font: inherit; font-size: 10.5px; letter-spacing: .05em; color: var(--sk-ink-3); cursor: pointer; }
+.sk-sp-tt .vh .off:hover { color: var(--sk-bad); }
+@media (max-width: 640px) {
+  .sk-sp-classrow > .line { padding-left: 22px; }
+  .sk-sp-classrow .slots { padding-left: 22px; }
 }

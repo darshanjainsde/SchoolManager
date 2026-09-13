@@ -7,8 +7,8 @@ import { toast } from 'sonner';
 import { Bracket } from '@/components/sports/bracket';
 import { DayPicker } from '@/components/sports/day-picker';
 import { PlanBoard, type PlanActions } from '@/components/sports/plan-board';
-import { Schedule } from '@/components/sports/schedule';
-import { Timetable } from '@/components/sports/timetable';
+import { Programme, type ProgrammeActions } from '@/components/sports/programme';
+import { Timetable, type TimetableActions } from '@/components/sports/timetable';
 import { HeatSheet } from '@/components/sports/heat-sheet';
 import { ScoreBox } from '@/components/sports/score-box';
 import { clashesOf, dayIndexOf, daySpanOf, eventLabel, slotsOf, type Slot } from '@/components/sports/model';
@@ -23,6 +23,15 @@ type PlanJob =
   | { kind: 'removeVenue'; venueId: string }
   | { kind: 'pin'; eventId: string; dayIdx: number | null }
   | { kind: 'refit' };
+
+type BoardJob =
+  | { kind: 'move'; slot: Slot; venueId: string; atMin: number }
+  | { kind: 'moveGroup'; eventId: string; groupLabel: string; deltaMin: number }
+  | { kind: 'hold'; eventIds: string[]; dayIdx: number | null }
+  | { kind: 'clearVenue'; venueId: string };
+
+/** The inverse of the last move, so one press puts it back. */
+type Undo = { label: string; job: BoardJob };
 
 const PLAN_SAID: Record<PlanJob['kind'], string> = {
   update: 'The meet changed shape — every unplayed slot has been laid out again.',
@@ -99,6 +108,42 @@ export default function TournamentView({ base, id }: { base: string; id: string 
     },
     onError: (e) => toast.error((e as Error).message),
   });
+  const [undo, setUndo] = useState<Undo | null>(null);
+  const board = useMutation({
+    mutationFn: (job: BoardJob) => {
+      if (job.kind === 'move') return api.patch(`/sports/tournaments/${id}/${job.slot.kind === 'match' ? 'matches' : 'heats'}/${job.slot.id}/slot`, { venueId: job.venueId, atMin: job.atMin });
+      if (job.kind === 'moveGroup') return api.post(`/sports/tournaments/${id}/move-group`, { eventId: job.eventId, groupLabel: job.groupLabel, deltaMin: job.deltaMin });
+      if (job.kind === 'hold') return api.patch(`/sports/tournaments/${id}/events/day`, { eventIds: job.eventIds, dayIdx: job.dayIdx });
+      return api.post(`/sports/tournaments/${id}/venues/${job.venueId}/clear`, {});
+    },
+    onSuccess: (fresh, job) => {
+      if (job.kind === 'move') qc.invalidateQueries({ queryKey: ['sports-tournament', host, id] });
+      else qc.setQueryData(['sports-tournament', host, id], fresh);
+      if (job.kind === 'move') toast.success(`${job.slot.event.sportName} ${job.slot.short} moved to ${t?.venues.find((v) => v.id === job.venueId)?.name ?? 'its new court'} at ${hhmm(job.atMin)}.`);
+      if (job.kind === 'moveGroup') toast.success(`${job.groupLabel} moved ${Math.abs(job.deltaMin)} minutes ${job.deltaMin < 0 ? 'earlier' : 'later'}. Anything played stayed where it was.`);
+      if (job.kind === 'hold') toast.success(job.dayIdx == null ? 'Freed — those events fall wherever they fit.' : 'Held to that day. The rest of the plan filled in around them.');
+      if (job.kind === 'clearVenue') toast.success('Cleared. Everything unplayed has been re-laid on the other venues.');
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const run = (job: BoardJob, back: Undo | null) => { setUndo(back); board.mutate(job); };
+  const boardActs: TimetableActions = {
+    move: (slot, venueId, atMin) => run(
+      { kind: 'move', slot, venueId, atMin },
+      { label: `${slot.event.sportName} ${slot.short} back to ${hhmm(slot.atMin)}`, job: { kind: 'move', slot, venueId: slot.venueId, atMin: slot.atMin } },
+    ),
+    clearVenue: (venueId) => run({ kind: 'clearVenue', venueId }, null),
+    refuse: (why) => toast.error(why),
+  };
+  const progActs: ProgrammeActions = {
+    moveGroup: (eventId, groupLabel, deltaMin) => run(
+      { kind: 'moveGroup', eventId, groupLabel, deltaMin },
+      { label: `${groupLabel} back`, job: { kind: 'moveGroup', eventId, groupLabel, deltaMin: -deltaMin } },
+    ),
+    hold: (eventIds, dayIdx) => run({ kind: 'hold', eventIds, dayIdx }, null),
+  };
+
   const planActs: PlanActions = {
     update: (body) => plan.mutate({ kind: 'update', body }),
     addVenue: (name) => plan.mutate({ kind: 'addVenue', name }),
@@ -110,6 +155,7 @@ export default function TournamentView({ base, id }: { base: string; id: string 
   if (q.isLoading || !t) return <p className="sk-state">Opening the tournament…</p>;
   const live = t.status === 'LIVE';
   const event = t.events.find((e) => e.id === eventId) ?? t.events[0];
+  const canRun = ready && can('CREATE') && t.status !== 'DONE';
   const openSlot = (s: Slot) => { setEventId(s.eventId); setView('events'); if (s.kind === 'match') { const m = s.event.matches.find((x) => x.id === s.id); if (m) setSelected(m); } };
 
   return (
@@ -157,7 +203,7 @@ export default function TournamentView({ base, id }: { base: string; id: string 
       </Card>
 
       <div className="sk-seg sk-sp-views" role="tablist" aria-label="Tournament views">
-        <button type="button" role="tab" aria-selected={view === 'schedule'} onClick={() => setView('schedule')}>Schedule</button>
+        <button type="button" role="tab" aria-selected={view === 'schedule'} onClick={() => setView('schedule')}>Programme</button>
         <button type="button" role="tab" aria-selected={view === 'day'} onClick={() => setView('day')}>Timetable</button>
         <button type="button" role="tab" aria-selected={view === 'plan'} onClick={() => setView('plan')}>Days &amp; courts{span.over ? ' ⚠' : ''}</button>
         <button type="button" role="tab" aria-selected={view === 'events'} onClick={() => setView('events')}>Events & results</button>
@@ -177,12 +223,13 @@ export default function TournamentView({ base, id }: { base: string; id: string 
       {view === 'schedule' ? (
         <Card>
           <CardHead>
-            <h3>Schedule</h3>
+            <h3>Programme</h3>
             <span className="sp" />
-            <span className="sk-muted">By sport, then by class.</span>
+            {undo ? <button type="button" className="sk-btn" data-size="sm" disabled={board.isPending} onClick={() => { const u = undo; setUndo(null); board.mutate(u.job); }}>Put {undo.label}</button> : null}
+            <span className="sk-muted">Sport, category or day &mdash; same rows.</span>
           </CardHead>
           <CardBody>
-            <Schedule t={t} onOpen={openSlot} />
+            <Programme t={t} canEdit={canRun} busy={board.isPending} act={progActs} onOpen={openSlot} />
           </CardBody>
         </Card>
       ) : null}
@@ -192,11 +239,11 @@ export default function TournamentView({ base, id }: { base: string; id: string 
           <CardHead>
             <h3>Timetable</h3>
             <span className="sp" />
+            {undo ? <button type="button" className="sk-btn" data-size="sm" disabled={board.isPending} onClick={() => { const u = undo; setUndo(null); board.mutate(u.job); }}>Put {undo.label}</button> : null}
             <DayPicker startsOn={t.startsOn} days={days} day={day} onDay={setDay} />
           </CardHead>
           <CardBody>
-            <Timetable t={t} day={day} clashes={clashes} onOpen={openSlot} />
-            <p className="sk-muted">Every sport of the meet is on this day, and a block is as tall as it is long. Press one to open its event; a red edge is a clash.</p>
+            <Timetable t={t} day={day} clashes={clashes} canEdit={canRun} busy={board.isPending} act={boardActs} onOpen={openSlot} />
           </CardBody>
         </Card>
       ) : null}

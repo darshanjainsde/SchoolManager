@@ -4,8 +4,7 @@ import {
   planStages, planClassHeats, advanceFrom, advanceCount, capacityOf, dayFloor,
   ageGroupFor, bandFor, beatsRecord, bracketSize, buildDraw, drawPlacings, findClashes, finalists, fitInDay, formatMark, hhmm,
   judgeScores, nextSlot, parseMark, parseSide, placingPoints, planClassStage, planHeats, planRounds, rankMarks, roundName,
-  seedPositions, shiftSlots, shuffle, sideOfSection, sideOfStudent,
-} from './maths';
+  seedPositions, shiftSlots, shuffle, sideOfSection, sideOfStudent, sayProblem, whyNot, type Placement } from './maths';
 
 const badminton = sportByKey('badminton')!.scoring;
 const tt = sportByKey('table-tennis')!.scoring;
@@ -368,5 +367,61 @@ describe('stages — how a thousand entries reach a final', () => {
     const cursor = new Map<string, number>();
     const slots = planRounds([2], ['v1'], 30, cursor, { dayStartMin: 540, dayEndMin: 960, days: 3 }, undefined, 1440 + 540);
     expect(slots[0].map((s) => s.atMin)).toEqual([1980, 2010]);
+  });
+});
+
+describe('whyNot — the one rule that decides if a slot may move', () => {
+  const W = { dayStartMin: 540, dayEndMin: 960 };
+  const p = (over: Partial<Placement> = {}): Placement => ({
+    id: 'x', people: ['a'], venueId: 'v1', atMin: 600, slotMin: 25, eventId: 'e1', roundIdx: 1, played: false, ...over,
+  });
+
+  it('lets a clear slot through', () => {
+    expect(whyNot(p(), [p({ id: 'o', atMin: 700, people: ['b'] })], W)).toBeNull();
+  });
+
+  it('never moves a played slot, whatever else is true', () => {
+    expect(whyNot(p({ played: true }), [], W)).toEqual({ kind: 'PLAYED' });
+  });
+
+  it('keeps the slot inside the day, both ends', () => {
+    expect(whyNot(p({ atMin: 520 }), [], W)).toEqual({ kind: 'DAY_START', min: 540 });
+    expect(whyNot(p({ atMin: 950 }), [], W)).toEqual({ kind: 'DAY_END', min: 960 });
+    expect(whyNot(p({ atMin: 935 }), [], W)).toBeNull(); // finishes exactly on the bell
+    // a later day is judged by its own hours, not by the minutes since day one
+    expect(whyNot(p({ atMin: 1440 + 600 }), [], W)).toBeNull();
+  });
+
+  it('refuses a double-booked venue and names the slot already there', () => {
+    expect(whyNot(p(), [p({ id: 'o', atMin: 610, people: ['b'] })], W)).toEqual({ kind: 'VENUE', otherId: 'o' });
+    expect(whyNot(p(), [p({ id: 'o', atMin: 625, people: ['b'] })], W)).toBeNull(); // starts as the other ends
+  });
+
+  it('refuses a child in two places and names the child', () => {
+    expect(whyNot(p({ people: ['a', 'b'] }), [p({ id: 'o', venueId: 'v2', atMin: 610, people: ['c', 'b'] })], W))
+      .toEqual({ kind: 'PERSON', who: 'b', otherId: 'o' });
+  });
+
+  it('keeps the rounds of an event in order, even when nothing overlaps', () => {
+    const final = p({ roundIdx: 2, atMin: 600 });
+    const heat = p({ id: 'h', roundIdx: 1, venueId: 'v2', people: ['z'], atMin: 590, slotMin: 30 });
+    expect(whyNot(final, [heat], W)).toEqual({ kind: 'ORDER', otherId: 'h' });
+    expect(whyNot(p({ roundIdx: 2, atMin: 620 }), [heat], W)).toBeNull();
+    // a different event's rounds are its own business
+    expect(whyNot(final, [{ ...heat, eventId: 'e2' }], W)).toBeNull();
+  });
+
+  it('ignores what is not on the timetable yet, and itself', () => {
+    expect(whyNot(p(), [p({ id: 'o', atMin: null, people: ['a'] })], W)).toBeNull();
+    expect(whyNot(p(), [p()], W)).toBeNull();
+  });
+
+  it('says each refusal in words, once, for both the API and the board', () => {
+    const n = { venue: () => 'Court 1', person: () => 'Saanvi Krishnamurthy', slot: () => 'Badminton Final', at: () => '09:25' };
+    expect(sayProblem({ kind: 'PLAYED' }, n)).toBe('That slot has a result in, so it stays where it happened.');
+    expect(sayProblem({ kind: 'VENUE', otherId: 'o' }, n)).toBe('Court 1 already has Badminton Final at 09:25.');
+    expect(sayProblem({ kind: 'PERSON', who: 'a', otherId: 'o' }, n)).toBe('Saanvi Krishnamurthy is in Badminton Final at the same time.');
+    expect(sayProblem({ kind: 'ORDER', otherId: 'o' }, n)).toBe('Badminton Final has to finish first — it feeds this round.');
+    expect(sayProblem({ kind: 'DAY_END', min: 960 }, n)).toBe('That would run past 16:00, when the day ends.');
   });
 });

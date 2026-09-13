@@ -2,7 +2,7 @@
  * Pure view helpers for a tournament payload — bookings for the clash finder,
  * the day board's rows, the words on a match card. No React; `model.test.ts`.
  */
-import { dayOf, findClashes, hhmm, minuteOfDay, parseSide, type Booking, type Clash, type Scoring } from '@skoolos/types';
+import { dayOf, findClashes, hhmm, minuteOfDay, parseSide, type Booking, type Clash, type HeatKind, type Placement, type ProblemNames, type Scoring } from '@skoolos/types';
 import type { EventDetail, MatchRow, TournamentDetail } from '@/app/app/sports/ui';
 
 export interface Slot {
@@ -243,4 +243,45 @@ export function timetableOf(t: TournamentDetail, day: number, showEveryVenue = f
   const hours: number[] = [];
   for (let m = Math.floor(fromMin / 60) * 60; m <= toMin; m += 60) if (m >= fromMin) hours.push(m);
   return { fromMin, toMin, hours, columns, idle, pxPerMin, tones: toneMap(t) };
+}
+
+/**
+ * The meet as placements, so the browser can run the SAME rule the API runs
+ * (`whyNot`) before it asks. A bad drag is then refused under the finger with
+ * a sentence, and the round trip is saved for the moves that are actually
+ * allowed — while the API still checks again, because this is not the only
+ * client.
+ */
+export function placementsOf(t: TournamentDetail): Placement[] {
+  const ROUND: Record<HeatKind, number> = { HEAT: 0, SEMI: 1, FINAL: 2 };
+  const out: Placement[] = [];
+  for (const ev of t.events) {
+    for (const m of ev.matches) {
+      if (m.bye) continue;
+      out.push({
+        id: m.id, eventId: ev.id, roundIdx: m.roundIdx, venueId: m.venueId, atMin: m.atMin, slotMin: ev.slotMin,
+        people: [...peopleOf(ev, m.aSide), ...peopleOf(ev, m.bSide)],
+        played: !!m.winner || m.scoreA.length > 0,
+      });
+    }
+    for (const h of ev.heats) {
+      out.push({
+        id: h.id, eventId: ev.id, roundIdx: ROUND[h.kind] ?? 0, venueId: h.venueId, atMin: h.atMin, slotMin: ev.slotMin,
+        people: h.marks.map((k) => k.studentId), played: h.done,
+      });
+    }
+  }
+  return out;
+}
+
+/** The words a refusal is said in, from what the board already knows. */
+export function problemNames(t: TournamentDetail): ProblemNames {
+  const slots = new Map(slotsOf(t).map((s) => [s.id, s]));
+  const venues = new Map(t.venues.map((v) => [v.id, v.name]));
+  return {
+    venue: (id) => venues.get(slots.get(id)?.venueId ?? '') ?? 'That venue',
+    person: (id) => t.sideNames[`s:${id}`] ?? 'A student',
+    slot: (id) => { const s = slots.get(id); return s ? `${s.event.sportName} ${s.short}` : 'another slot'; },
+    at: (id) => { const s = slots.get(id); return s ? hhmm(s.atMin) : 'the same time'; },
+  };
 }

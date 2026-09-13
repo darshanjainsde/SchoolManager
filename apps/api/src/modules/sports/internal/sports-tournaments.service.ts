@@ -3,14 +3,15 @@ import { Prisma, withTenant, type TenantTx } from '@skoolos/db';
 import {
   AGE_GROUPS, ageGroupFor, assertNotificationKind, assertNotificationOutboxKind, bandFor, buildDraw, cursorFrom, customSport, dayOf, finalists,
   advanceFrom, dayFloor, groupLabel as groupLabelOf, hhmm, inferVenueType, newDiary, parseSide, planHeats, planStages, resolveSport, shuffle, sideOfEntry, sidesAreSections, sportByKey, stdOfGrade, suggestTeamBasis, venuesForSport,
-  type Band, type DayWindow, type HeatKind, type Scoring, type Sport, type StageShape, type TeamBasis, type VenueType,
+  sayProblem, whyNot,
+  type Band, type DayWindow, type HeatKind, type Placement, type Scoring, type Sport, type StageShape, type TeamBasis, type VenueType,
 } from '@skoolos/types';
 import { ApiError } from '../../../common/errors/api-error';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 import { activeStudentsWhere } from '../../../common/roster/active-students';
 import { buildEventPlan, classLabel, drawToMatches, peopleOfSide, scheduleHeats, scheduleMatches, seedOf, type EntryIn, type HeatPlan, type MatchPlan } from './sports-build';
 import { SportsSettingsService } from './sports-settings.service';
-import type { AddVenueDto, CreateTournamentDto, EventInDto, MoveSlotDto, PinEventDto, ShiftDto, UpdateTournamentDto } from './sports.dto';
+import type { AddVenueDto, CreateTournamentDto, EventInDto, HoldDto, MoveGroupDto, MoveSlotDto, PinEventDto, ShiftDto, UpdateTournamentDto } from './sports.dto';
 
 export interface TournamentRow { id: string; name: string; startsOn: string; endsOn: string; status: string; published: boolean; version: number; events: number }
 export interface RosterStudent { id: string; name: string; std: number; section: string; gender: string | null; dob: string | null; houseId: string | null }
@@ -352,11 +353,141 @@ export class SportsTournamentsService {
         const v = await tx.sportsVenue.findFirst({ where: { id: dto.venueId, schoolId, tournamentId: id }, select: { id: true } });
         if (!v) throw new ApiError('VALIDATION', 'That venue is not in this tournament.', 400, 'venueId');
       }
+      const board = await this.boardOf(tx, schoolId, id);
+      const here = board.placements.find((p) => p.id === slotId);
+      if (!here) throw new ApiError(kind === 'match' ? 'MATCH_NOT_FOUND' : 'HEAT_NOT_FOUND', 'That slot is not in this tournament.', 404);
+      // The browser checks this too, so a bad drag never leaves the page. It is
+      // checked again HERE because the browser is not the only client and two
+      // teachers on two phones can aim at the same minute.
+      const moved: Placement = { ...here, atMin: dto.atMin, venueId: dto.venueId ?? here.venueId };
+      const no = whyNot(moved, board.placements, board.window);
+      if (no) throw new ApiError('SLOT_REFUSED', sayProblem(no, board.names), 409);
       const data = { atMin: dto.atMin, ...(dto.venueId ? { venueId: dto.venueId } : {}) };
       const where = { id: slotId, schoolId, event: { tournamentId: id } };
-      const r = kind === 'match' ? await tx.sportsMatch.updateMany({ where, data }) : await tx.sportsHeat.updateMany({ where, data });
-      if (r.count === 0) throw new ApiError(kind === 'match' ? 'MATCH_NOT_FOUND' : 'HEAT_NOT_FOUND', 'That slot is not in this tournament.', 404);
+      if (kind === 'match') await tx.sportsMatch.updateMany({ where, data });
+      else await tx.sportsHeat.updateMany({ where, data });
       await tx.sportsTournament.update({ where: { id }, data: { version: { increment: 1 } } });
+    });
+  }
+
+  /**
+   * Every scheduled slot of a meet as a placement, with the words to describe
+   * one. This is what makes a refusal a sentence — "Court 1 already has
+   * Badminton Final at 09:25" rather than a row id.
+   */
+  private async boardOf(tx: TenantTx, schoolId: string, id: string): Promise<{ placements: Placement[]; window: { dayStartMin: number; dayEndMin: number }; names: { venue: (i: string) => string; person: (i: string) => string; slot: (i: string) => string; at: (i: string) => string } }> {
+    const t = await this.requireTournament(tx, schoolId, id);
+    const [venues, events] = await Promise.all([
+      tx.sportsVenue.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, tournamentId: id }, select: { id: true, name: true } }),
+      tx.sportsEvent.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, tournamentId: id }, select: { id: true, sportKey: true, sportName: true, slotMin: true, teamBasis: true } }),
+    ]);
+    const eventIds = events.map((e) => e.id);
+    const [matches, heats, entries, students] = eventIds.length
+      ? await Promise.all([
+        tx.sportsMatch.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, eventId: { in: eventIds } }, select: { id: true, eventId: true, roundIdx: true, roundName: true, groupLabel: true, aSide: true, bSide: true, venueId: true, atMin: true, winner: true, scoreA: true, bye: true } }),
+        tx.sportsHeat.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, eventId: { in: eventIds } }, select: { id: true, eventId: true, kind: true, idx: true, venueId: true, atMin: true, done: true, marks: { select: { studentId: true } } } }),
+        tx.sportsEntry.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, eventId: { in: eventIds } }, select: { eventId: true, studentId: true, std: true, section: true, student: { select: { houseId: true, firstName: true, lastName: true } } } }),
+        tx.student.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId, sportsEntries: { some: { event: { tournamentId: id } } } }, select: { id: true, firstName: true, lastName: true } }),
+      ])
+      : [[], [], [], []];
+    const ev = (i: string) => events.find((e) => e.id === i);
+    const title = new Map<string, string>();
+    const when = new Map<string, number>();
+    const placements: Placement[] = [];
+    for (const m of matches) {
+      const e = ev(m.eventId);
+      if (!e || m.bye) continue;
+      const sport = resolveSport(e.sportKey, e.sportName);
+      const mine = entries.filter((x) => x.eventId === e.id).map((x) => ({ studentId: x.studentId, std: x.std, section: x.section, houseId: x.student.houseId }));
+      const people = sport ? [...peopleOfSide(m.aSide, sport, mine, e.teamBasis as TeamBasis), ...peopleOfSide(m.bSide, sport, mine, e.teamBasis as TeamBasis)] : [];
+      placements.push({ id: m.id, eventId: m.eventId, roundIdx: m.roundIdx, people, venueId: m.venueId, atMin: m.atMin, slotMin: e.slotMin, played: !!m.winner || m.scoreA.length > 0 });
+      title.set(m.id, `${e.sportName} ${m.roundName}${m.groupLabel && m.groupLabel !== 'Final' ? ` (${m.groupLabel})` : ''}`);
+      if (m.atMin != null) when.set(m.id, m.atMin);
+    }
+    const ROUND: Record<string, number> = { HEAT: 0, SEMI: 1, FINAL: 2 };
+    for (const h of heats) {
+      const e = ev(h.eventId);
+      if (!e) continue;
+      placements.push({ id: h.id, eventId: h.eventId, roundIdx: ROUND[h.kind] ?? 0, people: h.marks.map((k) => k.studentId), venueId: h.venueId, atMin: h.atMin, slotMin: e.slotMin, played: h.done });
+      title.set(h.id, `${e.sportName} ${h.kind === 'FINAL' ? 'Final' : h.kind === 'SEMI' ? `Semi-final ${h.idx + 1}` : `Heat ${h.idx + 1}`}`);
+      if (h.atMin != null) when.set(h.id, h.atMin);
+    }
+    const nameOf = new Map(students.map((s) => [s.id, `${s.firstName} ${s.lastName}`.trim()]));
+    const venueOf = new Map(venues.map((v) => [v.id, v.name]));
+    const bySlot = new Map(placements.map((p) => [p.id, p]));
+    return {
+      placements,
+      window: { dayStartMin: t.dayStartMin, dayEndMin: t.dayEndMin },
+      names: {
+        venue: (i) => venueOf.get(bySlot.get(i)?.venueId ?? '') ?? 'That venue',
+        person: (i) => nameOf.get(i) ?? 'A student',
+        slot: (i) => title.get(i) ?? 'another slot',
+        at: (i) => (when.has(i) ? hhmm(when.get(i)!) : 'the same time'),
+      },
+    };
+  }
+
+  /**
+   * A whole class's unplayed slots, together, by a number of minutes. The
+   * office says "put class 9 after lunch", not "move seventeen heats".
+   */
+  moveGroup(schoolId: string, id: string, dto: MoveGroupDto): Promise<TournamentDetail> {
+    return withTenant(schoolId, async (tx) => {
+      const t = await this.requireTournament(tx, schoolId, id);
+      if (t.status === 'DONE') throw new ApiError('TOURNAMENT_STATE', 'This tournament is finished.', 409);
+      const [matches, heats] = await Promise.all([
+        tx.sportsMatch.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, eventId: dto.eventId, event: { tournamentId: id }, groupLabel: dto.groupLabel, atMin: { not: null } }, select: { id: true, winner: true, scoreA: true } }),
+        tx.sportsHeat.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, eventId: dto.eventId, event: { tournamentId: id }, groupLabel: dto.groupLabel, atMin: { not: null } }, select: { id: true, done: true } }),
+      ]);
+      const ids = new Set<string>([
+        ...matches.filter((m) => !m.winner && m.scoreA.length === 0).map((m) => m.id),
+        ...heats.filter((h) => !h.done).map((h) => h.id),
+      ]);
+      if (!ids.size) throw new ApiError('VALIDATION', 'Nothing in that group is still to be played.', 400, 'groupLabel');
+      const board = await this.boardOf(tx, schoolId, id);
+      const moving = board.placements.filter((p) => ids.has(p.id)).map((p) => ({ ...p, atMin: p.atMin == null ? null : p.atMin + dto.deltaMin }));
+      const rest = board.placements.filter((p) => !ids.has(p.id));
+      for (const p of moving) {
+        const no = whyNot(p, [...rest, ...moving], board.window);
+        if (no) throw new ApiError('SLOT_REFUSED', sayProblem(no, board.names), 409);
+      }
+      await Promise.all([
+        tx.sportsMatch.updateMany({ where: { id: { in: matches.filter((m) => ids.has(m.id)).map((m) => m.id) } }, data: { atMin: { increment: dto.deltaMin } } }),
+        tx.sportsHeat.updateMany({ where: { id: { in: heats.filter((h) => ids.has(h.id)).map((h) => h.id) } }, data: { atMin: { increment: dto.deltaMin } } }),
+      ]);
+      await tx.sportsTournament.update({ where: { id }, data: { version: { increment: 1 } } });
+      return this.getIn(tx, schoolId, id);
+    });
+  }
+
+  /** Hold several events to one day of the meet at once — a whole category. */
+  holdEvents(schoolId: string, id: string, dto: HoldDto): Promise<TournamentDetail> {
+    return withTenant(schoolId, async (tx) => {
+      const t = await this.requireTournament(tx, schoolId, id);
+      if (t.status === 'DONE') throw new ApiError('TOURNAMENT_STATE', 'This tournament is finished.', 409);
+      const r = await tx.sportsEvent.updateMany({ where: { id: { in: dto.eventIds }, schoolId, tournamentId: id }, data: { dayIdx: dto.dayIdx } });
+      if (r.count === 0) throw new ApiError('EVENT_NOT_FOUND', 'None of those events are in this tournament.', 404);
+      return this.refitIn(tx, schoolId, id);
+    });
+  }
+
+  /**
+   * The court is flooded. Everything unplayed comes off it and is re-laid on
+   * the others; the venue stays in the meet so it can be used again tomorrow.
+   */
+  clearVenue(schoolId: string, id: string, venueId: string): Promise<TournamentDetail> {
+    return withTenant(schoolId, async (tx) => {
+      const t = await this.requireTournament(tx, schoolId, id);
+      if (t.status === 'DONE') throw new ApiError('TOURNAMENT_STATE', 'This tournament is finished.', 409);
+      const v = await tx.sportsVenue.findFirst({ where: { id: venueId, schoolId, tournamentId: id }, select: { id: true } });
+      if (!v) throw new ApiError('VALIDATION', 'That venue is not in this tournament.', 400, 'venueId');
+      const events = await tx.sportsEvent.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, tournamentId: id }, select: { id: true, sportName: true, venueIds: true } });
+      const orphan = events.find((e) => e.venueIds.length === 1 && e.venueIds[0] === venueId);
+      if (orphan) throw new ApiError('VALIDATION', `${orphan.sportName} has nowhere else to play. Give it another venue first.`, 400, 'venueId');
+      for (const e of events) if (e.venueIds.includes(venueId)) await tx.sportsEvent.update({ where: { id: e.id }, data: { venueIds: e.venueIds.filter((x) => x !== venueId) } });
+      await tx.sportsMatch.updateMany({ where: { schoolId, event: { tournamentId: id }, venueId, winner: null, scoreA: { isEmpty: true } }, data: { venueId: null, atMin: null } });
+      await tx.sportsHeat.updateMany({ where: { schoolId, event: { tournamentId: id }, venueId, done: false }, data: { venueId: null, atMin: null } });
+      return this.refitIn(tx, schoolId, id);
     });
   }
 

@@ -10,6 +10,7 @@ import type { EventDetail, MatchRow, TournamentDetail } from './ui';
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+import { toast } from 'sonner';
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }), usePathname: () => '/app/sports' }));
 
 const match = (over: Partial<MatchRow>): MatchRow => ({
@@ -47,27 +48,105 @@ function mockApi(t: TournamentDetail = detail()) {
 }
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(useHost).mockReturnValue('raffles.test.sckools.com'); });
 
-describe('Tournament view — the schedule a teacher reads', () => {
-  it('opens on the schedule, grouped by sport then by class, with counts on the outside', async () => {
+describe('Tournament view — the programme, hung three ways', () => {
+  it('opens on the programme by sport, and re-hangs the same rows by category or by day', async () => {
     mockApi();
     const u = userEvent.setup();
     renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
-    // shut by default: the sports are all visible, none of their slots are
-    const badminton = await screen.findByRole('region', { name: 'Badminton · Senior Boys' });
-    expect(within(badminton).getByText(/3 matches · Court 1/)).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Chess · Senior Boys' })).toBeInTheDocument();
-    expect(screen.queryByText('9 A v 9 B')).toBeNull();
-    // sport → class → the slots themselves
-    await u.click(within(badminton).getByRole('button', { name: /Badminton · Senior Boys/ }));
-    await u.click(within(badminton).getByRole('button', { name: /Class 9/ }));
+    // by sport: the sport is the outer level
+    expect(await screen.findByRole('region', { name: 'Badminton' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Chess' })).toBeInTheDocument();
+    expect(screen.getByText(/2 sports · 4 matches and heats/)).toBeInTheDocument();
+    // by category: the same four rows, hung under the group and category
+    await u.click(screen.getByRole('button', { name: 'Category' }));
+    expect(screen.getByRole('region', { name: 'Senior Boys' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Badminton' })).toBeNull();
+    expect(screen.getByText(/1 category · 4 matches and heats/)).toBeInTheDocument();
+    // by day: two days, because one badminton match spilled onto the second
+    await u.click(screen.getByRole('button', { name: 'Day' }));
+    expect(screen.getByRole('region', { name: 'Tue 15 Sep' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Wed 16 Sep' })).toBeInTheDocument();
+  });
+
+  it('sport, then category, then class — and the class rows carry their own times', async () => {
+    mockApi();
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    const badminton = await screen.findByRole('region', { name: 'Badminton' });
+    expect(within(badminton).queryByText('Aarav v Bela')).toBeNull(); // shut
+    await u.click(within(badminton).getByRole('button', { name: /^Badminton/ }));
+    await u.click(within(badminton).getByRole('button', { name: /^Senior Boys/ }));
+    expect(within(badminton).getByText('Class 9')).toBeInTheDocument();
     expect(within(badminton).getAllByRole('listitem')).toHaveLength(3);
-    expect(within(badminton).getAllByText('Aarav v Bela')).toHaveLength(3);
   });
 
   it('names an event that has no times yet instead of dropping it', async () => {
     mockApi(detail({ events: [event({ matches: [match({ id: 'm1', atMin: 540 })] }), event({ id: 'e2', sportName: 'Chess', matches: [] })] }));
     renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
     expect(await screen.findByText(/1 event not timetabled yet/)).toBeInTheDocument();
+  });
+});
+
+describe('Tournament view — moving what is already planned', () => {
+  async function openClass(u: ReturnType<typeof userEvent.setup>) {
+    const badminton = await screen.findByRole('region', { name: 'Badminton' });
+    await u.click(within(badminton).getByRole('button', { name: /^Badminton/ }));
+    await u.click(within(badminton).getByRole('button', { name: /^Senior Boys/ }));
+    return badminton;
+  }
+
+  it('moves one class together, and offers to put it back', async () => {
+    const api = mockApi();
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    const badminton = await openClass(u);
+    await u.click(within(badminton).getByRole('button', { name: 'Move…' }));
+    await u.click(within(badminton).getByRole('button', { name: '30 min later' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/sports/tournaments/t1/move-group', { eventId: 'e1', groupLabel: 'Class 9', deltaMin: 30 }));
+    // undo issues the inverse, not a second forward move
+    await u.click(await screen.findByRole('button', { name: /^Put Class 9 back/ }));
+    await waitFor(() => expect(api.post).toHaveBeenLastCalledWith('/sports/tournaments/t1/move-group', { eventId: 'e1', groupLabel: 'Class 9', deltaMin: -30 }));
+  });
+
+  it('will not offer to move a class whose slots have all been played', async () => {
+    mockApi(detail({ events: [event({ matches: [match({ id: 'm1', atMin: 540, winner: 's:a' })] })] }));
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    const badminton = await openClass(u);
+    expect(within(badminton).getByText('all played')).toBeInTheDocument();
+    expect(within(badminton).queryByRole('button', { name: 'Move…' })).toBeNull();
+  });
+
+  it('holds a whole branch to one day of the meet, or frees it', async () => {
+    const api = mockApi(detail({ endsOn: '2026-09-17' }));
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    await screen.findByRole('region', { name: 'Badminton' });
+    await u.click(within(screen.getByRole('region', { name: 'Badminton' })).getByRole('button', { name: 'Runs on…' }));
+    await u.click(screen.getByRole('button', { name: '16 Sep' }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/sports/tournaments/t1/events/day', { eventIds: ['e1'], dayIdx: 1 }));
+    await u.click(within(screen.getByRole('region', { name: 'Badminton' })).getByRole('button', { name: 'Runs on…' }));
+    await u.click(screen.getByRole('button', { name: 'Wherever it fits' }));
+    await waitFor(() => expect(api.patch).toHaveBeenLastCalledWith('/sports/tournaments/t1/events/day', { eventIds: ['e1'], dayIdx: null }));
+  });
+
+  it('a played block refuses to be picked up, and says why without asking the server', async () => {
+    const api = mockApi(detail({ events: [event({ matches: [match({ id: 'm1', atMin: 540, winner: 's:a' }), match({ id: 'm2', atMin: 600 })] })] }));
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    await u.click(await screen.findByRole('tab', { name: 'Timetable' }));
+    fireEvent.pointerDown(screen.getByTitle(/09:00 · 25 min/), { pointerId: 1 });
+    expect(toast.error).toHaveBeenCalledWith('That slot has a result in, so it stays where it happened.');
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it('clears a flooded court, and offers it only where there is somewhere else to go', async () => {
+    const api = mockApi(detail({ venues: [{ id: 'v1', name: 'Court 1', order: 0 }, { id: 'v2', name: 'Court 2', order: 1 }], events: [event({ venueIds: ['v1', 'v2'], matches: [match({ id: 'm1', atMin: 540 }), match({ id: 'm2', atMin: 565, venueId: 'v2' })] })] }));
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    await u.click(await screen.findByRole('tab', { name: 'Timetable' }));
+    await u.click(screen.getByTitle('Move everything unplayed off Court 2'));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/sports/tournaments/t1/venues/v2/clear', {}));
   });
 });
 

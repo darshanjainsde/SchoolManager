@@ -261,14 +261,92 @@ describe('board edits', () => {
     expect(txMock.sportsHeat.updateMany.mock.calls[0][0].where).toMatchObject({ done: false });
   });
 
-  it('moving a slot checks the venue belongs to the meet and the slot exists', async () => {
+  /** One badminton court, two matches on it, and a sprint heat on the track. */
+  function board() {
+    txMock.sportsVenue.findFirst.mockResolvedValue({ id: V2 });
+    txMock.sportsVenue.findMany.mockResolvedValue([{ id: V1, name: 'Court 1' }, { id: V2, name: 'Track' }]);
+    txMock.sportsEvent.findMany.mockResolvedValue([
+      { id: E, sportKey: 'badminton', sportName: 'Badminton', slotMin: 25, teamBasis: 'SECTIONS' },
+    ]);
+    const rows = [
+      { id: 'm1', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(1)}`, bSide: `s:${uid(2)}`, venueId: V1, atMin: 540, winner: null, scoreA: [], bye: false },
+      { id: 'm2', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(3)}`, bSide: `s:${uid(4)}`, venueId: V1, atMin: 565, winner: null, scoreA: [], bye: false },
+      { id: 'done', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(5)}`, bSide: `s:${uid(6)}`, venueId: V1, atMin: 590, winner: `s:${uid(5)}`, scoreA: [21], bye: false },
+      { id: 'final', eventId: E, roundIdx: 1, roundName: 'Final', groupLabel: 'Final', aSide: null, bSide: null, venueId: V1, atMin: 700, winner: null, scoreA: [], bye: false },
+    ];
+    // moveGroup narrows by groupLabel in SQL; a mock that ignores the where
+    // clause would hand it the whole draw and prove nothing.
+    txMock.sportsMatch.findMany.mockImplementation((args: { where?: { groupLabel?: string } }) =>
+      Promise.resolve(args?.where?.groupLabel ? rows.filter((r) => r.groupLabel === args.where!.groupLabel) : rows));
+    txMock.sportsHeat.findMany.mockResolvedValue([]);
+    txMock.sportsEntry.findMany.mockResolvedValue([1, 2, 3, 4, 5, 6].map((n) => ({ eventId: E, studentId: uid(n), std: 9, section: 'A', student: { houseId: null, firstName: 'Kid', lastName: String(n) } })));
+    txMock.student.findMany.mockResolvedValue([{ id: uid(1), firstName: 'Saanvi', lastName: 'Krishnamurthy' }]);
+  }
+
+  it('refuses a move onto a court that is already busy, and names what is there', async () => {
+    board();
+    await expect(svc().move(SCHOOL, T, 'match', 'm2', { atMin: 545 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: 'Court 1 already has Badminton Round 1 (Class 9) at 09:00.' },
+    });
+    expect(txMock.sportsMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses a move that would put one child in two places, and names the child', async () => {
+    board();
+    // m2 onto the track at 09:00 is free of m1's court, but they share nobody…
+    await svc().move(SCHOOL, T, 'match', 'm2', { venueId: V2, atMin: 540 });
+    expect(txMock.sportsMatch.updateMany).toHaveBeenCalledWith({ where: { id: 'm2', schoolId: SCHOOL, event: { tournamentId: T } }, data: { atMin: 540, venueId: V2 } });
+    // …whereas a match sharing a player with m1 cannot sit on top of it
+    txMock.sportsMatch.findMany.mockResolvedValue([
+      { id: 'm1', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(1)}`, bSide: `s:${uid(2)}`, venueId: V1, atMin: 540, winner: null, scoreA: [], bye: false },
+      { id: 'm2', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(1)}`, bSide: `s:${uid(4)}`, venueId: V2, atMin: 700, winner: null, scoreA: [], bye: false },
+    ]);
+    await expect(svc().move(SCHOOL, T, 'match', 'm2', { venueId: V2, atMin: 540 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: 'Saanvi Krishnamurthy is in Badminton Round 1 (Class 9) at the same time.' },
+    });
+  });
+
+  it('never moves a slot that has a result, and never lets a final jump its own round', async () => {
+    board();
+    await expect(svc().move(SCHOOL, T, 'match', 'done', { atMin: 800 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: 'That slot has a result in, so it stays where it happened.' },
+    });
+    await expect(svc().move(SCHOOL, T, 'match', 'final', { venueId: V2, atMin: 545 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: expect.stringContaining('has to finish first') },
+    });
+  });
+
+  it('keeps a move inside the day, and still checks the venue and the slot exist', async () => {
+    board();
+    await expect(svc().move(SCHOOL, T, 'match', 'final', { atMin: 950 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: 'That would run past 16:00, when the day ends.' },
+    });
     txMock.sportsVenue.findFirst.mockResolvedValue(null);
     await expect(svc().move(SCHOOL, T, 'match', 'm1', { venueId: V2, atMin: 700 })).rejects.toMatchObject({ response: { field: 'venueId' } });
-    txMock.sportsMatch.updateMany.mockResolvedValue({ count: 0 });
-    await expect(svc().move(SCHOOL, T, 'match', 'm1', { atMin: 700 })).rejects.toMatchObject({ response: { code: 'MATCH_NOT_FOUND' } });
-    txMock.sportsHeat.updateMany.mockResolvedValue({ count: 1 });
-    await svc().move(SCHOOL, T, 'heat', 'h1', { atMin: 700 });
-    expect(txMock.sportsHeat.updateMany).toHaveBeenCalledWith({ where: { id: 'h1', schoolId: SCHOOL, event: { tournamentId: T } }, data: { atMin: 700 } });
+    board();
+    await expect(svc().move(SCHOOL, T, 'match', 'nope', { atMin: 700 })).rejects.toMatchObject({ response: { code: 'MATCH_NOT_FOUND' } });
+  });
+
+  it('moves a whole class together, or refuses the batch and moves none of it', async () => {
+    board();
+    txMock.sportsMatch.updateMany.mockResolvedValue({ count: 2 });
+    txMock.sportsHeat.updateMany.mockResolvedValue({ count: 0 });
+    // +100 puts Class 9 at 10:40 and 11:05, still finishing before the 11:40 final it feeds
+    await svc().moveGroup(SCHOOL, T, { eventId: E, groupLabel: 'Class 9', deltaMin: 100 });
+    expect(txMock.sportsMatch.updateMany.mock.calls[0][0]).toEqual({ where: { id: { in: ['m1', 'm2'] } }, data: { atMin: { increment: 100 } } });
+    jest.clearAllMocks();
+    board();
+    // +160 would land Class 9 on top of the final on the same court, so nothing moves at all
+    await expect(svc().moveGroup(SCHOOL, T, { eventId: E, groupLabel: 'Class 9', deltaMin: 160 })).rejects.toMatchObject({ response: { code: 'SLOT_REFUSED' } });
+    expect(txMock.sportsMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('will not move a group in which nothing is left to play', async () => {
+    board();
+    txMock.sportsMatch.findMany.mockResolvedValue([{ id: 'done', winner: 's:x', scoreA: [21] }]);
+    txMock.sportsHeat.findMany.mockResolvedValue([]);
+    await expect(svc().moveGroup(SCHOOL, T, { eventId: E, groupLabel: 'Class 9', deltaMin: 30 }))
+      .rejects.toMatchObject({ response: { field: 'groupLabel' } });
   });
 });
 
