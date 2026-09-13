@@ -4140,6 +4140,14 @@ model SportsEvent {
   entry        String           @default("ALL")
   /// Team sports only: SECTIONS (9 A v 9 B), CLASSES (9 v 10) or HOUSES.
   teamBasis    String           @default("SECTIONS")
+  /// Measured/judged events: CLASS_QUAL · OPEN_QUAL · STRAIGHT (sports/maths.ts planStages).
+  stageShape      String        @default("STRAIGHT")
+  /// CLASS_QUAL: how many of each class reach the band stage.
+  advancePerClass Int           @default(2)
+  /// OPEN_QUAL/STRAIGHT: how many reach the final.
+  finalists       Int           @default(6)
+  /// Pinned to this day of the meet (0-based); null = wherever it fits.
+  dayIdx          Int?
   structure    String
   slotMin      Int
   lanes        Int              @default(6)
@@ -4204,7 +4212,10 @@ model SportsHeat {
   id       String       @id @default(uuid()) @db.Uuid
   schoolId String       @db.Uuid
   eventId  String       @db.Uuid
+  /// HEAT · SEMI · FINAL — the step of the funnel this heat belongs to.
   kind     String
+  /// Class heats: the class they belong to ("Class 9"), so the best of each class advance.
+  groupLabel String?
   idx      Int
   venueId  String?      @db.Uuid
   atMin    Int?

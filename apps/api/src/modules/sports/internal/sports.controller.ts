@@ -17,8 +17,8 @@ import { SportsResultsService } from './sports-results.service';
 import { SportsSettingsService } from './sports-settings.service';
 import { SportsTournamentsService } from './sports-tournaments.service';
 import {
-  AddRecordDto, AssignHouseDto, AwardPointsDto, CreateHouseDto, CreateTournamentDto, DecideAttemptDto, MarksDto, MoveSlotDto, ScoreDto, SetCoachPermsDto, ShiftDto,
-  SubmitAttemptDto, UpdateHouseDto, UpdateSportsSettingsDto, VoidRecordDto,
+  AddRecordDto, AddVenueDto, AssignHouseDto, AwardPointsDto, CreateHouseDto, CreateTournamentDto, DecideAttemptDto, MarksDto, MoveSlotDto, PinEventDto, ScoreDto, SetCoachPermsDto, ShiftDto,
+  SubmitAttemptDto, UpdateHouseDto, UpdateSportsSettingsDto, UpdateTournamentDto, VoidRecordDto,
 } from './sports.dto';
 
 /**
@@ -114,6 +114,29 @@ export class SportsController {
   @Post('tournaments/:id/finish')
   @SportsPerm('CREATE')
   finish(@Param('id', ParseUUIDPipe) id: string) { return this.tournaments.finish(this.sid(), id); }
+
+  /** Grow the meet: more days, different hours, a longer rest between a child's slots. */
+  @Patch('tournaments/:id')
+  @SportsPerm('CREATE')
+  updateTournament(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTournamentDto) { return this.tournaments.update(this.sid(), id, dto); }
+
+  @Post('tournaments/:id/venues')
+  @SportsPerm('CREATE')
+  addVenue(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AddVenueDto) { return this.tournaments.addVenue(this.sid(), id, dto); }
+
+  @Delete('tournaments/:id/venues/:venueId')
+  @SportsPerm('CREATE')
+  removeVenue(@Param('id', ParseUUIDPipe) id: string, @Param('venueId', ParseUUIDPipe) venueId: string) { return this.tournaments.removeVenue(this.sid(), id, venueId); }
+
+  /** Hold an event to one day of the meet (or free it with null), then re-lay the plan. */
+  @Patch('tournaments/:id/events/:eventId/day')
+  @SportsPerm('CREATE')
+  pinEvent(@Param('id', ParseUUIDPipe) id: string, @Param('eventId', ParseUUIDPipe) eventId: string, @Body() dto: PinEventDto) { return this.tournaments.pinEvent(this.sid(), id, eventId, dto); }
+
+  /** Lay every unplayed slot out again on the days and venues the meet has now. */
+  @Post('tournaments/:id/refit')
+  @SportsPerm('CREATE')
+  refit(@Param('id', ParseUUIDPipe) id: string) { return this.tournaments.refit(this.sid(), id); }
 
   @Post('tournaments/:id/shift')
   @SportsPerm('CREATE')

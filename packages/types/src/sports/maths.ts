@@ -260,7 +260,8 @@ export function planClassStage(entries: EntrySide[]): { mode: 'CLASS' | 'DRAW'; 
 }
 
 // ── heats ─────────────────────────────────────────────────────
-export interface Heat { idx: number; kind: 'HEAT' | 'FINAL'; lanes: { lane: number; side: SideKey }[] }
+export type HeatKind = 'HEAT' | 'SEMI' | 'FINAL';
+export interface Heat { idx: number; kind: HeatKind; groupLabel?: string; lanes: { lane: number; side: SideKey }[] }
 /** Balanced heats of at most `lanes`; one heat is the final straight away. */
 export function planHeats(sides: SideKey[], lanes: number): Heat[] {
   const uniq = [...new Set(sides)];
@@ -328,10 +329,13 @@ export const newDiary = (restMin = 15): Diary => ({ free: new Map(), restMin });
 /** A round is a count of matches, or the people in each match when the planner should keep their diaries clear. */
 export type RoundSpec = number | string[][];
 
-export function planRounds(rounds: RoundSpec[], venueIds: string[], slotMin: number, cursor: Map<string, number>, w: DayWindow, diary?: Diary): Slot[][] {
+/** The first minute of a day of the meet — what an event pinned to a day may not start before. */
+export const dayFloor = (dayIdx: number, w: DayWindow) => dayIdx * MIN_PER_DAY + w.dayStartMin;
+
+export function planRounds(rounds: RoundSpec[], venueIds: string[], slotMin: number, cursor: Map<string, number>, w: DayWindow, diary?: Diary, notBefore = 0): Slot[][] {
   if (venueIds.length === 0) throw new Error('NEED_VENUE');
   const out: Slot[][] = [];
-  let floor = 0;
+  let floor = notBefore;
   for (const round of rounds) {
     const items: string[][] = typeof round === 'number' ? Array.from({ length: round }, () => []) : round;
     const slots: Slot[] = [];
@@ -462,3 +466,128 @@ export function cursorFrom(bookings: { venueId: string | null; atMin: number | n
 
 export const isSingleScoring = (s: Scoring): s is SingleScoring => s.type === 'SINGLE';
 export const isMarkScoring = (s: Scoring): s is MarkScoring => s.type === 'MARK';
+
+// ── stages: how a big field becomes a final ───────────────────
+/**
+ * The shape a measured or judged event runs in. A school with a thousand
+ * entrants cannot run one heat after another: it qualifies inside each class,
+ * or it qualifies openly, and only the shortlist reaches the final.
+ */
+export type StageShape = 'CLASS_QUAL' | 'OPEN_QUAL' | 'STRAIGHT';
+export const STAGE_SHAPES: readonly StageShape[] = ['CLASS_QUAL', 'OPEN_QUAL', 'STRAIGHT'];
+
+export interface StagePlanInput {
+  entries: number;
+  /** How many classes the entrants come from — CLASS_QUAL splits by them. */
+  classes: number;
+  lanes: number;
+  shape: StageShape;
+  /** CLASS_QUAL: how many of each class go through. */
+  advancePerClass: number;
+  /** OPEN_QUAL / STRAIGHT: how many reach the final. */
+  finalists: number;
+}
+export interface StageStep {
+  kind: HeatKind;
+  /** What the office calls it: "Class heats", "Semi-finals", "Final". */
+  label: string;
+  /** People taking part in this step. */
+  field: number;
+  /** Heats (or panels) this step needs — the slots the planner must place. */
+  slots: number;
+}
+
+const heatsFor = (field: number, lanes: number) => Math.max(1, Math.ceil(field / Math.max(1, lanes)));
+
+/**
+ * The whole funnel, in order, from the entries to the final. Pure arithmetic:
+ * the wizard shows it before anything is created and the API builds exactly it.
+ */
+export function planStages(input: StagePlanInput): StageStep[] {
+  const lanes = Math.max(1, input.lanes);
+  const entries = Math.max(0, input.entries);
+  if (entries === 0) return [];
+  if (entries <= lanes) return [{ kind: 'FINAL', label: 'Final', field: entries, slots: 1 }];
+  const classes = Math.max(1, input.classes);
+  if (input.shape === 'CLASS_QUAL' && classes > 1) {
+    const perClass = Math.ceil(entries / classes);
+    const classHeats = heatsFor(perClass, lanes) * classes;
+    // One per class is a legitimate plan (the class champions meet); the band still needs two to race.
+    const band = Math.max(2, Math.min(entries, Math.max(1, input.advancePerClass) * classes));
+    const bandHeats = heatsFor(band, lanes);
+    const steps: StageStep[] = [{ kind: 'HEAT', label: 'Class heats', field: entries, slots: classHeats }];
+    if (bandHeats > 1) {
+      steps.push({ kind: 'SEMI', label: 'Band semi-finals', field: band, slots: bandHeats });
+      steps.push({ kind: 'FINAL', label: 'Final', field: Math.min(band, Math.max(2, input.finalists)), slots: 1 });
+    } else {
+      steps.push({ kind: 'FINAL', label: 'Band final', field: band, slots: 1 });
+    }
+    return steps;
+  }
+  if (input.shape === 'OPEN_QUAL') {
+    const heats = heatsFor(entries, lanes);
+    const semiField = Math.min(entries, Math.max(2, input.finalists) * 3);
+    const semis = heatsFor(semiField, lanes);
+    const steps: StageStep[] = [{ kind: 'HEAT', label: 'Qualifying heats', field: entries, slots: heats }];
+    if (semis > 1) steps.push({ kind: 'SEMI', label: 'Semi-finals', field: semiField, slots: semis });
+    steps.push({ kind: 'FINAL', label: 'Final', field: Math.min(entries, Math.max(2, input.finalists)), slots: 1 });
+    return steps;
+  }
+  const heats = heatsFor(entries, lanes);
+  return [
+    { kind: 'HEAT', label: 'Heats', field: entries, slots: heats },
+    { kind: 'FINAL', label: 'Final', field: Math.min(entries, lanes), slots: 1 },
+  ];
+}
+
+/** How many go through from one step to the next, under this plan. */
+export function advanceCount(input: StagePlanInput, from: HeatKind): number {
+  const steps = planStages(input);
+  const i = steps.findIndex((s) => s.kind === from);
+  return i >= 0 && i + 1 < steps.length ? steps[i + 1].field : 0;
+}
+
+/** Class heats: split the field by class first, then into heats of `lanes` inside each class. */
+export function planClassHeats(entries: { side: SideKey; std: number }[], lanes: number): Heat[] {
+  const byStd = new Map<number, SideKey[]>();
+  for (const e of entries) byStd.set(e.std, [...(byStd.get(e.std) ?? []), e.side]);
+  const out: Heat[] = [];
+  let idx = 0;
+  for (const std of [...byStd.keys()].sort((a, b) => a - b)) {
+    for (const h of planHeats(byStd.get(std)!, lanes)) {
+      out.push({ idx: idx++, kind: 'HEAT', groupLabel: `Class ${std}`, lanes: h.lanes });
+    }
+  }
+  return out;
+}
+
+/** The best `perGroup` marks of each group (a class, or the whole field when ungrouped). Ties at the cut come along. */
+export function advanceFrom(
+  marks: { side: SideKey; mark: number | null; groupLabel?: string | null }[],
+  perGroup: number,
+  lowerIsBetter: boolean,
+): SideKey[] {
+  // Groups keep the order they appear in — heat order, which is class order.
+  // Sorting the labels would put "Class 10" before "Class 9".
+  const groups = new Map<string, { side: SideKey; mark: number | null }[]>();
+  for (const m of marks) groups.set(m.groupLabel ?? '', [...(groups.get(m.groupLabel ?? '') ?? []), { side: m.side, mark: m.mark }]);
+  const out: SideKey[] = [];
+  for (const list of groups.values()) out.push(...finalists(list, perGroup, lowerIsBetter));
+  return [...new Set(out)];
+}
+
+// ── capacity: does the plan fit the days and venues? ───────────
+export interface CapacityInput { stages: { slots: number; slotMin: number; venues: number }[]; dayStartMin: number; dayEndMin: number; days: number }
+/** Venue-minutes a day holds, the minutes the plan needs, and the days it would take. */
+export function capacityOf(input: CapacityInput): { neededMin: number; dayMin: number; daysNeeded: number; fits: boolean } {
+  const dayMin = Math.max(0, input.dayEndMin - input.dayStartMin);
+  let neededMin = 0;
+  let worstDays = 1;
+  for (const s of input.stages) {
+    const mins = s.slots * s.slotMin;
+    neededMin += mins;
+    const lanes = Math.max(1, s.venues);
+    worstDays = Math.max(worstDays, dayMin > 0 ? Math.ceil(mins / (dayMin * lanes)) : 99);
+  }
+  return { neededMin, dayMin, daysNeeded: worstDays, fits: worstDays <= input.days };
+}

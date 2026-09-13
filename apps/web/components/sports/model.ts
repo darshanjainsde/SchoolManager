@@ -2,7 +2,7 @@
  * Pure view helpers for a tournament payload — bookings for the clash finder,
  * the day board's rows, the words on a match card. No React; `model.test.ts`.
  */
-import { findClashes, hhmm, parseSide, type Booking, type Clash, type Scoring } from '@skoolos/types';
+import { dayOf, findClashes, hhmm, minuteOfDay, parseSide, type Booking, type Clash, type Scoring } from '@skoolos/types';
 import type { EventDetail, MatchRow, TournamentDetail } from '@/app/app/sports/ui';
 
 export interface Slot {
@@ -77,3 +77,46 @@ export function groupsOf(event: EventDetail): { key: string; label: string; matc
 }
 
 export const whenOf = (atMin: number | null) => (atMin == null ? 'not scheduled' : hhmm(atMin));
+
+/**
+ * The days the meet is booked for, and the days its slots actually reach.
+ * `fitInDay` rolls a slot that will not finish before the bell onto the next
+ * morning, so a one-day meet can hold slots on day 2 — which the board must
+ * show rather than hide, or a court reads as free all day when it is not.
+ */
+export function daySpanOf(t: TournamentDetail): { booked: number; used: number; over: boolean } {
+  const a = Date.parse(`${t.startsOn}T00:00:00Z`);
+  const b = Date.parse(`${t.endsOn}T00:00:00Z`);
+  const booked = Number.isNaN(a) || Number.isNaN(b) ? 1 : Math.max(1, Math.round((b - a) / 86_400_000) + 1);
+  const used = slotsOf(t).reduce((n, s) => Math.max(n, dayOf(s.atMin) + 1), 1);
+  return { booked, used, over: used > booked };
+}
+
+export interface DayLoad {
+  day: number;
+  /** Minutes booked across every venue. */
+  total: number;
+  byVenue: Record<string, { min: number; slots: number }>;
+  /** The minute of the day the last slot finishes, or null when the day is empty. */
+  endsAt: number | null;
+  /** Events with a slot on this day, in the order they first appear. */
+  events: { id: string; label: string; slots: number }[];
+}
+
+/** What each day of the meet holds: minutes per venue, when it ends, whose events run. */
+export function loadOf(t: TournamentDetail, days: number): DayLoad[] {
+  const out: DayLoad[] = Array.from({ length: Math.max(1, days) }, (_, day) => ({ day, total: 0, byVenue: {}, endsAt: null, events: [] }));
+  for (const s of slotsOf(t)) {
+    const d = out[dayOf(s.atMin)];
+    if (!d) continue;
+    const v = (d.byVenue[s.venueId] ??= { min: 0, slots: 0 });
+    v.min += s.slotMin;
+    v.slots += 1;
+    d.total += s.slotMin;
+    d.endsAt = Math.max(d.endsAt ?? 0, minuteOfDay(s.atMin) + s.slotMin);
+    const e = d.events.find((x) => x.id === s.eventId);
+    if (e) e.slots += 1;
+    else d.events.push({ id: s.eventId, label: eventLabel(s.event), slots: 1 });
+  }
+  return out;
+}

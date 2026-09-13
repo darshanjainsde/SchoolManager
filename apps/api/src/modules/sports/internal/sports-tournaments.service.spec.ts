@@ -3,11 +3,11 @@ import 'reflect-metadata';
 const txMock = {
   sportsSettings: { findUnique: jest.fn(), create: jest.fn() },
   sportsTournament: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
-  sportsVenue: { createMany: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
-  sportsEvent: { groupBy: jest.fn(), create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn() },
+  sportsVenue: { createMany: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), count: jest.fn(), delete: jest.fn() },
+  sportsEvent: { groupBy: jest.fn(), create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
   sportsEntry: { createMany: jest.fn(), findMany: jest.fn() },
-  sportsMatch: { createMany: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
-  sportsHeat: { create: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
+  sportsMatch: { createMany: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
+  sportsHeat: { create: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
   student: { findMany: jest.fn() },
   school: { findUnique: jest.fn() },
   notification: { createMany: jest.fn() },
@@ -304,32 +304,189 @@ describe('ensureFinal — the band final builds itself', () => {
   });
 });
 
-describe('ensureHeatFinal — the best marks go through', () => {
+describe('ensureHeatFinal — the funnel, one step at a time', () => {
+  const measured = (over: Record<string, unknown> = {}) => ({ id: E, tournamentId: T, kind: 'MEASURED', lanes: 2, slotMin: 5, venueIds: [V1], sportKey: 'ath-100m', sportName: '100 m sprint', stageShape: 'STRAIGHT', advancePerClass: 2, finalists: 6, dayIdx: null, ...over });
   beforeEach(() => {
-    txMock.sportsEvent.findFirst.mockResolvedValue({ id: E, tournamentId: T, kind: 'MEASURED', lanes: 2, slotMin: 5, venueIds: [V1], sportKey: 'ath-100m', sportName: '100 m sprint' });
+    txMock.sportsEvent.findFirst.mockResolvedValue(measured());
     txMock.sportsTournament.findUnique.mockResolvedValue(tournamentRow());
     txMock.sportsMatch.findMany.mockResolvedValue([]);
+    txMock.sportsEntry.findMany.mockResolvedValue([1, 2, 3, 4].map((n) => ({ studentId: uid(n), std: n <= 2 ? 9 : 10 })));
   });
 
-  it('nothing until every heat is done; one heat needs no final', async () => {
-    txMock.sportsHeat.findMany.mockResolvedValue([{ kind: 'HEAT', done: true, marks: [] }, { kind: 'HEAT', done: false, marks: [] }]);
+  it('nothing until every heat of the step is done, and a final is never rebuilt', async () => {
+    txMock.sportsHeat.findMany.mockResolvedValue([{ kind: 'HEAT', groupLabel: null, done: true, marks: [] }, { kind: 'HEAT', groupLabel: null, done: false, marks: [] }]);
     expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(false);
-    txMock.sportsHeat.findMany.mockResolvedValue([{ kind: 'FINAL', done: true, marks: [] }]);
+    txMock.sportsHeat.findMany.mockResolvedValue([{ kind: 'FINAL', groupLabel: null, done: true, marks: [] }]);
     expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(false);
     expect(txMock.sportsHeat.create).not.toHaveBeenCalled();
   });
 
-  it('two heats done → a FINAL heat with the two fastest, scheduled after the heats', async () => {
+  it('STRAIGHT: two heats done → a final of the fastest lane-full, after the heats', async () => {
     txMock.sportsHeat.findMany
       .mockResolvedValueOnce([
-        { kind: 'HEAT', done: true, marks: [{ studentId: uid(1), mark: 12.5 }, { studentId: uid(2), mark: 12.1 }] },
-        { kind: 'HEAT', done: true, marks: [{ studentId: uid(3), mark: 12.3 }, { studentId: uid(4), mark: null }] },
+        { kind: 'HEAT', groupLabel: null, done: true, marks: [{ studentId: uid(1), mark: 12.5 }, { studentId: uid(2), mark: 12.1 }] },
+        { kind: 'HEAT', groupLabel: null, done: true, marks: [{ studentId: uid(3), mark: 12.3 }, { studentId: uid(4), mark: null }] },
       ])
       .mockResolvedValueOnce([{ venueId: V1, atMin: 545, event: { slotMin: 5 } }]);
     expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(true);
     const data = txMock.sportsHeat.create.mock.calls[0][0].data;
     expect(data).toMatchObject({ kind: 'FINAL', idx: 2, venueId: V1, atMin: 550 });
     expect(data.marks.createMany.data).toEqual([{ schoolId: SCHOOL, studentId: uid(2), lane: 1 }, { schoolId: SCHOOL, studentId: uid(3), lane: 2 }]);
+  });
+
+  it('CLASS_QUAL: the best of EACH class go to the band final, not the fastest overall', async () => {
+    txMock.sportsEvent.findFirst.mockResolvedValue(measured({ stageShape: 'CLASS_QUAL', advancePerClass: 1, lanes: 2 }));
+    txMock.sportsHeat.findMany
+      .mockResolvedValueOnce([
+        { kind: 'HEAT', groupLabel: 'Class 9', done: true, marks: [{ studentId: uid(1), mark: 12.1 }, { studentId: uid(2), mark: 12.2 }] },
+        { kind: 'HEAT', groupLabel: 'Class 10', done: true, marks: [{ studentId: uid(3), mark: 13.0 }, { studentId: uid(4), mark: 13.4 }] },
+      ])
+      .mockResolvedValueOnce([]);
+    expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(true);
+    const data = txMock.sportsHeat.create.mock.calls[0][0].data;
+    // uid(2) is faster than uid(3) but is not their class's best — the class champions meet
+    expect(data.marks.createMany.data.map((m: { studentId: string }) => m.studentId)).toEqual([uid(1), uid(3)]);
+    expect(data.kind).toBe('FINAL');
+  });
+
+  it('a band bigger than the lanes runs semi-finals first, then the final from those', async () => {
+    txMock.sportsEntry.findMany.mockResolvedValue([1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ studentId: uid(n), std: 9 + (n % 4) })));
+    txMock.sportsEvent.findFirst.mockResolvedValue(measured({ stageShape: 'CLASS_QUAL', advancePerClass: 2, lanes: 2, finalists: 2 }));
+    const heat = (n: number, std: number, marks: [number, number][]) => ({ kind: 'HEAT', groupLabel: `Class ${std}`, done: true, marks: marks.map(([id, m]) => ({ studentId: uid(id), mark: m })) });
+    txMock.sportsHeat.findMany
+      .mockResolvedValueOnce([heat(0, 9, [[1, 12.1], [5, 12.6]]), heat(1, 10, [[2, 12.2], [6, 12.7]]), heat(2, 11, [[3, 12.3], [7, 12.8]]), heat(3, 12, [[4, 12.4], [8, 12.9]])])
+      .mockResolvedValueOnce([]);
+    expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(true);
+    expect(txMock.sportsHeat.create.mock.calls.map((c) => c[0].data.kind)).toEqual(['SEMI', 'SEMI', 'SEMI', 'SEMI']); // 8 qualifiers on 2 lanes
+    jest.clearAllMocks();
+    txMock.sportsTournament.findUnique.mockResolvedValue(tournamentRow());
+    txMock.sportsEvent.findFirst.mockResolvedValue(measured({ stageShape: 'CLASS_QUAL', advancePerClass: 2, lanes: 2, finalists: 2 }));
+    txMock.sportsEntry.findMany.mockResolvedValue([1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ studentId: uid(n), std: 9 + (n % 4) })));
+    txMock.sportsHeat.findMany
+      .mockResolvedValueOnce([
+        heat(0, 9, [[1, 12.1], [5, 12.6]]), heat(1, 10, [[2, 12.2], [6, 12.7]]), heat(2, 11, [[3, 12.3], [7, 12.8]]), heat(3, 12, [[4, 12.4], [8, 12.9]]),
+        { kind: 'SEMI', groupLabel: null, done: true, marks: [{ studentId: uid(1), mark: 12.0 }, { studentId: uid(2), mark: 12.5 }] },
+        { kind: 'SEMI', groupLabel: null, done: true, marks: [{ studentId: uid(3), mark: 12.1 }, { studentId: uid(4), mark: 12.6 }] },
+      ])
+      .mockResolvedValueOnce([]);
+    expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(true);
+    const fin = txMock.sportsHeat.create.mock.calls[0][0].data;
+    expect(fin.kind).toBe('FINAL');
+    expect(fin.marks.createMany.data.map((m: { studentId: string }) => m.studentId)).toEqual([uid(1), uid(3)]);
+  });
+});
+
+describe('growing a meet after it was created', () => {
+  const venues = [{ id: V1, name: 'Track' }, { id: V2, name: 'Court 1' }];
+  beforeEach(() => {
+    txMock.sportsVenue.findMany.mockResolvedValue(venues);
+    txMock.sportsVenue.count.mockResolvedValue(2);
+    txMock.sportsEvent.findMany.mockResolvedValue([]);
+    txMock.sportsMatch.findMany.mockResolvedValue([]);
+    txMock.sportsHeat.findMany.mockResolvedValue([]);
+    txMock.sportsEntry.findMany.mockResolvedValue([]);
+    txMock.house.findMany.mockResolvedValue([]);
+    txMock.sportsEvent.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('a day can be added while the meet is live; the hours and the rest gap cannot', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE' }));
+    await svc().update(SCHOOL, T, { endsOn: '2026-09-18' });
+    expect(txMock.sportsTournament.update.mock.calls[0][0].data).toMatchObject({ endsOn: new Date('2026-09-18T00:00:00Z') });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE' }));
+    await expect(svc().update(SCHOOL, T, { dayEndMin: 1080 })).rejects.toMatchObject({ response: { code: 'TOURNAMENT_STATE' } });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    await expect(svc().update(SCHOOL, T, { endsOn: '2026-09-01' })).rejects.toMatchObject({ response: { field: 'endsOn' } });
+    await expect(svc().update(SCHOOL, T, { dayStartMin: 900, dayEndMin: 930 })).rejects.toMatchObject({ response: { field: 'dayEndMin' } });
+  });
+
+  it('a new venue joins every event that belongs on that kind of place, and the plan is re-laid', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsVenue.create.mockResolvedValue({ id: 'v-new' });
+    txMock.sportsEvent.findMany
+      .mockResolvedValueOnce([
+        { id: 'e-badminton', sportKey: 'badminton', sportName: 'Badminton', venueIds: [V2] },
+        { id: 'e-sprint', sportKey: 'ath-100m', sportName: '100 m sprint', venueIds: [V1] },
+      ])
+      .mockResolvedValue([]);
+    await svc().addVenue(SCHOOL, T, { name: 'Court 2' });
+    expect(txMock.sportsVenue.create.mock.calls[0][0].data).toMatchObject({ name: 'Court 2', order: 2 });
+    const updated = txMock.sportsEvent.update.mock.calls.map((c) => c[0]);
+    expect(updated).toHaveLength(1); // the courts event only
+    expect(updated[0]).toMatchObject({ where: { id: 'e-badminton' }, data: { venueIds: [V2, 'v-new'] } });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsVenue.findMany.mockResolvedValue(venues);
+    await expect(svc().addVenue(SCHOOL, T, { name: ' track ' })).rejects.toMatchObject({ response: { field: 'name' } });
+  });
+
+  it('a hall rescues the chess that had nowhere to play, and leaves the chess that already has a board', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsVenue.create.mockResolvedValue({ id: 'v-hall' });
+    txMock.sportsEvent.findMany
+      .mockResolvedValueOnce([
+        { id: 'e-chess-stranded', sportKey: 'chess', sportName: 'Chess', venueIds: [] },
+        { id: 'e-chess-housed', sportKey: 'chess', sportName: 'Chess', venueIds: ['v-board'] },
+        { id: 'e-sprint', sportKey: 'ath-100m', sportName: '100 m sprint', venueIds: [V1] },
+      ])
+      .mockResolvedValue([]);
+    await svc().addVenue(SCHOOL, T, { name: 'Main hall' });
+    const updated = txMock.sportsEvent.update.mock.calls.map((c) => c[0]);
+    expect(updated).toHaveLength(1);
+    expect(updated[0]).toMatchObject({ where: { id: 'e-chess-stranded' }, data: { venueIds: ['v-hall'] } });
+  });
+
+  it('the last venue, and a venue an event depends on, cannot be removed', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsVenue.findFirst.mockResolvedValue({ id: V1 });
+    txMock.sportsVenue.count.mockResolvedValue(1);
+    await expect(svc().removeVenue(SCHOOL, T, V1)).rejects.toMatchObject({ response: { message: 'A meet needs at least one venue.' } });
+    txMock.sportsVenue.count.mockResolvedValue(2);
+    txMock.sportsEvent.findMany.mockResolvedValueOnce([{ id: E, sportName: '100 m sprint', venueIds: [V1] }]);
+    await expect(svc().removeVenue(SCHOOL, T, V1)).rejects.toMatchObject({ response: { message: expect.stringMatching(/100 m sprint has nowhere else to play/) } });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE' }));
+    await expect(svc().removeVenue(SCHOOL, T, V1)).rejects.toMatchObject({ response: { code: 'TOURNAMENT_STATE' } });
+  });
+
+  it('refit moves only what has not been played, and keeps every played slot in the diary', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE', endsOn: new Date('2026-09-15T00:00:00Z') }));
+    txMock.sportsEvent.findMany.mockResolvedValue([
+      { id: E, tournamentId: T, sportKey: 'ath-100m', sportName: '100 m sprint', kind: 'MEASURED', slotMin: 5, lanes: 6, venueIds: [V1], teamBasis: 'SECTIONS', dayIdx: null, order: 0, groupKey: 'sen', category: 'Boys', structure: 'HEATS', stageShape: 'STRAIGHT', advancePerClass: 2, finalists: 6 },
+    ]);
+    txMock.sportsHeat.findMany.mockResolvedValue([
+      { id: 'h-done', eventId: E, kind: 'HEAT', groupLabel: null, idx: 0, venueId: V1, atMin: 540, done: true, marks: [{ studentId: uid(1), lane: 1 }] },
+      { id: 'h-open', eventId: E, kind: 'HEAT', groupLabel: null, idx: 1, venueId: V1, atMin: 545, done: false, marks: [{ studentId: uid(1), lane: 1 }, { studentId: uid(2), lane: 2 }] },
+    ]);
+    await svc().refit(SCHOOL, T);
+    const moved = txMock.sportsHeat.update.mock.calls.map((c) => c[0]);
+    expect(moved).toHaveLength(1);
+    expect(moved[0].where).toEqual({ id: 'h-open' });
+    // uid(1) finished the first heat at 545, so with a 15-minute rest the open heat cannot start before 560
+    expect(moved[0].data.atMin).toBeGreaterThanOrEqual(560);
+  });
+
+  it('pinning an event to a day holds its slots to that day', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ endsOn: new Date('2026-09-17T00:00:00Z') }));
+    txMock.sportsEvent.findMany.mockResolvedValue([
+      { id: E, tournamentId: T, sportKey: 'ath-100m', sportName: '100 m sprint', kind: 'MEASURED', slotMin: 5, lanes: 6, venueIds: [V1], teamBasis: 'SECTIONS', dayIdx: 2, order: 0, groupKey: 'sen', category: 'Boys', structure: 'HEATS', stageShape: 'STRAIGHT', advancePerClass: 2, finalists: 6 },
+    ]);
+    txMock.sportsHeat.findMany.mockResolvedValue([{ id: 'h1', eventId: E, kind: 'HEAT', groupLabel: null, idx: 0, venueId: null, atMin: null, done: false, marks: [{ studentId: uid(1), lane: 1 }] }]);
+    await svc().pinEvent(SCHOOL, T, E, { dayIdx: 2 });
+    expect(txMock.sportsEvent.updateMany.mock.calls[0][0]).toMatchObject({ where: { id: E, schoolId: SCHOOL, tournamentId: T }, data: { dayIdx: 2 } });
+    expect(txMock.sportsHeat.update.mock.calls[0][0].data.atMin).toBe(2 * 1440 + 540);
+  });
+
+  it('a finished meet has a timetable nobody may re-lay', async () => {
+    for (const run of [
+      () => svc().pinEvent(SCHOOL, T, E, { dayIdx: 1 }),
+      () => svc().refit(SCHOOL, T),
+      () => svc().update(SCHOOL, T, { endsOn: '2026-09-18' }),
+      () => svc().addVenue(SCHOOL, T, { name: 'Court 9' }),
+    ]) {
+      txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'DONE' }));
+      await expect(run()).rejects.toMatchObject({ response: { code: 'TOURNAMENT_STATE' } });
+    }
+    expect(txMock.sportsEvent.updateMany).not.toHaveBeenCalled();
+    expect(txMock.sportsVenue.create).not.toHaveBeenCalled();
   });
 });
 

@@ -5,8 +5,8 @@
  * without a database.
  */
 import {
-  buildDraw, planClassStage, planHeats, planRounds, roundName, shuffle, sideOfEntry, sidesAreSections,
-  type DayWindow, type Diary, type DrawMatch, type Sport, type TeamBasis,
+  buildDraw, planClassHeats, planClassStage, planHeats, planRounds, roundName, shuffle, sideOfEntry, sidesAreSections,
+  type DayWindow, type Diary, type DrawMatch, type HeatKind, type Sport, type StageShape, type TeamBasis,
 } from '@skoolos/types';
 
 export interface EntryIn { studentId: string; std: number; section: string; houseId?: string | null }
@@ -14,7 +14,7 @@ export interface MatchPlan {
   stage: 'CLASS' | 'FINAL'; groupLabel: string; roundIdx: number; roundName: string; pos: number;
   aSide: string | null; bSide: string | null; bye: boolean; winner: string | null; venueId: string | null; atMin: number | null;
 }
-export interface HeatPlan { kind: 'HEAT' | 'FINAL'; idx: number; venueId: string | null; atMin: number | null; lanes: { lane: number; side: string }[] }
+export interface HeatPlan { kind: HeatKind; groupLabel?: string | null; idx: number; venueId: string | null; atMin: number | null; lanes: { lane: number; side: string }[] }
 export interface EventPlan { matches: MatchPlan[]; heats: HeatPlan[]; walkovers: { std: number; side: string }[] }
 
 /** A side per entry: the student, or the section / class / house for a team sport. Children with no house drop out of a house draw. */
@@ -56,11 +56,15 @@ export const classLabel = (std: number) => `Class ${std}`;
  * a team basis of classes or houses: one draw straight to the final.
  * MEASURED: heats by lane count (one heat is the final). JUDGED: one panel round.
  */
-export function buildEventPlan(sport: Sport, structure: 'CLASS' | 'DRAW', entries: EntryIn[], seed: number, basis: TeamBasis = 'SECTIONS'): EventPlan {
+export function buildEventPlan(sport: Sport, structure: 'CLASS' | 'DRAW', entries: EntryIn[], seed: number, basis: TeamBasis = 'SECTIONS', stage?: { shape: StageShape; lanes: number }): EventPlan {
   const sides = sidesOf(sport, entries, basis);
   if (sport.kind !== 'MATCH') {
-    const width = sport.kind === 'JUDGED' ? Math.max(1, sides.length) : sport.lanes ?? 6;
-    const heats = planHeats(sides.map((s) => s.side), width).map((h) => ({ kind: h.kind, idx: h.idx, venueId: null, atMin: null, lanes: h.lanes }));
+    const width = sport.kind === 'JUDGED' ? Math.max(1, sides.length) : stage?.lanes ?? sport.lanes ?? 6;
+    // Class qualifying keeps each class in its own heats, so the best of each class can advance.
+    const raw = stage?.shape === 'CLASS_QUAL' && sport.kind === 'MEASURED' && new Set(sides.map((s) => s.std)).size > 1 && sides.length > width
+      ? planClassHeats(sides, width)
+      : planHeats(sides.map((s) => s.side), width);
+    const heats = raw.map((h) => ({ kind: h.kind, groupLabel: h.groupLabel ?? null, idx: h.idx, venueId: null, atMin: null, lanes: h.lanes }));
     return { matches: [], heats, walkovers: [] };
   }
   if (sides.length < 2) throw new Error('NEED_TWO_SIDES');
@@ -90,7 +94,7 @@ export function buildEventPlan(sport: Sport, structure: 'CLASS' | 'DRAW', entrie
  * Put every real (non-bye) match on a venue, group by group, round after round.
  * With a diary, a match waits until everyone in it is free and rested. Mutates the plans.
  */
-export function scheduleMatches(matches: MatchPlan[], venueIds: string[], slotMin: number, cursor: Map<string, number>, w: DayWindow, diary?: Diary, people?: (side: string | null) => string[]): void {
+export function scheduleMatches(matches: MatchPlan[], venueIds: string[], slotMin: number, cursor: Map<string, number>, w: DayWindow, diary?: Diary, people?: (side: string | null) => string[], notBefore = 0): void {
   const groups = new Map<string, MatchPlan[]>();
   for (const m of matches) {
     const key = `${m.stage}|${m.groupLabel}`;
@@ -100,14 +104,15 @@ export function scheduleMatches(matches: MatchPlan[], venueIds: string[], slotMi
     const rounds = Math.max(...group.map((m) => m.roundIdx)) + 1;
     const perRound = Array.from({ length: rounds }, (_, r) => group.filter((m) => m.roundIdx === r && !m.bye));
     const spec = perRound.map((round) => (diary && people ? round.map((m) => [...people(m.aSide), ...people(m.bSide)]) : round.length));
-    const slots = planRounds(spec, venueIds, slotMin, cursor, w, diary);
+    const slots = planRounds(spec, venueIds, slotMin, cursor, w, diary, notBefore);
     perRound.forEach((round, r) => round.forEach((m, i) => { m.venueId = slots[r][i].venueId; m.atMin = slots[r][i].atMin; }));
   }
 }
 
-export function scheduleHeats(heats: HeatPlan[], venueIds: string[], slotMin: number, cursor: Map<string, number>, w: DayWindow, diary?: Diary): void {
+export function scheduleHeats(heats: HeatPlan[], venueIds: string[], slotMin: number, cursor: Map<string, number>, w: DayWindow, diary?: Diary, notBefore = 0): void {
+  if (!heats.length) return;
   const spec = diary ? [heats.map((h) => h.lanes.map((l) => l.side.slice(2)))] : [heats.length];
-  const slots = planRounds(spec, venueIds, slotMin, cursor, w, diary);
+  const slots = planRounds(spec, venueIds, slotMin, cursor, w, diary, notBefore);
   heats.forEach((h, i) => { h.venueId = slots[0][i].venueId; h.atMin = slots[0][i].atMin; });
 }
 

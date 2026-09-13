@@ -5,8 +5,8 @@
  * `wizard-model.test.ts` pins every rule.
  */
 import {
-  AGE_GROUPS, ageGroupFor, bandFor, inferVenueType, sidesAreSections, suggestTeamBasis, venuesForSport,
-  type Band, type Sport, type SportCategory, type TeamBasis, type VenueType,
+  AGE_GROUPS, ageGroupFor, bandFor, capacityOf, inferVenueType, planStages, sidesAreSections, suggestTeamBasis, venuesForSport,
+  type Band, type Sport, type SportCategory, type StageShape, type StageStep, type TeamBasis, type VenueType,
 } from '@skoolos/types';
 import { genderBucket, type RosterStudent } from './ui';
 
@@ -26,10 +26,16 @@ export interface WizardEvent {
   venueIdx?: number[];
   /** Team sports: what a side is; absent = suggested from the entrants. */
   teamBasis?: TeamBasis;
+  /** Measured events: how a big field reaches a final. */
+  stageShape?: StageShape;
+  advancePerClass?: number;
+  finalists?: number;
+  /** Pinned to this day of the meet; absent = wherever it fits. */
+  dayIdx?: number;
   studentIds: string[];
 }
 
-export interface WizardDefaults { groupKey: string; categories: SportCategory[]; structure: 'CLASS' | 'DRAW' }
+export interface WizardDefaults { groupKey: string; categories: SportCategory[]; structure: 'CLASS' | 'DRAW'; stageShape: StageShape }
 
 export interface WizardState {
   name: string;
@@ -49,7 +55,7 @@ let seq = 0;
 export const nextUid = () => `ev${++seq}`;
 
 export function emptyState(today: string): WizardState {
-  return { name: '', startsOn: today, endsOn: today, dayStartMin: 540, dayEndMin: 960, restMin: 15, venues: [], defaults: { groupKey: '', categories: ['Boys', 'Girls'], structure: 'CLASS' }, events: [] };
+  return { name: '', startsOn: today, endsOn: today, dayStartMin: 540, dayEndMin: 960, restMin: 15, venues: [], defaults: { groupKey: '', categories: ['Boys', 'Girls'], structure: 'CLASS', stageShape: 'CLASS_QUAL' }, events: [] };
 }
 
 export function groupOptions(grouping: 'BANDS' | 'AGE', bands: Band[]): GroupOption[] {
@@ -72,8 +78,40 @@ export function resolved(state: WizardState, ev: WizardEvent) {
   const structure = ev.sport.kind === 'MATCH' ? ev.structure ?? state.defaults.structure : 'DRAW';
   const slotMin = ev.slotMin ?? ev.sport.slotMin;
   const lanes = ev.lanes ?? ev.sport.lanes ?? 6;
+  const stageShape: StageShape = ev.sport.kind === 'MEASURED' ? ev.stageShape ?? state.defaults.stageShape : 'STRAIGHT';
+  const advancePerClass = ev.advancePerClass ?? 2;
+  const finalists = ev.finalists ?? 6;
   const venues = ev.venueIdx ? { idx: ev.venueIdx, how: 'chosen' as const, want: venuesForSport(ev.sport, state.venues).want } : boundVenues(state, ev.sport);
-  return { group, structure, slotMin, lanes, venues };
+  return { group, structure, slotMin, lanes, stageShape, advancePerClass, finalists, venues };
+}
+
+/** The funnel this event would run, from the children ticked so far. */
+export function funnelOf(state: WizardState, ev: WizardEvent, roster: RosterStudent[]): StageStep[] {
+  const r = resolved(state, ev);
+  const chosen = roster.filter((s) => ev.studentIds.includes(s.id));
+  if (ev.sport.kind === 'MATCH') return [];
+  return planStages({
+    entries: chosen.length, classes: new Set(chosen.map((s) => s.std)).size, lanes: r.lanes,
+    shape: r.stageShape, advancePerClass: r.advancePerClass, finalists: r.finalists,
+  });
+}
+
+/** What the whole meet would cost: slots, venue time, and the days it needs. */
+export function costOf(state: WizardState, roster: RosterStudent[]): { entries: number; slots: number; minutes: number; daysNeeded: number; fits: boolean } {
+  const stages = state.events.map((ev) => {
+    const r = resolved(state, ev);
+    const n = sideCount(ev, roster);
+    const slots = ev.sport.kind === 'MATCH' ? Math.max(0, n - 1) : funnelOf(state, ev, roster).reduce((a, b) => a + b.slots, 0);
+    return { slots, slotMin: r.slotMin, venues: Math.max(1, r.venues.idx.length) };
+  });
+  const cap = capacityOf({ stages, dayStartMin: state.dayStartMin, dayEndMin: state.dayEndMin, days: daysOf(state) });
+  return {
+    entries: state.events.reduce((a, ev) => a + ev.studentIds.length, 0),
+    slots: stages.reduce((a, s) => a + s.slots, 0),
+    minutes: cap.neededMin,
+    daysNeeded: cap.daysNeeded,
+    fits: cap.fits,
+  };
 }
 
 /** Which of the meet's venues a sport takes by default, as indexes into `state.venues`. */
@@ -192,6 +230,8 @@ export function toDto(state: WizardState, roster: RosterStudent[]) {
         ...(custom ? { sportKey: 'custom', customName: ev.sport.name, presetKey: parts[1], teamSize: ev.sport.teamSize, ...(parts.length === 5 ? { customVenue: parts[3] } : {}) } : { sportKey: ev.sport.key }),
         groupKey: r.group, category: ev.category, structure: r.structure, venueIdx: r.venues.idx, studentIds: ev.studentIds,
         ...(isTeam(ev) ? { teamBasis: basisOf(ev, roster) } : {}),
+        ...(ev.sport.kind === 'MEASURED' ? { stageShape: r.stageShape, advancePerClass: r.advancePerClass, finalists: r.finalists } : {}),
+        ...(ev.dayIdx != null ? { dayIdx: ev.dayIdx } : {}),
         ...(r.slotMin !== ev.sport.slotMin ? { slotMin: r.slotMin } : {}),
         ...(ev.sport.kind !== 'MATCH' && r.lanes !== (ev.sport.lanes ?? 6) ? { lanes: r.lanes } : {}),
       };

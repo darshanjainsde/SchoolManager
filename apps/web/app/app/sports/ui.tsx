@@ -8,7 +8,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import type { Band, Scoring, SportsPerm, TeamBasis } from '@skoolos/types';
+import type { Band, HeatKind, Scoring, SportsPerm, StageShape, TeamBasis } from '@skoolos/types';
 
 export { Card, CardBody, CardHead, EmptyRow, ListRow, Pill, StatCard, apiErrorCode, useDebounced } from '@/app/app/library/ui';
 
@@ -23,10 +23,10 @@ export interface MatchRow {
   id: string; stage: string; groupLabel: string; roundIdx: number; roundName: string; pos: number; aSide: string | null; bSide: string | null;
   scoreA: number[]; scoreB: number[]; winner: string | null; bye: boolean; walkover: boolean; venueId: string | null; atMin: number | null; version: number; savedAt: string | null;
 }
-export interface HeatRow { id: string; kind: 'HEAT' | 'FINAL'; idx: number; venueId: string | null; atMin: number | null; done: boolean; marks: { studentId: string; side: string; lane: number; mark: number | null; rank: number | null }[] }
+export interface HeatRow { id: string; kind: HeatKind; groupLabel: string | null; idx: number; venueId: string | null; atMin: number | null; done: boolean; marks: { studentId: string; side: string; lane: number; mark: number | null; rank: number | null }[] }
 export interface EventDetail {
   id: string; sportKey: string; sportName: string; kind: 'MATCH' | 'MEASURED' | 'JUDGED'; scoring: Scoring; teamSize: number; groupKey: string; groupLabel: string; category: string;
-  structure: string; teamBasis: TeamBasis; slotMin: number; lanes: number; venueIds: string[]; order: number;
+  structure: string; teamBasis: TeamBasis; stageShape: StageShape; advancePerClass: number; finalists: number; dayIdx: number | null; slotMin: number; lanes: number; venueIds: string[]; order: number;
   entries: { studentId: string; side: string; std: number; section: string; houseId: string | null }[];
   matches: MatchRow[]; heats: HeatRow[];
 }

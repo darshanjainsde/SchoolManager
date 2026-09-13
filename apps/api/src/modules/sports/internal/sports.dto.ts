@@ -60,6 +60,12 @@ export class EventInDto {
   @IsOptional() @IsIn(['court', 'table', 'field', 'track', 'pool', 'hall', 'board', 'mat', 'ring', 'range']) customVenue?: string;
   /** Team sports: what a side is. Omitted = suggested from the entrants' classes. */
   @IsOptional() @IsIn(['SECTIONS', 'CLASSES', 'HOUSES']) teamBasis?: 'SECTIONS' | 'CLASSES' | 'HOUSES';
+  /** Measured/judged: how a big field reaches a final. */
+  @IsOptional() @IsIn(['CLASS_QUAL', 'OPEN_QUAL', 'STRAIGHT']) stageShape?: 'CLASS_QUAL' | 'OPEN_QUAL' | 'STRAIGHT';
+  @IsOptional() @IsInt() @Min(1) @Max(8) advancePerClass?: number;
+  @IsOptional() @IsInt() @Min(2) @Max(16) finalists?: number;
+  /** Pin this event to a day of the meet (0-based). */
+  @IsOptional() @IsInt() @Min(0) @Max(13) dayIdx?: number;
   @IsString() @IsNotEmpty() @MaxLength(20) groupKey!: string;
   @IsIn(['Boys', 'Girls', 'Mixed']) category!: 'Boys' | 'Girls' | 'Mixed';
   @IsIn(['CLASS', 'DRAW']) structure!: 'CLASS' | 'DRAW';
@@ -80,6 +86,23 @@ export class CreateTournamentDto {
   @IsOptional() @IsInt() @Min(0) @Max(120) restMin?: number;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => VenueInDto) venues!: VenueInDto[];
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(60) @ValidateNested({ each: true }) @Type(() => EventInDto) events!: EventInDto[];
+}
+
+/** Grow or reshape a meet after it was created. */
+export class UpdateTournamentDto {
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) endsOn?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(1439) dayStartMin?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(1440) dayEndMin?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(120) restMin?: number;
+}
+
+export class AddVenueDto {
+  @IsString() @IsNotEmpty() @MaxLength(40) name!: string;
+}
+
+/** Pin an event to a day, or unpin it with null. */
+export class PinEventDto {
+  @ValidateIf((o) => o.dayIdx !== null) @IsInt() @Min(0) @Max(13) dayIdx!: number | null;
 }
 
 export class MoveSlotDto {

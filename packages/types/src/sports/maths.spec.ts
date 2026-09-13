@@ -1,6 +1,7 @@
 import { sportByKey } from './catalogue';
 import {
   cursorFrom, stdOfGrade, validateBands, sideOfClass, sideOfHouse, sideOfEntry, suggestTeamBasis, newDiary,
+  planStages, planClassHeats, advanceFrom, advanceCount, capacityOf, dayFloor,
   ageGroupFor, bandFor, beatsRecord, bracketSize, buildDraw, drawPlacings, findClashes, finalists, fitInDay, formatMark, hhmm,
   judgeScores, nextSlot, parseMark, parseSide, placingPoints, planClassStage, planHeats, planRounds, rankMarks, roundName,
   seedPositions, shiftSlots, shuffle, sideOfSection, sideOfStudent,
@@ -308,5 +309,64 @@ describe('points and grouping', () => {
     expect(ageGroupFor(new Date('2009-01-01'), 2025)?.id).toBe('u17');
     expect(ageGroupFor(new Date('2008-12-31'), 2025)?.id).toBe('u19');
     expect(ageGroupFor(new Date('2006-12-31'), 2025)).toBeNull();
+  });
+});
+
+describe('stages — how a thousand entries reach a final', () => {
+  const base = { entries: 240, classes: 4, lanes: 6, shape: 'CLASS_QUAL' as const, advancePerClass: 2, finalists: 6 };
+  it('a field that fits the lanes is just a final', () => {
+    expect(planStages({ ...base, entries: 5 })).toEqual([{ kind: 'FINAL', label: 'Final', field: 5, slots: 1 }]);
+    expect(planStages({ ...base, entries: 0 })).toEqual([]);
+  });
+  it('class qualifying: heats inside each class, the best of each class, then one band final', () => {
+    // 2 from each of 4 classes is 8 — more than the 6 lanes, so the band runs semis first.
+    // The funnel SHOWS that, which is how the office learns to advance one per class instead.
+    expect(planStages(base).map((s) => [s.label, s.field, s.slots])).toEqual([['Class heats', 240, 40], ['Band semi-finals', 8, 2], ['Final', 6, 1]]);
+    expect(planStages({ ...base, advancePerClass: 1 }).map((s) => [s.label, s.field, s.slots])).toEqual([['Class heats', 240, 40], ['Band final', 4, 1]]);
+    // more per class than a heat holds → the band needs semis first
+    expect(planStages({ ...base, advancePerClass: 3, classes: 5, entries: 300 }).map((s) => [s.label, s.field, s.slots]))
+      .toEqual([['Class heats', 300, 50], ['Band semi-finals', 15, 3], ['Final', 6, 1]]);
+    expect(advanceCount(base, 'HEAT')).toBe(8);
+    expect(advanceCount({ ...base, advancePerClass: 1 }, 'HEAT')).toBe(4);
+  });
+  it('open qualifying: heats, semis when the shortlist is bigger than a heat, then the final', () => {
+    expect(planStages({ ...base, shape: 'OPEN_QUAL' }).map((s) => [s.label, s.field, s.slots])).toEqual([['Qualifying heats', 240, 40], ['Semi-finals', 18, 3], ['Final', 6, 1]]);
+    expect(planStages({ ...base, shape: 'OPEN_QUAL', finalists: 2 }).map((s) => s.label)).toEqual(['Qualifying heats', 'Final']);
+  });
+  it('straight is today’s behaviour: heats, then the fastest lane-full', () => {
+    expect(planStages({ ...base, shape: 'STRAIGHT' }).map((s) => [s.label, s.field, s.slots])).toEqual([['Heats', 240, 40], ['Final', 6, 1]]);
+    expect(planStages({ ...base, shape: 'CLASS_QUAL', classes: 1 }).map((s) => s.label)).toEqual(['Heats', 'Final']);
+  });
+  it('class heats keep each class together and are labelled by it', () => {
+    const entries = [{ side: 's:a', std: 9 }, { side: 's:b', std: 9 }, { side: 's:c', std: 10 }, { side: 's:d', std: 10 }, { side: 's:e', std: 10 }];
+    expect(planClassHeats(entries, 2).map((h) => [h.idx, h.groupLabel, h.lanes.map((l) => l.side)])).toEqual([
+      [0, 'Class 9', ['s:a', 's:b']],
+      [1, 'Class 10', ['s:c', 's:d']],
+      [2, 'Class 10', ['s:e']],
+    ]);
+  });
+  it('advancement takes the best of each group, with ties at the cut', () => {
+    const marks = [
+      { side: 's:a', mark: 12.1, groupLabel: 'Class 9' }, { side: 's:b', mark: 12.4, groupLabel: 'Class 9' }, { side: 's:c', mark: 12.9, groupLabel: 'Class 9' },
+      { side: 's:d', mark: 12.2, groupLabel: 'Class 10' }, { side: 's:e', mark: 12.2, groupLabel: 'Class 10' }, { side: 's:f', mark: null, groupLabel: 'Class 10' },
+    ];
+    expect(advanceFrom(marks, 2, true)).toEqual(['s:a', 's:b', 's:d', 's:e']);
+    expect(advanceFrom(marks.map((m) => ({ ...m, groupLabel: null })), 3, true)).toEqual(['s:a', 's:d', 's:e']); // a tie at the cut comes along
+  });
+  it('capacity says how many days a plan needs and whether it fits', () => {
+    const c = capacityOf({ stages: [{ slots: 40, slotMin: 5, venues: 1 }, { slots: 1, slotMin: 5, venues: 1 }], dayStartMin: 540, dayEndMin: 960, days: 1 });
+    expect(c).toMatchObject({ neededMin: 205, dayMin: 420, daysNeeded: 1, fits: true });
+    const big = capacityOf({ stages: [{ slots: 200, slotMin: 5, venues: 1 }], dayStartMin: 540, dayEndMin: 960, days: 1 });
+    expect(big).toMatchObject({ daysNeeded: 3, fits: false });
+    expect(capacityOf({ stages: [{ slots: 200, slotMin: 5, venues: 2 }], dayStartMin: 540, dayEndMin: 960, days: 2 }).fits).toBe(true);
+  });
+  it('a day pin gives the first minute of that day', () => {
+    expect(dayFloor(0, { dayStartMin: 540, dayEndMin: 960, days: 3 })).toBe(540);
+    expect(dayFloor(2, { dayStartMin: 540, dayEndMin: 960, days: 3 })).toBe(2 * 1440 + 540);
+  });
+  it('planRounds honours a floor, so a pinned event never starts earlier', () => {
+    const cursor = new Map<string, number>();
+    const slots = planRounds([2], ['v1'], 30, cursor, { dayStartMin: 540, dayEndMin: 960, days: 3 }, undefined, 1440 + 540);
+    expect(slots[0].map((s) => s.atMin)).toEqual([1980, 2010]);
   });
 });

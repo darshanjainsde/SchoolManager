@@ -4,16 +4,18 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
-import { SCORING_PRESETS, SPORT_CATEGORIES, VENUE_TYPES, VENUE_TYPE_LABEL, customSport, sportsByGroup, type Sport, type SportCategory, type TeamBasis, type VenueType } from '@skoolos/types';
-import { Card, CardBody, CardHead, EmptyRow, Pill, useDebounced, useDesk, type RosterStudent, type SettingsView } from './ui';
+import { SCORING_PRESETS, SPORT_CATEGORIES, VENUE_TYPES, VENUE_TYPE_LABEL, customSport, sportsByGroup, type SportCategory, type StageShape, type TeamBasis, type VenueType } from '@skoolos/types';
+import { Card, CardBody, CardHead, Pill, useDebounced, useDesk, type RosterStudent, type SettingsView } from './ui';
+import { PlayersStep } from './players-step';
 import {
-  TEAM_BASIS_WORD, basisOf, daysOf, eligible, emptyState, fixBasis, groupOptions, hhmmToMin, isTeam, lineLabel, makeVenue, meetYearOf, minToHhmm, problems, resolved, sideCount, singleSectionClasses, teamCounts, toDto, toggleSport,
+  basisOf, daysOf, emptyState, groupOptions, hhmmToMin, isTeam, lineLabel, makeVenue, meetYearOf, minToHhmm, problems, resolved, sideCount, toDto, toggleSport,
   type WizardEvent, type WizardState,
 } from './wizard-model';
 
 const STEPS = ['The meet', 'Sports & events', 'Players', 'Review & create'];
 const QUICK_VENUES = ['Court 1', 'Court 2', 'Field', 'Track', 'Pool', 'Hall', 'Table 1'];
 const BASIS_LABEL: Record<TeamBasis, string> = { SECTIONS: 'Sections (9 A v 9 B)', CLASSES: 'Classes (9 v 10)', HOUSES: 'Houses' };
+const SHAPE_LABEL: [StageShape, string][] = [['CLASS_QUAL', 'Class heats first'], ['OPEN_QUAL', 'Open qualifying'], ['STRAIGHT', 'Heats → final']];
 
 /**
  * Four steps, one POST. The defaults bar decides what nearly every event
@@ -54,6 +56,7 @@ export default function Wizard({ base, onClose }: { base: string; onClose: () =>
 
   const patch = (p: Partial<WizardState>) => setState((s) => ({ ...s, ...p }));
   const patchEvent = (uid: string, p: Partial<WizardEvent>) => setState((s) => ({ ...s, events: s.events.map((e) => (e.uid === uid ? { ...e, ...p } : e)) }));
+  const patchAll = (map: (e: WizardEvent) => Partial<WizardEvent> | null) => setState((s) => ({ ...s, events: s.events.map((e) => { const p = map(e); return p ? { ...e, ...p } : e; }) }));
 
   return (
     <Card>
@@ -72,7 +75,7 @@ export default function Wizard({ base, onClose }: { base: string; onClose: () =>
       <CardBody>
         {step === 0 ? <MeetStep state={st} patch={patch} /> : null}
         {step === 1 ? <SportsStep state={st} groups={groups} patch={patch} patchEvent={patchEvent} /> : null}
-        {step === 2 ? <PlayersStep state={st} roster={rosterRows} grouping={grouping} bands={bands} meetYear={meetYear} groups={groups} patchEvent={patchEvent} loading={roster.isLoading} /> : null}
+        {step === 2 ? <PlayersStep state={st} roster={rosterRows} grouping={grouping} bands={bands} meetYear={meetYear} groups={groups} patch={patch} patchEvent={patchEvent} patchAll={patchAll} loading={roster.isLoading} /> : null}
         {step === 3 ? <ReviewStep state={st} roster={rosterRows} groups={groups} issues={issues} busy={create.isPending} onCreate={() => create.mutate()} /> : null}
         <div className="sk-sp-actions" style={{ justifyContent: 'space-between' }}>
           <button type="button" className="sk-btn" disabled={step === 0} onClick={() => setStep(step - 1)}>Back</button>
@@ -169,6 +172,11 @@ function SportsStep({ state, groups, patch, patchEvent }: { state: WizardState; 
         <div className="sk-sp-field"><span className="sk-lab">Group for every event</span><div className="sk-seg">{groups.map((g) => <button key={g.id} type="button" aria-pressed={state.defaults.groupKey === g.id} onClick={() => setDefaults({ groupKey: g.id })}>{g.label}</button>)}</div></div>
         <div className="sk-sp-field"><span className="sk-lab">Run each sport for</span><div className="sk-sp-chips">{SPORT_CATEGORIES.map((c) => <button key={c} type="button" className="sk-chip" aria-pressed={state.defaults.categories.includes(c)} onClick={() => toggleCat(c)}>{c}</button>)}</div></div>
         <div className="sk-sp-field"><span className="sk-lab">Match sports play</span><div className="sk-seg"><button type="button" aria-pressed={state.defaults.structure === 'CLASS'} onClick={() => setDefaults({ structure: 'CLASS' })}>Class rounds → final</button><button type="button" aria-pressed={state.defaults.structure === 'DRAW'} onClick={() => setDefaults({ structure: 'DRAW' })}>One draw</button></div></div>
+        {state.events.some((e) => e.sport.kind === 'MEASURED') ? (
+          <div className="sk-sp-field"><span className="sk-lab">Track &amp; field events run</span><div className="sk-seg">
+            {SHAPE_LABEL.map(([id, label]) => <button key={id} type="button" aria-pressed={state.defaults.stageShape === id} onClick={() => setDefaults({ stageShape: id })}>{label}</button>)}
+          </div></div>
+        ) : null}
         <div className="sk-sp-field"><span className="sk-lab">Minutes and lanes</span><span className="sk-muted">From the catalogue per sport. Change on a line only if you must.</span></div>
       </div>
 
@@ -293,104 +301,6 @@ function EventEditor({ state, ev, groups, patch, patchEvent, onDone }: { state: 
         <button type="button" className="sk-btn" data-size="sm" data-tone="bad" onClick={() => { patch({ events: state.events.filter((e) => e.uid !== ev.uid) }); onDone(); }}>Remove this line</button>
       </div>
     </div>
-  );
-}
-
-function PlayersStep({ state, roster, grouping, bands, meetYear, groups, patchEvent, loading }: { state: WizardState; roster: RosterStudent[]; grouping: 'BANDS' | 'AGE'; bands: SettingsView['bands']; meetYear: number; groups: { id: string; label: string }[]; patchEvent: (uid: string, p: Partial<WizardEvent>) => void; loading: boolean }) {
-  const [q, setQ] = useState('');
-  const query = useDebounced(q).trim().toLowerCase();
-  const pairs = useMemo(() => {
-    const seen = new Map<string, { groupKey: string; category: SportCategory; events: WizardEvent[] }>();
-    for (const ev of state.events) { const g = resolved(state, ev).group; const k = `${g}|${ev.category}`; const cur = seen.get(k) ?? { groupKey: g, category: ev.category, events: [] }; cur.events.push(ev); seen.set(k, cur); }
-    return [...seen.values()];
-  }, [state]);
-  const [pairKey, setPairKey] = useState<string | null>(null);
-  const pair = pairs.find((p) => `${p.groupKey}|${p.category}` === pairKey) ?? pairs[0];
-  if (loading) return <EmptyRow>Opening the roll…</EmptyRow>;
-  if (!pair) return <EmptyRow>No sport picked yet — go back a step and press a few.</EmptyRow>;
-  const pool = eligible(roster, pair.groupKey, pair.category, grouping, bands, meetYear);
-  const shown = query ? pool.filter((s) => s.name.toLowerCase().includes(query)) : pool;
-  const byStd = new Map<number, RosterStudent[]>();
-  for (const s of shown) byStd.set(s.std, [...(byStd.get(s.std) ?? []), s]);
-  const set = (ev: WizardEvent, ids: string[]) => patchEvent(ev.uid, { studentIds: ids });
-  const tick = (ev: WizardEvent, id: string, on: boolean) => set(ev, on ? [...new Set([...ev.studentIds, id])] : ev.studentIds.filter((x) => x !== id));
-  const teamEvents = pair.events.filter((e) => isTeam(e));
-  return (
-    <div className="sk-sp-stack">
-      <div className="sk-sp-fieldrow">
-        {pairs.length > 1 ? <div className="sk-seg">{pairs.map((p) => { const k = `${p.groupKey}|${p.category}`; return <button key={k} type="button" aria-pressed={pair === p} onClick={() => setPairKey(k)}>{groups.find((g) => g.id === p.groupKey)?.label ?? p.groupKey} · {p.category}</button>; })}</div> : <Pill tone="brand">{groups.find((g) => g.id === pair.groupKey)?.label ?? pair.groupKey} · {pair.category}</Pill>}
-        <input className="sk-input" placeholder="Find a name…" aria-label="Find a student" value={q} onChange={(e) => setQ(e.target.value)} />
-        <span className="sk-muted">{grouping === 'AGE' ? `Age groups as on 31 Dec ${meetYear}.` : 'Bands by class.'} Tick a child once per event; a team sport enters their whole side.</span>
-      </div>
-      <div className="sk-tblwrap">
-        <table className="sk-tbl sk-sp-matrix">
-          <thead>
-            <tr>
-              <th>Child</th>
-              {pair.events.map((ev) => <th key={ev.uid}>{ev.sport.name}<br /><span className="sk-muted" style={{ fontWeight: 400 }}>{ev.studentIds.length} entered</span></th>)}
-              <th>All</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pool.length === 0 ? <tr><td colSpan={pair.events.length + 2}><span className="sk-muted">Nobody on the roll fits this group and category.</span></td></tr> : null}
-            {[...byStd.entries()].sort((a, b) => a[0] - b[0]).map(([std, kids]) => (
-              <FragmentRows key={std} std={std} kids={kids} events={pair.events} set={set} tick={tick} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {teamEvents.map((ev) => {
-        const basis = basisOf(ev, roster);
-        const counts = teamCounts(ev, roster);
-        const n = counts[basis];
-        const fix = fixBasis(ev, roster);
-        const walkovers = basis === 'SECTIONS' && resolved(state, ev).structure === 'CLASS' ? singleSectionClasses(ev, roster) : [];
-        const shortOf = `Only ${n} team${n === 1 ? '' : 's'} under ${TEAM_BASIS_WORD[basis]}`;
-        return (
-          <div key={ev.uid} className="sk-sp-field">
-            <span className="sk-lab">{ev.sport.name} · {ev.category} — a team is</span>
-            <div className="sk-sp-chips">
-              {(['SECTIONS', 'CLASSES', 'HOUSES'] as TeamBasis[]).map((b) => (
-                <button key={b} type="button" className="sk-chip" aria-pressed={basis === b} onClick={() => patchEvent(ev.uid, { teamBasis: b })}>
-                  {`${BASIS_LABEL[b]}${!ev.teamBasis && basis === b ? ' · suggested' : ''}${ev.studentIds.length ? ` · ${counts[b]}` : ''}`}
-                </button>
-              ))}
-            </div>
-            {ev.studentIds.length === 0 ? <p className="sk-sp-problem"><span>⚠</span><span>Tick the players first — every child of a section, class or house you tick makes that team.</span></p>
-              : n < 2 ? (
-                <p className="sk-sp-problem"><span>⚠</span><span>
-                  <b>{shortOf}</b>{fix ? '. ' : ', so there is nobody to play. Tick children from another class or section, or put them in houses first.'}
-                  {fix ? <button type="button" className="sk-btn" data-size="sm" onClick={() => patchEvent(ev.uid, { teamBasis: fix })}>{`Make the teams ${TEAM_BASIS_WORD[fix]}`}</button> : null}
-                </span></p>
-              ) : (
-                <p className="sk-sp-problem" data-ok="true"><span>✓</span><span>
-                  <b>{`${n} teams from ${ev.studentIds.length} players`}</b>{` under ${TEAM_BASIS_WORD[basis]}.`}
-                  {walkovers.length ? ` Class${walkovers.length > 1 ? 'es' : ''} ${walkovers.join(', ')} ha${walkovers.length > 1 ? 've' : 's'} one section, so ${walkovers.length > 1 ? 'they walk' : 'it walks'} over into the final.` : ''}
-                </span></p>
-              )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function FragmentRows({ std, kids, events, set, tick }: { std: number; kids: RosterStudent[]; events: WizardEvent[]; set: (ev: WizardEvent, ids: string[]) => void; tick: (ev: WizardEvent, id: string, on: boolean) => void }) {
-  return (
-    <>
-      <tr className="cls"><td>Class {std}</td>{events.map((ev) => <td key={ev.uid}><button type="button" className="sk-btn" data-size="sm" onClick={() => set(ev, [...new Set([...ev.studentIds, ...kids.map((k) => k.id)])])}>Enter class {std}</button></td>)}<td /></tr>
-      {kids.map((s) => {
-        const n = events.filter((ev) => ev.studentIds.includes(s.id)).length;
-        const all = n === events.length;
-        return (
-          <tr key={s.id}>
-            <td>{s.name} <span className="sk-muted">{s.std} {s.section}</span>{n > 3 ? <Pill tone="amber">{n} events</Pill> : null}</td>
-            {events.map((ev) => <td key={ev.uid}><input type="checkbox" aria-label={`${s.name} in ${ev.sport.name} ${ev.category}`} checked={ev.studentIds.includes(s.id)} onChange={(e) => tick(ev, s.id, e.target.checked)} /></td>)}
-            <td><button type="button" className="sk-chip" onClick={() => events.forEach((ev) => tick(ev, s.id, !all))}>{all ? 'None' : 'All'}</button></td>
-          </tr>
-        );
-      })}
-    </>
   );
 }
 

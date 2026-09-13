@@ -509,9 +509,13 @@ table, field, track, pool, hall, board, mat, ring, range; anything else is a hal
 CREATES one line per default category with everything filled in — no per-event form. **Venues bind from the sport**:
 a venue NAMED after it ("Badminton court 3") and only that; else every venue of the sport's type not named after
 another sport; else the fallback type (a board game in a hall); else NONE, and the line is flagged — never every
-venue. Edit opens the line's exceptions as a ROW of the same table directly beneath it (group, structure, minutes, lanes, its own venues), never a panel at the foot of the list; the red "no venue" cell is itself the button that opens it, and the editor can add the missing venue in one press (named after the type, so the line binds by itself). **Players**: one grid
-per group × category — a row per child, a column per event, "Enter class N" fills a column, All/None fills a row, a
-child in more than three events is badged. **Team sports** say what a team is: SECTIONS (9 A v 9 B), CLASSES (9 v 10)
+venue. Edit opens the line's exceptions as a ROW of the same table directly beneath it (group, structure, minutes, lanes, its own venues), never a panel at the foot of the list; the red "no venue" cell is itself the button that opens it, and the editor can add the missing venue in one press (named after the type, so the line binds by itself). **Players** (rebuilt 2026-09-13 for a whole-school meet): one panel per group × category. Every class of the group is
+a SHUT row, so a roll of 1,800 fits on one screen and the office can see at a glance how many classes there are. A
+chip on the shut row enters or empties that class in one sport without opening it; the bar above enters every
+eligible child in one sport, in every sport of the group, or in every event of the whole meet. Opening a class shows
+only its own children as the old grid (a column per event, All/None per row, a child in more than three events
+badged). A **cost line** under the bar answers what mass entry raises — entries, matches and heats, minutes of venue
+time, days needed against days booked — and offers the one press that books the days it needs. **Team sports** say what a team is: SECTIONS (9 A v 9 B), CLASSES (9 v 10)
 or HOUSES, suggested from the entrants (sections only when every class of the group has two or more), with the count
 each basis would give on its chip and a one-press fix when the chosen basis makes fewer than two teams. **Review**
 lists every line and every remaining problem in words; Create stays off until the list is empty.
@@ -535,6 +539,25 @@ carry every entered child of that section, class or house into the diary. `Sport
 `SportsTournament.restMin` (migration `20260915_000000_sports_team_basis`) hold the two new choices; a class-rounds
 event whose classes ALL walk over has its band final built at creation rather than waiting for a champion that will
 never be played for.
+
+**A big field reaches a final through stages** (migration `20260916_000000_sports_stages`). A measured event carries
+`stageShape` — CLASS_QUAL (each class races its own heats, the best of each meet in a band final), OPEN_QUAL (mixed
+heats, fastest marks through) or STRAIGHT (heats, then a final) — plus `advancePerClass` and `finalists`. The wizard
+shows the funnel it would run from the children ticked so far (`planStages`), and only the FIRST round is timetabled
+at creation: each later round is drawn the moment the one before it is ranked (`ensureHeatFinal` reads the marks,
+takes the leaders per group in HEAT order — never alphabetically — and builds the SEMI or the FINAL). A heat carries
+`kind` (HEAT/SEMI/FINAL) and `groupLabel`.
+
+**A meet can grow after it was created.** `PATCH :id` adds days (allowed while LIVE) and changes the hours or the rest
+gap (DRAFT only); `POST :id/venues` adds a court, which every event of that venue's type gains; `DELETE
+:id/venues/:venueId` removes one (DRAFT only, never the last, never one an event depends on); `PATCH
+:id/events/:eventId/day` holds an event to a day of the meet or frees it (`SportsEvent.dayIdx`); `POST :id/refit`
+lays the plan out again. All five re-lay the timetable and all five refuse on a DONE meet (409 `TOURNAMENT_STATE`).
+**A refit moves only what has not been played** — every played slot keeps its time and its place in each child's
+diary, and the cursor and the diary are seeded from those before anything unplayed is placed. The **Days & courts**
+view shows how full each court is on each day, which events run when, and the day the plan spills onto: `fitInDay`
+rolls an overrunning slot to the next morning, so a one-day meet can hold slots on day 2 — the day strip shows every
+day a slot reached, marks the ones the meet is not booked for, and offers to book them.
 
 **Board** (`GET /sports/tournaments/:id`): one payload — venues, events with scoring, entries, matches, heats with
 lane marks, `sideNames` — and the web derives the day board, brackets, heat sheets and the clash list with the shared

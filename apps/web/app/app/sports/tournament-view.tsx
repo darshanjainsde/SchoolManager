@@ -6,13 +6,29 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Bracket } from '@/components/sports/bracket';
 import { DayBoard } from '@/components/sports/day-board';
+import { PlanBoard, type PlanActions } from '@/components/sports/plan-board';
 import { HeatSheet } from '@/components/sports/heat-sheet';
 import { ScoreBox } from '@/components/sports/score-box';
-import { clashesOf, eventLabel, slotsOf, type Slot } from '@/components/sports/model';
+import { clashesOf, daySpanOf, eventLabel, slotsOf, type Slot } from '@/components/sports/model';
 import { hhmm } from '@skoolos/types';
 import { Card, CardBody, CardHead, EmptyRow, Pill, STATUS_LABEL, TONE, dayOfMeet, fmtDay, useDesk, type MatchRow, type TournamentDetail } from './ui';
 
-type View = 'board' | 'events' | 'clashes';
+type View = 'board' | 'plan' | 'events' | 'clashes';
+
+type PlanJob =
+  | { kind: 'update'; body: { endsOn?: string; dayStartMin?: number; dayEndMin?: number; restMin?: number } }
+  | { kind: 'addVenue'; name: string }
+  | { kind: 'removeVenue'; venueId: string }
+  | { kind: 'pin'; eventId: string; dayIdx: number | null }
+  | { kind: 'refit' };
+
+const PLAN_SAID: Record<PlanJob['kind'], string> = {
+  update: 'The meet changed shape — every unplayed slot has been laid out again.',
+  addVenue: 'Venue added. Every event that belongs on it now has it, and the plan is re-laid.',
+  removeVenue: 'Venue removed. What stood on it has been moved to the others.',
+  pin: 'Event held to its day. The rest of the plan filled in around it.',
+  refit: 'Laid out again on the days and courts the meet has now.',
+};
 
 /**
  * One tournament, one payload, every desk. The board, the brackets, the heat
@@ -38,7 +54,8 @@ export default function TournamentView({ base, id }: { base: string; id: string 
   });
   const t = q.data;
   const clashes = useMemo(() => (t ? clashesOf(t) : []), [t]);
-  const days = t ? Math.round((Date.parse(`${t.endsOn}T00:00:00Z`) - Date.parse(`${t.startsOn}T00:00:00Z`)) / 86_400_000) + 1 : 1;
+  const span = t ? daySpanOf(t) : { booked: 1, used: 1, over: false };
+  const days = Math.max(span.booked, span.used);
   useEffect(() => { if (t && !eventId && t.events[0]) setEventId(t.events[0].id); }, [t, eventId]);
   useEffect(() => {
     // keep the open scoresheet in step with a reload
@@ -64,6 +81,29 @@ export default function TournamentView({ base, id }: { base: string; id: string 
     },
     onError: (e) => toast.error((e as Error).message),
   });
+
+  const plan = useMutation({
+    mutationFn: (job: PlanJob) => {
+      if (job.kind === 'update') return api.patch(`/sports/tournaments/${id}`, job.body);
+      if (job.kind === 'addVenue') return api.post(`/sports/tournaments/${id}/venues`, { name: job.name });
+      if (job.kind === 'removeVenue') return api.del(`/sports/tournaments/${id}/venues/${job.venueId}`);
+      if (job.kind === 'pin') return api.patch(`/sports/tournaments/${id}/events/${job.eventId}/day`, { dayIdx: job.dayIdx });
+      return api.post(`/sports/tournaments/${id}/refit`, {});
+    },
+    onSuccess: (fresh, job) => {
+      qc.setQueryData(['sports-tournament', host, id], fresh);
+      qc.invalidateQueries({ queryKey: ['sports-tournaments'] });
+      toast.success(PLAN_SAID[job.kind]);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const planActs: PlanActions = {
+    update: (body) => plan.mutate({ kind: 'update', body }),
+    addVenue: (name) => plan.mutate({ kind: 'addVenue', name }),
+    removeVenue: (venueId) => plan.mutate({ kind: 'removeVenue', venueId }),
+    pin: (eventId, dayIdx) => plan.mutate({ kind: 'pin', eventId, dayIdx }),
+    refit: () => plan.mutate({ kind: 'refit' }),
+  };
 
   if (q.isLoading || !t) return <p className="sk-state">Opening the tournament…</p>;
   const live = t.status === 'LIVE';
@@ -115,9 +155,10 @@ export default function TournamentView({ base, id }: { base: string; id: string 
       </Card>
 
       <div className="sk-seg sk-sp-views" role="tablist" aria-label="Tournament views">
-        <button type="button" role="tab" aria-pressed={view === 'board'} aria-selected={view === 'board'} onClick={() => setView('board')}>Day board</button>
-        <button type="button" role="tab" aria-pressed={view === 'events'} aria-selected={view === 'events'} onClick={() => setView('events')}>Events & results</button>
-        <button type="button" role="tab" aria-pressed={view === 'clashes'} aria-selected={view === 'clashes'} onClick={() => setView('clashes')}>Clashes{clashes.length ? ` (${clashes.length})` : ''}</button>
+        <button type="button" role="tab" aria-selected={view === 'board'} onClick={() => setView('board')}>Day board</button>
+        <button type="button" role="tab" aria-selected={view === 'plan'} onClick={() => setView('plan')}>Days &amp; courts{span.over ? ' ⚠' : ''}</button>
+        <button type="button" role="tab" aria-selected={view === 'events'} onClick={() => setView('events')}>Events & results</button>
+        <button type="button" role="tab" aria-selected={view === 'clashes'} onClick={() => setView('clashes')}>Clashes{clashes.length ? ` (${clashes.length})` : ''}</button>
       </div>
 
       {view === 'board' ? (
@@ -126,12 +167,31 @@ export default function TournamentView({ base, id }: { base: string; id: string 
             <h3>Day board</h3>
             <span className="sp" />
             {days > 1 ? (
-              <div className="sk-seg">{Array.from({ length: days }, (_, i) => <button key={i} type="button" aria-pressed={day === i} onClick={() => setDay(i)}>{fmtDay(dayOfMeet(t.startsOn, i))}</button>)}</div>
+              <div className="sk-seg sk-sp-dayseg">{Array.from({ length: days }, (_, i) => (
+                <button key={i} type="button" aria-pressed={day === i} data-beyond={i >= span.booked} title={i >= span.booked ? 'The meet is not booked for this day' : undefined} onClick={() => setDay(i)}>
+                  {fmtDay(dayOfMeet(t.startsOn, i))}{i >= span.booked ? ' ⚠' : ''}
+                </button>
+              ))}</div>
             ) : <span className="sk-muted">{fmtDay(t.startsOn)}</span>}
           </CardHead>
           <CardBody>
+            {span.over ? (
+              <p className="sk-sp-problem"><span>⚠</span><span>
+                {`The plan needs ${span.used} days and the meet is booked for ${span.booked}. The last ${span.used - span.booked === 1 ? 'day is' : 'days are'} shown above with a warning.`}
+                <button type="button" className="sk-btn" data-size="sm" onClick={() => setView('plan')}>Open days &amp; courts</button>
+              </span></p>
+            ) : null}
             {slotsOf(t).length === 0 ? <EmptyRow>Nothing scheduled yet.</EmptyRow> : <DayBoard t={t} day={day} clashes={clashes} onOpen={openSlot} />}
-            <p className="sk-muted">Press a slot to open its event. Green edge: result in. Red edge: a clash — see the Clashes view.</p>
+            <p className="sk-muted">Every sport of the meet is on this board. Press a slot to open its event. Green edge: result in. Red edge: a clash — see the Clashes view.</p>
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {view === 'plan' ? (
+        <Card>
+          <CardHead><h3>Days &amp; courts</h3><span className="sp" />{plan.isPending ? <Pill tone="brand">Re-laying the plan…</Pill> : null}</CardHead>
+          <CardBody>
+            <PlanBoard t={t} canEdit={ready && can('CREATE') && t.status !== 'DONE'} busy={plan.isPending} act={planActs} onOpenDay={(d) => { setDay(d); setView('board'); }} />
           </CardBody>
         </Card>
       ) : null}

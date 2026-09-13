@@ -3594,3 +3594,62 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 /* A worded button may carry the bad tone without shrinking to an icon box. */
 .sk-btn[data-tone="bad"]:not([data-icon]) { color: var(--sk-bad); }
 .sk-btn[data-tone="bad"]:not([data-icon]):hover:not(:disabled) { border-color: var(--sk-bad); background: var(--sk-bad-tint); }
+
+/* Players step: a meet of 1,800 children is entered from shut class rows, so
+   the page keeps its shape whatever the roll size. */
+.sk-sp-mass { display: flex; flex-direction: column; gap: 7px; padding: 11px 14px; border: 1px dashed var(--sk-line-2); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); }
+.sk-chip[data-strong="true"] { border-color: var(--sk-brand); color: var(--sk-brand-2); font-weight: 650; }
+.sk-sp-cost { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 11px 14px; border: 1px solid var(--sk-line); border-left-width: 3px; border-left-color: var(--sk-good); border-radius: var(--sk-r-sm); background: var(--sk-card); }
+.sk-sp-cost[data-fits="false"] { border-left-color: var(--sk-amber); background: var(--sk-amber-tint); }
+.sk-sp-cost > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sk-sp-cost b { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.sk-sp-cost > .sp { flex: 1 1 auto; }
+.sk-sp-classlist { display: flex; flex-direction: column; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow: hidden; }
+.sk-sp-classbar { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 9px 12px; background: var(--sk-bg-2); border-bottom: 1px solid var(--sk-line); font-size: 13px; }
+.sk-sp-classbar > .sp { flex: 1 1 auto; }
+.sk-sp-class { border-top: 1px solid var(--sk-line); }
+.sk-sp-class:first-of-type { border-top: 0; }
+.sk-sp-class > .hd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 12px; }
+.sk-sp-class[data-open="true"] > .hd { background: var(--sk-brand-tint); }
+.sk-sp-class > .hd > .sk-sp-chips { margin-left: auto; }
+.sk-sp-class .tog { display: inline-flex; align-items: center; gap: 8px; padding: 3px 6px; margin: -3px -6px; border: 0; border-radius: var(--sk-r-sm); background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; min-width: 0; }
+.sk-sp-class .tog:hover { background: var(--sk-bg-2); }
+.sk-sp-class .tog .nm { font-weight: 700; font-size: 13.5px; white-space: nowrap; }
+.sk-sp-class .tog .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-sp-class .tog svg { flex: none; color: var(--sk-ink-3); transition: transform 120ms ease; }
+.sk-sp-class[data-open="true"] .tog svg { transform: rotate(90deg); }
+.sk-sp-class .sk-tblwrap { border-top: 1px solid var(--sk-line); }
+.sk-sp-count { font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); }
+.sk-chip[aria-pressed="true"] .sk-sp-count { color: inherit; }
+.sk-sp-funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 8px; list-style: none; padding: 0; }
+.sk-sp-funnel li { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 9px 12px; border: 1px solid var(--sk-line); border-left-width: 3px; border-left-color: var(--sk-brand); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); font-size: 12px; color: var(--sk-ink-2); }
+.sk-sp-funnel li b { font-size: 13px; color: var(--sk-ink); }
+.sk-sp-funnel li:last-child { border-left-color: var(--sk-amber); }
+@media (prefers-reduced-motion: reduce) { .sk-sp-class .tog svg { transition: none; } }
+@media (max-width: 640px) {
+  .sk-sp-class > .hd > .sk-sp-chips { margin-left: 0; width: 100%; }
+  .sk-sp-cost { gap: 8px 14px; }
+}
+
+/* Days & courts: the shape of the meet, and how full that shape is. */
+.sk-sp-plangrid { display: flex; flex-direction: column; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow-x: auto; }
+.sk-sp-planday { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-top: 1px solid var(--sk-line); min-width: max-content; }
+.sk-sp-planday:first-child { border-top: 0; }
+.sk-sp-planday > .d { flex: 0 0 clamp(104px, 20vw, 168px); display: flex; flex-direction: column; gap: 1px; min-width: 0; text-align: left; }
+.sk-sp-planday > .v { flex: 1 0 62px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sk-sp-planday > .tot { flex: 0 0 58px; text-align: right; font-family: var(--sk-mono); font-size: 12px; }
+.sk-sp-planhead { background: var(--sk-bg-2); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sk-ink-3); }
+.sk-sp-planhead > .v { flex-direction: row; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-sp-planhead > .v button { display: inline-flex; border: 0; background: none; padding: 0; color: inherit; cursor: pointer; }
+.sk-sp-planhead > .v button:hover { color: var(--sk-bad); }
+.sk-sp-planday[data-beyond="true"] { background: var(--sk-amber-tint); }
+.sk-sp-planday button.d { border: 0; background: none; font: inherit; cursor: pointer; border-radius: var(--sk-r-sm); padding: 2px 4px; margin: -2px -4px; }
+.sk-sp-planday button.d:hover { background: var(--sk-brand-tint); }
+.sk-sp-planday .d b { font-size: 13px; }
+.sk-sp-planday .d .sk-muted { font-size: 11px; }
+.sk-sp-planday .bar { display: block; height: 7px; border-radius: 4px; background: var(--sk-bg-2); border: 1px solid var(--sk-line); overflow: hidden; }
+.sk-sp-planday .bar i { display: block; height: 100%; background: var(--sk-brand); }
+.sk-sp-planday .bar i[data-full="true"] { background: var(--sk-amber); }
+.sk-sp-planday .n { font-family: var(--sk-mono); font-size: 10.5px; color: var(--sk-ink-3); }
+.sk-sp-planday .tot b[data-late="true"] { color: var(--sk-bad); }
+.sk-sp-dayseg button[data-beyond="true"] { color: var(--sk-amber-ink); }
