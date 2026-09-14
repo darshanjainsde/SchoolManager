@@ -74,8 +74,18 @@ export class AuthService {
    * so a wrong-tenant token is skipped WITHOUT being rotated or revoked. That
    * ordering is the whole point: rotating it would silently destroy the other
    * school's live session.
+   *
+   * `identity` is additive, and says WHO the rotated token belongs to so the
+   * controller can answer "who am I?" in the same response. Every console
+   * layout used to boot with POST /auth/refresh followed by GET /auth/me,
+   * serially, before the page could ask for its own data — three round trips to
+   * Mumbai before the first number appeared on screen. The user row is already
+   * loaded below to mint the access token, so carrying it out costs nothing.
    */
-  async refresh(rawToken: string, expectedSchoolId?: string): Promise<IssuedTokens> {
+  async refresh(
+    rawToken: string,
+    expectedSchoolId?: string,
+  ): Promise<IssuedTokens & { identity: { sub: string; schoolId: string; role: UserRole } }> {
     let payload: { sub: string; jti: string; fam: string; schoolId: string };
     try {
       payload = this.jwt.verify(rawToken, {
@@ -160,7 +170,12 @@ export class AuthService {
       });
 
       const accessToken = this.signAccess(user, payload.schoolId);
-      return { accessToken, refreshToken: newRefresh, expiresIn: this.env.JWT_ACCESS_TTL };
+      return {
+        accessToken,
+        refreshToken: newRefresh,
+        expiresIn: this.env.JWT_ACCESS_TTL,
+        identity: { sub: user.id, schoolId: payload.schoolId, role: user.role },
+      };
     });
   }
 

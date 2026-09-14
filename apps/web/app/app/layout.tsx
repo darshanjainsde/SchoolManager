@@ -182,7 +182,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
   const api = useApi({ audience: 'school', hostHeader: host });
-  useSessionProbe(api, 'school', !!host);
+  useSessionProbe(api, 'school', !!host, host);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
   // Collapse the desktop sidebar to an icons-only rail, so the main editor gets

@@ -92,7 +92,13 @@ export class AuthController {
     // name. A session that arrived on the legacy shared cookie (or a body
     // token) leaves with a per-school cookie — that is the migration path.
     setRefreshCookie(res, schoolRefreshCookie(ctx.schoolSlug), tokens.refreshToken, this.env);
-    return shapeTokenResponse(tokens, req);
+    // `me` rides along so a booting console does not need a second round trip
+    // to learn who it is signed in as. Additive: every existing field keeps its
+    // shape and meaning, so a client that ignores it is unaffected — which is
+    // what lets apps/mobile stay on the old two-call boot until it is changed.
+    // `identity` is internal and must not reach the body.
+    const { identity, ...issued } = tokens;
+    return { ...shapeTokenResponse(issued, req), me: await this.meFor(identity) };
   }
 
   @Public()
@@ -170,6 +176,18 @@ export class AuthController {
   @UseGuards(SchoolJwtGuard)
   @Get('me')
   async me(@CurrentUser() user: SchoolJwtPayload) {
+    return this.meFor(user);
+  }
+
+  /**
+   * The "who am I?" payload, in one place.
+   *
+   * Both GET /auth/me and the boot half of POST /auth/refresh answer with it,
+   * and they must never drift: a console that reads `features` off the refresh
+   * response and `role` off a later /auth/me would show one set of menu items
+   * and enforce another.
+   */
+  private async meFor(user: Pick<SchoolJwtPayload, 'sub' | 'schoolId' | 'role'>) {
     const [features, name, staffRole] = await Promise.all([
       this.features.getFeatures(user.schoolId),
       // The clients have nowhere else to learn the signed-in person's NAME:

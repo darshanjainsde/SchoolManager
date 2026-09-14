@@ -26,7 +26,7 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
   const status = useAuthStore((s) => s.status);
   const audience = useAuthStore((s) => s.audience);
   const api = useApi({ audience: 'school', hostHeader: host });
-  useSessionProbe(api, 'school', !!host);
+  useSessionProbe(api, 'school', !!host, host);
   const clear = useAuthStore((s) => s.clear);
 
   const me = useQuery({

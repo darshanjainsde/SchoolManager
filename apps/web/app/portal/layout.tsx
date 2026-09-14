@@ -30,7 +30,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   const probeApi = useApi({ audience: 'school', hostHeader: host });
   // Waits for the tenant host: a school refresh without it cannot resolve
   // which school the session belongs to.
-  useSessionProbe(probeApi, 'school', !!host);
+  useSessionProbe(probeApi, 'school', !!host, host);
   const clear = useAuthStore((s) => s.clear);
 
   // Same role guard as /teacher and /app: this portal is student-only. The

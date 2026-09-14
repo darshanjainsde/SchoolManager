@@ -69,7 +69,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
   const clear = useAuthStore((s) => s.clear);
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
-  useSessionProbe(api, 'school', !!host);
+  useSessionProbe(api, 'school', !!host, host);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
 
