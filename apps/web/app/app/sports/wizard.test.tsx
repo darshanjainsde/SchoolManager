@@ -149,6 +149,39 @@ describe('Wizard — a meet the size of a school', () => {
     expect(c9().getByRole('checkbox', { name: /Aarav Mehta in Badminton/ })).not.toBeChecked();
   });
 
+  it('the shortfall and the press that fixes it are on every step, not stranded on one', async () => {
+    mockApi();
+    const u = userEvent.setup();
+    renderWithProviders(<Wizard base="/app/sports" onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Day ends'), { target: { value: '10:00' } });
+    await toPlayers(u, 'Court 1', 'Badminton');
+    await u.click(await screen.findByRole('button', { name: 'All 4 into Badminton' }));
+    const cost = () => within(screen.getByRole('region', { name: 'What the meet needs' }));
+    expect(cost().getByText('2 needed · 1 booked')).toBeInTheDocument();
+    // the days live on step 1 and the cost is only knowable on step 3, so the
+    // warning has to travel — back to the dates, and forward to Review
+    await u.click(screen.getByRole('tab', { name: /The meet/ }));
+    expect(cost().getByRole('button', { name: 'Make it 2 days' })).toBeInTheDocument();
+    await u.click(screen.getByRole('tab', { name: /Review/ }));
+    await u.click(cost().getByRole('button', { name: 'Make it 2 days' }));
+    expect(await screen.findByText('It all fits')).toBeInTheDocument();
+    // and the last day really moved, where it is set
+    await u.click(screen.getByRole('tab', { name: /The meet/ }));
+    expect(screen.getByLabelText('Last day')).toHaveValue(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+  });
+
+  it('says what to do when more days is not the answer', async () => {
+    mockApi();
+    const u = userEvent.setup();
+    renderWithProviders(<Wizard base="/app/sports" onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Day ends'), { target: { value: '09:30' } });
+    await toPlayers(u, 'Court 1', 'Badminton');
+    await u.click(await screen.findByRole('button', { name: 'All 4 into Badminton' }));
+    const cost = () => within(screen.getByRole('region', { name: 'What the meet needs' }));
+    expect(cost().getByRole('button', { name: /Make it \d+ days/ })).toBeInTheDocument();
+    expect(cost().getByText(/add a venue on step 1 — the same work on twice the venues takes half the days/)).toBeInTheDocument();
+  });
+
   it('the cost line counts what was entered and books the days it needs', async () => {
     mockApi();
     const u = userEvent.setup();

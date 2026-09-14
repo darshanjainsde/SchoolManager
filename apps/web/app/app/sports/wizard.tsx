@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { X } from 'lucide-react';
 import { SCORING_PRESETS, SPORT_CATEGORIES, VENUE_TYPES, VENUE_TYPE_LABEL, customSport, sportsByGroup, type SportCategory, type StageShape, type TeamBasis, type VenueType } from '@skoolos/types';
 import { Card, CardBody, CardHead, Pill, useDebounced, useDesk, type RosterStudent, type SettingsView } from './ui';
+import { CostLine } from './cost-line';
 import { PlayersStep } from './players-step';
 import {
   basisOf, daysOf, emptyState, groupOptions, hhmmToMin, isTeam, lineLabel, makeVenue, meetYearOf, minToHhmm, problems, resolved, sideCount, toDto, toggleSport,
@@ -73,9 +74,13 @@ export default function Wizard({ base, onClose }: { base: string; onClose: () =>
         ))}
       </div>
       <CardBody>
+        {/* The shortfall and the press that fixes it travel together, on every
+            step — the days are set on step one and the cost is only knowable on
+            step three, so a warning that lives on one of them strands you. */}
+        {st.events.length ? <CostLine state={st} roster={rosterRows} patch={patch} /> : null}
         {step === 0 ? <MeetStep state={st} patch={patch} /> : null}
         {step === 1 ? <SportsStep state={st} groups={groups} patch={patch} patchEvent={patchEvent} /> : null}
-        {step === 2 ? <PlayersStep state={st} roster={rosterRows} grouping={grouping} bands={bands} meetYear={meetYear} groups={groups} patch={patch} patchEvent={patchEvent} patchAll={patchAll} loading={roster.isLoading} /> : null}
+        {step === 2 ? <PlayersStep state={st} roster={rosterRows} grouping={grouping} bands={bands} meetYear={meetYear} groups={groups} patchEvent={patchEvent} patchAll={patchAll} loading={roster.isLoading} /> : null}
         {step === 3 ? <ReviewStep state={st} roster={rosterRows} groups={groups} issues={issues} busy={create.isPending} onCreate={() => create.mutate()} /> : null}
         <div className="sk-sp-actions" style={{ justifyContent: 'space-between' }}>
           <button type="button" className="sk-btn" disabled={step === 0} onClick={() => setStep(step - 1)}>Back</button>

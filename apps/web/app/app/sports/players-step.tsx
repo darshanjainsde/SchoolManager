@@ -2,9 +2,9 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { SportCategory, StageShape, TeamBasis } from '@skoolos/types';
-import { EmptyRow, Pill, dayOfMeet, useDebounced, type RosterStudent, type SettingsView } from './ui';
+import { EmptyRow, Pill, useDebounced, type RosterStudent, type SettingsView } from './ui';
 import {
-  TEAM_BASIS_WORD, basisOf, costOf, daysOf, eligible, fixBasis, funnelOf, isTeam, resolved, singleSectionClasses, teamCounts,
+  TEAM_BASIS_WORD, basisOf, eligible, fixBasis, funnelOf, isTeam, resolved, singleSectionClasses, teamCounts,
   type WizardEvent, type WizardState,
 } from './wizard-model';
 
@@ -26,10 +26,9 @@ type Pair = { groupKey: string; category: SportCategory; events: WizardEvent[] }
  * entered — and the funnel card says how a field of hundreds narrows to a
  * final before anyone runs.
  */
-export function PlayersStep({ state, roster, grouping, bands, meetYear, groups, patch, patchEvent, patchAll, loading }: {
+export function PlayersStep({ state, roster, grouping, bands, meetYear, groups, patchEvent, patchAll, loading }: {
   state: WizardState; roster: RosterStudent[]; grouping: 'BANDS' | 'AGE'; bands: SettingsView['bands']; meetYear: number;
   groups: { id: string; label: string }[];
-  patch: (p: Partial<WizardState>) => void;
   patchEvent: (uid: string, p: Partial<WizardEvent>) => void;
   patchAll: (map: (ev: WizardEvent) => Partial<WizardEvent> | null) => void;
   loading: boolean;
@@ -93,8 +92,6 @@ export function PlayersStep({ state, roster, grouping, bands, meetYear, groups, 
         <span className="sk-muted">{grouping === 'AGE' ? `Age groups as on 31 Dec ${meetYear}.` : 'Bands by class.'} {pool.length} children fit this group.</span>
       </div>
 
-      <CostLine state={state} roster={roster} patch={patch} />
-
       <div className="sk-sp-mass">
         <span className="sk-lab">Enter every child of every class</span>
         <div className="sk-sp-chips">
@@ -142,33 +139,6 @@ export function PlayersStep({ state, roster, grouping, bands, meetYear, groups, 
       {measured.map((ev) => <StageCard key={ev.uid} state={state} ev={ev} roster={roster} patchEvent={patchEvent} />)}
       {teamEvents.map((ev) => <TeamCard key={ev.uid} state={state} ev={ev} roster={roster} patchEvent={patchEvent} />)}
     </div>
-  );
-}
-
-/** What the meet as entered would cost, and the one press that makes it fit. */
-function CostLine({ state, roster, patch }: { state: WizardState; roster: RosterStudent[]; patch: (p: Partial<WizardState>) => void }) {
-  const c = costOf(state, roster);
-  const have = daysOf(state);
-  if (c.entries === 0) return null;
-  const hours = Math.floor(c.minutes / 60);
-  const mins = c.minutes % 60;
-  return (
-    <section className="sk-sp-cost" data-fits={c.fits} aria-label="What the meet needs">
-      <div><span className="sk-lab">Entries</span><b>{c.entries}</b></div>
-      <div><span className="sk-lab">Matches & heats</span><b>{c.slots}</b></div>
-      <div><span className="sk-lab">Time on the venues</span><b>{hours ? `${hours} h ` : ''}{mins ? `${mins} min` : hours ? '' : '0 min'}</b></div>
-      <div><span className="sk-lab">Days</span><b>{c.daysNeeded} needed · {have} booked</b></div>
-      <span className="sp" />
-      {c.fits
-        ? <span className="sk-sp-vbadge" data-tone="good">It all fits</span>
-        : (
-          <span className="sk-sp-pointsrow">
-            <span className="sk-sp-vbadge" data-tone="warn">Over by {c.daysNeeded - have} day{c.daysNeeded - have === 1 ? '' : 's'}</span>
-            <button type="button" className="sk-btn" data-size="sm" onClick={() => patch({ endsOn: dayOfMeet(state.startsOn, c.daysNeeded - 1) })}>Make it {c.daysNeeded} days</button>
-            <span className="sk-muted">or add a court on step 1.</span>
-          </span>
-        )}
-    </section>
   );
 }
 
