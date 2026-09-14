@@ -20,7 +20,7 @@ import BirthdayTeaser from './sections/BirthdayTeaser';
 import RecordsSection from './sections/RecordsSection';
 import RecordsTeaser, { type RecordsHomeLayout } from './sections/RecordsTeaser';
 import { SUBPAGES } from './subpages';
-import { PS_CSS } from './ps-css';
+import './ps-css.css';
 import { themeRootProps } from './site-theme';
 import ContactSection from './sections/ContactSection';
 import FooterSection from './sections/FooterSection';
@@ -481,8 +481,6 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
 
   return (
     <div className={themeRoot.className} style={themeRoot.style}>
-      {/* Injected theme CSS */}
-      <style dangerouslySetInnerHTML={{ __html: PS_CSS }} />
       {/* Per-section overrides: sanitized on write, scoped here on render. */}
       {customCss && <style dangerouslySetInnerHTML={{ __html: customCss }} />}
       {/* Festive decoration layer + greeting strip (palette work lives in

@@ -413,7 +413,7 @@ export default function HeroSection({
                   <div
                     key={i}
                     className="reveal rounded-3xl ps-soft ps-tile min-h-[140px]"
-                    style={{ backgroundImage: `url('${url}')`, transitionDelay: `${(i + 1) * 0.12}s` }}
+                    style={{ backgroundImage: `url('${optimised(url, 828)}')`, transitionDelay: `${(i + 1) * 0.12}s` }}
                   />
                 ))}
               </div>
@@ -439,7 +439,7 @@ export default function HeroSection({
           </div>
           <div
             className="reveal relative overflow-hidden rounded-3xl ps-soft ps-tile min-h-[320px]"
-            style={images.length < 2 ? { backgroundImage: `url('${heroUrl}')` } : undefined}
+            style={images.length < 2 && heroUrl ? { backgroundImage: `url('${optimised(heroUrl, 1200)}')` } : undefined}
           >
             {/* Two or more images crossfade in the side panel (dots omitted —
                 the panel is a frame, not a gallery); one stays a still. */}
@@ -471,7 +471,7 @@ export default function HeroSection({
               className={`reveal rounded-3xl ps-soft ps-tile ${full ? 'h-72' : 'h-56'} ${
                 i % 2 === 1 ? 'md:translate-y-6' : ''
               }`}
-              style={{ backgroundImage: `url('${url}')`, transitionDelay: `${i * 0.1}s` }}
+              style={{ backgroundImage: `url('${optimised(url, 1200)}')`, transitionDelay: `${i * 0.1}s` }}
             />
           ))}
         </div>

@@ -94,7 +94,7 @@ function useNavOverflow(count: number): {
 
 // Mobile menu enter animation + reduced-motion handling. Scoped to this file
 // (rendered once, only from the branch that's actually active) rather than
-// the shared PS_CSS in PublicSite.tsx.
+// the shared ps-css.css, imported by PublicSite.tsx.
 const MOBILE_MENU_CSS = `
   @keyframes ps-mmenu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
   .ps-mmenu-panel { animation: ps-mmenu-in .22s cubic-bezier(.2,.7,.2,1); }

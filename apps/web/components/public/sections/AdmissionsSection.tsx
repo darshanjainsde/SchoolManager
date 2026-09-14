@@ -12,7 +12,7 @@ export { admissionsHasContent };
  * `journey` (homepage): dashed path draws itself, numbered badges spring onto
  * it, cards land staggered. `rail` (/admissions page): vertical brand-gradient
  * rail fills while alternating steps arrive. Both are static under
- * reduced-motion / Animation=Off (see PS_CSS).
+ * reduced-motion / Animation=Off (see ps-css.css).
  */
 /** A requested page must never answer with silence. See /academics, /gallery. */
 function AdmissionsEmpty() {

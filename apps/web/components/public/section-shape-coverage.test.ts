@@ -60,7 +60,7 @@ describe('every band below the fold answers to the shape control', () => {
 });
 
 describe('the shapes are real systems, not three radius values', () => {
-  const CSS = source('ps-css.ts');
+  const CSS = source('ps-css.css');
 
   it('drives every panel from tokens, so one class redefines all of them', () => {
     expect(CSS).toMatch(/\.ps-panel\s*\{[^}]*border-radius:\s*var\(--ps-radius\)/);
@@ -99,7 +99,7 @@ describe('the shapes are real systems, not three radius values', () => {
  * These assertions are cheap and they are the reason it cannot happen twice.
  */
 describe('a call to action is a class, not six utilities', () => {
-  const CSS = source('ps-css.ts');
+  const CSS = source('ps-css.css');
 
   it('gives .ps-cta its own padding, so a bare .ps-cta is never cramped', () => {
     expect(CSS).toMatch(/\.ps-cta\s*\{[^}]*padding:/);
@@ -143,7 +143,7 @@ describe('a call to action is a class, not six utilities', () => {
 });
 
 describe('a brand fill never assumes its label is white', () => {
-  const CSS = source('ps-css.ts');
+  const CSS = source('ps-css.css');
 
   it('takes the CTA label from the resolved token', () => {
     // Beacon's brand is a mint; white on it measures 1.6:1. Hardcoding #fff
@@ -170,7 +170,7 @@ describe('a brand fill never assumes its label is white', () => {
 });
 
 describe('choosing a THING is not the same control as switching a view', () => {
-  const CSS = source('ps-css.ts');
+  const CSS = source('ps-css.css');
 
   it('gives a choice its own surface, a price line and a mark', () => {
     // The gift list was first built as a segmented control. A track is for a

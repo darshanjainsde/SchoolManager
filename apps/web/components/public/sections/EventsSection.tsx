@@ -1,5 +1,6 @@
 'use client';
 
+import { optimised } from '@/lib/img';
 import type { PublicSiteData } from '@/lib/public-api';
 import { formatEventDate, safeHttpUrl } from '../site-utils';
 
@@ -40,7 +41,7 @@ export default function EventsSection({
                   style={{ transitionDelay: `${i * 0.07}s` }}
                 >
                   {coverSrc ? (
-                    <div className="h-40 bg-cover bg-center" style={{ backgroundImage: `url('${coverSrc}')` }} />
+                    <div className="h-40 bg-cover bg-center" style={{ backgroundImage: `url('${optimised(coverSrc, 828)}')` }} />
                   ) : (
                     <div className="h-40 bg-white/10 grid place-items-center text-5xl">📅</div>
                   )}

@@ -1,5 +1,6 @@
 'use client';
 
+import { optimised } from '@/lib/img';
 import type { PublicCourse } from '@/lib/public-api';
 import ProgrammeMark from '../ProgrammeMark';
 
@@ -65,7 +66,7 @@ export default function AcademicsSection({
               style={{ transitionDelay: `${i * 0.05}s`, background: 'var(--paper)' }}
             >
               {c.imageUrl ? (
-                <div className="min-h-[150px] bg-cover bg-center" style={{ backgroundImage: `url('${c.imageUrl}')` }} />
+                <div className="min-h-[150px] bg-cover bg-center" style={{ backgroundImage: `url('${optimised(c.imageUrl, 828)}')` }} />
               ) : (
                 <ProgrammeMark name={c.name} className="min-h-[150px]" />
               )}

@@ -1,5 +1,6 @@
 'use client';
 
+import { optimised } from '@/lib/img';
 import { useState } from 'react';
 import type { PublicCourse } from '@/lib/public-api';
 import { submitEnquiry, type EnquiryResult } from '../enquiry-client';
@@ -75,7 +76,7 @@ function FlipCard({ course, delay }: { course: PublicCourse; delay: number }) {
         {/* front */}
         <div className="ps-face ps-card ps-soft">
           {course.imageUrl ? (
-            <div className="h-40 bg-cover bg-center" style={{ backgroundImage: `url('${course.imageUrl}')` }} />
+            <div className="h-40 bg-cover bg-center" style={{ backgroundImage: `url('${optimised(course.imageUrl, 828)}')` }} />
           ) : (
             <ProgrammeMark name={course.name} className="h-40" />
           )}

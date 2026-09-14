@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import BirthdaysSection from '@/components/public/sections/BirthdaysSection';
-import { PS_CSS } from '@/components/public/ps-css';
+import '@/components/public/ps-css.css';
 import type { BirthdaysResult, PublicSiteData } from '@/lib/public-api';
 
 /**
@@ -53,7 +53,6 @@ export default function PortalBirthdaysPage() {
         } as React.CSSProperties
       }
     >
-      <style dangerouslySetInnerHTML={{ __html: PS_CSS }} />
       <BirthdaysSection data={wall.data} style={c.page} wishLine={c.wishLine} schoolName={site.data?.school.name ?? 'your school'} onOwnPage />
     </div>
   );
