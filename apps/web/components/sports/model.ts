@@ -238,8 +238,12 @@ export function timetableOf(t: TournamentDetail, day: number, showEveryVenue = f
   const fromMin = Math.min(t.dayStartMin, ...(starts.length ? starts : [t.dayStartMin]));
   const toMin = Math.max(t.dayEndMin, ...(ends.length ? ends : [t.dayEndMin]));
   const shortest = mine.length ? Math.min(...mine.map((s) => s.slotMin)) : 30;
-  // A five-minute heat must still be tall enough to read; a long day may scroll.
-  const pxPerMin = Math.min(5, Math.max(1.1, 26 / Math.max(1, shortest)));
+  // The shortest slot of the day sets the scale, and it has to clear two bars:
+  // readable, and tappable. A five-minute heat came out 23px tall — legible on
+  // a laptop, under the 24px a finger needs. Scaling from 30 (not 26) lifts
+  // every block together, so the axis stays honestly proportional and the
+  // smallest block lands at 28px. A long day simply scrolls further.
+  const pxPerMin = Math.min(6, Math.max(1.1, 30 / Math.max(1, shortest)));
   const hours: number[] = [];
   for (let m = Math.floor(fromMin / 60) * 60; m <= toMin; m += 60) if (m >= fromMin) hours.push(m);
   return { fromMin, toMin, hours, columns, idle, pxPerMin, tones: toneMap(t) };

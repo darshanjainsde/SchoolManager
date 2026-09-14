@@ -205,9 +205,10 @@ describe('Tournament view — the day as a timetable', () => {
     renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
     await u.click(await screen.findByRole('tab', { name: 'Timetable' }));
     const first = screen.getByTitle(/09:00 · 25 min · Badminton Final/);
-    // 25-minute slots scale at 1.1 px a minute: 27px tall, starting at the top of the day
-    expect(first).toHaveStyle({ top: '0px', height: '26px' });
-    expect(screen.getByTitle(/09:25 · 25 min/)).toHaveStyle({ top: '28px' });
+    // 25-minute slots scale at 1.2 px a minute, so the block clears the 24px a
+    // finger needs and the next one starts exactly where this one ends
+    expect(first).toHaveStyle({ top: '0px', height: '28px' });
+    expect(screen.getByTitle(/09:25 · 25 min/)).toHaveStyle({ top: '30px' });
   });
 });
 

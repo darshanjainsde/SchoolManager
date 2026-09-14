@@ -114,8 +114,9 @@ describe('the meet the way a teacher asks for it', () => {
     // the grid holds the day window, and the five-minute heat is still readable
     expect(tt).toMatchObject({ fromMin: 540, toMin: 960 });
     expect(tt.hours).toEqual([540, 600, 660, 720, 780, 840, 900, 960]);
-    expect(tt.pxPerMin).toBe(5);
-    expect(Math.round(tt.pxPerMin * 5)).toBeGreaterThanOrEqual(25);
+    expect(tt.pxPerMin).toBe(6);
+    // the block a finger has to hit: the shortest slot, less the 2px gutter
+    expect(Math.round(tt.pxPerMin * 5) - 2).toBeGreaterThanOrEqual(24);
   });
 
   it('stretches the grid past the bell when a slot runs over, and shrinks the scale for long slots', () => {
@@ -123,6 +124,7 @@ describe('the meet the way a teacher asks for it', () => {
     expect(timetableOf(late, 0)).toMatchObject({ fromMin: 540, toMin: 960 });
     const over = meet({ events: [ev({ matches: [m({ id: 'm1', atMin: 950 })] })] }); // runs to 16:15
     expect(timetableOf(over, 0).toMin).toBe(975);
-    expect(timetableOf(over, 0).pxPerMin).toBeCloseTo(1.1, 5); // 25-minute slots need no zoom
+    expect(timetableOf(over, 0).pxPerMin).toBeCloseTo(1.2, 5); // 25-minute slots need no zoom
+    expect(Math.round(timetableOf(over, 0).pxPerMin * 25) - 2).toBeGreaterThanOrEqual(24);
   });
 });

@@ -3659,7 +3659,13 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-sp-planday > .tot { flex: 0 0 58px; text-align: right; font-family: var(--sk-mono); font-size: 12px; }
 .sk-sp-planhead { background: var(--sk-bg-2); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sk-ink-3); }
 .sk-sp-planhead > .v { flex-direction: row; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sk-sp-planhead > .v button { display: inline-flex; border: 0; background: none; padding: 0; color: inherit; cursor: pointer; }
+.sk-sp-planhead > .v button {
+  display: inline-flex; align-items: center; justify-content: center; border: 0; background: none;
+  color: inherit; cursor: pointer;
+  /* The glyph stays 11px; the hit area does not. */
+  min-width: 26px; min-height: 26px; margin: -7px -6px; border-radius: var(--sk-r-sm);
+}
+.sk-sp-planhead > .v button:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: -2px; }
 .sk-sp-planhead > .v button:hover { color: var(--sk-bad); }
 .sk-sp-planday[data-beyond="true"] { background: var(--sk-amber-tint); }
 .sk-sp-planday button.d { border: 0; background: none; font: inherit; cursor: pointer; border-radius: var(--sk-r-sm); padding: 2px 4px; margin: -2px -4px; }
@@ -3780,7 +3786,13 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-sp-tt .blk[data-held="true"] { cursor: grabbing; z-index: 4; box-shadow: 0 8px 22px rgba(33,29,69,.28); opacity: .96; }
 .sk-sp-tt .col[data-aim="true"] { background: var(--sk-brand-tint); }
 .sk-sp-tt .aim { position: absolute; left: 3px; right: 3px; height: 2px; background: var(--sk-brand); border-radius: 2px; }
-.sk-sp-tt .vh .off { margin-left: auto; border: 0; background: none; padding: 0 2px; font: inherit; font-size: 10.5px; letter-spacing: .05em; color: var(--sk-ink-3); cursor: pointer; }
+.sk-sp-tt .vh .off {
+  margin-left: auto; border: 0; background: none; font: inherit; font-size: 10.5px; letter-spacing: .05em;
+  color: var(--sk-ink-3); cursor: pointer;
+  /* A finger needs 24px even when the ink is 10px — measured at 32×12. */
+  display: inline-flex; align-items: center; padding: 0 6px; min-height: 26px; border-radius: var(--sk-r-sm);
+}
+.sk-sp-tt .vh .off:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; }
 .sk-sp-tt .vh .off:hover { color: var(--sk-bad); }
 @media (max-width: 640px) {
   .sk-sp-classrow > .line { padding-left: 22px; }
