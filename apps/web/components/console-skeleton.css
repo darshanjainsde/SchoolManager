@@ -1,0 +1,58 @@
+/*
+ * What a console wears while it works out who you are.
+ *
+ * A real stylesheet, not an inline <style> the component renders: it is
+ * imported by console-skeleton.tsx, so Next puts it in the route's CSS chunk,
+ * which sits render-blocking in <head>. It is therefore already applied on the
+ * first paint — the thing an inline block would have bought — while also being
+ * cached once instead of re-sent inside every console page's HTML.
+ *
+ * Colours come from the --sk-* tokens where they exist and fall back to fixed
+ * values, so it holds in both themes and on the very first paint, before the
+ * theme script has run.
+ */
+.sk-skel { min-height: 100vh; background: var(--sk-paper, #f6f7fb); color: var(--sk-ink, #0f172a); }
+.sk-skel-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sk-skel-split { display: flex; min-height: 100vh; }
+.sk-skel-stack { display: flex; flex-direction: column; min-height: 100vh; }
+
+.sk-skel-rail { display: none; width: 240px; flex: none; flex-direction: column; gap: 22px; padding: 16px 12px; background: #0f172a; }
+@media (min-width: 640px) { .sk-skel-rail { display: flex; } }
+.sk-skel-brand { display: flex; flex-direction: column; gap: 6px; padding: 4px 6px; }
+.sk-skel-role { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #64748b; }
+.sk-skel-nav { display: flex; flex-direction: column; gap: 10px; }
+.sk-skel-navrow { display: flex; align-items: center; gap: 12px; padding: 7px 6px; }
+
+.sk-skel-top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--sk-panel, #fff); border-bottom: 1px solid var(--sk-rule, #e2e8f0); }
+.sk-skel-role-top { color: var(--sk-muted, #64748b); }
+.sk-skel-spacer { flex: 1; }
+
+.sk-skel-main { flex: 1; min-width: 0; padding: 24px; }
+@media (min-width: 640px) { .sk-skel-main { padding: 40px; } }
+.sk-skel-page { display: flex; flex-direction: column; gap: 14px; max-width: 1100px; }
+.sk-skel-sub { margin-bottom: 10px; }
+.sk-skel-tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); margin-bottom: 8px; }
+.sk-skel-tile { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 14px; background: var(--sk-panel, #fff); border: 1px solid var(--sk-rule, #e8eaf0); }
+.sk-skel-rows { display: flex; flex-direction: column; gap: 1px; border-radius: 12px; overflow: hidden; border: 1px solid var(--sk-rule, #e8eaf0); }
+.sk-skel-row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; background: var(--sk-panel, #fff); }
+
+.sk-skel-bar { background: var(--sk-rule, #e4e7ee); position: relative; overflow: hidden; flex: none; }
+.sk-skel-rail .sk-skel-bar { background: rgba(255,255,255,.10); }
+.sk-skel-bar::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+  animation: sk-skel-sweep 1.4s ease-in-out infinite;
+}
+.sk-skel-rail .sk-skel-bar::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent); }
+@keyframes sk-skel-sweep { 100% { transform: translateX(100%); } }
+
+@media (prefers-color-scheme: dark) {
+  .sk-skel { background: var(--sk-paper, #0b1020); color: var(--sk-ink, #e2e8f0); }
+  .sk-skel-tile, .sk-skel-row, .sk-skel-top { background: var(--sk-panel, #141a2e); border-color: var(--sk-rule, #232a42); }
+  .sk-skel-rows, .sk-skel-tile { border-color: var(--sk-rule, #232a42); }
+  .sk-skel-bar { background: var(--sk-rule, #222a41); }
+  .sk-skel-bar::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent); }
+}
+
+/* The sweep is decoration; it must never be the reason someone feels ill. */
+@media (prefers-reduced-motion: reduce) { .sk-skel-bar::after { animation: none; } }

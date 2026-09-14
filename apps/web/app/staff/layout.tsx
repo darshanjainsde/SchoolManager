@@ -16,6 +16,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { MobileNavButton, MobileNavDrawer } from '@/components/MobileNavDrawer';
 import { NAV_ITEMS } from './nav-items';
 import '../sk-theme.css';
+import { ConsoleSkeleton } from '@/components/console-skeleton';
 
 export default function StaffLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -49,7 +50,7 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
     }
   }, [hydrated, status, audience, me.data, router]);
 
-  if (!hydrated) return null;
+  if (!hydrated) return <ConsoleSkeleton chrome="side" label="Staff room" />;
 
   if (!isSchoolHost(host)) {
     return (
@@ -67,6 +68,10 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  // Still asking the API who this is — keep the shell on screen rather than
+  // blanking it. `anon` falls through to null below, where the effect above
+  // is already on its way to /login.
+  if (status === 'unknown') return <ConsoleSkeleton chrome="side" label="Staff room" />;
   if (status !== 'authed' || audience !== 'school') return null;
 
   const isActive = (href: string) =>
