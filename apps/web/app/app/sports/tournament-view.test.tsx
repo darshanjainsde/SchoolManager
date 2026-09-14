@@ -25,7 +25,7 @@ const event = (over: Partial<EventDetail>): EventDetail => ({
 /** One court, one day, and a badminton draw that does not finish on it. */
 const detail = (over: Partial<TournamentDetail> = {}): TournamentDetail => ({
   id: 't1', name: 'Annual Sports Meet', startsOn: '2026-09-15', endsOn: '2026-09-15', grouping: 'BANDS',
-  dayStartMin: 540, dayEndMin: 600, restMin: 15, status: 'DRAFT', published: false, version: 1,
+  dayStartMin: 540, dayEndMin: 600, restMin: 15, gapMin: 0, status: 'DRAFT', published: false, version: 1,
   venues: [{ id: 'v1', name: 'Court 1', order: 0 }],
   events: [
     event({ matches: [match({ id: 'm1', atMin: 540 }), match({ id: 'm2', atMin: 565 }), match({ id: 'spill', atMin: 1440 + 540 })] }),
@@ -178,8 +178,8 @@ describe('Tournament view — days, at any number of them', () => {
     await u.click(screen.getByRole('button', { name: 'Next day' }));
     expect(screen.getByText('Day 2 of 60')).toBeInTheDocument();
     expect(screen.getByText(/16 Sep · 1 slot · not booked/)).toBeInTheDocument();
-    // and the overrun is stated once, not stamped on every day
-    expect(screen.getByText('The plan runs to 60 days and the meet is booked for 1')).toBeInTheDocument();
+    // and the overrun is stated once, in the panel, not stamped on every day
+    expect(screen.getByText('The plan needs 60 days and 1 is booked')).toBeInTheDocument();
     expect(screen.queryAllByText('⚠')).toHaveLength(0);
   });
 });
@@ -245,8 +245,8 @@ describe('Tournament view — days & courts', () => {
     const u = userEvent.setup();
     renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
     await openPlan(u);
-    await u.type(screen.getByPlaceholderText('Court 3'), 'Court 2');
-    await u.click(screen.getByRole('button', { name: 'Add venue' }));
+    await u.type(screen.getByPlaceholderText('Badminton court 3'), 'Court 2');
+    await u.click(screen.getByRole('button', { name: 'Add' }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/sports/tournaments/t1/venues', { name: 'Court 2' }));
     fireEvent.change(screen.getByLabelText('Day for Chess · Senior Boys'), { target: { value: '0' } });
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/sports/tournaments/t1/events/e2/day', { dayIdx: 0 }));
@@ -262,8 +262,61 @@ describe('Tournament view — days & courts', () => {
     expect(screen.getByLabelText('Day starts')).toBeDisabled();
     expect(screen.getByLabelText('Day ends')).toBeDisabled();
     expect(screen.getByLabelText('Last day')).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Add venue' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove Court 1' })).toBeNull(); // the last court never goes
     expect(screen.getByText(/the hours and the rest gap are fixed/)).toBeInTheDocument();
+  });
+});
+
+describe('Tournament view — where the meet is', () => {
+  it('names what is in the way, in order, and sends you to the view that fixes it', async () => {
+    // one court, a plan that spills, and an event with nowhere to play
+    mockApi(detail({ events: [
+      event({ matches: [match({ id: 'm1', atMin: 540 }), match({ id: 'spill', atMin: 1440 + 540 })] }),
+      event({ id: 'e3', sportName: 'Chess', venueIds: [], matches: [] }),
+    ] }));
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    const panel = within(await screen.findByRole('group', { name: 'Where this meet is' }));
+    expect(panel.getByText('1 event has nowhere to play')).toBeInTheDocument();
+    expect(panel.getByText(/Chess · Senior Boys\. Add the right kind of venue/)).toBeInTheDocument();
+    expect(panel.getByText('2 things to clear before it can run')).toBeInTheDocument();
+    // publishing waits behind what is blocked
+    expect(panel.getByText(/Clear what is blocked above first/)).toBeInTheDocument();
+    await u.click(panel.getAllByRole('button', { name: 'Days & courts' })[0]);
+    expect(screen.getByRole('tab', { name: /Days & courts/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('says nothing is in the way once the plan fits, and offers the publish', async () => {
+    mockApi(detail({ endsOn: '2026-09-16', events: [event({ matches: [match({ id: 'm1', atMin: 540 })] })] }));
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    const panel = within(await screen.findByRole('group', { name: 'Where this meet is' }));
+    expect(panel.getByText('Nothing is in the way.')).toBeInTheDocument();
+    expect(panel.getByText('Publish to students')).toBeInTheDocument();
+    expect(panel.getByText(/Every entered child with a login is told their first slot/)).toBeInTheDocument();
+  });
+
+  it('never offers to book more days than a meet may have', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => match({ id: `m${i}`, atMin: i * 1440 + 540 }));
+    mockApi(detail({ events: [event({ matches: many })] }));
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    await u.click(await screen.findByRole('tab', { name: /Days & courts/ }));
+    expect(screen.getByRole('button', { name: 'Book 14 days' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Book 40 days' })).toBeNull();
+    expect(screen.getByText(/a meet runs for at most 14 days/)).toBeInTheDocument();
+    expect(screen.getByText(/Court 1 is the bottleneck/)).toBeInTheDocument();
+  });
+
+  it('a break between slots on a court is set with the hours, and is not the child rest gap', async () => {
+    const api = mockApi();
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    await u.click(await screen.findByRole('tab', { name: /Days & courts/ }));
+    expect(screen.getByLabelText("Rest between a child's own slots")).toHaveValue(15);
+    const gap = screen.getByLabelText('Break between slots on a court');
+    expect(gap).toHaveValue(0);
+    fireEvent.change(gap, { target: { value: '10' } });
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/sports/tournaments/t1', { gapMin: 10 }));
   });
 });

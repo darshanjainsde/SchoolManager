@@ -31,7 +31,7 @@ export interface EventDetail {
   matches: MatchRow[]; heats: HeatRow[];
 }
 export interface TournamentDetail {
-  id: string; name: string; startsOn: string; endsOn: string; grouping: 'BANDS' | 'AGE'; dayStartMin: number; dayEndMin: number; restMin: number; status: 'DRAFT' | 'LIVE' | 'DONE'; published: boolean; version: number;
+  id: string; name: string; startsOn: string; endsOn: string; grouping: 'BANDS' | 'AGE'; dayStartMin: number; dayEndMin: number; restMin: number; gapMin: number; status: 'DRAFT' | 'LIVE' | 'DONE'; published: boolean; version: number;
   venues: { id: string; name: string; order: number }[]; events: EventDetail[]; sideNames: Record<string, string>; bands: Band[];
 }
 export interface RecordView {

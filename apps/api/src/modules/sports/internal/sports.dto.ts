@@ -84,6 +84,8 @@ export class CreateTournamentDto {
   @IsOptional() @IsInt() @Min(1) @Max(1440) dayEndMin?: number;
   /** Minutes between two slots of the same child. */
   @IsOptional() @IsInt() @Min(0) @Max(120) restMin?: number;
+  /** Break left on the venue after each slot. */
+  @IsOptional() @IsInt() @Min(0) @Max(60) gapMin?: number;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => VenueInDto) venues!: VenueInDto[];
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(60) @ValidateNested({ each: true }) @Type(() => EventInDto) events!: EventInDto[];
 }
@@ -94,6 +96,8 @@ export class UpdateTournamentDto {
   @IsOptional() @IsInt() @Min(0) @Max(1439) dayStartMin?: number;
   @IsOptional() @IsInt() @Min(1) @Max(1440) dayEndMin?: number;
   @IsOptional() @IsInt() @Min(0) @Max(120) restMin?: number;
+  /** Break left on the venue after each slot. */
+  @IsOptional() @IsInt() @Min(0) @Max(60) gapMin?: number;
 }
 
 export class AddVenueDto {

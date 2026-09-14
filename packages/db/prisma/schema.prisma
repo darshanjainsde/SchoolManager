@@ -4102,6 +4102,8 @@ model SportsTournament {
   dayEndMin   Int                    @default(960)
   /// Minutes a child gets between two of their own slots when the meet is scheduled.
   restMin     Int                    @default(15)
+  /// Break left on the venue after each slot (minutes).
+  gapMin      Int                    @default(0)
   status      SportsTournamentStatus @default(DRAFT)
   published   Boolean                @default(false)
   version     Int                    @default(1)

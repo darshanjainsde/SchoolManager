@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, withTenant, type TenantTx } from '@skoolos/db';
 import {
-  AGE_GROUPS, ageGroupFor, assertNotificationKind, assertNotificationOutboxKind, bandFor, buildDraw, cursorFrom, customSport, dayOf, finalists,
+  AGE_GROUPS, MAX_MEET_DAYS, ageGroupFor, assertNotificationKind, assertNotificationOutboxKind, bandFor, buildDraw, cursorFrom, customSport, dayOf, finalists,
   advanceFrom, dayFloor, groupLabel as groupLabelOf, hhmm, inferVenueType, newDiary, parseSide, planHeats, planStages, resolveSport, shuffle, sideOfEntry, sidesAreSections, sportByKey, stdOfGrade, suggestTeamBasis, venuesForSport,
   sayProblem, whyNot,
   type Band, type DayWindow, type HeatKind, type Placement, type Scoring, type Sport, type StageShape, type TeamBasis, type VenueType,
@@ -28,13 +28,13 @@ export interface EventDetail {
   matches: MatchRow[]; heats: HeatRow[];
 }
 export interface TournamentDetail {
-  id: string; name: string; startsOn: string; endsOn: string; grouping: string; dayStartMin: number; dayEndMin: number; restMin: number; status: string; published: boolean; version: number;
+  id: string; name: string; startsOn: string; endsOn: string; grouping: string; dayStartMin: number; dayEndMin: number; restMin: number; gapMin: number; status: string; published: boolean; version: number;
   venues: { id: string; name: string; order: number }[]; events: EventDetail[]; sideNames: Record<string, string>; bands: Band[];
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const dateOf = (s: string) => new Date(`${s}T00:00:00Z`);
-const MAX_DAYS = 14;
+const MAX_DAYS = MAX_MEET_DAYS;
 
 /**
  * Tournaments — several sports on shared venues and days (spec §4). A meet is
@@ -133,12 +133,12 @@ export class SportsTournamentsService {
       });
 
       const t = await tx.sportsTournament.create({
-        data: { schoolId, name: dto.name.trim(), startsOn: dateOf(dto.startsOn), endsOn: dateOf(dto.endsOn), grouping: settings.grouping, dayStartMin, dayEndMin, restMin: dto.restMin ?? 15, createdById: actorId },
+        data: { schoolId, name: dto.name.trim(), startsOn: dateOf(dto.startsOn), endsOn: dateOf(dto.endsOn), grouping: settings.grouping, dayStartMin, dayEndMin, restMin: dto.restMin ?? 15, gapMin: dto.gapMin ?? 0, createdById: actorId },
         select: { id: true },
       });
       await tx.sportsVenue.createMany({ data: venueNames.map((name, order) => ({ schoolId, tournamentId: t.id, name, order })) });
       const venueRows = await tx.sportsVenue.findMany({ where: { schoolId, tournamentId: t.id }, orderBy: { order: 'asc' }, select: { id: true } });
-      const w: DayWindow = { dayStartMin, dayEndMin, days };
+      const w: DayWindow = { dayStartMin, dayEndMin, days, gapMin: dto.gapMin ?? 0 };
       const cursor = new Map(venueRows.map((v) => [v.id, dayStartMin]));
       // one diary for the whole meet: a child in two events is never in two places at once
       const diary = newDiary(dto.restMin ?? 15);
@@ -249,7 +249,7 @@ export class SportsTournamentsService {
         };
       });
       return {
-        id: t.id, name: t.name, startsOn: iso(t.startsOn), endsOn: iso(t.endsOn), grouping: t.grouping, dayStartMin: t.dayStartMin, dayEndMin: t.dayEndMin, restMin: t.restMin, status: t.status, published: t.published, version: t.version,
+        id: t.id, name: t.name, startsOn: iso(t.startsOn), endsOn: iso(t.endsOn), grouping: t.grouping, dayStartMin: t.dayStartMin, dayEndMin: t.dayEndMin, restMin: t.restMin, gapMin: t.gapMin, status: t.status, published: t.published, version: t.version,
         venues, events: detail, sideNames, bands: settings.bands,
       };
     }
@@ -608,7 +608,7 @@ export class SportsTournamentsService {
     return withTenant(schoolId, async (tx) => {
       const t = await this.requireTournament(tx, schoolId, id);
       if (t.status === 'DONE') throw new ApiError('TOURNAMENT_STATE', 'This tournament is finished.', 409);
-      const hoursOrRest = dto.dayStartMin != null || dto.dayEndMin != null || dto.restMin != null;
+      const hoursOrRest = dto.dayStartMin != null || dto.dayEndMin != null || dto.restMin != null || dto.gapMin != null;
       if (hoursOrRest && t.status !== 'DRAFT') throw new ApiError('TOURNAMENT_STATE', 'The hours and the rest gap can only change while the tournament is a draft. A day can still be added.', 409);
       const dayStartMin = dto.dayStartMin ?? t.dayStartMin;
       const dayEndMin = dto.dayEndMin ?? t.dayEndMin;
@@ -620,7 +620,7 @@ export class SportsTournamentsService {
         const days = Math.round((endsOn.getTime() - t.startsOn.getTime()) / 86_400_000) + 1;
         if (days > MAX_DAYS) throw new ApiError('VALIDATION', `A meet runs for at most ${MAX_DAYS} days.`, 400, 'endsOn');
       }
-      await tx.sportsTournament.update({ where: { id }, data: { endsOn, dayStartMin, dayEndMin, restMin: dto.restMin ?? t.restMin, version: { increment: 1 } } });
+      await tx.sportsTournament.update({ where: { id }, data: { endsOn, dayStartMin, dayEndMin, restMin: dto.restMin ?? t.restMin, gapMin: dto.gapMin ?? t.gapMin, version: { increment: 1 } } });
       return this.refitIn(tx, schoolId, id);
     });
   }
@@ -703,7 +703,7 @@ export class SportsTournamentsService {
     const t = await this.requireTournament(tx, schoolId, id);
     if (t.status === 'DONE') throw new ApiError('TOURNAMENT_STATE', 'This tournament is finished.', 409);
     const days = Math.round((t.endsOn.getTime() - t.startsOn.getTime()) / 86_400_000) + 1;
-    const w: DayWindow = { dayStartMin: t.dayStartMin, dayEndMin: t.dayEndMin, days };
+    const w: DayWindow = { dayStartMin: t.dayStartMin, dayEndMin: t.dayEndMin, days, gapMin: t.gapMin };
     const [venues, events] = await Promise.all([
       tx.sportsVenue.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, tournamentId: id }, orderBy: { order: 'asc' }, select: { id: true } }),
       tx.sportsEvent.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, tournamentId: id }, orderBy: { order: 'asc' } }),
@@ -758,9 +758,9 @@ export class SportsTournamentsService {
 
   /** Put late-built slots after everything already on the event's venues. */
   private async scheduleLate(tx: TenantTx, schoolId: string, tournamentId: string, venueIds: string[], slotMin: number, matches: MatchPlan[], heats: HeatPlan[], dayIdx?: number | null): Promise<void> {
-    const t = await tx.sportsTournament.findUnique({ where: { id: tournamentId }, select: { dayStartMin: true, dayEndMin: true, startsOn: true, endsOn: true } });
+    const t = await tx.sportsTournament.findUnique({ where: { id: tournamentId }, select: { dayStartMin: true, dayEndMin: true, startsOn: true, endsOn: true, gapMin: true } });
     if (!t || venueIds.length === 0) throw new ApiError('NEED_VENUE', 'This event has no venue to schedule on.', 400);
-    const w: DayWindow = { dayStartMin: t.dayStartMin, dayEndMin: t.dayEndMin, days: Math.round((t.endsOn.getTime() - t.startsOn.getTime()) / 86_400_000) + 1 };
+    const w: DayWindow = { dayStartMin: t.dayStartMin, dayEndMin: t.dayEndMin, days: Math.round((t.endsOn.getTime() - t.startsOn.getTime()) / 86_400_000) + 1, gapMin: t.gapMin };
     const [bm, bh] = await Promise.all([
       tx.sportsMatch.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, event: { tournamentId }, venueId: { in: venueIds }, atMin: { not: null } }, select: { venueId: true, atMin: true, event: { select: { slotMin: true } } } }),
       tx.sportsHeat.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, event: { tournamentId }, venueId: { in: venueIds }, atMin: { not: null } }, select: { venueId: true, atMin: true, event: { select: { slotMin: true } } } }),

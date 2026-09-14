@@ -425,3 +425,25 @@ describe('whyNot — the one rule that decides if a slot may move', () => {
     expect(sayProblem({ kind: 'DAY_END', min: 960 }, n)).toBe('That would run past 16:00, when the day ends.');
   });
 });
+
+describe('a break on the venue between slots', () => {
+  const W = { dayStartMin: 540, dayEndMin: 960, days: 1 };
+
+  it('leaves the court empty for the break before the next slot starts', () => {
+    const back = planRounds([3], ['v1'], 20, cursorFrom([], ['v1'], W), W);
+    expect(back[0].map((s) => s.atMin)).toEqual([540, 560, 580]);
+    const gapped = planRounds([3], ['v1'], 20, cursorFrom([], ['v1'], { ...W, gapMin: 10 }), { ...W, gapMin: 10 });
+    expect(gapped[0].map((s) => s.atMin)).toEqual([540, 570, 600]);
+  });
+
+  it('counts the break against the day, so the plan does not look emptier than it is', () => {
+    const stages = [{ slots: 12, slotMin: 25, venues: 1 }];
+    expect(capacityOf({ stages, dayStartMin: 540, dayEndMin: 960, days: 1 })).toMatchObject({ neededMin: 300, daysNeeded: 1 });
+    expect(capacityOf({ stages, dayStartMin: 540, dayEndMin: 960, days: 1, gapMin: 15 })).toMatchObject({ neededMin: 480, daysNeeded: 2 });
+  });
+
+  it('starts a fresh venue after a played slot plus its break', () => {
+    const c = cursorFrom([{ venueId: 'v1', atMin: 540, slotMin: 25 }], ['v1'], { ...W, gapMin: 10 });
+    expect(c.get('v1')).toBe(575);
+  });
+});

@@ -8,7 +8,7 @@ const ev = (over: Partial<EventDetail>): EventDetail => ({
 });
 const m = (over: Record<string, unknown>) => ({ id: 'm', stage: 'CLASS', groupLabel: 'Class 9', roundIdx: 0, roundName: 'Final', pos: 0, aSide: 's:a', bSide: 's:b', scoreA: [], scoreB: [], winner: null, bye: false, walkover: false, venueId: 'v1', atMin: 600, version: 1, savedAt: null, ...over });
 const t = (events: EventDetail[]): TournamentDetail => ({
-  id: 't', name: 'Meet', startsOn: '2026-09-15', endsOn: '2026-09-15', grouping: 'BANDS', dayStartMin: 540, dayEndMin: 960, restMin: 15, status: 'LIVE', published: true, version: 1,
+  id: 't', name: 'Meet', startsOn: '2026-09-15', endsOn: '2026-09-15', grouping: 'BANDS', dayStartMin: 540, dayEndMin: 960, restMin: 15, gapMin: 0, status: 'LIVE', published: true, version: 1,
   venues: [{ id: 'v1', name: 'Court 1', order: 0 }], events, sideNames: { 's:a': 'Aarav', 's:b': 'Bela', 'c:9-A': '9 A' }, bands: [],
 });
 

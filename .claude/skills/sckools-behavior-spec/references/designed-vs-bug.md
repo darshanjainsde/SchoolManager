@@ -202,6 +202,9 @@ No design rationale covers any of these. Escalate immediately:
 | "The record was not updated when she ran 12.10" | A mark queues an attempt; a record changes only when someone with VERIFY approves it | An approved attempt not standing, or a mark below the standing record queued |
 | "12.30 did not beat the record of 12.30" | Records are beaten strictly at the sport's precision | 12.29 not queued |
 | "The final heat has five runners on four lanes" | A tie at the cut brings everyone on that mark | More runners than lanes without a tie |
+| "The break and the rest gap do different things" | Correct: the break is left on the COURT after each slot; the rest is what one CHILD gets between two of their own | Either one having no effect on the plan |
+| "It will not let me book 20 days" | A meet runs for at most 14 days; past that the fix is more courts or shorter slots | A button offering more than 14 and the API refusing it |
+| "Most of the first round is byes" | A padded draw; byes are drawn as one muted line, not a card | A bye rendered as a full card, or a real match shown as a bye |
 | "It would not let me drag a heat there" | A drop is refused when it double-books a court, puts a child in two places, moves a played slot or jumps a round; the message says which | A refusal naming a conflict that is not there, or a clashing drop being accepted |
 | "I moved a class and nothing happened" | A group move is all-or-nothing — if one slot will not fit, none move and the reason says why | Some of a class moving and some not |
 | "The programme is in a different order than yesterday" | The spine is a switch (sport / category / day) and is not remembered between visits | The switch not changing the order |

@@ -74,15 +74,14 @@ export function Programme({ t, canEdit, busy, act, onOpen }: {
   if (!rows.length) return <EmptyRow>Nothing is timetabled yet.</EmptyRow>;
   return (
     <div className="sk-sp-stack">
-      <div className="sk-sp-classbar">
-        <span className="sk-lab">Group by</span>
-        <div className="sk-seg">
+      <div className="sk-sp-toolbar">
+        <div className="sk-sp-spine" role="group" aria-label="Group the programme by">
           {(['sport', 'category', 'day'] as Spine[]).map((s) => (
             <button key={s} type="button" aria-pressed={spine === s} onClick={() => { setSpine(s); setOpen(new Set()); setEditing(null); }}>{SPINE_LABEL[s]}</button>
           ))}
         </div>
-        <span className="sp" />
         <span className="sk-muted">{tree.length} {noun(spine, tree.length)} · {rows.length} matches and heats</span>
+        <span className="sp" />
         <button type="button" className="sk-btn" data-size="sm" onClick={() => setOpen(open.size ? new Set() : new Set(tree.map((g) => g.key)))}>
           {open.size ? 'Shut every branch' : 'Open every branch'}
         </button>

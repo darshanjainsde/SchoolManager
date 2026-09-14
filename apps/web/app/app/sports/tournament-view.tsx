@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Bracket } from '@/components/sports/bracket';
 import { DayPicker } from '@/components/sports/day-picker';
+import { NextUp, stepsOf } from '@/components/sports/next-up';
 import { PlanBoard, type PlanActions } from '@/components/sports/plan-board';
 import { Programme, type ProgrammeActions } from '@/components/sports/programme';
 import { Timetable, type TimetableActions } from '@/components/sports/timetable';
@@ -202,6 +203,8 @@ export default function TournamentView({ base, id }: { base: string; id: string 
         </CardBody>
       </Card>
 
+      <NextUp steps={stepsOf(t, clashes.length)} onGo={(to) => setView(to === 'programme' ? 'schedule' : to)} />
+
       <div className="sk-seg sk-sp-views" role="tablist" aria-label="Tournament views">
         <button type="button" role="tab" aria-selected={view === 'schedule'} onClick={() => setView('schedule')}>Programme</button>
         <button type="button" role="tab" aria-selected={view === 'day'} onClick={() => setView('day')}>Timetable</button>
@@ -210,23 +213,12 @@ export default function TournamentView({ base, id }: { base: string; id: string 
         <button type="button" role="tab" aria-selected={view === 'clashes'} onClick={() => setView('clashes')}>Clashes{clashes.length ? ` (${clashes.length})` : ''}</button>
       </div>
 
-      {span.over ? (
-        <div className="sk-notice">
-          <div className="nt">{`The plan runs to ${span.used} days and the meet is booked for ${span.booked}`}</div>
-          <div className="nd">
-            Everything still has a time — it just runs past the last booked day. Book the days, or add a court so the same work fits into fewer.{' '}
-            <button type="button" className="sk-btn" data-size="sm" onClick={() => setView('plan')}>Open days &amp; courts</button>
-          </div>
-        </div>
-      ) : null}
-
       {view === 'schedule' ? (
         <Card>
           <CardHead>
             <h3>Programme</h3>
             <span className="sp" />
             {undo ? <button type="button" className="sk-btn" data-size="sm" disabled={board.isPending} onClick={() => { const u = undo; setUndo(null); board.mutate(u.job); }}>Put {undo.label}</button> : null}
-            <span className="sk-muted">Sport, category or day &mdash; same rows.</span>
           </CardHead>
           <CardBody>
             <Programme t={t} canEdit={canRun} busy={board.isPending} act={progActs} onOpen={openSlot} />

@@ -570,6 +570,28 @@ the others (`POST …/venues/:venueId/clear`; refused when an event has nowhere
 else). **Running late** is the existing rain-delay shift. One step of **undo**
 issues the inverse move.
 
+**Two gaps, and they are not the same thing.** `SportsTournament.gapMin`
+(migration `20260917_000000_sports_gap`) is the **break left on the venue** after
+each slot — the umpire changing ends, the rake over the pit. `restMin` is the
+rest ONE CHILD gets between two of their own slots. A court can run back to
+back all morning while no single athlete does. The break counts against the
+day's capacity, so the cost line and the day bars do not pretend the day holds
+more than it does.
+
+**Where this meet is** is the panel above the views: what is done, what is next,
+and what is in the way, in order, each line naming the move and the view that
+makes it — an event with nowhere to play, a plan that outruns its days, clashes
+to clear, venues booked and never used, then Publish. Publishing shows as
+waiting while anything is blocked. **A meet runs for at most `MAX_MEET_DAYS`
+(14) days**, exported from `@skoolos/types` so no button ever offers to book
+more than the API will accept; past that the advice changes from "book the
+days" to "add courts or shorten the slots", naming the busiest venue.
+
+**The bracket draws its lines.** Every position keeps its cell and a cell
+doubles in height each round, so a card sits exactly between the two that feed
+it and the connectors are pure CSS. A bye is one muted line, not a card, and
+the round label counts them.
+
 **A move is refused, not repaired.** `whyNot` in `@skoolos/types` is the single
 rule: never a played slot, never a double-booked venue, never a child in two
 places, never a round before the one that feeds it, never outside the day's

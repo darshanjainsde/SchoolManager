@@ -22,14 +22,27 @@ export function Bracket({ t, event, selectedId, canScore, onSelect }: { t: Tourn
           <div key={g.key}>
             <p className="sk-lab" style={{ marginBottom: 6 }}>{g.label}{g.label !== 'Final' ? ' round' : ''}</p>
             <div className="sk-sp-bracket">
-              {Array.from({ length: rounds }, (_, r) => (
-                <div key={r} className="sk-sp-round">
-                  <span className="sk-lab">{roundNameOf(r, rounds)}</span>
-                  {g.matches.filter((m) => m.roundIdx === r).sort((a, b) => a.pos - b.pos).map((m) => (
-                    <MatchCard key={m.id} t={t} m={m} scoring={event.scoring} venue={m.venueId ? venueName.get(m.venueId) ?? null : null} selected={selectedId === m.id} canScore={canScore} onSelect={onSelect} />
-                  ))}
-                </div>
-              ))}
+              {Array.from({ length: rounds }, (_, r) => {
+                const mine = g.matches.filter((m) => m.roundIdx === r).sort((a, b) => a.pos - b.pos);
+                const byes = mine.filter((m) => m.bye).length;
+                return (
+                  <div key={r} className="sk-sp-round" data-r={r}>
+                    <span className="sk-lab">{roundNameOf(r, rounds)}{byes ? <em>{byes} bye{byes === 1 ? '' : 's'}</em> : null}</span>
+                    {/* Every position keeps its cell, and a cell doubles in height
+                        each round — so a card sits exactly between the two that
+                        feed it, and the connectors are drawn by the cells. */}
+                    <div className="cells" style={{ ['--pow' as string]: String(2 ** r) }}>
+                      {mine.map((m) => (
+                        <div key={m.id} className="cell" data-bye={m.bye}>
+                          {m.bye
+                            ? <span className="sk-sp-bye">{nameOf(t, m.aSide)} <em>bye</em></span>
+                            : <MatchCard t={t} m={m} scoring={event.scoring} venue={m.venueId ? venueName.get(m.venueId) ?? null : null} selected={selectedId === m.id} canScore={canScore} onSelect={onSelect} />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );

@@ -5,7 +5,7 @@
  * `wizard-model.test.ts` pins every rule.
  */
 import {
-  AGE_GROUPS, ageGroupFor, bandFor, capacityOf, inferVenueType, planStages, sidesAreSections, suggestTeamBasis, venuesForSport,
+  AGE_GROUPS, MAX_MEET_DAYS, ageGroupFor, bandFor, capacityOf, inferVenueType, planStages, sidesAreSections, suggestTeamBasis, venuesForSport,
   type Band, type Sport, type SportCategory, type StageShape, type StageStep, type TeamBasis, type VenueType,
 } from '@skoolos/types';
 import { genderBucket, type RosterStudent } from './ui';
@@ -44,6 +44,8 @@ export interface WizardState {
   dayStartMin: number;
   dayEndMin: number;
   restMin: number;
+  /** Break left on the venue after each slot. */
+  gapMin: number;
   venues: WizardVenue[];
   defaults: WizardDefaults;
   events: WizardEvent[];
@@ -55,7 +57,7 @@ let seq = 0;
 export const nextUid = () => `ev${++seq}`;
 
 export function emptyState(today: string): WizardState {
-  return { name: '', startsOn: today, endsOn: today, dayStartMin: 540, dayEndMin: 960, restMin: 15, venues: [], defaults: { groupKey: '', categories: ['Boys', 'Girls'], structure: 'CLASS', stageShape: 'CLASS_QUAL' }, events: [] };
+  return { name: '', startsOn: today, endsOn: today, dayStartMin: 540, dayEndMin: 960, restMin: 15, gapMin: 0, venues: [], defaults: { groupKey: '', categories: ['Boys', 'Girls'], structure: 'CLASS', stageShape: 'CLASS_QUAL' }, events: [] };
 }
 
 export function groupOptions(grouping: 'BANDS' | 'AGE', bands: Band[]): GroupOption[] {
@@ -104,7 +106,7 @@ export function costOf(state: WizardState, roster: RosterStudent[]): { entries: 
     const slots = ev.sport.kind === 'MATCH' ? Math.max(0, n - 1) : funnelOf(state, ev, roster).reduce((a, b) => a + b.slots, 0);
     return { slots, slotMin: r.slotMin, venues: Math.max(1, r.venues.idx.length) };
   });
-  const cap = capacityOf({ stages, dayStartMin: state.dayStartMin, dayEndMin: state.dayEndMin, days: daysOf(state) });
+  const cap = capacityOf({ stages, dayStartMin: state.dayStartMin, dayEndMin: state.dayEndMin, days: daysOf(state), gapMin: state.gapMin });
   return {
     entries: state.events.reduce((a, ev) => a + ev.studentIds.length, 0),
     slots: stages.reduce((a, s) => a + s.slots, 0),
@@ -197,6 +199,7 @@ export function problems(state: WizardState, roster: RosterStudent[], groups: Gr
   if (days < 1) out.push('The last day cannot be before the first.');
   if (days > 14) out.push('A meet runs for at most 14 days.');
   if (state.dayEndMin - state.dayStartMin < 60) out.push('A day needs at least an hour.');
+  if (days > MAX_MEET_DAYS) out.push(`A meet runs for at most ${MAX_MEET_DAYS} days.`);
   if (state.venues.length === 0) out.push('Add at least one venue (a court, a field, the track).');
   if (state.events.length === 0) out.push('Press at least one sport.');
   for (const ev of state.events) {
@@ -220,7 +223,7 @@ export function problems(state: WizardState, roster: RosterStudent[], groups: Gr
 
 export function toDto(state: WizardState, roster: RosterStudent[]) {
   return {
-    name: state.name.trim(), startsOn: state.startsOn, endsOn: state.endsOn, dayStartMin: state.dayStartMin, dayEndMin: state.dayEndMin, restMin: state.restMin,
+    name: state.name.trim(), startsOn: state.startsOn, endsOn: state.endsOn, dayStartMin: state.dayStartMin, dayEndMin: state.dayEndMin, restMin: state.restMin, gapMin: state.gapMin,
     venues: state.venues.map((v) => ({ name: v.name })),
     events: state.events.map((ev) => {
       const r = resolved(state, ev);

@@ -294,6 +294,8 @@ export function finalists(marks: { side: SideKey; mark: number | null }[], lanes
 
 // ── time on the day board ─────────────────────────────────────
 export const MIN_PER_DAY = 1440;
+/** The longest a meet may run. Shared, so no button offers what the API refuses. */
+export const MAX_MEET_DAYS = 14;
 export const dayOf = (atMin: number) => Math.floor(atMin / MIN_PER_DAY);
 export const minuteOfDay = (atMin: number) => atMin - dayOf(atMin) * MIN_PER_DAY;
 export function hhmm(atMin: number): string {
@@ -302,7 +304,14 @@ export function hhmm(atMin: number): string {
 }
 
 export interface Slot { venueId: string; atMin: number }
-export interface DayWindow { dayStartMin: number; dayEndMin: number; days: number }
+/**
+ * The shape of a day. `gapMin` is the break left ON THE VENUE after each slot —
+ * the umpire changing ends, the rake over the pit, the next pair walking on.
+ * It is not `Diary.restMin`, which is the rest a CHILD gets between two of
+ * their own slots: one court can run back to back all morning while no single
+ * athlete does.
+ */
+export interface DayWindow { dayStartMin: number; dayEndMin: number; days: number; gapMin?: number }
 
 /** The next start on a venue that fits a slot inside the day window, rolling to the next day when the day is full. */
 export function fitInDay(atMin: number, slotMin: number, w: DayWindow): number {
@@ -351,7 +360,7 @@ export function planRounds(rounds: RoundSpec[], venueIds: string[], slotMin: num
         if (at < bestAt) { bestAt = at; best = v; }
       }
       slots.push({ venueId: best!, atMin: bestAt });
-      cursor.set(best!, bestAt + slotMin);
+      cursor.set(best!, bestAt + slotMin + (w.gapMin ?? 0));
       if (diary) for (const p of people) diary.free.set(p, bestAt + slotMin);
       roundEnd = Math.max(roundEnd, bestAt + slotMin);
     }
@@ -459,7 +468,7 @@ export function cursorFrom(bookings: { venueId: string | null; atMin: number | n
   const cursor = new Map<string, number>(venueIds.map((v) => [v, w.dayStartMin]));
   for (const b of bookings) {
     if (!b.venueId || b.atMin == null || !cursor.has(b.venueId)) continue;
-    cursor.set(b.venueId, Math.max(cursor.get(b.venueId)!, b.atMin + b.slotMin));
+    cursor.set(b.venueId, Math.max(cursor.get(b.venueId)!, b.atMin + b.slotMin + (w.gapMin ?? 0)));
   }
   return cursor;
 }
@@ -577,14 +586,14 @@ export function advanceFrom(
 }
 
 // ── capacity: does the plan fit the days and venues? ───────────
-export interface CapacityInput { stages: { slots: number; slotMin: number; venues: number }[]; dayStartMin: number; dayEndMin: number; days: number }
+export interface CapacityInput { stages: { slots: number; slotMin: number; venues: number }[]; dayStartMin: number; dayEndMin: number; days: number; gapMin?: number }
 /** Venue-minutes a day holds, the minutes the plan needs, and the days it would take. */
 export function capacityOf(input: CapacityInput): { neededMin: number; dayMin: number; daysNeeded: number; fits: boolean } {
   const dayMin = Math.max(0, input.dayEndMin - input.dayStartMin);
   let neededMin = 0;
   let worstDays = 1;
   for (const s of input.stages) {
-    const mins = s.slots * s.slotMin;
+    const mins = s.slots * (s.slotMin + (input.gapMin ?? 0));
     neededMin += mins;
     const lanes = Math.max(1, s.venues);
     worstDays = Math.max(worstDays, dayMin > 0 ? Math.ceil(mins / (dayMin * lanes)) : 99);

@@ -1,14 +1,14 @@
 'use client';
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { hhmm } from '@skoolos/types';
+import { MAX_MEET_DAYS, hhmm } from '@skoolos/types';
 import { dayOfMeet, fmtDay, type TournamentDetail } from '@/app/app/sports/ui';
 import { daySpanOf, eventLabel, loadOf } from './model';
 
 const hhmmToMin = (t: string) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
 
 export interface PlanActions {
-  update: (p: { endsOn?: string; dayStartMin?: number; dayEndMin?: number; restMin?: number }) => void;
+  update: (p: { endsOn?: string; dayStartMin?: number; dayEndMin?: number; restMin?: number; gapMin?: number }) => void;
   addVenue: (name: string) => void;
   removeVenue: (venueId: string) => void;
   pin: (eventId: string, dayIdx: number | null) => void;
@@ -29,6 +29,12 @@ export function PlanBoard({ t, canEdit, busy, act, onOpenDay }: { t: TournamentD
   const window = t.dayEndMin - t.dayStartMin;
   const draft = t.status === 'DRAFT';
   const pinnedNowhere = t.events.filter((e) => e.dayIdx == null);
+  // Which venue holds the most work — the one worth duplicating when the plan
+  // will not fit however many days are booked.
+  const busiest = t.venues
+    .map((v) => ({ name: v.name, min: load.reduce((a, d) => a + (d.byVenue[v.id]?.min ?? 0), 0) }))
+    .sort((a, b) => b.min - a.min)
+    .map((v) => ({ name: v.name, days: Math.ceil(v.min / Math.max(1, window)) }))[0];
 
   return (
     <div className="sk-sp-stack">
@@ -36,8 +42,10 @@ export function PlanBoard({ t, canEdit, busy, act, onOpenDay }: { t: TournamentD
         <div className="sk-notice">
           <div className="nt">The plan runs past the last day</div>
           <div className="nd">
-            {`Slots have rolled onto day ${span.used}, which the meet is not booked for. Book the extra day${span.used - span.booked > 1 ? 's' : ''} or add a court, then the plan re-lays itself.`}
-            {canEdit ? <><br /><button type="button" className="sk-btn" data-size="sm" data-variant="primary" disabled={busy} onClick={() => act.update({ endsOn: dayOfMeet(t.startsOn, span.used - 1) })}>{`Book ${span.used} days`}</button></> : null}
+            {span.used <= MAX_MEET_DAYS
+              ? `Slots have rolled onto day ${span.used}, which the meet is not booked for. Book the extra day${span.used - span.booked > 1 ? 's' : ''} or add a court, then the plan re-lays itself.`
+              : `Slots have rolled onto day ${span.used}, and a meet runs for at most ${MAX_MEET_DAYS} days. ${busiest ? `${busiest.name} is the bottleneck — it alone holds ${busiest.days} day${busiest.days === 1 ? '' : 's'} of work. Another ${busiest.name.toLowerCase()} would halve that.` : 'Add courts, shorten the slots, or run fewer events.'}`}
+            {canEdit ? <><br /><button type="button" className="sk-btn" data-size="sm" data-variant="primary" disabled={busy} onClick={() => act.update({ endsOn: dayOfMeet(t.startsOn, Math.min(span.used, MAX_MEET_DAYS) - 1) })}>{`Book ${Math.min(span.used, MAX_MEET_DAYS)} days`}</button></> : null}
           </div>
         </div>
       ) : null}
@@ -79,9 +87,9 @@ export function PlanBoard({ t, canEdit, busy, act, onOpenDay }: { t: TournamentD
       <p className="sk-muted">Each bar is how much of the {Math.floor(window / 60)}-hour day that court is booked for. Press a day to see it slot by slot.</p>
 
       {canEdit ? (
-        <div className="sk-sp-fieldrow">
+        <div className="sk-sp-shape">
           <label className="sk-sp-field"><span className="sk-lab">Last day</span>
-            <input className="sk-input" type="date" value={t.endsOn} min={t.startsOn} disabled={busy} onChange={(e) => e.target.value && act.update({ endsOn: e.target.value })} />
+            <input className="sk-input" type="date" value={t.endsOn} min={t.startsOn} max={dayOfMeet(t.startsOn, MAX_MEET_DAYS - 1)} disabled={busy} onChange={(e) => e.target.value && act.update({ endsOn: e.target.value })} />
           </label>
           <label className="sk-sp-field"><span className="sk-lab">Day starts</span>
             <input className="sk-input" type="time" value={hhmm(t.dayStartMin)} disabled={busy || !draft} onChange={(e) => { const m = hhmmToMin(e.target.value); if (m != null) act.update({ dayStartMin: m }); }} />
@@ -89,16 +97,27 @@ export function PlanBoard({ t, canEdit, busy, act, onOpenDay }: { t: TournamentD
           <label className="sk-sp-field"><span className="sk-lab">Day ends</span>
             <input className="sk-input" type="time" value={hhmm(t.dayEndMin)} disabled={busy || !draft} onChange={(e) => { const m = hhmmToMin(e.target.value); if (m != null) act.update({ dayEndMin: m }); }} />
           </label>
-          <label className="sk-sp-field"><span className="sk-lab">Rest between a child&apos;s slots</span>
-            <input className="sk-input" type="number" min={0} max={120} step={5} style={{ width: '6em' }} value={t.restMin} disabled={busy || !draft} onChange={(e) => act.update({ restMin: Math.max(0, Math.min(120, Number(e.target.value) || 0)) })} />
+          <label className="sk-sp-field"><span className="sk-lab">Break between slots on a court</span>
+            <span className="sk-sp-unit">
+              <input className="sk-input" type="number" aria-label="Break between slots on a court" min={0} max={60} step={5} value={t.gapMin} disabled={busy || !draft} onChange={(e) => act.update({ gapMin: Math.max(0, Math.min(60, Number(e.target.value) || 0)) })} />
+              <span>min</span>
+            </span>
           </label>
-          <div className="sk-sp-field" data-grow><span className="sk-lab">Add a court, table, pool or field</span>
-            <div className="sk-sp-pointsrow">
-              <input className="sk-input" placeholder="Court 3" value={venue} disabled={busy} onChange={(e) => setVenue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && venue.trim()) { act.addVenue(venue.trim()); setVenue(''); } }} />
-              <button type="button" className="sk-btn" disabled={busy || !venue.trim()} onClick={() => { act.addVenue(venue.trim()); setVenue(''); }}>Add venue</button>
-            </div>
+          <label className="sk-sp-field"><span className="sk-lab">Rest between a child&apos;s own slots</span>
+            <span className="sk-sp-unit">
+              <input className="sk-input" type="number" aria-label="Rest between a child&apos;s own slots" min={0} max={120} step={5} value={t.restMin} disabled={busy || !draft} onChange={(e) => act.update({ restMin: Math.max(0, Math.min(120, Number(e.target.value) || 0)) })} />
+              <span>min</span>
+            </span>
+          </label>
+          <div className="sk-sp-field" data-wide><span className="sk-lab">Add a court, table, pool or field</span>
+            <span className="sk-sp-unit">
+              <input className="sk-input" placeholder="Badminton court 3" value={venue} disabled={busy} onChange={(e) => setVenue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && venue.trim()) { act.addVenue(venue.trim()); setVenue(''); } }} />
+              <button type="button" className="sk-btn" disabled={busy || !venue.trim()} onClick={() => { act.addVenue(venue.trim()); setVenue(''); }}>Add</button>
+            </span>
           </div>
-          <button type="button" className="sk-btn sk-press" disabled={busy} onClick={act.refit}>Lay the plan out again</button>
+          <div className="sk-sp-field" data-wide><span className="sk-lab">&nbsp;</span>
+            <button type="button" className="sk-btn sk-press" disabled={busy} onClick={act.refit}>Lay the plan out again</button>
+          </div>
         </div>
       ) : null}
       {canEdit && !draft ? <p className="sk-muted">The tournament is live, so the hours and the rest gap are fixed. A day or a court can still be added, and only unplayed slots move.</p> : null}

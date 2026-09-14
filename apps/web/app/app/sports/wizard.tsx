@@ -124,7 +124,8 @@ function MeetStep({ state, patch }: { state: WizardState; patch: (p: Partial<Wiz
         <label className="sk-sp-field"><span className="sk-lab">Last day</span><input className="sk-input" type="date" value={state.endsOn} min={state.startsOn} onChange={(e) => patch({ endsOn: e.target.value })} /></label>
         <label className="sk-sp-field"><span className="sk-lab">Day starts</span><input className="sk-input" type="time" value={minToHhmm(state.dayStartMin)} onChange={(e) => { const m = hhmmToMin(e.target.value); if (m != null) patch({ dayStartMin: m }); }} /></label>
         <label className="sk-sp-field"><span className="sk-lab">Day ends</span><input className="sk-input" type="time" value={minToHhmm(state.dayEndMin)} onChange={(e) => { const m = hhmmToMin(e.target.value); if (m != null) patch({ dayEndMin: m }); }} /></label>
-        <label className="sk-sp-field"><span className="sk-lab">Rest between a child’s slots</span><input className="sk-input" type="number" min={0} max={120} value={state.restMin} style={{ width: '6em' }} onChange={(e) => patch({ restMin: Math.max(0, Number(e.target.value) || 0) })} /></label>
+        <label className="sk-sp-field"><span className="sk-lab">Break between slots on a court</span><span className="sk-sp-unit"><input className="sk-input" type="number" min={0} max={60} step={5} value={state.gapMin} onChange={(e) => patch({ gapMin: Math.max(0, Math.min(60, Number(e.target.value) || 0)) })} /><span>min</span></span></label>
+        <label className="sk-sp-field"><span className="sk-lab">Rest between a child&rsquo;s own slots</span><span className="sk-sp-unit"><input className="sk-input" type="number" min={0} max={120} step={5} value={state.restMin} onChange={(e) => patch({ restMin: Math.max(0, Math.min(120, Number(e.target.value) || 0)) })} /><span>min</span></span></label>
       </div>
       <p className="sk-muted">{daysOf(state) > 0 ? `${daysOf(state)} day${daysOf(state) === 1 ? '' : 's'}, ${minToHhmm(state.dayStartMin)}–${minToHhmm(state.dayEndMin)} each day. A child gets ${state.restMin} minutes between two of their own slots.` : 'Pick the days.'}</p>
       <div className="sk-sp-field">
@@ -311,7 +312,8 @@ function ReviewStep({ state, roster, groups, issues, busy, onCreate }: { state: 
         <div><span className="sk-lab">Meet</span><b>{state.name.trim() || '—'}</b></div>
         <div><span className="sk-lab">Days</span><b>{daysOf(state) || '—'}</b></div>
         <div><span className="sk-lab">Hours</span><b>{minToHhmm(state.dayStartMin)}–{minToHhmm(state.dayEndMin)}</b></div>
-        <div><span className="sk-lab">Rest gap</span><b>{state.restMin} min</b></div>
+        <div><span className="sk-lab">Break on a court</span><b>{state.gapMin} min</b></div>
+        <div><span className="sk-lab">Rest for a child</span><b>{state.restMin} min</b></div>
         <div><span className="sk-lab">Venues</span><b>{state.venues.map((v) => v.name).join(', ') || '—'}</b></div>
       </div>
       <div className="sk-tblwrap">
