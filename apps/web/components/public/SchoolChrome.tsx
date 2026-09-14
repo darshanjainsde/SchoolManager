@@ -5,7 +5,7 @@ import type { PublicSiteData } from '@/lib/public-api';
 import './ps-css.css';
 import { themeRootProps, navFlagsFor } from './site-theme';
 import { admissionsHasContent } from './sections/AdmissionsSection';
-import { hofHasEntries } from './sections/HallOfFame';
+import { hofHasEntries } from './sections/hof-model';
 import SiteNav from './sections/SiteNav';
 
 /**

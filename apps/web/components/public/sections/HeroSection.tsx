@@ -4,49 +4,16 @@ import { useEffect, useState } from 'react';
 import { optimised } from '@/lib/img';
 import type { PublicSiteData } from '@/lib/public-api';
 import { rgba } from '../site-utils';
-
-// Layouts that put text on top of a photo and therefore need images + overlay.
-const PHOTO_LAYOUTS = new Set(['FULL_BLEED', 'SPLIT_MOSAIC', 'SPLIT_EDITORIAL', 'COLLAGE', 'SLIDESHOW']);
+// Pure helpers live in hero-model.ts with NO client boundary, so a server
+// component may call them. Deliberately not re-exported from here: a re-export
+// from a 'use client' module is still a client reference.
+import { PHOTO_LAYOUTS, heroImagesOf, heroIsPhotoLayout, heroWantsVideo, resolveHeroLayout } from './hero-model';
 
 // A photo hero cycles at most this many images as a background carousel. The
 // top slots take priority, so a school can add anywhere from 1 to 10 images and
 // the hero stays calm — one still image, several a gentle rotation, more than
 // this the leading ones. Keeps a long album from becoming an endless slideshow.
 const HERO_SLIDES_MAX = 6;
-
-/** Ordered hero images; falls back to the legacy single heroUrl. */
-export function heroImagesOf(data: PublicSiteData): string[] {
-  const imgs = data.homepage?.heroImages;
-  if (imgs && imgs.length > 0) return imgs;
-  return data.homepage?.heroUrl ? [data.homepage.heroUrl] : [];
-}
-
-/**
- * Effective layout after fallbacks: old API payloads map through the legacy
- * heroStyle; photo layouts without a single image degrade to the illustrated
- * hero (same downgrade the old PHOTO style had); a one-image slideshow is
- * just a full-bleed.
- */
-export function resolveHeroLayout(data: PublicSiteData): string {
-  const p = data.profile;
-  const declared =
-    p?.heroLayout ?? (p?.heroStyle === 'PHOTO' ? 'FULL_BLEED' : (p?.heroStyle ?? 'ILLUSTRATION'));
-  const count = heroImagesOf(data).length;
-  // A background video stands in for the missing photo: the media IS the
-  // full-bleed backdrop, so the no-image downgrade must not fire — but ONLY
-  // for a video that can actually render (a real http(s) URL). A half-typed
-  // URL must still degrade to the illustrated hero, never a blank band.
-  const hasVideo =
-    p?.heroMedia === 'VIDEO' && typeof p?.heroVideoUrl === 'string' && /^https?:\/\//i.test(p.heroVideoUrl);
-  if (PHOTO_LAYOUTS.has(declared) && count === 0) return hasVideo ? 'FULL_BLEED' : 'ILLUSTRATION';
-  if (declared === 'SLIDESHOW' && count === 1) return 'FULL_BLEED';
-  return declared;
-}
-
-/** Whether the effective layout is photo-based (drives the GHOST navbar). */
-export function heroIsPhotoLayout(data: PublicSiteData): boolean {
-  return PHOTO_LAYOUTS.has(resolveHeroLayout(data));
-}
 
 // ── Overlay between photo and text ──────────────────────────────────────────
 // Alphas are calibrated so the default opacity (65) reproduces the paper wash
@@ -234,15 +201,6 @@ function HeroVideo({ url, poster }: { url: string; poster: string | null }) {
       aria-hidden="true"
       tabIndex={-1}
     />
-  );
-}
-
-/** Whether this payload asks for a background video that can actually play. */
-export function heroWantsVideo(data: PublicSiteData): boolean {
-  return (
-    data.profile?.heroMedia === 'VIDEO' &&
-    typeof data.profile?.heroVideoUrl === 'string' &&
-    /^https?:\/\//i.test(data.profile.heroVideoUrl)
   );
 }
 

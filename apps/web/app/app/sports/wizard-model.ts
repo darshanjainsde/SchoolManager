@@ -8,7 +8,24 @@ import {
   AGE_GROUPS, MAX_MEET_DAYS, ageGroupFor, bandFor, capacityOf, inferVenueType, planStages, sidesAreSections, suggestTeamBasis, venuesForSport,
   type Band, type Sport, type SportCategory, type StageShape, type StageStep, type TeamBasis, type VenueType,
 } from '@skoolos/types';
-import { genderBucket, type RosterStudent } from './ui';
+import type { RosterStudent } from './ui';
+
+/**
+ * A school's free-text gender field, bucketed for events that are split by it.
+ *
+ * Lives here rather than in ui.tsx because that file is `'use client'`, and
+ * every export of a client module is a client reference in the RSC graph — so
+ * this module, which has no directive, could not safely call it. Latent rather
+ * than live (everything importing wizard-model is a client component today),
+ * but it is the same shape as the bug that took the school sites down, and
+ * client-boundary.test.ts now refuses it.
+ */
+export function genderBucket(g: string | null): 'Boys' | 'Girls' | null {
+  if (!g) return null;
+  if (/^(m|male|boy)/i.test(g)) return 'Boys';
+  if (/^(f|female|girl)/i.test(g)) return 'Girls';
+  return null;
+}
 
 export interface WizardVenue { name: string; type: VenueType }
 

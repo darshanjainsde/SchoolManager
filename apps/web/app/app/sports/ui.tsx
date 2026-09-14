@@ -71,11 +71,3 @@ export function dayOfMeet(startsOn: string, idx: number): string {
 
 export const TONE: Record<string, 'good' | 'amber' | 'bad' | 'brand' | 'muted'> = { DRAFT: 'muted', LIVE: 'good', DONE: 'brand' };
 export const STATUS_LABEL: Record<string, string> = { DRAFT: 'Draft', LIVE: 'Live', DONE: 'Finished' };
-
-/** The two words the desk uses for a category filter on the roster. */
-export function genderBucket(g: string | null): 'Boys' | 'Girls' | null {
-  if (!g) return null;
-  if (/^(m|male|boy)/i.test(g)) return 'Boys';
-  if (/^(f|female|girl)/i.test(g)) return 'Girls';
-  return null;
-}

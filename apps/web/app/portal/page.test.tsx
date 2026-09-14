@@ -156,7 +156,7 @@ describe('an API older than this build still works', () => {
         ? Promise.reject(new ApiError(500, 'Internal Server Error', null))
         : Promise.resolve([]),
     );
-    vi.mocked(useApi).mockReturnValue({ get, post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn() } as unknown as ApiStub);
+    vi.mocked(useApi).mockReturnValue({ get, post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn() } as never);
     renderWithProviders(<PortalHome />);
 
     // Surfaced — in both sections, which now share one error state.

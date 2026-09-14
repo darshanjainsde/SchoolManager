@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { optimised } from '@/lib/img';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
-import { heroIsPhotoLayout } from './HeroSection';
+import { heroIsPhotoLayout } from './hero-model';
 import { navModel, type NavNode } from './nav-model';
 import NavGroup from './NavGroup';
 

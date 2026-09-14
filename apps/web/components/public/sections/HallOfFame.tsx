@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import type { PublicHallOfFame, PublicHallOfFameEntry, PublicHallOfFameGroup } from '@/lib/public-api';
 import { batchLabel } from '@/lib/batch-label';
+// Pure — lives in hof-model.ts with no client boundary so a server component
+// may call it. Not re-exported: that would still be a client reference.
+import { hofHasEntries } from './hof-model';
 
 /** The layouts a school can pick in the studio (site-variants.ts lists the same values). */
 export const HOF_LAYOUTS = ['PODIUM', 'MEDALS', 'SPOTLIGHT', 'SHELF', 'TIMELINE', 'YEARBOOK', 'SCOREBOARD'] as const;
@@ -13,9 +16,6 @@ const RANK_WORDS: Record<number, string> = { 1: 'First', 2: 'Second', 3: 'Third'
 // Render order puts 1st in the middle, elevated, like a real podium.
 const PODIUM_ORDER = [2, 1, 3];
 
-export function hofHasEntries(hof: PublicHallOfFame | null | undefined): boolean {
-  return !!hof && hof.groups.some((g) => g.entries.length > 0);
-}
 
 function groupsForYear(hof: PublicHallOfFame, year: number): PublicHallOfFameGroup[] {
   return hof.groups.filter((g) => g.entries.some((e) => e.batchYear === year));
