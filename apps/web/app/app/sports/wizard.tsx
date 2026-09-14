@@ -187,7 +187,7 @@ function SportsStep({ state, groups, patch, patchEvent }: { state: WizardState; 
       </div>
 
       <div className="sk-sp-field">
-        <div className="sk-sp-fieldrow"><span className="sk-lab">Sports — press to add, press again to remove</span><input className="sk-input" placeholder="Find a sport…" aria-label="Find a sport" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 200 }} /></div>
+        <div className="sk-sp-fieldrow"><span className="sk-lab">Sports — press to add, press again to remove</span><input className="sk-input" placeholder="Find a sport…" aria-label="Find a sport" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 'min(100%, 200px)' }} /></div>
         {sportsByGroup().map((g) => {
           const list = query ? g.sports.filter((s) => s.name.toLowerCase().includes(query)) : g.sports;
           if (!list.length) return null;

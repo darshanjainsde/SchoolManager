@@ -2051,6 +2051,9 @@ button.sk-availcell:hover { filter: brightness(0.97); }
 .sk-availpanel .meta { font-size: 11.5px; color: var(--sk-ink-3); margin-bottom: 8px; }
 
 .sk-input {
+  /* border-box or every `width: 100%` use overflows its track by its own
+     padding. Three rules had patched that locally before it was fixed here. */
+  box-sizing: border-box;
   border: 1px solid var(--sk-line-2); border-radius: 10px; padding: 7px 11px;
   background: var(--sk-card); color: var(--sk-ink); font: inherit; font-size: 13px;
 }
@@ -3538,7 +3541,7 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-sp-game .sk-input { width: 100%; min-width: 0; font-family: var(--sk-mono); text-align: center; }
 
 /* heat sheet */
-.sk-sp-heat .sk-input { width: 7.5em; min-width: 0; font-family: var(--sk-mono); }
+.sk-sp-heat .sk-input { width: 9em; min-width: 0; font-family: var(--sk-mono); }
 .sk-sp-heathead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* day board */
@@ -3573,11 +3576,15 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-sp-perms label { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 0; cursor: pointer; }
 .sk-sp-band { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 0; border-top: 1px solid var(--sk-line); }
 .sk-sp-band:first-child { border-top: 0; }
-.sk-sp-band .sk-input { width: 11em; min-width: 0; }
+.sk-sp-band .sk-input { width: 12.5em; min-width: 0; }
 .sk-sp-stds { display: flex; gap: 4px; flex-wrap: wrap; }
 .sk-sp-stds .sk-chip { padding: 4px 8px; font-size: 12px; min-width: 2.2em; justify-content: center; }
 .sk-sp-pointsrow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.sk-sp-pointsrow .sk-input { width: 4.5em; min-width: 0; text-align: center; font-family: var(--sk-mono); }
+/* The narrow box is for the number of points. A <select> in the same row
+   holds a house name and must size itself, or "Raffles Red House" reads
+   "Raff". */
+.sk-sp-pointsrow input.sk-input { width: 6em; min-width: 0; text-align: center; font-family: var(--sk-mono); }
+.sk-sp-pointsrow select.sk-input { min-width: 0; max-width: min(100%, 18em); }
 /* wizard v2: the defaults bar, the events table, the players grid */
 .sk-sp-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px 18px; padding: 12px 14px; border: 1px dashed var(--sk-line-2); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); }
 .sk-sp-evtable td.nm { font-weight: 700; white-space: nowrap; }
@@ -3707,8 +3714,13 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-sp-slotline .v { margin-left: auto; font-size: 11.5px; color: var(--sk-ink-3); white-space: nowrap; }
 
 /* Timetable — one day on a proportional time axis. */
-.sk-sp-daypick { display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap; }
-.sk-sp-daypick .sk-sp-field { min-width: min(100%, 15em); }
+/* The stepper, the list and the stepper stay ONE row. A select sizes itself to
+   its longest option ("Sun 13 Sep · 84 slots · not booked"), so left to wrap it
+   pushed both arrows onto lines of their own. */
+.sk-sp-daypick { display: flex; align-items: flex-end; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.sk-sp-daypick .sk-sp-field { flex: 1 1 auto; min-width: 0; }
+.sk-sp-daypick .sk-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.sk-sp-daypick .sk-btn { flex: none; }
 .sk-sp-dayseg button { display: inline-flex; align-items: baseline; gap: 5px; }
 .sk-sp-dayseg .n { font-family: var(--sk-mono); font-size: 10.5px; opacity: 0.7; }
 .sk-sp-tt { display: flex; gap: 0; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow-x: auto; }
